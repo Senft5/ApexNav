@@ -5135,7 +5135,11 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
   await crewSide();
   await page.waitForSelector('.cp-week .drive-card.is-remembered .cp-best');
   const rec = await page.textContent('.cp-week');
-  check(/Upcoming drives/.test(rec) && /DRIVEN/.test(rec) && /2 came: @sam, @cara/.test(rec) && /811/.test(rec) && /Best Vetta Score · @sam on Cherohala Skyway/.test(rec) && /Nothing planned next/.test(rec) && await page.isVisible('.cp-week .plan-plus'), 'remembered, above the + to plan the next one: ' + rec);
+  check(/Upcoming drives/.test(rec) && /DRIVEN/.test(rec) && /2 came/.test(rec) && !/2 came: @/.test(rec) && /811/.test(rec) && /Best Vetta Score · @sam on Cherohala Skyway/.test(rec) && /Nothing planned next/.test(rec) && await page.isVisible('.cp-week .plan-plus'), 'remembered, above the + to plan the next one: ' + rec);
+  // who came is behind the faces, as who's going is
+  await page.click('.cp-week .drive-card.is-remembered .cp-going-who');
+  check(await page.$$eval('.cp-who-sheet .cp-who-row', (r) => r.map((x) => x.lastElementChild.textContent).join('|')) === '@sam|@cara' && /2 came/.test(await page.textContent('.cp-who-sheet h2')), 'the faces open who came');
+  await page.click('.cp-who-sheet button:has-text("Done")');
   // the results sheet (IDEAS S-25): folded under the best Score; the overall, then each stage as SS1, SS2; Share
   check(/Results · 2 stages/.test(rec) && !(await page.isVisible('.cp-week .cp-results')), 'the results fold, closed: ' + rec);
   await page.click('.cp-week .cp-results-fold > summary');
