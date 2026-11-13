@@ -7342,23 +7342,28 @@
     // Save the map here (offline_tiles.js, IDEAS F-02): the map, labels and terrain round the map's centre (25 km, less
     // when that would be over 2,500 tiles), so the map, loops, Explore and climbs work there with no signal.
     let areaBusy = false;
-    $('myAreaBtn').addEventListener('click', async () => {
-      if (areaBusy || !window.ApexOfflineTiles || !mapReady) return;
-      const c = map.getCenter();
-      areaBusy = true; $('myAreaBtn').disabled = true;
+    // saves (or, with an old area's id and name, updates in place) the map round (lat, lon); `btn` shows the progress
+    async function saveAreaAt(lat, lon, btn, { id = null, name = null, radiusKm = 25, idle } = {}) {
+      if (areaBusy || !window.ApexOfflineTiles) return;
+      areaBusy = true; btn.disabled = true;
       try {
-        const a = await ApexOfflineTiles.download({ lat: c.lat, lon: c.lng, radiusKm: 25, styleUrl: MAP_STYLE, name: `Around ${c.lat.toFixed(2)}, ${c.lng.toFixed(2)}`,
-          onProgress: (d, n) => { if (d % 25 === 0 || d === n) $('myAreaBtn').textContent = `Saving the map… ${Math.round(100 * d / n)}%`; } });
+        const a = await ApexOfflineTiles.download({ lat, lon, radiusKm, styleUrl: MAP_STYLE, id, name: name || `Around ${lat.toFixed(2)}, ${lon.toFixed(2)}`,
+          onProgress: (d, n) => { if (d % 25 === 0 || d === n) btn.textContent = `Saving the map… ${Math.round(100 * d / n)}%`; } });
         // members' road feel for the area too (signed in as a member): measured roads plan the same with no signal
         let roads = null;
         if (window.ApexOwnRouting && ApexOwnRouting.holdArea && window.ApexSync && (await ApexSync.member().catch(() => false))) {
-          $('myAreaBtn').textContent = 'Saving members\u2019 road feel…';
-          roads = await ApexOwnRouting.holdArea(routeCtxOpts().lookupCells, ApexOwnRouting.cellsNear(c.lat, c.lng, a.radiusKm), a.id).catch(() => null);
+          btn.textContent = 'Saving members\u2019 road feel…';
+          roads = await ApexOwnRouting.holdArea(routeCtxOpts().lookupCells, ApexOwnRouting.cellsNear(lat, lon, a.radiusKm), a.id).catch(() => null);
           if (roads) ApexOfflineTiles.setArea(a.id, { roadCells: roads.held, roadOf: roads.cells, roadWays: roads.ways });
         }
-        toast(`Saved ${ApexUnits.long(a.radiusKm * 1000, 0)} round here for offline, ${(a.bytes / 1048576).toFixed(0)} MB${roads && roads.ways ? `, with ${roads.ways} measured roads` : ''}.`);
+        toast(`${id ? 'Updated' : 'Saved'} ${ApexUnits.long(a.radiusKm * 1000, 0)} round ${id ? a.name.replace(/^Around /, '') : 'here'} for offline, ${(a.bytes / 1048576).toFixed(0)} MB${roads && roads.ways ? `, with ${roads.ways} measured roads` : ''}.`);
       } catch (_) { toast('Couldn\'t save the map. Check signal and try again.'); }
-      finally { areaBusy = false; $('myAreaBtn').disabled = false; $('myAreaBtn').textContent = 'Save the map here for offline'; renderMyData(); }
+      finally { areaBusy = false; btn.disabled = false; btn.textContent = idle; renderMyData(); }
+    }
+    $('myAreaBtn').addEventListener('click', () => {
+      if (!mapReady) return;
+      const c = map.getCenter();
+      saveAreaAt(c.lat, c.lng, $('myAreaBtn'), { idle: 'Save the map here for offline' });
     });
     function renderAreas() {
       const box = $('myAreas'); if (!box || !window.ApexOfflineTiles) return;
@@ -7366,9 +7371,19 @@
         const row = document.createElement('div'); row.className = 'row'; row.style.justifyContent = 'space-between';
         const feel = a.roadOf ? (a.roadCells < a.roadOf ? ' · members\u2019 road feel for part of it' : a.roadWays ? ` · ${a.roadWays} measured roads` : ' · no measured roads yet') : '';
         const t = document.createElement('span'); t.className = 'note'; t.textContent = `${a.name} · ${Number.isFinite(a.radiusKm) ? `${ApexUnits.long(a.radiusKm * 1000, 0)} round` : 'along the route'} · ${(a.bytes / 1048576).toFixed(0)} MB${feel}`;
+        // how old the map is (roads, names and closures change): an area saved half a year ago offers to update in place
+        const age = ApexOfflineTiles.ageOf(a, Date.now());
+        if (age.month) t.textContent += ` · saved ${age.month}`;
+        const acts = document.createElement('span'); acts.className = 'row';
+        if (age.stale && Number.isFinite(a.radiusKm) && Number.isFinite(a.lat) && Number.isFinite(a.lon)) {
+          const up = document.createElement('button'); up.className = 'linkbtn'; up.textContent = 'Update';
+          up.setAttribute('aria-label', `Update the map ${a.name}, saved ${age.month}`);
+          up.addEventListener('click', () => saveAreaAt(a.lat, a.lon, up, { id: a.id, name: a.name, radiusKm: a.radiusKm, idle: 'Update' }));
+          acts.append(up);
+        }
         const del = document.createElement('button'); del.className = 'linkbtn'; del.textContent = 'Delete';
         del.addEventListener('click', async () => { await ApexOfflineTiles.removeArea(a.id); if (window.ApexOwnRouting && ApexOwnRouting.releaseArea) ApexOwnRouting.releaseArea(a.id); renderMyData(); });
-        row.append(t, del); return row;
+        acts.append(del); row.append(t, acts); return row;
       }));
     }
     $('myOfflineDelBtn').addEventListener('click', async () => {

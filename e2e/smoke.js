@@ -7083,6 +7083,37 @@ flow('offline area kept: saving the map, or the first drive of a session, asks t
   check(n.asks === 2 && n.ids.includes('pk1') && n.ids.includes('pk2'), 'one more ask for the drives, both kept: ' + JSON.stringify(n));
 });
 
+flow('offline area grown old: its row says the month it was saved, Update fetches it again in place, a fresh one offers no update (IDEAS F-02)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => {
+    const u = route.request().url();
+    if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } }, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) });
+    if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
+    return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(16) });
+  });
+  await page.route('https://s3.amazonaws.com/**', (route) => route.fulfill({ contentType: 'image/png', body: Buffer.alloc(8) }));
+  await page.addInitScript(() => { try {
+    localStorage.setItem('apex.onboarded', '1');
+    if (!sessionStorage.getItem('seeded')) {
+      sessionStorage.setItem('seeded', '1');
+      localStorage.setItem('apex.offlineAreas', JSON.stringify([
+        { id: 'aold', name: 'Around 35.63, -83.47', lat: 35.63, lon: -83.47, radiusKm: 3, tiles: 10, bytes: 2097152, at: '2025-03-02T09:00:00Z' },
+        { id: 'anew', name: 'Around 39.10, -84.51', lat: 39.10, lon: -84.51, radiusKm: 25, tiles: 10, bytes: 1048576, at: new Date().toISOString() }]));
+    }
+  } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => document.querySelectorAll('#myAreas .row').length >= 2, null, { timeout: 15000 });
+  const rows = await page.$$eval('#myAreas > .row', (rs) => rs.map((r) => ({ text: r.textContent, up: [...r.querySelectorAll('button')].map((b) => b.textContent) })));
+  check(/saved Mar 2025/.test(rows[0].text) && rows[0].up.includes('Update'), 'the old area says when and offers Update: ' + JSON.stringify(rows));
+  check(!rows[1].up.includes('Update') && /saved /.test(rows[1].text), 'the fresh one says when, no Update: ' + JSON.stringify(rows));
+  await page.evaluate(() => [...document.querySelectorAll('#myAreas button')].find((b) => b.textContent === 'Update').click());
+  await page.waitForFunction(() => { const a = JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]'); const o = a.find((x) => x.id === 'aold'); return o && o.at > '2026'; }, null, { timeout: 60000 });
+  const after = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.offlineAreas')));
+  check(after.length === 2 && after.filter((a) => a.id === 'aold').length === 1, 'updated in place, not doubled: ' + JSON.stringify(after));
+  const o = after.find((a) => a.id === 'aold');
+  check(o.name === 'Around 35.63, -83.47' && o.lat === 35.63 && o.radiusKm === 3, 'same place, size and name: ' + JSON.stringify(o));
+  await page.waitForFunction(() => ![...document.querySelectorAll('#myAreas button')].some((b) => b.textContent === 'Update'), null, { timeout: 5000 });
+});
+
 flow('offline area, as a member: Save the map here keeps the measured roads round it; with no signal a plan still has them, and clearing them (what Sign out calls) leaves nothing (IDEAS F-02)', async (page, base) => {
   let online = true;
   const asks = [], way = { 0: { i: [0, 1, 2], n: [3, 3, 3], cam: [0.02, 0.03, 0.02], cn: [3, 3, 3], rough: [0.1, 0.2, 0.1] } };

@@ -170,9 +170,17 @@
   }
   /** Adds fields to a saved area's record (members' road feel counts, set after the tiles). */
   function setArea(id, fields) { saveAreas(areas().map((a) => (a.id === id ? { ...a, ...fields } : a))); }
+  /** How old a saved area's map is: `stale` after STALE_DAYS (roads, names and closures change), unknown date stays unknown. */
+  const STALE_DAYS = 180;
+  function ageOf(area, nowMs) {
+    const t = area && Date.parse(area.at);
+    if (!Number.isFinite(t)) return { days: null, stale: false, month: null };
+    const days = Math.max(0, Math.floor((nowMs - t) / 86400000)), d = new Date(t);
+    return { days, stale: days >= STALE_DAYS, month: `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()]} ${d.getUTCFullYear()}` };
+  }
   /** Bytes saved, from the areas list. */
   const bytesSaved = () => areas().reduce((s, a) => s + (a.bytes || 0), 0);
 
-  const api = { tilesFor, plan, tilesAlong, planAlong, boxOf, areasOf, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, MAX_TILES, PROTO, DEM };
+  const api = { tilesFor, plan, tilesAlong, planAlong, boxOf, areasOf, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, ageOf, STALE_DAYS, MAX_TILES, PROTO, DEM };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexOfflineTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);

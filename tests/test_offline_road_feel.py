@@ -82,7 +82,7 @@ def test_the_cockpit_wires_it():
     # a plan with no signal falls back to the kept cells; a server that says no (signed out) is final
     assert "if (r && r.status < 500) return null;" in COCKPIT and "ApexOwnRouting.keptFor(cells)" in COCKPIT
     # Save the map here asks for the area's road data as a member, and Delete lets the area's cells go
-    assert "ApexOwnRouting.holdArea(routeCtxOpts().lookupCells, ApexOwnRouting.cellsNear(c.lat, c.lng, a.radiusKm), a.id)" in COCKPIT
+    assert "ApexOwnRouting.holdArea(routeCtxOpts().lookupCells, ApexOwnRouting.cellsNear(lat, lon, a.radiusKm), a.id)" in COCKPIT
     assert "ApexOwnRouting.releaseArea(a.id)" in COCKPIT
     # sign-out (both keys) and account deletion, Erase everything and Delete offline data clear it
     assert COCKPIT.count("ApexSync.setSession(null); clearCarry(); clearCrowd();") == 4   # sign out, delete account (2), and Apple sign-in turned off in Settings
