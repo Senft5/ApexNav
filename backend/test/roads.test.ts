@@ -37,6 +37,19 @@ describe("GET /api/roads", () => {
     expect(JSON.stringify(j)).not.toMatch(/user|handle|email/i);
   });
 
+  it("many ways asked in any order: each direction's bins in order (the rule is checked per way and direction, not per bin)", async () => {
+    const shape = JSON.stringify([[35.5, -83.5], [35.51, -83.5]]);
+    const st: D1PreparedStatement[] = [];
+    for (const w of [31, 32, 33]) {
+      st.push(env.DB.prepare("INSERT INTO road_ways (way_id, s, w, n, e, shape, cls, len_m) VALUES (?, 35.5, -83.5, 35.51, -83.5, ?, 'secondary', 2000)").bind(w, shape));
+      for (const dir of [1, 0]) for (const i of [7, 2, 5, 0]) st.push(env.DB.prepare("INSERT INTO road_bins (way_id, dir, bin_idx, n, camber_n) VALUES (?, ?, ?, 1, 0)").bind(w, dir, i));
+    }
+    await env.DB.batch(st);
+    const j = await (await api(await makeUser("alice"), "GET", "/api/roads?ways=33,31,32")).json() as Record<string, Record<string, { i: number[] }>>;
+    expect(Object.keys(j).sort()).toEqual(["31", "32", "33"]);
+    for (const w of ["31", "32", "33"]) for (const d of ["0", "1"]) expect(j[w][d].i).toEqual([0, 2, 5, 7]);
+  });
+
   it("hides a road direction only one person has driven (IDEAS Z-08)", async () => {
     await seed();
     await env.DB.prepare("DELETE FROM rank_slots WHERE dir = 1 AND slot = 2").run();
