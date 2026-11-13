@@ -5428,6 +5428,10 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   // Your records: the cleanest corner of each kind (tight, medium, fast), from the same kept observations (IDEAS D-08)
   await page.waitForFunction(() => /Cleanest tight (left|right|corner), of \d+ tight corners/.test(document.getElementById('recordsTable').textContent), null, { timeout: 10000 });
   const recs = await page.textContent('#recordsTable');
+  // braking consistency by month: a labelled row a measure, no paragraph on the method (TestFlight 2026-11-12)
+  const steady = await page.evaluate(() => apexLogDebug.steadyLines([{ month: '2026-09', sd_m: 9, corners: 12, speed_sd_mps: 1.4, speed_corners: 12 }, { month: '2026-10', sd_m: 2, corners: 8, speed_sd_mps: 0.6, speed_corners: 8 }]));
+  check(steady.length === 2 && /^Braking point in Oct 2026: varies under 10 ft, over 8 corners · steadier than Sep 2026, about 30 ft$/.test(steady[0])
+    && /^Speed at the slowest point in Oct 2026: varies about 1 mph · steadier than Sep 2026, 3 mph$/.test(steady[1]), 'braking consistency rows: ' + JSON.stringify(steady));
   check(/Cleanest medium/.test(recs) && !/mph|km\/h/.test(recs), 'records by kind of corner: ' + recs);
   // Your year: the year's cleanest corners, one a road (two roads here), from the same kept observations
   const best = await page.evaluate(() => ApexAnalysis.job('profile', { year: 2026 }).then((r) => r.best));
@@ -5485,7 +5489,7 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   });
   check(dt.has && dt.lines.length === 0, 'a drive with g kept once a second has no touch of its own: ' + JSON.stringify(dt.lines));
   // and its corners against your records by kind (the record of each kind is held by the first drive to reach it)
-  check(dt.best.length >= 2 && /^Tight corners: \d{1,3} at best here(, your record of \d+ tight corners|, level with your record \(.+\)|; your record is \d{1,3}( \(.+\))?)\.$/.test(dt.best[0]), 'a drive against your records: ' + JSON.stringify(dt.best));
+  check(dt.best.length >= 2 && /^Cleanest tight corner: \d{1,3}( · your best of \d+| · level with your best(, .+)?| · your best \d{1,3}(, .+)?)?$/.test(dt.best[0]), 'a drive against your records: ' + JSON.stringify(dt.best));
   // corner by corner on its road: these three drives are on three roads, so no corner has been driven three times
   check(dt.road && dt.road.corners === 0 && dt.road.best === 0, 'no corner of this road driven three times yet: ' + JSON.stringify(dt.road));
   check(dt.say.join(' ') === 'Brakes on: about 1.1 g a second on this drive, 0.8 usually. Turn-in: one quick movement (quicker than the recording can time) on this drive, 0.9 usually.', 'a drive\'s touch in words: ' + dt.say);

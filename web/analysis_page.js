@@ -432,10 +432,9 @@
       for (const { z, r, d } of kinds) { out.push(line(`Cleanest ${z}${way(r.dir)}, of ${r.n} ${z} corners`, d, r.level, day(d))); names.push(d.name); }
       $('recordsTable').innerHTML = out.join('');
       $('recordsTable').querySelectorAll('tr td.l b').forEach((b, i) => { b.textContent = names[i]; });   // names are user text
-      $('recordsNote').textContent = 'Roads are matched by name.';
     }
     const finiteNum = (v) => typeof v === 'number' && Number.isFinite(v);
-    window.apexLogDebug = { loaded: () => drivesLoaded, records: (ds) => renderRecords(ds), driving: () => driving.p };   // e2e/smoke.js seeds the panel (the library itself is untouched)
+    window.apexLogDebug = { steadyLines: (m) => steadyLines(m), loaded: () => drivesLoaded, records: (ds) => renderRecords(ds), driving: () => driving.p };   // e2e/smoke.js seeds the panel (the library itself is untouched)
 
     // Braking consistency by month (IDEAS D-07 trend): how widely your braking point spread inside each month on corners you
     // drove five or more times that month (analysis_client.js steadiness: every drive's coach against the others, in the
@@ -460,13 +459,22 @@
     const monthLabel = (m) => `${MONTHS[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`;
     // the speed at those corners' slowest point, the same way: how steadily you carried speed through them (a spread, never a target)
     const STEADY_CLAIM_MPS = 0.45;                                       // 1 mph
-    function speedNote(months) {
+    // the panel's words: a labelled row a measure, the latest month and, when it is clear, against the first (TestFlight
+    // 2026-11-12, "walls of text": the method and the GPS floor were a paragraph under the chart)
+    function steadyLines(months) {
+      const out = [], a = months[0], z = months[months.length - 1];
+      if (!z) return out;
+      const about = (v) => (v < 3 ? `under ${ApexUnits.fine(3)}` : `about ${ApexUnits.fine(v)}`);           // below the GPS floor, no finer figure
+      const claim = months.length > 1 && Math.abs(z.sd_m - a.sd_m) >= STEADY_CLAIM_M && a.corners >= STEADY_CLAIM_CORNERS && z.corners >= STEADY_CLAIM_CORNERS;
+      out.push(`Braking point in ${monthLabel(z.month)}: varies ${about(z.sd_m)}, over ${z.corners} corners${claim ? ` · ${z.sd_m < a.sd_m ? 'steadier' : 'less steady'} than ${monthLabel(a.month)}, ${about(a.sd_m)}` : ''}`);
       const vs = months.filter((w) => finiteNum(w.speed_sd_mps));
-      if (!vs.length) return '';
-      const spd = (v) => `${Math.max(1, Math.round(ApexUnits.speed(v)))} ${ApexUnits.speedU()}`;
-      const a = vs[0], z = vs[vs.length - 1], diff = z.speed_sd_mps - a.speed_sd_mps;
-      const claim = vs.length > 1 && Math.abs(diff) >= STEADY_CLAIM_MPS && a.speed_corners >= STEADY_CLAIM_CORNERS && z.speed_corners >= STEADY_CLAIM_CORNERS;
-      return ` Your speed at their slowest point varied about ${spd(z.speed_sd_mps)} in ${monthLabel(z.month)}${claim ? `, ${diff < 0 ? 'steadier' : 'less steady'} than ${monthLabel(a.month)} (${spd(a.speed_sd_mps)})` : ''}.`;
+      if (vs.length) {
+        const spd = (v) => `${Math.max(1, Math.round(ApexUnits.speed(v)))} ${ApexUnits.speedU()}`;
+        const b = vs[0], y = vs[vs.length - 1], diff = y.speed_sd_mps - b.speed_sd_mps;
+        const sure = vs.length > 1 && Math.abs(diff) >= STEADY_CLAIM_MPS && b.speed_corners >= STEADY_CLAIM_CORNERS && y.speed_corners >= STEADY_CLAIM_CORNERS;
+        out.push(`Speed at the slowest point in ${monthLabel(y.month)}: varies about ${spd(y.speed_sd_mps)}${sure ? ` · ${diff < 0 ? 'steadier' : 'less steady'} than ${monthLabel(b.month)}, ${spd(b.speed_sd_mps)}` : ''}`);
+      }
+      return out;
     }
     function renderSteadiness() {
       const panel = $('steadyPanel'); if (!panel) return;
@@ -480,13 +488,8 @@
         const grid = [0, top / 2, top].map(v => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.rule}"/><text x="${L - 6}" y="${Y(v) + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${ApexUnits.fine(v)}</text>`).join('');
         const line = months.map((w, i) => `${i ? 'L' : 'M'}${X(w.month).toFixed(1)} ${Y(w.sd_m).toFixed(1)}`).join('');
         const dots = months.map((w) => `<circle cx="${X(w.month).toFixed(1)}" cy="${Y(w.sd_m).toFixed(1)}" r="${Math.min(8, 3 + Math.sqrt(w.corners))}" fill="${C.accent}"><title>${monthLabel(w.month)}: ${ApexUnits.fine(w.sd_m)} over ${w.corners} corners</title></circle><text x="${X(w.month).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${monthLabel(w.month)}</text>`).join('');
-        $('steadyChart').innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Braking consistency by month">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
-        const a = months[0], z = months[months.length - 1], diff = z.sd_m - a.sd_m;
-        const about = (v) => (v < 3 ? `under ${ApexUnits.fine(3)}` : `about ${ApexUnits.fine(v)}`);           // below the floor, no finer figure
-        const claim = Math.abs(diff) >= STEADY_CLAIM_M && a.corners >= STEADY_CLAIM_CORNERS && z.corners >= STEADY_CLAIM_CORNERS;
-        $('steadyNote').textContent = `How widely your braking point varied, within each month, on corners you drove five or more times that month; higher on the chart is steadier (fewer ${ApexUnits.metric() ? 'metres' : 'feet'}), bigger dots are more corners. `
-          + `${monthLabel(z.month)}: ${about(z.sd_m)} over ${z.corners} corners${claim ? `, ${diff < 0 ? 'steadier' : 'less steady'} than ${monthLabel(a.month)} (${about(a.sd_m)})` : ''}. ${ApexUnits.fine(5)} samples and GPS put the floor near ${ApexUnits.fine(3)}.`
-          + speedNote(months);
+        $('steadyChart').innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Braking consistency by month, steadier higher">${grid}<text x="${W - R}" y="${Y(0) - 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">steadier \u2191</text><path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
+        $('steadyNote').replaceChildren(...steadyLines(months).map((t) => { const n = document.createElement('p'); n.className = 'note'; n.textContent = t; return n; }));
       });
     }
 
