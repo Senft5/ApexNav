@@ -7728,6 +7728,47 @@ flow('corner clips: with the video lined up, a corner it holds comes out as a po
   check(await page.evaluate(() => document.querySelector('#dvDashcam .dc-clips button').disabled), 'nothing to clip, the key is off');
 });
 
+flow('film the drive: the app\'s own video of a drive is offered on its page, lined up by itself, and cuts a corner clip (big bet 5)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} window.APEX_DRIVECAM = '/__drivecam/'; });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  const T0 = 1763000000000;
+  // a drive that kept its clock (t0, t_s), and a 7 s video "filmed" from 1.5 s into it (DriveCam.swift names it for that moment)
+  const b64 = await page.evaluate(async (t0) => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 300; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9); }
+    await ApexRecording.store({ id: 'fd1', name: 'Filmed road', date: '2026-11-13T15:00:00Z', t0, t_s: lat.map((_, i) => i / 3), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => -0.1), lat_g: lat.map((_, i) => Math.sin(i / 3) * 0.4), g_known: null, elev: null, hz: 1, source: 'web-gps',
+      events: [{ type: 'corner', code: 'L4', call: 'Left 4', index: 9, dist_m: 45, start_m: 30, end_m: 60, radius_m: 80, apex_mph: 30, dir: 'L', severity: 4 }] });
+    const c = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }), g = c.getContext('2d');
+    const rec = new MediaRecorder(c.captureStream(15), { mimeType: 'video/webm' }), parts = [];
+    rec.ondataavailable = (e) => parts.push(e.data);
+    const stop = new Promise((ok) => { rec.onstop = ok; });
+    rec.start(); let f = 0; const t = setInterval(() => { g.fillStyle = `hsl(${f++ * 12},60%,50%)`; g.fillRect(0, 0, 320, 180); }, 66);
+    await new Promise((r) => setTimeout(r, 7200)); clearInterval(t); rec.stop(); await stop;
+    const buf = new Uint8Array(await new Blob(parts).arrayBuffer());
+    let bin = ''; for (let k = 0; k < buf.length; k += 0x8000) bin += String.fromCharCode(...buf.subarray(k, k + 0x8000));
+    return btoa(bin);
+  }, T0);
+  const name = `${T0 + 1500}.mov`;
+  await page.route('**/__drivecam/index.json', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify([{ name, start_ms: T0 + 1500, dur_s: 7.2 }, { name: '1.mov', start_ms: T0 - 9e6, dur_s: 60 }]) }));
+  await page.route(`**/__drivecam/${name}`, (r) => r.fulfill({ contentType: 'video/webm', body: Buffer.from(b64, 'base64') }));
+  await page.goto(base + '/analysis.html?drive=fd1');
+  await page.waitForSelector('#dvDashcam .dc-own button');
+  const keys = await page.evaluate(() => [...document.querySelectorAll('#dvDashcam .dc-own button')].map((b) => b.textContent));
+  check(keys.length === 1 && keys[0] === 'This drive\'s video · 7 s', 'only the video filmed on this drive is offered: ' + JSON.stringify(keys));
+  check(/Vetta filmed this drive/.test(await page.textContent('#dvDashcam')), 'the panel says it was filmed');
+  await page.evaluate(() => { window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type) => { window.__saved = { size: blob.size, name, type }; return 'saved'; }; });
+  await page.click('#dvDashcam .dc-own button');
+  await page.waitForFunction(() => /Video starts 1\.5 s into the drive/.test(document.querySelector('#dvDashcam').textContent), null, { timeout: 8000 });
+  // the corner (2 to 4 s into the drive) is in the video though its lead isn't all there: offered, cut from the video's start
+  await page.waitForFunction(() => { const b = document.querySelector('#dvDashcam .dc-clips button'); return b && !b.disabled && document.querySelector('#dvDashcam .dc-clip-pick option'); }, null, { timeout: 15000 });
+  await page.click('#dvDashcam .dc-clips button');
+  await page.waitForFunction(() => window.__saved, null, { timeout: 30000 });
+  const saved = await page.evaluate(() => window.__saved);
+  check(saved.size > 500 && /^Filmed_road-corner-1-/.test(saved.name), 'a clip from the drive\'s own video, with no lining up: ' + JSON.stringify(saved));
+});
+
 // A drive for the drive page's own flows: north 1.5 km with a corner call (dashcam) and some g (the grip circle)
 async function storeDashDrive(page, id = 'dc1', name = 'Dashcam road') {
   await page.evaluate(async ([id, name]) => {

@@ -182,7 +182,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, nudge: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, nudge: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -8315,6 +8315,7 @@
         updateCoverage();
         if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Tap a road for what was measured. A road with no line earns its first drivers extra points.');
       }
+      if (k === 'drivecam') driveCam(driveActive);                    // switched mid-drive: films (or stops) now
       if (k === 'nudge') nudgeSwitched();                              // panel R-1: asks for notifications only now
       if (k === 'twisty') {
         updateTwisty();
@@ -8364,6 +8365,25 @@
     // =======================================================================
     const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0, rest: null, brakes: null, descentSaid: null, flow: null, wet: null };
     const NATIVE_SHELL = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex);
+    // Film the drive (big bet 5, DriveCam.swift): only the app has a camera to film with; on the web the setting is not offered
+    // (its row hides when #driveCamRow is empty). On while a drive runs with the switch set; the shell says what it is doing.
+    if (!NATIVE_SHELL && $('driveCamRow')) $('driveCamRow').replaceChildren();
+    var driveCamOn = false;                                           // (var: enterDrive may run before this line is reached)
+    function driveCam(want) {
+      const on = !!(want && NATIVE_SHELL && state.toggles.drivecam);
+      if (on === driveCamOn || !NATIVE_SHELL) return;
+      driveCamOn = on;
+      try { window.webkit.messageHandlers.apex.postMessage({ cmd: 'driveCam', on }); } catch (_) {}
+    }
+    function driveCamSaid(st) {
+      const n = $('driveCamState');
+      if (st === 'denied') {
+        if (n) n.textContent = 'Vetta can\'t use the camera. Allow it in the iPhone\'s Settings → Vetta → Camera.';
+        if (driveCamOn) toast('Not filming: Vetta can\'t use the camera. Allow it in Settings → Vetta.');
+      } else if (st === 'unavailable') { if (n) n.textContent = 'This phone\'s back camera isn\'t available to film with.'; }
+      else if (st === 'on' && n) n.textContent = 'Filming this drive.';
+      else if (st === 'off' && n) n.textContent = 'Films while Vetta is on the phone\'s screen. Videos stay on this phone, the oldest going after about two hours of them.';
+    }
     function paintModeSwitch() {
       const on = state.mode === 'live';
       $('driveBar').hidden = !on; $('transport').hidden = on;
@@ -9666,6 +9686,7 @@
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
       driveActive = true; health.bump('drives'); drive.startedAt = performance.now();
+      driveCam(true);                                                  // Film the drive (DriveCam.swift): the app films the road
       leaveAtMs = null; whenReset();                                                     // driving it now: the plan's hour is this one
       learnFromPick();                                                 // a route you chose over Vetta's first: your taste (taste.js)
       // A drive takes the whole screen, whatever the phone was showing: a drive started from the car (or a link, or Siri)
@@ -10004,7 +10025,7 @@
     // ended: why a drive ended itself ('car', 'parked'; drive_keep.js EndWatch), or nothing for End
     async function leaveDrive(save, ended) {
       if (pendingEnd) { clearTimeout(pendingEnd.timer); pendingEnd = null; paintEndUndo(); }   // I-3: any other way out ends it now
-      driveActive = false; soundtrackStop(); drive.wet = null; if (ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null);   // the dry road back
+      driveActive = false; driveCam(false); soundtrackStop(); drive.wet = null; if (ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null);   // the dry road back
       const kept = keepStop();                                         // Round 3: no more checkpoints; dropped once saved
       stageWatch = null; $('stageBar').hidden = true;
       const laps = circuit.timer ? circuit.timer.state(Date.now()).laps : [];
@@ -10632,6 +10653,7 @@
       },
       onNative(msg) {
         if (msg && msg.type === 'journals') { if (journalsWaiter) journalsWaiter(msg); return; }
+        if (msg && msg.type === 'driveCam') { driveCamSaid(msg.state); return; }
         if (msg && msg.type === 'lifecycle') { if (driveActive) keepSave(); return; }   // going to the background: kept now
         if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'nudge') { nudgeAnswered(!!msg.granted); return; }

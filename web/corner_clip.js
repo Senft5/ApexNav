@@ -9,14 +9,16 @@
   /**
    * Where corner c (d.corners[k]: start, end in 5 m samples) sits in the video: { t0, t1 } in drive seconds (T: elapsed
    * time per sample), { vt0, vt1 } in video seconds, with the video starting offsetS into the drive and lasting dur s.
-   * null when any of it falls outside the video (a clip never shows a frame the video does not have).
+   * The lead and tail are cut short where the video starts or ends (the app's own film starts as the drive does); null
+   * when the corner itself is not all in the video (a clip never shows a frame the video does not have).
    */
   function clipWindow(T, c, offsetS, dur) {
     if (!c || !T || !T.length || !(dur > 0)) return null;
     const last = T[T.length - 1], s = T[Math.max(0, c.start)], e = T[Math.min(T.length - 1, c.end)];
     if (!finite(s) || !finite(e)) return null;
-    const t0 = Math.max(0, s - LEAD_S), t1 = Math.min(last, e + TAIL_S), vt0 = t0 - offsetS, vt1 = t1 - offsetS;
-    return vt0 >= 0 && vt1 <= dur && vt1 > vt0 ? { t0, t1, vt0, vt1 } : null;
+    if (s < offsetS || e > offsetS + dur) return null;
+    const t0 = Math.max(0, s - LEAD_S, offsetS), t1 = Math.min(last, e + TAIL_S, offsetS + dur), vt0 = t0 - offsetS, vt1 = t1 - offsetS;
+    return vt1 > vt0 ? { t0, t1, vt0, vt1 } : null;
   }
   /** The drive's corner calls as stretches of 5 m samples, in road order: [{ start, end, call }] (from d.events). */
   function cornersOf(d) {

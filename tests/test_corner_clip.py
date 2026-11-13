@@ -17,7 +17,7 @@ const n = 300, d = { speed_mps: Array(n).fill(15), lat_g: Array.from({ length: n
 const T = d.speed_mps.map((_, i) => i * 5 / 15);
 const corners = C.cornersOf(d), w = C.clipWindow(T, corners[0], 0, 7.2);
 const fmt = (v) => `${Math.round(v * 2.23694)} mph`;
-console.log(JSON.stringify({ corners, w, list: C.clippable(d, T, 0, 7.2), later: C.clippable(d, T, 30, 7.2), shifted: C.clippable(d, T, 26, 12),
+console.log(JSON.stringify({ corners, w, list: C.clippable(d, T, 0, 7.2), later: C.clippable(d, T, 30, 7.2), cut: C.clippable(d, T, 3, 7.2), past: C.clippable(d, T, 35, 7.2), shifted: C.clippable(d, T, 26, 12),
   tr: C.traceOf(d, T, w), f: C.frameAt(d, T, w, 3, 0, fmt), unknown: C.frameAt({ ...d, g_known: Array(n).fill(false) }, T, w, 3, 0, fmt), none: C.clipWindow(T, corners[0], 0, 0) }));
 """
 
@@ -41,7 +41,9 @@ def test_the_window_has_a_lead_and_a_tail_and_stays_in_the_video(r):
 
 def test_only_corners_the_video_holds_are_offered(r):
     assert [x["label"] for x in r["list"]] == ["Corner 1 · Left 4"]
-    assert r["later"] == []                               # slid past the first call, the second is still after the video
+    # the video starts 2 s before the second call: its lead is cut short at the video's first frame
+    assert [x["label"] for x in r["later"]] == ["Corner 2 · Right 3"] and r["later"][0]["w"]["vt0"] == 0
+    assert r["cut"] == [] and r["past"] == []             # a corner only partly in the video is not offered
     assert [x["label"] for x in r["shifted"]] == ["Corner 2 · Right 3"] and r["shifted"][0]["w"]["vt0"] == pytest.approx(32 - 4 - 26)
 
 
