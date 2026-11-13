@@ -3390,7 +3390,16 @@
     // frames the whole route and the car: above the open card when it leaves a strip to see the route in (U-70), else above
     // the bar (on its side, or the desk's column, the card covers the map: the fit is for when it goes down).
     // The app's own move: follow pauses without the recenter key, which a drag of the map brings up (U-71, U-122).
+    // The map the open sheet covers from the left when it is a column beside the map (a phone in landscape with a route
+    // planned, the desk's Where to?), in px of the map; 0 when it lies across the map's foot (2026-11-13)
+    function sideCover() {
+      const panel = $('planPanel');
+      if (!panel.classList.contains('open')) return 0;
+      const r = panel.getBoundingClientRect(), m = map.getContainer().getBoundingClientRect();
+      return r.width > 0 && r.width < m.width * 0.7 && r.left <= m.left + 24 && r.right > m.left ? Math.round(r.right - m.left) : 0;
+    }
     function routeBottom(aboveCard) {
+      if (sideCover()) return viewInsets().b + 24;                   // the card is beside the route, not under it
       const sv = viewInsets(), panel = $('planPanel'), mapH = (map.getContainer().clientHeight - sv.t - sv.b) || window.innerHeight;   // F-02: the map you can see, not its full-bleed box
       const desk = matchMedia('(min-width: 1100px) and (min-height: 600px)').matches;
       const overCard = aboveCard && panel.classList.contains('open') && !desk && mapH - panel.offsetHeight >= 120;
@@ -3401,7 +3410,7 @@
       const sv = viewInsets();
       map.stop();
       map.jumpTo({ padding: { top: 0, bottom: 0, left: 0, right: 0 } });
-      map.fitBounds(bounds, { padding: { top: sv.t + 60, left: sv.l + 40, right: sv.r + 60, bottom }, pitch: 0, bearing: 0, duration, maxZoom: 16 });
+      map.fitBounds(bounds, { padding: { top: sv.t + 60, left: Math.max(sv.l, sideCover()) + 40, right: sv.r + 60, bottom }, pitch: 0, bearing: 0, duration, maxZoom: 16 });
     }
     function fitPlannedRoute(t = plannedRoute, aboveCard = false) {
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2 || state.mode === 'live') return;
