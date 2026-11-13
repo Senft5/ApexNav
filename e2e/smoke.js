@@ -1063,6 +1063,17 @@ async function ownTrip(page, base, level = null) {
     steps: (window.apexDebug.track.steps || []).map((s) => s.street), via: ((window.apexDebug.track.request || {}).via || []).length }));
   return { r, calls };
 }
+flow('landscape: a planned route is the card alone, not under the search sheet (2026-11-13: it sat below Where to?\'s two columns)', async (page, base) => {
+  graphDir = graphFixture();
+  try {
+    await ownTrip(page, base);
+    const r = await page.evaluate(() => { const vis = (el) => !!el && el.getClientRects().length > 0;
+      return { routed: document.getElementById('planPanel').classList.contains('routed'), search: vis(document.querySelector('.plan-search-section')),
+        card: Math.round(document.getElementById('routeCard').getBoundingClientRect().top - document.getElementById('planBody').getBoundingClientRect().top) }; });
+    check(r.routed && !r.search && r.card <= 8, 'the card is the sheet, at its top: ' + JSON.stringify(r));
+  } finally { graphDir = null; }
+}, { viewport: { width: 844, height: 390 }, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 flow('design pass 2: the route card\'s last row is one ruled strip of keys, and the map\'s credit is a plate on the look\'s own tokens (IDEAS U-53)', async (page, base) => {
   graphDir = graphFixture();
   try {
@@ -8483,6 +8494,11 @@ flow('when to go: the route card says the best time to leave, opens the next day
   const line = await page.evaluate(() => ({ text: document.getElementById('routeWhenLine').textContent, open: document.getElementById('routeWhenLine').getAttribute('aria-expanded'),
     panel: !document.getElementById('routeWhenPanel').hidden, when: apexDebug.lastWhen }));
   check(/^(Better at |Leave by |Go now|No better time )/.test(line.text) && line.open === 'false' && !line.panel, 'the card says when to go in one line, closed: ' + JSON.stringify(line));
+  // its words sit inside their row at any length (two lines at 375 px ran over the rule above, 2026-11-13)
+  const whenBox = await page.evaluate(() => { const p = document.getElementById('routeCardWhen'), b = document.getElementById('routeWhenLine'), was = b.textContent, r = document.createRange();
+    b.textContent = 'Better at 2:00 PM tomorrow: no school run, lighter traffic, the sun behind you'; r.selectNodeContents(b);
+    const t = r.getBoundingClientRect(), q = p.getBoundingClientRect(); b.textContent = was; return { t: Math.round(t.top), b: Math.round(t.bottom), qt: Math.round(q.top), qb: Math.round(q.bottom), h: Math.round(t.height) }; });
+  check(whenBox.t >= whenBox.qt && whenBox.b <= whenBox.qb, 'the When line\'s words are inside its row: ' + JSON.stringify(whenBox));
   check(line.when.forecast === false && line.when.slots >= 40, 'a day of departures, and no forecast claimed without one: ' + JSON.stringify(line.when));
   await page.evaluate(() => document.getElementById('routeWhenLine').scrollIntoView({ block: 'center' }));
   await tap('#routeWhenLine', 'When to go');
