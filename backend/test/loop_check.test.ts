@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loopOnRoads, requireOnRoads, samplesOf, tileName, tilePolylines } from "../src/loop_check";
+import { loopOnRoads, requireOnRoads, MAX_SAMPLES, samplesOf, tileName, tilePolylines } from "../src/loop_check";
 import type { Env } from "../src/util";
 
 // Written by tools/graph_etl/tiles.py write_tile: tile 382_516 with a through road (class 3) along 39.1 N from 84.45 W to
@@ -20,7 +20,14 @@ describe("loop on roads", () => {
     expect(tilePolylines(bytes(), [39.2, -84.3, 39.21, -84.29])).toEqual([]);           // far from both
     expect(() => tilePolylines(new Uint8Array(80))).toThrow();
     expect(tileName(39.1, -84.45)).toBe("382_516");
-    expect(samplesOf(line([39.1, -84.45], [39.1, -84.4])).length).toBe(44);             // 4.3 km every 100 m
+    expect(samplesOf(line([39.1, -84.45], [39.1, -84.4])).length).toBe(22);             // 4.3 km every 200 m
+    const long = samplesOf(line([39.1, -84.45], [39.1, -83.9]));                          // 47 km: spread to MAX_SAMPLES
+    expect(long.length).toBeGreaterThanOrEqual(MAX_SAMPLES);
+    expect(long.length).toBeLessThanOrEqual(MAX_SAMPLES + 1);
+    // with the samples, only lines that can come near one: the box holds both roads, the sample only the through road's end
+    const box: [number, number, number, number] = [39.1, -84.45, 39.11, -84.4];
+    expect(tilePolylines(bytes(), box, [[39.1, -84.45]]).map((p) => p.cls)).toEqual([3]);
+    expect(tilePolylines(bytes(), box, [[39.3, -84.2]])).toEqual([]);
   });
 
   it("passes a loop on the through road, refuses one off the roads or on the lane", async () => {
