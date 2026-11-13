@@ -33,7 +33,7 @@ owner's rows are also in docs/OWNER_TODO.md. Apple's rules in detail: docs/APP_R
 | Kill switches | Built: feature flags from the Worker (track mode, taste, crowd curvature; Pro will be one) |
 | Security headers | Built: Content-Security-Policy on every page (tools/csp.py), session token in the Keychain |
 | Offline | Built: website requests give up after 30 s like the app's (#538), and the website opens from its kept copy when the network answers nothing (#552); notes and directions run without signal once a route is loaded; offline map areas; reports wait and send later; a whole drive records, scores and saves with no signal (checked 2026-11-12), and the map says when it has no map |
-| Costs | Workers Free today; Workers Paid ($5/month) once traffic or 30-day Time Travel matter |
+| Costs | Workers Free today; Workers Paid ($5/month) once traffic or 30-day Time Travel matter. **Free has hard daily caps across the account**, and once one is used up, everything fails until midnight UTC: D1 allows 100,000 rows written a day, and road-data upload writes at least 200 rows per km driven (one per 5 m bin, measured in the local D1 on 2026-11-13; index writes add more), so at most about 500 km of uploaded driving a day uses it all and sign-in, publishing and the rest stop with it. The API then answers 503 `service_unavailable` with Retry-After. Other caps: 5 million D1 rows read, 100,000 requests and 1,000 KV writes (photos) a day. Move to Paid before more than a handful of people upload drives |
 | Monitoring an outage | Built: the status workflow checks the site, `/api/health` and the weekly backup and daily sweep every 30 minutes and opens an "outage" issue (GitHub emails the owner); STATUS.md | — |
 
 ## 3. Quality bar before submitting

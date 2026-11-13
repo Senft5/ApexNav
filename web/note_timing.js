@@ -6,6 +6,14 @@
 (function (root) {
   'use strict';
   const DECEL_MPS2 = 3.4;                // a firm but unhurried stop: 0.35 g
+  // The road today (wet_roads.js): on a wet or icy road the car stops slower and corners slower, so the notes come earlier.
+  // setRoad({ decelMps2, apexK }) for a drive; setRoad(null) puts the dry road back. Unknown weather leaves it dry.
+  let decel = DECEL_MPS2, apexK = 1;
+  function setRoad(r) {
+    decel = r && finite(r.decelMps2) && r.decelMps2 > 0 ? Math.min(DECEL_MPS2, r.decelMps2) : DECEL_MPS2;
+    apexK = r && finite(r.apexK) && r.apexK > 0 ? Math.min(1, r.apexK) : 1;
+  }
+  const apexToday = (a) => (finite(a) ? a * apexK : a);
   const MIN_M = 60, MAX_M = 600;
   const REACT_DEFAULT_S = 1.2, REACT_MIN_S = 0.6, REACT_MAX_S = 2.5, REACT_ALPHA = 0.2;
   const BRAKE_G = -0.15, NEEDS_BRAKE_MPS = 2;   // braking starts below -0.15 g; a corner "needs" braking when 2+ m/s slower
@@ -23,7 +31,7 @@
    */
   function leadM({ vMps, apexMps = null, text = '', reactionS = REACT_DEFAULT_S }) {
     const v = finite(vMps) ? Math.max(0, vMps) : 0;
-    const brake = finite(apexMps) && apexMps < v ? (v * v - apexMps * apexMps) / (2 * DECEL_MPS2) : 0;
+    const a = apexToday(apexMps), brake = finite(a) && a < v ? (v * v - a * a) / (2 * decel) : 0;
     const think = finite(apexMps) ? THINK_S : 0;
     return Math.round(Math.max(MIN_M, Math.min(MAX_M, v * (speakS(text) + think + reactionS) + brake)));
   }
@@ -56,7 +64,7 @@
     };
   }
 
-  const needsBrake = (vMps, apexMps) => finite(vMps) && finite(apexMps) && vMps - apexMps >= NEEDS_BRAKE_MPS;
+  const needsBrake = (vMps, apexMps) => finite(vMps) && finite(apexMps) && vMps - apexToday(apexMps) >= NEEDS_BRAKE_MPS;
 
   // ---------------------------------------------------------------------------------------------------------------------
   // U-58: Auto reads the road. Interesting is a property of the road ahead (the route's corners, each with its severity
@@ -167,7 +175,7 @@
   const ASIDE_SLACK_S = 1;    // the call may start up to a second's driving after the planned point (frames, a busy queue)
   /** The advice said as the call's last clause: "Careful, hairpin left, long. Brake before it, not in it." */
   const withAdvice = (callText, advice) => `${String(callText || '').replace(/[.\s]+$/, '')}. ${String(advice || '').trim()}`;
-  const brakeM = (v, apexMps) => (finite(apexMps) && apexMps < v ? (v * v - apexMps * apexMps) / (2 * DECEL_MPS2) : 0);
+  const brakeM = (v, apexMps) => { const a = apexToday(apexMps); return finite(a) && a < v ? (v * v - a * a) / (2 * decel) : 0; };
   /** Metres before the entry that a call with an aside must be done by: max(ASIDE_MIN_S, think + react + braking). */
   function asideMarginM({ vMps, apexMps = null, reactionS = REACT_DEFAULT_S }) {
     const v = finite(vMps) ? Math.max(0, vMps) : 0;
@@ -224,6 +232,6 @@
 
   const api = { leadM, speakS, lastCallM, LATE_S, asideWindow, asideMarginM, withAdvice, ASIDE_MIN_S, chainReachM, NAME_NEXT_M, NAME_NEXT_S,
     keepsAwake, quietM, quietSpan, SLEEP_MIN_M, QUIET_MIN_S, QUIET_SAID_M, createCareRun, CARE_RUN_M, createReactionLearner, needsBrake, wakes, wakeWindowM, wakeCorner, nextWake, createWakeVoice,
-    DECEL_MPS2, MIN_M, MAX_M, REACT_DEFAULT_S, THINK_S, WAKE_MIN_M, TRANSITION_GAP_MS };
+    DECEL_MPS2, setRoad, MIN_M, MAX_M, REACT_DEFAULT_S, THINK_S, WAKE_MIN_M, TRANSITION_GAP_MS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexNoteTiming = api;
 })(typeof window !== 'undefined' ? window : globalThis);

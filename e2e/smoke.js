@@ -1995,7 +1995,9 @@ flow('a reported road closure the route still drives is on the route card (Worke
     const req = JSON.parse(route.request().postData() || '{}');
     route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
   });
-  let closures = [{ id: 'c1', kind: 'closure', lat: 35.86255, lon: -83.94135, heading: null, confirms: 1, clears: 0, m: 0 }];
+  let closures = [{ id: 'c1', kind: 'closure', lat: 35.86255, lon: -83.94135, heading: null, confirms: 1, clears: 0, m: 0 },
+    { id: 'h1', kind: 'pothole', lat: 35.85, lon: -83.94, heading: null, confirms: 2, clears: 0, m: 0 },        // confirmed: in the search
+    { id: 'h2', kind: 'gravel', lat: 35.84, lon: -83.94, heading: null, confirms: 0, clears: 0, m: 0 }];       // one driver's: not
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url());
     if (u.pathname === '/api/hazards') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(closures) });
@@ -2010,6 +2012,8 @@ flow('a reported road closure the route still drives is on the route card (Worke
   await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 20000 });
   await page.waitForFunction(() => /Passes a reported road closure/.test(document.getElementById('routeCardSub').textContent), null, { timeout: 10000 });
   check(Array.isArray(await page.evaluate(() => apexDebug.lastClosed)), 'the plan carried the closures to our router');
+  const rh = await page.evaluate(() => apexDebug.lastRoadHazards);
+  check(JSON.stringify(rh) === JSON.stringify([{ lat: 35.85, lon: -83.94 }]), 'the plan carried the confirmed pothole to our router, not the unconfirmed gravel: ' + JSON.stringify(rh));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('avoid police reports, driving: a report that lands on the route ahead is offered once with Go round, which routes round it (Worker and router stubbed)', async (page, base) => {
@@ -2441,6 +2445,20 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'notice'), null, { timeout: 5000 });
   const notice = await page.evaluate(() => window.__car.filter((m) => m.kind === 'notice'));
   check(notice.length === 1 && notice[0].titles.join('|') === 'No GPS fix yet.', 'a report from the car with no fix says so on the car: ' + JSON.stringify(notice));
+  // the car's Places as Where to? lists them: a pinned Home first, then a saved route, which the phone opens from its copy
+  const placesCar = await page.evaluate(() => {
+    localStorage.setItem('apex.pinnedPlaces', JSON.stringify([{ name: 'Home', label: '12 Oak St', lat: 35.61, lon: -84.11 }]));
+    const coords = Array.from({ length: 40 }, (_, i) => [-84.1 + i * 0.0004, 35.6 + i * 0.0003]);
+    ApexSavedRoutes.save(localStorage, { v: 1, id: 'saved_e2e', name: 'Test road', savedAt: Date.now(), request: null, coords, steps: [], timeMarks: [], miles: 1.2 });
+    window.apex.onNative({ type: 'carplay', action: 'places' });
+    return window.__car.filter((m) => m.kind === 'places').pop();
+  });
+  check(placesCar && placesCar.list[0].name === 'Home' && placesCar.list[0].detail === '12 Oak St' && placesCar.list[1].saved === 'saved_e2e'
+    && /^Saved · /.test(placesCar.list[1].detail), 'the car\'s Places: pinned, then saved: ' + JSON.stringify(placesCar));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'saved', id: 'saved_e2e' }));
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.id === 'saved_e2e', null, { timeout: 10000 })
+    .catch(async () => { throw new Error('the saved route from the car never opened: ' + JSON.stringify(await page.evaluate(() => window.apexDebug.track && window.apexDebug.track.id))); });
+  await page.evaluate(() => { ApexSavedRoutes.remove(localStorage, 'saved_e2e'); localStorage.removeItem('apex.pinnedPlaces'); });
   await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }));   // the shell's fix, as in the app
   // the cafés and fuel along it, by name on the car's route preview (the owner, 2026-11-11)
   await page.evaluate(() => { ApexStages.pois = async (pts) => { const a = pts[Math.min(1, pts.length - 1)];
@@ -4659,6 +4677,37 @@ flow('a saved stage: the live delta shows while you drive it and the result at t
   check(said.length === 1, `the result is said once (${JSON.stringify(said)})`);
 });
 
+flow('wet roads: rain where you are (the place plate\'s weather) brings the notes earlier and is said once (wet_roads.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  const asked = [];
+  await page.route('**/api.open-meteo.com/**', (route) => { asked.push(route.request().url());
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ current: { temperature_2m: 11, precipitation: 0.6, weather_code: 63 }, hourly: { time: [], precipitation: [] } }) }); });
+  await page.route('**/api.weather.gov/**', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.route('**/nominatim.openstreetmap.org/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.ApexWetRoads && window.ApexNoteTiming);
+  const dryLead = await page.evaluate(() => ApexNoteTiming.leadM({ vMps: 25, apexMps: 12, text: 'Left 3' }));
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForTimeout(300);
+  if (await page.isVisible('#permSheet.show')) await page.click('#permGo');
+  for (let burst = 0; burst < 12 && !(await page.evaluate(() => window.__said.some((t) => /^Wet roads/.test(t)))); burst++) {
+    await page.evaluate((burst) => {
+      for (let j = 0; j < 20; j++) { const k = burst * 20 + j;
+        window.apex.live({ lat: 39.1 + k * 5 / 110540, lon: -84.5, accuracy_m: 4, speed_mps: 20, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); }
+    }, burst);
+    await page.waitForTimeout(1000);
+  }
+  check(await page.evaluate(() => window.apexDebug.wetRoad) === 'wet', 'the road reads wet');
+  const said = await page.evaluate(() => window.__said.filter((t) => /^Wet roads/.test(t)));
+  check(said.length === 1, `said once (${JSON.stringify(said)})`);
+  check(asked.length === 1, `nothing new asked: the plate's one request (${asked.length})`);
+  const wetLead = await page.evaluate(() => ApexNoteTiming.leadM({ vMps: 25, apexMps: 12, text: 'Left 3' }));
+  check(wetLead > dryLead, `the notes come earlier (${dryLead} → ${wetLead} m)`);
+});
+
 flow("friends' activity: the Log lists who drove your stages lately and where you stand, as text; kudos (Worker stubbed, IDEAS S-03, S-07)", async (page, base) => {
   const kudos = [];
   await page.route('**/api/**', (route) => {
@@ -4816,6 +4865,11 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
     const body = c && c.querySelector('.cp-more-body'); return !!body && !/Stop being|I.ll lead|I.ll sweep/.test(body.textContent); }),
     'the planner\'s card: the roles in Set it up only, not again as links above it');
   check(!/List it for everyone/.test(await page.textContent(`${myCard} .cp-set`)), 'a private crew is not offered a public meet');
+  await page.waitForSelector(`${myCard} .cp-set .row-pick + .row-pick-native + .row-pick`);
+  const rules = await page.evaluate(() => { const c = [...document.querySelectorAll('.drive-card:not(.meet-card)')].find((x) => /My run/.test(x.textContent));
+    const [a, b] = c.querySelectorAll('.cp-set .row-pick'), ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    return { gap: Math.round(rb.top - ra.bottom), top: getComputedStyle(b).borderTopWidth }; });
+  check(rules.gap === 0 && rules.top === '0px', 'Lead and Sweep are one list, one rule between them: ' + JSON.stringify(rules));
   await page.fill(`${myCard} input[aria-label="Notes"]`, 'Fuel first.');
   await page.click(`${myCard} .cp-set button:text-is("Save")`);
   await page.waitForFunction(() => /Notes saved/.test(document.getElementById('toast').textContent));
@@ -8421,6 +8475,40 @@ flow('the co-driver says a long descent once as the car nears its top, from the 
   check(said.length === 1 && /^Long descent ahead: [\d.]+ miles at 8 percent\. A lower gear saves the brakes\.$/.test(said[0]), 'said once near the top: ' + JSON.stringify(said));
   for (let i = 420; i <= 500; i += 3) { await at(i, 20); await page.waitForTimeout(40); }
   check((await calls()).length === 1, 'and not again on the way down: ' + JSON.stringify(await calls()));
+});
+
+flow('the co-driver says a low sun once when the route turns into it, and not again once it is in view (sun_ahead.js, live R-13)', async (page, base) => {
+  const Sun = require('../web/sun.js'), dusk = new Date('2026-06-21T00:20:00Z'), LAT = 35.5, LON = -83.9;
+  await page.clock.setFixedTime(dusk);                       // the sun 0-15 degrees up in the west-northwest
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport && window.apex && window.apex.live && window.ApexSunAhead);
+  // north for 1 km (the sun off to the left), then 1 km straight at it
+  const az = Sun.sunPosition(dusk, LAT, LON).azimuth, pts = [];
+  let lat = LAT, lon = LON;
+  for (let m = 0; m <= 2000; m += 5) { pts.push([lat, lon]); const h = m < 1000 ? 0 : az;
+    lat += 5 * Math.cos(h) / 110540; lon += 5 * Math.sin(h) / (111320 * Math.cos(lat * Math.PI / 180)); }
+  const gpx = pts.map(([a, o]) => `<trkpt lat="${a.toFixed(7)}" lon="${o.toFixed(7)}"/>`).join('');
+  await page.setInputFiles('#gpxFile', { name: 'sunset.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Into the sunset</name><trkseg>${gpx}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Into the sunset', null, { timeout: 10000 });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const at = (i, v) => page.evaluate(([i, v]) => { const t = apexDebug.track, j = Math.min(i + 1, t.lat.length - 1), k = Math.max(0, j - 1);
+    const course = (Math.atan2((t.lon[j] - t.lon[k]) * Math.cos(t.lat[k] * Math.PI / 180), t.lat[j] - t.lat[k]) * 180 / Math.PI + 360) % 360;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: v, course_deg: course, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, [i, v]);
+  const calls = () => page.evaluate(() => window.__said.filter((s) => s === 'Sun in your eyes ahead.'));
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  // the first 50 m: the bend is more than 900 m off, nothing yet
+  for (let i = 0, end = await iAt(50); i <= end; i += 2) { await at(i, 20); await page.waitForTimeout(40); }
+  check((await calls()).length === 0, 'nothing said a long way short of the bend: ' + JSON.stringify(await calls()));
+  // up to the bend: said once
+  for (let i = await iAt(50), end = await iAt(900); i <= end; i += 3) { await at(i, 20); await page.waitForTimeout(50); }
+  check((await calls()).length === 1, 'said once before the bend: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  // into the sun: the driver sees it, not said again
+  for (let i = await iAt(1000), end = await iAt(1600); i <= end; i += 3) { await at(i, 20); await page.waitForTimeout(30); }
+  check((await calls()).length === 1, 'not again with the sun in view: ' + JSON.stringify(await calls()));
 });
 
 flow('the co-driver counts clean corners in a row live and says five, then ten, and passing the month\'s best once, never in Quiet notes (flow_live.js, IDEAS D-30)', async (page, base) => {

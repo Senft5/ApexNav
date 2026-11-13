@@ -378,6 +378,7 @@ def test_client_worker_fallback_and_timeout():
     assert r["cov"] is True and r["n"] >= 2 and r["sent"] == ["covers", "plan"], r
     assert r["inlineSame"], "a worker that won't start: the same answer from the page"
     assert r["timeout"] == "graph router timed out" and r["none"] == "no graph router here", r
+    assert r["funWait"] == "waiting" and r["maxWait"] == "waiting", "Fun and Long way outlast the page's own timeout"
 
 
 def test_planner_glue():
@@ -438,6 +439,18 @@ def test_reported_closures_keep_our_routes_and_loops_off_the_road():
     assert r["max1"] == 50 and r["max2"] == 50, r
     assert r["loop0Near"] < 20, r
     assert r["loopNear"] and all(d > 35 for d in r["loopNear"]), r
+
+
+def test_confirmed_road_hazards_nudge_the_search():
+    """Members' confirmed pothole, gravel and debris reports (graph_router.js HAZARD_X, avoid.hazards): the edges within
+    30 m of one cost x1.3, always (no switch), once however many sit on a road; a nudge, not a closure, so the quickest
+    still drives one when the way round costs more; a report far from any road changes nothing."""
+    r = case("hazards")
+    assert r["baseNear"] < 20, r
+    assert abs(r["r1"]["m"] - 1.3) < 1e-3 and abs(r["r2"]["m"] - 1.3) < 1e-3, r
+    assert 0 < r["r1"]["n"] <= 12 and r["r2"]["n"] == r["r1"]["n"], r
+    assert r["quickS"] >= r["baseS"] and r["quickS"] < r["baseS"] * 1.3, r
+    assert r["farMax"] == 1, r
 
 
 def test_there_and_back_comes_home_by_other_road():

@@ -18,8 +18,17 @@ def test_every_plan_carries_the_closures_even_with_no_avoid_switch_on():
     b = body("avoidForTrip")
     first = b.split("\n")[1]
     assert "closedForTrip(points)" in first, "asked before the no-switch shortcut"
-    assert "closed.length ? { ...avoid, closed } : avoid" in b
-    assert "out.closed = closed" in b
+    assert "if (!closed.length && !hazards.length) return avoid;" in b
+    assert b.count("if (closed.length) out.closed = closed;") == 2, "both paths"
+
+
+def test_every_plan_carries_the_confirmed_road_hazards_too():
+    b = body("avoidForTrip")
+    assert b.count("hazardsForTrip(points)") == 2 and b.count("if (hazards.length) out.hazards = hazards;") == 2
+    i = SRC.index("function hazardsForTrip(")
+    h = SRC[i:SRC.index("\n    }\n", i)]
+    assert "memberNow()" in h and "hazardsCover(points)" in h, "members only, and only what closedForTrip just fetched"
+    assert "ApexHazardReports.roadHazardsFor(" in h and "catch (_) { return []; }" in h
 
 
 def test_closures_are_members_only_and_never_hold_a_plan_long():

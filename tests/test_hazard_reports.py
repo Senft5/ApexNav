@@ -35,6 +35,12 @@ const cl = [{ kind: 'closure', lat: 35.65, lon: -83.9 }, { kind: 'closure', lat:
   { kind: 'closure', lat: 35.61, lon: -83.95 }];
 out.closures = H.closuresFor(cl, [{ lat: 35.6, lon: -84.0 }, { lat: 35.7, lon: -83.8 }]);
 out.noPoints = H.closuresFor(cl, []);
+const rh = [{ kind: 'pothole', lat: 35.65, lon: -83.9, confirms: 2 }, { kind: 'gravel', lat: 35.61, lon: -83.95, confirms: 1, clears: 1 },
+  { kind: 'debris', lat: 35.66, lon: -83.9, confirms: 0 }, { kind: 'gravel', lat: 35.62, lon: -83.9, confirms: 1, clears: 2 },
+  { kind: 'animal', lat: 35.65, lon: -83.9, confirms: 3 }, { kind: 'police', lat: 35.65, lon: -83.9, confirms: 3 },
+  { kind: 'closure', lat: 35.65, lon: -83.9, confirms: 3 }, { kind: 'pothole', lat: 36.9, lon: -83.9, confirms: 3 }];
+out.roadHazards = H.roadHazardsFor(rh, [{ lat: 35.6, lon: -84.0 }, { lat: 35.7, lon: -83.8 }]);
+out.roadHazardsNone = H.roadHazardsFor(rh, []);
 const mi = (m) => `${(m / 1609.344).toFixed(1)} mi`, now = Date.parse('2026-10-29T03:50:00Z');
 out.plate = H.plate({ kind: 'gravel', m: 640, created_at: '2026-10-29 01:50:00', confirms: 2 }, mi, now);
 out.plateFresh = H.plate({ kind: 'police', m: 300, created_at: '2026-10-29T03:49:40Z', confirms: 0 }, mi, now);
@@ -64,6 +70,13 @@ def test_closures_for_routing(out):
     # inside the trip's box (widened 15 km), closures only, nearest the middle first; one 140 km away left out
     assert out["closures"] == [{"lat": 35.65, "lon": -83.9}, {"lat": 35.61, "lon": -83.95}]
     assert out["noPoints"] == []
+
+
+def test_road_hazards_for_routing(out):
+    # confirmed potholes, gravel and debris inside the trip's box, nearest the middle first: unconfirmed, cleared (more
+    # clears than confirms), animals, police, closures and one 140 km away left out; a tie of clears and confirms stays
+    assert out["roadHazards"] == [{"lat": 35.65, "lon": -83.9}, {"lat": 35.61, "lon": -83.95}]
+    assert out["roadHazardsNone"] == []
 
 
 def test_hazard_plate_text(out):
