@@ -124,6 +124,20 @@ and in random batches so a trace cannot be re-assembled.
   cards; your own crew's listed drive says to answer on the crew page instead of Join. Asked by the map centre's 0.1-degree
   cell, never from a privacy zone, at most once per cell every 5 minutes. `web/meets_map.js`, no migration.
 
+### 2.13 Drive posts and the Feed (built 2026-11-13; big bet #4)
+- After a drive with a Score, a member taps **Post** on the drive's card (the solid key; Share card, the picture for
+  other apps, beside it): Friends or one of their crews on a slide switch, an optional line, Post. The card carries the
+  drive's name, the day, length, Score, roads and a line of its shape with both ends cut (privacy zones and 500 m on the
+  phone, 500 m again on the server, 600 points at most). Never a time along it or a speed.
+- **Feed** on People → Friends: the newest three posts from friends and your crews (See all for the rest), each with
+  kudos (one tap, counted at once) and comments (one tap opens the post with them and a line to add one). Report and
+  Block are behind ··· on a post or comment, never on its face; the author deletes a post, and a comment's author or
+  the post's author deletes a comment. Blocks hide both ways; three established reports hide; the owner's queue removes.
+- `backend/src/drive_posts.ts` (migration 0059: `drive_posts`, `drive_post_kudos`, `drive_comments`), `web/drive_posts.js`.
+  10 posts a day, 30 comments an hour, 200 comments a post. In Download my data; gone with the account.
+- Next: photos on a post (the photos table's kind CHECK needs a rebuild), stages on the card, pushes for kudos and
+  comments once APNs is on.
+
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.
 

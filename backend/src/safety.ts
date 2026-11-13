@@ -14,10 +14,11 @@ const REPORTS_PER_DAY = 20;
 const REASONS = ["spam", "abuse", "impersonation", "unsafe", "other"] as const;
 const UNSAFE_RE = /(?!\u200d)[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\u2028\u2029]/u;
 /** Where an auto-hide actually hides something (a person or a private crew is only queued for the owner). */
+import { POST_SEEN } from "./drive_posts";
 const HIDES: Record<ReportKind, string | null> = {
   user: null, car: "1",
   crew: "(SELECT visibility FROM crews WHERE id = r.target_id) = 'public'",
-  highlight: "1", event: "1", photo: "1", chat: "1", post: "1", reply: "1", build_chat: "1", circuit: "1",
+  highlight: "1", event: "1", photo: "1", chat: "1", post: "1", reply: "1", build_chat: "1", circuit: "1", drive: "1", comment: "1",
   roadbook: "(SELECT visibility FROM roadbooks WHERE id = r.target_id) = 'public'",
 };
 
@@ -125,6 +126,13 @@ async function resolveTarget(env: Env, v: Viewer, kind: ReportKind, target: unkn
     if (!m) throw new HttpError(404, "no_message");
     return { id, person: m.author };
   }
+  if (kind === "drive" || kind === "comment") {   // a drive post, or a comment on one, that you can see (drive_posts.ts); never your own
+    const m = await first<{ person: string }>(env, kind === "drive"
+      ? `SELECT p.author AS person FROM drive_posts p WHERE p.id = ?2 AND p.author != ?1 AND ${POST_SEEN("p")}`
+      : `SELECT c.author AS person FROM drive_comments c JOIN drive_posts p ON p.id = c.post_id WHERE c.id = ?2 AND c.author != ?1 AND ${POST_SEEN("p")}`, v.id, id);
+    if (!m) throw new HttpError(404, kind === "drive" ? "no_post" : "no_comment");
+    return { id, person: m.person };
+  }
   if (kind === "roadbook") {   // a roadbook someone else shows you: a public one, or a friend's (roadbooks.ts)
     const b = await first<{ owner: string }>(env,
       `SELECT b.owner FROM roadbooks b WHERE b.id = ?1 AND b.owner != ?2 AND (b.visibility = 'public' OR (b.visibility = 'friends'
@@ -208,6 +216,10 @@ export async function moderationQueue(env: Env, v: Viewer) {
     (r) => `build chat "${String(r.body).slice(0, 120)}" · @${r.handle ?? "?"}`);
   await each("event", (q) => `SELECT e.id, e.title, c.name AS crew, u.handle FROM crew_events e JOIN crews c ON c.id = e.crew_id LEFT JOIN users u ON u.id = e.created_by WHERE e.id IN (${q})`,
     (r) => `${r.title} · ${r.crew} · @${r.handle ?? "?"}`);
+  await each("drive", (q) => `SELECT p.id, p.title, p.caption, u.handle FROM drive_posts p JOIN users u ON u.id = p.author WHERE p.id IN (${q})`,
+    (r) => `drive post "${String(r.title).slice(0, 80)}"${r.caption ? ` "${String(r.caption).slice(0, 120)}"` : ""} · @${r.handle ?? "?"}`);
+  await each("comment", (q) => `SELECT c.id, c.body, u.handle FROM drive_comments c JOIN users u ON u.id = c.author WHERE c.id IN (${q})`,
+    (r) => `comment "${String(r.body).slice(0, 120)}" · @${r.handle ?? "?"}`);
   await each("roadbook", (q) => `SELECT b.id, b.name, b.visibility, b.roads_n, u.handle FROM roadbooks b JOIN users u ON u.id = b.owner WHERE b.id IN (${q})`,
     (r) => `roadbook "${String(r.name).slice(0, 80)}" (${r.visibility}, ${r.roads_n} roads) · @${r.handle ?? "?"}`);
   return rows.map((r) => {
@@ -268,6 +280,8 @@ export async function moderationResolve(env: Env, v: Viewer, req: Request): Prom
       env.DB.prepare("UPDATE ta_circuits SET removed = 1, tries = tries + 1 WHERE id = ?").bind(id)],
     // back to private, its followers let go; a removed book can't be made public again (roadbooks.ts mayShow)
     roadbook: [env.DB.prepare("UPDATE roadbooks SET visibility = 'private' WHERE id = ?").bind(id), env.DB.prepare("DELETE FROM roadbook_follows WHERE book_id = ?").bind(id)],
+    drive: [env.DB.prepare("DELETE FROM drive_posts WHERE id = ?").bind(id)],
+    comment: [env.DB.prepare("DELETE FROM drive_comments WHERE id = ?").bind(id)],
     photo: [],                                                        // stays down: removed reports hide it for good (photos.ts)
   }[kind];
   await env.DB.batch([mark, ...act]);
