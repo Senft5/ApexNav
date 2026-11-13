@@ -1,5 +1,5 @@
 import { env, exports } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ORIGIN, api, befriend, freshDb, makeBanned, makeUser, ok, type TestUser } from "./helpers";
 import { stripJpeg } from "../src/photos";
 
@@ -44,6 +44,17 @@ describe("photos", () => {
     expect(((await (await ok(api(a, "GET", "/api/me/export"))).json()) as { photos: unknown[] }).photos).toHaveLength(1);
     await ok(api(a, "DELETE", "/api/me", { confirm: "DELETE" }));
     expect((await api(b, "GET", `/api/photos/${id}`)).status).toBe(404);
+  });
+
+  it("when the photo store refuses the bytes, no row is left behind (it would show broken and count against the caps)", async () => {
+    const a = await makeUser("alice");
+    const spy = vi.spyOn(env.PHOTOS!, "put").mockRejectedValueOnce(new Error("KV put() limit exceeded for the day."));
+    const r = await upload(a, "kind=profile", jpeg());
+    spy.mockRestore();
+    expect(r.status).toBe(503);
+    expect(await r.json()).toEqual({ error: "photo_store_unavailable" });
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM photos").first<{ n: number }>())!.n).toBe(0);
+    expect((await upload(a, "kind=profile", jpeg())).status).toBe(201);
   });
 
   it("only JPEG, only small, only on your own car, at most 12 a car", async () => {
