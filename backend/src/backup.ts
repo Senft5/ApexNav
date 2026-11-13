@@ -29,7 +29,7 @@ const ident = (s: string) => `"${s.replaceAll('"', '""')}"`;
 /** Every statement needed to rebuild an empty database: tables, rows, AUTOINCREMENT counters, then indexes.
  *  All rows are read in one db.batch, which D1 runs as a single transaction: the dump is a consistent snapshot even while
  *  drives are being uploaded. It also keeps the run inside Workers Free's 50 queries per invocation (a batch counts as one):
- *  one query for the schema and row counts, one batch for the rows. */
+ *  one query for the schema, one batch for where each table's pages start, one batch for the rows. */
 export async function dumpStatements(db: D1Database): Promise<{ statements: string[]; counts: Record<string, number> }> {
   const objects = (await db.prepare(
     "SELECT m.type, m.name, m.sql, (SELECT json_group_array(json_object('name', p.name, 'pk', p.pk)) FROM pragma_table_info(m.name) p) AS cols " +
@@ -38,18 +38,30 @@ export async function dumpStatements(db: D1Database): Promise<{ statements: stri
   ).all<{ type: string; name: string; sql: string; cols: string }>()).results;
   const tables = objects.filter((o) => o.type === "table").map((o) => {
     const cols = JSON.parse(o.cols) as Column[];
-    const keys = cols.filter((c) => c.pk > 0).sort((a, b) => a.pk - b.pk).map((c) => ident(c.name));
-    const select = `SELECT ${cols.map((c) => ident(c.name)).join(", ")} FROM ${ident(o.name)} ORDER BY ${keys.length ? keys.join(", ") : "rowid"} LIMIT ${PAGE} OFFSET ?`;
-    return { ...o, select };
+    const pk = cols.filter((c) => c.pk > 0).sort((a, b) => a.pk - b.pk).map((c) => ident(c.name));
+    // Pages are key ranges, never OFFSET: SQLite reads and throws away every skipped row, and D1 bills them, so OFFSET
+    // paging read about N^2/2000 rows (a 100,000-row road_bins would have spent Workers Free's whole 5M-row day).
+    const keys = pk.length ? pk : ["rowid"], tuple = keys.length > 1 ? `(${keys.join(", ")})` : keys[0];
+    const marks = (from: number) => (keys.length > 1 ? `(${keys.map((_, i) => `?${from + i}`).join(", ")})` : `?${from}`);
+    const base = `SELECT ${cols.map((c) => ident(c.name)).join(", ")} FROM ${ident(o.name)}`;
+    return { ...o, keys, tuple, marks, base, order: ` ORDER BY ${keys.join(", ")}` };
   });
   const hasSeq = !!(await db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'sqlite_sequence'").first());
-  // Row counts first (cheap, approximate: rows may arrive before the batch), then enough pages for every row plus one spare
-  // page per table. The batch is the snapshot; a table whose spare page comes back full grew by 1,000+ rows in between,
-  // and the run fails loudly rather than write a partial copy.
-  const sizes = tables.length ? await db.batch(tables.map((t) => db.prepare(`SELECT count(*) AS n FROM ${ident(t.name)}`))) : [];
+  // First the key that starts each page of PAGE rows (one pass over each table's key, in key order), then one batch reads
+  // every page by key range. That batch is the snapshot: rows that arrive in between land in a range (the last one is
+  // open-ended), so nothing is missed and nothing is read twice.
+  const starts = tables.length ? await db.batch(tables.map((t) => db.prepare(
+    `SELECT ${t.keys.map((_, i) => `k${i}`).join(", ")} FROM (SELECT ${t.keys.map((k, i) => `${k} AS k${i}`).join(", ")}, row_number() OVER (ORDER BY ${t.keys.join(", ")}) AS rn FROM ${ident(t.name)}) WHERE rn % ${PAGE} = 1 AND rn > 1 ORDER BY rn`,
+  ))) : [];
   const plan = tables.flatMap((t, i) => {
-    const n = (sizes[i].results[0] as { n: number }).n;
-    return Array.from({ length: Math.floor(n / PAGE) + 2 }, (_, p) => ({ t: i, stmt: db.prepare(t.select).bind(p * PAGE) }));
+    const b = (starts[i].results as Record<string, unknown>[]).map((r) => t.keys.map((_, j) => r[`k${j}`]));
+    const n = t.keys.length;
+    return Array.from({ length: b.length + 1 }, (_, p) => {
+      const lo = p > 0 ? `${t.tuple} >= ${t.marks(1)}` : null, hi = p < b.length ? `${t.tuple} < ${t.marks(lo ? n + 1 : 1)}` : null;
+      const where = [lo, hi].filter(Boolean).join(" AND ");
+      const args = [...(p > 0 ? b[p - 1] : []), ...(p < b.length ? b[p] : [])];
+      return { t: i, stmt: db.prepare(t.base + (where ? ` WHERE ${where}` : "") + t.order).bind(...args) };
+    });
   });
   const seq = hasSeq ? [db.prepare("SELECT name, seq FROM sqlite_sequence ORDER BY name")] : [];
   const pages = plan.length + seq.length ? await db.batch([...plan.map((p) => p.stmt), ...seq]) : [];
@@ -58,8 +70,6 @@ export async function dumpStatements(db: D1Database): Promise<{ statements: stri
   const counts: Record<string, number> = Object.fromEntries(tables.map((t) => [t.name, 0]));
   for (const [j, p] of plan.entries()) {
     const t = tables[p.t], rows = rowsOf(pages[j]);
-    const last = j + 1 === plan.length || plan[j + 1].t !== p.t;
-    if (last && rows.length === PAGE) throw new Error(`${t.name} grew past the planned pages`);
     for (const r of rows) statements.push(`INSERT INTO ${ident(t.name)} VALUES(${r.map(literal).join(",")});`);
     counts[t.name] += rows.length;
   }
