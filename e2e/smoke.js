@@ -2441,6 +2441,20 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'notice'), null, { timeout: 5000 });
   const notice = await page.evaluate(() => window.__car.filter((m) => m.kind === 'notice'));
   check(notice.length === 1 && notice[0].titles.join('|') === 'No GPS fix yet.', 'a report from the car with no fix says so on the car: ' + JSON.stringify(notice));
+  // the car's Places as Where to? lists them: a pinned Home first, then a saved route, which the phone opens from its copy
+  const placesCar = await page.evaluate(() => {
+    localStorage.setItem('apex.pinnedPlaces', JSON.stringify([{ name: 'Home', label: '12 Oak St', lat: 35.61, lon: -84.11 }]));
+    const coords = Array.from({ length: 40 }, (_, i) => [-84.1 + i * 0.0004, 35.6 + i * 0.0003]);
+    ApexSavedRoutes.save(localStorage, { v: 1, id: 'saved_e2e', name: 'Test road', savedAt: Date.now(), request: null, coords, steps: [], timeMarks: [], miles: 1.2 });
+    window.apex.onNative({ type: 'carplay', action: 'places' });
+    return window.__car.filter((m) => m.kind === 'places').pop();
+  });
+  check(placesCar && placesCar.list[0].name === 'Home' && placesCar.list[0].detail === '12 Oak St' && placesCar.list[1].saved === 'saved_e2e'
+    && /^Saved · /.test(placesCar.list[1].detail), 'the car\'s Places: pinned, then saved: ' + JSON.stringify(placesCar));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'saved', id: 'saved_e2e' }));
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.id === 'saved_e2e', null, { timeout: 10000 })
+    .catch(async () => { throw new Error('the saved route from the car never opened: ' + JSON.stringify(await page.evaluate(() => window.apexDebug.track && window.apexDebug.track.id))); });
+  await page.evaluate(() => { ApexSavedRoutes.remove(localStorage, 'saved_e2e'); localStorage.removeItem('apex.pinnedPlaces'); });
   await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }));   // the shell's fix, as in the app
   // the cafés and fuel along it, by name on the car's route preview (the owner, 2026-11-11)
   await page.evaluate(() => { ApexStages.pois = async (pts) => { const a = pts[Math.min(1, pts.length - 1)];
