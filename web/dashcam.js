@@ -78,7 +78,7 @@
 
   /** page: el, Core, drive d, fmtSpeed, save(blob, name, type) → Promise. Returns the panel element. */
   function mount(page) {
-    const { el, Core, d } = page, T = Core.elapsedS(d.speed_mps), total = T[T.length - 1] || 0, calls = cornerCalls(d);
+    const { el, Core, d } = page, R = root.ApexRecording, T = R && R.timesOf ? R.timesOf(Core, d) : Core.elapsedS(d.speed_mps), total = T[T.length - 1] || 0, calls = cornerCalls(d);
     // a rule-separated section, not a box; the picker is an ink key, the offset the balance slider (REVIEW2.md U-18)
     const box = el('section', { className: 'dc-section' }, el('h2', { textContent: 'Dashcam overlay' }));
     const input = el('input', { type: 'file', accept: 'video/*', hidden: true }); input.setAttribute('aria-label', 'A video from this drive');

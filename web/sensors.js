@@ -104,12 +104,14 @@
   }
 
   /** Collects frames into 5 m samples (CLAUDE.md spatial binning) and writes the ApexDrive CSV the analysis page imports. */
-  const JUMP_M = 1000, JUMP_MPS = 90;                                     // no car covers 1 km between fixes, or 90 m/s over a longer gap
+  const JUMP_M = 1000, JUMP_MPS = 90;
+  /** A frame's clock in ms: the browser's fix time (t) or the app's frame time (at); null when it has neither. */
+  const clockOf = (f) => (f && finite(f.t) ? f.t : (f && finite(f.at) ? f.at : null));                                     // no car covers 1 km between fixes, or 90 m/s over a longer gap
   class Recorder {
     constructor() { this.rows = []; this.dist = 0; this.prev = null; this.nextAt = 0; this.startedAt = null; this.last = null; this.peaks = []; this.peaksLost = false; this.gs = []; this.g0 = null; }
     add(fr) {
       if (!fr || !fr.has_fix) return;
-      if (!this.startedAt) this.startedAt = fr.t || Date.now();
+      if (!this.startedAt) this.startedAt = clockOf(fr) || Date.now();
       const locked = fr.calibration === 'locked';                            // camber/crest/spikes are only meaningful in a solved chassis frame
       // The app's vertical spike (max |>8 Hz vertical| since its last frame) arrives ~10 times between GPS fixes, which all share one
       // position. Keep each frame's spike in order (null when unmeasured or crawling: door slams are not road) and place it on the road
@@ -143,13 +145,17 @@
           const f = xb > xa ? Math.min(1, Math.max(0, (x - xa) / (xb - xa))) : 1;
           return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
         };
+        // the clock along this stretch: from the last frame that stood here when the car was stopped (it left after that);
+        // 10 Hz frames between moving fixes share a position too, and keep the clock of the fix before
+        const tNow = clockOf(fr), tLast = this.last && this.last !== this.prev ? clockOf(this.last) : null;
+        const t0 = tLast != null && tNow != null && tLast < tNow && finite(this.last.speed_mps) && this.last.speed_mps < 1 ? tLast : clockOf(this.prev);
         while (this.nextAt <= this.dist) {                                   // interpolate each 5 m crossing
           const f = (this.nextAt - d0) / seg, mix = (a, b) => (finite(a) && finite(b) ? a + (b - a) * f : (finite(b) ? b : null)), g = gAt(this.nextAt - d0);
           this.rows.push({ distance_m: this.nextAt, lat: this.prev.lat + (fr.lat - this.prev.lat) * f, lon: this.prev.lon + (fr.lon - this.prev.lon) * f,
             elevation_m: mix(this.prev.elevation_m, fr.elevation_m), speed_mps: mix(this.prev.speed_mps, fr.speed_mps),
             lon_g: g ? Math.round(g[1] * 1e4) / 1e4 : null, lat_g: g ? Math.round(g[0] * 1e4) / 1e4 : null, roughness_rms: finite(fr.roughness_rms) ? fr.roughness_rms : null,
             ...(locked && fr.camber_v === CAMBER_V && finite(fr.camber_deg) ? { camber_deg: fr.camber_deg, camber_v: CAMBER_V } : { camber_deg: null }), crest_vertical_g: locked && finite(fr.crest_vertical_g) ? fr.crest_vertical_g : null,
-            vert_peak_g: null });
+            vert_peak_g: null, t_s: tNow != null && t0 != null && finite(this.startedAt) ? Math.round((t0 + (tNow - t0) * f - this.startedAt) / 10) / 100 : null });
           this.nextAt += 5;
         }
         const n = this.peaks.length;
@@ -170,7 +176,7 @@
      *  `from` only, so a checkpoint writes what is new; the recorder's own place on the road comes with it, so frames that
      *  arrive later carry on from there, the spikes still waiting to be placed with them. */
     snapshot(from = 0) {
-      const p = this.prev, keep = (f) => (f ? { lat: f.lat, lon: f.lon, t: f.t, elevation_m: f.elevation_m, speed_mps: f.speed_mps } : null);
+      const p = this.prev, keep = (f) => (f ? { lat: f.lat, lon: f.lon, t: f.t, at: f.at, elevation_m: f.elevation_m, speed_mps: f.speed_mps } : null);
       return { v: 1, from, n: this.rows.length, rows: this.rows.slice(from).map((r) => ({ ...r })), dist: this.dist, nextAt: this.nextAt,
                startedAt: this.startedAt, prev: keep(p), last: keep(this.last), peaks: this.peaks.slice(), peaksLost: this.peaksLost, gs: this.gs.slice(), g0: this.g0 ? this.g0.slice() : null };
     }
@@ -193,10 +199,11 @@
     /** CSV in the ApexDrive column layout; missing values are left blank, never zero. */
     toCsv() {
       const num = (v, d) => (finite(v) ? v.toFixed(d) : '');
-      const head = 'segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,roughness_rms,crest_vertical_g,vert_peak_g,source,camber_v';
+      const head = 'segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,roughness_rms,crest_vertical_g,vert_peak_g,source,camber_v,t_s';
+      // t_s per row: seconds since the drive started, from the fixes' own clock (stops included), blank where a fix had none
       // camber_v per row: blank where the row's camber (if any) is not from the fixed pipeline (a drive kept by an older build)
       return [head, ...this.rows.map((r, i) => [i, num(r.distance_m, 1), num(r.lat, 7), num(r.lon, 7), num(r.elevation_m, 1), num(finite(r.speed_mps) ? r.speed_mps * 2.2369362921 : null, 2),
-        num(r.lon_g, 4), num(r.lat_g, 4), num(r.camber_deg, 2), num(r.roughness_rms, 4), num(r.crest_vertical_g, 3), num(r.vert_peak_g, 3), 'web-gps', r.camber_v === CAMBER_V ? CAMBER_V : ''].join(','))].join('\n') + '\n';
+        num(r.lon_g, 4), num(r.lat_g, 4), num(r.camber_deg, 2), num(r.roughness_rms, 4), num(r.crest_vertical_g, 3), num(r.vert_peak_g, 3), 'web-gps', r.camber_v === CAMBER_V ? CAMBER_V : '', num(r.t_s, 2)].join(','))].join('\n') + '\n';
     }
   }
 

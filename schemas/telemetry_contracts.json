@@ -112,6 +112,13 @@
           "type": "number",
           "description": "Peak |>8 Hz vertical| in the bin, g. Pothole/bump spike source (>0.35 g)."
         },
+        "t_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Seconds since the drive started at this sample, from the fixes' own clock (a stop counts). Kept on the phone to line up a drive video (web/recording.js timesOf); never uploaded. null where a fix had no time."
+        },
         "target_mph": {
           "type": "number",
           "description": "Braking envelope from core/road_dna.py (mu_eff 0.60, 0.5 g decel, 70 mph cap)."
