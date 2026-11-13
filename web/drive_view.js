@@ -121,7 +121,10 @@
     return rows.length >= 3 ? rows : [];
   }
 
-  function plainCoach(ds, co) {
+  // the practised skill (driver_profile.js) each fix is part of: the end card names that skill on its own line, so the
+  // sentence under it does not ask for it again
+  const FIX_SKILL = { smoothness: 'arc', braking: 'brake', brake_after_apex: 'brake', early_apex: 'line', coast: 'exit' };
+  function plainCoach(ds, co, practised = null) {
     const comp = ds && finite(ds.score) && ds.components;
     if (!comp) return null;
     const kinds = {};
@@ -133,6 +136,7 @@
     const skip = isHabit ? HABIT_PART[habit[0]] : weak;
     const strong = Object.keys(PRAISE).filter((k) => k !== skip && finite(comp[k]) && comp[k] >= 0.7).sort((a, b) => comp[b] - comp[a])[0];
     if (!fix) return `${strong ? PRAISE[strong] : 'A tidy drive'}, and nothing stands out to fix.`;
+    if (practised && FIX_SKILL[isHabit ? habit[0] : weak] === practised) return strong ? `${PRAISE[strong]}.` : null;
     return `${strong ? `${PRAISE[strong]}. ` : ''}One thing to work on: ${fix}.`;
   }
 
@@ -544,7 +548,10 @@
     let net = null;
     if (ref) { const ks = d.corners.map((_, k) => lost(k)).filter((x) => x != null); net = ks.length ? ks.reduce((s, x) => s + x, 0) : null; }
     // TestFlight 2026-11-12 ("walls of text"): the comparison and the repeatability say their numbers in a line each
-    list.innerHTML = `<h2>Corners${ref ? ` \u00b7 vs your best here, ${esc(ref.name)} (${ref.score})` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `<b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly`}</p>` : '');
+    // the gap in words, against the drive it is measured from ("+18.9 s" was a sign to decode); each card's delta follows it
+    const nk = d.corners.map((_, k) => lost(k)).filter((x) => x != null).length;
+    const gap = net == null ? null : Math.abs(net) < 0.05 ? 'level' : `${Math.abs(net).toFixed(1)} s ${net > 0 ? 'slower' : 'quicker'}`;
+    list.innerHTML = '<h2>Corners</h2>' + (ref ? `<p class="note" style="margin-bottom:8px">${gap == null ? 'No clean corners to compare with your best drive here.' : `${gap === 'level' ? 'Level with' : `<b class="${net > 0 ? 'loss' : 'gain'}">${gap}</b> than`} your best drive here (${esc(String(ref.score))}), over ${nk} corner${nk === 1 ? '' : 's'}`}</p>` : '');
     const reps = consistencyRows(co);
     if (reps.length) {                                               // how repeatably each corner is driven over your passes (D-07)
       const ul = el('ol', 'dv-time'), m = (x) => fine(Math.max(3, x)), spd = (x) => `${Math.max(1, Math.round(x * MPH))} ${SPD()}`;
@@ -601,9 +608,9 @@
     d.corners.forEach((c, k) => {
       const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${callOf(c)}, apex ${Math.round(c.apex_mps * MPH)} ${SPD_WORDS()}`);
       r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${esc(callOf(c))}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} ${SPD()}</span><span class="dv-d">${DIST(d.dist[c.apex])}${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`
-        // a tip only where it is news: a corner in Where to find time, or a habit (no best pass to copy); the rest say it in
-        // their delta, so 36 cards don't each repeat "your best pass was 4 mph quicker" (TestFlight 2026-11-12, "text walls")
-        + (co && tipText(co.corners[k], MPH) && (co.top.includes(k) || !co.corners[k].best || co.corners[k].tip.vs_best === false)
+        // a tip only where it is news: a habit (no best pass to copy) that Where to find time does not already say; the rest
+        // say it in their delta, so cards don't repeat "your best pass was 4 mph quicker" (TestFlight 2026-11-12, "text walls")
+        + (co && tipText(co.corners[k], MPH) && !co.top.includes(k) && (!co.corners[k].best || co.corners[k].tip.vs_best === false)
           ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
       r.onclick = () => pick(c.apex, c.start, c.end);
       grid2.append(r);

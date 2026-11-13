@@ -5333,7 +5333,9 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
     return { t: r.textContent, shown: !!r.offsetParent, practice: e.hidden ? null : e.textContent };
   });
   check(/^Practice on Dry Ridge Rd · One steering arc: /.test(endRoad.practice || ''), 'the end card names the practised road: ' + endRoad.practice);
-  check(endRoad.shown && /^(\d+ least even corners|Least even corner): .+\. Lost most: one steering arc\.$/.test(endRoad.t), 'the road on the end card: ' + JSON.stringify(endRoad));
+  check(endRoad.shown && /^(\d+ least even corners|Least even corner): [^.]+\.$/.test(endRoad.t) && !/Lost most/.test(endRoad.t), 'the road on the end card, not repeating the practised skill: ' + JSON.stringify(endRoad));
+  const endLine = await page.textContent('#endLine');
+  check(!/steer more gently/.test(endLine), 'the coaching sentence does not ask again for the practised skill: ' + endLine);
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
 });
 
@@ -5396,9 +5398,8 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
     return { was, shown, t, after: d.hidden, title: row.querySelector('[title]') !== null };
   });
   check(def.was && def.shown && def.after && !def.title && /^You turn in once .+ 0 to 100, averaged over \d+ clean corners; -- until \d+\.$/.test(def.t), 'the definition on a tap: ' + JSON.stringify(def));
-  check(/One steering arc is weaker through rights: \d+ against 100 through lefts, on 3 of 3 drives\./.test(text), 'the weak side is named: ' + text);
+  check(/Work on: One steering arc\s+Through rights \d+, through lefts 100, on 3 of 3 drives\./.test(text) && !/One steering arc is weaker/.test(text), 'the weak side is named once, in the focus: ' + text);
   check(!/Back to power is stronger in tight corners/.test(text) && (text.match(/^Back to power is /gm) || []).length <= 1, 'one finding a skill: ' + text);
-  check(/Work on: One steering arc\s+It shows most through rights\./.test(text), 'the focus says where');
   check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st:not([data-skill="pace"])').length === 6), 'six stations, the weak one marked');
   // IDEAS D-29: pace beside them, in its own panel, and never the one to work on
   const pace = await page.evaluate(() => { const p = document.querySelector('#drivingRoot .dp-pace'); return p ? p.innerText : null; });
