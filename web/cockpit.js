@@ -6034,7 +6034,7 @@
         // the app's own path (our region list first, then the Overpass servers), with nothing read from this phone's cache
         cameras: (tile) => ApexCameras.load([tile], { fetchFn: fetch, storage: null }),
         cameraQuery: (tile) => ApexCameras.query([tile]),
-        away: () => svcAway + (document.hidden ? 1 : 0),   // a probe the page was hidden through is not judged
+        away: () => svcAway, hidden: () => document.hidden,   // a probe the page was hidden through is not judged
       };
     }
     /** Resolves true once the page is shown (now, or within ms), false when it stays hidden that long. */
