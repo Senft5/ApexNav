@@ -8053,7 +8053,9 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   check(/Friends/.test(layers) && /Cameras/.test(layers) && /Twisty roads/.test(layers) && /3D terrain/.test(layers) && !/Night|Theme|Units|Look/.test(layers), 'Layers: ' + layers);
   // design pass 8: the panel is the map's legend. Every layer row has its key and a line of what it is, Measured roads names
   // its three colours in words, "Who sees me" sits right under Friends, and the panel is whole on the screen
+  // read once the slide has finished, not at a fixed 400 ms: on a busy CI runner the 120 ms slide was caught 4 px short
   const legend = await page.evaluate(async () => { const tab = document.getElementById('swTab'); tab.click(); await new Promise((r) => setTimeout(r, 400));
+    await Promise.all(document.getElementById('swPanel').closest('.edge').getAnimations({ subtree: true }).map((x) => x.finished.catch(() => null)));
     const rows = [...document.querySelectorAll('#switchRow .sw')].filter((b) => !b.hidden), box = document.getElementById('swPanel').getBoundingClientRect();
     const out = { bare: rows.filter((b) => !b.querySelector('.ly-key') || !b.querySelector('small') || !b.querySelector('small').textContent.trim()).map((b) => b.dataset.toggle),
       keyOff: rows.filter((b) => { const k = b.querySelector('.ly-key').getBoundingClientRect(), t = b.querySelector('span').getBoundingClientRect(); return !(k.width >= 20 && k.right <= t.left + 1); }).map((b) => b.dataset.toggle),
