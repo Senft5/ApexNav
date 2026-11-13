@@ -7296,6 +7296,22 @@ flow('the main map: with no signal and no saved area one line says there is no m
   check(await page.evaluate(() => document.getElementById('mapNote').hidden), 'no note once the map draws');
 });
 
+flow('Road feel signed out: the Settings row says Off, and a Sign in key under the line opens People (free roamer B, 2026-11-13)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: new URL(route.request().url()).pathname === '/api/me' ? '{"signed_in":false}' : '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('.tabbar >> text=Garage');
+  await openSetting(page, 'roadfeel');
+  await page.waitForSelector('#ambientSignIn:not([hidden])', { timeout: 8000 });
+  const row = await page.evaluate(() => document.querySelector('#garageSettings .nav-row[data-setting="roadfeel"] small').textContent);
+  check(row === 'Off', 'the row says Off, not nothing: ' + row);
+  await page.click('#ambientSignIn');
+  await page.waitForTimeout(400);
+  const after = await page.evaluate(() => ({ pops: document.querySelectorAll('.garage-pop.open').length, google: !!([...document.querySelectorAll('a')].find((a) => /Sign in with Google/.test(a.textContent) && a.offsetParent)) }));
+  check(after.pops === 0 && after.google, 'Settings closed, People open on its sign-in: ' + JSON.stringify(after));
+});
+
 flow('a replay with no map: the one line sits clear of the Replay plate in the short map band (free roamer B, 2026-11-12)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   await page.setViewportSize({ width: 390, height: 664 });   // a phone's browser: the map is a short band between the notes and the binnacle
