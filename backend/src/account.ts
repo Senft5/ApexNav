@@ -54,6 +54,13 @@ export async function exportMyData(env: Env, v: Viewer): Promise<Record<string, 
                        LEFT JOIN crews c ON e.audience_type = 'crew' AND c.id = e.audience_id WHERE e.user_id = ?`),
     drive_scores_shared: q("SELECT c.name AS crew, d.score, d.driven_on, d.created_at FROM drive_scores d JOIN crews c ON c.id = d.crew_id WHERE d.user_id = ?"),
     photos: q("SELECT id, kind, ref_id, bytes, w, h, created_at FROM photos WHERE owner = ?"),
+    // drive posts (drive_posts.ts): yours, and the comments you wrote (on whose post, by handle)
+    drive_posts: q(`SELECT p.title, p.caption, p.driven_on, p.length_m, p.score, p.roads, p.stages, p.line, c.name AS crew, p.created_at
+                      FROM drive_posts p LEFT JOIN crews c ON c.id = p.crew_id WHERE p.author = ?`),
+    drive_post_comments: q(`SELECT u.handle AS on_post_by, p.title AS post, dc.body, dc.created_at FROM drive_comments dc JOIN drive_posts p ON p.id = dc.post_id
+                      JOIN users u ON u.id = p.author WHERE dc.author = ?`),
+    drive_post_kudos_given: q(`SELECT u.handle AS on_post_by, p.title AS post, k.created_at FROM drive_post_kudos k JOIN drive_posts p ON p.id = k.post_id
+                      JOIN users u ON u.id = p.author WHERE k.user_id = ?`),
     pro: q("SELECT source, since, expires_at FROM pro_entitlements WHERE user_id = ?"),
     themes_granted: q("SELECT theme, created_at FROM theme_grants WHERE user_id = ?"),
     decals_kept_off: q("SELECT c.name FROM decal_optouts o JOIN crews c ON c.id = o.crew_id WHERE o.user_id = ?"),
