@@ -8,8 +8,9 @@ import { bumpWeight } from "./contribute";
 const MAX_WAYS = 50;
 /**
  * k-anonymity (IDEAS Z-08): a road+direction is shown only once this many different people have driven it, so a road only
- * one person drives (the lane to their house) never shows their drives to anyone. rank_slots holds the first two distinct
- * drivers of each road+direction (contribute.ts), so it counts them without saying who.
+ * one person drives (the lane to their house) never shows their drives to anyone. road_floor holds the first two distinct
+ * established drivers (invited, or a member a week) of each road+direction (contribute.ts, migration 0058), so it counts them
+ * without saying who, and a fresh account can't be the second.
  */
 export const MIN_DRIVERS = 2;
 
@@ -26,7 +27,7 @@ export const OPEN_UNCLASSIFIED_M = 1500;
 export const shownSql = (way: string, dir: string) =>
   `(EXISTS (SELECT 1 FROM road_ways ow WHERE ow.way_id = ${way} AND (ow.cls IN (${OPEN_CLASSES.map((c) => `'${c}'`).join(",")})
       OR (ow.cls = 'unclassified' AND ow.len_m >= ${OPEN_UNCLASSIFIED_M})))
-    OR (SELECT COUNT(DISTINCT rs.holder) FROM rank_slots rs WHERE rs.way_id = ${way} AND rs.dir = ${dir}) >= ${MIN_DRIVERS})`;
+    OR (SELECT COUNT(*) FROM road_floor rf WHERE rf.way_id = ${way} AND rf.dir = ${dir}) >= ${MIN_DRIVERS})`;
 
 /** Confidence level for showing, never a count (owner decision 2026-10-28): 0 none, 1 one pass, 2 two to four, 3 five or more. */
 export const confLevel = (passes: number) => (passes >= 5 ? 3 : passes >= 2 ? 2 : passes >= 1 ? 1 : 0);

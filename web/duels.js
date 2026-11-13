@@ -147,7 +147,7 @@
           const r = await call('PUT', '/api/grants', { audience_type: 'friend', audience_id: d.with_id, share_scores: true, share_times: timed });
           toast(!r.ok ? 'Couldn’t change that. Try again.' : timed ? `@${d.with} sees your Scores and times now.` : `@${d.with} sees your Scores now.`);
           page.redo();
-        }, 'ink-btn');
+        }, 'linkbtn');   // a link beside Call it off: Drive it is the card's one key
         if (k === 'drive') act('Drive it', async () => page.openStage(d.canon_id, d.stage), 'ink-btn solid');
         if (k === 'rematch') act('Rematch', async () => {
           const r = await call('GET', '/api/segments'), mine = Array.isArray(r.data) ? r.data.find((s) => (s.origin_id || s.id) === d.canon_id) : null;
@@ -158,6 +158,9 @@
       const box = el('div', { className: `duel-card ${c.kind}` }, el('p', { className: 'duel-kicker', textContent: KICK[c.kind] || 'Duel' }),
         el('p', { className: 'duel-head', textContent: c.head }), el('p', { className: 'duel-line', textContent: c.line }));
       if (c.note) box.append(el('p', { className: 'note', textContent: c.note }));
+      // two links or more go together, so they wrap as one line under the key rather than one by one
+      const links = [...keys.children].filter((b) => b.classList.contains('linkbtn'));
+      if (links.length > 1) keys.append(el('div', { className: 'row' }, ...links));
       if (keys.children.length) box.append(keys);
       return box;
     }

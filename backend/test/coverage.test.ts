@@ -53,6 +53,20 @@ describe("GET /api/coverage (IDEAS Q-14)", () => {
     expect(Math.abs((row?.len_m ?? 0) - 1000)).toBeLessThan(5);
   });
 
+  it("a fresh account isn't a second driver: it earns its slot, but the road waits for an established one (migration 0058)", async () => {
+    const a = await makeUser("a"), fresh = await makeUser("fresh"), c = await makeUser("c");
+    await optIn(a, fresh, c);
+    await env.DB.prepare("UPDATE members SET joined_at = datetime('now'), invited_by = NULL WHERE user_id = ?").bind(fresh.id).run();
+    await ok(api(a, "POST", "/api/contribute", upload("drive-aaaa-0007")));
+    await ok(api(fresh, "POST", "/api/contribute", upload("drive-ffff-0001")));
+    // slot 2 and its 2x, as before: first-week points are unchanged
+    expect((await env.DB.prepare("SELECT pioneer_seconds AS n FROM members WHERE user_id = ?").bind(fresh.id).first<{ n: number }>())?.n).toBe(1);
+    expect((await env.DB.prepare("SELECT octane FROM points_ledger WHERE user_id = ?").bind(fresh.id).first<{ octane: number }>())?.octane).toBeGreaterThan(0);
+    expect((await (await ok(api(a, "GET", BOX))).json() as { ways: unknown[] }).ways).toEqual([]);          // still one that counts
+    await ok(api(c, "POST", "/api/contribute", upload("drive-cccc-0001")));                                // third, established
+    expect((await (await ok(api(a, "GET", BOX))).json() as { ways: unknown[] }).ways).toHaveLength(1);
+  });
+
   it("a road's length is at least as far as the bins reach along it (its line is simplified, so a little short)", async () => {
     const a = await makeUser("a");
     await optIn(a);

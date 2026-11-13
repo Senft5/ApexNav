@@ -1,6 +1,6 @@
 // Is a posted time attack loop on real through roads? (ta_fixed.ts fixedMake, time_attack.ts makeCircuit.) The server can't
 // route, so the first phone in an area builds a loop with Vetta's router and posts it; nothing stopped a hand-drawn one, through
-// fields or a housing estate, from becoming the area's loop for a season. This samples the loop every SAMPLE_M and finds the
+// fields or a housing estate, from becoming the area's loop for a season. This samples the loop every SAMPLE_M (at most MAX_SAMPLES points) and finds the
 // nearest road to each sample in Vetta's own graph tiles (the same tiles the phone routed on: web/data/graph/v1 shipped with
 // the site, the rest of the region relayed from the graph-data branch, graph.ts). A loop passes when every sample but a few
 // lies within NEAR_M of a road and most samples' nearest road is a through road (class unclassified or bigger), as the
@@ -13,7 +13,9 @@
 import { graphTile } from "./graph";
 import { Env, HttpError } from "./util";
 
-export const TILE_DEG = 0.25, SAMPLE_M = 100, NEAR_M = 30;
+export const TILE_DEG = 0.25, SAMPLE_M = 200, NEAR_M = 30;
+/** A long loop is sampled more sparsely, to this many points: the check's cost (a free-plan Worker has 10 ms of CPU) grows with them. */
+export const MAX_SAMPLES = 60;
 /** At most this share of samples may be off every road (the router's line and the tile's can differ by a few metres). */
 export const MAX_OFF = 0.03;
 /** At most this share of samples may have a residential, service or track road as their nearest. */
@@ -31,8 +33,10 @@ export type Box = [number, number, number, number];
 
 /** The polylines of a VGR1 tile (versions 1-3) with the lowest class of the edges using each; throws on anything else. With
  *  `box`, only edges that can reach it (their start node within their own length of it) are read: decoding every line of a
- *  tile costs tens of milliseconds, the few near a loop next to nothing. */
-export function tilePolylines(u8: Uint8Array, box?: Box): Poly[] {
+ *  tile costs tens of milliseconds, the few near a loop next to nothing. With `near` (the loop's samples) too, only edges that
+ *  can come within NEAR_M of a sample. */
+
+export function tilePolylines(u8: Uint8Array, box?: Box, near?: [number, number][]): Poly[] {
   if (u8.length < 64 || String.fromCharCode(u8[0], u8[1], u8[2], u8[3]) !== "VGR1") throw new Error("not a VGR1 tile");
   const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
   const version = dv.getUint16(4, true);
@@ -76,13 +80,53 @@ export function tilePolylines(u8: Uint8Array, box?: Box): Poly[] {
     out.push({ cls, pts });
   };
   if (!bq) { for (let k = 0; k < e; k++) one(k); return out; }
+  if (!near) {
+    for (let v = 0; v < n; v++) {
+      const a = qa[v], o = qo[v];
+      if (a < bq[0] - far || a > bq[2] + far || o < bq[1] - far || o > bq[3] + far) continue;   // no edge from here can reach it
+      for (let k = fe[v]; k < fe[v + 1]; k++) {
+        const rLat = ((lens[k] / 10 + 50) / M_LAT) * U, rLon = rLat / cos;                    // this edge's length, and some
+        if (a < bq[0] - rLat || a > bq[2] + rLat || o < bq[1] - rLon || o > bq[3] + rLon) continue;
+        one(k);
+      }
+    }
+    return out;
+  }
+  // A loop's box is mostly fields and towns it doesn't touch, and the cost of a cold Worker is the scan and the lines read, so
+  // it is a bitmap: cells CELL_Q tile units (about 220 m) a side over the box and `far` around it, counting the samples in
+  // each (`sum`, summed over [0, i) x [0, j)). An edge is read when a cell within its reach (its length, and NEAR_M) of its
+  // start node holds a sample: four reads.
+  const CELL_Q = 400, s0 = bq[0] - far, w0 = bq[1] - far, n0 = bq[2] + far, e0 = bq[3] + far;
+  const GI = Math.floor((n0 - s0) / CELL_Q) + 1, GJ = Math.floor((e0 - w0) / CELL_Q) + 1, H = GJ + 1;
+  const sum = new Int32Array((GI + 1) * H);
+  for (const [la, lo] of near) {
+    const i = Math.floor(((la * 1e6 - oLat) / GEOM_Q - s0) / CELL_Q), j = Math.floor(((lo * 1e6 - oLon) / GEOM_Q - w0) / CELL_Q);
+    if (i >= 0 && j >= 0 && i < GI && j < GJ) sum[(i + 1) * H + j + 1]++;
+  }
+  for (let i = 1; i <= GI; i++) for (let j = 1; j <= GJ; j++) sum[i * H + j] += sum[(i - 1) * H + j] + sum[i * H + j - 1] - sum[(i - 1) * H + j - 1];
+  const picked = scanEdges(qa, qo, fe, lens, n, s0, w0, n0, e0, ((NEAR_M / M_LAT) * U), U, cos, CELL_Q, GI, GJ, sum);
+  for (let m = 0; m < picked.length; m++) one(picked[m]);
+  return out;
+}
+
+/** The edges whose reach (their length, and NEAR_M) from their start node holds a sample cell (tilePolylines). A function of
+ *  its own over typed arrays, so V8 optimises it early: the scan is most of a cold check. */
+function scanEdges(qa: Uint16Array, qo: Uint16Array, fe: Uint32Array, lens: Uint16Array, n: number, s0: number, w0: number, n0: number,
+  e0: number, nearQ: number, U: number, cos: number, CELL_Q: number, GI: number, GJ: number, sum: Int32Array): number[] {
+  const H = GJ + 1, kLat = U / M_LAT / 10, bLat = (50 * U) / M_LAT + nearQ, inv = 1 / CELL_Q, icos = 1 / cos, out: number[] = [];
   for (let v = 0; v < n; v++) {
     const a = qa[v], o = qo[v];
-    if (a < bq[0] - far || a > bq[2] + far || o < bq[1] - far || o > bq[3] + far) continue;   // no edge from here can reach it
-    for (let k = fe[v]; k < fe[v + 1]; k++) {
-      const rLat = ((lens[k] / 10 + 50) / M_LAT) * U, rLon = rLat / cos;                    // this edge's length, and some
-      if (a < bq[0] - rLat || a > bq[2] + rLat || o < bq[1] - rLon || o > bq[3] + rLon) continue;
-      one(k);
+    if (a < s0 || a > n0 || o < w0 || o > e0) continue;
+    const ca = (a - s0) * inv, co = (o - w0) * inv;
+    for (let k = fe[v], k1 = fe[v + 1]; k < k1; k++) {
+      const rLat = (lens[k] * kLat + bLat) * inv, rLon = rLat * icos;
+      // a node is inside the grid, so i1, j1 >= 0 and | 0 floors them; i0, j0 are only clamped up to 0
+      let i0 = (ca - rLat) | 0, i1 = (ca + rLat) | 0, j0 = (co - rLon) | 0, j1 = (co + rLon) | 0;
+      if (i0 < 0) i0 = 0;
+      if (j0 < 0) j0 = 0;
+      if (i1 >= GI) i1 = GI - 1;
+      if (j1 >= GJ) j1 = GJ - 1;
+      if (sum[(i1 + 1) * H + j1 + 1] - sum[i0 * H + j1 + 1] - sum[(i1 + 1) * H + j0] + sum[i0 * H + j0] > 0) out.push(k);
     }
   }
   return out;
@@ -94,15 +138,18 @@ const hav = (a: [number, number], b: [number, number]) => {
   return 2 * R * Math.asin(Math.sqrt(h));
 };
 
-/** Points every SAMPLE_M along the line (its first point included). */
+/** Points every SAMPLE_M along the line (its first point included), or farther apart on a line longer than MAX_SAMPLES of them. */
 export function samplesOf(geom: [number, number][]): [number, number][] {
+  let total = 0;
+  for (let i = 1; i < geom.length; i++) total += hav(geom[i - 1], geom[i]);
+  const step = Math.max(SAMPLE_M, total / MAX_SAMPLES);
   const out: [number, number][] = [geom[0]];
   let carry = 0;
   for (let i = 1; i < geom.length; i++) {
     const a = geom[i - 1], b = geom[i], d = hav(a, b);
-    let t = SAMPLE_M - carry;
-    while (t <= d) { const f = t / d; out.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]); t += SAMPLE_M; }
-    carry = d - (t - SAMPLE_M);
+    let t = step - carry;
+    while (t <= d) { const f = t / d; out.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]); t += step; }
+    carry = d - (t - step);
   }
   return out;
 }
@@ -133,7 +180,7 @@ export async function loopOnRoads(geom: [number, number][], load: (name: string)
     let bytes: Uint8Array | null = null;
     try { bytes = await load(name); } catch { bytes = null; }
     let polys: Poly[] | null = null;
-    if (bytes) { try { polys = tilePolylines(bytes, box); } catch { polys = null; } }
+    if (bytes) { try { polys = tilePolylines(bytes, box, samples); } catch { polys = null; } }
     if (!polys) { missing.push(name); continue; }
     samples.forEach(([la, lo], i) => { if (tileName(la, lo) === name) inTile.add(i); });
     // roads near a tile's edge are in the next tile too (each tile carries the whole of its edges), so any tile's roads count

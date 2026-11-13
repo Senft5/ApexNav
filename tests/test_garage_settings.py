@@ -112,7 +112,7 @@ process.stdout.write(JSON.stringify({
     assert out["said"] == ["2 changed", ""]                              # a sheet's own words; without them, nothing
     assert all(k in out["order"] for k in out["groups"]) and len(out["groups"]) == 3
     for key, sel in (("zones", "#zoneList"), ("crash", "[data-toggle=&quot;crash&quot;]"), ("nudge", "[data-toggle=&quot;nudge&quot;]"), ("units", "#unitsRow"), ("motion", "#camList"),
-                     ("roadfeel", "#garageRoadFeelBody .sw"), ("tuning", "#garageTuneBody"), ("spots", "#hlList")):
+                     ("roadfeel", "#garageRoadFeelBody .sw, #ambientSignIn:not([hidden])"), ("tuning", "#garageTuneBody"), ("spots", "#hlList")):
         assert f'data-setting="{key}"' in HTML and f'data-summary="{sel}"' in HTML, key
 
 

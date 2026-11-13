@@ -87,6 +87,7 @@
   <script src="theme_sounds.js" defer></script>
   <script src="audio_bus.js" defer></script>
   <script src="brake_heat.js" defer></script>
+  <script src="sun_ahead.js" defer></script>     <!-- "Sun in your eyes ahead." when the road turns into a low sun (live R-13) -->
   <script src="soundtrack.js" defer></script>
   <script src="week_digest.js" defer></script>
   <script src="drive_card.js" defer></script>
@@ -1599,6 +1600,20 @@
        keyboard and may grow to just below the island; keyboard.js scrolls the field into view inside it. */
     html.kb-open .side-pop.open { bottom: calc(100% - var(--kb-h)); min-height: 0; max-height: calc(var(--kb-h) - max(var(--safe-top), 20px) - 12px);
       padding-bottom: 16px; box-shadow: none; }
+    /* The other half of that note: with little in the sheet (signed out, no rows yet) Find a loop stopped under the loop and
+       left an empty band below it. The section fills the sheet and the bar sits on its bottom edge, as it does when the rows
+       overflow (it's sticky then). Not in phone landscape, which lays the sheet out in two columns. */
+    @media not ((orientation: landscape) and (max-height: 540px)) {
+      .plan.open:not(.routed) .plan-body { align-content: stretch; }
+      .plan.open:not(.routed) .plan-search-section { display: flex; flex-direction: column; }
+      /* the spacer before the bar takes what's left; the bar keeps its 16 px when the rows overflow */
+      .plan.open:not(.routed) .plan-search-section::after { content: ""; flex: 1 0 0; order: 1; }
+      /* the tab bar under the sheet already clears the home indicator (the sheet is hidden while driving or replaying, the
+         bar while typing), so the bar's own safe-area padding was the empty band under Find a loop */
+      .plan.open:not(.routed) .plan-search-section > .find-bar { order: 2; padding-bottom: 10px; }
+      /* flex items' margins don't collapse: the chips' 4 px under them collapsed into the next row's own margin before */
+      .plan.open:not(.routed) .plan-search-section > .plan-chips { margin-bottom: 0; }
+    }
     /* TestFlight 2026-11-12 ("evil cluttered gap"): while typing, Where to? is the field and its list, like any maps app.
        The shortcuts, the loop, the planning inputs and Find a loop (the keyboard's Go key does its work) step aside, and the
        list shows every place instead of three and a link, so nothing floats over an empty band above the keyboard.
@@ -2106,9 +2121,10 @@
           </section>
           <!-- REVIEW5 §2, U-49: the settings below sit behind the Garage's one gear (web/garage_settings.js moves each
                data-setting section into its own sheet); the page keeps you, your cars, Look and voice and the co-driver -->
-          <section data-panel="garage" data-setting="roadfeel" data-title="Road feel" data-summary="#garageRoadFeelBody .sw">
+          <section data-panel="garage" data-setting="roadfeel" data-title="Road feel" data-summary="#garageRoadFeelBody .sw, #ambientSignIn:not([hidden])">
             <div id="garageRoadFeelBody" class="stack-8"></div>
             <p class="note" id="ambientNote" role="status" aria-live="polite">--</p>
+            <button class="ink-btn" id="ambientSignIn" type="button" hidden>Sign in</button>
           </section>
           <section data-panel="garage" data-setting="account" data-title="Account" data-empty-hides>
             <div id="garageAccountBody" class="stack-12" data-fill></div>
