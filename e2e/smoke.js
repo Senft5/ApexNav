@@ -4659,6 +4659,37 @@ flow('a saved stage: the live delta shows while you drive it and the result at t
   check(said.length === 1, `the result is said once (${JSON.stringify(said)})`);
 });
 
+flow('wet roads: rain where you are (the place plate\'s weather) brings the notes earlier and is said once (wet_roads.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  const asked = [];
+  await page.route('**/api.open-meteo.com/**', (route) => { asked.push(route.request().url());
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ current: { temperature_2m: 11, precipitation: 0.6, weather_code: 63 }, hourly: { time: [], precipitation: [] } }) }); });
+  await page.route('**/api.weather.gov/**', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.route('**/nominatim.openstreetmap.org/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.ApexWetRoads && window.ApexNoteTiming);
+  const dryLead = await page.evaluate(() => ApexNoteTiming.leadM({ vMps: 25, apexMps: 12, text: 'Left 3' }));
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForTimeout(300);
+  if (await page.isVisible('#permSheet.show')) await page.click('#permGo');
+  for (let burst = 0; burst < 12 && !(await page.evaluate(() => window.__said.some((t) => /^Wet roads/.test(t)))); burst++) {
+    await page.evaluate((burst) => {
+      for (let j = 0; j < 20; j++) { const k = burst * 20 + j;
+        window.apex.live({ lat: 39.1 + k * 5 / 110540, lon: -84.5, accuracy_m: 4, speed_mps: 20, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); }
+    }, burst);
+    await page.waitForTimeout(1000);
+  }
+  check(await page.evaluate(() => window.apexDebug.wetRoad) === 'wet', 'the road reads wet');
+  const said = await page.evaluate(() => window.__said.filter((t) => /^Wet roads/.test(t)));
+  check(said.length === 1, `said once (${JSON.stringify(said)})`);
+  check(asked.length === 1, `nothing new asked: the plate's one request (${asked.length})`);
+  const wetLead = await page.evaluate(() => ApexNoteTiming.leadM({ vMps: 25, apexMps: 12, text: 'Left 3' }));
+  check(wetLead > dryLead, `the notes come earlier (${dryLead} → ${wetLead} m)`);
+});
+
 flow("friends' activity: the Log lists who drove your stages lately and where you stand, as text; kudos (Worker stubbed, IDEAS S-03, S-07)", async (page, base) => {
   const kudos = [];
   await page.route('**/api/**', (route) => {
