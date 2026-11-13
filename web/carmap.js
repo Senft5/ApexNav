@@ -1,7 +1,7 @@
 // The car's map (web/carmap.html in CarPlay's base view, CarPlay/ApexCarPlay.swift): the phone's theme on OpenFreeMap with
 // the route, every corner's rating at its apex (the road book on the map), reported hazards as the hazard plate and the
 // car's position with its sight-line speed. Apple's templates own every control, so this page takes no touches: the shell
-// drives it through window.car (look, route, corners, hazards, position, sight, mode, zoom, pan, recentre, inset).
+// drives it through window.car (look, route, corners, hazards, position, sight, limit, mode, zoom, pan, recentre, inset).
 (function (root) {
   'use strict';
   const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
@@ -10,7 +10,7 @@
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
   const line = (coords) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords.map(([lat, lon]) => [lon, lat]) } });
 
-  const state = { theme: 'roadbook', night: false, route: [], corners: [], hazards: [], places: [], pos: null, sight: null, mode: 'idle', follow: true, inset: 0 };
+  const state = { theme: 'roadbook', night: false, route: [], corners: [], hazards: [], places: [], pos: null, sight: null, mode: 'idle', follow: true, inset: 0, limit: null };
   let map = null, ready = false, puck = null, sightTag = null;
 
   const look = () => { const t = root.ApexThemes.get(state.theme); return { P: t.map[state.night ? 'night' : 'day'], C: t[state.night ? 'night' : 'day'] }; };
@@ -77,6 +77,7 @@
     const out = carBoxes(sight);
     if (state.inset > 0) out.push([-1e4, -1e4, state.inset + CARD_GAP, g.H + 1e4]);
     if (g.credit) out.push(g.credit);
+    if (g.limit) out.push(g.limit);
     return out;
   }
   // Declutter runs while the map moves (a few times a second, platesSoon below), so it never forces a layout there: the
@@ -87,7 +88,9 @@
     fresh.forEach((p) => showPlate(p, true));                          // measured on the map, in its own font
     if (!geom) {
       const credit = document.getElementById('credit'), mr = c.getBoundingClientRect(), b = credit && credit.offsetHeight ? credit.getBoundingClientRect() : null;
-      geom = { W: c.clientWidth, H: c.clientHeight, credit: b && [b.left - mr.left - 3, b.top - mr.top - 3, b.right - mr.left + 3, b.bottom - mr.top + 3] };
+      const lim = document.getElementById('limit'), l = lim && !lim.hidden && lim.offsetHeight ? lim.getBoundingClientRect() : null;
+      geom = { W: c.clientWidth, H: c.clientHeight, credit: b && [b.left - mr.left - 3, b.top - mr.top - 3, b.right - mr.left + 3, b.bottom - mr.top + 3],
+               limit: l && [l.left - mr.left - 6, l.top - mr.top - 6, l.right - mr.left + 6, l.bottom - mr.top + 6] };
     }
     const tag = sightTag && sightTag.getElement();
     if (!tag || tag.hidden) sightSize = null; else if (!sightSize) sightSize = [tag.offsetWidth || 80, tag.offsetHeight || 24];
@@ -170,6 +173,23 @@
     const label = document.createElement('small'); label.textContent = t.label;
     const b = document.createElement('b'); b.textContent = t.text;
     el.innerHTML = t.short ? EYE_BARRED : EYE; el.append(label, b);
+  }
+
+  // The posted limit (web/carplay.js limitMessage), bottom left just past Apple's card, as Apple Maps and Waze show it.
+  // Unknown: no sign. Only the main screen and the Dashboard get one (the cluster is sent null; the car shows its own).
+  function drawLimit() {
+    const el = document.getElementById('limit');
+    if (!el) return;
+    const l = state.limit;
+    el.hidden = !l;
+    if (l) {
+      el.classList.toggle('round', l.round);
+      el.innerHTML = l.round ? '' : '<small>SPEED<br>LIMIT</small>';
+      const b = document.createElement('b'); b.textContent = String(l.value); el.append(b);
+      el.setAttribute('aria-label', `Speed limit ${l.value} ${l.round ? 'kilometres an hour' : 'miles an hour'}`);
+      el.style.left = `${(state.inset > 0 ? state.inset + CARD_GAP : 0) + 8}px`;
+    }
+    geom = null; platesSoon();
   }
 
   function addLayers() {
@@ -293,6 +313,11 @@
       if (JSON.stringify(next) === JSON.stringify(state.sight)) return;
       state.sight = next; drawSight();
     },
+    limit(l) {
+      const next = l && finite(l.value) && l.value > 0 ? { value: Math.round(l.value), round: !!l.round } : null;
+      if (JSON.stringify(next) === JSON.stringify(state.limit)) return;
+      state.limit = next; drawLimit();
+    },
     // U-77: the plates are placed again once the new camera has settled (heading up and pitched, the car low on the screen),
     // not only for the camera the mode left behind. The shell says the mode on every layout pass; only a change does
     // anything (a repeat used to tear down every plate, restart the camera's ease and undo a pan).
@@ -309,6 +334,7 @@
       const next = finite(px) ? Math.max(0, px) : 0;
       if (next === state.inset) return;
       state.inset = next; camera(false); platesSoon();
+      if (state.limit) drawLimit();                                    // the sign stays just past Apple's card
     },
     get state() { return state; },
     get shown() { return glide.shown; },                              // where the arrow is drawn (e2e/smoke.js)

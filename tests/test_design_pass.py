@@ -11,7 +11,8 @@ def test_the_route_cards_last_row_is_a_strip_of_keys():
     assert re.findall(r'id="(\w+)"', row) == ["routeSaveBtn", "routeShareBtn", "etaShareBtn", "routeGpxBtn", "routePinBtn"]
     rule = re.search(r"\.rc-links \.linkbtn \{([^}]*)\}", PAGE).group(1)
     assert "text-decoration: none" in rule and "min-height: 48px" in rule and "border-left: 1px solid var(--rule)" in rule
-    assert '.rc-links .linkbtn[aria-pressed="true"] { background: var(--panel-ink); color: var(--panel); }' in PAGE
+    # pressed (Saved) is ink-filled; the id rule below outranks a class rule, so the pressed rule names the id too (it was ink on ink)
+    assert '.rc-links .linkbtn[aria-pressed="true"], .rc-links #routeSaveBtn[aria-pressed="true"] { background: var(--panel-ink); color: var(--panel); }' in PAGE
     # REVIEW2's two weights stay: Save and Share in ink, the rest in pencil
     assert ".rc-links #routeSaveBtn, .rc-links #routeShareBtn { color: var(--panel-ink); font-weight: 700; }" in PAGE
     assert "html[data-type-size] .rc-links { display: grid; grid-template-columns: 1fr 1fr;" in PAGE

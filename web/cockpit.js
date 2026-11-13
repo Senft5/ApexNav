@@ -74,6 +74,7 @@
       if (!add.length) return false;
       t.events = [...t.events, ...add].sort((a, b) => a.dist_m - b.dist_m);
       Core.linkNotes(t.events);
+      if (t.marks && window.ApexRoadMarks) t.marks = ApexRoadMarks.unfelt(t.marks, t.events);   // a mapped hump they felt: one call
       return true;
     }
     const ownRouteOfTrack = new WeakMap();                            // a track built from one of our routes -> that route
@@ -212,7 +213,7 @@
     const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
     let etaText = '', etaLeftS = null;
     let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
-    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, echo: 0, attacks: [], road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
+    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, echo: 0, attacks: [], road: '', roadAt: -1e9, limitKey: '' };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -454,6 +455,11 @@
       }
       if (live && key !== car.sightKey) { car.sightKey = key; carPost(m); }
     }
+    // the posted limit on the car's map (web/carplay.js limitMessage), sent when it changes; never while the drive isn't live
+    function carLimit(limit, unit) {
+      const m = ApexCarPlay.limitMessage(limit, unit), key = JSON.stringify(m);
+      if (key !== car.limitKey) { car.limitKey = key; carPost(m); }
+    }
     function drawPuck() {
       const c = look.colors, carSvg = Themes.carSVG(look.theme, look.map.casing, 34, 34);   // outlined as the map draws its roads
       // a car's own theme: the arrow is that car from above, in its paint, outlined in the panel's ink (theme_contract.js holds
@@ -475,6 +481,7 @@
       if (has('apex-alt')) map.setPaintProperty('apex-alt', 'line-color', C.route);
       if (has('apex-explore')) map.setPaintProperty('apex-explore', 'line-color', C.route);
       if (has('apex-twisty')) map.setPaintProperty('apex-twisty', 'line-color', C.amber);
+      if (has('apex-places')) { map.setPaintProperty('apex-places', 'text-color', P.label); map.setPaintProperty('apex-places', 'text-halo-color', P.halo); }
       // Measured roads by the pavement measured there (coverage.js surface): smooth, fair, rough; ink where roughness is unknown
       if (has('apex-coverage')) map.setPaintProperty('apex-coverage', 'line-color', ['match', ['get', 's'], 1, C.gain, 2, C.amber, 3, C.signal, C.dim]);
     }
@@ -514,11 +521,24 @@
       map.addLayer({ id: 'apex-route', type: 'line', source: 'apex-route-src', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-width': width(3, 7) } });
       map.addLayer({ id: 'apex-dna', type: 'line', source: 'apex-route-src', filter: ['has', 'dna'], layout: { 'line-cap': 'butt', 'line-join': 'round', visibility: 'none' },
         paint: { 'line-color': ['get', 'dna'], 'line-width': width(3, 7) } });
+      // Places on the map (2026-11-13, as Apple and Google Maps show them): the eateries, cafés, fuel and shops with a name,
+      // in the map's own label ink set in italic (a place, not a street), only close in (street zoom) and never in a drive;
+      // a tap is the place's card (showPin)
+      if (map.getSource('openmaptiles')) map.addLayer({ id: 'apex-places', type: 'symbol', source: 'openmaptiles', 'source-layer': 'poi', minzoom: 15,
+        filter: ['all', ['has', 'name'], ['match', ['get', 'class'], PLACE_CLASSES, true, false]],
+        layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Italic'], 'text-size': 11, 'text-max-width': 8, 'text-padding': 10,
+          'symbol-sort-key': ['get', 'rank'], visibility: state.mode === 'live' ? 'none' : 'visible' },
+        paint: { 'text-halo-width': 1.4 } }, firstSymbol);                // under the street and town names: they win a clash
       map.addSource('apex-ribbon-src', { type: 'geojson', data: emptyFC() }); ribbonKey = null;
       map.addLayer({ id: 'apex-ribbon', type: 'line', source: 'apex-ribbon-src', layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': ['get', 'c'], 'line-width': width(4, 9) } });
     }
     const emptyFC = () => ({ type: 'FeatureCollection', features: [] });
+    // the kinds of place drawn (OpenMapTiles poi classes): what a driver stops for
+    const PLACE_CLASSES = ['restaurant', 'fast_food', 'cafe', 'bar', 'beer', 'ice_cream', 'bakery', 'fuel', 'grocery', 'lodging', 'car', 'attraction', 'museum'];
+    const PLACE_WORD = { restaurant: 'Restaurant', fast_food: 'Fast food', cafe: 'Café', bar: 'Bar', beer: 'Bar', ice_cream: 'Ice cream', bakery: 'Bakery',
+      fuel: 'Fuel station', grocery: 'Grocery', lodging: 'Lodging', car: 'Car shop', attraction: 'Attraction', museum: 'Museum' };
+    function applyPlaces() { if (mapReady && map.getLayer('apex-places')) map.setLayoutProperty('apex-places', 'visibility', state.mode === 'live' ? 'none' : 'visible'); }
     // Satellite, for developers only (the owner, 2026-11-04: to troubleshoot picks like a neighbourhood ranked a best road):
     // USGS The National Map's orthoimagery (USDA NAIP and USGS, public domain; the US only; tiles to zoom 16, stretched past
     // it) over the base map's fills and road lines, under our twisty and measured roads, the labels and every route line,
@@ -807,6 +827,16 @@
         const say = ApexCoverage.describe(coverage.cache.get(e.features[0].properties.way));
         if (say) toast(say);
       });
+      // tap a place on the map: its card, by its name and kind, with Go here, Start from here and Add via (the dropped pin's)
+      map.on('click', 'apex-places', (e) => {
+        if (state.tapToRoute || state.mode === 'live' || Date.now() < suppressMapClickUntil || !e.features || !e.features.length) return;
+        if (map.queryRenderedFeatures(e.point, { layers: ['apex-route', 'apex-alt', 'apex-explore'].filter((id) => map.getLayer(id)) }).length) return;
+        const f = e.features[0], at = f.geometry && f.geometry.coordinates;
+        if (!Array.isArray(at) || !f.properties.name) return;
+        showPin({ lat: at[1], lon: at[0] }, { name: f.properties.name, kind: PLACE_WORD[f.properties.class] || '' });
+      });
+      map.on('mouseenter', 'apex-places', () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', 'apex-places', () => { map.getCanvas().style.cursor = ''; });
       map.on('click', 'apex-explore', (e) => {
         if (state.tapToRoute || !e.features || !e.features.length) return;
         suppressMapClickUntil = Date.now() + 400;
@@ -1212,17 +1242,22 @@
       } catch (_) { /* An offline or unnamed place remains unknown. */ }
       if (lookup === pinLookup && droppedPin === p) $('pinPlace').textContent = name;
     }
-    function showPin(point) {
+    // place: a place tapped on the map ({ name, kind }): its card says its name and kind and how far, with no lookup
+    function showPin(point, place = null) {
       if (state.mode === 'live') return;
       closePin();
       droppedPin = point;
       const markerEl = document.createElement('div'); markerEl.className = 'dropped-pin';
       pinMarker = new maplibregl.Marker({ element: markerEl }).setLngLat([point.lon, point.lat]).addTo(map);
-      $('pinPlace').textContent = '--';
+      $('pinPlace').textContent = place ? place.name : '--';
+      const here = state.lastPosition, far = place && here ? FunRoute.kmBetween(here, point) * 1000 : null;
+      $('pinKind').textContent = place ? [place.kind, Number.isFinite(far) ? ApexUnits.long(far) : ''].filter(Boolean).join(' · ') : '';
+      $('pinKind').hidden = !$('pinKind').textContent;
+      $('pinOverlay').setAttribute('aria-label', place ? place.name : 'Dropped pin');
       $('pinViaBtn').hidden = !plannedRoute?.request;
       $('pinOverlay').classList.add('show');
       suppressMapClickUntil = Date.now() + 700;
-      reversePin(point);
+      if (!place) reversePin(point);
     }
     mapEl.addEventListener('pointerdown', (e) => {
       activeMapPointers.add(e.pointerId);
@@ -2060,7 +2095,7 @@
         latG = s.latG; lonG = s.lonG; camber = s.camberDeg;
         if (replayEnded && state.cursorM < totalM() - 1) paintReplayEnd(false);   // a seek back: it plays on from there
         if (replayEnded) { vMps = 0; latG = 0; lonG = 0; }           // U-110: the drive is over, the dial at rest (Sight hides under 5 mph)
-      } else { cluster.update({ speedMph: null }); sightHold.reset(); paintSight(ApexCarPlay.sightMessage(null), false); return; }
+      } else { cluster.update({ speedMph: null }); sightHold.reset(); paintSight(ApexCarPlay.sightMessage(null), false); carLimit(null); return; }
       state.cursorIdx = idx;
       if (latG != null && (Math.abs(latG) > 0.30 || Math.abs(lonG) > 0.35)) state.spiritedAt = performance.now();
 
@@ -2084,6 +2119,7 @@
       si.limit = limit != null ? ApexUnits.speed(limit) : null; si.unit = ApexUnits.speedU();
       const held = sightHold.step(si, performance.now());
       paintSight(held.msg, !!live);
+      carLimit(live ? si.limit : null, si.unit);                       // the posted limit's sign on the car's map
       const d = renderIn.cluster;                                       // F-18: one object, refilled each frame (the cluster reads it, keeps nothing)
       // in the chosen units (mph or km/h, U-22); the names are the cluster's
       d.speedMph = vMps != null ? ApexUnits.speed(vMps) : null;
@@ -2312,6 +2348,7 @@
       $('modePlate').classList.toggle('live', mode === 'live');
       paintIdle();
       updateTwisty();
+      applyPlaces();
     }
     // Names are known now: pre-render them in the co-driver's own voice (only when the owner turned Speak-road-names / LIVE on).
     function prefetchNames(t) {
@@ -6287,7 +6324,7 @@
             if (!x) continue;
             const line = [`${dot[x.state] || ''} ${p.name}: ${word[x.state] || x.state}`, x.ms ? `${(x.ms / 1000).toFixed(1)} s` : null, x.detail || null].filter(Boolean).join(' · ');
             out.append(el('p', { className: 'note', textContent: line }),
-              ...(x.state === 'down' ? [el('p', { className: 'note', textContent: `Affects: ${p.feeds}.`, style: 'opacity:.75;margin-top:-6px' })] : []));
+              ...(x.state === 'down' ? [el('p', { className: 'note', textContent: `Affects: ${p.feeds}.`, style: 'margin-top:-6px' })] : []));
           }
         }
         out.append(serverSide());
@@ -10378,7 +10415,7 @@
       else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) carAsked(() => reportHazard(m.kind, null, true));
       else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
-      else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
+      else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = ''; car.limitKey = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
         carPost(carPlaces());                   // a car screen that just connected gets everything again
         carPost(ApexCarPlay.loopsMessage(loopBy, ApexUnits.metric()));   // and the loop dial's lengths for its Loops
         peekTimeAttack();                                                // and this week's loop for its Places, if you've entered it
