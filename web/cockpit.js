@@ -7381,6 +7381,21 @@
           up.addEventListener('click', () => saveAreaAt(a.lat, a.lon, up, { id: a.id, name: a.name, radiusKm: a.radiusKm, idle: 'Update' }));
           acts.append(up);
         }
+        // a saved route's map: fetched again along the route as it is saved now (keepMapAlong, same id)
+        const route = age.stale && !Number.isFinite(a.radiusKm) ? ApexSavedRoutes.list(localStorage).find((p) => routeAreaId(p) === a.id) : null;
+        if (route) {
+          const up = document.createElement('button'); up.className = 'linkbtn'; up.textContent = 'Update';
+          up.setAttribute('aria-label', `Update the map along ${route.name}, saved ${age.month}`);
+          up.addEventListener('click', async () => {
+            if (up.disabled) return;
+            up.disabled = true; up.textContent = 'Saving the map…';
+            await keepMapAlong({ id: route.id, name: route.name, lat: route.coords.map((c) => c[1]), lon: route.coords.map((c) => c[0]) });
+            const now = ApexOfflineTiles.areas().find((x) => x.id === a.id);
+            if (!now || ApexOfflineTiles.ageOf(now, Date.now()).stale) toast('Couldn\'t update the map. Check signal and try again.');
+            renderMyData();
+          });
+          acts.append(up);
+        }
         const del = document.createElement('button'); del.className = 'linkbtn'; del.textContent = 'Delete';
         del.addEventListener('click', async () => { await ApexOfflineTiles.removeArea(a.id); if (window.ApexOwnRouting && ApexOwnRouting.releaseArea) ApexOwnRouting.releaseArea(a.id); renderMyData(); });
         acts.append(del); row.append(t, acts); return row;

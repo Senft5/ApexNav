@@ -7036,6 +7036,38 @@ flow('a saved route keeps the map along it: Save fetches the tiles within reach 
   check(true, 'unsaving the route drops its map');
 }, { viewport: { width: 1280, height: 900 } });
 
+flow('a saved route\'s map grown old: its row offers Update, which fetches it again along the saved route under the same id (IDEAS F-03)', async (page, base) => {
+  let tiles = 0;
+  await page.route('https://tiles.openfreemap.org/**', (route) => {
+    const u = route.request().url();
+    if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } }, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) });
+    if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
+    if (/\/t\/14\//.test(u)) tiles++;
+    return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) });
+  });
+  await page.route('https://s3.amazonaws.com/**', (route) => route.fulfill({ contentType: 'image/png', body: Buffer.alloc(8) }));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(JSON.parse(route.request().postData() || '{}').locations)) }));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded(), null, { timeout: 15000 });
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.60, lon: -83.90 }, { lat: 35.80, lon: -83.90 }], 'route_dest', 'To the gap', null, { from: null, to: { lat: 35.80, lon: -83.90 }, via: [] }));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'route' && apexDebug.track.request, null, { timeout: 20000 });
+  await page.evaluate(() => document.getElementById('routeSaveBtn').click());
+  await page.waitForFunction(() => window.apexDebug.mapAlong, null, { timeout: 60000 });
+  // the map kept long ago: back-date it, and the next start lists it as old
+  await page.evaluate(() => { const a = JSON.parse(localStorage.getItem('apex.offlineAreas')); a[0].at = '2025-04-01T09:00:00Z'; localStorage.setItem('apex.offlineAreas', JSON.stringify(a)); });
+  await page.reload();
+  await page.waitForFunction(() => [...document.querySelectorAll('#myAreas button')].some((b) => b.textContent === 'Update'), null, { timeout: 15000 });
+  check(/along the route.*saved Apr 2025/.test(await page.textContent('#myAreas')), 'the route\'s map says when: ' + await page.textContent('#myAreas'));
+  const id = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.offlineAreas'))[0].id);
+  tiles = 0;
+  await page.evaluate(() => [...document.querySelectorAll('#myAreas button')].find((b) => b.textContent === 'Update').click());
+  await page.waitForFunction(() => { const a = JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]'); return a.length === 1 && a[0].at > '2026'; }, null, { timeout: 60000 });
+  const after = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.offlineAreas')));
+  check(after[0].id === id && after[0].alongKm === 1.5 && /^Along /.test(after[0].name) && tiles > 10, 'fetched again along the route, same id: ' + JSON.stringify({ after, tiles }));
+  await page.waitForFunction(() => ![...document.querySelectorAll('#myAreas button')].some((b) => b.textContent === 'Update'), null, { timeout: 5000 });
+}, { viewport: { width: 1280, height: 900 } });
+
 flow('offline tiles two areas share: deleting one area keeps the tiles the other still needs, and a copy kept as it arrived keeps its areas (IDEAS F-02, F-03)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
