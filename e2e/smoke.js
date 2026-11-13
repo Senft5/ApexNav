@@ -1063,6 +1063,17 @@ async function ownTrip(page, base, level = null) {
     steps: (window.apexDebug.track.steps || []).map((s) => s.street), via: ((window.apexDebug.track.request || {}).via || []).length }));
   return { r, calls };
 }
+flow('landscape: a planned route is the card alone, not under the search sheet (2026-11-13: it sat below Where to?\'s two columns)', async (page, base) => {
+  graphDir = graphFixture();
+  try {
+    await ownTrip(page, base);
+    const r = await page.evaluate(() => { const vis = (el) => !!el && el.getClientRects().length > 0;
+      return { routed: document.getElementById('planPanel').classList.contains('routed'), search: vis(document.querySelector('.plan-search-section')),
+        card: Math.round(document.getElementById('routeCard').getBoundingClientRect().top - document.getElementById('planBody').getBoundingClientRect().top) }; });
+    check(r.routed && !r.search && r.card <= 8, 'the card is the sheet, at its top: ' + JSON.stringify(r));
+  } finally { graphDir = null; }
+}, { viewport: { width: 844, height: 390 }, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 flow('design pass 2: the route card\'s last row is one ruled strip of keys, and the map\'s credit is a plate on the look\'s own tokens (IDEAS U-53)', async (page, base) => {
   graphDir = graphFixture();
   try {

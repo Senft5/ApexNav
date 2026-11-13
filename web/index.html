@@ -1777,7 +1777,9 @@
       .plan.open.routed:not(.full) { height: calc(100% - var(--safe-bottom)); }                                   /* the plan flow: no half card on a short screen */
       #app.idle .deck-chips { display: none !important; }
       /* 14: two columns, so the basic level fits without scrolling: places and the loop left, Roads, More and Find right */
-      .plan.open .plan-search-section { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; row-gap: 12px; grid-auto-flow: row dense; align-items: start; }
+      /* :not(.routed): this display won over .plan.routed's display: none, so a route card in landscape sat under the whole
+         search sheet, scrolled off below it (2026-11-13) */
+      .plan.open:not(.routed) .plan-search-section { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; row-gap: 12px; grid-auto-flow: row dense; align-items: start; }
       .plan.open .plan-search-section > * { grid-column: 1; }
       .plan.open .plan-search-section > .ctl:not(.plan-loop), .plan.open .plan-search-section > .plan-more, .plan.open .plan-search-section > .find-bar { grid-column: 2; }
       .plan.open .plan-search-section > .plan-loop { grid-row: span 3; }   /* the dial is tall: Roads and More stack beside it, not below it */
