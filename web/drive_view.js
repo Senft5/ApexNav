@@ -638,18 +638,21 @@
     let ovl = null, ovlK = -1, ovlAt = null;
     const overlayable = (k) => !!(o.traceOf && co && co.corners[k] && co.corners[k].best && co.corners[k].best_from >= 0);
     // One tap from a corner to a clip to share (big bet 5): when the app filmed this drive and its video holds the corner
-    function clipKey(k) {
-      const c = d.corners[k];
-      if (!o.canClip || !o.clip || !o.canClip(c.start, c.end)) return null;
-      const b = el('button', 'btn solid dv-clip', 'Clip this corner'); b.type = 'button';
+    const actKey = (cls, label, run) => {                          // a key that makes a clip and says how it went
+      const b = el('button', `btn dv-clip ${cls}`, label); b.type = 'button';
       b.onclick = async (e) => {
         e.stopPropagation();
         b.disabled = true; b.textContent = 'Making the clip\u2026';
         let ok = false;
-        try { ok = await o.clip(c.start, c.end); } catch (_) { ok = false; }
+        try { ok = await run(); } catch (_) { ok = false; }
         b.disabled = false; b.textContent = ok ? 'Clip made \u00b7 make another' : 'Couldn\u2019t make the clip';
       };
       return b;
+    };
+    function clipKey(k) {
+      const c = d.corners[k];
+      if (!o.canClip || !o.clip || !o.canClip(c.start, c.end)) return null;
+      return actKey('solid', 'Clip this corner', () => o.clip(c.start, c.end));
     }
     // a corner with no best pass to lay over it: just its clip key, when there is a video of it
     function openClipOnly(k, after) {
@@ -681,6 +684,12 @@
       const pic = el('div', 'dv-ovl-pic', overlaySvg(tr, C, MPH, Math.round(Math.min(560, (box.clientWidth || 340)))));
       const key = el('div', 'dv-ovl-key', `<span class="a">This drive</span><span class="b">Best pass</span>`);
       box.append(pic, key, ...T.rows(tr, fmt).map((t) => el('p', 'dv-ovl-row', esc(t))));
+      // both passes filmed: the two videos side by side, the gap counting (ghost_clip.js)
+      if (o.ghostOf) Promise.resolve(o.ghostOf(k, r)).then((go) => {
+        if (!go || ovl !== box) return;
+        const g = actKey('dv-ghost', 'Side by side with your best pass', go), at = box.querySelector('.dv-clip');
+        if (at) at.after(g); else box.querySelector('.dv-ovl-when').after(g);
+      }).catch(() => {});
     }
     if (co && co.top.length) {                                      // where the time is: the biggest gaps to your own best passes
       const ul = el('ol', 'dv-time');

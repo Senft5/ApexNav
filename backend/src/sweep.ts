@@ -13,6 +13,7 @@ import { BUILD_CHAT_SWEEP } from "./builds";
 import { TA_SWEEP } from "./time_attack";
 import { TA_FIXED_SWEEP } from "./ta_fixed";
 import { DUELS_SWEEP } from "./duels";
+import { ITEMS_SWEEP } from "./member_items";
 
 export const SWEEPS: Record<string, string> = {
   sessions: "DELETE FROM sessions WHERE expires_at <= datetime('now')",
@@ -32,6 +33,7 @@ export const SWEEPS: Record<string, string> = {
   route_stats: STATS_SWEEP,
   crew_chat: CHAT_SWEEP,
   presence_samples: PRESENCE_SWEEP,
+  member_items: ITEMS_SWEEP,                                         // removals other phones have had 60 days to learn of
   build_chat: BUILD_CHAT_SWEEP,
   ...TA_SWEEP,
   ...TA_FIXED_SWEEP,

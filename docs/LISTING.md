@@ -73,7 +73,7 @@ positions, routing and search requests) is not "collected" by Apple's definition
 
 | data type | collected | linked to the user | tracking | purpose |
 |---|---|---|---|---|
-| Precise location | Yes: hazard reports and shared routes you make | Yes (kept with your account; never shown with your name) | No | App functionality |
+| Precise location | Yes: hazard reports and shared routes you make, and (signed in, switch on, the default) your saved routes and pinned places, kept on your account for your other phones | Yes (kept with your account; never shown with your name) | No | App functionality |
 | Precise location | Yes: road data, only with the switch on (map road id, 5 m section, four road measurements, the road's public map line; never your position or path) | No | No | App functionality, product improvement |
 | Precise location | Yes, only if you choose to be shown on the friends map with Exact (sent while driving, delayed as you choose, shown to friends or crews you pick, deleted when you choose Nobody) | Yes | No | App functionality |
 | Coarse location | Yes, only if you choose to be shown on the friends map (the default is within a mile, 10 minutes late) | Yes | No | App functionality |
