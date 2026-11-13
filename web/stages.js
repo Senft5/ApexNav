@@ -258,7 +258,7 @@
   const poiTiles = new Map();
   const POI_Z = 14, POI_PAD_KM = 0.4, POI_MAX_TILES = 160;
   const POI_KIND = (p) => (p.subclass === 'viewpoint' ? 'view' : p.class === 'cafe' ? 'cafe' : p.class === 'fuel' ? (p.subclass === 'charging_station' ? 'charge' : 'fuel') : null);   // the tiles file chargers under fuel
-  async function pois(points) {
+  async function poisAll(points) {
     if (!tileUrl) tileUrl = (await tileJson()).tiles[0];
     const want = new Set();
     for (const p of points || []) {
@@ -269,10 +269,15 @@
     await Promise.all([...want].filter(k => !poiTiles.has(k)).map(async (key) => {
       const [x, y] = key.split('/').map(Number);
       const buf = new Uint8Array(await bufferOf(tileUrl.replace('{z}', POI_Z).replace('{x}', x).replace('{y}', y)));
-      poiTiles.set(key, decodeLayer(buf, 'poi', POI_Z, x, y, 1).map(f => ({ kind: POI_KIND(f.props), name: f.props.name || f.props['name:latin'] || f.props.name_en || null, pt: f.lines[0] && f.lines[0][0] }))
-        .filter(f => f.kind && f.pt).map(f => ({ kind: f.kind, name: f.name, lat: f.pt[1], lon: f.pt[0] })));
+      // every place kept with its class (Find nearby, nearby.js, reads restaurants too); pois() keeps its four kinds
+      poiTiles.set(key, decodeLayer(buf, 'poi', POI_Z, x, y, 1).map(f => ({ kind: POI_KIND(f.props), cls: f.props.class || null, sub: f.props.subclass || null,
+        name: f.props.name || f.props['name:latin'] || f.props.name_en || null, pt: f.lines[0] && f.lines[0][0] }))
+        .filter(f => f.pt).map(f => ({ kind: f.kind, cls: f.cls, sub: f.sub, name: f.name, lat: f.pt[1], lon: f.pt[0] })));
     }));
     return [...want].flatMap(k => poiTiles.get(k) || []);
+  }
+  async function pois(points) {
+    return (await poisAll(points)).filter(f => f.kind).map(f => ({ kind: f.kind, name: f.name, lat: f.lat, lon: f.lon }));
   }
 
   // Join pieces end to end into strokes, continuing straight-ish through each node (≤ 50°).
@@ -668,5 +673,5 @@
     return copy(await p);
   }
 
-  root.ApexStages = { demTile, DEM_Z, decodeLayer, transportationAt, discover, discoverAsync, discoverKey, DISCOVER_KEEP_MS, nameStages, places, pois, addElevations, profile, fillProfile, climbM, sightOffsets, offsetsFrom, SIGHT_OPEN_M, stageDirection, terrarium, applyHighlights, prefLike, plans, waypoints, strokes, bestWindow, roadPieces, namesAlong };
+  root.ApexStages = { demTile, DEM_Z, decodeLayer, transportationAt, discover, discoverAsync, discoverKey, DISCOVER_KEEP_MS, nameStages, places, pois, poisAll, addElevations, profile, fillProfile, climbM, sightOffsets, offsetsFrom, SIGHT_OPEN_M, stageDirection, terrarium, applyHighlights, prefLike, plans, waypoints, strokes, bestWindow, roadPieces, namesAlong };
 })(typeof window !== 'undefined' ? window : globalThis);
