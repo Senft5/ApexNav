@@ -3302,17 +3302,17 @@
       const name = await ApexConfirm.prompt('Pin this place as', { action: 'Pin', value: has('home') ? (has('work') ? '' : 'Work') : 'Home', placeholder: 'Home, Work or any name', maxLength: 40 });
       if (!name || !name.trim()) return;
       const label = String(t.name || '').replace(/^To /, '') || name;
-      toast(ApexPinnedPlaces.pin(localStorage, name, { label, lat: to.lat, lon: to.lon }) ? `Pinned as ${name.trim()}. It's first in Where to?, on this phone only.` : 'Couldn\u2019t pin that.');
-      carPost(carPlaces());                                              // first in the car's Places too
+      toast(ApexPinnedPlaces.pin(localStorage, name, { label, lat: to.lat, lon: to.lon }) ? `Pinned as ${name.trim()}. It's first in Where to? now.` : 'Couldn\u2019t pin that.');
+      carPost(carPlaces()); itemsChanged();                              // first in the car's Places too, and on your account
     });
     $('routeSaveBtn').addEventListener('click', () => {
       const t = plannedRoute;
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
       if (ApexSavedRoutes.has(localStorage, t.id)) {
-        ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`); carPost(carPlaces());
+        ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`); carPost(carPlaces()); itemsChanged();
         if (window.ApexOfflineTiles) ApexOfflineTiles.removeArea(routeAreaId(t)).catch(() => {});   // and the map kept along it
         if (window.ApexRouteReports) ApexRouteReports.remove(localStorage, String(t.id));            // and its reports
-      } else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') { toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`); keepMapAlong(t); keepReportsAlong(t); carPost(carPlaces()); }
+      } else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') { toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`); keepMapAlong(t); keepReportsAlong(t); carPost(carPlaces()); itemsChanged(); }
       else toast('The phone is out of room for saved routes. Remove one first.');
       paintSaveBtn();
     });
@@ -3320,13 +3320,13 @@
     // it), so it draws with no signal on the way. Quietly, with signal; it shows in Your data as a map area and goes when the
     // route is unsaved. Nothing kept (no signal, a route too long) leaves the saved route as it was.
     const routeAreaId = (t) => `route_${String(t.id).replace(/[^\w-]/g, '').slice(0, 60)}`;
-    async function keepMapAlong(t) {
+    async function keepMapAlong(t, quiet = false) {
       if (!window.ApexOfflineTiles || navigator.onLine === false || !t || !Array.isArray(t.lat)) return;
       try {
         const mid = Math.floor(t.lat.length / 2);
         const a = await ApexOfflineTiles.download({ lat: t.lat[mid], lon: t.lon[mid], along: { lat: t.lat, lon: t.lon }, id: routeAreaId(t), styleUrl: MAP_STYLE, name: `Along ${t.name}` });
         if (!ApexSavedRoutes.has(localStorage, t.id)) { await ApexOfflineTiles.removeArea(a.id); return; }   // unsaved meanwhile
-        toast(`The map along ${t.name} is kept for no signal too, ${Math.max(1, Math.round(a.bytes / 1048576))} MB.`);
+        if (!quiet) toast(`The map along ${t.name} is kept for no signal too, ${Math.max(1, Math.round(a.bytes / 1048576))} MB.`);
         if (window.apexDebug) window.apexDebug.mapAlong = a;
       } catch (_) { /* the saved route stands without its map */ }
     }
@@ -5674,7 +5674,7 @@
         if (!p.pinned) return b;
         // a pinned place (U-20): its own row with Unpin beside it
         const un = document.createElement('button'); un.className = 'linkbtn'; un.textContent = 'Unpin'; un.setAttribute('aria-label', `Unpin ${p.label}`);
-        un.addEventListener('click', (e) => { e.stopPropagation(); ApexPinnedPlaces.unpin(localStorage, p.pinned.name); renderPlaces(); carPost(carPlaces()); });
+        un.addEventListener('click', (e) => { e.stopPropagation(); ApexPinnedPlaces.unpin(localStorage, p.pinned.name); renderPlaces(); carPost(carPlaces()); itemsChanged(); });
         const row = document.createElement('div'); row.className = 'row pinned-row'; row.append(b, un);
         if (b.classList.contains('place-extra')) { b.classList.remove('place-extra'); row.classList.add('place-extra'); }
         return row;
@@ -6322,6 +6322,26 @@
     async function apiCall(method, path, body) {
       return ApexSync.apiFetch(path, { method, headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
     }
+    // Saved routes and pinned places on your account (item_sync.js, big bet #11): once the account answers, and 1.5 s after a
+    // save, a removal, a pin or an unpin here; one at a time, and at most once a minute otherwise. What it brings is drawn.
+    let itemSyncing = null, itemSyncAt = 0, itemSyncAgain = false, itemsTimer = 0;
+    function syncItems(force) {
+      if (!window.ApexItemSync || !accountMe || !accountMe.id) return;
+      if (itemSyncing) { if (force) itemSyncAgain = true; return; }
+      if (!force && Date.now() - itemSyncAt < 60_000) return;
+      itemSyncAt = Date.now();
+      itemSyncing = ApexItemSync.sync(localStorage, ApexSavedRoutes, ApexPinnedPlaces, accountMe.id, apiCall)
+        .then((r) => {
+          if (!r || !r.pulled) return;
+          carPost(carPlaces()); if ($('planPanel').classList.contains('open') && !$('destInput').value.trim()) renderPlaces();
+          // a route saved on another phone was saved for offline there: its map is kept here too, quietly, one at a time
+          const came = ApexSavedRoutes.list(localStorage).filter((p) => (r.routes || []).includes(p.id));
+          came.reduce((go, p) => go.then(() => keepMapAlong({ id: p.id, name: p.name, lat: p.coords.map((c) => c[1]), lon: p.coords.map((c) => c[0]) }, true)), Promise.resolve());
+        })
+        .catch((e) => console.error('item sync', e))
+        .finally(() => { itemSyncing = null; if (itemSyncAgain) { itemSyncAgain = false; syncItems(true); } });
+    }
+    function itemsChanged() { clearTimeout(itemsTimer); itemsTimer = setTimeout(() => syncItems(true), 1500); }
     // "Sign in with Google" links: the app signs in through the native shell instead of following the link.
     document.addEventListener('click', (e) => {
       const a = e.target.closest && e.target.closest('a[href="/api/auth/google/start"]');
@@ -6681,6 +6701,7 @@
       // F-03: People and the Garage are never drawn without their modules while they are open; once loaded, needSocial draws them
       if (!socialIn && !socialFailed && (view === 'people' || view === 'garage')) { needSocial(); return; }
       accountMe = me && me.signed_in ? me : null;
+      syncItems(false);                                                     // saved routes and pinned places from the account
       if ($('myAccountDelGo')) $('myAccountDelGo').hidden = !accountMe;   // Your data's way to Delete account, signed in only
       if (accountMe && accountMe.member) loadCrewHazardKinds();
       // Where to? opened before the account came back: its time attack row's peek skipped then, so it goes now (CI 2026-11-12)
@@ -7286,6 +7307,12 @@
       if (pio && (pio.firsts || pio.seconds)) dsec.append(el('p', { className: 'note pioneer', textContent: [pio.firsts ? `Roads you mapped first: ${pio.firsts}` : '', pio.seconds ? `second to map ${pio.seconds}` : ''].filter(Boolean).join(' · ') }));
       rfBody.append(dsec);
       const asec = accBody === gbody ? section('Account') : el('div', { className: 'stack-8' });
+      const itemsOn = !(window.ApexItemSync && ApexItemSync.isOff(localStorage));
+      asec.append(switchRow('Saved routes and places on my account', itemsOn, async () => {
+        if (!(await ApexItemSync.setOn(localStorage, me.id, !itemsOn, apiCall))) { toast('No connection. Try again with signal.'); return; }
+        if (!itemsOn) syncItems(true);
+        redo();
+      }), el('p', { className: 'note', textContent: itemsOn ? 'On every phone you sign in on. Only you see them.' : 'Off: kept on this phone only.' }));
       asec.append(el('div', { className: 'row' },
         btn('Download my data', downloadMyData),
         btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); clearCarry(); clearCrowd(); redo(); })),
