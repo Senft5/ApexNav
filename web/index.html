@@ -1340,6 +1340,9 @@
     .rp-fact b { text-align: right; }
     .road-page p.note:not(.rp-head) { margin: 2px 0 0; font-size: 13px; line-height: 1.45; color: var(--panel-dim); }
     .side-pop .side-pop-head h3 { border: 0; padding: 0; margin: 0; }
+    /* About a road's one key, Plan this road: held at the sheet's foot as Find a loop is on the plan sheet */
+    .rp-go { position: sticky; bottom: calc(-24px - var(--safe-bottom)); margin: 0 calc(-16px - var(--safe-right)) calc(-24px - var(--safe-bottom)) calc(-16px - var(--safe-left));
+      padding: 10px calc(16px + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(16px + var(--safe-left)); background: var(--panel); border-top: 1px solid var(--rule); }
     /* The Garage's settings (REVIEW5 §2, web/garage_settings.js): one gear in the header, a sheet of rows, each row a sheet over
        it. Tall enough that a setting's sheet covers the list under it; hidden when shut, so nothing off screen takes focus. */
     .sheet:not([data-view="garage"]) .garage-gear { display: none; }

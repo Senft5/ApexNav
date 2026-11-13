@@ -7,6 +7,9 @@
   four columns left the name about 80 px on a 390 px phone, so "East Alexandria Pike" broke over three lines.
   - Wider screens keep the table as it was.
   - The e2e flow "plan flow (c) best roads nearby" checks the name's width and that the Road head is hidden.
+- **Done:** About a road, opened from that list, ends in a solid Plan this road key held at the sheet's foot. Before
+  this the page was a dead end, with Close its only key. The key plans that road, as the row does.
+  - It is covered by the e2e flow "best roads nearby: About a road has its own Plan this road key".
 - **Active bugs:** none known.
 - **Next:** keep walking the phone screens.
 
@@ -19,3 +22,10 @@
 - **Why:** Nate's standing UX rule, "clean and intuitive". A road name in three lines read as clutter, and a head reading
   "Road" over a road name says nothing.
 - **Undo:** delete the `@media (max-width: 520px)` block after `.nb-row .linkbtn` in web/index.html.
+
+## 2026-11-13 About a road gets a Plan this road key
+
+- **What:** `openRoadPage(s, go)` takes an optional `go`. The nearby list passes `() => driveStage(i)`. The key is a
+  `.find-key` in a sticky `.rp-go` bar, the same pattern as Find a loop. It closes the page, then plans the road.
+- **Why:** a page about a road you are choosing should let you choose it.
+- **Undo:** drop the `go` argument at the About button in cockpit.js `showExplore`.
