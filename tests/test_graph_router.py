@@ -453,6 +453,22 @@ def test_confirmed_road_hazards_nudge_the_search():
     assert r["farMax"] == 1, r
 
 
+def test_corner_prefs_steer_the_search_to_the_corners_asked_for():
+    """Plan -> Hairpins and Sweepers fewer/more (IDEAS R-19) in our router's search, not only the ranking: each edge's fun
+    counts up to 60 % more or less by its share of tight (radius under 40 m) and fast (100 to 260 m) turning, read from
+    the tiles' geometry (graph_router.js cornerMix, only when a pref is set). Two roads alike but for their corners: the
+    one asked for is planned, either way round; with no pref they cost the same."""
+    r = case("cornerPrefs")
+    assert r["mixBefore"] is None, "no pref, no geometry pass"
+    assert r["hpTight"] > 0.6 and r["hpFast"] < 0.2 and r["swFast"] > 0.8 and r["swTight"] < 0.2, r
+    assert r["bad0"]["hp"] == r["bad0"]["sw"], r
+    assert r["badTight"]["hp"] < r["badTight"]["sw"] and r["badFast"]["sw"] < r["badFast"]["hp"], r
+    assert all(0 <= x <= 1 for k in ("badTight", "badFast") for x in r[k].values()), "goodness stays inside 0..1"
+    for k, road, other in (("tight", "Hairpin Road", "Sweeper Road"), ("tightOnly", "Hairpin Road", "Sweeper Road"),
+                           ("fast", "Sweeper Road", "Hairpin Road"), ("fastOnly", "Sweeper Road", "Hairpin Road")):
+        assert road in r[k] and other not in r[k], (k, r[k])
+
+
 def test_there_and_back_comes_home_by_other_road():
     """There and back (graph_router.js roundTrip): to a destination and home again, the way back costing the way out x4 both
     ways, so a round trip drives little of itself twice; at Fun and Long way the way home buys good road as a plan does;
