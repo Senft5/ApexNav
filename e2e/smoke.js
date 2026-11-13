@@ -8829,14 +8829,15 @@ flow('find nearby: Where to? has Gas, Coffee and Food; a key, or "gas near me" t
     rows: [...document.querySelectorAll('#placeList .place')].map((b) => [b.querySelector('b').textContent, b.querySelector('span').textContent]) }));
   check(rows.q === 'Coffee' && rows.keys && rows.rows.length === 2 && rows.rows[0][0] === 'Bean There Coffee' && /^0\.\d mi$/.test(rows.rows[0][1])
     && rows.rows[1][0] === 'Café, no name on the map', 'the key says Coffee in the field, and the cafés are listed nearest first, how far, an unnamed one says so: ' + JSON.stringify(rows));
-  const pins = await page.evaluate(() => [...document.querySelectorAll('.nearby-pin')].map((p) => p.textContent));
-  check(pins.join() === 'Bean There Coffee,CAFÉ', 'and they are on the map, by name (an unnamed one by its stamp): ' + JSON.stringify(pins));
+  const pins = await page.evaluate(() => ({ pins: [...document.querySelectorAll('.nearby-pin')].map((p) => p.textContent),
+    half: document.getElementById('planPanel').getBoundingClientRect().top > innerHeight * 0.4 }));
+  check(pins.pins.join() === 'Bean There Coffee,CAFÉ' && pins.half, 'and they are on the map, by name (an unnamed one by its stamp), the sheet down to half under them: ' + JSON.stringify(pins));
   // typed, in the words people use: the fuel, never a geocode of the word; the restaurant 22 km off is out of reach
   await page.fill('#destInput', 'gas near me');
   await page.waitForFunction(() => { const b = document.querySelector('#placeList .place b'); return b && b.textContent === 'Shell'; }, null, { timeout: 5000 });
   await page.fill('#destInput', 'food');
   await page.waitForFunction(() => /^No food on the map within/.test(document.getElementById('placeList').textContent), null, { timeout: 5000 });
-  check(await page.evaluate(() => !document.querySelector('.nearby-pin')), 'none found, no pins left from before');
+  check(await page.evaluate(() => !document.querySelector('.nearby-pin') && !document.getElementById('planPanel').classList.contains('nearby')), 'none found, no pins left from before, the sheet back up');
   // Enter on "coffee" goes to the nearest
   await page.fill('#destInput', 'coffee');
   await page.press('#destInput', 'Enter');

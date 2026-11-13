@@ -5674,10 +5674,23 @@
     // the listed places on the map too, by name (an unnamed one by its stamp), the map fitted to them above the sheet; a tap
     // on one goes there, as its row does. They go when the list stops being a kind, the plan closes, or a route is planned.
     let nearbyPins = [];
-    function clearNearbyPins() { for (const m of nearbyPins) m.remove(); nearbyPins = []; }
+    function clearNearbyPins() { for (const m of nearbyPins) m.remove(); nearbyPins = []; $('planPanel').classList.remove('nearby'); }
+    // one name never over another: a farther place's pin waits while a nearer one's covers it (the list keeps them all)
+    function declutterNearby() {
+      const kept = [];
+      for (const m of nearbyPins) {
+        const el = m.getElement(); el.style.visibility = '';
+        const r = el.getBoundingClientRect();
+        if (kept.some((k) => r.left < k.right + 4 && r.right > k.left - 4 && r.top < k.bottom + 2 && r.bottom > k.top - 2)) el.style.visibility = 'hidden';
+        else kept.push(r);
+      }
+    }
+    map.on('moveend', () => { if (nearbyPins.length) declutterNearby(); });
     function paintNearbyPins(rows, cat, here, out) {
       clearNearbyPins();
       if (!rows.length || !mapReady) return;
+      // the sheet comes down to half (a phone, not typing), so the places show on the map above their list, as Apple's does
+      if (!document.documentElement.classList.contains('kb-open')) $('planPanel').classList.add('nearby');
       rows.forEach((r, i) => {
         const el = document.createElement('div'); el.className = `poi-pin nearby-pin poi-${cat === 'charge' ? 'charge' : cat}`;
         el.textContent = r.named ? r.label : ApexNearby.CATS[cat].stamp;
@@ -5685,6 +5698,7 @@
         el.addEventListener('click', (e) => { e.stopPropagation(); suppressMapClickUntil = Date.now() + 400; routeToPlace(out[i]); });
         nearbyPins.push(new maplibregl.Marker({ element: el }).setLngLat([r.lon, r.lat]).addTo(map));
       });
+      declutterNearby();
       const top = $('planPanel').getBoundingClientRect().top, h = map.getContainer().clientHeight;
       if (top < h * 0.3) return;                                         // the sheet is up over most of the map: leave the view
       let w = here.lon, e = here.lon, so = here.lat, n = here.lat;
