@@ -28,7 +28,8 @@
   }
 
   /**
-   * The marks of a route context as corridor positions [{ kind, atM, n }] (n: how many in a bump run), in order.
+   * The marks of a route context as corridor positions [{ kind, atM, endM, n }] (n: how many in a bump run, endM its last),
+   * in order.
    * Stops and crossings mapped twice within 40 m are one; bumps within 200 m of the last are one run.
    */
   function marksOf(ctx) {
@@ -48,13 +49,13 @@
       const m = { kind: r.kind, atM: r.atM, endM: r.atM, n: 1 };
       out.push(m); last[r.kind] = m;
     }
-    return out.map(({ kind, atM, n }) => ({ kind, atM, n }));
+    return out.map(({ kind, atM, endM, n }) => ({ kind, atM, endM, n }));
   }
 
   /**
    * Note events on track t ({lat, lon, dist}) for a route context and its corridor: [{ type: 'mark', kind, code, call,
-   * index, dist_m, lat, lon }], each snapped to the track within 30 m (else left out). nearest(lat, lon, lats, lons) gives
-   * { index, distM } (apex_core.js nearestIndex).
+   * index, dist_m, end_m, lat, lon }], each snapped to the track within 30 m (else left out). nearest(lat, lon, lats, lons) gives
+   * { index, distM } (apex_core.js nearestIndex). A speed bump the track already calls is left out (unfelt).
    */
   function events(ctx, corridor, t, nearest) {
     if (!t || !t.dist || !t.dist.length || typeof nearest !== 'function') return [];
@@ -65,11 +66,22 @@
       const hit = nearest(at[0], at[1], t.lat, t.lon);
       if (!hit || !(hit.distM <= SNAP_M) || !(hit.index >= 0)) continue;
       const k = KINDS[m.kind];
-      out.push({ type: 'mark', kind: m.kind, code: k.code, call: m.n > 1 && k.many ? k.many : k.call, index: hit.index, dist_m: t.dist[hit.index], lat: at[0], lon: at[1] });
+      const d = t.dist[hit.index];
+      out.push({ type: 'mark', kind: m.kind, code: k.code, call: m.n > 1 && k.many ? k.many : k.call, index: hit.index, dist_m: d, end_m: d + (m.endM - m.atM), lat: at[0], lon: at[1] });
     }
-    return out;
+    return unfelt(out, t.events);
   }
 
-  const api = { marksOf, events, placeAt, KINDS };
+  /**
+   * Marks less the mapped speed bumps the track already calls as a bump (a member's or the crowd's, apex_core.js /
+   * contributor.js bumpEvents) within 30 m of the run: one thing gets one call, and the felt bump is the measured one.
+   */
+  function unfelt(marks, events) {
+    const felt = (Array.isArray(events) ? events : []).filter((e) => e && e.type === 'bump' && finite(e.dist_m)).map((e) => e.dist_m);
+    if (!felt.length || !Array.isArray(marks)) return marks || [];
+    return marks.filter((m) => m.kind !== 'calming' || !felt.some((b) => b >= m.dist_m - SNAP_M && b <= (finite(m.end_m) ? m.end_m : m.dist_m) + SNAP_M));
+  }
+
+  const api = { marksOf, events, unfelt, placeAt, KINDS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadMarks = api;
 })(typeof window !== 'undefined' ? window : globalThis);

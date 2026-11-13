@@ -74,6 +74,7 @@
       if (!add.length) return false;
       t.events = [...t.events, ...add].sort((a, b) => a.dist_m - b.dist_m);
       Core.linkNotes(t.events);
+      if (t.marks && window.ApexRoadMarks) t.marks = ApexRoadMarks.unfelt(t.marks, t.events);   // a mapped hump they felt: one call
       return true;
     }
     const ownRouteOfTrack = new WeakMap();                            // a track built from one of our routes -> that route
