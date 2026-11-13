@@ -8,6 +8,7 @@ import { Env, HttpError, body, json, str } from "./util";
 import { rateCheck } from "./ratelimit";
 import { clientError, countError, errorSummary, failingRoutes, serverError } from "./errors";
 import { backupDatabase } from "./backup";
+import { pushStatus } from "./apns";
 import { sweepExpired } from "./sweep";
 import { cronHealth, runCron } from "./cron_runs";
 import { appleSignIn } from "./apple";
@@ -22,6 +23,7 @@ import {
   myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
+import * as drivePosts from "./drive_posts";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewBadge, crewFeed, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
 import { decalsPlace } from "./livery";
@@ -70,6 +72,8 @@ const noContent = () => new Response(null, { status: 204 });
 // Status checks (tools/status_check.py, IDEAS Y-05): one trivial read proves the database answers, not just the Worker.
 // The cron jobs ride along (src/cron_runs.ts): a backup or sweep that stopped or keeps failing is an outage there too, and so
 // is a route whose 500s keep coming (src/errors.ts failingRoutes).
+// Push (src/apns.ts): set up here, and does APNs answer this Worker (the HTTP/2 check). Nothing personal.
+on("GET", "/api/push/status", async (_req, env) => json(await pushStatus(env)));
 on("GET", "/api/health", async (_req, env) => {
   try { return json({ ok: true, db: true, cron: await cronHealth(env), failing_routes: await failingRoutes(env) }); }
   catch (e) { console.error(JSON.stringify({ event: "health_db_failed", error: String(e) })); return json({ ok: false, db: false }, 503); }
@@ -340,6 +344,15 @@ on("POST", "/api/duels/:id/accept", async (req, env, m) => json(await duelAccept
 on("DELETE", "/api/duels/:id", async (req, env, m) => json(await duelEnd(env, await requireMember(req, env), m.groups!.id)));
 on("POST", "/api/board", async (req, env) => json(await publish(env, await requireMember(req, env), req)));
 // Kudos (IDEAS S-07): a tap of thanks on a friend's run you can see; no text.
+// drive posts and the friends feed (src/drive_posts.ts)
+on("GET", "/api/feed", async (req, env) => json(await drivePosts.feed(env, await requireMember(req, env), new URL(req.url))));
+on("POST", "/api/posts", async (req, env) => json(await drivePosts.postCreate(env, await requireMember(req, env), req), 201));
+on("GET", "/api/posts/:id", async (req, env, m) => json(await drivePosts.postGet(env, await requireMember(req, env), m.groups!.id)));
+on("DELETE", "/api/posts/:id", async (req, env, m) => { await drivePosts.postDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
+on("POST", "/api/posts/:id/kudos", async (req, env, m) => { await drivePosts.postKudos(env, await requireMember(req, env), m.groups!.id, true); return noContent(); });
+on("DELETE", "/api/posts/:id/kudos", async (req, env, m) => { await drivePosts.postKudos(env, await requireMember(req, env), m.groups!.id, false); return noContent(); });
+on("POST", "/api/posts/:id/comments", async (req, env, m) => json({ id: (await drivePosts.commentCreate(env, await requireMember(req, env), m.groups!.id, req)).id }, 201));
+on("DELETE", "/api/comments/:id", async (req, env, m) => { await drivePosts.commentDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 on("POST", "/api/kudos", async (req, env) => { await kudosGive(env, await requireMember(req, env), req); return noContent(); });
 on("DELETE", "/api/kudos", async (req, env) => { await kudosTake(env, await requireMember(req, env), req); return noContent(); });
 on("GET", "/api/kudos", async (req, env) => json(await kudosReceived(env, await requireMember(req, env))));

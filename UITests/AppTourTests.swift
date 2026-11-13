@@ -23,8 +23,7 @@ final class AppTourTests: XCTestCase {
     }
 
     /// Launches the app and walks the first-run onboarding if it shows.
-    private func launch() -> (XCUIApplication, XCUIElement) {
-        let app = XCUIApplication()
+    private func launch(_ app: XCUIApplication = XCUIApplication()) -> (XCUIApplication, XCUIElement) {
         app.launch()
         app.tap()
         let web = app.webViews.firstMatch
@@ -50,10 +49,21 @@ final class AppTourTests: XCTestCase {
         let a = XCTAttachment(screenshot: app.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a)
     }
 
-    /// A tab by its label: buttons on the map page, links on the Log and Stages page.
-    private func tab(_ web: XCUIElement, _ name: String) -> XCUIElement {
-        web.descendants(matching: .any).matching(NSPredicate(format: "label == %@ AND (elementType == %d OR elementType == %d)",
-            name, XCUIElement.ElementType.button.rawValue, XCUIElement.ElementType.link.rawValue)).firstMatch
+    /// A tab by its label: buttons on the map page, links on the Log and Stages page. On the Log the map page's own tab bar
+    /// is still in the tree under it ("People" not hittable, hit point -1,-1: the audit run of 2026-11-13), so this is the
+    /// first match that can be tapped, waited for up to `wait` seconds; a match that never can be is returned as is.
+    private func tab(_ web: XCUIElement, _ name: String, wait: Double = 10) -> XCUIElement {
+        let all = web.descendants(matching: .any).matching(NSPredicate(format: "label == %@ AND (elementType == %d OR elementType == %d)",
+            name, XCUIElement.ElementType.button.rawValue, XCUIElement.ElementType.link.rawValue))
+        let end = Date().addingTimeInterval(wait)
+        repeat {
+            for i in 0..<min(all.count, 8) {
+                let e = all.element(boundBy: i)
+                if e.exists && e.isHittable { return e }
+            }
+            pause(0.5)
+        } while Date() < end
+        return all.firstMatch
     }
 
     /// Every text field on every tab with the real keyboard up (review 2026-10-28): a screenshot of each, the field fully on
@@ -63,7 +73,7 @@ final class AppTourTests: XCTestCase {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["APEX_TOUR"] == "1", "recorded tour only")
         let (app, web) = launch()
         let types = [XCUIElement.ElementType.textField, .searchField, .textView, .secureTextField].map { NSNumber(value: $0.rawValue) }
-        for name in ["Map", "Log", "Crew", "Garage"] {
+        for name in ["Map", "Log", "People", "Garage"] {
             let b = tab(web, name)
             guard b.waitForExistence(timeout: 10) else { XCTFail("no \(name) tab"); continue }
             b.tap(); pause(2.5)
@@ -111,7 +121,7 @@ final class AppTourTests: XCTestCase {
     func testTour() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["APEX_TOUR"] == "1", "recorded tour only")
         let (app, web) = launch()
-        for name in ["Log", "Crew", "Garage"] {
+        for name in ["Log", "People", "Garage"] {
             let b = tab(web, name)
             if b.waitForExistence(timeout: 10) { b.tap(); pause(2.5); scroll(app, times: 5) }
         }
@@ -133,4 +143,47 @@ final class AppTourTests: XCTestCase {
         }
         shot(app, "end of tour")
     }
+
+    /// Apple's own accessibility audit (Xcode 15, iOS 17: the checks Accessibility Inspector runs) on every tab, at the
+    /// default text size and at the largest accessibility size (LAUNCH.md section 3, IDEAS U-15). Each issue is one line
+    /// in the log ("A11Y-AUDIT tab · size · type · element: what") and in the `accessibility-audit` attachment, so a run of
+    /// the app tour workflow lists them all; the test fails while any is open. The cockpit's own sizes are the theme
+    /// contract's (REVIEW5 7.7), so text that doesn't grow on the map tab is listed, not hidden.
+    private func auditName(_ t: XCUIAccessibilityAuditType) -> String {
+        let names: [(XCUIAccessibilityAuditType, String)] = [(.contrast, "contrast"), (.elementDetection, "element detection"),
+            (.hitRegion, "hit region"), (.sufficientElementDescription, "description"), (.dynamicType, "dynamic type"),
+            (.textClipped, "text clipped"), (.trait, "trait")]
+        return names.filter { t.contains($0.0) }.map(\.1).joined(separator: "+").ifEmpty("type \(t.rawValue)")
+    }
+
+    func testAccessibilityAudit() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["APEX_TOUR"] == "1", "recorded tour only")
+        var lines: [String] = []
+        for (size, args) in [("default", [String]()), ("AX-XXXL", ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])] {
+            let app = XCUIApplication()
+            app.launchArguments = args
+            let web = launch(app).1
+            for name in ["Map", "Log", "People", "Garage"] {
+                let b = tab(web, name)
+                guard b.exists && b.isHittable else { lines.append("\(name) · \(size) · no tab to tap"); print("A11Y-AUDIT \(lines.last!)"); continue }
+                b.tap(); pause(3)
+                shot(app, "audit \(name) \(size)")
+                do {
+                    try app.performAccessibilityAudit(for: .all) { issue in
+                        let el = issue.element.map { e in [e.label, e.identifier, "\(e.elementType.rawValue)"].first { !$0.isEmpty } ?? "?" } ?? "-"
+                        lines.append("\(name) · \(size) · \(self.auditName(issue.auditType)) · \(el): \(issue.compactDescription)")
+                        print("A11Y-AUDIT \(lines.last!)")
+                        return true   // recorded here, failed once below with the whole list
+                    }
+                } catch {
+                    lines.append("\(name) · \(size) · audit error: \(error)")
+                }
+            }
+            app.terminate()
+        }
+        let a = XCTAttachment(string: lines.joined(separator: "\n")); a.name = "accessibility-audit"; a.lifetime = .keepAlways; add(a)
+        XCTAssertTrue(lines.isEmpty, "\(lines.count) accessibility issues (A11Y-AUDIT lines in the log)")
+    }
 }
+
+private extension String { func ifEmpty(_ other: String) -> String { isEmpty ? other : self } }

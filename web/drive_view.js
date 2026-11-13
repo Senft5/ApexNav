@@ -226,6 +226,42 @@
     return '';
   }
 
+  /**
+   * the corner overlay: one corner, this pass against your best pass there (corner_trace.js trace), as a speed
+   * trace each on this drive's road and the time between them under it. t: the trace; C: the palette; MPH: m/s to the shown
+   * speed unit; W: width in px. A string of SVG.
+   */
+  function overlaySvg(t, C, MPH, W = 340) {
+    const H = 150, GH = 46, L = 52, R = 10, T = 14, X0 = t.x_m[0], X1 = t.x_m[t.x_m.length - 1];
+    const vs = t.a_mps.concat(t.b_mps).filter((v) => v != null && Number.isFinite(v));
+    if (!vs.length) return '';
+    const lo = Math.max(0, Math.floor(Math.min(...vs) * MPH / 10) * 10), hi = Math.ceil(Math.max(...vs) * MPH / 10) * 10 || 10;
+    const X = (x) => L + (x - X0) / Math.max(1, X1 - X0) * (W - L - R), Y = (v) => T + (1 - (v * MPH - lo) / Math.max(1, hi - lo)) * (H - T - 18);
+    const line = (ys, f) => { let p = '', up = false; ys.forEach((y, i) => { if (y == null) { up = false; return; } p += `${up ? 'L' : 'M'}${X(t.x_m[i]).toFixed(1)} ${f(y).toFixed(1)}`; up = true; }); return p; };
+    const ink = C.panelInk || C.text || '#222', dim = C.panelDim || '#888', acc = C.accent || '#E5484D', rule = C.rule || '#ccc';
+    let svg = `<line x1="${L}" x2="${W - R}" y1="${Y(lo / MPH)}" y2="${Y(lo / MPH)}" stroke="${rule}"/>`;
+    for (const v of [lo, (lo + hi) / 2, hi]) svg += `<text x="${L - 4}" y="${(Y(v / MPH) + 3).toFixed(1)}" text-anchor="end" font-size="10" fill="${dim}">${Math.round(v)}${v === hi ? ` ${SPD()}` : ''}</text>`;
+    svg += `<line x1="${X(0).toFixed(1)}" x2="${X(0).toFixed(1)}" y1="${T}" y2="${H - 18}" stroke="${rule}" stroke-dasharray="3 4"/><text x="${X(0).toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="10" fill="${dim}">middle</text>`;
+    // braking onset of each pass: a tick at the top; slowest point: a dot on its line
+    const tick = (m, col, dash) => (m == null ? '' : `<line x1="${X(-m).toFixed(1)}" x2="${X(-m).toFixed(1)}" y1="${T - 4}" y2="${H - 18}" stroke="${col}" stroke-width="1.2"${dash ? ' stroke-dasharray="2 3"' : ''} opacity="0.7"/>`);
+    svg += tick(t.b.brake_m, ink, true) + tick(t.a.brake_m, acc, false);
+    svg += `<path d="${line(t.b_mps, Y)}" fill="none" stroke="${ink}" stroke-width="1.8" stroke-dasharray="5 4" opacity="0.75"/>`;
+    svg += `<path d="${line(t.a_mps, Y)}" fill="none" stroke="${acc}" stroke-width="2.4" stroke-linejoin="round"/>`;
+    const dot = (m, v, col) => (m == null || v == null ? '' : `<circle cx="${X(m).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="3.5" fill="${col}"/>`);
+    svg += dot(t.b.slow_m, t.b.min_mps, ink) + dot(t.a.slow_m, t.a.min_mps, acc);
+    if (t.a.brake_m != null) svg += `<text x="${(X(-t.a.brake_m) + 3).toFixed(1)}" y="${T + 2}" font-size="10" fill="${acc}">brake</text>`;
+    // the time between them, building through the corner: above the line, this pass is behind
+    const gs = t.gap_s.filter((g) => g != null), gm = Math.max(0.2, ...gs.map(Math.abs)), g0 = H + 6 + GH / 2;
+    const G = (g) => g0 - g / gm * (GH / 2 - 3);
+    svg += `<text x="${L}" y="${H + 4}" font-size="10" fill="${dim}">Time behind the best pass</text>`;
+    svg += `<line x1="${L}" x2="${W - R}" y1="${g0}" y2="${g0}" stroke="${rule}" stroke-dasharray="3 4"/>`;
+    svg += `<path d="${line(t.gap_s, G)}" fill="none" stroke="${acc}" stroke-width="1.8"/>`;
+    const last = gs.length ? gs[gs.length - 1] : null;
+    if (last != null) svg += `<text x="${W - R}" y="${H + 4}" text-anchor="end" font-size="10" fill="${dim}">${Math.abs(last) < 0.05 ? 'level' : `${Math.abs(last).toFixed(1)} s ${last > 0 ? 'behind' : 'ahead'}`}</text>`;
+    const tall = H + 10 + GH;
+    return `<svg viewBox="0 0 ${W} ${tall}" width="100%" role="img" aria-label="Speed through the corner, this pass against your best pass">${svg}</svg>`;
+  }
+
   function mount(root_, d, o) {
     const { Core, C, MPH } = o, ref = o.reference || null;
     const words = o.noteWords || noteWordsPref(), callOf = (c) => cornerCall(c, words);   // U-123        // ref: { name, score, corners[] } from Core.compareDrives(this, best other drive)
@@ -571,7 +607,7 @@
         b.setAttribute('aria-label', `Corner ${r.k + 1}, ${callOf(c)}: braking point ±${m(r.brake_sd_m)} over ${r.passes} passes`
           + `${r.min_sd_m != null ? `, slowest point ±${m(r.min_sd_m)}` : ''}${r.turn_sd_m != null ? `, turn-in ±${m(r.turn_sd_m)}` : ''}`
           + `${r.speed_sd_mps != null ? `, speed ±${spd(r.speed_sd_mps)}` : ''}${v ? '. Pick a braking marker you can always make' : ''}`);
-        b.onclick = () => pick(c.apex, c.start, c.end);
+        b.onclick = () => { pick(c.apex, c.start, c.end); if (overlayable(r.k)) openOverlay(r.k, b); };
         li.append(b); ul.append(li);
       });
       const speeds = reps.map((r) => r.speed_sd_mps).filter((x) => x != null).sort((p, q) => p - q);
@@ -594,13 +630,36 @@
       const say = same && ab.moments.length > 1 ? el('p', 'note', advice[0].charAt(0).toUpperCase() + advice[0].slice(1)) : null;
       list.prepend(...[el('h2', null, 'Most abrupt moments'), say, ul].filter(Boolean));
     }
+    // the corner overlay: a corner with a best pass opens it against this one, under the row tapped (o.traceOf, the worker's
+    // cornerTrace job); a second tap on the same corner closes it
+    let ovl = null, ovlK = -1, ovlAt = null;
+    const overlayable = (k) => !!(o.traceOf && co && co.corners[k] && co.corners[k].best && co.corners[k].best_from >= 0);
+    async function openOverlay(k, after) {
+      if (ovl) { ovl.remove(); ovl = null; }
+      if (ovlAt) ovlAt.setAttribute('aria-expanded', 'false');
+      if (ovlK === k && ovlAt === after) { ovlK = -1; ovlAt = null; return; }
+      ovlK = k; ovlAt = after; after.setAttribute('aria-expanded', 'true');
+      const box = el('div', 'dv-ovl'), from = co.others && co.others[co.corners[k].best_from];
+      box.innerHTML = `<h3 class="dv-ovl-h">Corner ${k + 1} against your best pass</h3><p class="dv-ovl-when">${from ? `Best pass ${esc(from.date)}` : ''}</p><p class="dv-ovl-wait">Reading both passes\u2026</p>`;
+      after.after(box); ovl = box;
+      let r = null;
+      try { r = await o.traceOf(k); } catch (_) { r = null; }
+      if (ovl !== box) return;                                     // another corner since
+      const tr = r && r.trace, T = root.ApexCornerTrace;
+      if (!tr || !T) { box.querySelector('.dv-ovl-wait').textContent = 'The best pass could not be lined up with this one here.'; return; }
+      const fmt = { dist: (m) => fine(m), speed: (v) => `${Math.round(v * MPH)} ${SPD()}` };
+      box.querySelector('.dv-ovl-wait').remove();
+      const pic = el('div', 'dv-ovl-pic', overlaySvg(tr, C, MPH, Math.round(Math.min(560, (box.clientWidth || 340)))));
+      const key = el('div', 'dv-ovl-key', `<span class="a">This drive</span><span class="b">Best pass</span>`);
+      box.append(pic, key, ...T.rows(tr, fmt).map((t) => el('p', 'dv-ovl-row', esc(t))));
+    }
     if (co && co.top.length) {                                      // where the time is: the biggest gaps to your own best passes
       const ul = el('ol', 'dv-time');
       for (const k of co.top) {
         const x = co.corners[k], c = d.corners[k], from = x.best ? co.others[x.best_from] : null, li = el('li'), b = el('button');
         b.innerHTML = `<b>${k + 1}</b><span>${esc(callOf(c))}</span><em class="loss">${fmtD(x.gain_s)}</em>`
           + `<span class="note">${esc(tipText(x, MPH) || 'Same technique, quicker all the way through')}${from ? ` \u00b7 best pass ${esc(from.date)}` : ''}</span>`;
-        b.onclick = () => pick(c.apex, c.start, c.end);
+        b.onclick = () => { pick(c.apex, c.start, c.end); if (overlayable(k)) openOverlay(k, b); };
         li.append(b); ul.append(li);
       }
       list.prepend(el('h2', null, 'Where to find time'), ul);
@@ -613,7 +672,8 @@
         // say it in their delta, so cards don't repeat "your best pass was 4 mph quicker" (TestFlight 2026-11-12, "text walls")
         + (co && tipText(co.corners[k], MPH) && !co.top.includes(k) && (!co.corners[k].best || co.corners[k].tip.vs_best === false)
           ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
-      r.onclick = () => pick(c.apex, c.start, c.end);
+      r.onclick = () => { pick(c.apex, c.start, c.end); if (overlayable(k)) openOverlay(k, r); };
+      if (overlayable(k)) r.setAttribute('aria-expanded', 'false');
       grid2.append(r);
     });
     if (!d.corners.length) grid2.append(el('p', 'note', 'No corners detected on this drive.'));
@@ -658,6 +718,6 @@
     return { move, setRoadFeel, markRecords, restyleMap() { if (basemap) basemap.restyle(); }, recenterMap() { if (basemap) basemap.recenter(); }, destroy() { ro.disconnect(); if (basemap) basemap.destroy(); }, summary: S };
   }
 
-  const api = { mount, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };
+  const api = { mount, overlaySvg, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveView = api;
 })(typeof window !== 'undefined' ? window : globalThis);

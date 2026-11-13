@@ -299,11 +299,16 @@ flow('startup budget: the map page is ready within its script bytes, script coun
   const r = await page.evaluate((origin) => { const js = performance.getEntriesByType('resource').filter((e) => e.name.startsWith(origin) && /\.js(\?|$)/.test(e.name));
     return { bytes: js.reduce((s, e) => s + (e.decodedBodySize || 0), 0), count: js.length, long: Math.round(window.__long),
       top: js.sort((a, b) => b.decodedBodySize - a.decodedBodySize).slice(0, 3).map((e) => `${e.name.split('/').pop()} ${Math.round(e.decodedBodySize / 1024)} KB`) }; }, base);
-  const got = { ...r, cpuS: +m.ScriptDuration.toFixed(2) };
+  const got = { ...r, cpuS: +m.ScriptDuration.toFixed(2), layoutS: +m.LayoutDuration.toFixed(2), styleS: +m.RecalcStyleDuration.toFixed(2) };
   console.log('     startup: ' + JSON.stringify(got));
   check(r.bytes > 1e6 && r.bytes <= BOOT.scriptBytes, `script bytes before ready ${r.bytes} (budget ${BOOT.scriptBytes}): ` + JSON.stringify(got));
   check(r.count <= BOOT.scriptCount, `scripts before ready ${r.count} (budget ${BOOT.scriptCount}): ` + JSON.stringify(got));
   check(got.cpuS <= BOOT.cpuS && r.long <= BOOT.longTaskMs, `CPU before ready ${got.cpuS} s (budget ${BOOT.cpuS}), longest task ${r.long} ms (budget ${BOOT.longTaskMs}): ` + JSON.stringify(got));
+  // native speed (2026-11-13): a closed sheet's contents are never styled or laid out (content-visibility), which took
+  // about 130 ms off a 1.1 s cold start at 4x CPU; a closed sheet that loses it shows here
+  const laidOut = await page.evaluate(() => [...document.querySelectorAll('.sheet:not(.open), .side-pop:not(.open)')]
+    .filter((e) => getComputedStyle(e).contentVisibility !== 'hidden').map((e) => e.id || e.className));
+  check(!laidOut.length, 'every closed sheet skips its layout: ' + JSON.stringify(laidOut));
 }, { viewport: { width: 393, height: 852 }, hasTouch: true });
 
 flow('first run: onboarding, Watch a replay loads the bundled drive and plays it; the Play switch drives it', async (page, base) => {
@@ -5414,6 +5419,16 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
     && vs.filter((t) => t !== 'this drive').every((t) => /^(\d+\.\d s (slower|quicker)|level) on \d+ corners?$/.test(t)), 'the road\'s other drives against this one: ' + JSON.stringify(vs));
   const roadFoot = await page.evaluate(() => [...document.querySelectorAll('#dvRoadTable tr')].pop().textContent);
   check(/^Latest \d{1,4} · best \d{1,4} · 4 scored drives here$/.test(roadFoot), 'the road table says latest and best, not a two-drive trend: ' + roadFoot);
+  // the corner overlay: a corner in Where to find time opens against your best pass there: two speed traces, the time between them, rows
+  await page.click('.dv-time li button');
+  await page.waitForSelector('.dv-ovl svg path', { timeout: 20000 });
+  const ovl = await page.evaluate(() => { const b = document.querySelector('.dv-ovl'); return { rows: [...b.querySelectorAll('.dv-ovl-row')].map((n) => n.textContent), paths: b.querySelectorAll('svg path').length,
+    head: b.querySelector('.dv-ovl-h').textContent, open: b.previousElementSibling.getAttribute('aria-expanded'), wide: document.documentElement.scrollWidth > document.documentElement.clientWidth }; });
+  check(/^Corner \d+ against your best pass$/.test(ovl.head) && ovl.paths >= 3 && ovl.open === 'true' && !ovl.wide
+    && ovl.rows.some((t) => /^Slowest: \d+ mph.* · best pass \d+ mph/.test(t)) && /^Through the corner: (\d+\.\d s (slower|quicker) than|level with) the best pass$/.test(ovl.rows[ovl.rows.length - 1]),
+    'the corner overlay: ' + JSON.stringify(ovl));
+  await page.click('.dv-time li button');
+  check(await page.evaluate(() => !document.querySelector('.dv-ovl')), 'a second tap closes the overlay');
   const abrupt = await page.evaluate(() => { const l = document.querySelector('.dv-abrupt'); return l ? { rows: [...l.querySelectorAll('li .note')].map((n) => n.textContent), say: l.previousElementSibling.textContent } : null; });
   check(abrupt && abrupt.rows.length === 3 && abrupt.rows.every((t) => !/·/.test(t)) && /^The brake came on sharply: squeeze it on$/.test(abrupt.say), 'abrupt moments say a shared advice once: ' + JSON.stringify(abrupt));
   // where this pass was well off your cleanest at a least even corner, the note says what it lost most (the second pass held the arc)
@@ -5702,6 +5717,75 @@ flow('landscape mount: the map takes the left, the instruments a column on the r
   const dn = await box('#notes'), db = await box('#driveBar'), ds = await box('.stage');
   check(db.h > 0 && db.x >= ds.x + ds.w - 1 && db.y < dn.y + dn.h && dn.x + dn.w <= ds.x + ds.w + 1 && ds.y + ds.h >= 389, 'driving on its side: ' + JSON.stringify({ dn, db, ds }));
 }, { viewport: { width: 844, height: 390 } });
+
+flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew with its ends cut; the Feed on People shows friends\' posts with kudos and comments one tap in (Worker stubbed, docs/SOCIAL.md 2.13)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const sent = [];
+  // bob's post: a line of 60 points north
+  const enc = (pts) => { let o = '', a0 = 0, b0 = 0; const e = (v) => { v = v < 0 ? ~(v << 1) : v << 1; while (v >= 32) { o += String.fromCharCode((32 | (v & 31)) + 63); v >>= 5; } o += String.fromCharCode(v + 63); };
+    for (const [a, b] of pts) { const x = Math.round(a * 1e5), y = Math.round(b * 1e5); e(x - a0); e(y - b0); a0 = x; b0 = y; } return o; };
+  const line = enc(Array.from({ length: 60 }, (_, i) => [35.3 + i * 0.001, -84.1 + Math.sin(i / 6) * 0.004]));
+  const bobPost = { id: 'P1AAAAAAAAAAAAAA', handle: 'bob', photo_id: null, mine: false, crew: null, title: 'Cherohala Skyway', caption: 'Fog on top, dry below.', driven_on: '2026-11-12',
+    length_m: 32000, score: 812, roads: ['Cherohala Skyway', 'TN-165', 'Tellico River Rd'], stages: [], line, created_at: new Date(Date.now() - 2 * 3600e3).toISOString().slice(0, 19).replace('T', ' '), kudos: 2, my_kudos: false, comments: 1 };
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (m !== 'GET') { sent.push({ m, p: u.pathname, b: route.request().postData() }); return u.pathname.endsWith('/comments') || u.pathname === '/api/posts' ? json({ id: 'C2AAAAAAAAAAAAAA' }, 201) : route.fulfill({ status: 204 }); }
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/crews') return json([{ id: 'k1', name: 'Ridge Runners', role: 'member', visibility: 'private', members: 3 }]);
+    if (u.pathname === '/api/feed') return json([bobPost]);
+    if (u.pathname === '/api/posts/P1AAAAAAAAAAAAAA') return json({ ...bobPost, comment_list: [{ id: 'C1AAAAAAAAAAAAAA', body: 'Was that you at the overlook?', created_at: bobPost.created_at, handle: 'cara', photo_id: null, mine: false, can_delete: false }] });
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card', { timeout: 15000 });
+  const c = await page.evaluate(() => { const k = document.querySelector('#accountBody .feed-card');
+    return { text: k.textContent, path: (k.querySelector('.feed-line path') || {}).getAttribute ? k.querySelector('.feed-line path').getAttribute('d').length : 0,
+      kudos: k.querySelector('.feed-acts button').getAttribute('aria-label'), wide: k.scrollWidth - k.clientWidth }; });
+  check(/@bob/.test(c.text) && /Cherohala Skyway/.test(c.text) && /812/.test(c.text) && /Fog on top/.test(c.text) && /Cherohala Skyway, TN-165 \+1/.test(c.text) && c.path > 100 && c.wide <= 1,
+    'a friend\'s post: who, the drive, its Score, its line, the roads and what they said: ' + JSON.stringify(c));
+  // kudos: one tap, at once
+  await page.click('#accountBody .feed-card .feed-acts button[aria-label^="Kudos"]');
+  await page.waitForFunction(() => document.querySelector('#accountBody .feed-card .feed-acts button[aria-pressed="true"]'));
+  check(sent.some((x) => x.m === 'POST' && x.p === '/api/posts/P1AAAAAAAAAAAAAA/kudos') && /Kudos, 3/.test(await page.getAttribute('#accountBody .feed-card .feed-acts button[aria-pressed="true"]', 'aria-label')), 'kudos is one tap and counts at once');
+  // comments: one tap opens the post with them, and a line to add one
+  await page.click('#accountBody .feed-card .feed-acts button[aria-label="1 comments"]');
+  await page.waitForSelector('.feed-sheet .feed-comment');
+  check(/Was that you at the overlook\?/.test(await page.textContent('.feed-sheet .feed-comments')), 'the comments, under the post');
+  await page.fill('.feed-sheet .feed-say .field', 'Yes! Waved.');
+  await page.click('.feed-sheet .feed-say button:has-text("Send")');
+  await page.waitForFunction(() => document.querySelectorAll('.feed-sheet .feed-comment').length === 2);
+  check(sent.some((x) => x.p === '/api/posts/P1AAAAAAAAAAAAAA/comments' && JSON.parse(x.b).body === 'Yes! Waved.'), 'Send posts the comment');
+  // Report is behind ··· on the post, never on its face
+  check(!(await page.$('.feed-sheet .feed-card button:text-is("Report")')), 'no Report on the card\'s face');
+  await page.click('.feed-sheet .feed-card .feed-more');
+  await page.waitForSelector('.feed-menu button:text-is("Report")');
+  await page.click('.feed-menu button:text-is("Cancel")');
+  await page.click('.feed-sheet button:text-is("Done")');
+  // Post on a scored drive's card: to the crew picked, its line without its ends
+  await page.evaluate(() => document.querySelector('.tab[data-view="map"]').click());
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording);
+  await page.evaluate(async () => {
+    ApexCore.driverScore = (v) => ({ score: 790, components: {} });
+    const lat = [], lon = []; for (let i = 0; i < 600; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
+    const d = { id: 'pd1', name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] };
+    await ApexRecording.store(d);
+    apexDebug.showEndCard(d, Date.now() - 30 * 60000, { quiet: true });
+  });
+  await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !b.hidden && !b.getAttribute('aria-disabled'); }, null, { timeout: 15000 });
+  check(await page.evaluate(() => document.getElementById('endPost').classList.contains('solid') && !document.getElementById('endShare').classList.contains('solid')), 'Post is the solid key; Share card sits beside it');
+  await page.click('#endPost');
+  await page.waitForSelector('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")');
+  await page.click('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")');
+  await page.fill('.post-sheet textarea', 'First run with the crew.');
+  await page.click('.post-sheet button:text-is("Post")');
+  await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Posted');
+  const p = JSON.parse(sent.find((x) => x.p === '/api/posts').b);
+  const first = (() => { const s = p.line; let i = 0, r = 0, sh = 0, b; do { b = s.charCodeAt(i++) - 63; r |= (b & 31) << sh; sh += 5; } while (b >= 32); return (r & 1 ? ~(r >> 1) : r >> 1) / 1e5; })();
+  check(p.crew_id === 'k1' && p.caption === 'First run with the crew.' && p.score === 790 && p.title === 'Cherohala Skyway' && first > 35.36 + 0.0044,
+    'the post: to the crew, the caption, the Score, and the line starting 500 m in: ' + JSON.stringify({ ...p, line: p.line.length, first }));
+});
 
 flow('friend profile: a friend on People → Profile shows what the friend shares, as text, what to do with them first and Unfriend at the foot; Back returns (Worker stubbed, IDEAS S-15, REVIEW_PEOPLE P-04, P-24)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
@@ -7698,6 +7782,48 @@ flow('dashcam overlay: a video from the drive gets its speed, g and calls drawn 
     && [...document.querySelectorAll('#dvDashcam button')].find((x) => /Make the video/.test(x.textContent)).disabled), 'nothing to preview or make from it');
 });
 
+flow('corner clips: with the video lined up, a corner it holds comes out as a portrait clip with its call, speed and g, to share (big bet 5)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async () => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 300; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9); }
+    await ApexRecording.store({ id: 'cc1', name: 'Clip road', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => -0.1), lat_g: lat.map((_, i) => Math.sin(i / 3) * 0.4), g_known: null, elev: null, hz: 1, source: 'web-gps',
+      events: [{ type: 'corner', code: 'L4', call: 'Left 4', index: 9, dist_m: 45, start_m: 30, end_m: 60, radius_m: 80, apex_mph: 30, dir: 'L', severity: 4 },
+               { type: 'corner', code: 'R3', call: 'Right 3', index: 100, dist_m: 500, start_m: 480, end_m: 520, radius_m: 60, apex_mph: 25, dir: 'R', severity: 3 }] });
+  });
+  await page.goto(base + '/analysis.html?drive=cc1');
+  await page.waitForSelector('#dvDashcam input[type=file]', { state: 'attached' });
+  // a 7 s video made right here: the first call (2 to 4 s into the drive) with its lead and tail fits; the second doesn't
+  await page.evaluate(async () => {
+    const c = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }), g = c.getContext('2d');
+    const rec = new MediaRecorder(c.captureStream(15), { mimeType: 'video/webm' }), parts = [];
+    rec.ondataavailable = (e) => parts.push(e.data);
+    const stop = new Promise((ok) => { rec.onstop = ok; });
+    rec.start(); let f = 0; const t = setInterval(() => { g.fillStyle = `hsl(${f++ * 12},60%,50%)`; g.fillRect(0, 0, 320, 180); }, 66);
+    await new Promise((r) => setTimeout(r, 7200)); clearInterval(t); rec.stop(); await stop;
+    const file = new File(parts, 'clip.webm', { type: 'video/webm' }), dt = new DataTransfer(); dt.items.add(file);
+    const input = document.querySelector('#dvDashcam input[type=file]'); input.files = dt.files; input.dispatchEvent(new Event('change'));
+    window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type) => { window.__saved = { size: blob.size, name, type }; return 'saved'; };
+  });
+  await page.waitForFunction(() => { const b = document.querySelector('#dvDashcam .dc-clips button'); return b && !b.disabled && document.querySelector('#dvDashcam .dc-clip-pick option'); }, null, { timeout: 15000 });
+  const opts = await page.evaluate(() => [...document.querySelectorAll('#dvDashcam .dc-clip-pick option')].map((o) => o.textContent));
+  check(opts.length === 1 && opts[0] === 'Corner 1 · Left 4', 'only the corners the video holds: ' + JSON.stringify(opts));
+  await page.click('#dvDashcam .dc-clips button');
+  // a frame of the clip while it is made: portrait, with something drawn
+  await page.waitForFunction(() => { const c = document.querySelector('#dvDashcam .dc-clip-canvas'); return c && c.style.display === 'block' && c.width === 720 && c.height === 1280; }, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__saved, null, { timeout: 30000 });
+  const saved = await page.evaluate(() => window.__saved);
+  check(saved.size > 500 && /^Clip_road-corner-1-.*\.(webm|mp4)$/.test(saved.name), 'a portrait clip, saved to share: ' + JSON.stringify(saved));
+  check(/Done/.test(await page.textContent('#dvDashcam .dc-clip-note')), 'the clip says it is done');
+  // slid so the call is before the video: no clip offered, said plainly
+  await page.evaluate(() => { const r = document.querySelector('#dvDashcam input[aria-label^="When the video starts"]'); r.value = '20'; r.dispatchEvent(new Event('input')); });
+  await page.waitForFunction(() => /No corner falls inside the video/.test(document.querySelector('#dvDashcam .dc-clip-note').textContent), null, { timeout: 5000 });
+  check(await page.evaluate(() => document.querySelector('#dvDashcam .dc-clips button').disabled), 'nothing to clip, the key is off');
+});
+
 // A drive for the drive page's own flows: north 1.5 km with a corner call (dashcam) and some g (the grip circle)
 async function storeDashDrive(page, id = 'dc1', name = 'Dashcam road') {
   await page.evaluate(async ([id, name]) => {
@@ -8149,7 +8275,9 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   check(/Friends/.test(layers) && /Cameras/.test(layers) && /Twisty roads/.test(layers) && /3D terrain/.test(layers) && !/Night|Theme|Units|Look/.test(layers), 'Layers: ' + layers);
   // design pass 8: the panel is the map's legend. Every layer row has its key and a line of what it is, Measured roads names
   // its three colours in words, "Who sees me" sits right under Friends, and the panel is whole on the screen
+  // read once the slide has finished, not at a fixed 400 ms: on a busy CI runner the 120 ms slide was caught 4 px short
   const legend = await page.evaluate(async () => { const tab = document.getElementById('swTab'); tab.click(); await new Promise((r) => setTimeout(r, 400));
+    await Promise.all(document.getElementById('swPanel').closest('.edge').getAnimations({ subtree: true }).map((x) => x.finished.catch(() => null)));
     const rows = [...document.querySelectorAll('#switchRow .sw')].filter((b) => !b.hidden), box = document.getElementById('swPanel').getBoundingClientRect();
     const out = { bare: rows.filter((b) => !b.querySelector('.ly-key') || !b.querySelector('small') || !b.querySelector('small').textContent.trim()).map((b) => b.dataset.toggle),
       keyOff: rows.filter((b) => { const k = b.querySelector('.ly-key').getBoundingClientRect(), t = b.querySelector('span').getBoundingClientRect(); return !(k.width >= 20 && k.right <= t.left + 1); }).map((b) => b.dataset.toggle),

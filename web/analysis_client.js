@@ -299,6 +299,22 @@
     },
 
     /**
+     * the corner overlay: corner k of drive id against your best pass at it from another drive (the coach's
+     * best_from), as corner_trace.js traces them on this drive's road. { trace, other: { id, name, date } } or { trace: null }.
+     */
+    async cornerTrace({ id, k }) {
+      const Core = CoreOf(), T = root.ApexCornerTrace, sums = await Rec().summaries(Core), me = sums.find((s) => s.id === id);
+      const d = me ? await full(id, me) : null;
+      if (!d || !T || !d.corners || !d.corners[k]) { release(); return { trace: null }; }
+      const { co, near } = await coachOf(Core, d, sums), x = co.corners[k];
+      const b = x && x.best && x.best_from >= 0 ? near[x.best_from] : null;
+      let trace = null;
+      try { trace = b ? T.trace(Core, d, k, b) : null; } catch (_) { trace = null; }
+      release();
+      return { trace, other: b ? { id: b.id, name: b.name, date: label(b) } : null };
+    },
+
+    /**
      * A road's corners across every drive with the same name as drive id (Your roads, corner by corner; driver_profile.js roadBook): the
      * drives oldest first, placed in the newest one's frame, the corners in its road order. A drive of unknown date holds a
      * corner with no date. { book: { corners, fewer, drives } | null }.

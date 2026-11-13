@@ -17,6 +17,8 @@ export interface Env {
   APPLE_TEAM_ID?: string;   // Sign in with Apple token revocation (src/apple_revoke.ts): the team id and the key's id and .p8 text
   APPLE_SIWA_KEY_ID?: string;
   APPLE_SIWA_KEY_P8?: string;
+  APNS_KEY_ID?: string;      // push (src/apns.ts): an APNs key's id and .p8 text; without them the Sign in with Apple key is
+  APNS_KEY_P8?: string;      // used, which works when the owner ticks APNs on that same key
   NREL_API_KEY?: string;    // secret: NLR (ex-NREL) Alternative Fuel Stations key (src/chargers.ts); none = 503 no_key
   CTX_KEYS?: string;        // secret: free client keys for the route-context sources, JSON (src/route_feeds.ts)
   OSM?: KVNamespace;        // optional: the OSM relay's tiles (src/osm_relay.ts), a week each; the Cache API does without it

@@ -975,7 +975,7 @@
       if (dvView) dvView.destroy();
       const reference = dvInfo.reference || null, coach = dvInfo.coach || null;
       $('tab-drive').insertBefore(dvActs, $('dvRoot'));                // out of the root before it is redrawn
-      dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach, mapPalette: () => look.map }); dvCurrent = d;
+      dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach, mapPalette: () => look.map, traceOf: (k) => ApexAnalysis.job('cornerTrace', { id, k }) }); dvCurrent = d;
       const dvHead = $('dvRoot').querySelector('.dv-head');
       if (dvHead) dvHead.after(dvActs);                                  // the score first, then Replay
       // a video from this drive with its numbers on it (dashcam.js, IDEAS D-11)

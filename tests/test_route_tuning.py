@@ -65,7 +65,8 @@ process.stdout.write(JSON.stringify({ base, atDef, none: T.tune(T.DEFAULTS), non
         assert s["min"] <= s["def"] <= s["max"] and s["min"] < s["max"], s
         k = (s["def"] - s["min"]) / s["step"]
         assert abs(k - round(k)) < 1e-9, s                                  # the default is on a step
-        assert s["hint"] and len(s["hint"]) <= 120 and "\n" not in s["hint"], s   # a one-line hint
+        # a short line under its slider, not a paragraph (walkthrough 2026-11-13: two-line hints made the screen a wall of text)
+        assert s["hint"] and len(s["hint"]) <= 64 and "\n" not in s["hint"], s
         # named for drivers, never with constant names
         assert not re.search(r"[A-Z]{2,}_|_[A-Z]{2,}|\b(perMin|slackS|budget|W_|K\.)", s["label"] + " " + s["hint"]), s
     groups = {s["group"] for s in r["sliders"]}
@@ -194,4 +195,4 @@ def test_the_page_wiring():
     assert "avoid, ...devTuneReq() }) : Promise.resolve([]);" in js
     assert "tuned: o.tuned || null" in js and "lv.tuned = tunedNow;" in js
     src = read("route_tuning.js")
-    assert "Best roads nearby are not changed" in src                       # the screen says what it affects
+    assert "Not a loop\\'s length, nor Best roads nearby." in src             # the screen says what it affects, in a line
