@@ -5882,7 +5882,7 @@
     function paintOptChips() {
       if (!window.ApexPlanOptions || !optChipsReady) return;                // (painted once the switches above are read)
       const on = ApexPlanOptions.active(optState());
-      // TestFlight 2026-11-12 (note 8, "cluttered"): Where to? says only how many (Options · 3, each named to VoiceOver);
+      // TestFlight 2026-11-12 (note 8, "cluttered"): Where to? says only how many (Options · 3 on, each named to VoiceOver);
       // the route card, planned with them, still shows each one as a chip
       for (const [chipId, boxId] of [['planOptionsChip', null], ['cardOptionsChip', 'cardOptsOn']]) {
         const chip = $(chipId), box = boxId && $(boxId);
