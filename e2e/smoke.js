@@ -9556,7 +9556,12 @@ flow('a loop by time: the dial turns to Time (half an hour to three hours), Find
   await funTiles(page);                                       // (loops and Fun are our router's only, the owner 2026-11-11)
   await planPage(page, base);
   await page.click('#destInput');
-  await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('open') && document.getElementById('loopBy').getClientRects().length > 0);
+  // the dial is folded to its row (2026-11-13 IA pass): the row says the length, a tap opens the dial
+  await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('open'));
+  check(await page.evaluate(() => document.getElementById('loopBy').getClientRects().length === 0 && /^Loop from here\s*45 mi$/.test(document.getElementById('loopRow').textContent.trim())), 'the loop dial folded to one row, its length on it');
+  await page.evaluate(() => document.activeElement && document.activeElement.blur());
+  await page.click('#loopRow');
+  await page.waitForFunction(() => document.getElementById('loopBy').getClientRects().length > 0);
   await page.evaluate(() => { document.activeElement && document.activeElement.blur(); const st = document.querySelector('.stage'); if (st) st.scrollLeft = 0; });
   const dial = () => page.evaluate(() => ({ by: [...document.querySelectorAll('#loopBy [aria-checked="true"]')].map((b) => b.textContent), keys: [...document.querySelectorAll('#loopDetents button')].map((b) => b.textContent),
     on: (document.querySelector('#loopDetents [aria-pressed="true"]') || {}).textContent, face: document.getElementById('loopDialVal').textContent + ' ' + document.getElementById('loopDialUnit').textContent,

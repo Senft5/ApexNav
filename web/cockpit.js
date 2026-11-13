@@ -6007,10 +6007,14 @@
       $('loopDialMark').style.transform = `rotate(${-120 + 240 * i / Math.max(1, all.length - 1)}deg)`;
       document.querySelectorAll('#loopTicks line').forEach((l, k) => l.classList.toggle('on', k === i));
       try { localStorage.setItem(LOOP_PICK, String(i)); } catch (_) {}
+      $('loopRowLen').textContent = b.textContent.trim();
       // the idle map's "Loop from here · 45 mi" is this dial's loop: it says the length now picked, not the one at launch
       try { paintLoopSuggest(); } catch (_) { /* at launch the deck isn't set up yet; it paints itself */ }
     }
     document.querySelectorAll('#loopDetents button').forEach(b => b.addEventListener('click', () => pickLoop(b)));
+    // the folded dial (2026-11-13 IA pass): one row with the length; a tap opens the dial under it
+    function openLoopDial(open) { $('loopBody').hidden = !open; $('loopRow').setAttribute('aria-expanded', String(open)); }
+    $('loopRow').addEventListener('click', () => openLoopDial($('loopBody').hidden));
     // the ticks on the dial's rim, and turning it: drag round the dial and it clicks to the nearest length
     $('loopTicks').innerHTML = [-120, -60, 0, 60, 120].map((a) => { const r = (a * Math.PI) / 180, s = Math.sin(r), c = Math.cos(r);
       return `<line x1="${(60 + 50 * s).toFixed(1)}" y1="${(60 - 50 * c).toFixed(1)}" x2="${(60 + 58 * s).toFixed(1)}" y2="${(60 - 58 * c).toFixed(1)}"/>`; }).join('');
