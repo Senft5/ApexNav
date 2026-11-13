@@ -3355,6 +3355,7 @@
       attachWeather(t);
       attachClosures(t);
       if (typeof attachWhen === 'function') attachWhen(t);        // (tests evaluate buildRoute on its own)
+      if (typeof attachMarksSoon === 'function') attachMarksSoon(t);   // road marks also for a route rebuilt mid-drive
       // the route bar shows this; screen readers hear it (REVIEW.md: the bar is the toast)
       if (!prebuilt) announce(`${name} · ${ApexUnits.long(totalM(), 1)} · ${((n) => `${n} corner${n === 1 ? '' : 's'}`)(t.events.filter(e => e.type === 'corner').length)}`);
     }
@@ -8760,6 +8761,19 @@
         await contextOn([again], CTX_BUDGET_MS, 'marks', ['osm_overpass']);
         if (plannedRoute === t && again.ctx && again.corridor) attachMarks(t, again, tries + 1);
       }, 4000 * (tries + 1));
+    }
+    // A route built during a drive (a reroute, a new destination) gets no When to go scan, so it asks for the marks itself:
+    // the ranked candidate's context when it has one, else the map's answer for this route alone. Off the launch path.
+    function attachMarksSoon(t) {
+      if (!window.ApexRoadMarks || !t || !Array.isArray(t.lat) || t.lat.length < 2 || state.mode !== 'live') return;
+      setTimeout(async () => {
+        if (plannedRoute !== t || (t.marks && t.marks.length)) return;
+        const o = routeOptions, kept = o && o.current === t && o.list ? o.list[o.picked] : null;
+        if (kept && kept.ctx && kept.corridor) { attachMarks(t, kept); return; }
+        const c = { t, route: { coords: Array.from(t.lat, (la, i) => [t.lon[i], la]), times: null }, timeS: t.timeS };
+        await contextOn([c], CTX_BUDGET_MS, 'marks', ['osm_overpass']);
+        if (plannedRoute === t && c.ctx && c.corridor) attachMarks(t, c);
+      }, 1500);
     }
     function attachWhen(t) {
       whenReset();

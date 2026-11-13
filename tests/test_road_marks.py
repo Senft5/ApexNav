@@ -59,3 +59,10 @@ def test_nothing_invented_or_off_the_road(out):
     # a chicane is no bump; a stop mapped twice is one; give-way and signals are not called
     assert out["chicane"] == [{"kind": "stop", "atM": 300, "n": 2}]
     assert out["place"][0] == pytest.approx(39) and out["past"] is None
+
+
+def test_each_mark_has_its_own_glyph_on_the_strip():
+    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
+    svgs = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert "<polygon" in svgs[0] and "M58 32 L80 54" in svgs[1] and "M36 30" in svgs[2] and "Q50 34" in svgs[3]
+    assert len(set(svgs[:4])) == 4 and all(s.count("#f70") == 0 for s in svgs[4:])   # an unknown code: the bare hazard straight
