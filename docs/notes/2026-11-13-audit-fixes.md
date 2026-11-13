@@ -6,6 +6,9 @@
 - Left: static text inside the People sign-in rows and the Garage look cards ("A time, a meeting point...", "Marguerite", "In use") flagged as small hit regions. They are not controls; the next run says whether WebKit still reports them as tappable.
 - Next: run the App tour recording again on main and compare.
 
+## 2026-11-13: main's e2e red: "Clip this corner" was paper on paper
+- The corner box opens inside the "where the time is" row, so `.dv-time button` (transparent, the row's look) also styled its solid Clip key: 1.11:1 under #677's contrast floor. The rule is now `.dv-time li > button`.
+
 # CALL SHEET
 
 ## 2026-11-13: credit key named in the page, not in MapLibre
