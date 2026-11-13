@@ -362,7 +362,7 @@
     });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p) };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -5295,6 +5295,7 @@
       $('scrim').classList.toggle('show', !!v);
       document.querySelectorAll('#tabbar .tab').forEach(t => t.classList.toggle('on', v ? t.dataset.view === v : t.dataset.view === 'map'));
       if (v === 'people' && peopleSide === 'friends') try { if (inbox) inbox.markSeen(); } catch (_) {}   // For you on screen: seen
+      if (v === 'garage') try { shelveLooks(); } catch (_) { /* before the picker is built */ }   // the looks' shelf turns to the one in use (not at boot)
     }
     const openSheet = (v = view || 'route') => showView(v);
     // The Log and Stages (analysis.html) open in a full-screen frame over the map, never in its place (the owner,
@@ -6615,6 +6616,16 @@
       openBoard: () => { closeSheet(); showView(null); openPlan(true); const d = $('planAttack'); if (d && !d.hidden) { d.open = true; d.scrollIntoView({ block: 'nearest' }); } },
       openBook: (id) => openRoadbookLink(id),
       openCrews: () => setPeopleSide('crews') }) : null; } catch (e) { console.error('inbox', e); } });
+    // Drive posts and the Feed (web/drive_posts.js, docs/SOCIAL.md 2.13): Post on the drive's card; the Feed on People → Friends
+    let drivePosts = null;
+    onSocial(() => { try { drivePosts = window.ApexDrivePosts ? ApexDrivePosts.mount({ el, btn, toast, apiCall, jsonOf,
+      avatar: (id, h, px) => (window.ApexPhotos ? ApexPhotos.avatar(id, h, px) : el('span')),
+      fmtLen: (m) => ApexUnits.long(m, 1),
+      report: safety && safety.report, block: safety ? (handle) => safety.block(handle, () => renderAccount()) : null,
+      crews: () => apiCall('GET', '/api/crews').then(jsonOf).then((l) => (Array.isArray(l) ? l.map((c) => ({ id: c.id, name: c.name })) : [])),
+      inZone: (lat, lon) => { try { return !!(window.ApexPrivacyZones && ApexPrivacyZones.zoneAt(ApexPrivacyZones.load(localStorage), lat, lon)); } catch (_) { return false; } },
+      myHandle: () => (accountMe && accountMe.handle) || null,
+      openFriend: (h) => { document.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); if (window.apexOpenFriend) window.apexOpenFriend(String(h).toLowerCase()); } }) : null; } catch (e) { console.error('drive posts', e); } });
     const inboxTick = () => { if (inbox && !driveActive && document.visibilityState === 'visible') inbox.refresh(); };
     document.addEventListener('visibilitychange', inboxTick);
     setInterval(inboxTick, 5 * 60 * 1000);
@@ -6879,6 +6890,11 @@
       const empty = !accepted.length && !(Array.isArray(crews) && crews.length);
       // For you (inbox.js): what happened to you lately, one sentence a row (a new account's page stays its three parts)
       if (inbox && !empty) body.append(inbox.section());
+      // the Feed (drive_posts.js): the newest drives your friends and crews posted, kudos and comments one tap in
+      if (drivePosts && !empty) {
+        const fpop = popSheet('Feed'); pops.push(fpop);
+        body.append(drivePosts.section(() => { if (!fpop._filled) { fpop.append(drivePosts.full()); fpop._filled = true; } fpop.classList.add('open'); }));
+      }
       if (!empty) {
         const yline = el('small'), yface = window.ApexPhotos ? ApexPhotos.avatar(me.photo_id, me.handle, 40) : el('span');
         const yrow = el('button', { className: 'friend-head you-row', type: 'button', 'aria-label': `You, @${me.handle}: who sees what` }, yface,
@@ -8059,8 +8075,11 @@
     }
     // On a phone the looks stand on a shelf you turn sideways (index.html .theme-cards): it opens on the look in use, and
     // turns to it when the look changes somewhere else. Never while a finger is turning it: the card you chose is in view.
+    // Native speed (2026-11-13): measured only on the Garage; at boot its read forced a layout of the closed sheet (25 ms at
+    // 4x CPU). showView turns the shelf when the Garage opens.
     function shelveLooks() {
       const box = $('themeCards'), cur = themeCards.get(state.theme);
+      if (view !== 'garage') return;
       if (!box || !cur || box._at === state.theme || box.scrollWidth <= box.clientWidth + 4) return;
       box._at = state.theme;
       box.scrollLeft = cur.card.offsetLeft - box.firstElementChild.offsetLeft;
@@ -9474,6 +9493,30 @@
       }
       return car.symbols.get(key);
     }
+    // The junction's lanes for the car's guidance card (CarPlay/ApexCarPlay.swift junctionImage), a PNG drawn as the road
+    // book's lane row (web/carplay.js laneGlyphs) in the card's ink: 105 pt by 30 at 3x, each lane a 24-unit box.
+    function carLanes(packed) {
+      const glyphs = ApexCarPlay.laneGlyphs(ApexLanes.lanes(packed));
+      if (!glyphs.length) return null;
+      const ink = ((look && look.theme && look.theme.night) || {}).panelInk || '#EDE4D3', key = `lanes|${JSON.stringify(packed)}|${ink}`;
+      if (!car.symbols.has(key)) {
+        let png = null;
+        try {
+          const cv = document.createElement('canvas'); cv.width = 315; cv.height = 90;
+          const x = cv.getContext('2d'), u = Math.min(cv.height / 26, cv.width / (glyphs.length * 26));   // px per unit: 24 and a gap
+          x.strokeStyle = ink; x.lineWidth = 2.6; x.lineCap = 'round'; x.lineJoin = 'round';
+          const x0 = (cv.width - glyphs.length * 26 * u) / 2;
+          glyphs.forEach((g, i) => {
+            x.save(); x.globalAlpha = g.alpha;
+            x.translate(x0 + (i + 0.5) * 26 * u, cv.height / 2); x.scale(u, u); x.rotate(g.rotate * Math.PI / 180);
+            x.stroke(new Path2D(g.d)); x.restore();
+          });
+          png = cv.toDataURL('image/png').split(',')[1];
+        } catch (_) { /* no canvas: the card goes without lanes */ }
+        car.symbols.set(key, png);
+      }
+      return car.symbols.get(key);
+    }
     // U-63: the road under the car for the continue step on a route with no named steps (a GPX track, a loop), read from the
     // map's own tiles (ApexRoadNames, as the saved drive's name is) at most every 5 s and only when a continue step asks.
     function carRoad() {
@@ -9499,8 +9542,8 @@
             speedMps: state.live ? state.live.speed_mps : null, road: carRoad, step: carStep() });
       if (!g || (g.key === car.guideKey && now - car.guideAt < 1000)) return;
       car.guideKey = g.key; car.guideAt = now;
-      const sym = carSymbol(g.type, g.corner, g.recording);
-      carPost(sym ? { ...g, symbol: sym } : g);
+      const sym = carSymbol(g.type, g.corner, g.recording), { lanes, ...msg } = g, ln = lanes ? carLanes(lanes) : null;
+      carPost({ ...msg, ...(sym ? { symbol: sym } : {}), ...(ln ? { lanes: ln } : {}) });
     }
     function activity(action, fields = {}) {
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
@@ -9759,6 +9802,10 @@
       // swaps under a reaching finger when the score lands; Share waits for it. Only a drive with no score changes them.
       $('endShare').hidden = false; $('endShare').setAttribute('aria-disabled', 'true'); $('endShareLink').hidden = true; $('endLogKey').hidden = true; $('endLog').hidden = false;
       $('endAgain').hidden = true;                                     // panel D-1: once the drive is stored (endCardScored)
+      // Post (drive_posts.js), for a member: there from the first frame like Share card (U-118), waiting for the score
+      const member = !!drivePosts && !!(accountMe && accountMe.member);
+      $('endPost').hidden = !member; $('endPost').disabled = false; $('endPost').textContent = 'Post'; $('endPost').setAttribute('aria-disabled', 'true');
+      $('endShare').classList.toggle('solid', !member);
       $('endCard').classList.add('show');
       showEndTrail(c);
     }
@@ -9837,6 +9884,11 @@
       // U-75: Share card is the solid key only with a score to share; with none, Open in the Log is, and Share is a link
       const scored = c.ds.score != null;
       $('endShare').removeAttribute('aria-disabled');
+      // Post (drive_posts.js) is the solid key for a member with a score: the drive goes to friends first; Share card, the
+      // picture for other apps, stays beside it
+      const posting = scored && !!drivePosts && !!(accountMe && accountMe.member);
+      $('endPost').hidden = !posting; $('endPost').removeAttribute('aria-disabled');
+      $('endShare').classList.toggle('solid', !posting);
       $('endShare').hidden = !scored; $('endShareLink').hidden = scored;
       $('endLogKey').hidden = scored; $('endLog').hidden = !scored;
       $('endAgain').hidden = !(Number.isFinite(endDrive.len_m) && endDrive.len_m >= ApexYourRoads.MIN_LEN_M);   // panel D-1: a road, not an errand
@@ -9957,6 +10009,15 @@
     $('endDone').addEventListener('click', () => $('endCard').classList.remove('show'));
     $('endAgain').addEventListener('click', () => { const d = endDrive; if (!d) return; $('endCard').classList.remove('show'); driveAgain(d.id, d.name); });
     $('endShareLink').addEventListener('click', () => $('endShare').click());
+    // Post (drive_posts.js): the drive's card to your friends or a crew, for a member with a scored drive; once posted it says so
+    $('endPost').addEventListener('click', async () => {
+      if (!endDrive || !drivePosts || $('endPost').disabled || $('endPost').getAttribute('aria-disabled') === 'true') return;   // still scoring
+      const roads = Object.entries(drive.roads || {}).filter(([, m]) => m >= 500).sort((a, b) => b[1] - a[1]).map(([n]) => n);
+      const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const ok = await drivePosts.compose({ name: endDrive.name, driven_on: day, len_m: endDrive.len_m, score: endDrive.ds && endDrive.ds.score,
+        lat: endDrive.lat, lon: endDrive.lon, roads });
+      if (ok) { $('endPost').textContent = 'Posted'; $('endPost').disabled = true; }
+    });
     $('endStage').addEventListener('click', () => { if (endDrive) openLog(`analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`); });
     $('endShare').addEventListener('click', async () => {
       if (!endDrive || !window.ApexDriveCard || $('endShare').getAttribute('aria-disabled') === 'true') return;   // U-118: still scoring
@@ -10059,7 +10120,7 @@
       const stamp = `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}_${pad(when.getHours())}${pad(when.getMinutes())}${pad(when.getSeconds())}`;
       const fileName = `web_${stamp}.csv`;
       return { fileName, id: 'rec_' + fileName.replace(/\W+/g, '_'),     // the id ApexRecording.parse gives it
-               meta: { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: nameAt(when) } };
+               meta: { source: 'web-gps', ...(Number.isFinite(rec.startedAt) ? { t0: rec.startedAt } : {}), date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: nameAt(when) } };
     }
     // What the end card can say before the drive is parsed (F-04): its name, the distance and time its own rows give (as
     // the Log will count them), and its trail. No corner count and no score until they are measured.

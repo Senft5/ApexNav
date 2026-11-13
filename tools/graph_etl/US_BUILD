@@ -1,0 +1,6 @@
+Change this file on claude/project-thread-39xbx9 to run .github/workflows/graph-us.yml (the lower-48 build) before
+the workflow is on main. only= is a pilot (Geofabrik ids, comma separated; empty: the lower 48); live=true points the
+Worker at a pilot build too.
+only=west-virginia
+live=false
+run=3

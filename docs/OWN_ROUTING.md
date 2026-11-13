@@ -234,6 +234,16 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   .github/workflows/graph-region.yml, and the Worker relays them at `/api/graph/v1/` (backend/src/graph.ts) from
   raw.githubusercontent.com with the edge cache in front: free, no R2, no KV, no secrets (2026-11-04, the owner: free
   tier, no new costs).
+- The lower 48 (2026-11-13, .github/workflows/graph-us.yml): ~4 GB a build is too much for a git branch, so each build
+  is a GitHub release `graph-us-<build>` of 2 degree packs (tools/graph_etl/pack.py: the tiles back to back, packs.json
+  giving each tile's pack, offset and length), and `graph-data` `us/v1/current.json` ({ tag, build }) names the live
+  one, committed after every file is up. The Worker reads the pointer hourly and a tile as an HTTP Range of its pack;
+  with no pointer it serves the branch's OH/KY/IN tiles. Plan: tools/graph_etl/us_plan.py (one job per 1 degree band x
+  15 degree chunk, each fetching only the Geofabrik states under its blocks' margins, kept once per run as artifacts).
+  A pilot (`only=` in tools/graph_etl/US_BUILD) makes a release but moves the pointer only with `live=true`; the two
+  newest US releases are kept. Still free: public-repo Actions minutes and release storage. R2 (bet #1, needs the
+  owner's card) would replace the release reads, nothing else. Outside OH/KY/IN the context grid is unknown (the
+  edges' grid channels unknown, never guessed) until ctx-region.yml covers more.
 
 ## 8. Status
 
