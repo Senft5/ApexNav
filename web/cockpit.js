@@ -10440,6 +10440,13 @@
         const p = ApexSavedRoutes.list(localStorage).find((q) => q.id === m.id);
         if (p) openSaved(p).catch(() => {});
       }
+      // Add a stop from the car: the list of what's ahead, then the one picked, only one that list had (the route's own places)
+      else if (m.action === 'stops') carPost(ApexCarPlay.stopsMessage(track && track === plannedRoute && track.kind === 'route' ? track.scenic : null,
+        state.mode === 'live' ? routeWatch.bestM : state.cursorM, (d) => ApexUnits.long(d, 1, true)));
+      else if (m.action === 'stop' && Number.isFinite(m.lat) && Number.isFinite(m.lon) && track && track === plannedRoute) {
+        const p = (track.scenic || []).find((x) => Math.abs(x.lat - m.lat) < 1e-6 && Math.abs(x.lon - m.lon) < 1e-6);
+        if (p) carAsked(() => addViaAt({ lat: p.lat, lon: p.lon, label: (p.name || '').trim() || String(m.name || 'Stop').slice(0, 40) }, p.m));
+      }
       else if (m.action === 'loop' && LOOP_MINUTES.includes(m.minutes) && !driveActive) carAsked(() => loop({ minutes: m.minutes }));
       // a distance from the car's Loops list: only one the dial has (miles, or kilometres kept as miles)
       else if (m.action === 'loop' && Number.isFinite(m.miles) && !driveActive

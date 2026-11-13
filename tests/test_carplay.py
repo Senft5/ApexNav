@@ -294,6 +294,10 @@ console.log(JSON.stringify({
   noLanes: C.guideMessage({ id: 'r', dist: [0, 5000], steps: [{ m: 1200, type: 15, street: 'Deals Gap Road' }] }, 100, 3600, require(process.argv[1] + '/web/directions.js').phrase),
   laneGlyphs: [C.laneGlyphs(require(process.argv[1] + '/web/lanes.js').lanes([[2, 0, 0], [10, 8, 2], [256, 0, 0]])), C.laneGlyphs([{ angle: 0, use: false, ok: false }, { angle: 0 }]),
     C.laneGlyphs(Array.from({ length: 9 }, () => ({ angle: 0, use: true })))],
+  stops: C.stopsMessage([{ kind: 'fuel', name: ' Shell ', lat: 35.1, lon: -84, m: 5000 }, { kind: 'cafe', name: '', lat: 35.2, lon: -84, m: 2000 },
+    { kind: 'view', name: 'Overlook', lat: 35.3, lon: -84, m: 3000 }, { kind: 'charge', name: 'EVgo', lat: 35.4, lon: -84, m: 1100 }, { kind: 'fuel', name: 'Behind', lat: 35, lon: -84, m: 900 }], 1000,
+    (m) => `${(m / 1609.344).toFixed(1)} mi`),
+  stopsNone: C.stopsMessage(null, 0),
   limits: [C.limitMessage(54.7, 'mph'), C.limitMessage(80, 'km/h'), C.limitMessage(null, 'mph'), C.limitMessage(0, 'mph'), C.limitMessage(500, 'mph')],
   loops: [C.loopsMessage('time', false), C.loopsMessage('distance', false), C.loopsMessage('distance', true)],
   offerUndo: C.offerMessage('o8', 'Pothole reported', '', 'Undo', 5000, 'OK'),
@@ -535,6 +539,20 @@ def test_the_car_offers_the_same_loop_times_as_the_phones_dial():
     assert '("1½ hours", 90, nil)' in row and '("3 hours", 180, nil)' in row
     # and the page takes every one of them: it used to accept only 30, 60 and 120, so the car's 1½ and 3 hours did nothing
     assert "m.action === 'loop' && LOOP_MINUTES.includes(m.minutes)" in cockpit_source()
+
+
+def test_add_a_stop_from_the_car(maps):
+    """Apple Maps and Waze add a stop while guiding; the phone could ("Add as a stop") and the car couldn't."""
+    rows = maps["stops"]["list"]
+    assert [r["name"] for r in rows] == ["Café", "Shell"], "ahead only, 150 m on at least, fuel and cafés by name, no viewpoints"
+    assert rows[0]["detail"] == "0.6 mi ahead" and rows[1]["detail"] == "Fuel · 2.5 mi ahead" and rows[1]["at"] == [35.1, -84]
+    assert maps["stopsNone"] == {"kind": "stops", "list": []}
+    js = cockpit_source()
+    assert "else if (m.action === 'stops') carPost(ApexCarPlay.stopsMessage(" in js
+    assert "if (p) carAsked(() => addViaAt({ lat: p.lat, lon: p.lon," in js, "only a place on the route's own list, and a failure says why on the car"
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert '[CPBarButton(title: "Stops") { _ in ApexCar.shared.send("stops") }]' in swift and 'case "stops":' in swift
+    assert 'ApexCar.shared.send("stop", ["lat": s.lat, "lon": s.lon, "name": s.name])' in swift
 
 
 def test_the_cars_map_shows_the_posted_speed_limit(maps):

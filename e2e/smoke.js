@@ -2685,6 +2685,16 @@ flow('CarPlay: the car is in every drive: a free drive from its Drive key, a con
   check(kinds.indexOf('start') >= 0 && kinds.indexOf('start') < kinds.indexOf('guide'), 'start before the first maneuver: ' + kinds.join());
   const g = await page.evaluate(() => window.__car.find((m) => m.kind === 'guide'));
   check(g.follow === true && g.type === 8 && /^Follow /.test(g.instruction) && g.distM > 2000 && !g.corner, 'a continue step to the far turn: ' + JSON.stringify({ ...g, symbol: !!g.symbol }));
+  // Add a stop from the car: Stops lists what's ahead on the route by name, and the one tapped joins the route
+  await page.waitForFunction(() => Array.isArray(window.apexDebug.track.scenic) && window.apexDebug.track.scenic.length, null, { timeout: 10000 });
+  const stops = await page.evaluate(() => { window.apex.onNative({ type: 'carplay', action: 'stops' }); return window.__car.filter((m) => m.kind === 'stops').pop(); });
+  check(stops && stops.list.length === 2 && stops.list[0].name === 'Bean There Coffee' && /^Café · .* ahead$/.test(stops.list[0].detail) && stops.list[1].name === 'Shell',
+    'the stops ahead, nearest first, by name: ' + JSON.stringify(stops));
+  const via = await page.evaluate(async (s) => { const before = window.apexDebug.track; window.apex.onNative({ type: 'carplay', action: 'stop', lat: s.at[0], lon: s.at[1], name: s.name });
+    for (let i = 0; i < 100 && window.apexDebug.track === before; i++) await new Promise((r) => setTimeout(r, 100));
+    const t = window.apexDebug.track; return { changed: t !== before, via: t.request && t.request.via, active: window.apexDebug.driveActive }; }, stops.list[0]);
+  check(via.changed && via.active && via.via.some((v) => v.label === 'Bean There Coffee'), 'the stop joins the route, the drive goes on: ' + JSON.stringify(via));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'stop', lat: 1, lon: 1, name: 'Nowhere' }));   // not on the list: nothing
   await page.evaluate(() => { window.__car = []; for (let i = 0; i < 2; i++) window.apex.onNative({ type: 'carplay', action: 'end' }); });
   await page.waitForFunction(() => !window.apexDebug.driveActive);
   const after = await page.evaluate(() => window.__car.map((m) => m.kind));

@@ -248,6 +248,23 @@
   }
 
   /**
+   * Add a stop from the car (Apple Maps' and Waze's "Add stop" while guiding): the fuel, chargers and cafés still ahead on
+   * the route (scenic.js along(): { kind, name, lat, lon, m }), nearest first, at most 8, none closer than 150 m (too late
+   * to turn in). { kind:'stops', list:[{ name, at, m, detail }] }: the name on the map, else the kind ("Fuel"); the detail
+   * says the kind and how far ahead. An empty list when there are none (the car says so).
+   */
+  const STOP_KINDS = { fuel: 'Fuel', charge: 'Charger', cafe: 'Café' }, STOPS_MAX = 8;
+  function stopsMessage(list, atM, fmtDist) {
+    const at = finite(atM) ? atM : 0, fmt = typeof fmtDist === 'function' ? fmtDist : (m) => `${(m / 1000).toFixed(1)} km`;
+    const rows = (Array.isArray(list) ? list : []).filter((p) => p && STOP_KINDS[p.kind] && finite(p.m) && p.m > at + 150 && finite(p.lat) && finite(p.lon))
+      .sort((a, b) => a.m - b.m).slice(0, STOPS_MAX).map((p) => {
+        const name = typeof p.name === 'string' ? p.name.trim().slice(0, 40) : '', word = STOP_KINDS[p.kind];
+        return { name: name || word, at: [p.lat, p.lon], m: Math.round(p.m), detail: [name ? word : '', `${fmt(p.m - at)} ahead`].filter(Boolean).join(' · ') };
+      });
+    return { kind: 'stops', list: rows };
+  }
+
+  /**
    * The car's Loops list as the phone's loop dial (cockpit.js labelLoops): `by` 'time' gives its five times, otherwise its
    * five distances in the driver's units (`metric`), so the car never offers lengths the phone's dial doesn't.
    * { kind:'loops', list:[{ name, minutes }] | [{ name, miles }] }, the miles kept as the dial keeps them.
@@ -565,7 +582,7 @@
     return { step, reset };
   }
 
-  const api = { sightMessage, limitMessage, line, routeMessage, loopsMessage, laneGlyphs, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
+  const api = { sightMessage, limitMessage, stopsMessage, line, routeMessage, loopsMessage, laneGlyphs, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
                 recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
   api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
   api.sightTag = sightTag;                                             // panel round 2, TH-2

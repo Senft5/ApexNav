@@ -232,6 +232,13 @@ final class ApexCar {
                 scene?.driveStarted()
                 scene?.guideChanged()
             }
+        case "stops":
+            // what's ahead to stop at, asked by the Stops key (web/carplay.js stopsMessage); shown as it comes back
+            let list: [(name: String, detail: String, lat: Double, lon: Double)] = ((dict["list"] as? [[String: Any]]) ?? []).prefix(8).compactMap { p in
+                guard let name = p["name"] as? String, !name.isEmpty, let c = Self.coord(p["at"]) else { return nil }
+                return (name: String(name.prefix(40)), detail: String(((p["detail"] as? String) ?? "").prefix(60)), lat: c.latitude, lon: c.longitude)
+            }
+            scene?.showStops(list)
         case "limit":
             let v = Self.num(dict["value"]).map { Int($0.rounded()) }
             limit = v.flatMap { $0 > 0 && $0 <= 200 ? ApexCarLimit(value: $0, round: (dict["round"] as? Bool) ?? false) : nil }
@@ -526,6 +533,25 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         } else if let c = p.coord { go(to: c, name: p.name) }
     }
 
+    /// The stops ahead (ApexCar `case "stops"`), asked by the Stops key while guiding: a tap adds one to the route and goes
+    /// back to the map; the page reroutes through it. None ahead: one row that says so.
+    @MainActor fileprivate func showStops(_ list: [(name: String, detail: String, lat: Double, lon: Double)]) {
+        guard ApexCar.shared.driving, let ic = interfaceController else { return }
+        let items: [CPListItem] = list.map { s in
+            let item = CPListItem(text: s.name, detailText: s.detail.isEmpty ? nil : s.detail)
+            item.handler = { [weak self] _, done in
+                self?.interfaceController?.popToRootTemplate(animated: true, completion: nil)
+                ApexCar.shared.send("stop", ["lat": s.lat, "lon": s.lon, "name": s.name])
+                done()
+            }
+            return item
+        }
+        let none = CPListItem(text: "No stops ahead", detailText: "Fuel, chargers and cafés on this route")
+        let t = CPListTemplate(title: "Add a stop", sections: [CPListSection(items: items.isEmpty ? [none] : items)])
+        if ic.topTemplate is CPListTemplate, ic.templates.count > 1 { ic.popToRootTemplate(animated: false, completion: nil) }
+        ic.pushTemplate(t, animated: true, completion: nil)
+    }
+
     /// Report a hazard (the phone's report sheet's kinds): one tap on a grid, then back to the map.
     @MainActor private func openReport() {
         let kinds: [(String, String, String)] = [("pothole", "Pothole", "circle.bottomhalf.filled"), ("gravel", "Gravel", "circle.grid.3x3.fill"),
@@ -649,7 +675,8 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         trip = t
         session = map.startNavigationSession(for: t)
         maneuverKey = ""
-        map.leadingNavigationBarButtons = []
+        // Stops (a route only): the fuel, chargers and cafés still ahead on it, one tap to add one, as Apple Maps and Waze do
+        map.leadingNavigationBarButtons = ApexCar.shared.route == nil ? [] : [CPBarButton(title: "Stops") { _ in ApexCar.shared.send("stops") }]
         map.trailingNavigationBarButtons = [CPBarButton(title: "End") { _ in ApexCar.shared.send("end") }]
         // Owner, 2026-10-30: the guidance card floated mid-left. A bar that never hides holds the card below it;
         // in guidance the bar hides after a moment (a tap on the map brings End back), so the card sits at the top.
