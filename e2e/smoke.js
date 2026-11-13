@@ -3429,7 +3429,7 @@ flow('first run and the end card: the welcome draws its road with the keys live 
     await new Promise((r) => setTimeout(r, 600)); mo.disconnect();
     return { counted, text: s.textContent, font: getComputedStyle(s).fontFamily };
   });
-  check(!none.counted && /no corners to score$/.test(none.text) && /Barlow/.test(none.font), 'no score: words set as a title, nothing counted: ' + JSON.stringify(none));
+  check(!none.counted && /^No corners to score$/.test(none.text) && /Barlow/.test(none.font), 'no score: words set as a title, nothing counted: ' + JSON.stringify(none));
 });
 
 flow('drive ended: Open in the Log is the solid key with no score, Share card with one, fixed from the first frame; a drive on a route keeps its name (REVIEW4 U-75, REVIEW5 U-118)', async (page, base) => {
@@ -3774,7 +3774,7 @@ flow('the app comes back whole: the deck after a car-started drive, the end card
   await scoredCard(page);
   const none = await page.evaluate(() => { const s = document.getElementById('endScore'), box = s.parentElement;
     return { score: s.textContent, line: document.getElementById('endLine').textContent, of1000: !!box.querySelector('small').offsetParent, label: !!box.querySelector('span').offsetParent, unk: s.classList.contains('unk') }; });
-  check(/^[\d.]+ (mi|km) · no corners to score$/.test(none.score) && !none.of1000 && !none.label && !none.unk && !/Not enough clean corners|--/.test(none.line + none.score), 'no score: the drive in words in the score slot: ' + JSON.stringify(none));
+  check(none.score === 'No corners to score' && !none.of1000 && !none.label && !none.unk && !/Not enough clean corners|--/.test(none.line + none.score), 'no score: why, in words, in the score slot (the distance is the facts row\'s): ' + JSON.stringify(none));
   // R-5 / I-6: a tab never opens under the card; the Log takes the screen from it too
   await page.evaluate(() => document.querySelector('.tab[data-view="garage"]').click());
   check(!(await page.isVisible('#endCard.show')) && await page.evaluate(() => document.getElementById('sheet').classList.contains('open')), 'Garage closes the end card (dynamic-type/phone/010)');
@@ -6035,7 +6035,7 @@ flow('End: the card is up within 150 ms of the tap and the drive is parsed, scor
   const done = await page.evaluate(async () => ({ stats: ApexAnalysis.stats, saved: (await ApexRecording.summaries(null)).length, score: document.getElementById('endScore').textContent,
     meta: document.getElementById('endMeta').textContent }));
   check(done.stats.jobs.save === 1 && !done.stats.inlineJobs.save, 'saved in the worker: ' + JSON.stringify(done.stats));
-  check(done.saved === 1 && /^(\d+|[\d.]+ (mi|km) · (no|too few clean) corners to score)$/.test(done.score) && /corners/.test(done.meta), 'saved with its summary, the score and corners on the card: ' + JSON.stringify(done));
+  check(done.saved === 1 && /^(\d+|(No|Too few clean) corners to score)$/.test(done.score) && /corners/.test(done.meta), 'saved with its summary, the score and corners on the card: ' + JSON.stringify(done));
   // the Log shows the new drive without loading again
   await page.click('#endDone');
   await page.click('.tab[data-view="log"]');
@@ -7880,11 +7880,11 @@ flow('REVIEW5 §2: the Garage leads with you, your cars, Look and voice and the 
   await page.waitForSelector('#garageSettings.open');
   const rows = await page.$$eval('#garageSettings .nav-row', (r) => r.filter((x) => !x.hidden).map((x) => x.querySelector('span').textContent));
   check(JSON.stringify(rows) === '["Road feel","Privacy zones","Crash check","Reminder","Units","Map motion","Route tuning","Spots","Your data","Account","Feedback","About Vetta"]', 'the rows behind the gear: ' + rows);
-  // U-116: a member with the switch off is told to turn it on above, never to sign in
+  // U-116: a member with the switch off is never told to sign in; the switch says Off, so no line repeats it
   await page.click('#garageSettings .nav-row[data-setting="roadfeel"]');
   await page.waitForSelector('.garage-pop.open[data-setting="roadfeel"]');
   const rf = await page.evaluate(() => { const p = document.querySelector('.garage-pop.open[data-setting="roadfeel"]'); return { note: document.getElementById('ambientNote').textContent, sw: !!p.querySelector('.sw'), heads: p.querySelectorAll('h3').length }; });
-  check(rf.note === 'Off. Turn on Share road feel above.' && rf.sw && rf.heads === 1, 'Road feel: ' + JSON.stringify(rf));
+  check(rf.note === '' && rf.sw && rf.heads === 1, 'Road feel: ' + JSON.stringify(rf));
   await page.click('.garage-pop.open[data-setting="roadfeel"] .side-pop-head button');
   // U-117: Crash check says what it does with no contact, and with one
   // a sheet opened over the Settings list is reachable at once, not a frame later: clicked and read in one task, before any
@@ -9043,6 +9043,8 @@ flow('plan flow (d) one Options sheet: Avoid ✕ and Prefer ✓ in it, what is o
   await cardUp(page); await planDone(page);
   const card = await page.evaluate(() => [...document.querySelectorAll('#cardOptsOn .chip')].map((c) => c.textContent));
   check(JSON.stringify(card) === '["✕ Highways","✓ Passenger aboard","More hairpins"]', 'and on the route card, one chip each: ' + JSON.stringify(card));
+  const cardKey = await page.evaluate(() => document.getElementById('cardOptionsChip').textContent);
+  check(cardKey === 'Options', 'the card\'s Options key carries no count: the chips beside it name each one: ' + cardKey);
   check(asked.some((r) => r.costing_options && JSON.stringify(r.costing_options).includes('"use_highways":0')), 'the plan avoided highways');
   const n = asked.length;
   await page.click('#cardOptsOn .chip');

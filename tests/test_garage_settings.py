@@ -84,7 +84,7 @@ def test_crash_check_says_what_it_does_without_a_contact():
 def test_road_data_line_follows_the_account_state():
     # U-116: signed out, signed in with the switch off, or on: never "Sign in" to a member
     js = (WEB / "cockpit.js").read_text()
-    assert "'Off. Turn on Share road feel above.' : 'Off. Sign in to share road feel.'" in js
+    assert "ambient.member ? '' : 'Off. Sign in to share road feel.'" in js   # a member's off switch says it alone
     assert "Sign in and turn on Share road feel in the Garage" not in js
     assert "earns 3×" not in js                                         # U-126: no multiplier of nothing
 
