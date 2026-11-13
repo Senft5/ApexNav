@@ -22,7 +22,9 @@ const flowy = { tech: 30, flow: 85, smooth: null }, techy = { tech: 90, flow: 30
 const lat = [], lon = []; let x = 0, y = 0, h = 0;
 for (let k = 0; k < 12; k++) for (let i = 0; i < 30; i++) { h += (k % 2 ? 1 : -1) * 0.02; x += 5 * Math.cos(h); y += 5 * Math.sin(h); lat.push(35 + y / 110540); lon.push(-83 + x / 91190); }
 const f = T.featuresOf(Core, { lat, lon, rough: Array(lat.length).fill(0.1) });
-console.log(JSON.stringify({ few, t, line: T.describe(t), plus: T.bonus(t, flowy), minus: T.bonus(t, techy), none: T.bonus(null, flowy), f }));
+const lean = { flow: T.cornerLean(t, { tight: 0, fast: 0, measured: true }), set: T.cornerLean(t, { tight: 1, fast: 0 }), none: T.cornerLean(null, { tight: 0, fast: 0 }),
+  even: T.cornerLean({ tech: 0.4, flow: 0.4, smooth: 0.2 }, {}), techy: T.cornerLean({ tech: 0.9, flow: 0.1, smooth: 0 }, {}) };
+console.log(JSON.stringify({ lean, few, t, line: T.describe(t), plus: T.bonus(t, flowy), minus: T.bonus(t, techy), none: T.bonus(null, flowy), f }));
 """
 
 
@@ -74,3 +76,23 @@ def test_routes_you_choose_teach_your_taste_at_half_an_answer():
     assert r["lean"] == "flowing" and r["noLean"] is None
     assert r["picks"] == 10
     assert r["old"]["votes"] == 5 and r["old"]["picks"] == 0
+
+
+def test_a_level_corner_pref_leans_with_your_taste(out):
+    lean, t = out["lean"], out["t"]
+    tilt = round(20 * max(-0.5, min(0.5, 1.25 * (t["tech"] - t["flow"])))) / 20
+    assert tilt < 0, "a flow lover"
+    assert lean["flow"] == {"tight": tilt, "fast": -tilt, "measured": True}, "fewer hairpins, more sweepers; other prefs kept"
+    assert lean["set"] == {"tight": 1, "fast": -tilt}, "a pref you set wins"
+    assert lean["none"] == {"tight": 0, "fast": 0}, "no taste yet: unchanged"
+    assert lean["even"] == {}, "an even taste: unchanged"
+    assert lean["techy"] == {"tight": 0.5, "fast": -0.5}, "at most half a step"
+
+
+def test_the_cockpit_searches_with_the_leaning_prefs():
+    src = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert "ApexTaste.cornerLean(t, roadPrefs)" in src
+    for call in ("const ownReq = { from, to, level, prefs: searchPrefs()", "ownRouter().explore({ start: { lat: c.lat, lon: c.lon }, maxKm, maxS: minutes * 60, prefs: searchPrefs() })",
+                 "level: LOOP_STYLE, prefs: searchPrefs()", "{ names: inReach, prefs: searchPrefs(),"):
+        assert call in src, call
+    assert "FunRoute.score(t, turnsM, roadPrefs, scaleAt)" in src, "route scores keep the prefs you set"
