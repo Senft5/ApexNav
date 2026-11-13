@@ -1,6 +1,7 @@
-// Pinned places (IDEAS U-20): Home, Work and places you name, first in Where to?, one tap to route there. Kept on this
-// phone only (apex.pinnedPlaces): a home address is the most sensitive thing a navigation app holds, so it is never sent to
-// the server. Erase everything clears it. Pure (tests/test_pinned_places.py).
+// Pinned places (IDEAS U-20): Home, Work and places you name, first in Where to?, one tap to route there. Kept on the phone
+// (apex.pinnedPlaces) and, signed in with the switch on (the default), on your account for your other phones (item_sync.js,
+// big bet #11; only you see them; the switch off deletes the account's copy). `at` is when it was pinned: the newest pin of
+// a name wins across phones. Erase everything clears the phone's. Pure (tests/test_pinned_places.py).
 (function (root) {
   'use strict';
   const KEY = 'apex.pinnedPlaces', MAX = 12, MAX_NAME = 30;
@@ -15,9 +16,9 @@
       .map(({ i, ...p }) => p);
   }
   /** Pin `place` ({ label, lat, lon }) as `name`; the same name (any case) is replaced. Returns the list, or null when refused. */
-  function pin(storage, name, place) {
+  function pin(storage, name, place, now = Date.now()) {
     const n = String(name || '').replace(/\s+/g, ' ').trim().slice(0, MAX_NAME);
-    const p = { name: n, label: String((place && place.label) || n).slice(0, 120), lat: place && place.lat, lon: place && place.lon };
+    const p = { name: n, label: String((place && place.label) || n).slice(0, 120), lat: place && place.lat, lon: place && place.lon, at: now };
     if (!ok(p)) return null;
     const rest = list(storage).filter((q) => q.name.toLowerCase() !== n.toLowerCase());
     const all = [p, ...rest].slice(0, MAX);

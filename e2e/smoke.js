@@ -206,6 +206,70 @@ async function unnamed(page) {
   return out;
 }
 
+// Text in view a driver can't read: under 4.5:1 on its own surface (3:1 at 24 px, or 18.7 px bold), WCAG AA, the floor of
+// the theme contract (tests/test_themes.py checks the tokens; this checks the page as drawn, IDEAS U-15). In every open page.
+// The surface is the first grounds under the text, composed; text over a picture, a gradient, the map or video has no
+// colour to measure and is left out, as is a disabled key (WCAG exempts it) and text a screen reader alone hears.
+async function lowContrast(page) {
+  const out = [];
+  for (const p of page.context().pages()) {
+    if (p.isClosed()) continue;
+    const found = await p.evaluate(() => {
+      const parse = (s) => { const m = String(s).match(/rgba?\(([^)]+)\)/); if (!m) return null; const v = m[1].split(/[,\s/]+/).filter(Boolean).map(Number); return [v[0], v[1], v[2], v.length > 3 ? v[3] : 1]; };
+      const over = (top, under) => [0, 1, 2].map((i) => top[i] * top[3] + under[i] * (1 - top[3])).concat(1);
+      const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+      const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+      // the grounds under an element, from the nearest opaque one up to it; null over anything without one colour
+      const surface = (el) => {
+        const chain = [];
+        for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+          const cs = getComputedStyle(n);
+          if (cs.backgroundImage !== 'none' || /^(CANVAS|VIDEO|IMG)$/.test(n.tagName) || cs.backdropFilter && cs.backdropFilter !== 'none') return null;
+          const c = parse(cs.backgroundColor);
+          if (c && c[3] > 0) { chain.push(c); if (c[3] >= 0.999) break; }
+          if (n === document.documentElement && !(c && c[3] >= 0.999)) return null;
+        }
+        if (!chain.length || chain[chain.length - 1][3] < 0.999) return null;
+        let bg = chain.pop();
+        while (chain.length) bg = over(chain.pop(), bg);
+        return bg;
+      };
+      const opacity = (el) => { let o = 1; for (let n = el; n && n.nodeType === 1; n = n.parentElement) o *= parseFloat(getComputedStyle(n).opacity); return o; };
+      const hidden = (el) => { for (let n = el; n && n.nodeType === 1; n = n.parentElement) { if (n.hidden || n.inert || n.getAttribute('aria-hidden') === 'true' || n.disabled || n.getAttribute('aria-disabled') === 'true') return true; } return false; };
+      const where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).join('.') : '');
+      // mid-fade is not how it reads: text in (or under) a running animation or transition is left for its last frame
+      const moving = new Set(document.getAnimations().filter((a) => a.playState === 'running' || a.pending).map((a) => a.effect && a.effect.target).filter(Boolean));
+      const still = (el) => { for (let n = el; n && n.nodeType === 1; n = n.parentElement) if (moving.has(n)) return false; return true; };
+      const hits = [], seen = new Set();
+      for (const el of document.querySelectorAll('body *')) {
+        if (el instanceof SVGElement || /^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|OPTION)$/.test(el.tagName)) continue;
+        const text = [...el.childNodes].filter((c) => c.nodeType === 3).map((c) => c.textContent).join(' ').replace(/\s+/g, ' ').trim();
+        if (!/[\p{L}\p{N}]/u.test(text)) continue;
+        const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+        if (!r.width || !r.height || r.bottom <= 0 || r.top >= innerHeight || r.right <= 0 || r.left >= innerWidth || cs.visibility !== 'visible') continue;
+        if (cs.clip === 'rect(0px, 0px, 0px, 0px)' || (r.width <= 1 && r.height <= 1) || hidden(el) || !still(el)) continue;
+        // on top where it is drawn: text under a sheet or a scrim is not what the driver reads
+        const hx = Math.min(innerWidth - 1, Math.max(0, r.left + r.width / 2)), hy = Math.min(innerHeight - 1, Math.max(0, r.top + r.height / 2));
+        const hit = document.elementFromPoint(hx, hy);
+        if (!hit || !(hit === el || el.contains(hit) || hit.contains(el))) continue;
+        const o = opacity(el); if (o < 0.05) continue;
+        const fg = parse(cs.color), bg = surface(el); if (!fg || !bg) continue;
+        if (cs.webkitTextFillColor && parse(cs.webkitTextFillColor) && parse(cs.webkitTextFillColor)[3] === 0) continue;   // gradient text
+        const ink = over([fg[0], fg[1], fg[2], fg[3] * o], bg), q = ratio(ink, bg);
+        const px = parseFloat(cs.fontSize), large = px >= 24 || (px >= 18.66 && +cs.fontWeight >= 700);
+        if (q >= (large ? 3 : 4.5) - 0.005) continue;
+        const k = where(el) + '|' + text.slice(0, 30);
+        if (seen.has(k)) continue; seen.add(k);
+        const hex = (c) => '#' + c.slice(0, 3).map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+        hits.push(`${where(el)} "${text.slice(0, 40)}" ${q.toFixed(2)}:1 (${px} px, ${hex(ink)} on ${hex(bg)})`);
+      }
+      return hits.slice(0, 8);
+    }).catch(() => []);
+    out.push(...found.map((h) => `${new URL(p.url()).pathname.slice(1) || 'index.html'}: ${h}`));
+  }
+  return out;
+}
+
 async function openSetting(page, key) {
   await page.click('#garageGear');
   await page.click(`#garageSettings .nav-row[data-setting="${key}"]`);
@@ -2713,6 +2777,17 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   check(!r2.hidden && r2.text === 'SIGHT45' && !r2.short && bg === 'rgb(17, 17, 17)', 'the car tag names itself on the dark plate: ' + JSON.stringify(r2) + bg);
   await page.evaluate(() => car.sight({ text: 'OPEN', unit: '', short: false }));
   check((await read()).hidden, 'OPEN: no plate on the car (TH-2)');
+  // the posted limit's sign, bottom left past Apple's card (as Apple Maps and Waze show it); unknown: none
+  const lim = () => page.evaluate(() => { const e = document.getElementById('limit'), b = e.getBoundingClientRect(); return { hidden: e.hidden, text: e.textContent, round: e.classList.contains('round'), left: b.left, bottom: innerHeight - b.bottom }; });
+  check((await lim()).hidden, 'no limit known: no sign');
+  await page.evaluate(() => car.limit({ value: 55, round: false }));
+  const l1 = await lim();
+  check(!l1.hidden && l1.text === 'SPEEDLIMIT55' && !l1.round && l1.left === 8 && l1.bottom === 8, 'the US sign, bottom left: ' + JSON.stringify(l1));
+  await page.evaluate(() => { car.inset(300); car.limit({ value: 80, round: true }); });
+  const l2 = await lim();
+  check(!l2.hidden && l2.text === '80' && l2.round && l2.left === 324, 'km/h: the red ring, past Apple\'s card: ' + JSON.stringify(l2));
+  await page.evaluate(() => { car.limit(null); car.inset(0); });
+  check((await lim()).hidden, 'the limit gone: the sign goes');
   await page.evaluate(() => car.sight({ text: '43', unit: 'MPH', short: true }));
   // plates never pile up: three corners on one spot show one plate, the tight one when there is no car to measure from
   await page.evaluate(() => { car.mode('preview'); car.corners([{ at: [35.41, -84.1], text: 'R4', tight: false }, { at: [35.41, -84.1], text: 'L2', tight: true }, { at: [35.41001, -84.1], text: 'R3', tight: false }]); });
@@ -7054,6 +7129,38 @@ flow('no colour swaps or Octane: an accent picked before is cleared, Settings se
   check(!(await page.$('#lookRow')), 'no colour-swap Look section');
 });
 
+// U-15: the contrast floor in every look, day and night, not only the one most flows run in: the welcome, the map, People,
+// the Garage and the Log, each read with lowContrast (every flow's last screen is read in the default look already)
+flow('contrast in every look: the welcome, the map, People, the Garage and the Log hold 4.5:1 in each theme, day and night (IDEAS U-15)', async (page, base) => {
+  const themes = ['roadbook', 'tapedeck', 'billet'], found = [];
+  for (const theme of themes) {
+    for (const night of [false, true]) {
+      const m = `${theme} ${night ? 'night' : 'day'}`;
+      await page.evaluate(({ t, n }) => { localStorage.clear(); localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, nightMode: n ? 'on' : 'off' })); }, { t: theme, n: night }).catch(() => {});
+      await page.goto(base + '/index.html');
+      await page.waitForFunction((t) => document.documentElement.dataset.theme === t, theme);
+      await page.waitForSelector('#obNext', { state: 'visible' });
+      await page.waitForTimeout(400);
+      found.push(...(await lowContrast(page)).map((h) => `${m} welcome: ${h}`));
+      await page.evaluate(() => localStorage.setItem('apex.onboarded', '1'));
+      await page.goto(base + '/index.html');
+      await page.waitForFunction((t) => document.documentElement.dataset.theme === t, theme);
+      await page.waitForTimeout(800);
+      found.push(...(await lowContrast(page)).map((h) => `${m} map: ${h}`));
+      for (const view of ['people', 'garage']) {
+        await page.click(`#tabbar .tab[data-view="${view}"]`);
+        await page.waitForTimeout(700);
+        found.push(...(await lowContrast(page)).map((h) => `${m} ${view}: ${h}`));
+      }
+      await page.goto(base + '/analysis.html');
+      await page.waitForTimeout(800);
+      found.push(...(await lowContrast(page)).map((h) => `${m} log: ${h}`));
+    }
+  }
+  if (process.env.CONTRAST_LOG) for (const h of found) console.log('CONTRAST sweep | ' + h);
+  else check(!found.length, `text under the contrast floor:\n  ${found.join('\n  ')}`);
+});
+
 flow('theme contract on the page: the hazard plate, the speed, the call and the binnacle floors, day and night (REVIEW.md 4.3)', async (page, base) => {
   for (const night of [false, true]) {
     await page.addInitScript((n) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, night);
@@ -7577,9 +7684,10 @@ flow('desk: on a big screen Where to? is a column on the left and sheets a panel
   const plan = await box('#planPanel');
   check(plan.w === 440 && plan.x < 40 && plan.h > 600, 'Where to? is a left column: ' + JSON.stringify(plan));
   await page.click('.tab[data-view="garage"]');
-  await page.waitForTimeout(400);
+  // the panel slides and scales in: measure once it has settled (CI caught it mid-way at x 987, width 479.9999)
+  await page.waitForFunction(() => { const s = document.querySelector('.sheet.open'); if (!s) return false; const r = s.getBoundingClientRect();
+    return Math.abs(r.right - innerWidth) < 1 && Math.abs(r.width - 480) < 0.01; }, null, { timeout: 3000 }).catch(() => {});
   const sheet = await box('.sheet.open');
-  // to the pixel: the sheet's slide can leave its width a float hair short (479.99994), which is still 480 px on screen
   check(Math.round(sheet.w) === 480 && sheet.x > 900, 'Settings is a right panel: ' + JSON.stringify(sheet));
 }, { viewport: { width: 1440, height: 900 } });
 
@@ -7850,6 +7958,65 @@ flow('film the drive: the app\'s own video of a drive is offered on its page, li
   await page.waitForFunction(() => window.__saved, null, { timeout: 40000 });
   const reelSaved = await page.evaluate(() => window.__saved);
   check(reelSaved.size > 500 && /^Filmed_road-best-corners-/.test(reelSaved.name), 'the reel, saved to share: ' + JSON.stringify(reelSaved));
+});
+
+flow('side by side: a corner filmed on this drive and on your best pass plays as one clip, both from the same point, the gap counting (big bet 5)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} window.APEX_DRIVECAM = '/__drivecam/'; });
+  let index = [], video = null;
+  await page.route('**/__drivecam/index.json', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(index) }));
+  await page.route('**/__drivecam/*.mov', (r) => (video ? r.fulfill({ contentType: 'video/webm', body: video }) : r.fulfill({ status: 404, body: '' })));
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  // one road four times (the corner overlay's road), each drive with the clock kept (t0, t_s)
+  await page.evaluate(async (src) => {
+    const gen = eval(src);
+    const tweak = (csv, k) => csv.split('\n').map((l, i) => { if (!i || !l) return l; const c = l.split(','); c[5] = (+c[5] * (1 - 0.03 * k)).toFixed(3); return c.join(','); }).join('\n');
+    for (let k = 0; k < 4; k++) {
+      const d = ApexRecording.parse(ApexCore, tweak(gen(k === 1 ? 'clean' : 'saw', 0), k), 'g' + k + '.csv', { id: 'g' + k, name: 'Dry Ridge Rd', date: `2026-0${5 + k}-01T09:00`, source: 'web-gps', t0: 1760000000000 + k * 864e5 });
+      d.t_s = Array.from(ApexCore.elapsedS(d.speed_mps));
+      await ApexRecording.store(d);
+    }
+  }, PROFILE_CSV);
+  // the corner Where to find time leads with, its best pass, and where it is on both drives
+  await page.goto(base + '/analysis.html?tab=drive&drive=g3');
+  await page.waitForSelector('.dv-time li button', { timeout: 20000 });
+  await page.click('.dv-time li button');
+  await page.waitForSelector('.dv-ovl svg path', { timeout: 20000 });
+  const k = (await page.evaluate(() => +document.querySelector('.dv-ovl-h').textContent.match(/Corner (\d+)/)[1])) - 1;
+  const plan = await page.evaluate(async (k) => {
+    const r = await ApexAnalysis.job('cornerTrace', { id: 'g3', k }), a = await ApexRecording.get('g3'), b = await ApexRecording.get(r.other.id);
+    const c = ApexRecording.scoreOf(ApexCore, a).corners[k], Ta = ApexRecording.timesOf(ApexCore, a), Tb = ApexRecording.timesOf(ApexCore, b);
+    return { other: r.other.id, aStart: Ta[c.start], aEnd: Ta[c.end], bStart: Tb[r.trace.b_win[0]], bEnd: Tb[r.trace.b_win[1]], t0a: a.t0, t0b: b.t0 };
+  }, k);
+  // a video for each drive that starts 3.5 s before the corner there (named for that moment, as the app names them)
+  const len = Math.ceil(Math.max(plan.aEnd - plan.aStart, plan.bEnd - plan.bStart) + 7);
+  const b64 = await page.evaluate(async (ms) => {
+    const c = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }), g = c.getContext('2d');
+    const rec = new MediaRecorder(c.captureStream(15), { mimeType: 'video/webm' }), parts = [];
+    rec.ondataavailable = (e) => parts.push(e.data);
+    const stop = new Promise((ok) => { rec.onstop = ok; });
+    rec.start(); let f = 0; const t = setInterval(() => { g.fillStyle = `hsl(${f++ * 12},60%,50%)`; g.fillRect(0, 0, 320, 180); }, 66);
+    await new Promise((r) => setTimeout(r, ms)); clearInterval(t); rec.stop(); await stop;
+    const buf = new Uint8Array(await new Blob(parts).arrayBuffer());
+    let bin = ''; for (let q = 0; q < buf.length; q += 0x8000) bin += String.fromCharCode(...buf.subarray(q, q + 0x8000));
+    return btoa(bin);
+  }, len * 1000);
+  video = Buffer.from(b64, 'base64');
+  const at = (t0, s) => Math.round(t0 + (s - 3.5) * 1000);
+  index = [{ name: `${at(plan.t0a, plan.aStart)}.mov`, start_ms: at(plan.t0a, plan.aStart), dur_s: len }, { name: `${at(plan.t0b, plan.bStart)}.mov`, start_ms: at(plan.t0b, plan.bStart), dur_s: len }];
+  await page.goto(base + '/analysis.html?tab=drive&drive=g3');
+  await page.waitForSelector('#dvDashcam .dc-own button', { timeout: 20000 });
+  await page.evaluate(() => { window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type) => { window.__saved = { size: blob.size, name, type }; return 'saved'; }; });
+  await page.click('.dv-time li button');
+  await page.waitForSelector('.dv-ovl .dv-ghost', { timeout: 20000 });
+  check(await page.evaluate(() => !!document.querySelector('.dv-ovl .dv-clip.solid')), 'the corner\'s own clip key is there too');
+  // a frame of it: portrait, this pass on top and the best pass below
+  await page.click('.dv-ovl .dv-ghost');
+  await page.waitForFunction(() => { const c = document.querySelector('#dvDashcam .dc-clip-canvas'); return c && c.style.display === 'block' && c.width === 720 && c.height === 1280; }, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__saved, null, { timeout: 60000 });
+  const saved = await page.evaluate(() => window.__saved);
+  check(saved.size > 500 && /^Dry_Ridge_Rd-side-by-side-\d+-/.test(saved.name), 'the side-by-side clip, saved to share: ' + JSON.stringify(saved));
+  await page.waitForFunction(() => /Clip made/.test(document.querySelector('.dv-ovl .dv-ghost').textContent), null, { timeout: 5000 });
 });
 
 // A drive for the drive page's own flows: north 1.5 km with a corner call (dashcam) and some g (the grip circle)
@@ -8814,6 +8981,73 @@ flow('when to go: the route card says the best time to leave, opens the next day
   await planDone(page);
   await page.waitForFunction(() => !document.getElementById('routeCardWhen').hidden && !/^Leaving /.test(document.getElementById('routeWhenLine').textContent) && apexDebug.lastWhen.planned === null, null, { timeout: 25000 });
 }, IPHONE);
+
+flow('find nearby: Where to? has Gas, Coffee and Food; a key, or "gas near me" typed, lists the nearest by name and how far, and a tap plans the way there (big gap vs Apple Maps, 2026-11-13)', async (page, base) => {
+  await planRouter(page);
+  await funTiles(page);
+  const { tap } = await planPage(page, base);
+  // the map's places (offline here): round the middle of the spots asked for, a café 600 m north, an unnamed one 1.5 km
+  // south, a Shell 1 km east; the keys come from nearby.js, the places from the tiles (stages.js poisAll)
+  await page.evaluate(() => { window.__asked = 0; ApexStages.poisAll = async (pts) => { window.__asked++;
+    const lat = pts.reduce((a, p) => a + p.lat, 0) / pts.length, lon = pts.reduce((a, p) => a + p.lon, 0) / pts.length;
+    return [{ cls: 'cafe', name: 'Bean There Coffee', lat: lat + 0.0054, lon }, { cls: 'cafe', name: null, lat: lat - 0.0136, lon },
+      { cls: 'fuel', sub: null, name: 'Shell', lat, lon: lon + 0.0116 }, { cls: 'restaurant', name: null, lat: lat + 0.2, lon }]; }; });
+  await tap('#destInput', 'Where to?');
+  const keys = await page.evaluate(() => [...document.querySelectorAll('#nearbyKeys .chip')].map((b) => ({ t: b.textContent, h: Math.round(b.getBoundingClientRect().height), l: b.getAttribute('aria-label') })));
+  check(keys.map((k) => k.t).join() === 'Gas,Coffee,Food' && keys.every((k) => k.h >= 44 && / nearby$/.test(k.l)), 'three keys under Where to?: ' + JSON.stringify(keys));
+  await tap('#nearbyKeys .chip:nth-child(2)', 'Coffee');
+  await page.waitForFunction(() => document.querySelectorAll('#placeList .place').length >= 2, null, { timeout: 5000 });
+  const rows = await page.evaluate(() => ({ q: document.getElementById('destInput').value, keys: document.getElementById('nearbyKeys').hidden,
+    rows: [...document.querySelectorAll('#placeList .place')].map((b) => [b.querySelector('b').textContent, b.querySelector('span').textContent]) }));
+  check(rows.q === 'Coffee' && rows.keys && rows.rows.length === 2 && rows.rows[0][0] === 'Bean There Coffee' && /^0\.\d mi$/.test(rows.rows[0][1])
+    && rows.rows[1][0] === 'Café, no name on the map', 'the key says Coffee in the field, and the cafés are listed nearest first, how far, an unnamed one says so: ' + JSON.stringify(rows));
+  const pins = await page.evaluate(() => ({ pins: [...document.querySelectorAll('.nearby-pin')].map((p) => p.textContent),
+    half: document.getElementById('planPanel').getBoundingClientRect().top > innerHeight * 0.4 }));
+  check(pins.pins.join() === 'Bean There Coffee,CAFÉ' && pins.half, 'and they are on the map, by name (an unnamed one by its stamp), the sheet down to half under them: ' + JSON.stringify(pins));
+  // typed, in the words people use: the fuel, never a geocode of the word; the restaurant 22 km off is out of reach
+  await page.fill('#destInput', 'gas near me');
+  await page.waitForFunction(() => { const b = document.querySelector('#placeList .place b'); return b && b.textContent === 'Shell'; }, null, { timeout: 5000 });
+  await page.fill('#destInput', 'food');
+  await page.waitForFunction(() => /^No food on the map within/.test(document.getElementById('placeList').textContent), null, { timeout: 5000 });
+  check(await page.evaluate(() => !document.querySelector('.nearby-pin') && !document.getElementById('planPanel').classList.contains('nearby')), 'none found, no pins left from before, the sheet back up');
+  // Enter on "coffee" goes to the nearest
+  await page.fill('#destInput', 'coffee');
+  await page.press('#destInput', 'Enter');
+  await cardUp(page);
+  await planDone(page);
+  const card = await page.evaluate(() => document.getElementById('routeCardName') ? document.getElementById('routeCardName').textContent : document.getElementById('routeBarName').textContent);
+  check(/Bean There Coffee/.test(card), 'Enter plans the way to the nearest café: ' + card);
+}, { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
+flow('places on the map: named eateries, cafés and fuel close in (never in a drive), in italic under the street names; a tap is the place card, by its name, kind and how far, with Go here (2026-11-13, as Apple Maps)', async (page, base) => {
+  await planRouter(page);
+  await funTiles(page);
+  // a base map with its street names (the real style is offline here)
+  const style = { version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } },
+    layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#eee' } }, { id: 'highway-name-minor', type: 'symbol', source: 'openmaptiles', 'source-layer': 'transportation_name', layout: { 'text-field': '{name}', 'text-font': ['Noto Sans Regular'] } }] };
+  await page.route('https://tiles.openfreemap.org/**', (route) => { const u = route.request().url();
+    if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(style) });
+    if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
+    return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) }); });
+  await planPage(page, base);
+  await page.waitForFunction(() => apexDebug.map.getLayer('apex-places'), null, { timeout: 10000 });
+  const layer = await page.evaluate(() => { const m = apexDebug.map, l = m.getLayer('apex-places'), order = m.getLayersOrder();
+    return l ? { min: l.minzoom, vis: m.getLayoutProperty('apex-places', 'visibility'), font: m.getLayoutProperty('apex-places', 'text-font'), under: order.indexOf('apex-places') < order.indexOf(order.find((id) => /road.*label|label.*road|highway-name/i.test(id)) || order[order.length - 1]) } : null; });
+  check(layer && layer.min === 15 && layer.vis === 'visible' && /Italic/.test(layer.font) && layer.under, 'the places layer: ' + JSON.stringify(layer));
+  // a tap on a place (the tiles are offline here: the map is asked what is under the tap, and a café is there)
+  await page.evaluate(() => { const m = apexDebug.map, real = m.queryRenderedFeatures.bind(m), c = m.getCenter();
+    m.queryRenderedFeatures = (pt, o) => (o && o.layers && o.layers.includes('apex-places') ? [{ layer: { id: 'apex-places' }, geometry: { type: 'Point', coordinates: [c.lng, c.lat + 0.005] }, properties: { name: 'Bean There Coffee', class: 'cafe' } }] : real(pt, o));
+    const p = m.project([c.lng, c.lat + 0.005]); m.fire('click', { point: p, lngLat: m.unproject(p), originalEvent: new MouseEvent('click') }); });
+  await page.waitForSelector('#pinOverlay.show', { timeout: 3000 });
+  const card = await page.evaluate(() => ({ name: document.getElementById('pinPlace').textContent, kind: document.getElementById('pinKind').textContent, go: !!document.getElementById('pinGoBtn').offsetParent }));
+  check(card.name === 'Bean There Coffee' && /^Café · 0\.\d mi$/.test(card.kind) && card.go, 'the place card: its name, kind and how far: ' + JSON.stringify(card));
+  await page.click('#pinCancelBtn');
+  // in a drive the map carries the road, not the shops
+  await page.evaluate(() => { for (let i = 0; i < 5; i++) window.apex.live({ lat: 39.155 + i * 1e-5, lon: -84.615, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0, lon_g: 0 }); });
+  await page.click('#startDrive');
+  await page.waitForFunction(() => window.apexDebug.state.mode === 'live', null, { timeout: 5000 });
+  check(await page.evaluate(() => apexDebug.map.getLayoutProperty('apex-places', 'visibility')) === 'none', 'no places on the map in a drive');
+}, { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
 flow('along the route by name: the Along line opens a list of the cafés and fuel stops by their names on the map, and a tap on one (or its pin) says its name and offers it as a stop; in a drive the next fuel stamp names its station (the owner, 2026-11-11)', async (page, base) => {
   await planRouter(page);
@@ -10524,6 +10758,9 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
       const nameless = await unnamed(page);
       if (process.env.A11Y_LOG) for (const h of nameless) console.log(`A11Y ${name} | ${h}`);
       else check(!nameless.length, `a control in view a screen reader can't name:\n  ${nameless.join('\n  ')}`);
+      const faint = await lowContrast(page);
+      if (process.env.CONTRAST_LOG) for (const h of faint) console.log(`CONTRAST ${name} | ${h}`);
+      else check(!faint.length, `text in view under the contrast floor:\n  ${faint.join('\n  ')}`);
       check(!errors.length, `page errors or missing files:\n  ${errors.join('\n  ')}`);
       console.log(`ok   ${name} (${Date.now() - t0} ms)`);
     } catch (e) {

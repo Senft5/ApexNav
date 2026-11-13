@@ -118,8 +118,11 @@
     function section() {
       const box = el('section', { className: 'inbox-sec' }); box.hidden = true;
       const head = el('h3', { textContent: 'For you' });
+      // what was seen when this list was drawn, read now: an earlier draw's answer landing once People is on screen marks
+      // the list seen, and this draw's rows would lose their dot before the driver saw them (CI, PR #677)
+      const seen = seenGet();
       refresh().then((data) => {
-        const seen = seenGet(), now = data && data.now ? tsOf(data.now) : Date.now();
+        const now = data && data.now ? tsOf(data.now) : Date.now();
         const rows = (data && Array.isArray(data.items) ? data.items : []).filter((i) => !CARDED.has(i.kind)).map((i) => ({ i, l: line(i) })).filter((x) => x.l).slice(0, SHOWN);
         const list = el('div', { className: 'inbox', role: 'list' });
         for (const { i, l } of rows) {

@@ -40,11 +40,20 @@ targets:
     # Sign in with Apple (IDEAS O-05, App Review 4.8). The App ID has the capability (enabled through the App Store Connect API).
     # CarPlay navigation (docs/CARPLAY.md): Apple assigned com.apple.developer.carplay-maps to the account on 2026-10-29, so
     # device builds carry it too; cloud signing (-allowProvisioningUpdates) puts it on the App ID and the profile.
+    # Owner, 2026-11-13: Time Sensitive Notifications, WeatherKit, Siri, App Attest and Data Protection on the App ID.
+    # Push (aps-environment) comes with the push PR. tools/asc_capabilities.py switches on what the App Store Connect API
+    # knows (Push, Siri, Data Protection); the rest go onto the App ID through cloud signing, as CarPlay did. Data protection
+    # stays at iOS's default class, so a drive recorded with the phone locked in its mount can still write its files.
     entitlements:
       path: ApexNav.entitlements
       properties:
         com.apple.developer.applesignin: [Default]
         com.apple.developer.carplay-maps: true
+        com.apple.developer.usernotifications.time-sensitive: true
+        com.apple.developer.weatherkit: true
+        com.apple.developer.siri: true
+        com.apple.developer.devicecheck.appattest-environment: production
+        com.apple.developer.default-data-protection: NSFileProtectionCompleteUntilFirstUserAuthentication
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

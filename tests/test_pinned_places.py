@@ -36,6 +36,7 @@ def test_home_then_work_then_newest(out):
 
 
 def test_repin_replaces_and_bad_refused(out):
-    assert out["home"] == [{"name": "HOME", "label": "9 Oak Ave", "lat": 5, "lon": 5}]
+    assert [{k: v for k, v in p.items() if k != "at"} for p in out["home"]] == [{"name": "HOME", "label": "9 Oak Ave", "lat": 5, "lon": 5}]
+    assert isinstance(out["home"][0]["at"], (int, float))      # when it was pinned: the newest pin wins across phones (item_sync.js)
     assert out["bad"] == [None, None, None]
     assert out["after"] == ["HOME", "Work", "Dragon"]

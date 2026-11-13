@@ -260,10 +260,10 @@
     }
     // the app's own film of this drive (DriveCam.swift): one key per video, lined up by itself
     const own = el('div', { className: 'dc-row dc-own', hidden: true });
-    let vids = [], shownOwn = '';
+    let vids = [], shownOwn = '', ownList = [];
     if (typeof page.ownVideos === 'function') {
       Promise.resolve().then(() => page.ownVideos()).then((list) => {
-        vids = ownVideos(list, d.t0, total);
+        ownList = Array.isArray(list) ? list : []; vids = ownVideos(ownList, d.t0, total);
         own.replaceChildren(...vids.map((v) => {
           const b = el('button', { className: 'btn solid', type: 'button', textContent: v.label });
           b.addEventListener('click', () => { shownOwn = v.name; pick.firstChild.textContent = 'Pick another video'; openSrc(page.videoUrl(v.name), Math.max(-600, v.offsetS)); });
@@ -355,6 +355,47 @@
     // 5 m samples), opened lined up if it isn't yet, and the clip made from it
     const ownFor = (start, end) => (CC ? vids.find((v) => CC.clipWindow(T, { start, end }, v.offsetS, v.durS)) : null);
     box.canClip = (start, end) => !!ownFor(start, end);
+    // Side by side (ghost_clip.js): this pass and the best pass, when the app filmed both drives. other: { d (that drive),
+    // bWin: [start, end] of the corner on it, trace (corner_trace.js), when }
+    function ghostPlan(start, end, other) {
+      const GC = root.ApexGhostClip, R = root.ApexRecording;
+      if (!GC || !R || !other || !other.d || !Array.isArray(other.bWin) || !Array.isArray(other.d.speed_mps)) return null;
+      const va = ownFor(start, end);
+      if (!va) return null;
+      const Tb = R.timesOf(Core, other.d), [bs, be] = other.bWin;
+      for (const vb of ownVideos(ownList, other.d.t0, Tb[Tb.length - 1] || 0)) {
+        const a = { T, start, end, offsetS: va.offsetS, dur: va.durS, d }, b = { T: Tb, start: bs, end: be, offsetS: vb.offsetS, dur: vb.durS, d: other.d };
+        const w = GC.windows(a, b);
+        if (w) return { va, vb, a, b, w };
+      }
+      return null;
+    }
+    box.canGhost = (start, end, other) => !!ghostPlan(start, end, other);
+    box.ghost = async (start, end, other) => {
+      const p = ghostPlan(start, end, other);
+      if (!p || clipBusy) return false;
+      clipBusy = true; clipBtn.disabled = true; reelBtn.disabled = true; clipNote.textContent = 'Making the side-by-side clip: both play through once.';
+      // the two videos shown small while they play (WebKit decodes a video it shows), the clip's canvas beside them
+      const mkv = (name) => { const v = el('video', { muted: true, playsInline: true, preload: 'auto' }); v.setAttribute('playsinline', ''); v.setAttribute('muted', '');
+        v.style.cssText = 'width:72px;height:auto;margin-right:6px'; v.src = page.videoUrl(name); return v; };
+      const va = mkv(p.va.name), vb = mkv(p.vb.name), row = el('div', { className: 'dc-row dc-ghost-src' }, va, vb);
+      clips.insertBefore(row, clipCanvas); clipCanvas.style.display = 'block';
+      const opened = (v) => new Promise((ok, no) => { if (v.readyState >= 1) { ok(); return; } v.addEventListener('loadedmetadata', ok, { once: true }); v.addEventListener('error', no, { once: true }); setTimeout(no, 12000); });
+      let ok = false;
+      try {
+        va.load(); vb.load();
+        await Promise.all([opened(va), opened(vb)]);
+        const lab = labelOf({ start, end });
+        const { blob, mime } = await root.ApexGhostClip.record({ va, vb, a: p.a, b: p.b, w: p.w, trace: other.trace, fmtSpeed: page.fmtSpeed, canvas: clipCanvas,
+          meta: { title: d.name || '', label: lab.label, whenB: other.when || '' } });
+        await page.save(blob, root.ApexFlyoverVideo.fileName(`${d.name || 'drive'}-side-by-side-${lab.k + 1}`, mime), mime.split(';')[0]);
+        clipSaid = 'Done. The sound isn\u2019t kept.'; ok = true;
+      } catch (_) { clipSaid = 'Couldn\u2019t make the side-by-side clip on this phone.'; }
+      for (const v of [va, vb]) { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (_) {} }
+      row.remove(); clipCanvas.style.display = 'none'; clipNote.textContent = clipSaid;
+      clipBusy = false; clipBtn.disabled = !clipList.length || frameOk !== true; reelBtn.disabled = frameOk !== true;
+      return ok;
+    };
     box.clip = async (start, end) => {
       const v = ownFor(start, end);
       if (!v || clipBusy) return false;
