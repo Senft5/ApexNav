@@ -5289,6 +5289,7 @@
       $('scrim').classList.toggle('show', !!v);
       document.querySelectorAll('#tabbar .tab').forEach(t => t.classList.toggle('on', v ? t.dataset.view === v : t.dataset.view === 'map'));
       if (v === 'people' && peopleSide === 'friends') try { if (inbox) inbox.markSeen(); } catch (_) {}   // For you on screen: seen
+      if (v === 'garage') try { shelveLooks(); } catch (_) { /* before the picker is built */ }   // the looks' shelf turns to the one in use (not at boot)
     }
     const openSheet = (v = view || 'route') => showView(v);
     // The Log and Stages (analysis.html) open in a full-screen frame over the map, never in its place (the owner,
@@ -8046,8 +8047,11 @@
     }
     // On a phone the looks stand on a shelf you turn sideways (index.html .theme-cards): it opens on the look in use, and
     // turns to it when the look changes somewhere else. Never while a finger is turning it: the card you chose is in view.
+    // Native speed (2026-11-13): measured only on the Garage; at boot its read forced a layout of the closed sheet (25 ms at
+    // 4x CPU). showView turns the shelf when the Garage opens.
     function shelveLooks() {
       const box = $('themeCards'), cur = themeCards.get(state.theme);
+      if (view !== 'garage') return;
       if (!box || !cur || box._at === state.theme || box.scrollWidth <= box.clientWidth + 4) return;
       box._at = state.theme;
       box.scrollLeft = cur.card.offsetLeft - box.firstElementChild.offsetLeft;
