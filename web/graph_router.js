@@ -45,6 +45,7 @@
     FUN_FULL_PCT: 0.5,       // fun per km that counts as full: the loaded network's median of edges with corners
     // members' data (crowd.js channels) per edge, with the route engine's own weights (route_engine.js QUALITY/SCENERY)
     // against the share of the model the tile's score already knew (conf x the model's weight)
+    PREF_STEP: 0.6, CORNER_TIGHT_M: 40, CORNER_FAST_M: [100, 260],   // the corner prefs, per edge (cornerMix; fun_route.js PREF_STEP)
     CROWD_W: { rough: 1, flow: 1, loved: 1.5, bank: 0.5, crest: 2 }, MODEL_WQ: 37.1, MODEL_WS: 12.8,
     // measured crests (ROAD_INTELLIGENCE 3.2: unweighting over CREST_G is a vertical event) per km, full at CREST_FULL_KM;
     // crowd-verified bumps cost an edge BUMP_X of its time each, at most BUMP_MAX (a pothole road loses, it isn't banned)
@@ -609,13 +610,48 @@
     return v.objCache.get(key);
   }
   const OBJ_KNOBS = ['W_NOTPOOR', 'W_QUALITY', 'W_FUN', 'W_SCENERY', 'POOR_LO', 'POOR_HI', 'GATE_LO', 'GATE_HI', 'UNKNOWN_G', 'MODEL_WQ', 'MODEL_WS', 'PRIVATE_X', 'PRIVATE_S',
-    'DESTINATION_X', 'DESTINATION_S', 'FERRY_X', 'UNPAVED_X', 'AVOID_HWY_X', 'AVOID_TOLL_X', 'AVOID_FERRY_X', 'AVOID_UNPAVED_X', 'AVOID_POINT_X', 'AVOID_POINT_M', 'AVOID_CAM_X', 'AVOID_CAM_M', 'CLOSED_X', 'CLOSED_M', 'HAZARD_X', 'HAZARD_M'];
+    'DESTINATION_X', 'DESTINATION_S', 'FERRY_X', 'UNPAVED_X', 'AVOID_HWY_X', 'AVOID_TOLL_X', 'AVOID_FERRY_X', 'AVOID_UNPAVED_X', 'AVOID_POINT_X', 'AVOID_POINT_M', 'AVOID_CAM_X', 'AVOID_CAM_M', 'CLOSED_X', 'CLOSED_M', 'HAZARD_X', 'HAZARD_M', 'PREF_STEP'];
+  const clampPref = (x) => (Number.isFinite(Number(x)) ? Math.max(-1, Math.min(1, Number(x))) : 0);
+  /**
+   * Per edge, the share of its turning (radians, at each inner vertex of its line) in tight corners (local radius under
+   * CORNER_TIGHT_M) and in fast ones (CORNER_FAST_M[0] to [1]), of all its turning tighter than CORNER_FAST_M[1]; 0 on a
+   * straight edge. From the tiles' geometry, once per view (only asked when a corner pref is set).
+   */
+  function cornerMix(v) {
+    if (v.cornerMix) return v.cornerMix;
+    const E = v.E, tight = new Float32Array(E), fast = new Float32Array(E);
+    const [f0, f1] = K.CORNER_FAST_M;
+    for (let e = 0; e < E; e++) {
+      if (!(v.fun[e] > 0)) continue;                                    // no corner points: nothing to weigh
+      const k = v.eTile[e], t = v.tiles[k];
+      let g = null;
+      try { g = typeof t.geom === 'function' ? t.geom(e - v.edgeBase[k]) : null; } catch (_) { g = null; }
+      if (!g || g.length < 6) continue;
+      const cos = Math.cos(g[0] * RAD);
+      let tT = 0, tF = 0, tA = 0;
+      let ax = (g[3] - g[1]) * 111320 * cos, ay = (g[2] - g[0]) * 110540, al = Math.hypot(ax, ay);
+      for (let i = 4; i + 1 < g.length; i += 2) {
+        const bx = (g[i + 1] - g[i - 1]) * 111320 * cos, by = (g[i] - g[i - 2]) * 110540, bl = Math.hypot(bx, by);
+        if (al > 0.5 && bl > 0.5) {
+          const th = Math.abs(Math.atan2(ax * by - ay * bx, ax * bx + ay * by)), r = (al + bl) / 2 / Math.max(th, 1e-6);
+          if (r < f1) { tA += th; if (r < K.CORNER_TIGHT_M) tT += th; else if (r >= f0) tF += th; }
+        }
+        if (bl > 0.5) { ax = bx; ay = by; al = bl; }
+      }
+      if (tA > 0) { tight[e] = tT / tA; fast[e] = tF / tA; }
+    }
+    v.cornerMix = { tight, fast };
+    return v.cornerMix;
+  }
   function objectiveOf(v, o = {}) {
     const prefs = o.prefs || {}, taste = o.taste || {}, avoid = o.avoid || {}, B = flagBits();
-    const corner = 1 + 0.25 * ((Number(prefs.tight) || 0) + (Number(prefs.fast) || 0));
+    // the corner prefs (IDEAS R-19, Plan -> Hairpins and Sweepers fewer/more): each edge's fun counts PREF_STEP more or
+    // less by the share of its turning that is tight (radius under 40 m: hairpins, 1s and 2s) or fast (100 to 260 m: 5s
+    // and 6s), as fun_route.js cornerWeight weighs a route's corners, so the search itself seeks the roads asked for
+    const pT = clampPref(prefs.tight), pF = clampPref(prefs.fast), mix = pT || pF ? cornerMix(v) : null;
     const tq = Number.isFinite(taste.quality) ? taste.quality / (K.W_NOTPOOR + K.W_QUALITY) : 1;
     const wp = K.W_NOTPOOR * tq, wq = K.W_QUALITY * tq;
-    const wf = (Number.isFinite(taste.fun) ? taste.fun : K.W_FUN) * Math.max(0.3, corner);
+    const wf = Number.isFinite(taste.fun) ? taste.fun : K.W_FUN;
     const ws = Number.isFinite(taste.scenery) ? taste.scenery : K.W_SCENERY;
     const crowd = v.crowd || null, CW = (o.crowdWeights) || K.CROWD_W;
     const E = v.E, bad = new Float32Array(E), mult = new Float32Array(E), add = new Float32Array(E);
@@ -645,10 +681,13 @@
       const notPoor = clamp01((q - K.POOR_LO) / (K.POOR_HI - K.POOR_LO));
       // fun is already gated by quality in the tiles (corners only count on good road); per km against the network's own
       const keep = builtAt && F && F.builtKeep ? F.builtKeep(builtAt(e)) : 1;
-      const f = fk ? Math.min(1, v.fun[e] * keep / Math.max(0.05, v.len[e] / 1000) / v.funFull) : 0;
+      const like = mix ? Math.max(1 - K.PREF_STEP, Math.min(1 + K.PREF_STEP, 1 + K.PREF_STEP * (pT * mix.tight[e] + pF * mix.fast[e]))) : 1;
+      // (after the cap, so a road already at full fun still gains on one that isn't what was asked for; a road of other
+      // corners, or none, counts as before; the goodness is then held to 1 at most)
+      const f = fk ? Math.min(1, v.fun[e] * keep / Math.max(0.05, v.len[e] / 1000) / v.funFull) * like : 0;
       const w = wp + wq + (fk ? wf : 0) + (sk ? ws : 0);
       const raw = (wp * notPoor + wq * q + (fk ? wf * f : 0) + (sk ? ws * s * (0.5 + 0.5 * gate) : 0)) / Math.max(1e-6, w);
-      let g = cf * raw + (1 - cf) * K.UNKNOWN_G;
+      let g = Math.min(1, cf * raw + (1 - cf) * K.UNKNOWN_G);
       // crowd-verified bumps (roads.ts verifiedBumps) take goodness off the edge too, so the pick sees them, not only the search
       const bumpX = crowd && crowd.bumps && crowd.bumps[e] ? 1 + Math.min(K.BUMP_MAX, K.BUMP_X * crowd.bumps[e]) : 1;
       g /= bumpX;

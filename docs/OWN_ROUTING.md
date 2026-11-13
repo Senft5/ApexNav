@@ -249,7 +249,7 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     crossing 4 s, calming 3 s, crossing 1 s (build.py DELAY_S), barrier 120 s; private and barrier edges x10 + 600 s, destination-only x2 + 60 s, unpaved x1.5,
     ferry x2; Avoid chips multiply (highways x4, tolls x3, ferries x5, unpaved x5).
   - Goodness per edge: 0.5 quality + 0.3 fun (gated corner points per km against the loaded network's 90th
-    percentile) + 0.2 scenery (half-counted below the corner gate), the corner prefs scaling fun; unknown channels drop
+    percentile) + 0.2 scenery (half-counted below the corner gate), the corner prefs scaling each edge's fun by its share of tight (radius under 40 m) or fast (100 to 260 m) turning, ±60 % (`cornerMix`, from the tiles' geometry, 2026-11-13); unknown channels drop
     out, and the whole blends to 0.3 by how little was known (`conf`), so unknown road can't win.
   - Plans: the quickest, then `a` bisected in log steps (at most 5 more searches) for the largest `a` whose time is
     inside the level's budget (fun_route.js LEVELS, the same numbers); every distinct route found inside the budget is

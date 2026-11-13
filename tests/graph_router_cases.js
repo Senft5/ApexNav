@@ -460,6 +460,33 @@ const CASES = {
     return { baseNear: near(base), baseS: base.timeS, quickS: q.timeS, r1: ratio(c1), r2: ratio(c2), farMax: ratio(far).m };
   },
 
+  // the corner prefs in the search (IDEAS R-19): two roads of the same time, quality and corner points, one all tight
+  // S-bends (radius ~15 m), one all sweepers (~150 m+); Hairpins more / Sweepers fewer plans the first, the other way
+  // round the second, and each edge's share of tight and fast turning (cornerMix) says which is which
+  cornerPrefs() {
+    const S = [39.40, -84.70], km = (m) => m / (111320 * Math.cos(S[0] * Math.PI / 180));
+    const nodes = [at(S[0], S[1]), at(S[0], S[1] + km(5000)), at(S[0] + 0.004, S[1]), at(S[0] + 0.004, S[1] + km(5000)), at(S[0] - 0.004, S[1]), at(S[0] - 0.004, S[1] + km(5000))], edges = [];
+    const wave = (lat0, A, lambda, step) => { const g = []; for (let x = step; x < 5000; x += step) g.push([lat0 + A * Math.sin(2 * Math.PI * x / lambda) / 110540, S[1] + km(x)]); return g; };
+    const road = (a, b, name, geom) => { edges.push({ from: a, to: b, name, t: 600, len: 9000, fun: 10, quality: 0.8, geom });
+      edges.push({ from: b, to: a, name, t: 600, len: 9000, fun: 10, quality: 0.8, geom: geom.slice().reverse() }); };
+    two(edges, 0, 2, { name: 'North Link', t: 20, len: 450 }); two(edges, 0, 4, { name: 'South Link', t: 20, len: 450 });
+    two(edges, 1, 3, { name: 'North End', t: 20, len: 450 }); two(edges, 1, 5, { name: 'South End', t: 20, len: 450 });
+    road(2, 3, 'Hairpin Road', wave(S[0] + 0.004, 30, 120, 5));
+    road(4, 5, 'Sweeper Road', wave(S[0] - 0.004, 60, 600, 20));
+    const v = R.view(H.tiles(nodes, edges).tiles);
+    const from = { lat: S[0], lon: S[1] + km(-50) }, to = { lat: S[0], lon: S[1] + km(5050) };
+    const names = (r) => [...new Set(r.names.map((n) => n.name).filter(Boolean))];
+    const best = (prefs) => names(R.plan(v, { from, to, level: 'fun', prefs }).routes[0]);
+    const R0 = R.objective(v, {}), mix = v.cornerMix || null;
+    R.objective(v, { prefs: { tight: 1 } });
+    const m = v.cornerMix, edgeOf = (name) => { for (let e = 0; e < v.E; e++) if (names({ names: [{ name: v.tiles[v.eTile[e]].names[v.name[e]] }] })[0] === name) return e; return -1; };
+    const hp = edgeOf('Hairpin Road'), sw = edgeOf('Sweeper Road');
+    const bad = (prefs) => { const c = R.objective(v, { prefs }); return { hp: c.bad[hp], sw: c.bad[sw] }; };
+    return { mixBefore: mix, hpTight: m.tight[hp], hpFast: m.fast[hp], swTight: m.tight[sw], swFast: m.fast[sw],
+      bad0: { hp: R0.bad[hp], sw: R0.bad[sw] }, badTight: bad({ tight: 1, fast: -1 }), badFast: bad({ tight: -1, fast: 1 }),
+      tight: best({ tight: 1, fast: -1 }), fast: best({ tight: -1, fast: 1 }), tightOnly: best({ tight: 1 }), fastOnly: best({ fast: 1 }) };
+  },
+
   roundTrips() {
     const g = H.grid({ seed: 9, nx: 28, ny: 28, holes: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
     const v = R.view(H.tiles(g.nodes, g.edges).tiles);
