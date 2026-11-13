@@ -341,10 +341,23 @@
     return { kind: 'corners', list };
   }
 
-  /** Reported hazards for the car's map: { kind:'hazards', list:[{ id, at, title }] }, at most 40. */
-  function hazardsMessage(reports, labels) {
-    const list = (Array.isArray(reports) ? reports : []).filter((h) => h && finite(h.lat) && finite(h.lon)).slice(0, 40)
-      .map((h) => ({ id: String(h.id || ''), at: [+h.lat.toFixed(6), +h.lon.toFixed(6)], title: h.label || (labels && labels[h.kind]) || 'Hazard' }));
+  /**
+   * Reported hazards for the car's map: { kind:'hazards', list:[{ id, at, title }] }, at most 40. `cameras` (the planned
+   * route's t.alpr, cockpit.js attachAlpr) add the speed cameras first, then the plate readers, after the reports, as
+   * "Speed camera" / "Camera" plates (Waze shows them on the car).
+   */
+  const HAZARDS_MAX = 40;
+  function hazardsMessage(reports, labels, cameras) {
+    const at = (h) => [+h.lat.toFixed(6), +h.lon.toFixed(6)];
+    const list = (Array.isArray(reports) ? reports : []).filter((h) => h && finite(h.lat) && finite(h.lon)).slice(0, HAZARDS_MAX)
+      .map((h) => ({ id: String(h.id || ''), at: at(h), title: h.label || (labels && labels[h.kind]) || 'Hazard' }));
+    const cams = (Array.isArray(cameras) ? cameras : []).filter((c) => c && finite(c.lat) && finite(c.lon))
+      .sort((a, b) => (a.kind === 'speed' ? 0 : 1) - (b.kind === 'speed' ? 0 : 1));
+    for (const c of cams) {
+      if (list.length >= HAZARDS_MAX) break;
+      const p = at(c);
+      list.push({ id: `cam:${p[0]},${p[1]}`, at: p, title: c.kind === 'speed' ? 'Speed camera' : 'Camera' });
+    }
     return { kind: 'hazards', list };
   }
 

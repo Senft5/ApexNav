@@ -2632,6 +2632,16 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   // a car screen that connects later asks again and gets the route and the look again
   await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'hello' }); });
   await page.waitForFunction(() => ['route', 'corners', 'look', 'places', 'along'].every((k) => window.__car.some((m) => m.kind === k)));
+  // the route's speed cameras as plates on the car's map (Waze shows them), and none with the phone's camera switch off
+  const camPlates = await page.evaluate(() => { const t = apexDebug.track, i = Math.floor(t.lat.length / 2);
+    t.alpr = [{ type: 'alpr', kind: 'speed', lat: t.lat[i], lon: t.lon[i], dist_m: t.dist[i] }];
+    window.__car = []; window.apex.onNative({ type: 'carplay', action: 'hello' });
+    const on = window.__car.filter((m) => m.kind === 'hazards').pop();
+    apexDebug.state.toggles.lpr = false; window.__car = []; window.apex.onNative({ type: 'carplay', action: 'hello' });
+    const off = window.__car.filter((m) => m.kind === 'hazards').pop();
+    apexDebug.state.toggles.lpr = true; t.alpr = null;
+    return { on: on && on.list.map((h) => h.title), off: off && off.list.map((h) => h.title) }; });
+  check(camPlates.on && camPlates.on.includes('Speed camera') && camPlates.off && !camPlates.off.includes('Speed camera'), 'speed cameras on the car\'s map: ' + JSON.stringify(camPlates));
   // the mute map button
   await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'voice' }); });
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'look' && m.voice === false));

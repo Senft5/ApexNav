@@ -2528,6 +2528,7 @@
       if (track === t) {
         loadTrackOnMap(); render(false);
         const lpr = t.alpr.filter((c) => c.kind !== 'speed').length, spd = t.alpr.length - lpr;
+        carHazards();
         toast([`${lpr} plate-reading camera${lpr === 1 ? '' : 's'}`, spd ? `${spd} speed camera${spd === 1 ? '' : 's'}` : null].filter(Boolean).join(' and ') + ' on this route');
       }
     }
@@ -9646,6 +9647,7 @@
         o ? o.picked : 0, (m) => ApexUnits.long(m, 1)));
       carPost(ApexCarPlay.cornersMessage(t, (m) => sample(t, m), state.noteWords));        // the road book on the car's map (web/carmap.js)
       car.along = ''; carAlong(t);                                       // the car forgets the last route's places with it
+      carHazards();                                                      // and its cameras
     }
     // The cafés and fuel along the route by name on the car's route preview (the owner, 2026-11-11). t.scenic comes later
     // than the route (attachScenic): it is sent then, and again with every route the car is sent.
@@ -9665,8 +9667,11 @@
       car.look = key;
       carPost(msg);
     }
+    // with the planned route's speed cameras (and plate readers) as plates, as Waze shows them on the car: the same switch as
+    // the phone's camera notes (toggles.lpr), from map data (web/cameras.js), never a camera we weren't told of
     function carHazards() {
-      const msg = ApexCarPlay.hazardsMessage(reported.list, ApexHazardReports.LABEL), key = msg.list.map((h) => h.id).join(',');
+      const t = plannedRoute && car.route && Array.isArray(plannedRoute.alpr) && state.toggles.lpr ? plannedRoute : null;
+      const msg = ApexCarPlay.hazardsMessage(reported.list, ApexHazardReports.LABEL, t ? t.alpr : null), key = msg.list.map((h) => h.id).join(',');
       if (key === car.hazards) return;
       car.hazards = key;
       carPost(msg);
@@ -10458,7 +10463,7 @@
       else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) carAsked(() => reportHazard(m.kind, null, true));
       else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
-      else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = ''; car.limitKey = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
+      else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = null; car.limitKey = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
         carPost(carPlaces());                   // a car screen that just connected gets everything again
         carPost(ApexCarPlay.loopsMessage(loopBy, ApexUnits.metric()));   // and the loop dial's lengths for its Loops
         peekTimeAttack();                                                // and this week's loop for its Places, if you've entered it

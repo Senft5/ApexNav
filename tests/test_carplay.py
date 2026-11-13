@@ -278,6 +278,9 @@ console.log(JSON.stringify({
   // M-3 (panel round 1): the plates in the driver's notation, as the strip's next cells print it
   plainPlates: C.cornersMessage({ events: [...t.events, { type: 'corner', dir: 'L', severity: 2, shape: 'square', dist_m: 1000 }, { type: 'corner', dir: 'R', severity: 1, shape: 'acute', dist_m: 1100 }] }, at, 'plain').list.map((c) => c.text),
   rallyPlates: C.cornersMessage({ events: [{ type: 'corner', dir: 'L', severity: 4, grade: '-', dist_m: 10 }, { type: 'corner', dir: 'L', severity: 2, shape: 'square', dist_m: 1000 }, { type: 'corner', dir: 'R', severity: 1, shape: 'acute', dist_m: 1100 }] }, at, 'rally').list.map((c) => c.text),
+  cams: C.hazardsMessage([{ id: 7, kind: 'gravel', lat: 35.2, lon: -83.5 }], { gravel: 'Gravel' },
+    [{ kind: 'alpr', lat: 35.31, lon: -83.41 }, { kind: 'speed', lat: 35.3, lon: -83.4 }, { kind: 'speed', lat: null, lon: 1 }]).list,
+  camsFull: C.hazardsMessage(Array.from({ length: 40 }, (_, i) => ({ id: i, kind: 'gravel', lat: 35, lon: -83 })), {}, [{ kind: 'speed', lat: 35.3, lon: -83.4 }]).list.length,
   hazards: C.hazardsMessage([{ id: 7, kind: 'gravel', lat: 35.2, lon: -83.5 }, { id: 8, label: 'Cattle grid', lat: 35, lon: -83 }, { id: 9, kind: 'x' }], { gravel: 'Gravel' }),
   along: C.alongMessage([{ kind: 'cafe', name: 'Bean There Coffee' }, { kind: 'view', name: 'Overlook' }, { kind: 'fuel', name: 'Shell' }, { kind: 'fuel', name: 'Speedway' },
     { kind: 'fuel', name: 'Marathon' }, { kind: 'fuel', name: null }]),
@@ -540,6 +543,18 @@ def test_the_car_offers_the_same_loop_times_as_the_phones_dial():
     assert '("1½ hours", 90, nil)' in row and '("3 hours", 180, nil)' in row
     # and the page takes every one of them: it used to accept only 30, 60 and 120, so the car's 1½ and 3 hours did nothing
     assert "m.action === 'loop' && LOOP_MINUTES.includes(m.minutes)" in cockpit_source()
+
+
+def test_the_cars_map_shows_the_routes_speed_cameras(maps):
+    """Waze shows speed cameras on the car; Vetta knew the route's cameras (the phone's notes) and the car didn't."""
+    gravel, speed, lpr = maps["cams"]
+    assert gravel["title"] == "Gravel", "reports first"
+    assert speed == {"id": "cam:35.3,-83.4", "at": [35.3, -83.4], "title": "Speed camera"}, "speed cameras before plate readers"
+    assert lpr["title"] == "Camera" and len(maps["cams"]) == 3, "a camera with no place is dropped"
+    assert maps["camsFull"] == 40
+    js = cockpit_source()
+    assert "Array.isArray(plannedRoute.alpr) && state.toggles.lpr ? plannedRoute : null;" in js, "the phone's camera switch"
+    assert "carHazards();                                                      // and its cameras" in js
 
 
 def test_off_route_the_car_says_rerouting(maps):
