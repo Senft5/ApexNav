@@ -6,6 +6,13 @@ export const ISSUER = "https://token.actions.githubusercontent.com";
 export const AUDIENCE = "vetta-data";
 export const REPO = "senft5/apexnav";              // compared lower-case (GitHub's names are case-insensitive)
 export const REF = "refs/heads/main";
+/** GitHub's ids for the repository and its owner: a name can be freed and taken again (a rename, a deleted account), an id
+ *  can't. */
+export const REPO_ID = "1432495043", OWNER_ID = "55918175";
+/** Only the workflows that upload map data, as files on main (workflow_ref): any other workflow on main, or one that runs
+ *  a pull request's code with main's token (pull_request_target), is refused. */
+export const WORKFLOWS = [".github/workflows/data-mirror.yml", ".github/workflows/graph-us.yml"];
+const EVENTS = ["push", "schedule", "workflow_dispatch", "workflow_run"];
 const JWKS_URL = `${ISSUER}/.well-known/jwks`;
 const JWKS_MS = 3600_000, SKEW_S = 60;
 
@@ -47,6 +54,9 @@ export async function verifyGitHubOidc(token: string, now = Date.now()): Promise
   if (c.iss !== ISSUER || !aud.includes(AUDIENCE)) return null;
   if (typeof c.exp !== "number" || c.exp < s - SKEW_S || (typeof c.nbf === "number" && c.nbf > s + SKEW_S)) return null;
   if (String(c.repository).toLowerCase() !== REPO || c.ref !== REF) return null;
+  if (String(c.repository_id) !== REPO_ID || String(c.repository_owner_id) !== OWNER_ID) return null;
+  if (!EVENTS.includes(String(c.event_name))) return null;
+  if (!WORKFLOWS.some((w) => String(c.workflow_ref).toLowerCase() === `${REPO}/${w}@${REF}`)) return null;
   let key: CryptoKey | null;
   try { key = await keyFor(head.kid, now); } catch { return null; }
   if (!key) return null;
