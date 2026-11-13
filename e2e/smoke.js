@@ -833,7 +833,7 @@ flow('a deliberate detour: one quiet "Rerouting", the new route goes the way the
   });
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); if (m && m.cmd === 'car') window.__car.push(m); } } } }; });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex && window.apex.live, null, { timeout: 20000 });
   await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.96, lon: -83.92 }, { lat: 36.06, lon: -83.92 }], 'route_dest', 'To the ridge', null,
@@ -903,6 +903,11 @@ flow('a deliberate detour: one quiet "Rerouting", the new route goes the way the
   check(!strips.some((s) => /Checking route|Off route|Wrong way/.test(s)), 'no flip-flop words: ' + [...new Set(strips)].join(' | '));
   const runs = strips.map((s) => /Rerouting/.test(s)).reduce((n, on, q, a) => n + (on && !a[q - 1] ? 1 : 0), 0);
   check(runs === 1, `"Rerouting…" on the status line once, in one run (${runs}): ` + [...new Set(strips)].join(' | '));
+  // the car: its card says "Rerouting…" once (CarPlay's paused trip) in place of the old turn frozen, then guides the new route
+  const carSeq = await page.evaluate(() => window.__car.filter((m) => m.kind === 'paused' || m.kind === 'guide').map((m) => m.kind === 'paused' ? `paused:${m.reason}:${m.text}` : 'guide'));
+  const pauses = carSeq.filter((k) => k.startsWith('paused'));
+  check(pauses.length === 1 && pauses[0] === 'paused:rerouting:Rerouting…' && carSeq.lastIndexOf('guide') > carSeq.indexOf(pauses[0]),
+    'the car: Rerouting once, then guidance again: ' + JSON.stringify([...new Set(carSeq)]));
   // the map: the old line until the new one, swapped in one redraw, never cleared; no camera fit while driving, no jump
   const during = out.lines.slice(linesBefore);
   check(during.length === 1 && during[0] > 0 && !out.lines.includes(0), 'the route line replaced once, never cleared: ' + JSON.stringify(out.lines));

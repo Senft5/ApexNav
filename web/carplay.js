@@ -265,6 +265,19 @@
   }
 
   /**
+   * Off the route in a live drive: the car's card says what the phone's status line says (cockpit.js offRouteText), as
+   * CarPlay's own paused trip, never the last turn with its distance frozen while the car drives away from it (Apple Maps
+   * and Waze show "Rerouting" there). `words` null: on route, no message. { kind:'paused', key, reason, text }, `reason`
+   * 'rerouting' while a new route is coming, else 'proceed' (Off route, Wrong way, no signal): CPTripPauseReason.
+   */
+  function pausedMessage(words) {
+    const w = String(words || '').trim();
+    if (!w) return null;
+    const text = clip(w);
+    return { kind: 'paused', key: `off:${text}`, reason: /^Rerouting/.test(w) ? 'rerouting' : 'proceed', text };
+  }
+
+  /**
    * The car's Loops list as the phone's loop dial (cockpit.js labelLoops): `by` 'time' gives its five times, otherwise its
    * five distances in the driver's units (`metric`), so the car never offers lengths the phone's dial doesn't.
    * { kind:'loops', list:[{ name, minutes }] | [{ name, miles }] }, the miles kept as the dial keeps them.
@@ -582,7 +595,7 @@
     return { step, reset };
   }
 
-  const api = { sightMessage, limitMessage, stopsMessage, line, routeMessage, loopsMessage, laneGlyphs, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
+  const api = { sightMessage, limitMessage, stopsMessage, pausedMessage, line, routeMessage, loopsMessage, laneGlyphs, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
                 recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
   api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
   api.sightTag = sightTag;                                             // panel round 2, TH-2

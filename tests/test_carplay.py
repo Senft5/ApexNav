@@ -298,6 +298,7 @@ console.log(JSON.stringify({
     { kind: 'view', name: 'Overlook', lat: 35.3, lon: -84, m: 3000 }, { kind: 'charge', name: 'EVgo', lat: 35.4, lon: -84, m: 1100 }, { kind: 'fuel', name: 'Behind', lat: 35, lon: -84, m: 900 }], 1000,
     (m) => `${(m / 1609.344).toFixed(1)} mi`),
   stopsNone: C.stopsMessage(null, 0),
+  paused: ['Rerouting…', 'Wrong way · no signal to reroute', 'Off route', null, ''].map((w) => C.pausedMessage(w)),
   limits: [C.limitMessage(54.7, 'mph'), C.limitMessage(80, 'km/h'), C.limitMessage(null, 'mph'), C.limitMessage(0, 'mph'), C.limitMessage(500, 'mph')],
   loops: [C.loopsMessage('time', false), C.loopsMessage('distance', false), C.loopsMessage('distance', true)],
   offerUndo: C.offerMessage('o8', 'Pothole reported', '', 'Undo', 5000, 'OK'),
@@ -539,6 +540,20 @@ def test_the_car_offers_the_same_loop_times_as_the_phones_dial():
     assert '("1½ hours", 90, nil)' in row and '("3 hours", 180, nil)' in row
     # and the page takes every one of them: it used to accept only 30, 60 and 120, so the car's 1½ and 3 hours did nothing
     assert "m.action === 'loop' && LOOP_MINUTES.includes(m.minutes)" in cockpit_source()
+
+
+def test_off_route_the_car_says_rerouting(maps):
+    """Apple Maps and Waze say "Rerouting" on the car; Vetta's card kept the last turn, its distance frozen, while off route."""
+    rr, wrong, off, none, empty = maps["paused"]
+    assert rr == {"kind": "paused", "key": "off:Rerouting…", "reason": "rerouting", "text": "Rerouting…"}
+    assert wrong["reason"] == "proceed" and len(wrong["text"]) <= 24 and wrong["text"].startswith("Wrong way")
+    assert off["reason"] == "proceed" and off["text"] == "Off route"
+    assert none is None and empty is None, "on the route: the maneuver, never a pause"
+    js = cockpit_source()
+    assert "state.cursorIdx < 0 ? ApexCarPlay.pausedMessage(offRouteText()) : null;" in js, "the status line's own words"
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert 'case "paused":' in swift and "session.pauseTrip(for: rerouting ? .rerouting : .proceedToRoute, description: text)" in swift
+    assert "maneuver = nil; maneuverKey = \"\"" in swift, "the next guide resumes the trip"
 
 
 def test_add_a_stop_from_the_car(maps):

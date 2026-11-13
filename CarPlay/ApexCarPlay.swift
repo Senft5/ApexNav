@@ -221,6 +221,11 @@ final class ApexCar {
                           lanes: (dict["lanes"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { UIImage(data: $0, scale: 3) })
             if !driving { driving = true; eachMap { $0.setMode() }; scene?.driveStarted() }
             scene?.guideChanged()
+        case "paused":
+            // off the route (web/carplay.js pausedMessage): CarPlay's own paused trip says "Rerouting…" (or Off route) in place of
+            // the last turn, whose distance froze while the car drove away from it; the next `guide` resumes the trip
+            guard driving, let text = dict["text"] as? String, !text.isEmpty else { return }
+            scene?.pauseGuide(rerouting: (dict["reason"] as? String) == "rerouting", text: String(text.prefix(ApexCar.glanceMax)))
         case "start":
             // U-59: the page entered a drive, with a route or none (a free drive sends no maneuver until it has driven a little, and
             // used to never reach the car at all): the navigation session, End and the drive's map buttons, and the record card
@@ -738,6 +743,14 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             let driven = g.drivenM.map { ApexCar.shared.distance($0) } ?? Measurement(value: -1, unit: unit)
             mapTemplate?.updateEstimates(CPTravelEstimates(distanceRemaining: driven, timeRemaining: -1), for: t)
         }
+    }
+
+    /// Off the route: the session's paused trip (CPTripPauseReason) with the phone's words, Apple Maps' "Rerouting" card. The
+    /// maneuver is forgotten, so the next `guide` (on the new route, or back on this one) sets one again, which resumes the trip.
+    @MainActor func pauseGuide(rerouting: Bool, text: String) {
+        guard let session else { return }
+        session.pauseTrip(for: rerouting ? .rerouting : .proceedToRoute, description: text)
+        maneuver = nil; maneuverKey = ""
     }
 
     /// U-62: after End the car goes idle (Where to?, Loops, Places, Drive), never a trip preview of the route just finished: the
