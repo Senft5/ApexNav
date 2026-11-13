@@ -425,10 +425,11 @@
     // owner's Edit livery, or for a supporter the meter and their own Decals; for everyone else it is a line, not a key.
     function liveryFoot(c, redo) {
       const l = c.livery || { tier: 'plain', decals: 0, next: null, supporters: [] };
-      // a crew-mate on a Plain crew with nothing to open: no line at all (walkthrough 2026-11-12: "Plain livery" alone told
-      // them nothing and left them nothing to do). The owner keeps it, above their Edit livery.
+      // a Plain crew with nothing to open: no line at all (walkthrough 2026-11-12: "Plain livery" alone told a crew-mate
+      // nothing and left them nothing to do). The owner too (2026-11-13): their Edit livery is on the cover now, so the foot
+      // line sat alone under the page, saying what the cover already shows
       const supporter = !c.is_owner && l.mine && l.mine.pro && !l.granted;
-      if (!c.is_owner && !supporter && !l.granted && !l.decals) return null;
+      if (!supporter && !l.granted && !l.decals) return null;
       const line = el('p', { className: 'note cp-livery-line', textContent: liveryShort(l) });
       const foot = el('div', { className: 'cp-livery-foot' }, line);
       if (supporter) foot.append(btn('Your Decals', () => liverySheet(c, redo), 'linkbtn'));

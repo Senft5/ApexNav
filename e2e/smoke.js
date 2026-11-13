@@ -3103,7 +3103,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
     const name = (x) => x.classList.contains('cp-week') ? 'run' : (x.querySelector(':scope > .cp-sec h3') || {}).textContent || x.className;
     const body = [...document.querySelectorAll('.crew-page .cp-body > *')].map((x) => x.classList.contains('cp-title') ? 'title' : x.classList.contains('cp-livery-foot') ? 'livery' : x.querySelector('.cp-tabs') ? 'tabs' : x.className);
     return { body, panes: Object.fromEntries([...document.querySelectorAll('.cp-pane')].map((p) => [p.id, [...p.children].map(name).filter(Boolean)])) }; });
-  check(JSON.stringify(order.body) === '["title","tabs","livery"]' && JSON.stringify(order.panes['cpPane-drives'].slice(0, 2)) === '["run","Members"]'
+  check(JSON.stringify(order.body) === '["title","tabs"]' && JSON.stringify(order.panes['cpPane-drives'].slice(0, 2)) === '["run","Members"]'
     && order.panes['cpPane-chat'].length === 1 && order.panes['cpPane-board'][0] === 'Vetta Score board', 'the page in order: ' + JSON.stringify(order));
   check(await page.evaluate(() => ![...document.querySelectorAll('#cpPane-chat h3')].some((h) => h.textContent === 'Chat')), 'the Chat tab names the chat: no second "Chat" heading under it');
   check(!(await page.$$('.crew-page .cp-livery, .crew-page .cp-meter')).length, 'no livery box or meter on the page (they are in Edit livery)');
@@ -3169,7 +3169,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.waitForFunction(() => document.querySelector('.cp-meet [data-crew-home]').getAttribute('aria-checked') === 'true', null, { timeout: 10000 });
   const home = JSON.parse(find('/api/crews/k1/home').b);
   check(home.on === true && home.lat === 39.25 && home.lon === -84.55, 'no Home pinned: the switch turns on with the square the phone is in: ' + JSON.stringify(home));
-  check((await page.textContent('.cp-livery-line')).trim() === 'Plain livery', 'the livery line says Plain and nothing it lacks (the owner, 2026-11-10: no Pro nudge on the crew page)');
+  check(!(await page.$('.cp-livery-line')) && !/Plain livery/.test(await page.textContent('.crew-page')), 'a Plain crew\'s owner sees no foot line either: Edit livery is on the cover (2026-11-13; the owner, 2026-11-10: no Pro nudge on the crew page)');
 }, { geolocation: { latitude: 39.2, longitude: -84.6 }, permissions: ['geolocation'] });
 
 flow('build threads: start one from a car, add a step, a friend suggests and it shows on a red rule (Worker stubbed, REVIEW.md roadmap 23)', async (page, base) => {
@@ -4452,6 +4452,13 @@ flow('shared routes: one a friend shared shows on People, Friends, under From fr
   await page.click('#routeSharePick button:has-text("@alice")');
   await page.click('#routeSharePick button:has-text("Ridge Runners")');
   check(await goes() === 'Goes to @alice and Ridge Runners. The line only, first 400 m hidden.', 'it names who gets it: ' + await goes());
+  check(!(await page.$('#routeSharePick button:text-is("Cancel")')), 'one Cancel on screen, the route card\'s: the share panel has none');
+  await page.click('#routeShareBtn');
+  check(await page.evaluate(() => !document.getElementById('routeSharePick').childElementCount), 'Share again closes the panel');
+  await page.click('#routeShareBtn');
+  await page.waitForSelector('#routeSharePick .share-goes');
+  await page.click('#routeSharePick button:has-text("@alice")');
+  await page.click('#routeSharePick button:has-text("Ridge Runners")');
   await page.click('#routeSharePick button:has-text("Send")');
   for (let i = 0; i < 30 && !posted.length; i++) await page.waitForTimeout(100);
   check(posted.length === 1 && JSON.stringify(posted[0].friends) === '["alice"]' && JSON.stringify(posted[0].crews) === '["k1"]', 'it goes to the ones named: ' + JSON.stringify(posted[0] && { f: posted[0].friends, c: posted[0].crews }));
@@ -5734,6 +5741,10 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   const grid = await page.$$eval('.who-grid > .who-n', (n) => n.map((x) => x.textContent + (x.classList.contains('focus') ? '*' : '')));
   check(JSON.stringify(grid) === '["@bob","@cara*","@eve"]', 'one grid, her row marked: ' + JSON.stringify(grid));
   check(await page.evaluate(() => [...document.querySelectorAll('.who-grid .who-c')].slice(4, 8).map((c) => c.textContent).join('|')) === '10 min|✓|–|–', 'her cells: where (10 min), scores on, times off, no car shown');
+  const whoRows = await page.evaluate(() => { const g = document.querySelector('.who-grid'), n = g.querySelector('.who-n'), c = n.nextElementSibling;
+    return { step: Math.abs(n.getBoundingClientRect().bottom - c.getBoundingClientRect().bottom), carNote: /never a public crew/.test(g.parentElement.textContent),
+      carLink: g.nextElementSibling && /Who sees each car/.test(g.nextElementSibling.textContent) }; });
+  check(whoRows.step < 0.5 && !whoRows.carNote && whoRows.carLink, 'a row is one line across, and Who sees each car sits under the grid, with no sentence about cars: ' + JSON.stringify(whoRows));
   await page.click('.who-grid button[aria-label="@cara sees your times"]');
   await page.waitForFunction(() => document.querySelector('.who-grid button[aria-label="@cara sees your times"]').getAttribute('aria-checked') === 'true');
   check(posted.some(([m, p, b]) => m === 'PUT' && p === '/api/grants' && /"audience_id":"U2"/.test(b) && /"share_times":true/.test(b)), 'Times changed in its cell');

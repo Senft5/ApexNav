@@ -6166,11 +6166,14 @@
     function shareRouteWith(handle) {
       shareTo = handle;
       showView(null); openPlan(true);
-      if (plannedRoute) { $('routeShareBtn').click(); setTimeout(() => $('routeSharePick').scrollIntoView({ block: 'nearest' }), 50); }
+      // the panel emptied first: Share opens and closes it
+      if (plannedRoute) { $('routeSharePick').replaceChildren(); $('routeShareBtn').click(); setTimeout(() => $('routeSharePick').scrollIntoView({ block: 'nearest' }), 50); }
       else { $('destInput').focus(); toast(`Plan a route, then Share on its card: @${handle} is picked.`); }
     }
     $('routeShareBtn').addEventListener('click', async () => {
       const t = plannedRoute, box = $('routeSharePick');
+      // Share opens and closes its panel, so the panel has no Cancel of its own under the route card's Cancel (which drops the route)
+      if (box.childElementCount) { box.replaceChildren(); return; }
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
       box.replaceChildren(el('p', { className: 'note', textContent: 'Loading your friends and crews…' }));
       let friends = [], crews = [];
@@ -6205,7 +6208,7 @@
           const j = await jsonOf(r);
           if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of shares today.' : 'Couldn\'t share it. Try again.'); return; }
           toast(j && j.shared ? `Shared. They'll find it in People.` : 'Nobody to share it with.'); box.replaceChildren();
-        }, 'ink-btn solid'), btn('Cancel', () => box.replaceChildren(), 'linkbtn')), ...bookPart());
+        }, 'ink-btn solid')), ...bookPart());
       box.scrollIntoView({ block: 'nearest' });
     });
     // From friends (REVIEW_PEOPLE P-13/P-14): what friends shared with you, newest first, with when; `list` is the render's read.

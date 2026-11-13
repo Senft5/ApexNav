@@ -51,7 +51,7 @@
 
   const STYLE = `
     .who-sees { max-width: 560px; width: 100%; margin: 0 auto; display: grid; gap: 14px; align-content: start; }
-    .who-grid { display: grid; grid-template-columns: minmax(0, 1fr) repeat(4, 56px); align-items: center; }
+    .who-grid { display: grid; grid-template-columns: minmax(0, 1fr) repeat(4, 56px); align-items: stretch; }   /* stretch: a row's cells are one height, so its rule is one line */
     .who-grid > .who-h { font-size: 12px; font-weight: 600; color: var(--panel-dim); text-align: center; padding: 6px 0; letter-spacing: 0.04em; text-transform: uppercase; }
     .who-grid > .who-g { grid-column: 1 / -1; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); padding: 14px 0 4px; border-bottom: 1px solid var(--rule); }
     .who-grid > .who-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; padding: 0 4px 0 0; min-height: 48px; line-height: 48px; border-bottom: 1px solid var(--hair, var(--rule)); }
@@ -143,7 +143,8 @@
         group('Crews', list.filter((r) => r.kind === 'crew'));
         if (list.length) kids.push(grid);
         else kids.push(el('p', { className: 'note', textContent: 'No friends or crews yet, so nobody sees anything of yours.' }));
-        kids.push(el('p', { className: 'note', textContent: 'A car is seen by friends and private crews, never a public crew.' }));
+        // the Car column says who sees it; the link under it changes that, car by car
+        kids.push(el('div', { className: 'row' }, btn('Who sees each car', () => { close(); if (page.openGarage) page.openGarage('cars'); }, 'linkbtn')));
 
         // everyone: road feel without your name, and the places where nobody sees you
         const rf = page.roadFeel ? page.roadFeel.get() : null;
@@ -155,8 +156,7 @@
         }
         const z = page.zones ? page.zones().length : 0;
         kids.push(el('div', { className: 'fm-row' }, el('span', { textContent: 'Home zones' }),
-          el('span', { className: 'note' }, z ? `${z} zone${z === 1 ? '' : 's'} · nobody sees you there · ` : 'None yet · ', btn(z ? 'Change' : 'Add one', () => { close(); if (page.openGarage) page.openGarage('privacy'); }, 'linkbtn'))),
-          el('div', { className: 'row' }, btn('Who sees each car', () => { close(); if (page.openGarage) page.openGarage('cars'); }, 'linkbtn')));
+          el('span', { className: 'note' }, z ? `${z} zone${z === 1 ? '' : 's'} · nobody sees you there · ` : 'None yet · ', btn(z ? 'Change' : 'Add one', () => { close(); if (page.openGarage) page.openGarage('privacy'); }, 'linkbtn'))));
         box.replaceChildren(...kids);
         if (focusEl) { focusEl.scrollIntoView({ block: 'center' }); focus = null; }
       };
