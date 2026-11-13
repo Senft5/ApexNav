@@ -6595,6 +6595,7 @@
       // F-03: People and the Garage are never drawn without their modules while they are open; once loaded, needSocial draws them
       if (!socialIn && !socialFailed && (view === 'people' || view === 'garage')) { needSocial(); return; }
       accountMe = me && me.signed_in ? me : null;
+      if ($('myAccountDelGo')) $('myAccountDelGo').hidden = !accountMe;   // Your data's way to Delete account, signed in only
       if (accountMe && accountMe.member) loadCrewHazardKinds();
       // Where to? opened before the account came back: its time attack row's peek skipped then, so it goes now (CI 2026-11-12)
       if (accountMe && accountMe.member && $('planPanel').classList.contains('open')) peekTimeAttack();
@@ -7432,6 +7433,7 @@
       try { if (window.caches) { await caches.delete('kokoro-voices'); for (const k of await caches.keys()) if (k.startsWith('apexnav-shell-')) await caches.delete(k); } } catch (_) {}
       toast('Offline data deleted.'); renderMyData();
     });
+    $('myAccountDelGo').addEventListener('click', () => { if (window.ApexGarageSettings && ApexGarageSettings.ui) { ApexGarageSettings.ui.close(); ApexGarageSettings.ui.open('account'); } });
     $('myDrivesDelBtn').addEventListener('click', async () => {
       const list = await ApexRecording.ids();
       if (!list.length) { toast('No drives on this phone.'); return; }
@@ -8738,7 +8740,9 @@
     // line and the closures are then that hour's. It runs after the card is up and never holds it (WHEN_AFTER_MS).
     const WHEN_AFTER_MS = 1200;
     let whenState = null, whenTimer = 0, whenAbort = null;
-    const whenClock = (ms) => `${new Date(ms).toDateString() === new Date().toDateString() ? '' : 'tomorrow '}${new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    // "2:00 PM tomorrow": the day after the hour, so every sentence it goes into reads ("Better at 2:00 PM tomorrow", not
+    // "Better at tomorrow 2:00 PM"; TestFlight sweep 2026-11-13)
+    const whenClock = (ms) => `${new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${new Date(ms).toDateString() === new Date().toDateString() ? '' : ' tomorrow'}`;
     function whenReset() {
       clearTimeout(whenTimer);
       if (whenAbort) whenAbort.abort();

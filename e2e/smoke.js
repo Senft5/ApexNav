@@ -6393,6 +6393,28 @@ flow('Settings behind the gear: three short lists, each row saying what it is se
   await page.evaluate(() => document.querySelector('[data-units="imperial"]').click());
 }, { viewport: { width: 393, height: 852 }, hasTouch: true });
 
+flow('Your data: Delete account is a row that opens Account, signed in only (it was a sentence to follow by hand, 2026-11-13)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  let signedIn = false;
+  await page.route('**/api/**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: r.request().url().endsWith('/api/me') ? JSON.stringify(signedIn ? { signed_in: true, member: true, handle: 'me' } : { signed_in: false }) : '[]' }));
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForFunction(() => window.apexDebug && !document.getElementById('boot') && document.getElementById('garageGear'), null, { timeout: 20000 });
+  await page.waitForTimeout(800);
+  check(await page.evaluate(() => document.getElementById('myAccountDelGo').hidden), 'signed out: no Delete account row');
+  check(!(await page.evaluate(() => document.querySelector('.garage-pop[data-setting="data"]').textContent.includes('Settings → Account'))), 'no directions to read in its place');
+  signedIn = true;
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && !document.getElementById('boot') && !document.getElementById('myAccountDelGo').hidden, null, { timeout: 20000 });
+  await page.click('#garageGear');
+  await page.click('#garageSettings .nav-row[data-setting="data"]');
+  await page.waitForSelector('.garage-pop[data-setting="data"].open');
+  await page.click('#myAccountDelGo');
+  await page.waitForTimeout(400);
+  const open = await page.evaluate(() => [...document.querySelectorAll('.garage-pop[data-setting].open')].map((p) => p.dataset.setting));
+  check(open.join() === 'account', 'it opens Account, in place of Your data: ' + JSON.stringify(open));
+  check(await page.evaluate(() => [...document.querySelectorAll('.garage-pop[data-setting="account"] button')].some((b) => b.textContent === 'Delete account' && b.getBoundingClientRect().height > 0)), 'where Delete account is');
+}, { viewport: { width: 393, height: 852 }, hasTouch: true });
+
 flow('dev mode: anyone else sees no Dev entry, loads no panel, and settings left on this phone change no plan (the owner 2026-11-09)', async (page, base) => {
   graphDir = graphFixture();
   try {
@@ -8029,7 +8051,8 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   check(g.title === 'Garage' && g.themes === 3 && g.how >= 1 && g.bare === 0 && !g.octane && g.erase === 'rgb(200, 16, 46)/none/none', 'Garage: ' + JSON.stringify(g));
   // 2026-11-10: Your data is the Settings list's rows in three groups (it was eight keys of eight widths): one left edge, one width
   const rowsOf = await page.evaluate(() => { const box = document.querySelector('.data-rows'); return { groups: [...box.querySelectorAll('.nav-group')].map((h) => h.textContent),
-    rows: [...box.querySelectorAll('.nav-row')].map((r) => { const b = r.getBoundingClientRect(); return [r.id, Math.round(b.left), Math.round(b.width), Math.round(b.height)]; }) }; });
+    rows: [...box.querySelectorAll('.nav-row')].filter((r) => !r.hidden).map((r) => {   // signed out: no Delete account row
+      const b = r.getBoundingClientRect(); return [r.id, Math.round(b.left), Math.round(b.width), Math.round(b.height)]; }) }; });
   check(rowsOf.groups.join() === 'Take a copy,Offline,Remove' && rowsOf.rows.length === 7 && new Set(rowsOf.rows.map((r) => r[1] + '/' + r[2])).size === 1 && rowsOf.rows.every((r) => r[3] >= 44),
     'Your data: seven rows in three groups, one edge and width, 44 pt or more: ' + JSON.stringify(rowsOf));
   let alerted = false; page.on('dialog', (d) => { alerted = true; d.dismiss(); });
@@ -8365,7 +8388,7 @@ flow('when to go: the route card says the best time to leave, opens the next day
   const before = asked.length;
   await page.evaluate(() => document.querySelectorAll('#routeWhenRibbon > button')[12].click());
   const key = await page.evaluate(() => ({ text: document.getElementById('routeWhenPlan').textContent, hidden: document.getElementById('routeWhenPlan').hidden, detail: document.getElementById('routeWhenDetail').textContent }));
-  check(!key.hidden && /^Plan for (tomorrow )?\d{1,2}:\d\d/.test(key.text), 'the key names the hour: ' + JSON.stringify(key));
+  check(!key.hidden && /^Plan for \d{1,2}:\d\d\s?[AP]M( tomorrow)?$/.test(key.text), 'the key names the hour: ' + JSON.stringify(key));
   await tap('#routeWhenPlan', 'Plan for the hour');
   await planDone(page);
   await page.waitForFunction(() => !document.getElementById('routeCardWhen').hidden && /^Leaving /.test(document.getElementById('routeWhenLine').textContent), null, { timeout: 25000 });
