@@ -72,6 +72,8 @@ final class ApexCar {
     /// `attack`: this week's time attack loop (its id), which the phone drives as the route itself.
     typealias Place = (name: String, detail: String, coord: CLLocationCoordinate2D?, saved: String?, attack: String?)
     private(set) var places: [Place] = []
+    /// Nearby's kinds for the top of Places (web/carplay.js nearbyKeys): Gas (an electric car's Chargers), Coffee, Food.
+    private(set) var nearbyKinds: [(cat: String, name: String)] = []
     /// The car's Loops list as the phone's loop dial (web/carplay.js loopsMessage): five times or five distances, each sent
     /// back as it came (`minutes` or `miles`). Empty until the page says, and then the dial's five times stand in.
     private(set) var loops: [(name: String, minutes: Int?, miles: Double?)] = []
@@ -237,6 +239,14 @@ final class ApexCar {
                 scene?.driveStarted()
                 scene?.guideChanged()
             }
+        case "nearby":
+            // one kind's nearest places by name (web/carplay.js nearbyMessage), into the list the Places row opened
+            guard let cat = dict["cat"] as? String else { return }
+            let list: [(name: String, detail: String, coord: CLLocationCoordinate2D)] = ((dict["list"] as? [[String: Any]]) ?? []).prefix(12).compactMap { p in
+                guard let name = p["name"] as? String, !name.isEmpty, let c = Self.coord(p["at"]) else { return nil }
+                return (name: String(name.prefix(60)), detail: String(((p["detail"] as? String) ?? "").prefix(40)), coord: c)
+            }
+            scene?.showNearby(cat: cat, list: list, empty: String(((dict["empty"] as? String) ?? "").prefix(80)))
         case "stops":
             // what's ahead to stop at, asked by the Stops key (web/carplay.js stopsMessage); shown as it comes back
             let list: [(name: String, detail: String, lat: Double, lon: Double)] = ((dict["list"] as? [[String: Any]]) ?? []).prefix(8).compactMap { p in
@@ -293,6 +303,10 @@ final class ApexCar {
                 let c = Self.coord(p["at"])
                 guard c != nil || saved != nil || attack != nil else { return nil }
                 return (name: String(name.prefix(60)), detail: String(((p["detail"] as? String) ?? "").prefix(60)), coord: c, saved: saved, attack: attack)
+            }
+            nearbyKinds = ((dict["nearby"] as? [[String: Any]]) ?? []).prefix(3).compactMap { k in
+                guard let cat = k["cat"] as? String, let name = k["name"] as? String, !cat.isEmpty, !name.isEmpty else { return nil }
+                return (cat: String(cat.prefix(16)), name: String(name.prefix(24)))
             }
         case "loops":
             loops = ((dict["list"] as? [[String: Any]]) ?? []).prefix(5).compactMap { r in
@@ -524,8 +538,38 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             return item
         }
         let empty = CPListItem(text: "No places yet", detailText: "Where to? finds one")
-        let t = CPListTemplate(title: "Places", sections: [CPListSection(items: items.isEmpty ? [empty] : items)])
+        // Nearby first, as Apple Maps' Gas, Coffee and Food: a kind opens its nearest places by name
+        let kinds: [CPListItem] = ApexCar.shared.nearbyKinds.map { k in
+            let item = CPListItem(text: k.name, detailText: nil)
+            item.accessoryType = .disclosureIndicator
+            item.handler = { [weak self] _, done in self?.openNearby(cat: k.cat, title: k.name); done() }
+            return item
+        }
+        var sections: [CPListSection] = []
+        if !kinds.isEmpty { sections.append(CPListSection(items: kinds, header: "Nearby", sectionIndexTitle: nil)) }
+        sections.append(CPListSection(items: items.isEmpty ? [empty] : items, header: kinds.isEmpty ? nil : "Your places", sectionIndexTitle: nil))
+        let t = CPListTemplate(title: "Places", sections: sections)
         interfaceController?.pushTemplate(t, animated: true, completion: nil)
+    }
+
+    /// One kind nearby: "Looking nearby…" until the phone's list comes back (ApexCar `case "nearby"`), then its places by
+    /// name and distance; a tap plans the way there, as a place in Where to? does.
+    private var nearbyList: (cat: String, template: CPListTemplate)?
+    @MainActor private func openNearby(cat: String, title: String) {
+        let t = CPListTemplate(title: title, sections: [CPListSection(items: [CPListItem(text: "Looking nearby…", detailText: nil)])])
+        nearbyList = (cat, t)
+        interfaceController?.pushTemplate(t, animated: true, completion: nil)
+        ApexCar.shared.send("nearby", ["cat": cat])
+    }
+    @MainActor fileprivate func showNearby(cat: String, list: [(name: String, detail: String, coord: CLLocationCoordinate2D)], empty: String) {
+        guard let n = nearbyList, n.cat == cat else { return }
+        let items: [CPListItem] = list.map { p in
+            let item = CPListItem(text: p.name, detailText: p.detail.isEmpty ? nil : p.detail)
+            item.handler = { [weak self] _, done in self?.go(to: p.coord, name: p.name); done() }
+            return item
+        }
+        let none = CPListItem(text: empty.isEmpty ? "None nearby" : empty, detailText: nil)
+        n.template.updateSections([CPListSection(items: items.isEmpty ? [none] : items)])
     }
 
     @MainActor private func open(place p: ApexCar.Place) {

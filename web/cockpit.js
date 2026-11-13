@@ -9621,7 +9621,9 @@
         attacks = car.attacks.map((c) => ({ id: c.segment_id, name: c.name,
           detail: [c.featured ? 'Featured' : '', Number.isFinite(c.length_m) ? ApexUnits.long(c.length_m, 1) : ''].filter(Boolean).join(' · ') }));
       } catch (_) {}
-      return ApexCarPlay.placesMessage(recentPlaces(), pinned, saved, (m) => ApexUnits.long(m), attacks);
+      // Nearby first (Apple Maps' Gas, Coffee and Food on the car): the phone's Find nearby kinds, an electric car's Chargers
+      const nearby = window.ApexNearby ? ApexCarPlay.nearbyKeys(ApexNearby.keys(isElectric()), ApexNearby.CATS) : [];
+      return { ...ApexCarPlay.placesMessage(recentPlaces(), pinned, saved, (m) => ApexUnits.long(m), attacks), nearby };
     }
     // Time attack's Drive it (time_attack.js, the phone's or the car's): the loop itself is the route, as a roadbook road is
     async function driveAttack(c, g) {
@@ -10439,6 +10441,11 @@
       else if (m.action === 'offer' && car.offer && m.id === car.offer.id && performance.now() < car.offer.until) car.offer.run();
       else if (m.action === 'disconnect') keepCar(false, m.t);      // Round 3: the car switched off; the drive ends once it stays put
       else if (m.action === 'places') carPost(carPlaces());
+      else if (m.action === 'nearby' && window.ApexNearby && ApexNearby.CATS[m.cat]) {     // a kind from the car's Places: the phone's Find nearby list
+        const cat = m.cat;
+        nearbyFor(cat).then(({ rows, failed }) => carPost(ApexCarPlay.nearbyMessage(cat, ApexNearby.CATS[cat].label, rows, (d) => ApexUnits.long(d),
+          ApexNearby.emptyLine(cat, failed, 8, (d) => ApexUnits.long(d))))).catch(() => carPost(ApexCarPlay.nearbyMessage(cat, ApexNearby.CATS[cat].label, [], null, ApexNearby.emptyLine(cat, true))));
+      }
       else if (m.action === 'attack' && !driveActive) {                  // a time attack you've entered, from the car's Places
         const c = car.attacks.find((x) => String(x.segment_id) === String(m.id));
         let g = [];

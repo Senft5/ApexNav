@@ -301,6 +301,10 @@ console.log(JSON.stringify({
     { kind: 'view', name: 'Overlook', lat: 35.3, lon: -84, m: 3000 }, { kind: 'charge', name: 'EVgo', lat: 35.4, lon: -84, m: 1100 }, { kind: 'fuel', name: 'Behind', lat: 35, lon: -84, m: 900 }], 1000,
     (m) => `${(m / 1609.344).toFixed(1)} mi`),
   stopsNone: C.stopsMessage(null, 0),
+  nearby: C.nearbyMessage('gas', 'Gas', [{ label: 'Pilot', lat: 35.601, lon: -84.1, m: 111 }, { label: '', lat: 1, lon: 1, m: 5 }, { label: 'Shell', lat: 35.6, lon: -84.09, m: 905 }],
+    (m) => `${m} m`, 'No gas on the map within 5 mi.'),
+  nearbyNone: C.nearbyMessage('coffee', 'Coffee', [], null, 'No coffee on the map within 5 mi.'),
+  nearbyKeys: C.nearbyKeys(['charge', 'coffee', 'nope'], { charge: { label: 'Chargers' }, coffee: { label: 'Coffee' } }),
   paused: ['Rerouting…', 'Wrong way · no signal to reroute', 'Off route', null, ''].map((w) => C.pausedMessage(w)),
   limits: [C.limitMessage(54.7, 'mph'), C.limitMessage(80, 'km/h'), C.limitMessage(null, 'mph'), C.limitMessage(0, 'mph'), C.limitMessage(500, 'mph')],
   loops: [C.loopsMessage('time', false), C.loopsMessage('distance', false), C.loopsMessage('distance', true)],
@@ -568,6 +572,21 @@ def test_overview_shows_the_whole_route_while_guiding():
     assert "func overview() {" in native and "follow = false\n        fitRoute(animated: true)" in native
     web = open(os.path.join(ROOT, "web", "carmap.js"), encoding="utf-8").read()
     assert "overview() {" in web and "state.follow = false; fitRoute(" in web
+
+
+def test_nearby_on_the_cars_places(maps):
+    """Apple Maps on CarPlay has Gas, Coffee and Food; the phone had Find nearby and the car didn't."""
+    n = maps["nearby"]
+    assert n["kind"] == "nearby" and n["cat"] == "gas" and n["title"] == "Gas" and n["empty"] == ""
+    assert [r["name"] for r in n["list"]] == ["Pilot", "Shell"] and n["list"][0] == {"name": "Pilot", "detail": "111 m", "at": [35.601, -84.1]}
+    assert maps["nearbyNone"]["list"] == [] and maps["nearbyNone"]["empty"] == "No coffee on the map within 5 mi."
+    assert maps["nearbyKeys"] == [{"cat": "charge", "name": "Chargers"}, {"cat": "coffee", "name": "Coffee"}]
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert 'case "nearby":' in swift and 'ApexCar.shared.send("nearby", ["cat": cat])' in swift
+    assert 'CPListSection(items: kinds, header: "Nearby", sectionIndexTitle: nil)' in swift
+    assert "self?.go(to: p.coord, name: p.name)" in swift, "a tap plans the way there, as Where to? does"
+    js = cockpit_source()
+    assert "nearbyFor(cat).then(({ rows, failed }) => carPost(ApexCarPlay.nearbyMessage(" in js
 
 
 def test_off_route_the_car_says_rerouting(maps):

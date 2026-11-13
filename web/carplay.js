@@ -321,6 +321,23 @@
   }
 
   /**
+   * Nearby on the car (Apple Maps' Gas, Coffee and Food in CarPlay): the phone's Find nearby list (nearby.js list rows
+   * { label, lat, lon, m }) for one kind, nearest first by name and distance (`fmtDist`), at most 12; `empty` the phone's own
+   * line when there are none. { kind:'nearby', cat, title, list:[{ name, detail, at }], empty }. `keys` the kinds as rows
+   * for the car's Places: nearbyKeys(['gas','coffee','food'], CATS) -> [{ cat, name }].
+   */
+  const NEARBY_MAX = 12;
+  function nearbyMessage(cat, title, rows, fmtDist, empty) {
+    const list = (Array.isArray(rows) ? rows : []).filter((r) => r && finite(r.lat) && finite(r.lon) && typeof r.label === 'string' && r.label.trim())
+      .slice(0, NEARBY_MAX).map((r) => ({ name: r.label.trim().slice(0, 60), detail: finite(r.m) && typeof fmtDist === 'function' ? String(fmtDist(r.m)) : '',
+        at: [+r.lat.toFixed(6), +r.lon.toFixed(6)] }));
+    return { kind: 'nearby', cat: String(cat || ''), title: String(title || 'Nearby').slice(0, 40), list, empty: list.length ? '' : String(empty || '').slice(0, 80) };
+  }
+  function nearbyKeys(keys, cats) {
+    return (Array.isArray(keys) ? keys : []).filter((k) => cats && cats[k] && cats[k].label).map((k) => ({ cat: k, name: cats[k].label }));
+  }
+
+  /**
    * The road book on the car's map (web/carmap.js): every corner's rating at its apex, { kind:'corners', list:[{ at, text,
    * tight }] }. `at(m)` places an event that carries no position of its own (a planned route's corners have dist_m only).
    * Panel round 1 M-3: `words` ('plain' | 'rally') is the driver's notation, the strip's next cells' (plain_notes.js
@@ -608,7 +625,7 @@
     return { step, reset };
   }
 
-  const api = { sightMessage, limitMessage, stopsMessage, pausedMessage, line, routeMessage, loopsMessage, laneGlyphs, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
+  const api = { sightMessage, limitMessage, stopsMessage, pausedMessage, nearbyMessage, nearbyKeys, line, routeMessage, loopsMessage, laneGlyphs, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
                 recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
   api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
   api.sightTag = sightTag;                                             // panel round 2, TH-2

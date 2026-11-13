@@ -2602,6 +2602,16 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.id === 'saved_e2e', null, { timeout: 10000 })
     .catch(async () => { throw new Error('the saved route from the car never opened: ' + JSON.stringify(await page.evaluate(() => window.apexDebug.track && window.apexDebug.track.id))); });
   await page.evaluate(() => { ApexSavedRoutes.remove(localStorage, 'saved_e2e'); localStorage.removeItem('apex.pinnedPlaces'); });
+  // Nearby on the car (Apple Maps' Gas, Coffee, Food): the kinds head Places, and one kind comes back nearest first by name
+  check(placesCar.nearby && placesCar.nearby.map((k) => k.name).join('|') === 'Gas|Coffee|Food', 'Nearby heads the car\'s Places: ' + JSON.stringify(placesCar.nearby));
+  await page.evaluate(() => { window.__pois = ApexStages.poisAll; window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true });
+    ApexStages.poisAll = async () => [{ cls: 'fuel', sub: '', name: 'Shell', lat: 35.6, lon: -84.09 }, { cls: 'fuel', sub: '', name: 'Pilot', lat: 35.601, lon: -84.1 },
+      { cls: 'cafe', name: 'Bean There', lat: 35.6, lon: -84.1 }];
+    window.__car = []; window.apex.onNative({ type: 'carplay', action: 'nearby', cat: 'gas' }); });
+  await page.waitForFunction(() => window.__car.some((m) => m.kind === 'nearby'), null, { timeout: 5000 });
+  const nearCar = await page.evaluate(() => { ApexStages.poisAll = window.__pois; return window.__car.find((m) => m.kind === 'nearby'); });
+  check(nearCar.cat === 'gas' && nearCar.title === 'Gas' && nearCar.list.map((r) => r.name).join('|') === 'Pilot|Shell' && nearCar.list.every((r) => /mi$|ft$/.test(r.detail) && Array.isArray(r.at)),
+    'the car\'s Gas nearby, nearest first, by name and distance: ' + JSON.stringify(nearCar));
   // the car's Loops list is the phone's loop dial: distances in your units, and its times once the dial is set to time
   const loopsCar = await page.evaluate(() => { window.apex.onNative({ type: 'carplay', action: 'hello' }); return window.__car.filter((m) => m.kind === 'loops').pop(); });
   check(loopsCar && loopsCar.list.map((r) => r.name).join('|') === '15 mi|30 mi|45 mi|60 mi|90 mi', 'the car gets the dial\'s distances: ' + JSON.stringify(loopsCar));
