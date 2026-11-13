@@ -31,56 +31,56 @@
   const pct = (v) => `${Math.round(v)} %`;
   const times = (v, def) => (v === def ? 'Standard' : v === 0 ? 'Not at all' : `${(+v.toFixed(2))}×`);
   const GROUPS = [['time', 'Time'], ['roads', 'Roads'], ['avoid', 'Avoid'], ['data', 'Data']];
-  // Each slider: id, group, label, hint (one line), min, max, step, def (today's value), show(v), and set(v, all values):
+  // Each slider: id, group, label, hint (one short line, walkthrough 2026-11-13: no walls of text), min, max, step, def (today's value), show(v), and set(v, all values):
   // the tune it makes ({ router?, engine?, levels?, hwy? }). Multipliers (×) scale the code's numbers; the time ones are the numbers.
   const SLIDERS = [
-    { id: 'funTime', group: 'time', label: 'Fun: extra time for better road', hint: 'How much longer than the quickest way Fun may take for better road (plus a few minutes on short trips).',
+    { id: 'funTime', group: 'time', label: 'Fun: extra time for better road', hint: 'How much longer than Quick a Fun route may take.',
       min: 10, max: 100, step: 5, def: 35, show: (v) => `up to ${pct(v)}`,
       set: (v, n) => ({ levels: { 'fun.budget': v / 100, 'fun.slackS': Math.round(BASE.levels['fun.slackS'] * v / 35), ...price('fun', n).levels }, router: { ...reach('fun', v / 35), ...price('fun', n).router } }) },
-    { id: 'funEager', group: 'time', label: 'Fun: how readily it spends it', hint: 'Higher takes the extra time for a smaller gain in road; lower stays nearer the quickest.',
+    { id: 'funEager', group: 'time', label: 'Fun: how readily it spends it', hint: 'Higher trades more time for a smaller gain.',
       min: 0.25, max: 4, step: 0.25, def: 1, show: (v) => times(v, 1),
       set: (v, n) => price('fun', n) },
-    { id: 'maxTime', group: 'time', label: 'Long way: extra time for better road', hint: 'How much longer than the quickest way Long way may take for better road (plus ten minutes on short trips).',
+    { id: 'maxTime', group: 'time', label: 'Long way: extra time for better road', hint: 'How much longer than Quick a Long way route may take.',
       min: 30, max: 200, step: 10, def: 90, show: (v) => `up to ${pct(v)}`,
       set: (v, n) => ({ levels: { 'max.budget': v / 100, 'max.slackS': Math.round(BASE.levels['max.slackS'] * v / 90), ...price('max', n).levels }, router: { ...reach('max', v / 90), ...price('max', n).router } }) },
-    { id: 'maxEager', group: 'time', label: 'Long way: how readily it spends it', hint: 'Higher takes the extra time for a smaller gain in road; lower stays nearer the quickest.',
+    { id: 'maxEager', group: 'time', label: 'Long way: how readily it spends it', hint: 'Higher trades more time for a smaller gain.',
       min: 0.25, max: 4, step: 0.25, def: 1, show: (v) => times(v, 1),
       set: (v, n) => price('max', n) },
-    { id: 'quickStray', group: 'time', label: 'Quick: time it may give for a nicer road', hint: 'Quick is the quickest way; it takes a nicer road only when that costs no more than this.',
+    { id: 'quickStray', group: 'time', label: 'Quick: time it may give for a nicer road', hint: 'Quick takes a nicer road only when it costs no more than this.',
       min: 0, max: 300, step: 15, def: 60, show: (v) => (v === 0 ? 'never' : v < 60 ? `${v} s` : `${+(v / 60).toFixed(2)} min`),
       set: (v) => ({ levels: { 'quick.slackS': v } }) },
-    { id: 'hwyLimit', group: 'time', label: 'Fun and Long way: when to say take the highway', hint: 'They never drive highways. When the way without them takes more than this, the card says Quick is the way.',
+    { id: 'hwyLimit', group: 'time', label: 'Fun and Long way: when to say take the highway', hint: 'They skip highways. Past this, the card points you to Quick.',
       min: 1.25, max: 4, step: 0.25, def: 2, show: (v) => `${+v.toFixed(2)}× the quickest`,
       set: (v) => ({ hwy: { ABSURD: v }, router: { HWY_ABSURD: v } }) },
-    { id: 'corners', group: 'roads', label: 'Corners', hint: 'How much bends and twisty roads count.',
+    { id: 'corners', group: 'roads', label: 'Corners', hint: 'How much bends count.',
       min: 0, max: 2, step: 0.1, def: 1, show: (v) => times(v, 1),
       set: (v) => ({ router: scale('router', ['W_FUN'], v), engine: scale('engine', ['FUN', 'GAIN'], v) }) },
-    { id: 'quality', group: 'roads', label: 'Road quality and smoothness', hint: 'How much a well-kept, smooth, open road counts, and every mile more of one.',
+    { id: 'quality', group: 'roads', label: 'Road quality and smoothness', hint: 'How much smooth, well-kept roads count.',
       min: 0, max: 2, step: 0.1, def: 1, show: (v) => times(v, 1),
       set: (v) => ({ router: scale('router', ['W_QUALITY', 'ROAD.good'], v), engine: scale('engine', ['QUALITY', 'GOOD_PER_KM'], v) }) },
-    { id: 'scenery', group: 'roads', label: 'Scenery', hint: 'How much forest, water, ridges and views count.',
+    { id: 'scenery', group: 'roads', label: 'Scenery', hint: 'How much forest, water and views count.',
       min: 0, max: 2, step: 0.1, def: 1, show: (v) => times(v, 1),
       set: (v) => ({ router: scale('router', ['W_SCENERY'], v), engine: scale('engine', ['SCENERY'], v) }) },
-    { id: 'towns', group: 'avoid', label: 'Towns and businesses', hint: 'How hard routes keep out of strip malls and busy business streets.',
+    { id: 'towns', group: 'avoid', label: 'Towns and businesses', hint: 'How hard routes avoid strip malls and busy streets.',
       min: 0, max: 3, step: 0.25, def: 1, show: (v) => times(v, 1),
       set: (v) => ({ engine: scale('engine', ['BUSINESS_PER_KM', 'BUSINESS_CAP'], v) }) },
-    { id: 'lights', group: 'avoid', label: 'Traffic lights and stops', hint: 'Higher routes round lights and stop signs; your arrival time still counts only their real wait.',
+    { id: 'lights', group: 'avoid', label: 'Traffic lights and stops', hint: 'Higher routes round them. Arrival times stay true.',
       min: 0.5, max: 4, step: 0.25, def: 1, show: (v) => times(v, 1),
       set: (v) => ({ router: { STOP_AVOID_X: v } }) },
-    { id: 'streets', group: 'avoid', label: 'Side streets and subdivisions', hint: 'How hard routes keep off narrow residential streets and housing estates.',
+    { id: 'streets', group: 'avoid', label: 'Side streets and subdivisions', hint: 'How hard routes avoid residential streets.',
       min: 0, max: 3, step: 0.25, def: 1, show: (v) => times(v, 1),
       set: (v) => ({ router: scale('router', ['ROAD.poor', 'W_NOTPOOR'], v), engine: scale('engine', ['POOR_PER_KM', 'POOR_CAP'], v) }) },
-    { id: 'crowd', group: 'data', label: 'Members\' road data', hint: 'How much what members measured and loved on a road counts against the map\'s own guess.',
+    { id: 'crowd', group: 'data', label: 'Members\' road data', hint: 'How much members\' measurements count.',
       min: 0, max: 3, step: 0.25, def: 1, show: (v) => times(v, 1),
       set: (v) => ({ router: scale('router', ['CROWD_W.rough', 'CROWD_W.flow', 'CROWD_W.loved', 'CROWD_W.bank'], v) }) },
-    { id: 'driver', group: 'data', label: 'Fits how you drive', hint: 'How much a route that suits your driving (from your drives) counts.',
+    { id: 'driver', group: 'data', label: 'Fits how you drive', hint: 'How much a route that suits your driving counts.',
       min: 0, max: 3, step: 0.25, def: 1, show: (v) => times(v, 1),
       set: (v) => ({ engine: scale('engine', ['DRIVER'], v) }) },
   ];
   const BY_ID = Object.fromEntries(SLIDERS.map((s) => [s.id, s]));
   const DEFAULTS = Object.fromEntries(SLIDERS.map((s) => [s.id, s.def]));
   // What the screen says the sliders reach (the plumbing: destination plans in full; loops through our router's search)
-  const AFFECTS = 'Applies to routes to a place, and to the roads a loop is built from (a loop\'s length is yours, so the time sliders don\'t apply to it). Best roads nearby are not changed.';
+  const AFFECTS = 'Changes routes to a place and loops. Not a loop\'s length, nor Best roads nearby.';
 
   /** A slider's value, clamped to its bounds and on its steps; anything not a number is its default. */
   function clampOne(s, v) {
