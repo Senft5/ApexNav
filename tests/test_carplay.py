@@ -547,3 +547,10 @@ def test_a_request_from_the_car_that_fails_says_why_on_the_car(maps):
         assert asked in js
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
     assert 'case "notice":' in swift and "func showNotice(titles: [String])" in swift and "CPAlertTemplate(titleVariants: titles" in swift
+
+
+def test_the_cars_search_puts_your_own_places_first():
+    """As the phone's Where to? does while typing (U-19): Home, a saved route or a time attack by name, then the map's."""
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert "ApexCar.shared.places.filter { $0.name.localizedCaseInsensitiveContains(q) }" in swift
+    assert "done(mine + found)" in swift and "if let ref = item.userInfo as? PlaceRef { open(place: ref.place); return }" in swift
