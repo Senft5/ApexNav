@@ -87,6 +87,7 @@
   <script src="theme_sounds.js" defer></script>
   <script src="audio_bus.js" defer></script>
   <script src="brake_heat.js" defer></script>
+  <script src="sun_ahead.js" defer></script>     <!-- "Sun in your eyes ahead." when the road turns into a low sun (live R-13) -->
   <script src="soundtrack.js" defer></script>
   <script src="week_digest.js" defer></script>
   <script src="drive_card.js" defer></script>
@@ -2106,9 +2107,10 @@
           </section>
           <!-- REVIEW5 §2, U-49: the settings below sit behind the Garage's one gear (web/garage_settings.js moves each
                data-setting section into its own sheet); the page keeps you, your cars, Look and voice and the co-driver -->
-          <section data-panel="garage" data-setting="roadfeel" data-title="Road feel" data-summary="#garageRoadFeelBody .sw">
+          <section data-panel="garage" data-setting="roadfeel" data-title="Road feel" data-summary="#garageRoadFeelBody .sw, #ambientSignIn:not([hidden])">
             <div id="garageRoadFeelBody" class="stack-8"></div>
             <p class="note" id="ambientNote" role="status" aria-live="polite">--</p>
+            <button class="ink-btn" id="ambientSignIn" type="button" hidden>Sign in</button>
           </section>
           <section data-panel="garage" data-setting="account" data-title="Account" data-empty-hides>
             <div id="garageAccountBody" class="stack-12" data-fill></div>

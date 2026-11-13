@@ -75,7 +75,14 @@
     t.objectStore('drives').put(d);
     if (sum) t.objectStore('summaries').put(sum); else t.objectStore('summaries').delete(d.id);   // rebuilt when next listed
     await done(t);
+    keepStorage();
     return sum;
+  }
+  // a kept drive asks the browser, once a session, to keep the storage under pressure (it is the person's own data); best-effort
+  let askedKeep = false;
+  function keepStorage() {
+    if (askedKeep) return; askedKeep = true;
+    try { const st = root.navigator && root.navigator.storage; if (st && st.persist) st.persist().catch(() => {}); } catch (_) {}
   }
   /** Changes a few fields of a stored drive (tags, a note, shared) in one transaction; its summary follows. */
   const META = ['name', 'tags', 'note', 'contributed', 'ended'];

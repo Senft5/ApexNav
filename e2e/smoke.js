@@ -1995,7 +1995,9 @@ flow('a reported road closure the route still drives is on the route card (Worke
     const req = JSON.parse(route.request().postData() || '{}');
     route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
   });
-  let closures = [{ id: 'c1', kind: 'closure', lat: 35.86255, lon: -83.94135, heading: null, confirms: 1, clears: 0, m: 0 }];
+  let closures = [{ id: 'c1', kind: 'closure', lat: 35.86255, lon: -83.94135, heading: null, confirms: 1, clears: 0, m: 0 },
+    { id: 'h1', kind: 'pothole', lat: 35.85, lon: -83.94, heading: null, confirms: 2, clears: 0, m: 0 },        // confirmed: in the search
+    { id: 'h2', kind: 'gravel', lat: 35.84, lon: -83.94, heading: null, confirms: 0, clears: 0, m: 0 }];       // one driver's: not
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url());
     if (u.pathname === '/api/hazards') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(closures) });
@@ -2010,6 +2012,8 @@ flow('a reported road closure the route still drives is on the route card (Worke
   await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 20000 });
   await page.waitForFunction(() => /Passes a reported road closure/.test(document.getElementById('routeCardSub').textContent), null, { timeout: 10000 });
   check(Array.isArray(await page.evaluate(() => apexDebug.lastClosed)), 'the plan carried the closures to our router');
+  const rh = await page.evaluate(() => apexDebug.lastRoadHazards);
+  check(JSON.stringify(rh) === JSON.stringify([{ lat: 35.85, lon: -83.94 }]), 'the plan carried the confirmed pothole to our router, not the unconfirmed gravel: ' + JSON.stringify(rh));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('avoid police reports, driving: a report that lands on the route ahead is offered once with Go round, which routes round it (Worker and router stubbed)', async (page, base) => {
@@ -4861,6 +4865,11 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
     const body = c && c.querySelector('.cp-more-body'); return !!body && !/Stop being|I.ll lead|I.ll sweep/.test(body.textContent); }),
     'the planner\'s card: the roles in Set it up only, not again as links above it');
   check(!/List it for everyone/.test(await page.textContent(`${myCard} .cp-set`)), 'a private crew is not offered a public meet');
+  await page.waitForSelector(`${myCard} .cp-set .row-pick + .row-pick-native + .row-pick`);
+  const rules = await page.evaluate(() => { const c = [...document.querySelectorAll('.drive-card:not(.meet-card)')].find((x) => /My run/.test(x.textContent));
+    const [a, b] = c.querySelectorAll('.cp-set .row-pick'), ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    return { gap: Math.round(rb.top - ra.bottom), top: getComputedStyle(b).borderTopWidth }; });
+  check(rules.gap === 0 && rules.top === '0px', 'Lead and Sweep are one list, one rule between them: ' + JSON.stringify(rules));
   await page.fill(`${myCard} input[aria-label="Notes"]`, 'Fuel first.');
   await page.click(`${myCard} .cp-set button:text-is("Save")`);
   await page.waitForFunction(() => /Notes saved/.test(document.getElementById('toast').textContent));
@@ -5311,8 +5320,8 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
     const t = host.querySelector('.dp-touch'), out = t ? t.innerText : null; host.remove();
     return out;
   });
-  check(/Your touch/.test(touch) && /brakes on at about 0\.82 g a second and let them off at about 0\.41 g a second/.test(touch) && /more gently/.test(touch)
-    && /quick movement of the wheel/.test(touch), 'the touch panel says it in words: ' + touch);
+  check(/Your touch/.test(touch) && /Brakes on: 0\.82 g a second/.test(touch) && /Brakes off: 0\.41 g a second/.test(touch) && /Letting go: gentler/.test(touch)
+    && /Turn-in: one quick movement/.test(touch), 'the touch panel, a labelled row each: ' + touch);
   // by kind of corner (a row a measure, a column a size, "--" where too few) and month by month
   check(/By kind of corner/i.test(touch) && /Brakes on\s+1\.2\s+0\.8\s+--/.test(touch) && /Turn-in\s+quick\s+quick\s+--/.test(touch)
     && /Brakes on month by month, in g a second: Sep 0\.9, Oct 0\.8\./.test(touch), 'touch by kind of corner and month: ' + touch);
@@ -6243,9 +6252,9 @@ flow('Settings behind the gear: three short lists, each row saying what it is se
   check(groups.join('|') === 'Sharing and safety|How the app reads|You and Vetta' && a[0].group, 'three lists, each under its name: ' + JSON.stringify(a.map((x) => x.group || x.row)));
   check(say['Units'] === 'Miles and feet' && say['Map motion'] === 'Lean' && say['Privacy zones'] === 'None' && /^(On|Off)$/.test(say['Crash check']) && say['Reminder'] === 'Off', 'each row says what it is set to: ' + JSON.stringify(say));
   check(say['Feedback'] === '' && say['About Vetta'] === '', 'a row with nothing to say says nothing: ' + JSON.stringify(say));
-  // the three that said nothing: Spots counts yours, Route tuning says Standard until a slider moves; Road feel has no
-  // switch to read while signed out, so it still says nothing
-  check(say['Spots'] === 'None' && say['Route tuning'] === 'Standard' && say['Road feel'] === '', 'Spots, Route tuning and Road feel: ' + JSON.stringify(say));
+  // the three that said nothing: Spots counts yours, Route tuning says Standard until a slider moves; Road feel signed out
+  // has no switch to read, so its Sign in key makes it say Off
+  check(say['Spots'] === 'None' && say['Route tuning'] === 'Standard' && say['Road feel'] === 'Off', 'Spots, Route tuning and Road feel: ' + JSON.stringify(say));
   check(rows.every((r) => r.h >= 44 && !r.cut && !r.wide), 'every row a thumb tall, its value whole: ' + JSON.stringify(rows.filter((r) => r.h < 44 || r.cut || r.wide)));
   check(rows.find((r) => r.row === 'Units').label === 'Units: Miles and feet' && rows.find((r) => r.row === 'Feedback').label === 'Feedback', 'read aloud with its value: ' + JSON.stringify(rows.map((r) => r.label)));
   // change one in its sheet, come back: the row has it
@@ -7012,6 +7021,35 @@ flow('offline tiles two areas share: deleting one area keeps the tiles the other
   check(JSON.stringify(r.afterArea) === '[false,false]', 'and the area\'s go with the area: ' + JSON.stringify(r));
 });
 
+flow('offline area kept: saving the map, or the first drive of a session, asks the browser to keep the storage under pressure (navigator.storage.persist, IDEAS F-02)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => {
+    const u = route.request().url();
+    if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } }, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) });
+    if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
+    return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) });
+  });
+  await page.route('https://s3.amazonaws.com/**', (route) => route.fulfill({ contentType: 'image/png', body: Buffer.alloc(8) }));
+  await page.addInitScript(() => {
+    try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__persistAsks = 0;
+    if (navigator.storage) navigator.storage.persist = () => { window.__persistAsks++; return Promise.resolve(false); };   // refused: the save still stands
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded(), null, { timeout: 15000 });
+  check(await page.evaluate(() => window.__persistAsks) === 0, 'nothing asked before a save');
+  await page.evaluate(() => { window.apexDebug.map.jumpTo({ center: [-83.47, 35.63], zoom: 11 }); document.getElementById('myAreaBtn').click(); });
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]').length === 1, null, { timeout: 60000 });
+  await page.waitForFunction(() => window.__persistAsks === 1, null, { timeout: 5000 });
+  check(/round/.test(await page.textContent('#myAreas')), 'the area is listed even though the browser said no: ' + await page.textContent('#myAreas'));
+  // a kept drive asks once a session, not on every save
+  const n = await page.evaluate(async () => {
+    const lat = [35.6, 35.6005, 35.601], lon = [-83.5, -83.5, -83.5], d = (id) => ({ id, name: 'Test', date: new Date().toISOString(), lat, lon, dist: [0, 55, 110], speed_mps: [15, 15, 15] });
+    await ApexRecording.store(d('pk1')); await ApexRecording.store(d('pk2'));
+    return { asks: window.__persistAsks, ids: await ApexRecording.ids() };
+  });
+  check(n.asks === 2 && n.ids.includes('pk1') && n.ids.includes('pk2'), 'one more ask for the drives, both kept: ' + JSON.stringify(n));
+});
+
 flow('offline area grown old: its row says the month it was saved, Update fetches it again in place, a fresh one offers no update (IDEAS F-02)', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => {
     const u = route.request().url();
@@ -7377,6 +7415,22 @@ flow('the main map: with no signal and no saved area one line says there is no m
   await page.evaluate(() => window.apexDebug.map.setStyle('https://tiles.openfreemap.org/styles/liberty?again'));
   await page.waitForTimeout(2500);
   check(await page.evaluate(() => document.getElementById('mapNote').hidden), 'no note once the map draws');
+});
+
+flow('Road feel signed out: the Settings row says Off, and a Sign in key under the line opens People (free roamer B, 2026-11-13)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: new URL(route.request().url()).pathname === '/api/me' ? '{"signed_in":false}' : '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('.tabbar >> text=Garage');
+  await openSetting(page, 'roadfeel');
+  await page.waitForSelector('#ambientSignIn:not([hidden])', { timeout: 8000 });
+  const row = await page.evaluate(() => document.querySelector('#garageSettings .nav-row[data-setting="roadfeel"] small').textContent);
+  check(row === 'Off', 'the row says Off, not nothing: ' + row);
+  await page.click('#ambientSignIn');
+  await page.waitForTimeout(400);
+  const after = await page.evaluate(() => ({ pops: document.querySelectorAll('.garage-pop.open').length, google: !!([...document.querySelectorAll('a')].find((a) => /Sign in with Google/.test(a.textContent) && a.offsetParent)) }));
+  check(after.pops === 0 && after.google, 'Settings closed, People open on its sign-in: ' + JSON.stringify(after));
 });
 
 flow('a replay with no map: the one line sits clear of the Replay plate in the short map band (free roamer B, 2026-11-12)', async (page, base) => {
@@ -8497,6 +8551,40 @@ flow('the co-driver says a long descent once as the car nears its top, from the 
   check(said.length === 1 && /^Long descent ahead: [\d.]+ miles at 8 percent\. A lower gear saves the brakes\.$/.test(said[0]), 'said once near the top: ' + JSON.stringify(said));
   for (let i = 420; i <= 500; i += 3) { await at(i, 20); await page.waitForTimeout(40); }
   check((await calls()).length === 1, 'and not again on the way down: ' + JSON.stringify(await calls()));
+});
+
+flow('the co-driver says a low sun once when the route turns into it, and not again once it is in view (sun_ahead.js, live R-13)', async (page, base) => {
+  const Sun = require('../web/sun.js'), dusk = new Date('2026-06-21T00:20:00Z'), LAT = 35.5, LON = -83.9;
+  await page.clock.setFixedTime(dusk);                       // the sun 0-15 degrees up in the west-northwest
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport && window.apex && window.apex.live && window.ApexSunAhead);
+  // north for 1 km (the sun off to the left), then 1 km straight at it
+  const az = Sun.sunPosition(dusk, LAT, LON).azimuth, pts = [];
+  let lat = LAT, lon = LON;
+  for (let m = 0; m <= 2000; m += 5) { pts.push([lat, lon]); const h = m < 1000 ? 0 : az;
+    lat += 5 * Math.cos(h) / 110540; lon += 5 * Math.sin(h) / (111320 * Math.cos(lat * Math.PI / 180)); }
+  const gpx = pts.map(([a, o]) => `<trkpt lat="${a.toFixed(7)}" lon="${o.toFixed(7)}"/>`).join('');
+  await page.setInputFiles('#gpxFile', { name: 'sunset.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Into the sunset</name><trkseg>${gpx}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Into the sunset', null, { timeout: 10000 });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const at = (i, v) => page.evaluate(([i, v]) => { const t = apexDebug.track, j = Math.min(i + 1, t.lat.length - 1), k = Math.max(0, j - 1);
+    const course = (Math.atan2((t.lon[j] - t.lon[k]) * Math.cos(t.lat[k] * Math.PI / 180), t.lat[j] - t.lat[k]) * 180 / Math.PI + 360) % 360;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: v, course_deg: course, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, [i, v]);
+  const calls = () => page.evaluate(() => window.__said.filter((s) => s === 'Sun in your eyes ahead.'));
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  // the first 50 m: the bend is more than 900 m off, nothing yet
+  for (let i = 0, end = await iAt(50); i <= end; i += 2) { await at(i, 20); await page.waitForTimeout(40); }
+  check((await calls()).length === 0, 'nothing said a long way short of the bend: ' + JSON.stringify(await calls()));
+  // up to the bend: said once
+  for (let i = await iAt(50), end = await iAt(900); i <= end; i += 3) { await at(i, 20); await page.waitForTimeout(50); }
+  check((await calls()).length === 1, 'said once before the bend: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  // into the sun: the driver sees it, not said again
+  for (let i = await iAt(1000), end = await iAt(1600); i <= end; i += 3) { await at(i, 20); await page.waitForTimeout(30); }
+  check((await calls()).length === 1, 'not again with the sun in view: ' + JSON.stringify(await calls()));
 });
 
 flow('the co-driver counts clean corners in a row live and says five, then ten, and passing the month\'s best once, never in Quiet notes (flow_live.js, IDEAS D-30)', async (page, base) => {

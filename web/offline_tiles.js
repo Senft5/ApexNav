@@ -164,6 +164,8 @@
     const area = { id, name: name || 'Saved area', lat, lon, radiusKm: along ? null : p.radiusKm, ...(along ? { alongKm: p.bufferKm, box: boxOf(along.lat, along.lon) } : {}),
       tiles: urls.length, bytes, at: new Date().toISOString(), graphTiles: g ? g.kept : 0 };
     saveAreas([...areas().filter((a) => a.id !== id), area]);
+    // ask the browser to keep the saved map under storage pressure (Safari and Chrome may otherwise evict it); best-effort
+    try { const st = root.navigator && root.navigator.storage; if (st && st.persist) st.persist().catch(() => {}); } catch (_) {}
     return area;
   }
   /** Adds fields to a saved area's record (members' road feel counts, set after the tiles). */

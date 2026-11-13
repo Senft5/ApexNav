@@ -1461,6 +1461,7 @@
     const speech = { busy: false, queue: ApexSpeechQueue.createSpeechQueue(), current: null, talkingUntil: 0, nativeTimer: 0, via: null, chime: null };
     const MEMO_S = 5;   // a remembered coaching tip takes up to this long to say
     let brakeSay = null;  // the brake heat call waiting for a quiet moment (noteBrakes), said before a break cue
+    let sunSay = null;    // "Sun in your eyes ahead." waiting for a quiet moment (sun_ahead.js, the notes loop), after brake heat
     let breakSay = null;  // a break suggestion waiting for a quiet moment (noteRest sets it, the notes loop says it)
     let flowSay = null, flowQueue = [];   // flowQueue: the next ones, in order, when two land close together; "Five clean in a row." (noteFlow, flow_live.js), the lowest of the quiet slots, never in Quiet notes
     const NUM_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
@@ -1991,16 +1992,25 @@
         const d = ApexBrakeHeat.descentAhead(track.descents, state.cursorM, said);
         if (d) { said.add(d.start_m); brakeSay = { text: ApexBrakeHeat.descentCall(d, ApexUnits.spokenShort), until: performance.now() + 60000 }; }
       }
+      // A low sun the road turns into (sun_ahead.js): on the road being followed, live, once every 5 minutes at most, not under
+      // a sky the place plate knows is overcast or wet. Its own slot after brake heat, kept 15 s (then the stretch is near).
+      if (live && !offRoute && !sunSay && track && window.ApexSunAhead && window.ApexSun) {
+        const pd = placeAsk.data || {}, word = window.ApexPlacePlate ? ApexPlacePlate.weather(pd) : null, nowS = performance.now() / 1000;
+        if (!ApexSunAhead.hidden(word, pd.code) && ApexSunAhead.due(nowS, drive.sunAt ?? null) && ApexSunAhead.ahead(track, state.cursorM, new Date())) {
+          drive.sunAt = nowS; sunSay = { text: ApexSunAhead.TEXT, until: performance.now() + 15000 };
+        }
+      }
+      if (sunSay && performance.now() > sunSay.until) sunSay = null;
       if (brakeSay && performance.now() > brakeSay.until) brakeSay = null;
       if (breakSay && performance.now() > breakSay.until) breakSay = null;
       if (flowSay && (performance.now() > flowSay.until || state.notesMode === 'quiet')) { flowSay = null; flowQueue = []; }
-      const quiet = brakeSay || breakSay || flowSay;
+      const quiet = brakeSay || sunSay || breakSay || flowSay;
       if (quiet && live && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size && performance.now() > speech.talkingUntil) {
         const quietReach = lead + vMps * (0.6 + 0.07 * quiet.text.length + 2);
         const callDue = ev.some(e => noteM(e) - state.cursorM < quietReach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`)
           && (e.type === 'corner' ? spirited : (spirited || noteworthyInCruise(e))));
         const bumpDue = ApexRoadMemory.upcoming(hazardMemory, state.live, 0, quietReach, { has: () => false });
-        if (!callDue && !bumpDue) { say(quiet.text); if (quiet === brakeSay) brakeSay = null; else if (quiet === breakSay) breakSay = null; else { flowSay = flowQueue.shift() || null; if (flowSay) flowSay.until = performance.now() + 20000; } }
+        if (!callDue && !bumpDue) { say(quiet.text); if (quiet === brakeSay) brakeSay = null; else if (quiet === sunSay) sunSay = null; else if (quiet === breakSay) breakSay = null; else { flowSay = flowQueue.shift() || null; if (flowSay) flowSay.until = performance.now() + 20000; } }
       }
     }
 
@@ -2654,6 +2664,20 @@
     }
     // members' "Road closed" reports near the trip, for our own router (graph_router.js CLOSED_X): kept 5 min (hazardsAround),
     // otherwise a plan waits POLICE_WAIT_MS at most and goes without them. Signed out there are none to ask for: []
+    // confirmed potholes, gravel and debris near the trip, for our router (graph_router.js HAZARD_X): from the same hazard
+    // reports as the closures (kept 5 min, or no wait at all: a plan doesn't wait for these); none known: []
+    // Confirmed potholes, gravel and debris (IDEAS R-04, hazard_reports.js roadHazardsFor) for our own router's HAZARD_X
+    // nudge: from the reports closedForTrip has just fetched round the trip, with the drive's own (newer); members only,
+    // never a wait of its own, and never a reason a plan fails
+    function hazardsForTrip(points) {
+      try {
+        if (!window.ApexHazardReports || !memberNow() || !hazardsCover(points)) return [];
+        let mine = [];
+        try { mine = reported.list.filter((h) => h && h.kind !== 'police' && h.kind !== 'closure'); } catch (_) { mine = []; }   // (not yet set up at boot)
+        const ids = new Set(mine.map((h) => h.id));
+        return ApexHazardReports.roadHazardsFor([...mine, ...closureCache.list.filter((h) => !h || !ids.has(h.id))], points);
+      } catch (_) { return []; }
+    }
     async function closedForTrip(points) {
       if (!window.ApexHazardReports || !memberNow()) return [];
       if (hazardsCover(points)) return closuresAround(points);   // (with the drive's own, newer: closuresAround)
@@ -2665,7 +2689,15 @@
     }
     async function avoidForTrip(points) {
       const closedP = closedForTrip(points).catch(() => []);
-      if (!avoid.police && !avoid.cameras) { const closed = await closedP; if (window.apexDebug) window.apexDebug.lastClosed = closed; return closed.length ? { ...avoid, closed } : avoid; }
+      if (!avoid.police && !avoid.cameras) {
+        const closed = await closedP, hazards = hazardsForTrip(points);
+        if (window.apexDebug) { window.apexDebug.lastClosed = closed; window.apexDebug.lastRoadHazards = hazards; }
+        if (!closed.length && !hazards.length) return avoid;
+        const out = { ...avoid };
+        if (closed.length) out.closed = closed;
+        if (hazards.length) out.hazards = hazards;
+        return out;
+      }
       const camsP = camsForTrip(points);
       const out = { ...avoid };
       if (avoid.police) {
@@ -2681,6 +2713,9 @@
       const closed = await closedP;
       if (window.apexDebug) window.apexDebug.lastClosed = closed;
       if (closed.length) out.closed = closed;
+      const hazards = hazardsForTrip(points);
+      if (window.apexDebug) window.apexDebug.lastRoadHazards = hazards;
+      if (hazards.length) out.hazards = hazards;
       return out;
     }
     // A loop's avoid choices: the same lists as a trip's, for the box a loop of `km` can reach from `c` (a third of its
@@ -8417,7 +8452,11 @@
         : a && a.paused ? 'Paused: the server refused. Trying again in a few minutes.'
         : a && a.error ? `Couldn't reach the server. Retrying. ${mi}`
         : `Sharing while the phone is mounted. ${mi || 'Starts once you move.'} The first and last km of every trip stay on this phone.`;
+      // 2026-11-13 (free roamer B): signed out, the line said "Sign in" with no way to; the key under it opens People, where
+      // signing in is (as every other "Sign in to …"), and the Settings row reads Off from it
+      const si = $('ambientSignIn'); if (si) si.hidden = !(ambient.allowed === false && !ambient.member);
     }
+    $('ambientSignIn')?.addEventListener('click', () => { if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.close(); showView('friends'); });
     // what the Garage just read of the account (renderAccount): who you are and the Share road feel switch, said at once
     function ambientFromAccount(member, on) {
       ambient.member = member; ambient.allowed = !!(member && on); ambient.checkedAt = performance.now(); paintAmbient();
@@ -9437,7 +9476,7 @@
       startStageWatch();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;

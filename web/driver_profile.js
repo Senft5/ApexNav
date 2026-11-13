@@ -685,18 +685,18 @@
   // -------------------------------------------------------------------------------------------------------------
   const WORDS = {
     squeeze: { name: 'One braking', is: 'You brake once for a corner: on, then off.',
-      tip: 'Pick the braking point early and squeeze on once. A second go at the pedal means the first was too light or too late.' },
+      tip: 'Pick the braking point early and squeeze on once.' },
     brake: { name: 'Brakes done by the apex', is: 'Your slowing is finished by the middle of the corner.',
-      tip: 'Finish slowing before the middle of the corner. Braking past it means you arrived too fast: brake a little earlier.' },
+      tip: 'Brake a little earlier, so the slowing is done before the middle.' },
     arc: { name: 'One steering arc', is: 'You turn in once and hold it, with no corrections on the way round.',
-      tip: 'Turn in once and hold the wheel. A correction mid-corner means the turn-in was early or sharp: look further through the corner before you turn.' },
+      tip: 'Look further through the corner, then turn in once and hold the wheel.' },
     entry: { name: 'Entry speed', is: 'You set your speed before the corner and keep it to the middle.',
-      tip: 'Set the speed before you turn and hold it to the middle of the corner. Speeding up and slowing again mid-corner means the throttle came too soon.' },
+      tip: 'Set the speed before you turn and hold it to the middle.' },
     line: { name: 'Patient apex', is: 'You are slowest at the middle of the corner or just after, not long before it.',
-      tip: 'Stay slow a little longer. The slowest point belongs at the middle of the corner, where you can see the way out.' },
+      tip: 'Stay slow a little longer, until you can see the way out.' },
     pace: { name: 'Pace', less: 'lower', more: 'higher', is: 'How much of each corner\'s sane limit you use, read as the Vetta Score reads it: full from 85% to 100% of it, and less above it, so over the limit never earns it.' },
     exit: { name: 'Back to power', is: 'Once the braking is done you pick the throttle straight up.',
-      tip: 'When the braking is done, pick the throttle up gently straight away. A long coast is the car waiting for you.' },
+      tip: 'Pick the throttle up gently as soon as the braking is done.' },
   };
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const monthName = (m) => `${MONTHS[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`;
@@ -732,42 +732,36 @@
   }
   /** How you drive, as up to three sentences of fact (never advice to go faster). */
   function styleLines(st, metric = true) {
+    // one labelled fact a row (TestFlight 2026-11-12, "text walls"): the label says what is measured, the number after it
     const out = [];
-    if (finite(st.trail_share)) {
-      const n = Math.round(st.trail_share * 10);
-      out.push(n >= 6 ? `You brake into the corner: still on the brakes as the car turns in ${n} of 10 corners you brake for.`
-        : n <= 2 ? `You finish braking in a straight line: still on the brakes as the car turns in only ${n} of 10 corners you brake for.`
-          : `You brake into the corner about half the time (${n} of 10 corners you brake for).`);
-    }
+    if (finite(st.trail_share)) out.push(`Still braking at turn-in: ${Math.round(st.trail_share * 10)} of 10 corners you brake for`);
     if (finite(st.slow_m)) {
       const m = Math.abs(st.slow_m), d = metric ? `${Math.round(m)} m` : `${Math.round(m * 3.28084 / 5) * 5} ft`;
-      out.push(m < 2.5 ? 'Your slowest point sits on the middle of the corner.' : `Your slowest point sits about ${d} ${st.slow_m < 0 ? 'before' : 'after'} the middle of the corner.`);
+      out.push(m < 2.5 ? 'Slowest point: the middle of the corner' : `Slowest point: ${d} ${st.slow_m < 0 ? 'before' : 'after'} the middle`);
     }
     if (finite(st.use)) {
       const left = Math.round((1 - st.use) * 20) * 5;
-      out.push(left > 0 ? `You usually keep about ${left}% of a corner's sane limit in hand.` : 'You usually drive at the corner\'s sane limit. On the road, leave more in hand.');
+      out.push(left > 0 ? `Kept in hand: about ${left}% of the sane limit` : 'Kept in hand: none. On the road, leave more in hand');
     }
     return out;
   }
   /** Your touch, as sentences of fact: how the brakes go on and come off, and how the car is loaded at turn-in. */
   const gps = (x) => `${x < 1 ? r(x, 2).toFixed(2).replace(/0$/, '') : r(x, 1).toFixed(1)} g a second`;
   function touchLines(t) {
+    // one labelled fact a row (TestFlight 2026-11-12, "text walls"); "quick": quicker than the recording can time
     const out = [];
     if (!t) return out;
     const on = t.brake_on || {}, off = t.brake_off || {}, turn = t.turn_in || {};
-    // a rate, or "quick": most corners quicker than 5 m bins can time
-    const how = (m) => (finite(m.rate) ? `at about ${gps(m.rate)}` : m.quick_rate ? 'in one quick movement (quicker than the recording can time)' : null);
-    const a = how(on), b = how(off);
-    if (a && b) out.push(`You put the brakes on ${a} and let them off ${b}.`);
-    else if (a) out.push(`You put the brakes on ${a}.`);
-    else if (b) out.push(`You let the brakes off ${b}.`);
+    const how = (m) => (finite(m.rate) ? gps(m.rate) : m.quick_rate ? 'one quick movement' : null);
+    if (how(on)) out.push(`Brakes on: ${how(on)}`);
+    if (how(off)) out.push(`Brakes off: ${how(off)}`);
     if (finite(t.release)) {
-      out.push(t.release <= 0.7 ? 'You let the brakes go more gently than you put them on, which keeps the front tyres loaded as you turn in.'
-        : t.release >= 1.3 ? 'You let the brakes go more sharply than you put them on. Easing off them as you turn in keeps the front tyres loaded.'
-          : 'You put the brakes on and let them off at about the same rate.');
+      out.push(t.release <= 0.7 ? 'Letting go: gentler than putting them on, which keeps the front loaded'
+        : t.release >= 1.3 ? 'Letting go: sharper than putting them on. Ease off as you turn in'
+          : 'Letting go: about as fast as putting them on');
     }
-    if (finite(turn.rate)) out.push(`You load the car up at about ${gps(turn.rate)} as you turn in${finite(turn.lo) && finite(turn.hi) ? `, most corners between ${r(turn.lo, 1).toFixed(1)} and ${r(turn.hi, 1).toFixed(1)}` : ''}.`);
-    else if (turn.quick_rate) out.push('You turn in with one quick movement of the wheel (quicker than the recording can time).');
+    if (finite(turn.rate)) out.push(`Turn-in: ${gps(turn.rate)}${finite(turn.lo) && finite(turn.hi) ? `, most corners ${r(turn.lo, 1).toFixed(1)} to ${r(turn.hi, 1).toFixed(1)}` : ''}`);
+    else if (turn.quick_rate) out.push('Turn-in: one quick movement');
     return out;
   }
   const TOUCH_NAME = { brake_on: 'Brakes on', brake_off: 'Brakes off', turn_in: 'Turn-in' };

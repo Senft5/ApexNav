@@ -126,6 +126,9 @@ html.kb-open .confirm-sheet .cs-acts { margin-top: 10px; } html.kb-open .confirm
 .row-pick span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-pick i { flex: none; width: 9px; height: 9px; margin-right: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-3px); }
 .row-pick[disabled] { color: var(--panel-dim); }
+/* pickers one under another are one list: a single rule between them, not two with a gap (Lead and Sweep on a crew drive) */
+.row-pick-list { display: grid; }
+.row-pick + .row-pick-native + .row-pick { border-top: 0; }
 .row-pick-sheet { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.45); display: flex; align-items: flex-end; justify-content: center; }
 .row-pick-sheet .rp-box { width: 100%; max-width: 480px; max-height: 72dvh; display: flex; flex-direction: column; background: var(--panel); color: var(--panel-ink);
   border-top: 2px solid var(--panel-ink); padding: 12px calc(16px + env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px)); }
