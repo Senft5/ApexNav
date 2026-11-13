@@ -165,7 +165,7 @@ jobs:
             # and a re-run of the failed job builds its blocks again
             if ! python -m tools.graph_etl.build --pbf "$WORK/blocks/$name.osm.pbf" --tiles="$box" --out "out/$name/v1" \
               --work "$WORK/w_$name" --dem-cache "$WORK/dem" --source "Geofabrik US states (merged)" \
-              --build "${{ needs.plan.outputs.week }}" --ctx "$CTX_DIR"; then
+              --build "us-${{ needs.plan.outputs.week }}" --ctx "$CTX_DIR"; then
               echo "::error::block $name failed"; echo "$name" >> "$WORK/failed.txt"; rm -rf "out/$name"
             fi
             rm -rf "$WORK/w_$name" "$WORK/blocks/$name.osm.pbf"
@@ -185,7 +185,11 @@ jobs:
   publish:
     needs: [plan, band]
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
+    permissions:
+      contents: write
+      actions: read
+      id-token: write          # the R2 upload (tools/graph_etl/upload_r2.sh): the Worker checks this run's GitHub OIDC token
     steps:
       - uses: actions/checkout@v4
       - name: Free disk
@@ -206,7 +210,8 @@ jobs:
           rm -rf bands
           python -m tools.graph_etl.check merged/v1 | tail -12 | tee -a "$GITHUB_STEP_SUMMARY" || true
           python -m tools.graph_etl.pack merged/v1 packs | tee -a "$GITHUB_STEP_SUMMARY"
-          rm -rf merged
+          # the tiles stay for the R2 upload, beside the slim index the Worker serves (a pack's tiles, byte for byte)
+          rm -f merged/v1/index.json && cp packs/index.json merged/v1/index.json
           du -sh packs && ls packs | wc -l
       - name: The release
         id: rel
@@ -230,6 +235,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # our bucket first (src/data_store.ts): the Worker serves R2's index before any release, so the build goes live
+          # there; it switches only once every tile is in (a 409 otherwise). The release stays the fallback.
+          set -o pipefail
+          bash tools/graph_etl/upload_r2.sh merged | tee -a "$GITHUB_STEP_SUMMARY"
           mkdir -p ptr
           printf '{"tag":"%s","build":"%s","at":"%s"}\n' "${{ steps.rel.outputs.tag }}" "${{ steps.rel.outputs.build }}" "$(date -u +%FT%TZ)" > ptr/current.json
           bash tools/graph_etl/publish_data.sh ptr us/v1 "graph us: ${{ steps.rel.outputs.tag }}"

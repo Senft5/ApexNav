@@ -977,7 +977,14 @@
       $('tab-drive').insertBefore(dvActs, $('dvRoot'));                // out of the root before it is redrawn
       dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach, mapPalette: () => look.map, traceOf: (k) => ApexAnalysis.job('cornerTrace', { id, k }),
         // one tap from a corner to its clip, from the app's own video of the drive (the Dashcam panel below, big bet 5)
-        canClip: (s, e) => !!(dcPanel && dcPanel.canClip && dcPanel.canClip(s, e)), clip: (s, e) => (dcPanel && dcPanel.clip ? dcPanel.clip(s, e) : false) }); dvCurrent = d;
+        canClip: (s, e) => !!(dcPanel && dcPanel.canClip && dcPanel.canClip(s, e)), clip: (s, e) => (dcPanel && dcPanel.clip ? dcPanel.clip(s, e) : false),
+        // and the best pass's video beside it, when that drive was filmed too (ghost_clip.js)
+        ghostOf: async (k, r) => {
+          if (!dcPanel || !dcPanel.canGhost || !r || !r.other || !r.trace || !r.trace.b_win || !d.corners[k]) return null;
+          const raw = await ApexRecording.get(r.other.id), c = d.corners[k];
+          const other = raw ? { d: raw, bWin: r.trace.b_win, trace: r.trace, when: r.other.date } : null;
+          return other && dcPanel.canGhost(c.start, c.end, other) ? () => dcPanel.ghost(c.start, c.end, other) : null;
+        } }); dvCurrent = d;
       const dvHead = $('dvRoot').querySelector('.dv-head');
       if (dvHead) dvHead.after(dvActs);                                  // the score first, then Replay
       // a video from this drive with its numbers on it (dashcam.js, IDEAS D-11)
