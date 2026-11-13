@@ -360,7 +360,7 @@
       let la0 = Infinity, la1 = -Infinity, lo0 = Infinity, lo1 = -Infinity;
       for (let i = 0; i < n; i++) { la0 = Math.min(la0, d.lat[i]); la1 = Math.max(la1, d.lat[i]); lo0 = Math.min(lo0, d.lon[i]); lo1 = Math.max(lo1, d.lon[i]); }
       basemap = BM.attach(planBox, {
-        box: [la0, lo0, la1, lo1], palette: o.mapPalette,
+        box: [la0, lo0, la1, lo1], pts: { lat: d.lat, lon: d.lon }, palette: o.mapPalette,
         view: () => { const w = planBox.clientWidth; return w ? BM.viewFor(plan.frame, xc, yc, ms * w / MW) : null; },
         onShown: () => { const cr = planBox.querySelector('.dv-credit'); if (cr) cr.hidden = false; },
         // the path moves with the map (one transform; CSS keeps its lines their width), the numbers and letters are

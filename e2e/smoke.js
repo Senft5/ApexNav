@@ -7025,7 +7025,7 @@ flow('a saved route keeps the map along it: Save fetches the tiles within reach 
   await page.evaluate(() => document.getElementById('routeSaveBtn').click());
   await page.waitForFunction(() => window.apexDebug.mapAlong, null, { timeout: 60000 });
   const area = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]'));
-  check(area.length === 1 && area[0].alongKm === 1.5 && area[0].radiusKm === null && /^Along /.test(area[0].name) && area[0].box && area[0].box[0] < 35.61 && area[0].box[2] > 35.79, 'an area along the route: ' + JSON.stringify(area));
+  check(area.length === 1 && area[0].alongKm === 1.5 && area[0].radiusKm === null && /^Along /.test(area[0].name) && area[0].box && area[0].box[0] < 35.61 && area[0].box[2] > 35.79 && Array.isArray(area[0].line) && area[0].line.length >= 2 && area[0].lineTolKm === 0.1, 'an area along the route, with its thinned line: ' + JSON.stringify(area));
   // every z14 tile within reach of the line (x for -83.90 at z14 is 4373; 1.5 km is under one tile), none 25 km round
   const z14 = got.filter((t) => t[0] === 14), xs = [...new Set(z14.map((t) => t[1]))];
   check(z14.length > 10 && xs.every((x) => Math.abs(x - 4373) <= 2), 'the tiles hug the route: ' + JSON.stringify({ n: z14.length, xs }));

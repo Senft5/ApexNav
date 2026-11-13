@@ -63,6 +63,20 @@ function lim(lat, lon) {
 const loop = (lat0, lon0, km) => { const lat = [], lon = [];
   for (let i = 0; i <= 400; i++) { const a = i / 400 * 2 * Math.PI; lat.push(lat0 + Math.sin(a) * km / 111 + i * 1e-5); lon.push(lon0 + Math.cos(a) * km / 70); }
   return [lat, lon]; };
+// an L-shaped saved route (north, then east) and its area as offline_tiles.js keeps it, line thinned to 100 m
+function corridor() {
+  const O = require(process.argv[1] + '/web/offline_tiles.js'), rl = [], ro = [];
+  for (let i = 0; i <= 200; i++) { rl.push(35.6 + 0.2 * i / 200); ro.push(-83.9 + 0.0005 * Math.sin(i / 3)); }   // a little wiggle
+  for (let i = 1; i <= 200; i++) { rl.push(35.8); ro.push(-83.9 + 0.2 * i / 200); }
+  const line = O.lineOf(rl, ro, 0.1), a = { lat: 35.7, lon: -83.8, radiusKm: null, alongKm: 1.5, box: O.boxOf(rl, ro), line, lineTolKm: 0.1 };
+  const pts = (f) => { const lat = [], lon = []; for (let i = 0; i <= 300; i++) { const [p, q] = f(i / 300); lat.push(p); lon.push(q); } return { lat, lon }; };
+  const along = pts((t) => (t < 0.5 ? [35.6 + 0.4 * t, -83.896] : [35.803, -83.9 + 0.4 * (t - 0.5)]));   // 300-400 m off the line
+  const across = pts((t) => [35.6 + 0.2 * t, -83.9 + 0.2 * t]);                                        // the diagonal: inside the box
+  const box = (q) => [Math.min(...q.lat), Math.min(...q.lon), Math.max(...q.lat), Math.max(...q.lon)];
+  return { n: rl.length, kept: line.length, along: B.covered([a], box(along), along), across: B.covered([a], box(across), across),
+    acrossNoPts: B.covered([a], box(across)), acrossOld: B.covered([{ ...a, line: undefined }], box(across), across),
+    offline: B.worthTrying(false, [a], box(across), across), short: O.lineOf([1], [2]) };
+}
 const [la, lo] = loop(35.6, -83.9, 3), [nla, nlo] = loop(69.6, 18.9, 40);
 const areas = [{ lat: 35.6, lon: -83.9, radiusKm: 25 }];
 console.log(JSON.stringify({
@@ -72,6 +86,7 @@ console.log(JSON.stringify({
   route: [B.covered([{ lat: 35.7, lon: -83.9, radiusKm: null, alongKm: 1.5, box: [35.6, -83.91, 35.8, -83.89] }], [35.62, -83.905, 35.78, -83.895]),
           B.covered([{ lat: 35.7, lon: -83.9, radiusKm: null, alongKm: 1.5, box: [35.6, -83.91, 35.8, -83.89] }], [35.62, -83.95, 35.78, -83.895]),
           B.covered([{ lat: 35.7, lon: -83.9, radiusKm: null, alongKm: 1.5, box: [35.6, -83.91, 35.8, null] }], [35.62, -83.905, 35.78, -83.895])],
+  corridor: corridor(),
   tryOnline: B.worthTrying(true, [], [0, 0, 1, 1]), tryOffNone: B.worthTrying(false, [], [35.55, -83.95, 35.65, -83.85]),
   tryOffSaved: B.worthTrying(false, areas, [35.55, -83.95, 35.65, -83.85]), tryUnknown: B.worthTrying(undefined, [], [0, 0, 1, 1]),
   follow: follow(la, lo), lim: lim(la, lo),
@@ -133,3 +148,12 @@ def test_out_a_little_past_the_drive_never_all_the_way(r):
     # the pan box is three fitted views across: at the lowest zoom (half the scale) one and a half views of it show,
     # wider than the 360 x 240 box, so the zoom-out limit is the one that holds and the drive stays in reach
     assert abs(lim["wide"] - 540) < 0.5 and abs(lim["tall"] - 360) < 0.5, lim
+
+
+def test_a_route_map_only_for_a_drive_that_kept_to_the_route(r):
+    c = r["corridor"]
+    assert 3 <= c["kept"] < c["n"] / 10, c                        # the line thinned, the corner kept
+    assert c["along"] is True, "a drive that kept to the route: its map is on the phone"
+    assert c["across"] is False and c["offline"] is False, "the diagonal inside the box but off the corridor: blank, said"
+    assert c["acrossNoPts"] is True and c["acrossOld"] is True, "without points, or an older area with no line: the box"
+    assert c["short"] is None
