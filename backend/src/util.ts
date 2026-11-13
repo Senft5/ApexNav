@@ -23,6 +23,7 @@ export interface Env {
   CTX?: KVNamespace;        // context-grid bundles, key v1/... (src/context_grid.ts); bound once the owner creates it
   FLAGS?: string;           // feature flags JSON (src/flags.ts), set in the dashboard to change a rollout without a release
   DEV_FINGERPRINTS?: string;   // more developers by email fingerprint, comma-separated (src/developers.ts)
+  QUERY_LIMIT?: string;     // tests only: a request past this many D1 queries fails, as Workers Free's 50 does (src/query_budget.ts)
   REVIEW_INVITE_HASH?: string;   // tests only: production uses the constant in auth.ts    // weekly database dumps (src/backup.ts); production only
 }
 
