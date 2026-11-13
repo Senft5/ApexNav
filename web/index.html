@@ -1379,7 +1379,12 @@
     .crew-tiles.one { grid-template-columns: minmax(0, 1fr); }
     .crew-tiles.one .crew-tile-head b { white-space: normal; overflow-wrap: anywhere; }
     .row.profile-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .profile-keys .ink-btn, .profile-keys .ink-btn.solid { height: 44px; padding: 0 8px; }
-    .profile-foot { gap: 16px; border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 8px; }
+    .profile-foot { gap: 16px; border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 8px; } .profile-foot > :first-child { padding-left: 0; }
+    /* a friend's profile opens on the person: their photo, name and what they are doing now, as a social app's would */
+    .profile-who { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; } .profile-who .note { margin: 0; }
+    .profile-who small { display: block; margin-top: 2px; font-size: 13px; color: var(--panel-dim); }
+    .profile-who small.live { color: var(--panel-ink); font-weight: 600; }
+    .profile-who small.live::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 6px 1px 0; border-radius: 50%; background: var(--accent); }
     /* P-25: Tapedeck's mono is wide; the status lines and the drive card's lines a size down so each stays one line */
     html[data-theme="tapedeck"] .friend-head small, html[data-theme="tapedeck"] .cp-drive-body .note { font-size: 12px; letter-spacing: 0; }
     .friend-sent span { color: var(--panel-dim); }
