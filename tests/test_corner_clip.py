@@ -52,3 +52,24 @@ def test_a_frame_says_speed_g_and_how_far_through(r):
     assert f["speed"] == "34 mph" and f["lonG"] == -0.1 and f["latG"] is not None and f["at"] == pytest.approx(3 / 6.5, abs=0.01)
     assert r["unknown"]["latG"] is None and r["unknown"]["lonG"] is None   # g the phone did not measure stays unknown
     assert len(r["tr"]["lat"]) == len(r["tr"]["t"]) > 10
+
+
+def test_the_reel_takes_the_best_corners_the_video_holds_in_road_order():
+    script = r"""
+const C = require(process.argv[1] + '/web/corner_clip.js'), Core = require(process.argv[1] + '/web/apex_core.js');
+const n = 400, v = Array(n).fill(15), lat = Array(n).fill(0), lon = Array(n).fill(0);
+// four corners; the third is driven rough (lateral g jumping about), the first gentle, the second and fourth clean and committed
+const corner = (s, e, peak, rough) => { for (let q = s; q <= e; q++) { const x = Math.sin(Math.PI * (q - s) / (e - s)); lat[q] = peak * x + (rough && q % 2 ? 0.25 : 0); } };
+corner(20, 40, 0.15, false); corner(80, 100, 0.45, false); corner(150, 170, 0.45, true); corner(250, 270, 0.45, false);
+const cs = [[20, 40], [80, 100], [150, 170], [250, 270]].map(([s, e]) => ({ start: s, end: e, apex: (s + e) / 2, apex_mps: 15 }));
+const d = { speed_mps: v, lat_g: lat, lon_g: lon, g_known: null };
+const all = C.bestOf(Core, d, cs, () => true, 3), held = C.bestOf(Core, d, cs, (c) => c.start < 200, 3);
+const unknown = C.bestOf(Core, { ...d, g_known: v.map((_, i) => (i >= 80 && i <= 100 ? 0 : 1)) }, cs, () => true, 3);
+console.log(JSON.stringify({ all, held, unknown }));
+"""
+    p = subprocess.run([NODE, "-e", script, os.getcwd()], capture_output=True, text=True, timeout=60)
+    assert p.returncode == 0, p.stderr
+    o = json.loads(p.stdout)
+    assert [x["k"] for x in o["all"]] == [0, 1, 3]            # the rough one left out, the rest in road order
+    assert [x["k"] for x in o["held"]] == [0, 1, 2]           # the fourth isn't in the video: never in its reel
+    assert [x["k"] for x in o["unknown"]] == [0, 2, 3]        # unmeasured g: not ranked

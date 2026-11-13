@@ -607,7 +607,7 @@
         b.setAttribute('aria-label', `Corner ${r.k + 1}, ${callOf(c)}: braking point ±${m(r.brake_sd_m)} over ${r.passes} passes`
           + `${r.min_sd_m != null ? `, slowest point ±${m(r.min_sd_m)}` : ''}${r.turn_sd_m != null ? `, turn-in ±${m(r.turn_sd_m)}` : ''}`
           + `${r.speed_sd_mps != null ? `, speed ±${spd(r.speed_sd_mps)}` : ''}${v ? '. Pick a braking marker you can always make' : ''}`);
-        b.onclick = () => { pick(c.apex, c.start, c.end); if (overlayable(r.k)) openOverlay(r.k, b); };
+        b.onclick = () => { pick(c.apex, c.start, c.end); openCorner(r.k, b); };
         li.append(b); ul.append(li);
       });
       const speeds = reps.map((r) => r.speed_sd_mps).filter((x) => x != null).sort((p, q) => p - q);
@@ -634,6 +634,31 @@
     // cornerTrace job); a second tap on the same corner closes it
     let ovl = null, ovlK = -1, ovlAt = null;
     const overlayable = (k) => !!(o.traceOf && co && co.corners[k] && co.corners[k].best && co.corners[k].best_from >= 0);
+    // One tap from a corner to a clip to share (big bet 5): when the app filmed this drive and its video holds the corner
+    function clipKey(k) {
+      const c = d.corners[k];
+      if (!o.canClip || !o.clip || !o.canClip(c.start, c.end)) return null;
+      const b = el('button', 'btn solid dv-clip', 'Clip this corner'); b.type = 'button';
+      b.onclick = async (e) => {
+        e.stopPropagation();
+        b.disabled = true; b.textContent = 'Making the clip\u2026';
+        let ok = false;
+        try { ok = await o.clip(c.start, c.end); } catch (_) { ok = false; }
+        b.disabled = false; b.textContent = ok ? 'Clip made \u00b7 make another' : 'Couldn\u2019t make the clip';
+      };
+      return b;
+    }
+    // a corner with no best pass to lay over it: just its clip key, when there is a video of it
+    function openClipOnly(k, after) {
+      if (ovl) { ovl.remove(); ovl = null; }
+      if (ovlAt) ovlAt.setAttribute('aria-expanded', 'false');
+      if (ovlK === k && ovlAt === after) { ovlK = -1; ovlAt = null; return; }
+      const key = clipKey(k);
+      if (!key) { ovlK = -1; ovlAt = null; return; }
+      ovlK = k; ovlAt = after; after.setAttribute('aria-expanded', 'true');
+      const box = el('div', 'dv-ovl'); box.append(key); after.after(box); ovl = box;
+    }
+    const openCorner = (k, after) => { if (overlayable(k)) openOverlay(k, after); else openClipOnly(k, after); };
     async function openOverlay(k, after) {
       if (ovl) { ovl.remove(); ovl = null; }
       if (ovlAt) ovlAt.setAttribute('aria-expanded', 'false');
@@ -641,6 +666,7 @@
       ovlK = k; ovlAt = after; after.setAttribute('aria-expanded', 'true');
       const box = el('div', 'dv-ovl'), from = co.others && co.others[co.corners[k].best_from];
       box.innerHTML = `<h3 class="dv-ovl-h">Corner ${k + 1} against your best pass</h3><p class="dv-ovl-when">${from ? `Best pass ${esc(from.date)}` : ''}</p><p class="dv-ovl-wait">Reading both passes\u2026</p>`;
+      const ck = clipKey(k); if (ck) box.querySelector('.dv-ovl-when').after(ck);
       after.after(box); ovl = box;
       let r = null;
       try { r = await o.traceOf(k); } catch (_) { r = null; }
@@ -659,7 +685,7 @@
         const x = co.corners[k], c = d.corners[k], from = x.best ? co.others[x.best_from] : null, li = el('li'), b = el('button');
         b.innerHTML = `<b>${k + 1}</b><span>${esc(callOf(c))}</span><em class="loss">${fmtD(x.gain_s)}</em>`
           + `<span class="note">${esc(tipText(x, MPH) || 'Same technique, quicker all the way through')}${from ? ` \u00b7 best pass ${esc(from.date)}` : ''}</span>`;
-        b.onclick = () => { pick(c.apex, c.start, c.end); if (overlayable(k)) openOverlay(k, b); };
+        b.onclick = () => { pick(c.apex, c.start, c.end); openCorner(k, b); };
         li.append(b); ul.append(li);
       }
       list.prepend(el('h2', null, 'Where to find time'), ul);
@@ -672,7 +698,7 @@
         // say it in their delta, so cards don't repeat "your best pass was 4 mph quicker" (TestFlight 2026-11-12, "text walls")
         + (co && tipText(co.corners[k], MPH) && !co.top.includes(k) && (!co.corners[k].best || co.corners[k].tip.vs_best === false)
           ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
-      r.onclick = () => { pick(c.apex, c.start, c.end); if (overlayable(k)) openOverlay(k, r); };
+      r.onclick = () => { pick(c.apex, c.start, c.end); openCorner(k, r); };
       if (overlayable(k)) r.setAttribute('aria-expanded', 'false');
       grid2.append(r);
     });
