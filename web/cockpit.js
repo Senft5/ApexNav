@@ -6014,7 +6014,8 @@
     // leans on from this phone, at a fixed test place, and sends what it saw to the Worker (backend/src/service_check.ts),
     // where Claude reads it in D1. Runs on its own once a launch at most every SVC_EVERY_MS, and on Run check.
     const SVC_KEY = 'apex.svccheck.at', SVC_EVERY_MS = 6 * 3600e3;
-    let svcRun = null;
+    let svcRun = null, svcAway = 0;
+    document.addEventListener('visibilitychange', () => { if (document.hidden) svcAway++; });
     function serviceCheckDeps() {
       const AT = ApexServiceCheck.AT, TO = ApexServiceCheck.TO;
       const own = () => (ownOn() ? ownRouter() : null);
@@ -6033,6 +6034,7 @@
         // the app's own path (our region list first, then the Overpass servers), with nothing read from this phone's cache
         cameras: (tile) => ApexCameras.load([tile], { fetchFn: fetch, storage: null }),
         cameraQuery: (tile) => ApexCameras.query([tile]),
+        away: () => svcAway + (document.hidden ? 1 : 0),   // a probe the page was hidden through is not judged
       };
     }
     /** Runs the check once (a second ask while one runs gets the same run) and sends it. Resolves { results, sent }. */
@@ -7127,7 +7129,7 @@
       accBody.append(asec);                                                 // your account: Garage → Settings → Account
       if (safety) { accBody.append(safety.blockedSection()); if (me.moderator) accBody.append(safety.moderationSection()); }
       // the owner's service check runs by itself once a launch, at most every 6 h, once the map is idle (its results go to D1)
-      if (me.moderator && !svcRun && !svcLast && serviceCheckDue()) setTimeout(() => runServiceCheck().then((r) => { svcLast = r; }).catch(() => {}), 8000);
+      if (me.moderator && !svcRun && !svcLast && serviceCheckDue()) setTimeout(() => !document.hidden && runServiceCheck().then((r) => { svcLast = r; }).catch(() => {}), 8000);
       if (me.moderator) accBody.append(serviceCheckSection(), errorsSection(), healthSection(), latencySection(), ...(window.ApexFeedback ? [ApexFeedback.ownerSection({ el, btn, apiCall, jsonOf })] : []));
     }
 
