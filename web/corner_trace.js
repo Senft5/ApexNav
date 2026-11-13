@@ -54,6 +54,7 @@
       if (i === c.end && at0 !== null && fin(va) && fin(vb)) out.corner_s = gap - at0;
     }
     if (!out.a_mps.some(fin)) return null;
+    out.i0 = i0; out.b_win = [bs, be];                                // where the trace starts on a, and the corner on b (side-by-side video)
     const bApex = bs + Math.round((c.apex - c.start) * (be - bs) / Math.max(1, c.end - c.start));
     const ma = marks(Core, a, c.start, c.end, c.apex), mb = marks(Core, b, bs, be, bApex);
     const before = (i) => (i === null ? null : (c.apex - i) * 5), after = (i) => (i === null ? null : (i - c.apex) * 5);
