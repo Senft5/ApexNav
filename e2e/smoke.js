@@ -7889,6 +7889,39 @@ flow('a stage\'s Board and Runs fit the phone: an empty board is a sentence, a f
   check(!bad.length, 'the stage page under the island, the home bar or a corner, or keys on keys:\n  ' + bad.join('\n  '));
 });
 
+flow('a friend on a stage\'s Board is a link to their profile, as on Friends lately', async (page, base) => {
+  await page.setViewportSize({ width: SAFE.portrait.w, height: SAFE.portrait.h });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: SAFE.portrait.i });
+  await page.route(base + '/api/**', (route) => { const p = new URL(route.request().url()).pathname, m = route.request().method();
+    const json = (b) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(b) });
+    if (m !== 'GET') return json({});
+    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'natesenft', id: 'U1' });
+    if (p === '/api/friends') return json([{ id: 'F1', handle: 'bob', status: 'accepted' }]);
+    if (p === '/api/board/S1') return json([{ mine: true, handle: 'natesenft', driver_score: 840, time_s: 200 }, { handle: 'bob', user_id: 'F1', driver_score: 812, time_s: 205 }]);
+    if (p === '/api/crews') return json([{ id: 'k1', name: 'VETTA', role: 'owner', members: 1, visibility: 'public' }]);
+    return json([]); });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording && window.ApexCore);
+  // the real drive twice (web/data/dry_ridge.js), and a stage over its middle, backed up
+  await page.evaluate(async () => {
+    await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = 'data/dry_ridge.js'; s.onload = ok; s.onerror = fail; document.head.append(s); });
+    const src = window.APEX_DRIVES.find((x) => x.id === 'dry_ridge'), f = src.fields, c = (k) => f.indexOf(k);
+    const want = ['distance_m', 'lat', 'lon', 'elevation_m', 'speed_mph', 'lon_g', 'lat_g', 'camber_deg', 'roughness_rms', 'crest_vertical_g', 'vert_peak_g'];
+    const csv = [want.join(','), ...src.rows.map((r) => want.map((k) => (r[c(k)] == null ? '' : r[c(k)])).join(','))].join('\n');
+    for (const at of ['20261101_064500', '20261103_071500']) await ApexRecording.store(ApexRecording.parse(ApexCore, csv, `web_${at}.csv`, { source: 'web-gps', name: 'Dry Ridge Rd' }));
+    const r = src.rows, a = r[Math.floor(r.length * 0.2)], b = r[Math.floor(r.length * 0.8)];
+    localStorage.setItem('apex.segments', JSON.stringify([{ id: 'S1', name: 'Dry Ridge Rd', lat0: a[c('lat')], lon0: a[c('lon')], lat1: b[c('lat')], lon1: b[c('lon')],
+      length_m: b[c('distance_m')] - a[c('distance_m')], synced: true }]));
+  });
+  await page.goto(base + '/analysis.html?tab=stages');
+  await page.waitForSelector('#segList button.seg', { timeout: 15000 });
+  await page.click('#segList button.seg');
+  await page.waitForSelector('#segBoard a.friend-link', { timeout: 15000 });
+  const b = await page.evaluate(() => [...document.querySelectorAll('#segBoard tr b')].map((x) => [x.textContent, x.querySelector('a') ? x.querySelector('a').getAttribute('href') : null]));
+  check(JSON.stringify(b) === '[["You",null],["@bob","index.html?view=friends&friend=bob"]]', 'You is plain, @bob opens his profile: ' + JSON.stringify(b));
+});
+
 // REVIEW.md 1.2, screen by screen: each row's "what it should be", checked on the running app. Rows with a flow of
 // their own are named there (Driving: the theme contract; Drive ended; Crew member: crew page; Hazard plate colours).
 flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, driving, the hazard report and replay', async (page, base) => {
