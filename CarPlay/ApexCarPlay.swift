@@ -70,6 +70,9 @@ final class ApexCar {
     /// `attack`: this week's time attack loop (its id), which the phone drives as the route itself.
     typealias Place = (name: String, detail: String, coord: CLLocationCoordinate2D?, saved: String?, attack: String?)
     private(set) var places: [Place] = []
+    /// The car's Loops list as the phone's loop dial (web/carplay.js loopsMessage): five times or five distances, each sent
+    /// back as it came (`minutes` or `miles`). Empty until the page says, and then the dial's five times stand in.
+    private(set) var loops: [(name: String, minutes: Int?, miles: Double?)] = []
     /// The cafés and fuel along the planned route by name (web/carplay.js alongMessage): a longer and a shorter line for the
     /// route preview, empty until the page has looked. A new route clears them; the page sends that route's after it.
     private(set) var along = (full: "", short: "", descent: "")
@@ -269,6 +272,13 @@ final class ApexCar {
                 guard c != nil || saved != nil || attack != nil else { return nil }
                 return (name: String(name.prefix(60)), detail: String(((p["detail"] as? String) ?? "").prefix(60)), coord: c, saved: saved, attack: attack)
             }
+        case "loops":
+            loops = ((dict["list"] as? [[String: Any]]) ?? []).prefix(5).compactMap { r in
+                guard let name = r["name"] as? String, !name.isEmpty else { return nil }
+                let minutes = (r["minutes"] as? NSNumber)?.intValue, miles = (r["miles"] as? NSNumber)?.doubleValue
+                guard (minutes ?? 0) > 0 || (miles ?? 0) > 0 else { return nil }
+                return (name: String(name.prefix(24)), minutes: minutes, miles: minutes == nil ? miles : nil)
+            }
         default:
             break
         }
@@ -467,12 +477,14 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     }
 
     @MainActor private func openLoops() {
-        // The same five times as the phone's loop dial (web/cockpit.js LOOP_MINUTES), so the car and the phone offer one set.
-        let loops: [(String, Int)] = [("30 minutes", 30), ("1 hour", 60), ("1½ hours", 90), ("2 hours", 120), ("3 hours", 180)]
-        let items: [CPListItem] = loops.map { label, minutes in
-            let item = CPListItem(text: label, detailText: nil)
+        // The phone's dial, by time or by distance in your units (ApexCar.loops); its five times until the page has said.
+        let times: [(name: String, minutes: Int?, miles: Double?)] = [("30 minutes", 30, nil), ("1 hour", 60, nil), ("1½ hours", 90, nil),
+                                                                       ("2 hours", 120, nil), ("3 hours", 180, nil)]
+        let loops = ApexCar.shared.loops.isEmpty ? times : ApexCar.shared.loops
+        let items: [CPListItem] = loops.map { l in
+            let item = CPListItem(text: l.name, detailText: nil)
             item.handler = { [weak self] _, done in
-                ApexCar.shared.send("loop", ["minutes": minutes])
+                if let m = l.minutes { ApexCar.shared.send("loop", ["minutes": m]) } else if let mi = l.miles { ApexCar.shared.send("loop", ["miles": mi]) }
                 self?.interfaceController?.popToRootTemplate(animated: true, completion: nil)
                 done()
             }

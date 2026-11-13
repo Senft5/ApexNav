@@ -290,6 +290,7 @@ console.log(JSON.stringify({
   offerSame: C.offerMessage('o4', 'Running 12 min late for home.', 'Running 12 min late for home.', 'Skip Cherohala Skyway', 60000),
   notice: [C.noticeMessage("Couldn't get your location. Type a start or tap the map."), C.noticeMessage('  '),
     C.noticeMessage("Loops use Vetta's own road map, which covers Ohio, Kentucky and Indiana so far.")],
+  loops: [C.loopsMessage('time', false), C.loopsMessage('distance', false), C.loopsMessage('distance', true)],
   offerUndo: C.offerMessage('o8', 'Pothole reported', '', 'Undo', 5000, 'OK'),
   offerNone: [C.offerMessage('', 'x', '', 'k'), C.offerMessage('o5', '', '', 'k'), C.offerMessage('o6', 'x', '', ''), C.offerMessage('o7', 'x', '', 'k', 1000).seconds],
   alongDescent: C.alongMessage([], 'Long descent: 3.7 mi at 8% +1'),
@@ -522,13 +523,30 @@ def test_the_car_offers_the_same_loop_times_as_the_phones_dial():
     """The phone's loop dial has five times; the car's Loops list had three of its own (30 minutes, 1 hour, 2 hours)."""
     import re
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
-    row = re.search(r"let loops: \[\(String, Int\)\] = \[(.*)\]", swift).group(1)
-    car = [int(m) for m in re.findall(r'\("[^"]+", (\d+)\)', row)]
+    row = re.search(r"let times: \[\(name: String, minutes: Int\?, miles: Double\?\)\] = \[(.*?)\]\n", swift, re.S).group(1)
+    car = [int(m) for m in re.findall(r'\("[^"]+", (\d+), nil\)', row)]
     dial = json.loads(re.search(r"LOOP_MINUTES = (\[[\d, ]+\])", cockpit_source()).group(1))
     assert car == dial == [30, 60, 90, 120, 180]
-    assert '("1½ hours", 90)' in row and '("3 hours", 180)' in row
+    assert '("1½ hours", 90, nil)' in row and '("3 hours", 180, nil)' in row
     # and the page takes every one of them: it used to accept only 30, 60 and 120, so the car's 1½ and 3 hours did nothing
     assert "m.action === 'loop' && LOOP_MINUTES.includes(m.minutes)" in cockpit_source()
+
+
+def test_the_cars_loops_list_is_the_phones_dial_by_time_or_distance(maps):
+    """The car offered only times while the phone's dial is set to distance by default: the car now gets the dial itself."""
+    time, mi, km = maps["loops"]
+    assert [r["name"] for r in time["list"]] == ["30 minutes", "1 hour", "1½ hours", "2 hours", "3 hours"]
+    assert [r["minutes"] for r in time["list"]] == [30, 60, 90, 120, 180]
+    assert [r["name"] for r in mi["list"]] == ["15 mi", "30 mi", "45 mi", "60 mi", "90 mi"] and mi["list"][0]["miles"] == 15
+    assert [r["name"] for r in km["list"]] == ["25 km", "50 km", "75 km", "100 km", "150 km"]
+    assert abs(km["list"][0]["miles"] - 25 / 1.609344) < 1e-9 and all("minutes" not in r for r in km["list"])
+    js = cockpit_source()
+    assert "const km = ApexCarPlay.LOOP_KM[i], mi = ApexCarPlay.LOOP_MI[i];" in js, "the dial and the car share one set"
+    assert js.count("carPost(ApexCarPlay.loopsMessage(loopBy, ApexUnits.metric()))") == 2, "on hello and whenever the dial changes"
+    assert "carAsked(() => loop(m.miles))" in js and "Math.abs(x - m.miles) < 0.01" in js, "only a distance the dial has"
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert 'case "loops":' in swift and 'ApexCar.shared.send("loop", ["miles": mi])' in swift
+    assert "let loops = ApexCar.shared.loops.isEmpty ? times : ApexCar.shared.loops" in swift
 
 
 def test_a_close_convoy_hazard_alerts_the_car_with_the_voice_off_too():
