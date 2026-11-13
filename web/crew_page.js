@@ -194,6 +194,7 @@
     .cp-livery-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; border-top: 1px solid var(--rule); padding-top: 10px; }
     .cp-msg { display: grid; grid-template-columns: 40px 1fr; gap: 10px; padding: 8px 0; border-top: 1px solid var(--rule); }
     .cp-msg p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .cp-board-row.tap { cursor: pointer; }
     .cp-msg .cp-who { border: 0; background: none; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; align-self: start; }
     .cp-msg .row { gap: 10px; align-items: baseline; }
     .cp-say { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
@@ -633,6 +634,13 @@
             el('span', { className: 'rank', textContent: x.total == null ? '' : String(i + 1) }),
             P() ? P().avatar(x.photo_id || null, x.handle, 36) : el('span'), who,
             el('span', { className: 'score', textContent: x.total == null ? '--' : Number(x.total).toLocaleString() }));
+          // a crew-mate's row is the person: a tap opens their sheet (Add friend, Report, Block), as their face does
+          if (!x.mine && x.handle) {
+            row.classList.add('tap'); row.tabIndex = 0; row.setAttribute('role', 'button'); row.setAttribute('aria-label', `@${x.handle}, ${x.total == null ? 'no Score' : `${Number(x.total).toLocaleString()} points`}`);
+            const open = () => member(c, { handle: x.handle, photo_id: x.photo_id, mine: false, role: 'member' }, null);
+            row.addEventListener('click', open);
+            row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+          }
           return row;
         }));
       };

@@ -3133,6 +3133,13 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.click('.cp-member-sheet button:has-text("Done")');
   // P-17: a message is its handle, time and words; Report is behind one key
   await page.click('.cp-tabs [data-cp-tab="chat"]');
+  // a row on the Board is the person too
+  await page.click('.cp-tabs [data-cp-tab="board"]');
+  await page.click('.cp-board-row.tap:has-text("@sam")');
+  await page.waitForSelector('.cp-member-sheet h2:has-text("@sam")');
+  check(!(await page.$('.cp-board-row.mine.tap')), 'your own row is not a key');
+  await page.click('.cp-member-sheet button:has-text("Done")');
+  await page.click('.cp-tabs [data-cp-tab="chat"]');
   // the handle on a message opens the person, as a face on the members strip does
   await page.click('.cp-msg button.cp-who:has-text("@sam")');
   await page.waitForSelector('.cp-member-sheet button:text-is("Request sent")[disabled]');
@@ -5574,6 +5581,23 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   await page.click('.profile-view button:has-text("Friends")');   // one back glyph and where it goes (REVIEW2.md)
   await page.waitForSelector('.side-pop.open .profile-view', { state: 'detached', timeout: 3000 }).catch(() => {});
   check(await page.evaluate(() => !document.querySelector('.side-pop.open') && !!document.querySelector('#accountBody .friend-head:not(.you-row)')), 'Back returns to the friends list');
+  // a friend's handle on the Log's Friends lately links here: the map page opens People on that friend's profile
+  await page.goto(base + '/index.html?view=friends&friend=bob');
+  await page.waitForSelector('.side-pop.open .profile-view', { timeout: 10000 });
+  check((await page.textContent('.side-pop.open .profile-view')).includes('@bob'), 'index.html?view=friends&friend=bob opens @bob\'s profile');
+  // and from the Log itself, in its frame over the map: a tap on @bob closes the Log onto his profile, the map page never reloads
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.evaluate(() => { window.__stay = 1; });
+  await page.route(base + '/api/board/activity', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify([{ handle: 'bob', canon_id: 'C1', stage: 'Esses', driver_score: 812, driven_on: '2026-10-26', you: null }]) }));
+  await page.evaluate(() => document.querySelector('.tab[data-view="log"]').click());
+  const frame = await (await page.waitForSelector('iframe')).contentFrame();
+  await frame.waitForSelector('#friendsList a.friend-link', { timeout: 10000 });
+  check(await frame.getAttribute('#friendsList a.friend-link', 'href') === 'index.html?view=friends&friend=bob', 'the handle is a link to the friend');
+  await frame.click('#friendsList a.friend-link');
+  await page.waitForSelector('.side-pop.open .profile-view', { timeout: 10000 });
+  check(await page.evaluate(() => window.__stay === 1 && document.querySelector('.side-pop.open .profile-view').textContent.includes('@bob')), 'the Log closes onto @bob\'s profile, in place');
 });
 
 flow('duels: a friend\'s challenge is a card on People; Accept starts it; the card keeps both Scores and the days left; your own Scores can be shown from it; Challenge on a stage sends one (Worker stubbed, SOCIAL 2.7)', async (page, base) => {
