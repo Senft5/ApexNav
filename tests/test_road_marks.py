@@ -121,3 +121,11 @@ def test_a_deer_crossing_is_called_in_cruise_from_dusk_to_dawn():
     got = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
     assert got == [True, True, False, False, False, False]
     assert "ApexRoadMarks.cruiseWorthy(e, sunAltNow())" in open(os.path.join(ROOT, "web", "cockpit.js")).read()
+
+
+def test_the_road_ahead_gets_the_marks_too():
+    """A free drive (no route) asks the map for the horizon's own corridor, and a mark said on the last horizon is not
+    said again on the next one, which overlaps it."""
+    js = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert "attachHorizonMarks(t);" in js and "await contextOn([c], CTX_BUDGET_MS, 'ahead', ['osm_overpass']);" in js
+    assert "free.marksSaid = [...(free.marksSaid || []), ...old.marks.filter(" in js

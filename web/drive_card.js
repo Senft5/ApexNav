@@ -7,6 +7,7 @@
 (function (root) {
   'use strict';
   const W = 1080, H = 1920;   // 9:16 (JA-1)
+  const SITE = 'vettadrive.com';
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
   /** Normalised outline of the drive in a unit box (y down), equal scale on both axes, at most `max` points. */
@@ -147,7 +148,8 @@
     });
     const mixText = mixLine(m.mix);
     g.fillStyle = dim; g.font = font(500, 34); g.fillText(mixText, 90, H - 170);
-    g.fillStyle = accent; g.font = font(800, 40, C.fontNum); g.textAlign = 'right'; g.fillText('VETTA', W - 90, H - 172); g.textAlign = 'left';
+    g.fillStyle = accent; g.font = font(800, 40, C.fontNum); g.textAlign = 'right'; g.fillText('VETTA', W - 90, H - 172);
+    g.fillStyle = dim; g.font = font(600, 26); g.fillText(SITE, W - 90, H - 132); g.textAlign = 'left';   // where a shared card leads (the owner's domain, 2026-11-14)
     if (opts.car) drawCar(g, opts.car, ink, W - 90, H - 212);
     return canvas;
   }
@@ -170,9 +172,10 @@
     return shareFile(blob, fileName, 'image/png');
   }
   /** Any file the same way (the end card's best corner clip too). */
-  async function shareFile(blob, fileName, mime) {
+  async function shareFile(blob, fileName, mime, opts = {}) {
     // the shell's share sheet in the app (save_file.js), where a download link does nothing (feedback 07)
-    if (root.ApexSaveFile && typeof location !== 'undefined' && location.protocol === 'apexnav:') return root.ApexSaveFile.saveFile(blob, fileName, mime, { share: true });
+    if (root.ApexSaveFile && typeof location !== 'undefined' && location.protocol === 'apexnav:') return root.ApexSaveFile.saveFile(blob, fileName, mime, { ...opts, share: true });
+    if (opts.caption && root.ApexSaveFile && await root.ApexSaveFile.copyText(String(opts.caption).slice(0, 500)) && opts.copied) opts.copied();
     const file = typeof File === 'function' ? new File([blob], fileName, { type: mime }) : null;
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file] }); return 'shared'; } catch (e) { if (e && e.name === 'AbortError') return 'cancelled'; }
@@ -182,6 +185,6 @@
     return 'saved';
   }
 
-  const api = { cardModel, cardTitle, mixLine, silhouette, trimEnds, TRIM_M, cornerMix, drawCard, shareCard, shareFile, PARTS, W, H };
+  const api = { cardModel, cardTitle, mixLine, silhouette, trimEnds, TRIM_M, cornerMix, drawCard, shareCard, shareFile, SITE, PARTS, W, H };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveCard = api;
 })(typeof window !== 'undefined' ? window : globalThis);

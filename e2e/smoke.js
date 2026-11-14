@@ -3958,6 +3958,37 @@ flow('the Log list: each drive has its road\'s shape beside its name; a summary 
   check(old && old.sv === 3 && old.n === 32 && old.score === 777 && rows.find((r) => r.id === 'sh2').score.trim() === '777', 'the old summary got its shape and kept its score (not scored again): ' + JSON.stringify(sum));
 });
 
+flow('the App Store rating: asked on the end card after a good drive, parked, from the third drive, once per version; never moving (guideline 5.6.1)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__posted = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { window.__posted.push(m); } } } }; });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apex && window.ApexRecording && window.ApexEndLine);
+  await page.clock.install();
+  const end = (id, score, mps) => page.evaluate(async ([id, score, mps]) => {
+    document.getElementById('endDone').click();
+    ApexCore.driverScore = () => ({ score, components: {} });
+    window.apex.live({ lat: 35.36, lon: -84.29, accuracy_m: 5, speed_mps: mps, course_deg: 0, has_fix: true });
+    const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + Math.sin(i / 40) * 0.0015); }
+    const d = { id, name: 'Road ' + id, date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15), lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] };
+    await ApexRecording.store(d);
+    apexDebug.showEndCard(d, Date.now() - 600e3, { quiet: true });
+  }, [id, score, mps]);
+  const asked = () => page.evaluate(() => window.__posted.filter((m) => m && m.cmd === 'askReview').length);
+  const settle = async () => { for (let i = 0; i < 20; i++) { await page.clock.runFor(250); await page.waitForTimeout(20); } };
+  await end('r1', 820, 0); await settle();
+  await end('r2', 820, 0); await settle();
+  check(await asked() === 0, 'not before the third drive');
+  await end('r3', 820, 6); await settle();
+  check(await asked() === 0, 'never while moving');
+  await end('r4', 610, 0); await settle();
+  check(await asked() === 0, 'an ordinary drive: no');
+  await end('r5', 820, 0); await settle();
+  check(await asked() === 1 && await page.evaluate(() => localStorage.getItem('vetta.reviewAsked')) === '1.4', 'a good drive, parked, from the third: asked once, for this version');
+  await end('r6', 900, 0); await settle();
+  check(await asked() === 1, 'once per version');
+}, { userAgent: 'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 ApexNav/1.4 (77)' });
+
 flow('drive ended: Open in the Log is the solid key with no score, Share card with one, fixed from the first frame; a drive on a route keeps its name (REVIEW4 U-75, REVIEW5 U-118)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
@@ -8818,7 +8849,7 @@ flow('film the drive: the app\'s own video of a drive is offered on its page, li
   const keys = await page.evaluate(() => [...document.querySelectorAll('#dvDashcam .dc-own button')].map((b) => b.textContent));
   check(keys.length === 1 && keys[0] === 'This drive\'s video · 7 s', 'only the video filmed on this drive is offered: ' + JSON.stringify(keys));
   check(/Vetta filmed this drive/.test(await page.textContent('#dvDashcam')), 'the panel says it was filmed');
-  await page.evaluate(() => { window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type) => { window.__saved = { size: blob.size, name, type }; return 'saved'; }; });
+  await page.evaluate(() => { window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type, o) => { window.__saved = { size: blob.size, name, type, caption: o && o.caption }; if (o && o.copied) o.copied(); return 'saved'; }; });
   await page.click('#dvDashcam .dc-own button');
   await page.waitForFunction(() => /Video starts 1\.5 s into the drive/.test(document.querySelector('#dvDashcam').textContent), null, { timeout: 8000 });
   // the corner (2 to 4 s into the drive) is in the video though its lead isn't all there: offered, cut from the video's start
@@ -8827,6 +8858,11 @@ flow('film the drive: the app\'s own video of a drive is offered on its page, li
   await page.waitForFunction(() => window.__saved, null, { timeout: 30000 });
   const saved = await page.evaluate(() => window.__saved);
   check(saved.size > 500 && /^Filmed_road-corner-1-/.test(saved.name), 'a clip from the drive\'s own video, with no lining up: ' + JSON.stringify(saved));
+  check(saved.caption === 'Filmed road · Left 4\nCalled by Vetta. Free on iPhone, link in bio.\n#drivingroads #backroads' && /caption is copied/.test(await page.textContent('#dvDashcam .dc-clip-note')),
+    'its caption goes with it, copied: ' + JSON.stringify(saved.caption));
+  check(await page.isChecked('#dvDashcam .dc-speed'), 'Show speed on clips: on until switched off');
+  await page.uncheck('#dvDashcam .dc-speed');
+  check(await page.evaluate(() => localStorage.getItem('apex.clipSpeed') === 'off' && !ApexCornerClip.speedShown()), 'off, kept on this phone');
   // one tap from the corner itself: on a fresh page, the corner's card offers Clip this corner, which opens the video and shares the clip
   await page.goto(base + '/analysis.html?drive=fd1');
   await page.waitForSelector('#dvDashcam .dc-own button');
@@ -10635,6 +10671,44 @@ flow('road marks: a stop sign and a railway crossing from the map are pinned on 
   check(saidAt !== null && 1500 - saidAt >= 92, `"Stop sign" said with room to stop from 25 m/s (${saidAt === null ? 'never' : Math.round(1500 - saidAt) + ' m before'}): ` + JSON.stringify(await page.evaluate(() => window.__said)));
   for (let i = await iAt(1500), end = await iAt(2190); i <= end; i += 3) { await at(i, 25); await page.waitForTimeout(30); }
   check(await page.evaluate(() => window.__said.filter((s) => /Railway crossing/.test(s)).length) === 1, 'the crossing called once: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+});
+
+flow('road marks on the road ahead: a free drive with no route still hears the stop sign from the map, once (attachHorizonMarks)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  const KY = 110540, lat = (m) => 35.5 + m / KY, LON = -83.9, kx = 111320 * Math.cos(35.5 * Math.PI / 180);
+  const g = (m, dx = 0) => ({ lat: lat(m), lon: LON + dx / kx });
+  const ids = []; for (let m = 0; m <= 3000; m += 100) ids.push(1000 + m / 100);
+  const elements = [
+    { type: 'way', id: 1, tags: { highway: 'tertiary', name: 'Straight Road' }, nodes: ids, geometry: ids.map((_, k) => g(k * 100)) },
+    { type: 'way', id: 2, tags: { highway: 'primary', name: 'Big Pike' }, nodes: [9001, 1015, 9002], geometry: [g(1500, -300), g(1500), g(1500, 300)] },
+    { type: 'node', id: 1015, ...g(1500), tags: { highway: 'stop' } },
+  ];
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const coords = []; for (let m = 0; m <= 2500; m += 10) coords.push([LON, lat(m)]);
+  await page.evaluate((coords) => apexDebug.horizonFrom(coords), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon' && Array.isArray(apexDebug.track.marks) && apexDebug.track.marks.length, null, { timeout: 30000 })
+    .catch(async () => { throw new Error('no marks on the road ahead: ' + JSON.stringify(await page.evaluate(() => [apexDebug.track && apexDebug.track.kind, apexDebug.lastCtx]))); });
+  const marks = await page.evaluate(() => apexDebug.track.marks.map((m) => [m.code, Math.round(m.dist_m)]));
+  check(marks.length === 1 && marks[0][0] === 'STOP' && Math.abs(marks[0][1] - 1500) <= 30, 'the stop on the road ahead: ' + JSON.stringify(marks));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 25, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const stops = () => page.evaluate(() => window.__said.filter((s) => /^Stop sign/.test(s)));
+  for (let i = await iAt(1000), end = await iAt(1490); i <= end && !(await stops()).length; i += 2) { await at(i); await page.waitForTimeout(40); }
+  check((await stops()).length === 1, 'the stop called on a free drive: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  // the next road ahead overlaps this one (rebuilt before its end): the stop it holds was said already
+  const c2 = []; for (let m = 1300; m <= 3000; m += 10) c2.push([LON, lat(m)]);
+  await page.evaluate((c) => apexDebug.horizonFrom(c), c2);
+  await page.waitForFunction(() => apexDebug.track.dist[apexDebug.track.dist.length - 1] < 2000 && Array.isArray(apexDebug.track.marks) && apexDebug.track.marks.length, null, { timeout: 30000 });
+  for (let i = 0, end = await iAt(400); i <= end; i += 2) { await at(i); await page.waitForTimeout(40); }
+  check((await stops()).length === 1, 'not again on the next road ahead: ' + JSON.stringify(await stops()));
 });
 
 flow('road marks on a route set during a drive: the map is asked for this route alone (road_marks.js, attachMarksSoon)', async (page, base) => {
