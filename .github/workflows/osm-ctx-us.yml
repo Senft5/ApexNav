@@ -149,10 +149,14 @@ jobs:
       WORK: /home/runner/osm_work
     steps:
       - uses: actions/checkout@v4
-      - name: Free disk
+      - name: Free disk, add swap
+        # the New York chunk (43_-76) lost its runner mid-build on the first full run (2026-11-14), out of memory: swap
+        # as graph-us.yml has
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
-          df -h /
+          sudo swapoff -a || true
+          sudo fallocate -l 12G /swapfile2 && sudo chmod 600 /swapfile2 && sudo mkswap /swapfile2 && sudo swapon /swapfile2
+          free -m && df -h /
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -210,8 +214,9 @@ jobs:
 
   publish:
     needs: [plan, band]
-    # a pilot uploads too: it only adds or refreshes cells, it never takes any away
-    if: github.ref == 'refs/heads/main'
+    # a pilot uploads too: it only adds or refreshes cells, it never takes any away. So does a run with a failed chunk:
+    # the chunks that built go up, the failed one's cells stay as they were (Overpass, or last week's)
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:

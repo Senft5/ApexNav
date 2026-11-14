@@ -202,3 +202,9 @@ def test_a_reused_publish_never_asks_geofabrik():
     plan = wf[wf.index("\n  plan:"):wf.index("\n  osm:")]
     assert plan.index('if [ -n "$IN_BANDS" ]; then') < plan.index("download.geofabrik.de/index-v1.json")
     assert "--retry-max-time 1500" in plan
+
+
+def test_the_lower_48_is_rebuilt_monthly_and_goes_live():
+    wf = open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "graph-us.yml")).read()
+    assert 'cron: "23 3 1 * *"' in wf, "the 1st of each month (day of month and day of week together would be either)"
+    assert '[ -z "$only" ] && live=true' in wf, "a scheduled run has no inputs: the whole country, live"

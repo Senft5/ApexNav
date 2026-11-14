@@ -58,7 +58,7 @@
     // web/route_tuning.js): 1 counts their wait as it is; above it the search keeps off them, while the route's time (the
     // card's, the ETA's) still counts only the real wait
     STOP_AVOID_X: 1,
-    PRIVATE_X: 10, PRIVATE_S: 600, DESTINATION_X: 2, DESTINATION_S: 60, FERRY_X: 2, UNPAVED_X: 1.5,
+    PRIVATE_X: 10, PRIVATE_S: 600, DESTINATION_X: 2, DESTINATION_S: 60, FERRY_X: 2, UNPAVED_X: 1.5, UNPAVED_FREE_KM: 0.5,
     AVOID_HWY_X: 4, AVOID_TOLL_X: 3, AVOID_FERRY_X: 5, AVOID_UNPAVED_X: 5,
     AVOID_POINT_X: 8, AVOID_POINT_M: 150, AVOID_POINT_MAX: 20,   // Avoid police reports: edges within 150 m of a live report
     AVOID_CAM_X: 8, AVOID_CAM_M: 35, AVOID_CAM_MAX: 60,          // Avoid cameras: edges within 35 m of a plate reader or speed camera
@@ -975,7 +975,7 @@
     const B = flagBits(), coords = [], names = [], steps = [], turns = [], times = [];
     let lineM = 0;
     const gEnd = [], gEdge = [];
-    let timeS = 0, distM_ = 0, q = 0, s = 0, sw = 0, f = 0, cf = 0, wsum = 0, junctions = 0, signals = 0, hwyM = 0, gm = 0, poorM = 0, goodM = 0;
+    let timeS = 0, distM_ = 0, q = 0, s = 0, sw = 0, f = 0, cf = 0, wsum = 0, junctions = 0, signals = 0, hwyM = 0, gm = 0, poorM = 0, goodM = 0, unpavedM = 0;
     const hwyBy = new Map();                                            // metres per highway name (the card's "Uses 0.4 mi of I-275")
     const has = { highways: false, tolls: false, ferries: false, unpaved: false };
     let roundabout = null;
@@ -1036,7 +1036,7 @@
       if (isHwyEdge(v, e)) { hwyM += m; const hn = nm || 'the highway'; hwyBy.set(hn, (hwyBy.get(hn) || 0) + (fl & B.ramp ? m / 1000 : m)); }
       if (fl & B.toll) has.tolls = true;
       if (fl & B.ferry) has.ferries = true;
-      if (fl & B.unpaved) has.unpaved = true;
+      if (fl & B.unpaved) { has.unpaved = true; unpavedM += m; }
     }
     const end = coords[coords.length - 1];
     if (coords.length) {
@@ -1047,7 +1047,7 @@
     const nameKm = new Map();
     for (const n of names) if (n.name) nameKm.set(n.name, (nameKm.get(n.name) || 0) + (n.toM - n.fromM) / 1000);   // km, as routeOf has them (Valhalla lengths)
     const why = { source: 'own', level: meta.level || null, role: meta.role || null, a: meta.a != null ? meta.a : 0,
-      quality: cf > 0 ? q / cf : null, scenery: sw > 0 ? s / sw : null, fun: f, conf: wsum > 0 ? cf / wsum : 0, goodness: wsum > 0 ? gm / wsum : null, poorKm: poorM / 1000, goodKm: goodM / 1000, junctions, signals,
+      quality: cf > 0 ? q / cf : null, scenery: sw > 0 ? s / sw : null, fun: f, conf: wsum > 0 ? cf / wsum : 0, goodness: wsum > 0 ? gm / wsum : null, poorKm: poorM / 1000, goodKm: goodM / 1000, unpavedKm: unpavedM / 1000, junctions, signals,
       objective: meta.a ? 't*(1+a*(1-goodness))' : 'time', hwyKm: hwyM / 1000 };
     // motorway, trunk and their links driven (km) and the one most of it is on, by name (NO_HWY levels report it)
     const hwyName = hwyM > 0 ? [...hwyBy].sort((x, y) => y[1] - x[1])[0][0] : null;
@@ -1313,7 +1313,7 @@
     // the pick at Fun and Long way: the goodness the extra time buys (pick()), not the largest weight inside the budget
     if (free2 && K.BUY[level] != null) {
       const was = best;
-      best = pick(base, [...found, ...alts], limitS, K.BUY[level]);
+      best = pick(base, [...found, ...alts], limitS, K.BUY[level], unpavedOk(req.avoid, base));
       if (best !== was) {
         if (was.why.role === 'best') was.why.role = 'step';
         // an alternate is a route that differs from the pick (ALT_MIN_DIFF); one that doesn't any more is a step
@@ -1338,14 +1338,22 @@
    * that's near (price 0.12: 10 % more time must buy 0.012 of goodness), Long way also the good road further off (0.03),
    * and neither lengthens a trip for road no better than the quickest's (2026-11-08, the levels audit).
    */
-  function pick(base, routes, limitS, price) {
+  /** With unpaved roads avoided (the app's default: fun_route.js AVOID_DEFAULT), a route the pick may take drives no more
+   *  of them than the level's quickest does, UNPAVED_FREE_KM aside: the search's AVOID_UNPAVED_X is a cost, and at Fun's
+   *  weights a forest road's corners outweigh it (Back of the Dragon, 2026-11-14: 18 km of Nat'l Forest Road 614 picked off VA 16). */
+  function unpavedOk(avoid, base) {
+    if (!avoid || !avoid.unpaved) return null;
+    const cap = ((base && base.why.unpavedKm) || 0) + K.UNPAVED_FREE_KM;
+    return (r) => !((r.why.unpavedKm || 0) > cap);
+  }
+  function pick(base, routes, limitS, price, ok = null) {
     const rel = (r) => (r.timeS - base.timeS) / Math.max(1, base.timeS);
     const road = (r) => K.ROAD.good * (r.why.goodKm || 0) - K.ROAD.poor * (r.why.poorKm || 0);
     const g = (r) => r.why.goodness + K.ROAD.w * (road(r) - road(base));
     const u = (r) => g(r) - price * rel(r);
     let best = base;
     for (const r of routes) {
-      if (r === base || r.timeS > limitS || !Number.isFinite(r.why.goodness)) continue;
+      if (r === base || r.timeS > limitS || !Number.isFinite(r.why.goodness) || (ok && !ok(r))) continue;
       const x = rel(r), dg = g(r) - base.why.goodness;
       if (x > 0 && dg < K.BUY_MIN * x) continue;
       if (x <= 0 && dg <= 0) continue;
@@ -1391,7 +1399,7 @@
       if (!backs.length) continue;
       const quickBack = backs.reduce((x, y) => (y.timeS < x.timeS ? y : x));
       const limitS = quickBack.timeS * (1 + L.budget) + L.slackS;
-      const back = K.BUY[level] != null ? pick(quickBack, backs, limitS, K.BUY[level]) : quickBack;
+      const back = K.BUY[level] != null ? pick(quickBack, backs, limitS, K.BUY[level], unpavedOk(req.avoid, quickBack)) : quickBack;
       const r = loopRoute(v, obj, [{ edges: Array.from(o.edgeIdx), fs: o.fs, ft: o.ft }, { edges: Array.from(back.edgeIdx), fs: back.fs, ft: back.ft }], level, back.why.a);
       r.kind = 'round'; r.why.role = 'round';
       r.out = { timeS: o.timeS, distM: o.distM, role: o.why.role }; r.back = { timeS: back.timeS, distM: back.distM, a: back.why.a };

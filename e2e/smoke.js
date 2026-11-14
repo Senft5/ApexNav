@@ -3565,6 +3565,65 @@ flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stub
   check(!(await page.$$eval('#crewsBody h3', (h) => h.filter((x) => /Convoy/.test(x.textContent)).length)), 'no Convoy heading on Crews');
 });
 
+flow('convoy voice: Talk joins the channel, the one key mutes and unmutes, and a new voice is listened to (Worker, socket and WebRTC stubbed)', async (page, base) => {
+  await page.addInitScript(() => {
+    try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.convoy', 'AAAAAAAAAAAAAAAAAAAAAA'); } catch (_) {}
+    // no real microphone or SFU here: a fake getUserMedia and RTCPeerConnection that answer like the real ones
+    const track = { enabled: true, stop() {} };
+    navigator.mediaDevices.getUserMedia = async () => ({ getAudioTracks: () => [track], getTracks: () => [track] });
+    window.__track = track;
+    window.RTCPeerConnection = class { constructor() { this.connectionState = 'new'; }
+      addTransceiver() { return { mid: '0', sender: { getParameters: () => ({ encodings: [{}] }), setParameters: async () => {} } }; }
+      async createOffer() { return { type: 'offer', sdp: 'v=0 offer' }; } async createAnswer() { return { type: 'answer', sdp: 'v=0 answer' }; }
+      async setLocalDescription(d) { this.localDescription = d; } async setRemoteDescription() {} close() {} };
+  });
+  const id = 'AAAAAAAAAAAAAAAAAAAAAA', until = Date.now() + 60 * 60000, calls = [], frames = [];
+  const ctx = { sessionId: id, name: 'Sunday run', role: 'member', you: 'k2', leaderKey: 'k1', expiresAtMs: until, seq: 0, leaderEpoch: 1, voiceReady: true, voice: [],
+    members: [{ key: 'k1', handle: 'lead', role: 'leader', online: true }, { key: 'k2', handle: 'me', role: 'member', online: true }] };
+  let sock = null;
+  await page.routeWebSocket(/\/api\/convoy\/.*\/connect/, (ws) => {
+    sock = ws;
+    ws.onMessage((m) => { const f = JSON.parse(m); frames.push(f); if (f.type === 'authenticate') ws.send(JSON.stringify({ type: 'ready', context: ctx, events: [], positions: [], route: null, regroup: null })); });
+  });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname.includes('/voice')) calls.push(`${m} ${u.pathname.replace(`/api/convoy/${id}`, '')}`);
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === `/api/convoy/${id}`) return json(ctx);
+    if (u.pathname === `/api/convoy/${id}/ticket`) return json({ ticket: 't'.repeat(32), expiresAtMs: Date.now() + 60000 }, 201);
+    if (u.pathname === `/api/convoy/${id}/voice` && m === 'POST') return json({ sdp: { type: 'answer', sdp: 'a=rtpmap:111 opus/48000/2\r\n' }, voice: [] });
+    if (u.pathname === `/api/convoy/${id}/voice/pull`) return json({ sdp: { type: 'offer', sdp: 'v=0 pull' }, tracks: [{ key: 'k1', mid: '1' }] });
+    if (u.pathname === `/api/convoy/${id}/voice/answer`) return json({ ok: true });
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForSelector('.convoy-bar.show .cv-talk', { timeout: 15000 });
+  check((await page.textContent('.convoy-bar .cv-talk')) === 'Talk', 'the convoy line has one Talk key');
+  const box = await page.$eval('.convoy-bar .cv-talk', (b) => { const r = b.getBoundingClientRect(); return [r.width, r.height]; });
+  check(box[0] >= 44 && box[1] >= 44, 'the key is thumb-sized for a car mount: ' + box);
+  await page.click('.convoy-bar .cv-talk');
+  await page.waitForFunction(() => document.querySelector('.convoy-bar .cv-talk').textContent === 'Mute', null, { timeout: 5000 });
+  check(calls[0] === 'POST /voice', 'Talk publishes the microphone through the Worker: ' + calls);
+  check(await page.$eval('.convoy-bar .cv-talk', (b) => b.classList.contains('on')), 'the key shows the mic is open');
+  check(frames.some((f) => f.type === 'voice' && f.muted === false), 'the convoy is told we are on, unmuted');
+  if (process.env.SHOTS) await page.screenshot({ path: path.join(process.env.SHOTS, 'convoy-voice-on.png') });
+  await page.click('.convoy-bar .cv-talk');
+  await page.waitForFunction(() => document.querySelector('.convoy-bar .cv-talk').textContent === 'Unmute', null, { timeout: 3000 });
+  check(await page.evaluate(() => window.__track.enabled === false) && frames.some((f) => f.type === 'voice' && f.muted === true), 'Mute turns the mic off and tells the convoy');
+  await page.click('.convoy-bar .cv-talk');
+  await page.waitForFunction(() => document.querySelector('.convoy-bar .cv-talk').textContent === 'Mute', null, { timeout: 3000 });
+  sock.send(JSON.stringify({ type: 'voice', key: 'k1', on: true, muted: false, joined: true }));
+  await page.waitForTimeout(300);
+  check(calls.includes('POST /voice/pull') && calls.includes('PUT /voice/answer'), 'a voice that comes on is listened to: ' + calls);
+  await page.click('.convoy-bar .cv-line');
+  await page.waitForSelector('.convoy-sheet button:has-text("Leave voice")');
+  await page.click('.convoy-sheet button:has-text("Leave voice")');
+  await page.waitForTimeout(200);
+  check(calls.at(-1) === 'DELETE /voice' && !(await page.evaluate(() => localStorage.getItem('apex.convoyVoice'))), 'Leave voice takes us off, and the next convoy will not join by itself');
+});
+
 flow('crew page: an old ?view=crew link opens People on Crews, at your crew; going, chat and the livery reach the Worker (Worker stubbed, REVIEW.md roadmap 20)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const sent = [], boardAsks = [], soon = new Date(Date.now() + 3 * 86400e3).toISOString();
