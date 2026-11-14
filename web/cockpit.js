@@ -6005,8 +6005,8 @@
         placesAsk = { q, p: new Promise((r) => { done = r; }) };
         try {
           try { rows = (IN_APP_SHELL && await appleSuggest(q)) || await photonSuggest(q); } catch (_) {
-            // no signal: the map kept on the phone has the towns and places round you (mapSuggest)
-            rows = navigator.onLine === false ? await mapSuggest(q).catch(() => []) : [];
+            // no signal, or one bar that carries nothing: the map kept on the phone has the towns and places round you (mapSuggest)
+            rows = await mapSuggest(q).catch(() => []);
             if (!mine.length && !rows.length) empty = navigator.onLine === false ? 'No signal, and no match on the map kept on this phone.' : 'Suggestions didn\'t load. Press Search to try.';
           }
           if (seq !== suggestSeq) return;                                // a newer keystroke won

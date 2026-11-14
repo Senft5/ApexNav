@@ -1030,7 +1030,7 @@ flow('Where to? with no signal: the towns and places on the map kept on the phon
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.ownRouting', '0'); } catch (_) {} });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexStages && window.ApexPlaceSearch);
-  // what the kept tiles hold round here (stages.js reads them from the phone with no signal); asked only with no signal
+  // what the kept tiles hold round here (stages.js reads them from the phone with no signal); asked when the map search fails
   await page.evaluate(() => {
     window.__keptAsked = 0;
     ApexStages.places = async ([p]) => { window.__keptAsked++; return [{ name: 'Tellico Plains', cls: 'town', lat: 35.366, lon: -84.296 }, { name: 'Tellico Plains', cls: 'village', lat: 35.9, lon: -84.29 }]; };
@@ -1049,6 +1049,9 @@ flow('Where to? with no signal: the towns and places on the map kept on the phon
   await page.context().setOffline(false);
   await page.route('https://nominatim.openstreetmap.org/**', (route) => route.abort());
   await page.route('https://photon.komoot.io/**', (route) => route.abort());
+  // one bar that carries nothing (the phone says it's online, the map search never answers): the kept map's places too
+  await page.fill('#destInput', 'tellic');
+  await page.waitForFunction(() => [...document.querySelectorAll('#placeList button.place')].some((b) => /Tellico Plains/.test(b.textContent)), null, { timeout: 15000 });
   const asked = [];
   await page.route('https://valhalla1.openstreetmap.de/route', (route) => { const req = JSON.parse(route.request().postData() || '{}'); asked.push(req.locations);
     route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) }); });
