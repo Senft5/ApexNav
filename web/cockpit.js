@@ -2602,7 +2602,12 @@
       for (let i = 0; i < t.lat.length; i += 20) pts.push([t.lat[i], t.lon[i]]);
       pts.push([t.lat[t.lat.length - 1], t.lon[t.lon.length - 1]]);
       const nodes = await ApexCameras.load(ApexCameras.tilesNear(pts));
-      if (track === t) $('camOfflineNote').hidden = !!nodes;
+      if (track === t) {
+        // no signal: a kept list past its week still pins the cameras (cameras.js keptAt), and the note says how old it is
+        const note = $('camOfflineNote'), aged = nodes && Number.isFinite(nodes.keptAt);
+        note.textContent = aged ? `Camera map from ${new Date(nodes.keptAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}, no signal to check for newer ones.` : "Camera map offline. No pins doesn't mean no cameras.";
+        note.hidden = !!nodes && !aged;
+      }
       if (nodes) { attachAlpr(t, nodes); return; }
       // U-102: no toast over the replay's map: the Layers sheet, under Cameras, says the camera map is offline
     }

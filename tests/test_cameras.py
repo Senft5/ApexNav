@@ -30,6 +30,10 @@ const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.
   const took = Date.now() - t0;
   const again = await C.load(['140_-340'], { fetchFn: () => { throw new Error('not again'); }, storage: store, now: 2000, region: null });
   const stale = await C.load(['140_-340'], { fetchFn: () => Promise.resolve({ ok: false, status: 500 }), storage: store, now: 1000 + 8 * 864e5, region: null });
+  const offline = () => Promise.reject(new TypeError('Failed to fetch'));
+  const kept = await C.load(['140_-340'], { fetchFn: offline, storage: store, now: 1000 + 30 * 864e5, region: null });
+  const tooOld = await C.load(['140_-340'], { fetchFn: offline, storage: store, now: 1000 + 91 * 864e5, region: null });
+  const part = await C.load(['140_-340', '141_-340'], { fetchFn: offline, storage: store, now: 1000 + 30 * 864e5, region: null });
   const empty = await C.load([], { fetchFn, storage: mem() });
   // our region file: 156_-339 covered with two cameras, 156_-338 covered with none, 140_-340 not covered (Overpass)
   const doc = { version: 1, tiles: ['156_-339', '156_-338'], cams: [[39.1, -84.7, 'a'], [39.2, -84.6, 's'], [35.1, -84.9, 'a'], [39.1, 'x', 'a'], [39.1, -84.7, 'q']] };
@@ -44,7 +48,7 @@ const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.
   const down = await C.load(['156_-339'], { fetchFn: (url) => url.includes('region.json') ? Promise.resolve({ ok: false, status: 502 }) : Promise.resolve({ ok: true, json: async () => ({ elements: [] }) }),
     storage: mem(), now: 1000, region: 'https://w/api/cameras/v1/region.json' });
   const both = await C.load(['156_-339'], { fetchFn: () => Promise.resolve({ ok: false, status: 504 }), storage: mem(), now: 1000, region: 'https://w/api/cameras/v1/region.json' });
-  console.log(JSON.stringify({ tiles: tiles.length, box: box.length, q: C.query(['140_-340']), first, took, again, stale, empty, calls: calls.length,
+  console.log(JSON.stringify({ tiles: tiles.length, box: box.length, q: C.query(['140_-340']), first, took, again, stale, kept, keptAt: kept && kept.keptAt, tooOld, part, freshAt: first.keptAt ?? null, empty, calls: calls.length,
     classify: els.map(C.classify), keys: [...store._m.keys()],
     inside, insideAsked, kept2: [...store2._m.keys()].sort(), mixed, mixedAsked, down, both, servers: C.SERVERS.length }));
 })();
@@ -71,7 +75,7 @@ def test_servers_raced_and_tiles_kept_a_week(out):
     assert out["took"] < 3000, "the answer wins without waiting for the server that hangs"
     assert out["calls"] == 4, "every server asked at once"
     assert out["again"] == out["first"], "the tile is kept: no second query"
-    assert out["stale"] is None, "after a week the tile is asked for again (and offline says so with null)"
+    assert out["stale"] == out["first"], "after a week the tile is asked for again; no answer: the kept one, with its age (below)"
     assert out["empty"] == [] and out["keys"] == ["apex.cam.140_-340"]
 
 
@@ -91,3 +95,13 @@ def test_tiles_outside_our_list_still_go_to_overpass(out):
 def test_our_list_down_falls_back_to_overpass_and_both_down_is_unknown(out):
     assert out["down"] == [], "our list down: Overpass answers (none there)"
     assert out["both"] is None, "nothing answered: unknown (the note says offline), never an empty map"
+
+
+def test_no_signal_uses_a_kept_list_past_its_week_and_says_how_old(out):
+    """A saved route driven with no signal a month after its cameras were kept: the kept list still pins them (cameras are
+    fixed hardware), marked with when it was kept so the Layers note says so. Past 90 days, or a tile never kept: unknown."""
+    assert [c["kind"] for c in out["kept"]] == ["alpr", "speed"] and out["keptAt"] == 1000
+    assert out["freshAt"] is None, "a fresh answer carries no age"
+    assert out["tooOld"] is None and out["part"] is None, "too old, or one tile never kept: unknown, never a partial map"
+    src = open(os.path.join(ROOT, "web", "cockpit.js")).read()
+    assert "no signal to check for newer ones." in src
