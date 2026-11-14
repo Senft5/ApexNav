@@ -82,3 +82,20 @@
 [data-theme="roadbook"] .nav-rows > .nav-row:first-child, [data-theme="roadbook"] .nav-rows > .nav-group + .nav-row { border-top-left-radius: var(--r-card); border-top-right-radius: var(--r-card); }
 [data-theme="roadbook"] .nav-rows > .nav-row:last-child, [data-theme="roadbook"] .nav-rows > .nav-row:has(+ .nav-group) { border-bottom: 0; border-bottom-left-radius: var(--r-card); border-bottom-right-radius: var(--r-card); }
 [data-theme="roadbook"] .nav-rows > .nav-group { border: 0; padding-left: 4px; }
+
+/* the Log's drive page and Stages: every box (corners, the timeline, the map, the lanes, cards) a raised rounded card,
+   flat, instead of white paper with a shadow on white; the zoom keys and the readout rounded; the tags and the plan's
+   avoid stamps raised pills, the one picked inked (no tilted stamp) */
+[data-theme="roadbook"] .log-page :is(.dp-card, .seg, .dv-corner, .dv-time button, .card, .empty, .dv-map, .dv-lanes, .seg-map, .vote-map) { background: var(--raised); box-shadow: none; border-radius: var(--r-card); }
+[data-theme="roadbook"] .log-page :is(.seg, .dv-corner).on { box-shadow: inset 0 0 0 2px var(--accent); }
+[data-theme="roadbook"] .log-page :is(.dv-map, .dv-lanes, .seg-map, .vote-map) { overflow: hidden; }
+[data-theme="roadbook"] .log-page .dv-plan { border-radius: calc(var(--r-card) - 6px); }
+[data-theme="roadbook"] .log-page .dv-recenter { border: 0; border-radius: var(--r-chip); padding: 4px 12px; box-shadow: var(--elev-1); }
+[data-theme="roadbook"] .log-page .dv-z { border-radius: var(--r-key); }
+[data-theme="roadbook"] .log-page .dv-z:not(.on) { border-color: transparent; background: var(--raised); color: var(--panel-ink); }
+[data-theme="roadbook"] .log-page .dv-read { border-radius: var(--r-card); overflow: hidden; }
+[data-theme="roadbook"] .stamps > :is(button, .chip, .ink-btn) { border-color: transparent; background: var(--raised); border-radius: var(--r-chip); padding: 0 14px;
+  letter-spacing: 0; text-transform: none; font-size: 14px; font-weight: 600; }
+[data-theme="roadbook"] .stamps > :is(.on, [aria-checked="true"], [aria-pressed="true"]) { background: var(--panel-ink); color: var(--panel); transform: none; box-shadow: none; }
+
+[data-theme="roadbook"] .log-page :is(button.btn, a.btn, label.btn):not(.solid):not(.on):not([aria-pressed="true"]):not(.danger) { border-color: transparent; background: var(--raised); }
