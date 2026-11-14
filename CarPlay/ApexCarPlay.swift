@@ -429,6 +429,7 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             lookChanged()
             interfaceController.setRootTemplate(map, animated: false, completion: nil)
             ApexCar.shared.scene = self
+            ApexCarOffline.shared.carConnected()               // the saved areas kept for the car's map too (ApexCarOffline.swift)
             routeChanged()
             if ApexCar.shared.driving { driveStarted(); guideChanged() }
             ApexCar.shared.send("hello")                       // the page sends the route, the corners, the look and the places again

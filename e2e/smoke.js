@@ -3969,6 +3969,36 @@ flow('the Log list: each drive has its road\'s shape beside its name; a summary 
   check(old && old.sv === 3 && old.n === 32 && old.score === 777 && rows.find((r) => r.id === 'sh2').score.trim() === '777', 'the old summary got its shape and kept its score (not scored again): ' + JSON.stringify(sum));
 });
 
+flow('the Log marks your best drive on a road you have scored twice or more, once, and never a road driven once (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexRecording && window.ApexCore);
+  // Dry Ridge Rd twice (814, then 811) and Pebble Ridge once (836, the highest of all, but its only drive)
+  const set = [['pb1', 'Dry Ridge Rd', 3, 814], ['pb2', 'Dry Ridge Rd', 2, 811], ['pb3', 'Pebble Ridge', 1, 836]];
+  await page.evaluate(async (set) => { for (const [id, name, ago] of set) { const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + Math.sin(i / 20) * 0.0012); }
+    await ApexRecording.store({ id, name, date: new Date(Date.now() - ago * 86400e3).toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map((_, i) => Math.sin(i / 20) * 3), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }); } }, set);
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#historyTable tr.row-link', { timeout: 15000 });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexRecording);
+  await page.evaluate(async (set) => {
+    const db = await new Promise((ok, no) => { const r = indexedDB.open('apexnav'); r.onsuccess = () => ok(r.result); r.onerror = no; });
+    await new Promise((ok) => { const t = db.transaction('summaries', 'readwrite'), st = t.objectStore('summaries');
+      for (const [id, , , score] of set) st.get(id).onsuccess = (e) => { const x = e.target.result; x.ds = { ...x.ds, score }; st.put(x); };
+      t.oncomplete = ok; });
+    db.close(); }, set);
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#historyTable tr.row-link', { timeout: 15000 });
+  const rows = await page.evaluate(() => [...document.querySelectorAll('#historyTable tr.row-link')].map((r) => ({ id: r.dataset.drive,
+    pb: !!r.querySelector('.ix-score .pb'), score: r.querySelector('.ix-score').textContent.trim(), label: r.getAttribute('aria-label') || '' })));
+  const marked = rows.filter((r) => r.pb).map((r) => r.id);
+  check(rows.length === 3 && marked.length === 1 && marked[0] === 'pb1', 'one Best, on the 814 of Dry Ridge Rd, none on a road driven once: ' + JSON.stringify(rows));
+  const one = rows.find((r) => r.id === 'pb1');
+  check(one && /^Best\s*814$/.test(one.score) && /your best on this road/.test(one.label), 'the badge reads Best over the score and VoiceOver hears it: ' + JSON.stringify(one));
+});
+
 flow('the App Store rating: asked on the end card after a good drive, parked, from the third drive, once per version; never moving (guideline 5.6.1)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__posted = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { window.__posted.push(m); } } } }; });
@@ -5513,6 +5543,56 @@ flow('your best pass: on a road driven before (no stage saved) the bar shows the
   check(!(await page.isVisible('#coachBar')), 'the bar goes when the stretch ends');
 });
 
+flow('your best pass on a wet road: an ODOT sensor reads the road wet, so your dry best is no time to chase: said once, no gap, no "brake later" (pass_coach.js setSurface)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.route('**/api.open-meteo.com/**', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.route('**/api.weather.gov/**', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.route('**/nominatim.openstreetmap.org/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html?notes=full');
+  await page.waitForFunction(() => window.apex && window.ApexPassCoach && window.ApexRecording && window.apexDebug && window.apexDebug.setRoadEvents && window.ApexRoadSurface);
+  await page.evaluate(async () => {
+    const Core = window.ApexCore, MPH = 2.2369362921, lat = [], lon = [];
+    let la = 35.6, lo = -83.9, h = 0;
+    for (let i = 0; i < 800; i++) { if (i > 100 && i < 700) h += 0.05 * Math.sin((i - 100) / 25);
+      la += 5 * Math.cos(h) / 110540; lo += 5 * Math.sin(h) / (111320 * Math.cos(35.6 * Math.PI / 180)); lat.push(la); lon.push(lo); }
+    const { kappa } = Core.computeCurvature(lat, lon);
+    const v = kappa.map((k) => Math.max(9, 22 - 300 * Math.abs(k))), latG = v.map((x, i) => x * x * kappa[i] / 9.80665);
+    const lonG = v.map((x, i) => (i ? (x * x - v[i - 1] ** 2) / 10 / 9.80665 : 0));
+    const prof = Core.profileRecording({ lat, lon, distance_m: lat.map((_, i) => i * 5), speed_mph: v.map((x) => x * MPH), lon_g: lonG, lat_g: latG });
+    await ApexRecording.store({ id: 'e2e_dry', name: 'Esses run', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: v, lon_g: lonG, lat_g: latG,
+      g_known: null, events: prof.events, elev: null, hz: 1 });
+    window.__road = { lat, lon, v, latG, lonG }; window.__clock = Date.now();
+    await window.apexDebug.refreshSavedDrives();
+    apexDebug.setRoadEvents({ events: [{ id: 'dot:OH:wx:9', kind: 'wet', label: 'Wet road', lat: lat[300], lon: lon[300], src: 'ODOT sensor' }] });
+  });
+  check(await page.evaluate(() => window.apexDebug.passRefs) >= 6, 'the earlier dry drive\'s corners are remembered');
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForTimeout(300);
+  if (await page.isVisible('#permSheet.show')) await page.click('#permGo');
+  let bars = [];
+  for (let burst = 0; burst < 10; burst++) {
+    await page.evaluate((burst) => {
+      const r = window.__road;
+      for (let j = burst * 160; j < Math.min(1600, (burst + 1) * 160); j++) {
+        const i = Math.min(799, Math.floor(j / 2)), f = (j % 2) / 2, k = Math.min(799, i + 1);
+        window.__clock += 2500 / (r.v[i] * 0.9);
+        window.apex.live({ lat: r.lat[i] + (r.lat[k] - r.lat[i]) * f, lon: r.lon[i] + (r.lon[k] - r.lon[i]) * f, accuracy_m: 4, speed_mps: r.v[i] * 0.9, course_deg: 0,
+          lat_g: r.latG[i] * 0.81, lon_g: r.lonG[i], has_fix: true, calibration: 'locked', at: window.__clock });
+      }
+    }, burst);
+    await page.waitForTimeout(1050);
+    if (await page.isVisible('#coachBar')) bars.push(await page.textContent('#coachBar'));
+  }
+  check(await page.evaluate(() => window.apexDebug.wetRoad) === 'wet', 'the sensor reads the road wet');
+  const said = await page.evaluate(() => window.__said);
+  check(said.filter((t) => t === 'Wet today. Your best here was dry.').length === 1, `the co-driver says the road is wet, once (${JSON.stringify(said)})`);
+  check(!said.some((t) => /Brake later|tenths? down|seconds? down/.test(t)), `no time chased on a wet road (${JSON.stringify(said)})`);
+  check(!bars.some((b) => / s vs best/.test(b)), `the bar shows no time gap (${JSON.stringify(bars)})`);
+});
+
 flow('wet roads: rain where you are (the place plate\'s weather) brings the notes earlier and is said once (wet_roads.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
@@ -5542,6 +5622,32 @@ flow('wet roads: rain where you are (the place plate\'s weather) brings the note
   check(asked.length === 1, `nothing new asked: the plate's one request (${asked.length})`);
   const wetLead = await page.evaluate(() => ApexNoteTiming.leadM({ vMps: 25, apexMps: 12, text: 'Left 3' }));
   check(wetLead > dryLead, `the notes come earlier (${dryLead} → ${wetLead} m)`);
+});
+
+flow('a wet road from ODOT\'s sensor: dry weather, a wet sensor near you: the road reads wet, it is said once, and the drive is kept as a wet one (road_surface.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.route('**/api.open-meteo.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ current: { temperature_2m: 14, precipitation: 0, weather_code: 1 }, hourly: { time: [new Date(Date.now() - 3600e3).toISOString().slice(0, 16)], precipitation: [0] } }) }));
+  await page.route('**/api.weather.gov/**', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.route('**/nominatim.openstreetmap.org/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.ApexRoadSurface && window.apexDebug && window.apexDebug.setRoadEvents && window.ApexRecording);
+  await page.evaluate(() => apexDebug.setRoadEvents({ events: [{ id: 'dot:OH:wx:1', kind: 'wet', label: 'Wet road', lat: 40.02, lon: -83.0, src: 'ODOT sensor' }] }));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start', free: true }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  for (let burst = 0; burst < 10 && !(await page.evaluate(() => window.__said.some((t) => /^Wet roads/.test(t)))); burst++) {
+    await page.evaluate((burst) => { for (let j = 0; j < 40; j++) { const k = burst * 40 + j;
+      window.apex.live({ lat: 40.0 + k * 10 / 110540, lon: -83.0, accuracy_m: 4, speed_mps: 20, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); } }, burst);
+    await page.waitForTimeout(800);
+  }
+  check(await page.evaluate(() => window.apexDebug.wetRoad) === 'wet', 'the sensor\'s wet road counts');
+  check((await page.evaluate(() => window.__said.filter((t) => /^Wet roads/.test(t)))).length === 1, 'said once');
+  for (let i = 0; i < 2; i++) await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'end' }));
+  const kept = await page.waitForFunction(async () => { const all = await ApexRecording.all(); return all.length ? all[0].surface || 'none' : null; }, null, { timeout: 15000 }).then((h) => h.jsonValue());
+  check(kept === 'wet', 'the drive is kept as a wet one: ' + kept);
 });
 
 flow('cold tyres: a dry road at 4 degrees is said once, and not again on the next drive the same day (wet_roads.js coldLine)', async (page, base) => {
@@ -6444,6 +6550,41 @@ flow('landscape mount: the map takes the left, the instruments a column on the r
   const dn = await box('#notes'), db = await box('#driveBar'), ds = await box('.stage');
   check(db.h > 0 && db.x >= ds.x + ds.w - 1 && db.y < dn.y + dn.h && dn.x + dn.w <= ds.x + ds.w + 1 && ds.y + ds.h >= 389, 'driving on its side: ' + JSON.stringify({ dn, db, ds }));
 }, { viewport: { width: 844, height: 390 } });
+
+flow('drive posts: Drive it on a friend\'s post lays a route along their line, through stops on their roads, and names it for them (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const enc = (pts) => { let o = '', a0 = 0, b0 = 0; const e = (v) => { v = v < 0 ? ~(v << 1) : v << 1; while (v >= 32) { o += String.fromCharCode((32 | (v & 31)) + 63); v >>= 5; } o += String.fromCharCode(v + 63); };
+    for (const [a, b] of pts) { const x = Math.round(a * 1e5), y = Math.round(b * 1e5); e(x - a0); e(y - b0); a0 = x; b0 = y; } return o; };
+  // bob's line: 200 points north over about 22 km, weaving
+  const pts = Array.from({ length: 200 }, (_, i) => [35.3 + i * 0.001, -84.1 + Math.sin(i / 6) * 0.004]);
+  const bobPost = { id: 'P1AAAAAAAAAAAAAA', handle: 'bob', photo_id: null, mine: false, crew: null, title: 'Cherohala Skyway', caption: '', driven_on: '2026-11-12',
+    length_m: 22000, score: 812, roads: [], stages: [], line: enc(pts), created_at: new Date(Date.now() - 2 * 3600e3).toISOString().slice(0, 19).replace('T', ' '), kudos: 0, my_kudos: false, comments: 0 };
+  const noLine = { ...bobPost, id: 'P2AAAAAAAAAAAAAA', title: 'Short hop', line: null };
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/feed') return json([bobPost, noLine]);
+    return json([]);
+  });
+  const asked = [];
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => { const req = JSON.parse(route.request().postData() || '{}'); asked.push(req.locations);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) }); });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card', { timeout: 15000 });
+  const keys = await page.evaluate(() => [...document.querySelectorAll('#accountBody .feed-card')].map((k) => { const b = k.querySelector('.feed-drive');
+    return b ? { label: b.getAttribute('aria-label'), text: b.textContent, h: Math.round(b.getBoundingClientRect().height) } : null; }));
+  check(keys.length === 2 && keys[0] && keys[0].label === 'Drive @bob\'s Cherohala Skyway' && keys[0].text === 'Drive it' && keys[0].h >= 40 && keys[1] === null,
+    'Drive it on a post with a line, none on one without: ' + JSON.stringify(keys));
+  await page.click('#accountBody .feed-card .feed-drive');
+  await page.waitForFunction(() => window.apexDebug && apexDebug.track && apexDebug.track.id === 'post_P1AAAAAAAAAAAAAA', null, { timeout: 20000 });
+  const locs = asked.find((l) => Array.isArray(l) && l.length > 2) || [];
+  const near = (a, b) => Math.abs(a.lat - b[0]) < 1e-4 && Math.abs(a.lon - b[1]) < 1e-4;
+  check(locs.length >= 8 && locs.length <= 12 && near(locs[0], pts[0]) && near(locs[locs.length - 1], pts[pts.length - 1])
+    && locs.every((l) => pts.some((p) => near(l, p))), 'the route goes through stops on bob\'s line, end to end: ' + JSON.stringify(locs.map((l) => [l.lat, l.lon])));
+  const after = await page.evaluate(() => ({ name: apexDebug.track.name, toast: document.getElementById('toast').textContent, feed: !!document.querySelector('.feed-sheet'), view: document.body.dataset.view || '' }));
+  check(after.name === 'Cherohala Skyway' && /Cherohala Skyway, @bob's line: [\d.]+ (mi|km)/.test(after.toast) && !after.feed, 'the route is named for the drive and says whose line: ' + JSON.stringify(after));
+});
 
 flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew with its ends cut; the Feed on People shows friends\' posts with kudos and comments one tap in (Worker stubbed, docs/SOCIAL.md 2.13)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1');
@@ -9113,6 +9254,33 @@ flow('your best yet: the drive page leads with the corners this drive beat every
   await page.waitForSelector('.dv-corners .dv-corner', { timeout: 20000 });
   check(!(await page.$('.dv-bests')), 'the slowest pass has no best yet');
   check(await page.evaluate(() => document.getElementById('dvRoadSince').hidden), 'and, the first drive here, no since line');
+});
+
+flow('like with like on the drive page: a wet pass is set against your wet passes, tagged in This road over time, with its best wet beside the best (road_surface.js alike)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording && window.ApexRoadSurface);
+  // one road four times: dry and quick, wet and slow, dry and quickest, then wet again, quicker than the first wet one
+  await page.evaluate(async (src) => {
+    const gen = eval(src);
+    const tweak = (csv, f) => csv.split('\n').map((l, i) => { if (!i || !l) return l; const c = l.split(','); c[5] = (+c[5] * f).toFixed(3); return c.join(','); }).join('\n');
+    const runs = [[0.97, null], [0.88, 'wet'], [1.0, null], [0.92, 'wet']];
+    for (let k = 0; k < runs.length; k++) {
+      const d = ApexRecording.parse(ApexCore, tweak(gen('clean', 0), runs[k][0]), 'w' + k + '.csv', { id: 'w' + k, name: 'Dry Ridge Rd', date: `2026-0${6 + k}-01T09:00`, source: 'web-gps' });
+      if (runs[k][1]) d.surface = runs[k][1];
+      await ApexRecording.store(d);
+    }
+  }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html?tab=drive&drive=w3');
+  await page.waitForSelector('#dvRoadSince:not([hidden])', { timeout: 20000 });
+  const r = await page.evaluate(() => ({ note: document.getElementById('dvNote').textContent, since: document.getElementById('dvRoadSince').textContent.trim(),
+    subs: [...document.querySelectorAll('#dvRoadTable tr td.l .sub')].map((x) => x.textContent), foot: document.querySelector('#dvRoadTable tr:last-child').textContent,
+    bests: !!document.querySelector('.dv-bests'), dashed: document.querySelectorAll('#dvRoadChart circle[stroke-dasharray]').length }));
+  check(/Wet road/.test(r.note), 'the drive is tagged wet: ' + r.note);
+  check(r.subs.filter((t) => /Wet road$/.test(t)).length === 2 && r.dashed === 2, 'the two wet passes are tagged in the history: ' + JSON.stringify(r.subs));
+  check(/^Since your first wet drive here \(.+\) (Score [+−]\d+ · )?\d+\.\d s quicker over \d+ corners$/.test(r.since), 'since the first wet drive, not the dry ones: ' + r.since);
+  check(/best \d+ · best wet \d+ · 4 scored drives here/.test(r.foot), 'the best wet pass beside the best: ' + r.foot);
+  check(r.bests, 'quicker than the other wet pass: a best yet, though a dry pass was quicker still');
 });
 
 flow('side by side: a corner filmed on this drive and on your best pass plays as one clip, both from the same point, the gap counting (big bet 5)', async (page, base) => {

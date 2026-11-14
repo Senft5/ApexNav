@@ -327,6 +327,9 @@
     const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
     // Offline areas (offline_tiles.js, IDEAS F-02): map requests go through a protocol that serves a saved copy first
     try { if (window.ApexOfflineTiles) ApexOfflineTiles.install(maplibregl); } catch (_) {}
+    // the car's map keeps its own copy of the saved areas (CarPlay/ApexCarOffline.swift): the list as it is now, at launch,
+    // so areas saved before this build (or while the car's map couldn't keep them) are caught up
+    try { if (window.ApexOfflineTiles && ApexOfflineTiles.tellShell) ApexOfflineTiles.tellShell(); } catch (_) {}
     const map = new maplibregl.Map({ container: 'map', style: MAP_STYLE,
       center: startPos ? [startPos.lon, startPos.lat] : [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0,
       trackResize: false,   // F-02: the page's own observer resizes it (below), once, not again after setPixelRatio already did
@@ -2056,7 +2059,9 @@
       if (live && spirited && vMps >= 5 && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size
           && performance.now() > speech.talkingUntil
           && !ev.some(e => noteM(e) - state.cursorM < reach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`))) {
-        const memo = ApexRoadMemory.upcoming(roadMemory, state.live, reach, reach + 200, state.spoken);
+        // on a wet or icy road (noteWet) "brake later here", learnt on your dry passes, is not said: the grip isn't there
+        const slickNow = !!(drive.wet && (drive.wet.state === 'wet' || drive.wet.state === 'ice'));
+        const memo = ApexRoadMemory.upcoming(slickNow ? roadMemory.filter((n) => n.kind !== 'brake_later') : roadMemory, state.live, reach, reach + 200, state.spoken);
         if (memo) { state.spoken.add(memo.id); say(memo.text); }
       }
       // A break suggestion waits for the same quiet (any notes mode: tiredness matters on a commute too): a fresh fix, a free
@@ -7051,7 +7056,15 @@
         snap = snap || ApexPostMap.snapper({ gl: maplibregl, style: MAP_STYLE, palette: () => look.map, restyle: ApexBasemap.restyle,
           transform: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
         return snap.snap(`${look.map.bg}|${look.map.road}|${id}`, pts, w, h, pad); }; })(),
-      openFriend: (h) => { document.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); if (window.apexOpenFriend) window.apexOpenFriend(String(h).toLowerCase()); } }) : null; } catch (e) { console.error('drive posts', e); } });
+      openFriend: (h) => { document.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); if (window.apexOpenFriend) window.apexOpenFriend(String(h).toLowerCase()); },
+      // Drive it on a post: a route through stops along its line, on real roads (the line is thinned, so it is not driven as drawn)
+      driveLine: async (stops, p) => {
+        if (!Array.isArray(stops) || stops.length < 2) return;
+        closeSheet(); showView(null);
+        const name = String(p.title || 'A friend\u2019s drive').slice(0, 60);
+        await buildRoute(stops, `post_${p.id}`, name);
+        if (plannedRoute && plannedRoute.id === `post_${p.id}`) toast(`${name}${p.mine ? '' : `, @${p.handle}'s line`}: ${ApexUnits.long(totalM(), 1)}.`);
+      } }) : null; } catch (e) { console.error('drive posts', e); } });
     const inboxTick = () => { if (inbox && !driveActive && document.visibilityState === 'visible') inbox.refresh(); };
     document.addEventListener('visibilitychange', inboxTick);
     setInterval(inboxTick, 5 * 60 * 1000);
@@ -9072,18 +9085,32 @@
     // Unknown weather leaves the dry road; nothing new is asked of anyone.
     function noteWet() {
       if (!window.ApexWetRoads || !window.ApexPlacePlate || !driveActive) return;
-      const w = drive.wet || (drive.wet = { data: null, state: null, said: null });
+      const w = drive.wet || (drive.wet = { data: null, state: null, said: null, weather: null, sensor: null, sensorAt: -1e9 });
+      // ODOT's road weather sensors near you (road_surface.js sensorAt, the traffic feed's wet and icy sites), looked at
+      // every 30 s: a sensor's wet or icy road counts as the weather's does, the worse of the two kept
+      const S = window.ApexRoadSurface, now = performance.now(), p = state.lastPosition;
+      let changed = false;
+      if (S && p && now - (w.sensorAt ?? -1e9) >= 30000) {
+        w.sensorAt = now;
+        const sn = S.sensorAt(roadEvents.list, p.lat, p.lon);
+        if (sn !== (w.sensor ?? null)) { w.sensor = sn; changed = true; }
+      }
       const d = placeAsk.data;
-      if (!d || d === w.data) return;                                  // nothing new since the last look
-      w.data = d;
-      const st = ApexWetRoads.stateOf(ApexPlacePlate.weather(d), d.tempC);
-      if (st == null) return;                                          // unknown: keep what we had
+      if (d && d !== w.data) {
+        w.data = d;
+        const ws = ApexWetRoads.stateOf(ApexPlacePlate.weather(d), d.tempC);
+        if (ws != null) { w.weather = ws; changed = true; }               // unknown: keep what we had
+      }
+      if (!changed) return;
+      const st = S ? S.worse(w.weather ?? null, w.sensor ?? null) : (w.weather ?? null);
+      if (st == null) return;
+      if (drive.surface) drive.surface.see(st);                          // the worst of the drive, kept on its record
       w.state = st;
       ApexNoteTiming.setRoad(ApexWetRoads.road(st));
       const line = ApexWetRoads.line(st);
       if (line && w.said !== st) { w.said = st; toast(line); sayQuietLine(line); }
       // cold tyres on a dry road (wet_roads.js coldLine): once a drive, and once a day, so a winter of drives isn't told daily
-      const car = routingCar(), cold = !w.cold && ApexWetRoads.coldLine(st, d.tempC, car && car.tyres);
+      const car = routingCar(), cold = !w.cold && !!d && ApexWetRoads.coldLine(st, d.tempC, car && car.tyres);
       if (cold) {
         w.cold = true;
         const today = new Date().toDateString();
@@ -9172,6 +9199,7 @@
     // closures (both ways) are routed round like a reported closure.
     const roadEvents = { list: [], closures: [], at: NaN, busy: false, mergedAt: null };
     if (window.apexDebug) window.apexDebug.loadRoadEvents = () => loadRoadEvents(true);
+    if (window.apexDebug) window.apexDebug.setRoadEvents = (json) => { roadEvents.list = window.ApexRoadEvents ? ApexRoadEvents.rows(json) : []; };   // e2e: the feed as it came
     function roadEventsNear(p) { return p && window.ApexRoadEvents ? ApexRoadEvents.near(roadEvents.list, p.lat, p.lon, Date.now()) : []; }
     async function loadRoadEvents(force = false) {
       if (!window.ApexRoadEvents || !window.ApexSync || roadEvents.busy || window.APEX_REVIEW) return;
@@ -10240,6 +10268,7 @@
       const w = coachWatch, rows = drive.rec && drive.rec.rows;
       if (!w || !rows || performance.now() - w.at < 1000) return;
       w.at = performance.now();
+      if (w.coach.setSurface) w.coach.setSurface(drive.wet && drive.wet.state);   // a wet road: your dry best is no time to chase
       const r = w.coach.update(rows), bar = $('coachBar');
       for (const ev of r.events) {
         if (!ev.say || !isSpirited()) continue;
@@ -10344,7 +10373,7 @@
       startStageWatch(); startCoach();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); drive.surface = window.ApexRoadSurface ? ApexRoadSurface.createLog() : null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
@@ -10780,6 +10809,7 @@
         { const tags = window.ApexRouteDriver ? ApexRouteDriver.driveTags(ApexRouteDriver.load(localStorage)) : []; if (tags.length) extra.tags = tags; }
         if (laps.length) extra.laps = laps;
         if (battery) extra.battery = battery;
+        { const sf = drive.surface ? drive.surface.value() : null; if (sf) extra.surface = sf; }   // dry, wet or icy (road_surface.js); unknown left out
         // F-04: the card in the frame after End, from the recording as it stands; the drive is parsed, scored and saved in
         // the analysis worker (analysis_client.js save), and the card gets its score when that lands
         const job = driveJob(rec, (when) => driveName(road, when));

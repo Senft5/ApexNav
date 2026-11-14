@@ -397,11 +397,14 @@
       // the road's look before you read it. From the summary's 32 points; none known, nothing drawn.
       const shapeThumb = (d) => { const sh = Array.isArray(d.shape) && d.shape.length > 1 ? d.shape : null; if (!sh || !window.ApexRouteThumb) return '';
         return (ApexRouteThumb.svg(sh.map((p) => p[0]), sh.map((p) => p[1]), { w: 48, h: 48, pad: 6, line: C.accent, hi: C.panelInk, width: 2 }) || '').replace(' role="img" aria-label="Route map"', ' aria-hidden="true"'); };
-      const rows = shown.slice().reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${escH(d.name)}">
+      // your best on a road you have scored twice or more, marked on its row as a fitness app marks a PR (free roamer B,
+      // 2026-11-14): the same rule as Your records' "Best Score on this road" (roads by name, a tie to the earlier drive)
+      const pb = roadBests(drives);
+      const rows = shown.slice().reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${escH(d.name)}${pb.has(d.id) ? ', your best on this road' : ''}">
         <td class="ix-date">${stamp(d)}</td>
         <td class="ix-shape">${shapeThumb(d)}</td>
         <td class="l ix-road"><b>${escH(listName(d.name))}</b><span class="sub">${ApexFormat.factsLine(d, ['distance', 'corners'])}${ApexDriveTags.normalize(d.tags).length ? ` · <span class="tagline">${escH(ApexDriveTags.normalize(d.tags).join(', '))}</span>` : ''}</span></td>
-        <td class="ix-score">${d.ds.score != null ? `<span class="score">${d.ds.score}</span>` : ''}</td></tr>`).join('');
+        <td class="ix-score">${pb.has(d.id) ? '<span class="pb">Best</span>' : ''}${d.ds.score != null ? `<span class="score">${d.ds.score}</span>` : ''}</td></tr>`).join('');
       $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="4"><span class="note">No drives yet.</span></td></tr>' : !shown.length ? '<tr><td class="l" colspan="4"><span class="note">No drives with those tags.</span></td></tr>' : rows;
       setTimeout(renderRecords, 0);
       setTimeout(renderSteadiness, 0);                                  // the coach runs per road: after the Log has painted
@@ -412,17 +415,24 @@
     // smoothest drive and best braking, and your cleanest corner of each kind (tight, medium, fast: technique credits, as Your
     // driving reads them). No speed, time or pace record of its own.
     // A drive whose date is unknown never counts for "this month".
-    function renderRecords(list = drives) {
+    const whenOf = (d) => monthOf(d) ? d.date : '';                     // an unknown date is never "latest" and never wins a tie
+    /** Each road (by name) scored twice or more: its best drive (a tie to the earlier), how many scored, and its latest drive. */
+    function roadRecords(list) {
       const roads = new Map();
       for (const d of list) { const r = roads.get(d.name) || []; r.push(d); roads.set(d.name, r); }
-      const when = (d) => monthOf(d) ? d.date : '';                    // an unknown date is never "latest" and never wins a tie
-      const rows = [...roads.entries()].map(([name, all]) => {
+      const when = whenOf;
+      return [...roads.entries()].map(([name, all]) => {
         const ds = all.filter(d => d.ds.score != null);
         if (ds.length < 2) return null;
         const best = ds.reduce((m, d) => (d.ds.score > m.ds.score || (d.ds.score === m.ds.score && when(d) && (!when(m) || when(d) < when(m))) ? d : m));
         const dated = all.filter(when), last = dated.length ? dated.reduce((m, d) => (when(d) > when(m) ? d : m)) : null;
         return { name, best, n: ds.length, fresh: last === best, last };
-      }).filter(Boolean).sort((p, q) => (q.last ? when(q.last) : '').localeCompare(p.last ? when(p.last) : '')).slice(0, 6);
+      }).filter(Boolean);
+    }
+    const roadBests = (list) => new Set(roadRecords(list).map((r) => r.best.id));
+    function renderRecords(list = drives) {
+      const when = whenOf;
+      const rows = roadRecords(list).sort((p, q) => (q.last ? when(q.last) : '').localeCompare(p.last ? when(p.last) : '')).slice(0, 6);
       const month = new Date(), key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
       const mine = list.filter(d => d.ds.score != null && monthOf(d) === key && d.ds.components);
       const of = (k) => mine.filter(d => finiteNum(d.ds.components[k]));
@@ -995,7 +1005,8 @@
       $('dvAgain').hidden = !(Number.isFinite(s.len_m) && s.len_m >= 1000);   // panel D-1: a road to drive again, not an errand
       // Round 3 (drive_keep.js): a drive that ended itself, or was recovered after the app closed, says so
       const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(s) : null;
-      $('dvNote').textContent = [dateLabel(s), s.source === 'web-gps' ? 'Recorded on this phone' : s.source === 'imported' ? 'Imported' : 'Example drive', ended].filter(Boolean).join(' · ');
+      const wet = window.ApexRoadSurface ? ApexRoadSurface.label(s.surface) : '';   // a wet or icy road, said: its times aren't your dry ones
+      $('dvNote').textContent = [dateLabel(s), s.source === 'web-gps' ? 'Recorded on this phone' : s.source === 'imported' ? 'Imported' : 'Example drive', wet, ended].filter(Boolean).join(' · ');
       const [d, info] = await Promise.all([full(id), ApexAnalysis.job('drive', { id }).catch(() => null)]);
       if (run !== dvRun || !d) return;                                   // another drive opened meanwhile
       dvInfo = info || {};
@@ -1108,10 +1119,11 @@
       if (same.length < 2) { panel.hidden = true; return; }
       panel.hidden = false;
       const W = 760, H = 150, L = 40, R = 14, T = 12, B = 24, sc = same.filter(x => x.score != null);
+      const S = window.ApexRoadSurface, me = same.find((o) => o.self), wetMe = !!(S && me && S.slick(me.surface)), wword = me && me.surface === 'ice' ? 'icy' : 'wet';
       const X = (i) => L + (sc.length < 2 ? 0.5 : i / (sc.length - 1)) * (W - L - R), Y = (v) => T + (1 - v / 1000) * (H - T - B);
       const grid = [0, 500, 1000].map(v => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.rule}"/><text x="${L - 6}" y="${Y(v) + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${v}</text>`).join('');
       const line = sc.map((x, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(x.score).toFixed(1)}`).join('');
-      const dots = sc.map((x, i) => `<circle cx="${X(i)}" cy="${Y(x.score)}" r="${x.self ? 7 : 4.5}" fill="${x.self ? C.accent : C.panel}" stroke="${C.accent}" stroke-width="2"/><text x="${X(i)}" y="${H - 7}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${ApexFormat.dayShort(String(x.date || ''))}</text>`).join('');
+      const dots = sc.map((x, i) => `<circle cx="${X(i)}" cy="${Y(x.score)}" r="${x.self ? 7 : 4.5}" fill="${x.self ? C.accent : C.panel}" stroke="${C.accent}" stroke-width="2"${S && S.slick(x.surface) ? ' stroke-dasharray="2 2"' : ''}/><text x="${X(i)}" y="${H - 7}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${ApexFormat.dayShort(String(x.date || ''))}</text>`).join('');
       $('dvRoadChart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Score on this road over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
       // since your first drive here: the Score and the time over the corners both drove (drive_view.js roadProgress)
       const pr = window.ApexDriveView && ApexDriveView.roadProgress ? ApexDriveView.roadProgress(same) : null;
@@ -1119,12 +1131,14 @@
       if (pr) {
         const sd = pr.score_d == null ? '' : `Score ${pr.score_d >= 0 ? '+' : '\u2212'}${Math.abs(pr.score_d)}`;
         const ts = `${slower(-pr.gain_s)} over ${pr.matched} corners`;
-        $('dvRoadSince').innerHTML = `<span class="note">Since your first drive here${pr.since ? ` (${escH(pr.since)})` : ''}</span> <b class="${cls(-pr.gain_s)}">${[sd, ts].filter(Boolean).join(' \u00b7 ')}</b>`;
+        $('dvRoadSince').innerHTML = `<span class="note">Since your first ${wetMe ? `${wword} ` : ''}drive here${pr.since ? ` (${escH(pr.since)})` : ''}</span> <b class="${cls(-pr.gain_s)}">${[sd, ts].filter(Boolean).join(' \u00b7 ')}</b>`;
       }
+      // on a wet drive, the best wet pass here beside the best of all (a dry one, most often): like with like
+      const wetSc = wetMe ? sc.filter((x) => S.alike(x.surface, me.surface)) : [];
       const last = sc[sc.length - 1];   // the latest and the best, never a "trend" from the first drive to the last (two drives)
       $('dvRoadTable').innerHTML = '<tr><th class="l">Drive</th><th>Score</th><th>Corners</th><th class="l">vs this drive</th></tr>' + same.map(o =>
-        `<tr class="${o.self ? 'best' : ''}"><td class="l"><b></b><span class="sub">${o.dateLabel}</span></td><td><span class="score">${o.score ?? UNK}</span></td><td>${o.corners ?? UNK}</td><td class="l">${o.self ? 'this drive' : o.matched ? `${o.delta_s == null ? '--' : slower(o.delta_s)} on ${o.matched} corner${o.matched === 1 ? '' : 's'}` : '--'}</td></tr>`
-      ).join('') + `<tr><td class="l" colspan="4"><span class="note">${sc.length > 1 ? `Latest ${last.score} \u00b7 best ${Math.max(...sc.map((x) => x.score))} \u00b7 ${sc.length} scored drives here` : ''}</span></td></tr>`;
+        `<tr class="${o.self ? 'best' : ''}"><td class="l"><b></b><span class="sub">${o.dateLabel}${S && S.label(o.surface) ? ` \u00b7 ${S.label(o.surface)}` : ''}</span></td><td><span class="score">${o.score ?? UNK}</span></td><td>${o.corners ?? UNK}</td><td class="l">${o.self ? 'this drive' : o.matched ? `${o.delta_s == null ? '--' : slower(o.delta_s)} on ${o.matched} corner${o.matched === 1 ? '' : 's'}` : '--'}</td></tr>`
+      ).join('') + `<tr><td class="l" colspan="4"><span class="note">${sc.length > 1 ? `Latest ${last.score} \u00b7 best ${Math.max(...sc.map((x) => x.score))}${wetSc.length > 1 ? ` \u00b7 best ${wword} ${Math.max(...wetSc.map((x) => x.score))}` : ''} \u00b7 ${sc.length} scored drives here` : ''}</span></td></tr>`;
       $('dvRoadTable').querySelectorAll('tr td.l b').forEach((b, i) => { if (same[i]) b.textContent = same[i].name; });
     }
 

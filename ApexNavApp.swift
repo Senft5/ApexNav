@@ -545,6 +545,11 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             ApexCar.shared.receive(dict)
             return
         }
+        // The car map's offline maps (CarPlay/ApexCarOffline.swift): the page's saved areas, the whole list each time.
+        if cmd == "offlinePacks", let dict = body as? [String: Any] {
+            ApexCarOffline.shared.receive(dict)
+            return
+        }
         // The drive journal (Round 3, web/drive_keep.js): the fixes the page has not yet kept.
         if cmd == "journal", let dict = body as? [String: Any] {
             shell?.handleJournal(dict)
