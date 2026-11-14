@@ -2700,6 +2700,9 @@ flow('CarPlay: the car is in every drive: a free drive from its Drive key, a con
   check(await page.evaluate(() => window.__car.some((m) => m.kind === 'end')), 'End from the car, End again: it ends now');
   // a route: planned from the car, driven, a continue step while its first turn is 6 miles off; after End the car goes idle
   await fix();
+  // the map's places along the route (for Stops below): a café 1 km in, a Shell at the far end
+  await page.evaluate(() => { ApexStages.pois = async (pts) => { const a = pts[Math.min(1, pts.length - 1)];
+    return [{ kind: 'cafe', name: 'Bean There Coffee', lat: a.lat, lon: a.lon + 0.0003 }, { kind: 'fuel', name: 'Shell', lat: pts[pts.length - 1].lat, lon: pts[pts.length - 1].lon }]; }; });
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'go', lat: 35.7565, lon: -83.97, name: 'Maryville' }));
   await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && window.__car.some((m) => m.kind === 'route'); }, null, { timeout: 20000 });
   await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'start' }); });
