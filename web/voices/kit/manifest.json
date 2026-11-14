@@ -8453,6 +8453,20 @@
    "text": "points down on your best.",
    "heard": 1.0,
    "voice": "bm_fable"
+  },
+  "line:pass_wet_today": {
+   "file": "line_pass_wet_today.m4a",
+   "dur": 2.373,
+   "text": "Wet today. Your best here was dry.",
+   "heard": 0.86,
+   "voice": "bm_fable"
+  },
+  "line:pass_icy_today": {
+   "file": "line_pass_icy_today.m4a",
+   "dur": 3.465,
+   "text": "Icy today. Your best here was dry. Go gently.",
+   "heard": 0.84,
+   "voice": "bm_fable"
   }
  }
 }
