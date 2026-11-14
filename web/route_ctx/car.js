@@ -186,7 +186,7 @@
     } catch (_) { return null; }
   }
   /**
-   * Stations for the tiles: cached first, the rest from Overpass (fuel) or our Worker (chargers). { stations, status } where
+   * Stations for the tiles: cached first, the rest from our build then Overpass (fuel) or our Worker (chargers). { stations, status } where
    * status is 'ok', 'partial' (some tiles missing), 'unavailable', or 'no-key' (chargers with no NREL key on the server).
    */
   async function stationsFor(tiles, { electric, fetch: fetchFn, apiGet, storage, signal, now = Date.now() } = {}) {
