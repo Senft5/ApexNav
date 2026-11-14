@@ -3109,6 +3109,17 @@ flow('the turn arrow and route overview: the next turn of a route being driven h
   await page.click('#recenterBtn');
   await page.waitForFunction(() => window.apexDebug.state.follow && getComputedStyle(document.getElementById('overviewBtn')).display !== 'none', null, { timeout: 3000 })
     .catch(() => check(false, 'Recenter brings the drive camera and the overview key back'));
+  // a small phone (iPhone SE): the map between the strip and the gauges is about 230 px; Layers and the key under it stay
+  // clear of the map's credit key at its bottom right
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.waitForTimeout(400);
+  const keys = await page.evaluate(() => { const r = (q) => { const b = document.querySelector(q).getBoundingClientRect(); return { t: b.top, b: b.bottom, l: b.left, r: b.right }; };
+    return { tab: r('#swEdge .edge-tab'), key: r('#overviewBtn'), credit: r('.maplibregl-ctrl-attrib'), stage: r('#app > .stage') }; });
+  // the credit key sits 10 px in from the map's bottom right, 24 px tall (index.html .maplibregl-ctrl-attrib), drawn or not
+  // (these tiles are stubbed, so it is empty here)
+  const creditTop = keys.credit.b > 0 ? keys.credit.t : keys.stage.b - 34;
+  check(keys.key.b <= creditTop && keys.tab.b <= keys.key.t + 4 && keys.tab.t >= keys.stage.t, 'on a small phone the keys clear the credit: ' + JSON.stringify(keys));
+  await page.setViewportSize({ width: 390, height: 844 });
   for (let m = turnM + 20; m <= turnM + 200; m += 40) { await driveTo(m); await page.waitForTimeout(80); }
   await page.waitForFunction(() => !window.apexDebug.turnArrow, null, { timeout: 5000 })
     .catch(() => check(false, 'past the turn the arrow goes (the next step is the arrival): ' + JSON.stringify(turnM)));
@@ -7268,6 +7279,8 @@ flow('push notifications: Garage > Notifications asks iOS only at the switch, ha
   // a push's tap: kudos on your post opens that post with its comments
   await page.evaluate(() => window.apex.onNative({ type: 'link', params: { view: 'friends', post: 'P1AAAAAAAAAAAAAA' } }));
   await page.waitForSelector('.feed-sheet', { timeout: 8000 });
+  // the sheet opens at once with "Loading…" and fills when the post arrives (CI 2026-11-14: read before it had, twice)
+  await page.waitForFunction(() => /That fog!/.test((document.querySelector('.feed-sheet') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
   const sheet = await page.textContent('.feed-sheet');
   check(/Cherohala Skyway/.test(sheet) && /That fog!/.test(sheet), 'the tap opens the post it is about: ' + sheet.slice(0, 160));
   await page.evaluate(() => document.querySelectorAll('.feed-sheet').forEach((n) => n.remove()));
