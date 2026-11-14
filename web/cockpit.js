@@ -6932,6 +6932,7 @@
           const missing = Object.entries(s.config).filter(([, v]) => !v).map(([k]) => k);
           box.append(el('p', { className: 'note', textContent: `Database ${s.db ? 'answers' : 'not answering'} · ${missing.length ? `not set: ${missing.join(', ')}` : 'every binding and secret set'}` }),
             el('p', { className: 'note', textContent: `Road graph on GitHub: ${s.graph_data.http === 200 ? `${s.graph_data.tiles} tiles` : `HTTP ${s.graph_data.http || '--'} ${s.graph_data.error || ''}`} · ${(s.graph_data.ms / 1000).toFixed(1)} s` }),
+            ...(s.realtime ? [el('p', { className: 'note', textContent: `${s.realtime.ok ? dot.up : dot.down} Convoy voice (Cloudflare Realtime): ${s.realtime.ok ? 'answers' : `HTTP ${s.realtime.http || '--'} ${s.realtime.error || ''}`} · ${(s.realtime.ms / 1000).toFixed(1)} s` })] : []),
             ...s.overpass.map((o) => el('p', { className: 'note', textContent: `${o.elements != null ? dot.up : dot.down} Overpass ${o.host} from the server: ${o.elements != null ? `${o.elements} features` : `HTTP ${o.http || '--'} ${o.error || ''}`} · ${(o.ms / 1000).toFixed(1)} s` })));
           // the usage guard (backend src/usage.ts): this month against the $5 plan's included amounts
           const u = s.usage;

@@ -4,7 +4,8 @@
   tests in backend/test/convoy_voice.test.ts); web client web/convoy_voice.js (tests/test_convoy_voice.py) with one Talk /
   Mute key on the convoy's line, ducking under the co-driver, who-is-talking; iOS shell: microphone permission string,
   WKWebView mic grant for the app's own page, play-and-record audio session while the channel is on. docs/CONVOY_VOICE.md.
-- Waiting on the owner: the two Worker secrets REALTIME_APP_ID / REALTIME_APP_TOKEN (docs/OWNER_TODO.md).
+- The owner set REALTIME_APP_ID / REALTIME_APP_TOKEN (2026-11-14). The service check (and its daily cron, source 'server')
+  now asks the SFU for a session with them: row srv_realtime, Garage → Settings → Account → Service check.
 - Next: verify on the next TestFlight build (mic prompt, speaker, Bluetooth car audio, CarPlay); then push-to-talk from
   CarPlay and headset buttons as a bonus.
 
