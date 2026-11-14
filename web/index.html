@@ -379,7 +379,11 @@
     #app:not(.live) .plates { bottom: 72px; }
     #app.plan-open .plates, #app.plan-open .edge { display: none; }
     /* ---------------- while-you-drive switches: an edge tab that slides a small panel over the map ---------------- */
-    .edge { --edge-w: min(288px, calc(100vw - 64px)); position: absolute; right: 0; top: 38%; z-index: 4; display: flex; align-items: flex-start;
+    /* the map's right-hand keys (Layers, then Recenter or Overview under it) start 38% down the map, or higher on a short
+       map (a small phone in a drive: the map between the strip and the gauges is about 230 px) so they stay clear of the
+       map's credit key at the bottom right: 184 px is the Layers tab, a key under it at drive size, and the credit */
+    #app { --keys-top: min(38%, calc(100% - 184px)); }
+    .edge { --edge-w: min(288px, calc(100vw - 64px)); position: absolute; right: 0; top: var(--keys-top); z-index: 4; display: flex; align-items: flex-start;
       transform: translateX(var(--edge-w)); transition: transform 0.12s cubic-bezier(0.2, 0.8, 0.2, 1); }   /* F-16: a small panel, 120 ms */
     /* the edge's box runs as tall as its panel, so closed, the empty strip under the tab lay over the keys below it (Recenter
        took no tap; 2026-11-14): only the tab, and the panel when open, take a touch */
@@ -400,15 +404,15 @@
     #app.sheet-open .edge { display: none; }
     /* Recenter: the second map key, under Layers (REVIEW.md 1.2 Map idle). U-71: the glyph is always its face; the time
        left before it recenters on its own is a bar along its foot that drains, and the seconds are in its label only */
-    #recenterBtn { display: none; position: absolute; right: 0; top: calc(38% + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; }
+    #recenterBtn { display: none; position: absolute; right: 0; top: calc(var(--keys-top) + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; }
     #recenterBtn.show { display: flex; align-items: center; justify-content: center; }
     /* the compass (as Apple Maps shows one): only when the map is turned off north and you aren't driving; its needle points
        north, under Recenter when that shows; a tap turns the map to face north and leaves it there */
-    #compassBtn { position: absolute; right: 0; top: calc(38% + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; display: flex; align-items: center; justify-content: center; }
+    #compassBtn { position: absolute; right: 0; top: calc(var(--keys-top) + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; display: flex; align-items: center; justify-content: center; }
     #compassBtn[hidden], #app.sheet-open #compassBtn, #app.live #compassBtn { display: none; }
-    #recenterBtn.show ~ #compassBtn { top: calc(38% + 124px); }
+    #recenterBtn.show ~ #compassBtn { top: calc(var(--keys-top) + 124px); }
     /* route overview in a drive: where Recenter sits; following, it shows, and once you've looked, Recenter takes its place */
-    #overviewBtn { position: absolute; right: 0; top: calc(38% + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; display: flex; align-items: center; justify-content: center; }
+    #overviewBtn { position: absolute; right: 0; top: calc(var(--keys-top) + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; display: flex; align-items: center; justify-content: center; }
     #overviewBtn[hidden], #recenterBtn.show ~ #overviewBtn, #app.sheet-open #overviewBtn { display: none; }
     #overviewBtn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     #compassBtn svg { width: 28px; height: 28px; }
