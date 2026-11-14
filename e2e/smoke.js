@@ -8597,18 +8597,30 @@ flow('Compare with a single drive: one line says it needs two, no empty panels; 
   check(/Shared road/.test(two.cards) && !two.road && !two.corners && !two.pick, 'two drives: the comparison is drawn: ' + JSON.stringify(two));
 });
 
-flow('Compare two drives on different roads: one line says they share no road, no gap chart or corner table of dashes (free roamer B, 2026-11-14)', async (page, base) => {
+flow('Compare: Compare with lists only drives near this one; two near drives on different roads say they share no road; a drive alone says so (free roamer B, 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/analysis.html');
   await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
-  // the same profile 2 km apart (seed 0 and 1): nothing of one road lies on the other
+  // the same profile 2 km apart (seed 0 and 1: boxes overlap, nothing of one road lies on the other), and once 100 km away (seed 50)
   await page.evaluate(async (src) => { const gen = eval(src);
-    for (let k = 0; k < 2; k++) await ApexRecording.store(ApexRecording.parse(ApexCore, gen('saw', k), 'X' + k + '.csv', { id: 'X' + k, name: ['Dry Ridge Rd', 'Pebble Ridge'][k], date: `2026-0${7 + k}-01T09:00`, source: 'web-gps' })); }, PROFILE_CSV);
-  await page.goto(base + '/analysis.html?tab=compare');
-  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && /share|Shared/.test(document.querySelector('#cards').textContent), null, { timeout: 20000 });
-  const r = await page.evaluate(() => ({ cards: document.getElementById('cards').textContent.trim(), road: document.getElementById('cmpRoad').hidden,
-    corners: document.getElementById('cmpCorners').hidden, pick: document.querySelector('.compare-pick').hidden }));
-  check(/share no road/.test(r.cards) && r.road && r.corners && !r.pick, 'different roads: one line, the pickers stay, nothing empty under it: ' + JSON.stringify(r));
+    for (const [k, seed, name] of [[0, 0, 'Dry Ridge Rd'], [1, 1, 'Pebble Ridge'], [2, 50, 'Far Hollow Rd']])
+      await ApexRecording.store(ApexRecording.parse(ApexCore, gen('saw', seed), 'X' + k + '.csv', { id: 'X' + k, name, date: `2026-0${7 + k}-01T09:00`, source: 'web-gps' })); }, PROFILE_CSV);
+  const look = async (a) => {
+    await page.goto(base + '/analysis.html?tab=compare');
+    await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && document.querySelector('#cards').textContent.trim(), null, { timeout: 20000 });
+    if (a) { await page.evaluate((id) => { const s = document.getElementById('selA'); s.value = id; s.dispatchEvent(new Event('change')); }, a);
+      await page.waitForFunction(() => /share|Shared|No other/.test(document.querySelector('#cards').textContent), null, { timeout: 20000 }); }
+    return page.evaluate(() => ({ cards: document.getElementById('cards').textContent.trim(), road: document.getElementById('cmpRoad').hidden,
+      corners: document.getElementById('cmpCorners').hidden, pick: document.querySelector('.compare-pick').hidden,
+      a: document.getElementById('selA').value, with: [...document.getElementById('selB').options].map((o) => o.value),
+      withShown: !document.getElementById('selB').closest('label').hidden, swap: !document.getElementById('swapBtn').hidden }));
+  };
+  const near = await look('X0');
+  check(JSON.stringify(near.with) === '["X1"]' && near.withShown && near.swap, 'Compare with: only the near drive, not the one 100 km away: ' + JSON.stringify(near));
+  check(/share no road/.test(near.cards) && near.road && near.corners && !near.pick, 'near, different roads: one line, the pickers stay, nothing empty under it: ' + JSON.stringify(near));
+  const alone = await look('X2');
+  check(/No other drive on this road yet/.test(alone.cards) && !alone.with.length && !alone.withShown && !alone.swap && !alone.pick && alone.road && alone.corners,
+    'a drive alone: one line, this drive\'s picker stays, no empty Compare with or Swap: ' + JSON.stringify(alone));
 });
 
 flow('the drive page\'s map: with no map to be had the picture keeps its blank panel; MapLibre loads only for it (TestFlight 15)', async (page, base) => {
