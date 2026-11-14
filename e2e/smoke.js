@@ -6107,15 +6107,24 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
     await ApexRecording.store(d);
     apexDebug.showEndCard(d, Date.now() - 30 * 60000, { quiet: true });
   });
-  await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !b.hidden && !b.getAttribute('aria-disabled'); }, null, { timeout: 15000 });
-  check(await page.evaluate(() => document.getElementById('endPost').classList.contains('solid') && !document.getElementById('endShare').classList.contains('solid')), 'Post is the solid key; Share card sits beside it');
+  await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !document.getElementById('endPostRow').hidden && !b.getAttribute('aria-disabled'); }, null, { timeout: 15000 });
+  check(await page.evaluate(() => document.getElementById('endPost').classList.contains('solid') && !document.getElementById('endShare').classList.contains('solid') && document.getElementById('endPost').textContent === 'Post to friends'), 'Post to friends is the solid key; Share card sits beside it');
+  // one tap (2026-11-14): Post to friends sends it at once, no sheet; Undo in the toast takes it back
   await page.click('#endPost');
+  await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Posted to friends');
+  const one = JSON.parse(sent.filter((x) => x.p === '/api/posts').pop().b);
+  check(one.crew_id === null && one.score === 790 && one.title === 'Cherohala Skyway' && !(await page.$('.post-sheet')), 'one tap posts the drive to your friends, no sheet: ' + JSON.stringify({ ...one, line: one.line && one.line.length }));
+  await page.click('#toast .toast-key:text-is("Undo")');
+  await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Post to friends' && !document.getElementById('endPost').disabled);
+  check(sent.some((x) => x.m === 'DELETE' && x.p === '/api/posts/C2AAAAAAAAAAAAAA'), 'Undo takes the post back');
+  // ··· beside it: the sheet, for a caption or a crew
+  await page.click('#endPostMore');
   await page.waitForSelector('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")');
   await page.click('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")');
   await page.fill('.post-sheet textarea', 'First run with the crew.');
   await page.click('.post-sheet button:text-is("Post")');
   await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Posted');
-  const p = JSON.parse(sent.find((x) => x.p === '/api/posts').b);
+  const p = JSON.parse(sent.filter((x) => x.p === '/api/posts').pop().b);
   const first = (() => { const s = p.line; let i = 0, r = 0, sh = 0, b; do { b = s.charCodeAt(i++) - 63; r |= (b & 31) << sh; sh += 5; } while (b >= 32); return (r & 1 ? ~(r >> 1) : r >> 1) / 1e5; })();
   check(p.crew_id === 'k1' && p.caption === 'First run with the crew.' && p.score === 790 && p.title === 'Cherohala Skyway' && first > 35.36 + 0.0044,
     'the post: to the crew, the caption, the Score, and the line starting 500 m in: ' + JSON.stringify({ ...p, line: p.line.length, first }));

@@ -992,6 +992,15 @@
        the drive is stored (it was two keys and an orphan). Nothing changes place when the score lands (U-118): Mark a stage
        only gives up its right half. */
     .end-acts > .solid:not([hidden]) { grid-column: 1 / -1; }
+    /* (2026-11-14) one tap posts the drive to your friends; ··· beside it is the sheet: a caption, or a crew */
+    .end-acts > .end-post { grid-column: 1 / -1; display: flex; gap: 10px; }
+    .end-post > #endPost { flex: 1 1 auto; }
+    .end-post > .end-post-more { flex: none; width: 52px; min-height: 0; height: auto; align-self: stretch; padding: 0; display: grid; place-items: center; }
+    /* the quiet keys under it in one row of three when Drive it again is there (it sat alone on a third row) */
+    .end-acts:has(#endAgain:not([hidden])):has(#endStage:not([hidden])) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .end-acts:has(#endAgain:not([hidden])):has(#endStage:not([hidden])) .ink-btn:not(.solid) { padding: 0 4px; font-size: 14px; }
+    .end-post-more svg { width: 22px; height: 22px; fill: currentColor; }
+    .end-acts > .end-post[hidden] { display: none; }
     .end-acts:not(:has(#endAgain:not([hidden]))) > #endStage { grid-column: 1 / -1; }
     .end-score span { grid-column: 1 / span 2; grid-row: 2; margin-top: 10px; font-size: 13px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--panel-dim); white-space: nowrap; }
     .end-line { margin: 0; font-size: 16px; line-height: 1.35; }
@@ -1582,6 +1591,9 @@
     #planBody, .sheet .body, .garage-pop > section, .theme-cards { grid-template-columns: minmax(0, 1fr); }   /* one wide child wraps; a sheet never grows past the screen */
     #endCard .end-card { zoom: var(--type-scale-fit, 1); }
     #endCard.overlay { overflow-y: auto; overscroll-behavior: contain; }
+    /* (2026-11-14) what the card's keys say back (Posted to your friends · Undo) shows over the dimmed map above the card:
+       under the overlay (z-index 40) a toast was neither seen nor tappable */
+    body:has(#endCard.show) .toast { z-index: 41; }
     html[data-type-size="large"] .rc-stats, html[data-type-size="large"] .rc-dials { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; }
     html[data-type-size="large"] .rc-stats > div:nth-child(odd) { border-left: 0; padding-left: 0; }
     html[data-type-size="large"] .end-acts { grid-template-columns: minmax(0, 1fr); }
@@ -2419,7 +2431,7 @@
           <p class="end-line" id="endLine"></p>
           <!-- U-75: the solid key is Share card only when there is a score to share; otherwise it is Open in the Log, and Share
                waits as a link -->
-          <div class="end-acts"><button class="ink-btn solid" id="endPost" hidden>Post</button><button class="ink-btn solid" id="endShare">Share card</button><a class="ink-btn solid" id="endLogKey" href="analysis.html" hidden>Open in the Log</a><button class="ink-btn" id="endStage">Mark a stage</button><button class="ink-btn" id="endAgain" hidden>Drive it again</button></div>
+          <div class="end-acts"><div class="end-post" id="endPostRow" hidden><button class="ink-btn solid" id="endPost">Post to friends</button><button class="ink-btn end-post-more" id="endPostMore" aria-label="Post with a caption or to a crew"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div><button class="ink-btn solid" id="endShare">Share card</button><a class="ink-btn solid" id="endLogKey" href="analysis.html" hidden>Open in the Log</a><button class="ink-btn" id="endStage">Mark a stage</button><button class="ink-btn" id="endAgain" hidden>Drive it again</button></div>
           <div class="end-links"><a class="linkbtn" id="endLog" href="analysis.html">Open in the Log</a><button class="linkbtn" id="endShareLink" hidden>Share card</button><button class="linkbtn" id="endDone">Done</button></div>
         </div>
         <div class="end-portrait" id="endPortrait" aria-hidden="true" hidden></div>

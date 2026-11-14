@@ -10218,7 +10218,8 @@
       $('endAgain').hidden = true;                                     // panel D-1: once the drive is stored (endCardScored)
       // Post (drive_posts.js), for a member: there from the first frame like Share card (U-118), waiting for the score
       const member = !!drivePosts && !!(accountMe && accountMe.member);
-      $('endPost').hidden = !member; $('endPost').disabled = false; $('endPost').textContent = 'Post'; $('endPost').setAttribute('aria-disabled', 'true');
+      $('endPostRow').hidden = !member; $('endPost').disabled = false; $('endPost').textContent = 'Post to friends'; $('endPost').setAttribute('aria-disabled', 'true');
+      $('endPostMore').hidden = false; $('endPostMore').setAttribute('aria-disabled', 'true');
       $('endShare').classList.toggle('solid', !member);
       $('endCard').classList.add('show');
       showEndTrail(c);
@@ -10301,7 +10302,7 @@
       // Post (drive_posts.js) is the solid key for a member with a score: the drive goes to friends first; Share card, the
       // picture for other apps, stays beside it
       const posting = scored && !!drivePosts && !!(accountMe && accountMe.member);
-      $('endPost').hidden = !posting; $('endPost').removeAttribute('aria-disabled');
+      $('endPostRow').hidden = !posting; $('endPost').removeAttribute('aria-disabled'); $('endPostMore').removeAttribute('aria-disabled');
       $('endShare').classList.toggle('solid', !posting);
       $('endShare').hidden = !scored; $('endShareLink').hidden = scored;
       $('endLogKey').hidden = scored; $('endLog').hidden = !scored;
@@ -10424,13 +10425,29 @@
     $('endAgain').addEventListener('click', () => { const d = endDrive; if (!d) return; $('endCard').classList.remove('show'); driveAgain(d.id, d.name); });
     $('endShareLink').addEventListener('click', () => $('endShare').click());
     // Post (drive_posts.js): the drive's card to your friends or a crew, for a member with a scored drive; once posted it says so
-    $('endPost').addEventListener('click', async () => {
-      if (!endDrive || !drivePosts || $('endPost').disabled || $('endPost').getAttribute('aria-disabled') === 'true') return;   // still scoring
+    // (2026-11-14) one tap: Post to friends sends it at once, with Undo in the toast; ··· beside it is the sheet (a caption,
+    // or a crew instead)
+    const endPostOf = () => {
       const roads = Object.entries(drive.roads || {}).filter(([, m]) => m >= 500).sort((a, b) => b[1] - a[1]).map(([n]) => n);
       const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      const ok = await drivePosts.compose({ name: endDrive.name, driven_on: day, len_m: endDrive.len_m, score: endDrive.ds && endDrive.ds.score,
-        lat: endDrive.lat, lon: endDrive.lon, roads });
-      if (ok) { $('endPost').textContent = 'Posted'; $('endPost').disabled = true; pushOffer(); }
+      return { name: endDrive.name, driven_on: day, len_m: endDrive.len_m, score: endDrive.ds && endDrive.ds.score, lat: endDrive.lat, lon: endDrive.lon, roads };
+    };
+    const endPosted = (said) => { $('endPost').textContent = said; $('endPost').disabled = true; $('endPostMore').hidden = true; };
+    const endPostReady = () => !!endDrive && !!drivePosts && !$('endPost').disabled && $('endPost').getAttribute('aria-disabled') !== 'true';   // not while scoring
+    $('endPost').addEventListener('click', async () => {
+      if (!endDrive || !drivePosts || !drivePosts.post || !endPostReady()) return;
+      $('endPost').disabled = true;
+      const id = await drivePosts.post(endPostOf());
+      if (!id) { $('endPost').disabled = false; return; }
+      endPosted('Posted to friends'); pushOffer();
+      if (typeof id === 'string') toast('Posted to your friends.', { label: 'Undo', ms: 8000, onClick: async () => {
+        if (await drivePosts.remove(id)) { $('endPost').textContent = 'Post to friends'; $('endPost').disabled = false; $('endPostMore').hidden = false; toast('Taken back.'); }
+        else toast('Couldn’t take it back. Check signal.');
+      } });
+    });
+    $('endPostMore').addEventListener('click', async () => {
+      if (!endPostReady() || $('endPostMore').getAttribute('aria-disabled') === 'true') return;
+      if (await drivePosts.compose(endPostOf())) { endPosted('Posted'); pushOffer(); }
     });
     $('endStage').addEventListener('click', () => { if (endDrive) openLog(`analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`); });
     $('endShare').addEventListener('click', async () => {
