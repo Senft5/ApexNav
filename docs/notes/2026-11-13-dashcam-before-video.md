@@ -13,6 +13,9 @@
 - **Done:** main's e2e flow "side by side" failed its contrast floor. The drive page's card look in signature.css
   (`.log-page :is(… .dv-time button …)`) also caught the Clip this corner key inside a "Where to find time" row, so the
   dark key got the card's light face: 1.11:1. The rule now takes only the row's own button (`.dv-time li > button`).
+- **Done:** the e2e flow "People: Return on the keyboard…" failed once on this PR's CI. Its stub answered each save after
+  a fixed 400 ms, and a slow runner's second Return came after that, when the form had re-rendered ("element was
+  detached"). The stub now holds each save until both Returns are in.
 - **Active bugs:** none known.
 - **Next:** keep walking the phone screens.
 
