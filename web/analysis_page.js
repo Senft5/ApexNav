@@ -397,11 +397,14 @@
       // the road's look before you read it. From the summary's 32 points; none known, nothing drawn.
       const shapeThumb = (d) => { const sh = Array.isArray(d.shape) && d.shape.length > 1 ? d.shape : null; if (!sh || !window.ApexRouteThumb) return '';
         return (ApexRouteThumb.svg(sh.map((p) => p[0]), sh.map((p) => p[1]), { w: 48, h: 48, pad: 6, line: C.accent, hi: C.panelInk, width: 2 }) || '').replace(' role="img" aria-label="Route map"', ' aria-hidden="true"'); };
-      const rows = shown.slice().reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${escH(d.name)}">
+      // your best on a road you have scored twice or more, marked on its row as a fitness app marks a PR (free roamer B,
+      // 2026-11-14): the same rule as Your records' "Best Score on this road" (roads by name, a tie to the earlier drive)
+      const pb = roadBests(drives);
+      const rows = shown.slice().reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${escH(d.name)}${pb.has(d.id) ? ', your best on this road' : ''}">
         <td class="ix-date">${stamp(d)}</td>
         <td class="ix-shape">${shapeThumb(d)}</td>
         <td class="l ix-road"><b>${escH(listName(d.name))}</b><span class="sub">${ApexFormat.factsLine(d, ['distance', 'corners'])}${ApexDriveTags.normalize(d.tags).length ? ` · <span class="tagline">${escH(ApexDriveTags.normalize(d.tags).join(', '))}</span>` : ''}</span></td>
-        <td class="ix-score">${d.ds.score != null ? `<span class="score">${d.ds.score}</span>` : ''}</td></tr>`).join('');
+        <td class="ix-score">${pb.has(d.id) ? '<span class="pb">Best</span>' : ''}${d.ds.score != null ? `<span class="score">${d.ds.score}</span>` : ''}</td></tr>`).join('');
       $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="4"><span class="note">No drives yet.</span></td></tr>' : !shown.length ? '<tr><td class="l" colspan="4"><span class="note">No drives with those tags.</span></td></tr>' : rows;
       setTimeout(renderRecords, 0);
       setTimeout(renderSteadiness, 0);                                  // the coach runs per road: after the Log has painted
@@ -412,17 +415,24 @@
     // smoothest drive and best braking, and your cleanest corner of each kind (tight, medium, fast: technique credits, as Your
     // driving reads them). No speed, time or pace record of its own.
     // A drive whose date is unknown never counts for "this month".
-    function renderRecords(list = drives) {
+    const whenOf = (d) => monthOf(d) ? d.date : '';                     // an unknown date is never "latest" and never wins a tie
+    /** Each road (by name) scored twice or more: its best drive (a tie to the earlier), how many scored, and its latest drive. */
+    function roadRecords(list) {
       const roads = new Map();
       for (const d of list) { const r = roads.get(d.name) || []; r.push(d); roads.set(d.name, r); }
-      const when = (d) => monthOf(d) ? d.date : '';                    // an unknown date is never "latest" and never wins a tie
-      const rows = [...roads.entries()].map(([name, all]) => {
+      const when = whenOf;
+      return [...roads.entries()].map(([name, all]) => {
         const ds = all.filter(d => d.ds.score != null);
         if (ds.length < 2) return null;
         const best = ds.reduce((m, d) => (d.ds.score > m.ds.score || (d.ds.score === m.ds.score && when(d) && (!when(m) || when(d) < when(m))) ? d : m));
         const dated = all.filter(when), last = dated.length ? dated.reduce((m, d) => (when(d) > when(m) ? d : m)) : null;
         return { name, best, n: ds.length, fresh: last === best, last };
-      }).filter(Boolean).sort((p, q) => (q.last ? when(q.last) : '').localeCompare(p.last ? when(p.last) : '')).slice(0, 6);
+      }).filter(Boolean);
+    }
+    const roadBests = (list) => new Set(roadRecords(list).map((r) => r.best.id));
+    function renderRecords(list = drives) {
+      const when = whenOf;
+      const rows = roadRecords(list).sort((p, q) => (q.last ? when(q.last) : '').localeCompare(p.last ? when(p.last) : '')).slice(0, 6);
       const month = new Date(), key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
       const mine = list.filter(d => d.ds.score != null && monthOf(d) === key && d.ds.components);
       const of = (k) => mine.filter(d => finiteNum(d.ds.components[k]));
