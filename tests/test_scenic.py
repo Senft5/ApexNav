@@ -123,6 +123,24 @@ console.log(JSON.stringify({ q: S.fallsQuery(35, -84.1, 35.2, -83.9), falls, lis
     assert r["shown"] == [True, False, True]                                 # a waterfall goes before a café it would touch
 
 
+
+def test_waterfalls_from_the_regions_built_list():
+    """Inside the built region the waterfalls come from GET /api/ctx/falls.json (tools/osm_ctx/falls.py), not Overpass: those
+    in the box, as fallsFrom gives them. A box reaching a 0.25 degree cell the list doesn't cover (across the border) is
+    null, so the phone asks Overpass instead of saying "no waterfalls" where the list simply stops."""
+    src = r"""
+const S = require(process.argv[1] + '/web/scenic.js');
+const doc = { built: '2026-11-14', bundle: 0.25, cells: [[156, -339], [156, -338]], falls: [[39.1, -84.6, 'Shaker Run Falls'], [39.2, -84.4, null], [39.9, -84.4, 'Away']] };
+console.log(JSON.stringify({ in: S.fallsInRegion(doc, 39.0, -84.7, 39.24, -84.3), part: S.fallsInRegion(doc, 39.0, -84.7, 39.3, -84.3),
+  none: S.fallsInRegion(null, 39, -84.7, 39.2, -84.3), bad: S.fallsInRegion({ cells: [] }, 39, -84.7, 39.2, -84.3),
+  empty: S.fallsInRegion({ ...doc, falls: [] }, 39.0, -84.7, 39.24, -84.3) }));
+"""
+    r = json.loads(subprocess.run([NODE, "-e", src, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["in"] == [{"kind": "falls", "name": "Shaker Run Falls", "lat": 39.1, "lon": -84.6}, {"kind": "falls", "name": None, "lat": 39.2, "lon": -84.4}]
+    assert r["part"] is None, "39.3 reaches a cell the list doesn't cover"
+    assert r["none"] is None and r["bad"] is None
+    assert r["empty"] == [], "covered and none there: known none, not unknown"
+
 CHARGERS = r"""
 const S = require(process.argv[1] + '/web/scenic.js');
 const n = 26001, N = (m) => 35 + m / 110540;

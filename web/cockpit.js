@@ -10041,13 +10041,21 @@
       $('routeCardAlong').hidden = true; $('routeAlongPanel').hidden = true; $('routeAlongPanel').replaceChildren();
       $('routeAlongLine').setAttribute('aria-expanded', 'false');
     }
-    // IDEAS R-24: waterfalls near the route, from OpenStreetMap through Overpass (the map's tiles have none). A trip over 1°
-    // across, the servers down or offline: none, and the Along line says what the tiles gave.
+    // IDEAS R-24: waterfalls near the route, from OpenStreetMap (the map's tiles have none): inside Ohio, Kentucky and
+    // Indiana from the list built weekly with the OSM tiles (GET /api/ctx/falls.json, asked once a session), elsewhere
+    // through Overpass. A trip over 1° across, the servers down or offline: none, and the Along line says what the tiles gave.
+    let fallsRegion = null;
     async function fallsNear(t) {
       if (!window.ApexCameras || !ApexScenic.fallsQuery) return [];
       let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
       for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
       if (n - s > 1 || e - w > 1) return [];
+      if (ApexScenic.fallsInRegion) {
+        if (!fallsRegion) fallsRegion = apiCall('GET', '/api/ctx/falls.json').then((r) => (r && r.ok ? r.json() : null)).catch(() => null)
+          .then((d) => { if (!d) setTimeout(() => { fallsRegion = null; }, 10 * 60000); return d; });
+        const got = ApexScenic.fallsInRegion(await fallsRegion, s - 0.005, w - 0.005, n + 0.005, e + 0.005);
+        if (got) return got;
+      }
       try {
         const json = await ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexScenic.fallsQuery(s - 0.005, w - 0.005, n + 0.005, e + 0.005)));
         return ApexScenic.fallsFrom(json);
