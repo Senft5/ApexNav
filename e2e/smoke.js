@@ -3053,6 +3053,59 @@ flow('turn by turn in road order: exit 19, then the sharp right a mile on, on th
     + JSON.stringify(guides.map((g) => [g.instruction, Math.round(g.at)])));
 });
 
+flow('the turn arrow and route overview: the next turn of a route being driven has an arrow on the map, gone once taken; one key shows the rest of the route', async (page, base) => {
+  // a road north 1.2 km, then right onto Main St for 600 m to the destination (turn_arrow.js)
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.APEX_REVIEW = true; window.webkit = { messageHandlers: { apex: { postMessage() {} } } }; });
+  const KY = 110540, KX = 111320 * Math.cos(35.5 * Math.PI / 180), P = [];
+  for (let y = 0; y <= 1200; y += 10) P.push([y, 0]);
+  const TURN = P.length - 1;
+  for (let x = 10; x <= 600; x += 10) P.push([1200, x]);
+  const LL = P.map(([n, e]) => [35.5 + n / KY, -83.9 + e / KX]), end = LL[LL.length - 1];
+  await page.route('https://valhalla1.openstreetmap.de/**', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    if (!req.locations) return route.abort();
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ trip: { legs: [{ shape: polyline6(LL), maneuvers: [
+      { type: 1, begin_shape_index: 0, length: 1.2, time: 80, street_names: ['Oak St'] },
+      { type: 10, begin_shape_index: TURN, length: 0.6, time: 40, street_names: ['Main St'] },
+      { type: 4, begin_shape_index: LL.length - 1, length: 0, time: 0 }] }],
+      summary: { length: 1.8, time: 120, has_highway: false, has_toll: false, has_ferry: false } } }) });
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function' && window.apexDebug);
+  await page.evaluate(([lat, lon]) => window.apex.live({ lat, lon, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }), LL[0]);
+  await page.evaluate(([lat, lon]) => window.apex.onNative({ type: 'carplay', action: 'go', lat, lon, name: 'Main St' }), end);
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && (t.steps || []).length >= 2; }, null, { timeout: 20000 });
+  check(await page.evaluate(() => !window.apexDebug.turnArrow), 'no arrow on a route only planned');
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const turnM = await page.evaluate(() => apexDebug.track.steps.find((s) => s.type === 10).m);
+  const driveTo = (m) => page.evaluate((m) => { const t = apexDebug.track, i = t.dist.findIndex((d) => d >= m), a = Math.max(0, i - 2), b = Math.min(t.lat.length - 1, i + 2);
+    const crs = (Math.atan2((t.lon[b] - t.lon[a]) * Math.cos(t.lat[i] * Math.PI / 180), t.lat[b] - t.lat[a]) * 180 / Math.PI + 360) % 360;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 12, course_deg: crs, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, m);
+  for (let m = 100; m <= turnM - 60; m += 40) { await driveTo(m); await page.waitForTimeout(80); }
+  await page.waitForFunction((m) => window.apexDebug.turnArrow && Math.abs(window.apexDebug.turnArrow.m - m) < 1, turnM, { timeout: 5000 })
+    .catch(() => check(false, 'the arrow is at the turn: ' + JSON.stringify(turnM)));
+  await page.waitForTimeout(800);   // the drive's camera settles on the fix
+  const drawn = await page.evaluate(() => { const m = window.apexDebug.map;
+    return { shaft: m.queryRenderedFeatures({ layers: ['apex-turnarrow'] }).length, head: m.queryRenderedFeatures({ layers: ['apex-turnarrow-head'] }).length }; });
+  check(drawn.shaft > 0 && drawn.head > 0, 'the arrow is drawn on the map, shaft and head: ' + JSON.stringify(drawn));
+  // the route overview key: the rest of the route in view, north up and flat; Recenter takes its place and comes back at once
+  check(await page.isVisible('#overviewBtn'), 'a route being driven has the overview key');
+  await page.click('#overviewBtn');
+  await page.waitForTimeout(1200);
+  const ov = await page.evaluate(([lat, lon]) => { const m = window.apexDebug.map, b = m.getBounds();
+    return { end: b.contains([lon, lat]), pitch: m.getPitch(), bearing: m.getBearing(), follow: window.apexDebug.state.follow,
+      recenter: document.getElementById('recenterBtn').classList.contains('show'), key: getComputedStyle(document.getElementById('overviewBtn')).display }; }, end);
+  check(ov.end && ov.pitch < 1 && Math.abs(ov.bearing) < 1 && !ov.follow && ov.recenter && ov.key === 'none', 'the overview shows the rest of the route, Recenter in its key\'s place: ' + JSON.stringify(ov));
+  await page.click('#recenterBtn');
+  await page.waitForFunction(() => window.apexDebug.state.follow && getComputedStyle(document.getElementById('overviewBtn')).display !== 'none', null, { timeout: 3000 })
+    .catch(() => check(false, 'Recenter brings the drive camera and the overview key back'));
+  for (let m = turnM + 20; m <= turnM + 200; m += 40) { await driveTo(m); await page.waitForTimeout(80); }
+  await page.waitForFunction(() => !window.apexDebug.turnArrow, null, { timeout: 5000 })
+    .catch(() => check(false, 'past the turn the arrow goes (the next step is the arrival): ' + JSON.stringify(turnM)));
+});
+
 flow('the sight-line speed rides under the position arrow, on the phone and on the car map (the owner, 2026-10-29)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html?drive=dry_ridge&play=1');
