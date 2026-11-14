@@ -299,8 +299,11 @@
     const tired = Core.fatigue ? fatigueText(Core.fatigue(d.speed_mps, d.lon_g, d.lat_g, d.corners, d.g_known || null)) : null;   // unmeasured g is left out
     const mi = finite(S.km) ? DIST(S.km * 1000, 1) : '--';
     const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
-    head.innerHTML = `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`
+    // a drive with no Score says why in the score's place, as the end card does (D-6 / R-5), not "--" over four empty bars
+    const scored = !!(ds && finite(ds.score)), nCorners = Array.isArray(d.corners) ? d.corners.length : null;
+    head.innerHTML = (scored ? `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`
       + `<div class="bars">${bar('pace', 'Pace')}${bar('smoothness', 'Smooth')}${bar('braking', 'Brakes')}${bar('consistency', 'Rhythm')}</div>`
+      : `<div class="dv-score no-score"><b class="score">${nCorners ? 'Too few clean corners to score' : 'No corners to score'}</b></div>`)
       // RA-3 (panel round 2): the end card's line, from the one helper (format.js factsLine): same distance, time and corners
       + `<div class="dv-meta">${root.ApexFormat ? root.ApexFormat.factsLine({ len_m: finite(S.km) ? S.km * 1000 : null, secs: S.duration_s, corners: d.corners }) : `${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners`}</div>`
       // lap times from track mode (a circuit only, IDEAS D-15): best marked, sectors when the first lap set their lines
