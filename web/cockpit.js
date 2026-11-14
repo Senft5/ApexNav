@@ -2392,11 +2392,20 @@
     function startVideo() {
       if (!track || state.mode === 'live' || !mapReady) return;
       const t = track;
-      video = ApexFlyoverVideo.start({ map, fps: 30,
+      // a portrait map (the phone) records 9:16 for Reels and Shorts; the speed only when the clip switch shows it
+      const cv = map.getCanvas(), portrait = !!cv && cv.height > cv.width, speedOn = !ApexFlyoverVideo.speedShown || ApexFlyoverVideo.speedShown();
+      video = ApexFlyoverVideo.start({ map, fps: 30, portrait,
         overlay: () => { const s = sample(t, state.cursorM), n = lastNotes[0];
-          return { title: t.name, note: n ? `${n.call}${n.dist != null ? ` · ${n.dist}${n.unit || ''}` : ''}` : '', speed: Number.isFinite(s.speedMps) ? `${Math.round(ApexUnits.speed(s.speedMps))} ${ApexUnits.speedU()}` : '' }; },
-        onStop: (blob, mime) => { $('videoBtn').classList.remove('on'); $('videoBtn').textContent = 'Video';
-          if (blob.size > 0) ApexSaveFile.saveFile(blob, ApexFlyoverVideo.fileName(t.name, mime), mime.split(';')[0]).then((r) => { if (r !== 'cancelled') toast('Video ready.'); }); else toast('Couldn\'t record the video on this phone.'); } });
+          return { title: t.name, note: n ? `${n.call}${n.dist != null ? ` · ${n.dist}${n.unit || ''}` : ''}` : '', speed: speedOn && Number.isFinite(s.speedMps) ? `${Math.round(ApexUnits.speed(s.speedMps))} ${ApexUnits.speedU()}` : '' }; },
+        onStop: async (blob, mime) => { $('videoBtn').classList.remove('on'); $('videoBtn').textContent = 'Video';
+          if (!(blob.size > 0)) { toast('Couldn\'t record the video on this phone.'); return; }
+          // its caption (corner_clip.js caption: the road, where the app is, the tags) copied as it is shared
+          try { await ApexLazy.load('clips'); } catch (_) {}
+          const rec = t.id && window.ApexRecording ? await ApexRecording.get(t.id).catch(() => null) : null;
+          let copied = false;
+          const caption = window.ApexCornerClip && ApexCornerClip.caption ? ApexCornerClip.caption(rec || { name: t.name }, '') : '';
+          const r = await ApexSaveFile.saveFile(blob, ApexFlyoverVideo.fileName(t.name, mime), mime.split(';')[0], { caption, copied: () => { copied = true; } });
+          if (r !== 'cancelled') toast(copied ? 'Video ready. Its caption is copied.' : 'Video ready.'); } });
       if (!video) { toast('This browser can\'t record video.'); return; }
       $('videoBtn').classList.add('on'); $('videoBtn').textContent = 'Stop';
       state.cursorM = 0; resumeFollow(); setPlaying(true);
@@ -10637,8 +10646,12 @@
         const r = await ApexBestClip.make(f);
         const ext = /mp4/.test(r.mime || '') ? 'mp4' : 'webm';
         const name = `${(endDrive && endDrive.name || 'drive').replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'drive'} best corner.${ext}`;
-        const out = window.ApexDriveCard ? await ApexDriveCard.shareFile(r.blob, name, r.mime || `video/${ext}`) : 'failed';
-        if (out === 'saved') toast('Clip saved.');
+        let copied = false;
+        const rec = window.ApexRecording ? await ApexRecording.get(f.driveId).catch(() => null) : null;
+        const caption = window.ApexCornerClip && ApexCornerClip.caption ? ApexCornerClip.caption(rec || endDrive || {}, f.call) : '';
+        const out = window.ApexDriveCard ? await ApexDriveCard.shareFile(r.blob, name, r.mime || `video/${ext}`, { caption, copied: () => { copied = true; } }) : 'failed';
+        if (out === 'saved') toast(copied ? 'Clip saved. Its caption is copied.' : 'Clip saved.');
+        else if (copied && out === 'shared') toast('Its caption is copied, ready to paste.');
       } catch (_) { toast('This phone can’t make the clip. It plays in the Log.'); }
       finally { if (endClipFound === f) { k.removeAttribute('aria-busy'); $('endClipAct').textContent = 'Share clip'; } }
     });

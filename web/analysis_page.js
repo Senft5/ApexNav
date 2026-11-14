@@ -1019,7 +1019,7 @@
       if (window.ApexDashcam && ApexDashcam.supported() && Array.isArray(d.speed_mps) && d.speed_mps.length > 20) {
         const mk = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
         $('dvDashcam').replaceChildren(dcPanel = ApexDashcam.mount({ el: mk, Core, d, fmtSpeed: (v) => `${Math.round(ApexUnits.speed(v))} ${ApexUnits.speedU()}`,
-          save: (blob, name, type) => ApexSaveFile.saveFile(blob, name, type),
+          save: (blob, name, type, opts) => ApexSaveFile.saveFile(blob, name, type, opts || {}),
           // Post this clip (drive_posts.js on the map page, through ApexLogHost): a member's drive from the last 30 days
           ...(hostPosts() ? { canPost: () => hostPosts().canPost(d.date_known === false ? null : d.date), post: (blob, meta) => hostPosts().post(blob, meta) } : {}),
           // the app's own film of the drive (DriveCam.swift, big bet 5): served by the app at drivecam/; the web has none

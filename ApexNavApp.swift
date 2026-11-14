@@ -549,6 +549,8 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
         // A file the page made (GPX, Download my data, a drive video): the share sheet, since a download link does nothing in
         // a web view. The name is cleaned to letters, digits, dot, dash and underscore; the file goes in the app's temp folder.
         if cmd == "shareFile", let dict = body as? [String: Any], let b64 = dict["data"] as? String, let data = Data(base64Encoded: b64) {
+            // a clip's caption (corner_clip.js caption): on the clipboard as the clip is shared, to paste into the post
+            if let caption = dict["caption"] as? String, !caption.isEmpty { UIPasteboard.general.string = String(caption.prefix(500)) }
             shell?.shareFile(name: (dict["name"] as? String) ?? "ApexNav", data: data)
             return
         }

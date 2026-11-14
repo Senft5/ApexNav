@@ -8802,7 +8802,7 @@ flow('film the drive: the app\'s own video of a drive is offered on its page, li
   const keys = await page.evaluate(() => [...document.querySelectorAll('#dvDashcam .dc-own button')].map((b) => b.textContent));
   check(keys.length === 1 && keys[0] === 'This drive\'s video · 7 s', 'only the video filmed on this drive is offered: ' + JSON.stringify(keys));
   check(/Vetta filmed this drive/.test(await page.textContent('#dvDashcam')), 'the panel says it was filmed');
-  await page.evaluate(() => { window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type) => { window.__saved = { size: blob.size, name, type }; return 'saved'; }; });
+  await page.evaluate(() => { window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type, o) => { window.__saved = { size: blob.size, name, type, caption: o && o.caption }; if (o && o.copied) o.copied(); return 'saved'; }; });
   await page.click('#dvDashcam .dc-own button');
   await page.waitForFunction(() => /Video starts 1\.5 s into the drive/.test(document.querySelector('#dvDashcam').textContent), null, { timeout: 8000 });
   // the corner (2 to 4 s into the drive) is in the video though its lead isn't all there: offered, cut from the video's start
@@ -8811,6 +8811,11 @@ flow('film the drive: the app\'s own video of a drive is offered on its page, li
   await page.waitForFunction(() => window.__saved, null, { timeout: 30000 });
   const saved = await page.evaluate(() => window.__saved);
   check(saved.size > 500 && /^Filmed_road-corner-1-/.test(saved.name), 'a clip from the drive\'s own video, with no lining up: ' + JSON.stringify(saved));
+  check(saved.caption === 'Filmed road · Left 4\nCalled by Vetta. Free on iPhone, link in bio.\n#drivingroads #backroads' && /caption is copied/.test(await page.textContent('#dvDashcam .dc-clip-note')),
+    'its caption goes with it, copied: ' + JSON.stringify(saved.caption));
+  check(await page.isChecked('#dvDashcam .dc-speed'), 'Show speed on clips: on until switched off');
+  await page.uncheck('#dvDashcam .dc-speed');
+  check(await page.evaluate(() => localStorage.getItem('apex.clipSpeed') === 'off' && !ApexCornerClip.speedShown()), 'off, kept on this phone');
   // one tap from the corner itself: on a fresh page, the corner's card offers Clip this corner, which opens the video and shares the clip
   await page.goto(base + '/analysis.html?drive=fd1');
   await page.waitForSelector('#dvDashcam .dc-own button');
