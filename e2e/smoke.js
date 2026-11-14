@@ -4455,6 +4455,51 @@ flow('a saved route keeps its reports: Save asks for the cells it runs through, 
   await page.context().setOffline(false);
 }, { viewport: { width: 1280, height: 900 } });
 
+flow('a saved route keeps its road feel: Save keeps what members measured along it, and opened again with no signal its card still has their corners and bumps, with when they were kept (router stubbed, IDEAS F-03)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(JSON.parse(route.request().postData() || '{}').locations)) }));
+  await page.route(base + '/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex && window.apex.live && window.ApexContributor && window.ApexSync && window.ApexRouteFeel, null, { timeout: 20000 });
+  await page.evaluate(() => {
+    ApexSync.member = async () => ({ signed_in: true, member: true });
+    window.__asked = 0;
+    // members drove a bend 100 m long (three passes) and felt two bumps
+    ApexContributor.measuredAlong = async (t) => { window.__asked++; const n = t.lat.length, k = new Array(n).fill(null), kn = new Array(n).fill(null);
+      for (let i = 300; i < 320; i++) { k[i] = 0.02; kn[i] = 3; }
+      return { coverage: 0.5, coveredKm: 30, km: 60, avgPasses: 2, roughness: 0.1, bankedKm: 0, roughKm: 0, repavedKm: 0, crowdK: k, crowdKn: kn, crowdBumps: [{ index: 100, p: 0.9 }, { index: 400, p: 0.85 }] }; };
+  });
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.52, lon: -83.92 }, { lat: 36.08, lon: -83.92 }], 'route_feel', 'Down the ridge', null,
+    { from: null, to: { lat: 36.08, lon: -83.92 }, via: [] }));
+  await page.waitForFunction(() => /2 bumps members felt/.test(document.getElementById('measuredNote').textContent), null, { timeout: 20000 });
+  const online = await page.textContent('#measuredNote');
+  check(/corners from members' drives/.test(online) && !/kept/.test(online), 'with signal: the members\' corners and bumps, asked now: ' + online);
+  await page.evaluate(() => document.getElementById('routeSaveBtn').click());
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.routeFeel') || '{}'));
+  const e = Object.values(kept)[0];
+  check(e && e.k.length === 1 && e.k[0][1].length === 20 && e.bumps.length === 2, 'Save keeps the bend and the bumps with the route: ' + JSON.stringify(kept).slice(0, 300));
+  // the context grid's indexes read with signal first (as a real phone would have them): read for the first time with no
+  // signal they'd fall back to the shipped copy's path for every tile, a 404 here once the flow is back online
+  await page.waitForFunction(() => window.ApexContextGrid && ApexContextGrid.urlsNear, null, { timeout: 20000 });
+  await page.evaluate(() => ApexContextGrid.urlsNear(35.8, -83.92, 1));
+  // no signal: membership can't be asked and nothing is measured; the route opened again from the car's Places
+  await page.context().setOffline(true);
+  await page.evaluate(() => { ApexSync.member = async () => { throw new Error('offline'); }; window.__asked = 0; document.getElementById('measuredNote').textContent = '';
+    const p = JSON.parse(localStorage.getItem('apex.savedRoutes') || '[]')[0]; window.apex.onNative({ type: 'carplay', action: 'saved', id: p.id }); });
+  await page.waitForFunction(() => /kept/.test(document.getElementById('measuredNote').textContent), null, { timeout: 15000 });
+  const off = await page.textContent('#measuredNote');
+  const t = await page.evaluate(() => ({ corrected: apexDebug.track.crowdCorrected, bumps: apexDebug.track.events.filter((x) => x.type === 'bump' && x.crowd).length, asked: window.__asked }));
+  check(/Measured by members/.test(off) && /2 bumps members felt/.test(off) && /corners from members' drives/.test(off) && /\(kept \d/.test(off), 'with no signal the card still has them, with when they were kept: ' + off);
+  check(t.corrected === 100 && t.bumps === 2 && t.asked === 0, 'the route\'s own corners and bump calls come from the kept copy, nothing asked: ' + JSON.stringify(t));
+  // unsaved: the copy goes with it
+  await page.evaluate(() => document.getElementById('routeSaveBtn').click());
+  check(await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('apex.routeFeel') || '{}')).length === 0), 'removing the route removes its road feel');
+  await page.context().setOffline(false);
+}, { viewport: { width: 1280, height: 900 } });
+
 flow('reported hazards: a call ahead, "still there?" after passing, and a one-tap report (Worker stubbed, IDEAS Q-15/Q-16)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; const S = window.speechSynthesis;   // what the co-driver says, whatever voice is set
@@ -4855,7 +4900,12 @@ flow('no signal: a hazard report waits on the phone and goes when the connection
   await page.evaluate(() => { const fix = () => window.apex.live({ lat: 35.6, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 90, has_fix: true }); fix(); window.__fixes = setInterval(fix, 500); });
   await page.click('#hzReportBtn');
   await page.click('#hzKinds button:has-text("Debris")');
-  await saidOn(page, /Debris saved/);
+  // CI 2026-11-14: twice this wait ran out on shard 2 and never locally; on a timeout, say what the page shows instead
+  await saidOn(page, /Debris saved/, { timeout: 15000 }).catch(async (e) => {
+    const seen = await page.evaluate(() => ({ toast: document.getElementById('toast').textContent, note: (document.getElementById('dsNote') || { getAttribute: () => null }).getAttribute('aria-label'),
+      key: document.getElementById('hzReportBtn').textContent, sheet: document.getElementById('hzOverlay').classList.contains('show'), outbox: localStorage.getItem('apex.outbox'), online: navigator.onLine }));
+    throw new Error(`no "Debris saved" in 15 s: ${JSON.stringify(seen)} (${e.message.split('\n')[0]})`);
+  });
   check(await page.evaluate(() => JSON.parse(localStorage.getItem('apex.outbox')).length) === 1, 'kept on the phone');
   offline = false;
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
@@ -5521,6 +5571,21 @@ const PROFILE_CSV = `(fault, seed) => {
   }
   return 'segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g\\n' + rows.join('\\n') + '\\n';
 }`;
+
+flow('the Log draws one rule between the drive list and Score over time, not two (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async (src) => { const gen = eval(src);
+    for (let k = 0; k < 3; k++) await ApexRecording.store(ApexRecording.parse(ApexCore, gen('saw', k), 'L' + k + '.csv', { id: 'L' + k, name: ['Dry Ridge Rd', 'Pebble Ridge', 'Hog Run'][k], date: `2026-0${7 + k}-01T09:00`, source: 'web-gps' })); }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#trendPanel:not([hidden])', { timeout: 20000 });
+  // the panel's top rule closes the list; the last row's own bottom line would sit a few px above it
+  const r = await page.evaluate(() => { const td = document.querySelector('#historyTable tr:last-child > td'), p = document.getElementById('trendPanel');
+    const visQuiet = [...document.querySelectorAll('#historyPanel ~ details.quiet')].some((d) => !d.hidden);
+    return { quiet: visQuiet, row: parseFloat(getComputedStyle(td).borderBottomWidth), panel: parseFloat(getComputedStyle(p).borderTopWidth) }; });
+  check(!r.quiet && (r.row === 0 && r.panel === 1), 'one rule between the list and the panel: ' + JSON.stringify(r));
+});
 
 flow('a drive\'s corners on a road driven four times: each says your cleanest pass there, and a tap opens the drive that holds it (driver_profile.js roadRecords rows)', async (page, base) => {
   await page.goto(base + '/analysis.html');
@@ -6244,6 +6309,10 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   // the Garage: Who sees what under You; the pioneer count with Road feel; no points board anywhere
   await page.evaluate(() => document.querySelector('.tab[data-view="garage"]').click());
   await page.waitForSelector('#garageMeBody .nav-row:has-text("Who sees what")');
+  // one rule between things, never two: none over You (the header draws one), none under Who sees what (Your cars' does)
+  const rules = await page.evaluate(() => { const b = document.getElementById('garageMeBody'), you = b.querySelector(':scope > :first-child > h3'), last = b.querySelector('.nav-rows:last-child > .nav-row:last-child');
+    return [you.textContent, getComputedStyle(you).borderTopStyle === 'none' || parseFloat(getComputedStyle(you).borderTopWidth) === 0, parseFloat(getComputedStyle(last).borderBottomWidth) === 0]; });
+  check(JSON.stringify(rules) === '["You",true,true]', 'the Garage draws one rule between things, not two: ' + JSON.stringify(rules));
   check(/Roads you mapped first: 3/.test(await page.textContent('#garageRoadFeelBody')), 'roads you mapped first, in the Garage (Settings → Road feel)');
   // Crews: the crew things, none of the friend things; with no crew, one row
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
@@ -7312,6 +7381,62 @@ flow('contrast in every look: the welcome, the map, People, the Garage and the L
     }
   }
   if (process.env.CONTRAST_LOG) for (const h of found) console.log('CONTRAST sweep | ' + h);
+  else check(!found.length, `text under the contrast floor:\n  ${found.join('\n  ')}`);
+});
+
+// U-15: the route card, Saved and Where to? in every look, day and night: the card is what a driver reads most before a drive
+flow('contrast in every look: a planned route\'s card and its Saved key hold 4.5:1 in each theme, day and night (IDEAS U-15)', async (page, base) => {
+  graphDir = graphFixture();
+  const found = [];
+  try {
+    for (const theme of ['roadbook', 'tapedeck', 'billet']) {
+      for (const night of [false, true]) {
+        const m = `${theme} ${night ? 'night' : 'day'}`;
+        // a clean phone per look: a second plan on one page starts from what the first left (recents, the saved route)
+        const ctx = await page.context().browser().newContext({ viewport: { width: 390, height: 844 }, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+        await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
+        await ctx.addInitScript(({ t, n }) => { try { localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.funLevel', 'quick'); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, nightMode: n ? 'on' : 'off' })); } catch (_) {} }, { t: theme, n: night });
+        const p = await ctx.newPage();
+        try {
+        await ownTrip(p, base);
+        await p.waitForFunction((t) => document.documentElement.dataset.theme === t, theme);
+        await p.waitForTimeout(1200);                              // the route reveal and the card's count-up settle
+        found.push(...(await lowContrast(p)).map((h) => `${m} card: ${h}`));
+        await p.click('#routeSaveBtn');
+        await p.waitForFunction(() => document.getElementById('routeSaveBtn').getAttribute('aria-pressed') === 'true');
+        await p.waitForTimeout(400);
+        found.push(...(await lowContrast(p)).map((h) => `${m} saved: ${h}`));
+        } finally { await ctx.close(); }
+      }
+    }
+  } finally { graphDir = null; }
+  if (process.env.CONTRAST_LOG) for (const h of found) console.log('CONTRAST card | ' + h);
+  else check(!found.length, `text under the contrast floor:\n  ${found.join('\n  ')}`);
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
+// U-15: the drive screen on the demo replay in every look, day and night, with a note up (tools/contrast_dump.js only
+// reports it for the review pack; this holds it to the floor)
+flow('contrast in every look: the drive screen on the replay holds 4.5:1 in each theme, day and night (IDEAS U-15)', async (page, base) => {
+  const found = [];
+  for (const theme of ['roadbook', 'tapedeck', 'billet']) {
+    for (const night of [false, true]) {
+      const m = `${theme} ${night ? 'night' : 'day'}`;
+      const ctx = await page.context().browser().newContext({ viewport: { width: 390, height: 844 } });
+      await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
+      await ctx.addInitScript(({ t, n }) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, { t: theme, n: night });
+      const p = await ctx.newPage();
+      try {
+        await p.goto(base + '/index.html?drive=dry_ridge&play=1');
+        await p.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.track.events.length);
+        await p.waitForFunction(() => window.apexDebug.state.playing, null, { timeout: 10000 });
+        await p.waitForFunction((t) => document.documentElement.dataset.theme === t, theme);
+        await p.evaluate(() => { const st = window.apexDebug.state, t = window.apexDebug.track; st.cursorM = t.dist[t.dist.length - 1] * 0.45; });
+        await p.waitForTimeout(2500);
+        found.push(...(await lowContrast(p)).map((h) => `${m}: ${h}`));
+      } finally { await ctx.close(); }
+    }
+  }
+  if (process.env.CONTRAST_LOG) for (const h of found) console.log('CONTRAST drive | ' + h);
   else check(!found.length, `text under the contrast floor:\n  ${found.join('\n  ')}`);
 });
 
@@ -9226,8 +9351,14 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
     if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(style) });
     if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
     return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) }); });
+  // off until the owner says yes (his decision card of 2026-11-13): the flag apex.mapPlaces switches it on
   await planPage(page, base);
   await page.waitForFunction(() => apexDebug.map.getLayer('apex-places'), null, { timeout: 10000 });
+  check(await page.evaluate(() => apexDebug.map.getLayoutProperty('apex-places', 'visibility')) === 'none', 'places are off by default, until the owner says yes');
+  await page.evaluate(() => localStorage.setItem('apex.mapPlaces', '1'));
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && apexDebug.map && apexDebug.map.getLayer('apex-places') && apexDebug.state.lastPosition, null, { timeout: 20000 });
+  await page.evaluate(() => apexDebug.map.jumpTo({ center: [-84.615, 39.155] }));   // the map opens on what it last showed: back over you
   const layer = await page.evaluate(() => { const m = apexDebug.map, l = m.getLayer('apex-places'), order = m.getLayersOrder();
     return l ? { min: l.minzoom, vis: m.getLayoutProperty('apex-places', 'visibility'), font: m.getLayoutProperty('apex-places', 'text-font'), under: order.indexOf('apex-places') < order.indexOf(order.find((id) => /road.*label|label.*road|highway-name/i.test(id)) || order[order.length - 1]) } : null; });
   check(layer && layer.min === 15 && layer.vis === 'visible' && /Italic/.test(layer.font) && layer.under, 'the places layer: ' + JSON.stringify(layer));
@@ -10955,7 +11086,8 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
     ['the car map glides between fixes', 32], ['private themes', 32], ['turn by turn in road order', 30], ['level cards: one control', 27],
     ['the strip never cuts', 23], ['when to go', 21], ['the map is a fixed stage', 20], ['a deliberate detour', 20],
     ['theme contract on the page', 19], ['plan flow (d)', 18], ['plan flow (g)', 18], ['a loop by time', 17], ['plan flow (a)', 17],
-    ['plan flow (e, f)', 16], ["the map's viewpoint, café and fuel stamps", 15]];
+    ['plan flow (e, f)', 16], ["the map's viewpoint, café and fuel stamps", 15],
+    ['contrast in every look: the welcome', 30], ['contrast in every look: a planned', 27], ['contrast in every look: the drive', 22]];
   const weight = (f) => (LONG_S.find(([p]) => f.name.startsWith(p)) || [, 5])[1];
   const slice = new Map();
   if (shard) {

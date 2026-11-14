@@ -200,7 +200,7 @@ def point_counts(g: Graph):
 def near_counts(g: Graph, pts: list, dist_m: float):
     """Per chain: how many of the points lie within dist_m of its line (each point once per chain)."""
     out = np.zeros(len(g.chains))
-    if not pts:
+    if not pts or not len(g.chains):   # no chains: an empty query array is float, which shapely refuses (48N 89W)
         return out
     pa = np.array(pts)
     px, py = xy(pa[:, 0], pa[:, 1])

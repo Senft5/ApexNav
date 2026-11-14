@@ -76,6 +76,7 @@
   <script src="plain_notes.js" defer></script>
   <script src="hazard_reports.js" defer></script>
   <script src="route_reports.js" defer></script>
+  <script src="route_feel.js" defer></script>
   <script src="route_card.js" defer></script>
   <script src="route_reveal.js" defer></script>
   <script src="route_story.js" defer></script>
@@ -1613,7 +1614,9 @@
     .sheet h3, .plan h3, .side-pop h3 { font-size: 18px; font-weight: 700; font-family: var(--font-num); border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; margin-bottom: 8px; }
     .sheet p.note.err, .plan p.note.err { color: var(--accent); }
     /* The sheet header already draws a rule: the first heading under it doesn't draw a second. */
-    #accountBody > h3:first-child, #accountBody > :first-child > h3:first-child, #crewsBody > h3:first-child, #crewsBody > :first-child > h3:first-child, #accountSection + [data-panel~="garage"] > h3:first-child { border-top: 0; padding-top: 0; }
+    #accountBody > h3:first-child, #accountBody > :first-child > h3:first-child, #crewsBody > h3:first-child, #crewsBody > :first-child > h3:first-child, #accountSection + [data-panel~="garage"] > h3:first-child, #garageMeBody > :first-child > h3:first-child { border-top: 0; padding-top: 0; }
+    /* a section that ends in a row list: the next heading's rule closes it, so the last row draws none of its own (Garage: You) */
+    #garageMeBody > .stack-8 > .nav-rows:last-child > .nav-row:last-child { border-bottom: 0; }
     .sheet p.note, .plan p.note { font-size: 13px; color: var(--panel-dim); line-height: 1.45; margin-top: 6px; }
     .row { display: flex; gap: 6px; flex-wrap: wrap; }
     .plan-fields { display: grid; gap: 6px; } .plan-fields .ink-btn { min-width: 64px; }
