@@ -6947,7 +6947,7 @@ flow('push notifications: Garage > Notifications asks iOS only at the switch, ha
   // (2026-11-14) each kind has its own switch under it, as the server keeps them (duels off here)
   await page.waitForSelector('.garage-pop.open #pushKinds:not([hidden]) .sw');
   const sw = await page.$$eval('.garage-pop.open #pushKinds .sw', (l) => l.map((b) => [b.textContent, b.getAttribute('aria-checked')]));
-  check(JSON.stringify(sw) === JSON.stringify([['Friend requests', 'true'], ['Kudos', 'true'], ['Comments and mentions', 'true'], ['Duels', 'false'], ['Crew drives', 'true']]), 'one switch per kind: ' + JSON.stringify(sw));
+  check(JSON.stringify(sw) === JSON.stringify([['Friend requests', 'true'], ['Kudos', 'true'], ['Comments and mentions', 'true'], ['Duels', 'false'], ['Someone beat you', 'true'], ['Crew drives', 'true']]), 'one switch per kind: ' + JSON.stringify(sw));
   await page.click('.garage-pop.open #pushKinds .sw:has-text("Kudos")');
   for (let i = 0; i < 40 && !kinds.length; i++) await page.waitForTimeout(50);
   check(JSON.stringify(kinds) === '[["duels","kudos"]]' && await page.getAttribute('.garage-pop.open #pushKinds .sw:has-text("Kudos")', 'aria-checked') === 'false', 'Kudos off is kept on the server: ' + JSON.stringify(kinds));
