@@ -1316,11 +1316,26 @@
       $('pinOverlay').classList.add('show');
       suppressMapClickUntil = Date.now() + 700;
       placeInfo(null);
+      placePhoto(null);
+      if (window.ApexPlacePhoto) {                                       // a picture of it, once one facing it is found (place_photo.js)
+        const asked = droppedPin;
+        ApexPlacePhoto.lookup(point.lat, point.lon).then((p) => { if (droppedPin === asked && p) placePhoto(p); }).catch(() => {});
+      }
       if (!place) reversePin(point);
       else if (window.ApexPlaceInfo) {                                  // hours, phone and site, once known (place_info.js)
         const asked = droppedPin;
         ApexPlaceInfo.lookup(place.name, point.lat, point.lon).then((tags) => { if (droppedPin === asked && tags) placeInfo(ApexPlaceInfo.contact(tags, new Date())); }).catch(() => {});
       }
+    }
+    // the card's photo, shown once it has loaded (a broken one never shows); null clears it
+    function placePhoto(p) {
+      const fig = $('pinPhoto'), img = fig.querySelector('img'), a = fig.querySelector('a');
+      fig.hidden = true; img.onload = img.onerror = null;
+      if (!p) { img.removeAttribute('src'); return; }
+      a.textContent = ApexPlacePhoto.credit(p); a.href = ApexPlacePhoto.page(p);
+      img.alt = `Street photo of ${$('pinPlace').textContent === '--' ? 'this place' : $('pinPlace').textContent}`;
+      img.onload = () => { if (droppedPin) fig.hidden = false; };
+      img.src = p.src;
     }
     // the card's open-now line and Call / Website keys; null clears them (a dropped pin, or nothing known)
     function placeInfo(c) {
@@ -7119,6 +7134,11 @@
       openBook: (id) => openRoadbookLink(id),
       openCrews: () => setPeopleSide('crews'),
       openPost: (id) => (drivePosts ? drivePosts.open(id) : null) }) : null; } catch (e) { console.error('inbox', e); } });
+    // People you may know (web/people_suggest.js, docs/SOCIAL.md 2.14): crew-mates and friends of friends, one Add key each
+    let peopleSuggest = null;
+    onSocial(() => { try { peopleSuggest = window.ApexPeopleSuggest ? ApexPeopleSuggest.mount({ el, btn, toast, apiCall, jsonOf,
+      avatar: (id, h, px) => (window.ApexPhotos ? ApexPhotos.avatar(id, h, px) : el('span')),
+      sent: (h) => { try { const l = JSON.parse(localStorage.getItem('apex.sentRequests') || '[]'); localStorage.setItem('apex.sentRequests', JSON.stringify([...(Array.isArray(l) ? l : []).filter((x) => x !== h), h].slice(-30))); } catch (_) {} } }) : null; } catch (e) { console.error('suggest', e); } });
     // Drive posts and the Feed (web/drive_posts.js, docs/SOCIAL.md 2.13): Post on the drive's card; the Feed on People → Friends
     let drivePosts = null;
     onSocial(() => { try { drivePosts = window.ApexDrivePosts ? ApexDrivePosts.mount({ el, btn, toast, apiCall, jsonOf,
@@ -7580,6 +7600,7 @@
         friendRows.append(booksRow);
       }
       if (friendRows.children.length) body.append(friendRows);
+      if (peopleSuggest && me.member) peopleSuggest.into(body);   // people you may know, under it once there are any
       if (stash('apex.add') && add.value && !accepted.some(f => f.handle === add.value)) add.focus();
 
       // ---- Crews: your crew's page, its drives, the convoy, crews near you and a new one; crew invites live in a crew ----

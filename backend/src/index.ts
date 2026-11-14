@@ -20,7 +20,7 @@ import { duelAccept, duelCreate, duelEnd, duelList } from "./duels";
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
 import {
-  boardActivity, boardFor, crewCreate, crewDiscover, crewInvite, crewInvitePreview, crewInvitesBy, crewInvitesRevoke, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest, friendRequestCancel,
+  boardActivity, boardFor, crewCreate, crewDiscover, crewInvite, crewInvitePreview, crewInvitesBy, crewInvitesRevoke, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendSuggestions, friendRequest, friendRequestCancel,
   myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
@@ -196,6 +196,7 @@ on("POST", "/api/friends/request", async (req, env, _m, ctx) => {
 });
 on("POST", "/api/friends/request/cancel", async (req, env) => { await friendRequestCancel(env, await requireMember(req, env), req); return noContent(); });
 on("GET", "/api/friends", async (req, env) => json(await friendList(env, await requireMember(req, env))));
+on("GET", "/api/friends/suggested", async (req, env) => json(await friendSuggestions(env, await requireMember(req, env))));
 on("POST", "/api/friends/accept", async (req, env, _m, ctx) => {
   const v = await requireMember(req, env), other = await friendAccept(env, v, req);
   await later(ctx, afterFriend(env, v, other, true));

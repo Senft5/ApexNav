@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov https://itscameras.dot.state.oh.us https://www.trimarc.org; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov https://itscameras.dot.state.oh.us https://www.trimarc.org https://*.fbcdn.net; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
@@ -114,6 +114,7 @@
   <script src="carplay.js" defer></script>
   <script src="cameras.js" defer></script>
   <script src="place_info.js" defer></script>
+  <script src="place_photo.js" defer></script>
   <script src="route_ctx/osm_common.js" defer></script>
   <script src="whats_new.js" defer></script>
   <script src="saved_routes.js" defer></script>
@@ -411,6 +412,10 @@
     .poi-pin { cursor: pointer; }
     .pinned-row { flex-wrap: nowrap; align-items: stretch; } .pinned-row .place { flex: 1; min-width: 0; }
     .dropped-pin { width: 24px; height: 24px; border: 3px solid var(--panel); background: var(--accent); border-radius: 50%; box-shadow: 0 0 0 2px var(--panel-ink); }
+    .pin-photo { margin: -24px calc(-24px - var(--safe-right)) 0 calc(-24px - var(--safe-left)); position: relative; aspect-ratio: 16 / 9; max-height: 34vh; overflow: hidden; background: var(--hair); }
+    .pin-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .pin-photo figcaption { position: absolute; right: 0; bottom: 0; max-width: 100%; padding: 3px 8px; font-size: 11px; line-height: 1.3; background: rgba(0, 0, 0, 0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pin-photo figcaption a { color: #fff; text-decoration: none; }
     .pin-hours { margin: 2px 0 0; font-weight: 700; color: var(--panel-ink); }
     .pin-hours.closed { color: var(--panel-dim); }   /* closed is not a warning: the signal colour stays for hazards */
     .pin-contact { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 2px; }
@@ -2483,6 +2488,8 @@
       </div>
       <div class="overlay dim" id="pinOverlay" role="dialog" aria-modal="true" aria-label="Dropped pin">
         <div class="card-sheet">
+          <!-- the street-level photo taken nearest the place and facing it (place_photo.js, Mapillary); nothing until loaded -->
+          <figure class="pin-photo" id="pinPhoto" hidden><img alt="" decoding="async" /><figcaption><a target="_blank" rel="noopener"></a></figcaption></figure>
           <h2 id="pinPlace">--</h2>
           <p class="note" id="pinKind" hidden></p>
           <!-- a named place's hours, phone and site, from its OSM tags (place_info.js); nothing until known -->
@@ -2634,7 +2641,7 @@
           <div class="opt-mix"><span>Fast bends</span><div class="switch" role="radiogroup" aria-label="Fast bends"><button data-pref-fast="-1" role="radio" aria-checked="false">Fewer</button><button data-pref-fast="0" role="radio" aria-checked="true">Any</button><button data-pref-fast="1" role="radio" aria-checked="false">More</button></div></div></div>
         <div class="ctl"><div class="ctl-label">Start from</div>
           <div class="from-row">
-            <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="From: current location" aria-label="From" autocomplete="off" />
+            <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="Current location" aria-label="From" autocomplete="off" />
             <button class="icon-btn" id="swapBtn" aria-label="Swap From and To"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4"/></svg></button>
           </div></div>
         <!-- a loop sized by what the phone knows (app only: the page shows this group when the app can answer). An hour or two

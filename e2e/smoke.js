@@ -6627,6 +6627,12 @@ flow('drive posts: Drive it on a friend\'s post lays a route along their line, t
     return b ? { label: b.getAttribute('aria-label'), text: b.textContent, h: Math.round(b.getBoundingClientRect().height) } : null; }));
   check(keys.length === 2 && keys[0] && keys[0].label === 'Drive @bob\'s Cherohala Skyway' && keys[0].text === 'Drive it' && keys[0].h >= 40 && keys[1] === null,
     'Drive it on a post with a line, none on one without: ' + JSON.stringify(keys));
+  // on its side (a phone in a landscape mount), the line stays at most half the screen's height (2026-11-14: it filled it)
+  const vp = page.viewportSize();
+  await page.setViewportSize({ width: 844, height: 390 });
+  const side = await page.evaluate(() => { const r = document.querySelector('#accountBody .feed-card .feed-line').getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), vh: innerHeight }; });
+  check(side.h <= side.vh / 2 + 1 && side.w >= 2 * side.h - 2, 'a post\'s line on a phone on its side is half the screen at most, its shape kept: ' + JSON.stringify(side));
+  await page.setViewportSize(vp);
   await page.click('#accountBody .feed-card .feed-drive');
   await page.waitForFunction(() => window.apexDebug && apexDebug.track && apexDebug.track.id === 'post_P1AAAAAAAAAAAAAA', null, { timeout: 20000 });
   const locs = asked.find((l) => Array.isArray(l) && l.length > 2) || [];
@@ -7147,6 +7153,28 @@ flow('Billet: a primary key is light metal with dark ink, not dark on dark (REVI
   await page.waitForSelector('#accountBody a.ink-btn.solid');
   const s = await page.evaluate(() => { const c = getComputedStyle(document.querySelector('#accountBody a.ink-btn.solid')); return { bg: c.backgroundImage, ink: c.color }; });
   check(/rgb\(242, 242, 244\)/.test(s.bg) && s.ink === 'rgb(13, 13, 14)', 'Sign in with Google under Billet: ' + JSON.stringify(s));
+});
+
+flow('People you may know: crew-mates and friends of friends on People, Add sends a request, × hides one on this phone (Worker stubbed, docs/SOCIAL.md 2.14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const sent = [];
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (m === 'POST' && u.pathname === '/api/friends/request') { sent.push(JSON.parse(route.request().postData()).handle); return route.fulfill({ status: 204 }); }
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me', id: 'ME1' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/friends/suggested') return json([{ handle: 'erin', photo_id: null, crew: 'Ridge Runners', mutual: 1 }, { handle: 'dave', photo_id: null, crew: null, mutual: 2 }]);
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .suggest-sec:not([hidden]) .suggest-card', { timeout: 15000 });
+  const cards = await page.$$eval('#accountBody .suggest-card', (l) => l.map((c) => [c.querySelector('.suggest-h').textContent, c.querySelector('small').textContent]));
+  check(JSON.stringify(cards) === JSON.stringify([['@erin', 'In Ridge Runners'], ['@dave', '2 friends in common']]), 'who, and why: ' + JSON.stringify(cards));
+  await page.click('#accountBody .suggest-card:has-text("@erin") button:has-text("Add")');
+  await page.waitForSelector('#accountBody .suggest-card:has-text("@erin") button:has-text("Sent")');
+  check(JSON.stringify(sent) === '["erin"]' && await page.evaluate(() => JSON.parse(localStorage.getItem('apex.sentRequests') || '[]').includes('erin')), 'Add sends the request and keeps it as sent: ' + JSON.stringify(sent));
+  await page.click('#accountBody .suggest-card:has-text("@dave") .suggest-x');
+  check(!(await page.$('#accountBody .suggest-card:has-text("@dave")')) && await page.evaluate(() => localStorage.getItem('apex.suggestHidden')) === '["dave"]', '× hides dave on this phone');
 });
 
 flow('People: two tabs; a request is a card on top, then you, then friends with where they are; a friend row is about the friend; one Invite key; links open their side (the owner, 2026-10-30; REVIEW_PEOPLE steps 5, 6)', async (page, base) => {
@@ -10523,6 +10551,16 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
   let asked = '';
   await page.route(/^https:\/\/overpass/, (route) => { asked = decodeURIComponent(route.request().postData() || ''); return route.fulfill({ contentType: 'application/json',
     body: JSON.stringify({ elements: [{ type: 'node', id: 1, tags: { name: 'Bean There Coffee', opening_hours: '24/7', phone: '+1 513 555 0101', website: 'beanthere.example.com' } }] }) }); });
+  // a street photo facing it (place_photo.js): Mapillary's images in the square round it, one 30 m south looking north
+  let photoAsked = '';
+  await page.route('**/api/ctx/keys', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ keys: { mapillaryToken: 'MLY|test' } }) }));
+  await page.route('https://graph.mapillary.com/**', (route) => { photoAsked = route.request().url();
+    const b = new URL(photoAsked).searchParams.get('bbox').split(',').map(Number), lon = (b[0] + b[2]) / 2, lat = (b[1] + b[3]) / 2;
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [
+      { id: '7', thumb_1024_url: 'https://scontent.test.fbcdn.net/away.jpg', computed_compass_angle: 180, captured_at: Date.UTC(2024, 0, 1), computed_geometry: { coordinates: [lon, lat - 30 / 111320] }, creator: { username: 'away' } },
+      { id: '8', thumb_1024_url: 'https://scontent.test.fbcdn.net/facing.jpg', computed_compass_angle: 2, captured_at: Date.UTC(2023, 5, 1), computed_geometry: { coordinates: [lon, lat - 30 / 111320] }, creator: { username: 'roadie' } }] }) }); });
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+  await page.route('https://scontent.test.fbcdn.net/**', (route) => route.fulfill({ contentType: 'image/png', body: PNG }));
   // on by default since the owner said yes (2026-11-14); apex.mapPlaces = '0' turns it off
   await planPage(page, base);
   await page.waitForFunction(() => apexDebug.map.getLayer('apex-places'), null, { timeout: 10000 });
@@ -10553,6 +10591,13 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
   const more = await page.evaluate(() => ({ hours: document.getElementById('pinHours').textContent, keys: [...document.querySelectorAll('#pinContact a')].map((a) => [a.textContent, a.getAttribute('href'), a.getBoundingClientRect().height]) }));
   check(more.hours === 'Open 24 hours' && JSON.stringify(more.keys.map((k) => k.slice(0, 2))) === '[["Call","tel:+15135550101"],["Website","https://beanthere.example.com/"]]' && more.keys.every((k) => k[2] >= 44)
     && /"name"="Bean There Coffee"/.test(asked), 'the card says it is open and offers Call and Website: ' + JSON.stringify({ more, asked }));
+  // and a street photo of it at the top, the one facing it, with who took it (2026-11-14, as Apple and Google Maps lead with one)
+  await page.waitForFunction(() => !document.getElementById('pinPhoto').hidden, null, { timeout: 5000 })
+    .catch(async () => { throw new Error('no photo on the card: ' + JSON.stringify({ photoAsked })); });
+  const photo = await page.evaluate(() => { const f = document.getElementById('pinPhoto'), r = f.getBoundingClientRect(), sheet = f.parentElement.getBoundingClientRect();
+    return { src: f.querySelector('img').getAttribute('src'), credit: f.querySelector('a').textContent, href: f.querySelector('a').getAttribute('href'), full: Math.abs(r.width - sheet.width) < 1, above: r.bottom <= document.getElementById('pinPlace').getBoundingClientRect().top }; });
+  check(photo.src === 'https://scontent.test.fbcdn.net/facing.jpg' && photo.credit === 'Photo: roadie · Mapillary · 2023 · CC BY-SA' && /pKey=8/.test(photo.href) && photo.full && photo.above
+    && /access_token=MLY%7Ctest/.test(photoAsked), 'the card leads with the photo facing the place, credited: ' + JSON.stringify(photo));
   await page.click('#pinCancelBtn');
   // in a drive the map carries the road, not the shops
   await page.evaluate(() => { for (let i = 0; i < 5; i++) window.apex.live({ lat: 39.155 + i * 1e-5, lon: -84.615, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0, lon_g: 0 }); });
