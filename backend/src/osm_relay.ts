@@ -109,11 +109,11 @@ const cacheKey = (tile: string) => new Request(`https://apexnav.cache/osm/v1/${t
 // tile outside the built region, or across its border (not in its bundle), still goes to Overpass.
 export const BUNDLE = 5;
 export const bundleKey = (tile: string) => { const [i, j] = tile.split("_").map(Number); return `osm/v1/${Math.floor(i / BUNDLE)}_${Math.floor(j / BUNDLE)}.txt.gz`; };
-type R2Get = { get(k: string): Promise<{ body: ReadableStream } | null> };
+type R2Get = { get(k: string): Promise<{ body: ReadableStream } | null>; head?(k: string): Promise<unknown> };
 // the last bundles read, per isolate: the next tile a plan asks for is usually in the same 0.25° bundle
 const bundles = new Map<string, Promise<string | null>>();
 const BUNDLES_KEPT = 3;
-export function resetBuiltForTest(): void { bundles.clear(); }
+export function resetBuiltForTest(): void { bundles.clear(); builtIndex = null; }
 async function bundleText(data: R2Get, key: string): Promise<string | null> {
   let p = bundles.get(key);
   if (!p) {
@@ -130,6 +130,18 @@ async function bundleText(data: R2Get, key: string): Promise<string | null> {
   const text = await p;
   if (text == null) bundles.delete(key);   // not there (yet), or R2 failed: asked again next time
   return text;
+}
+// whether a build is in R2 at all (osm/v1/index.json), asked at most every 10 minutes per isolate: with one, a tile it
+// doesn't hold (outside the three states, or across their border) answers 504 at once instead of holding the plan while
+// Overpass is tried (still tried in the background and kept, for the next plan there)
+let builtIndex: { at: number; on: boolean } | null = null;
+export async function hasBuild(data: { head?(k: string): Promise<unknown> } | undefined, now = Date.now()): Promise<boolean> {
+  if (!data || typeof data.head !== "function") return false;
+  if (builtIndex && now - builtIndex.at < 600_000) return builtIndex.on;
+  let on = false;
+  try { on = !!(await data.head("osm/v1/index.json")); } catch { on = false; }
+  builtIndex = { at: now, on };
+  return on;
 }
 /** The tile's built elements (compact JSON text), or null when it wasn't built (Overpass then). */
 export async function builtTile(data: R2Get | undefined, tile: string): Promise<string | null> {
@@ -180,7 +192,8 @@ export async function osmTile(url: URL, env: { OSM?: Kv; DATA?: R2Get }, waiter?
     inflight.set(tile, job);
     if (waiter) waiter.waitUntil(job);
   }
-  const body = await Promise.race([job, new Promise<"late">((r) => setTimeout(() => r("late"), waitMs))]);
+  const wait = (await hasBuild(env.DATA)) ? 0 : waitMs;   // built region: an unbuilt tile isn't worth the plan's wait
+  const body = await Promise.race([job, new Promise<"late">((r) => setTimeout(() => r("late"), wait))]);
   if (body === "late") return new Response(JSON.stringify({ error: "still_fetching" }), { status: 504, headers: { "content-type": "application/json", "retry-after": "10" } });
   if (!body) return new Response(JSON.stringify({ error: "overpass_unavailable" }), { status: 502, headers: { "content-type": "application/json" } });
   return new Response(body, { headers: { ...headers, "x-cache": "miss" } });

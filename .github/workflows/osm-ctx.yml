@@ -60,6 +60,15 @@ jobs:
         with:
           path: .graph_cache/osm
           key: graph-osm-${{ steps.week.outputs.w }}
+      - name: The states' outlines (once here: six bands asking Geofabrik at once had one refused)
+        run: |
+          mkdir -p polys
+          for s in $STATES; do curl -fsSL --retry 6 --retry-delay 10 --retry-all-errors -o "polys/$s.poly" "https://download.geofabrik.de/north-america/us/$s.poly"; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: osm-polys
+          path: polys
+          retention-days: 3
 
   band:
     needs: download
@@ -87,10 +96,10 @@ jobs:
           path: .graph_cache/osm
           key: graph-osm-${{ needs.download.outputs.week }}
           fail-on-cache-miss: true
-      - name: The states' outlines
-        run: |
-          mkdir -p "$WORK"
-          for s in $STATES; do curl -fsSL --retry 5 -o "$WORK/$s.poly" "https://download.geofabrik.de/north-america/us/$s.poly"; done
+      - uses: actions/download-artifact@v4
+        with:
+          name: osm-polys
+          path: /home/runner/osm_work
       - name: Build the band's blocks
         run: |
           if [ -n "$DRY" ] && [ "${{ matrix.band }}" != "38.5" ]; then echo "dry run: the Cincinnati block only"; exit 0; fi
@@ -103,7 +112,7 @@ jobs:
             echo "::group::block $w,$b,$e,$t"
             clip=$(python3 -c "m=0.05; print(f'{$w-m},{$b-m},{$e+m},{$t+m}')")
             osmium extract --overwrite -s smart -b "$clip" -o "$WORK/block.osm.pbf" "$WORK/region.osm.pbf"
-            python -m tools.osm_ctx.build --pbf "$WORK/block.osm.pbf" --box "$w,$b,$e,$t" $polys --out out
+            python -m tools.osm_ctx.build --pbf "$WORK/block.osm.pbf" --box="$w,$b,$e,$t" $polys --out out
             rm -f "$WORK/block.osm.pbf"
             echo "::endgroup::"
           done

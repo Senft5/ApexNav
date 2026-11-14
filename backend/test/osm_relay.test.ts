@@ -117,5 +117,22 @@ describe("OSM relay (/api/ctx/osm)", () => {
       expect(bundleKey("-3_-1")).toBe("osm/v1/-1_-1.txt.gz");
       await DATA.delete("osm/v1/140_-320.txt.gz"); resetBuiltForTest();
     });
+
+    it("with a build in R2, a tile it doesn't hold answers 504 at once and Overpass is still asked for the next plan", async () => {
+      resetBuiltForTest();
+      await DATA.put("osm/v1/index.json", JSON.stringify({ built: "2026-11-18", bundles: 1 }));
+      const box = fresh();
+      let release: () => void = () => {};
+      const gate = new Promise<void>((r) => { release = r; });
+      stub(async () => { await gate; return ok(); });
+      const later: Promise<unknown>[] = [];
+      const t0 = Date.now();
+      const r = await osmTile(new URL(`https://x/api/ctx/osm?bbox=${box}`), { DATA }, { waitUntil: (p) => later.push(p) }, globalThis.fetch, 5000);
+      expect(r.status).toBe(504);
+      expect(Date.now() - t0).toBeLessThan(1000);
+      release(); await Promise.all(later);
+      expect((await osmTile(new URL(`https://x/api/ctx/osm?bbox=${box}`), { DATA })).headers.get("x-cache")).toBe("hit");
+      await DATA.delete("osm/v1/index.json"); resetBuiltForTest();
+    });
   });
 });

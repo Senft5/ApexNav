@@ -13,7 +13,7 @@ Only tiles wholly inside the coverage polygons (the extracts' Geofabrik .poly) a
 {"elements":[]}; a tile across the border is left out, so the Worker asks Overpass for it instead of passing half a
 tile off as all of it. The Worker (osm_relay.ts builtTile) finds a tile's line without parsing the rest.
 
-    python -m tools.osm_ctx.build --pbf block.osm.pbf --box w,s,e,n --poly ohio.poly --poly kentucky.poly --out OUT
+    python -m tools.osm_ctx.build --pbf block.osm.pbf --box=w,s,e,n --poly ohio.poly --poly kentucky.poly --out OUT
 
 Data: (c) OpenStreetMap contributors, ODbL 1.0 (About > Sources).
 """
