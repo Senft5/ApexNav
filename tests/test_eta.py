@@ -158,3 +158,25 @@ def test_a_late_loop_skips_its_next_stage_before_heading_home():
     assert out["close"]["start"] == 15000                                                       # 200 m to go: too late to turn off
     assert out["after"] == {"kind": "home", "label": "Head home", "start": None}
     assert out["none"]["kind"] == "home" and out["noAt"]["start"] == 2000
+
+
+def test_trip_figures():
+    """The trip figures under the map: arrival (AM/PM dropped), time left, distance left; unknown gives none."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = r"""
+const E = require(process.argv[1] + '/web/eta.js');
+console.log(JSON.stringify([
+  E.figures(600, false, '2:36 PM', '1.9 mi'),
+  E.figures(1830, true, '14:36', '12 km'),
+  E.figures(30, false, '9:05 a.m.', ''),
+  E.figures(3900, false, '6:10 PM', '61 mi'),
+  E.figures(NaN, false, '2:36 PM', '1 mi'),
+  E.figures(600, false, '', '1 mi'),
+]));
+"""
+    out = json.loads(subprocess.run([NODE, "-e", js, root], capture_output=True, text=True, check=True).stdout)
+    assert out[0] == [{"v": "2:36", "u": "arrival"}, {"v": "10", "u": "min"}, {"v": "1.9", "u": "mi"}]
+    assert out[1] == [{"v": "14:36", "u": "arrival"}, {"v": "~30", "u": "min"}, {"v": "12", "u": "km"}]
+    assert out[2] == [{"v": "9:05", "u": "arrival"}, {"v": "<1", "u": "min"}]
+    assert out[3] == [{"v": "6:10", "u": "arrival"}, {"v": "1:05", "u": "hr"}, {"v": "61", "u": "mi"}]
+    assert out[4] is None and out[5] is None

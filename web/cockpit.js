@@ -211,7 +211,7 @@
     const BACK_ON_QUIET_MS = 60000;
     const etaPace = ApexEta.createEta();   // live ETA on the current route: pace per section class, a slow arrival (paintEta, U-108)
     const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
-    let etaText = '', etaLeftS = null;
+    let etaText = '', etaLeftS = null, etaFig = null;
     let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
     const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, echo: 0, attacks: [], road: '', roadAt: -1e9, limitKey: '' };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
@@ -4038,8 +4038,13 @@
             if (b.kind === 'skip') skipStage(b.span); else headHome(); } }); }
       }
       etaLeftS = est ? est.leftS : null;
-      const text = est ? `${ApexEta.leftText(est.leftS, est.rough)} · ${etaClock().format(new Date(est.arriveAt))}` : '';
-      if (text !== etaText) { etaText = text; paintDriveStat(); }
+      const clock = est ? etaClock().format(new Date(est.arriveAt)) : '';
+      const text = est ? `${ApexEta.leftText(est.leftS, est.rough)} · ${clock}` : '';
+      // the figures under the map (eta.js figures): arrival, time left, distance left, set as Apple and Google Maps set them
+      const fig = est ? ApexEta.figures(est.leftS, est.rough, clock, ApexUnits.long(Math.max(0, totalM() - atM), 1)) : null;
+      const figKey = fig ? JSON.stringify(fig) : '', was = etaFig ? JSON.stringify(etaFig) : '';
+      etaFig = fig;
+      if (text !== etaText || figKey !== was) { etaText = text; paintDriveStat(); }
     }
     // Perf: one clock formatter (toLocaleTimeString built a new one with every fix); the same words as before
     let etaClockFmt = null;
@@ -9400,7 +9405,8 @@
       else if (r && r.samples > 0) main.push(`<b>● Rec</b> ${ApexUnits.long((r.km) * 1000, 2)}`);
       else main.push(s.gps === 'on' ? 'Starting…' : 'Finding GPS…');
       if (s.mountSetUntil > performance.now()) main.push('Mount set');   // the calibration lock (U-74)
-      if (etaText) main.push(...etaText.split(' · '));                  // U-99: "25 min left" and "7:12" are parts of their own
+      // on a route the time is the trip figures, set apart (below); with no figures it is words in the line (U-99)
+      if (etaText && !etaFig) main.push(...etaText.split(' · '));
       if (NATIVE_SHELL) { const a = ambientStats(); if (a) main.push(a.error ? 'Sharing · retrying' : a.paused ? 'Sharing paused' : `Sharing ${ApexUnits.long((a.km) * 1000, 1)}`); }
       else if (drive.share === 'on') main.push(drive.shareErr ? 'Sharing · retrying' : `Sharing ${ApexUnits.long((drive.shareKm) * 1000, 1)}`);
       else if (drive.share === 'stopped') main.push('Sharing paused');
@@ -9420,7 +9426,12 @@
       // each part stays whole: a narrow screen breaks the line between parts, never inside "77 min left", and never cuts one
       // (U-99: the line was one nowrap run, so "25 min left · 7:12" ended "25…"). The dot rides with the part before it, so a
       // wrapped line never starts with one.
-      const m = main.map((x, i) => `<span>${x}${i < main.length - 1 ? ' ·' : ''}</span>`).join(' '), w = warn.join(' · ');
+      const line = main.map((x, i) => `<span>${x}${i < main.length - 1 ? ' ·' : ''}</span>`).join(' '), w = warn.join(' · ');
+      // on a route, as Apple and Google Maps: three figures you read at a glance (arrival, time left, distance left), the
+      // recording and sharing a small line under them; the line wrapped to three lines on a phone (2026-11-14)
+      const said = etaFig ? `Arriving ${etaText.split(' · ')[1] || ''}, ${etaText.split(' · ')[0]}${etaFig[2] ? `, ${etaFig[2].v} ${etaFig[2].u} to go` : ''}.` : '';
+      const m = etaFig ? `<span class="trip" aria-hidden="true">${etaFig.map((f) => `<span class="tf"><b>${f.v.replace(/</g, '&lt;')}</b><small>${f.u}</small></span>`).join('')}</span><span class="sr-only">${said}</span><span class="ds-sub">${line}</span>` : line;
+      if ($('dsMain').classList.contains('has-trip') !== !!etaFig) $('dsMain').classList.toggle('has-trip', !!etaFig);
       if ($('dsMain').innerHTML !== m) $('dsMain').innerHTML = m;
       // the line's state, for its drawing (index.html #driveBar[data-state]): seek until the first sample is kept
       const ds = s.gps === 'denied' ? 'off' : zoned ? 'zone' : r && r.samples > 0 ? 'rec' : 'seek';

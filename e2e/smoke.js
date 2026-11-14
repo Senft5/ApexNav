@@ -4273,9 +4273,11 @@ flow('the status line wraps between its parts, never "25 min left…", at every 
   const pts = Array.from({ length: 600 }, (_, i) => `<trkpt lat="${(35.5 + i * 1e-4).toFixed(6)}" lon="-83.9"/>`).join('');
   const fits = () => page.evaluate(() => {
     const m = document.getElementById('dsMain'), box = m.getBoundingClientRect(), end = document.getElementById('driveEnd').getBoundingClientRect();
-    const parts = [...m.children].map((x) => x.getBoundingClientRect());
+    // on a route the figures (arrival, time left, distance left) and each part of the small line under them are the parts
+    const parts = [...m.querySelectorAll(m.classList.contains('has-trip') ? '.tf, .ds-sub > span' : ':scope > span')].map((x) => x.getBoundingClientRect());
     return { text: m.textContent, cut: getComputedStyle(m).textOverflow === 'ellipsis' && m.scrollWidth > m.clientWidth,
-      inside: parts.every((r) => r.left >= box.left - 0.5 && r.right <= box.right + 0.5 && r.right <= end.left), lines: new Set(parts.map((r) => Math.round(r.top))).size };
+      inside: parts.every((r) => r.left >= box.left - 0.5 && r.right <= box.right + 0.5 && r.right <= end.left), lines: new Set(parts.map((r) => Math.round(r.top))).size,
+      trip: [...m.querySelectorAll('.tf')].map((x) => x.textContent) };
   });
   for (const theme of ['roadbook', 'tapedeck', 'billet']) {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -4296,7 +4298,7 @@ flow('the status line wraps between its parts, never "25 min left…", at every 
         await page.evaluate((n) => { document.documentElement.dataset.mode = n ? 'night' : 'day'; }, night);
         await page.waitForTimeout(60);
         const r = await fits();
-        check(!r.cut && r.inside && /min left/.test(r.text), `${width} px ${theme}${night ? ' night' : ''}: ${JSON.stringify(r)}`);
+        check(!r.cut && r.inside && /min left/.test(r.text) && r.trip.length === 3, `${width} px ${theme}${night ? ' night' : ''}: ${JSON.stringify(r)}`);
       }
     }
     await page.evaluate(() => { for (let i = 0; i < 2; i++) window.apex.onNative({ type: 'carplay', action: 'end' }); });
