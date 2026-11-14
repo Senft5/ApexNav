@@ -13,7 +13,7 @@
       if (!day || day < from || !x.p || !Number.isFinite(x.p.score)) continue;
       const had = best.get(day);
       const smooth = x.p.components && Number.isFinite(x.p.components.smoothness) ? x.p.components.smoothness : null;   // for the smoothest crew (IDEAS S-08)
-      if (!had || x.p.score > had.score) best.set(day, { day, score: x.p.score, time_s: x.p.time_s ?? null, smoothness: smooth });
+      if (!had || x.p.score > had.score) best.set(day, { day, score: x.p.score, time_s: x.p.time_s ?? null, smoothness: smooth, splits: x.p.splits || null, surface: x.p.surface || null });
     }
     return [...best.values()].sort((a, b) => b.day.localeCompare(a.day));
   }

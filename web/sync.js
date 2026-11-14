@@ -194,8 +194,11 @@
 
   /** Publishes one pass; the server delivers it only to friends/crews you granted (Account). Safe to repeat. */
   // smooth: the run's Smooth component 0..1 (IDEAS S-08 smoothest crew), sent as 0-100; unknown stays null
-  const publishScore = (segmentId, score, timeS, day, smooth = null) => call('POST', '/api/board', { segment_id: segmentId, driver_score: Math.round(score), time_s: timeS == null ? null : Math.max(1, Math.round(timeS)), driven_on: day,
-    smoothness: Number.isFinite(smooth) ? Math.max(0, Math.min(100, Math.round(smooth * 100))) : null });
+  // splits / surface (live ghost duels, ghost_duel.js): the run's times along the stage and its road; the server keeps the
+  // splits only where it keeps the time (the friends and crews you share times with)
+  const publishScore = (segmentId, score, timeS, day, smooth = null, extra = {}) => call('POST', '/api/board', { segment_id: segmentId, driver_score: Math.round(score), time_s: timeS == null ? null : Math.max(1, Math.round(timeS)), driven_on: day,
+    smoothness: Number.isFinite(smooth) ? Math.max(0, Math.min(100, Math.round(smooth * 100))) : null,
+    ...(Array.isArray(extra.splits) && timeS != null ? { splits: extra.splits } : {}), ...(extra.surface ? { surface: extra.surface } : {}) });
   const standings = () => call('GET', '/api/crews/standings');
   const points = () => call('GET', '/api/points');
   const board = async (canonId) => list(await call('GET', `/api/board/${encodeURIComponent(canonId)}`));

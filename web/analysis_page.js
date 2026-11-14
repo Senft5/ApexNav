@@ -138,6 +138,42 @@
     let yearText = '';
     // This month's challenges (challenges.js, IDEAS S-11): text and a bar each; shown once this month has a dated drive.
     // Your notes (recce.js, IDEAS V-09): keep a drive's calls as yours, edit them, forget them.
+    // A ghost duel's result (ghost_duel.js): on one of your stages this drive covered, against the quickest run a friend
+    // shared with you there on a road like this one (GET /api/board/ghosts), the gap at the finish and the corners that
+    // decided it. Members only, silent offline. #dvGhostActs is where "Challenge back" goes (the Social thread).
+    async function renderGhost(d, run) {
+      const panel = $('dvGhost'), G = window.ApexGhostDuel;
+      panel.hidden = true;
+      if (!G || !window.ApexSync || !Array.isArray(d.speed_mps) || !(await ApexSync.member())) return;
+      const mine = (segs || []).filter((x) => x && x.synced).map((seg) => ({ seg, p: Core.segmentPass(seg, d) })).filter((x) => x.p);
+      if (!mine.length) return;
+      const canon = (x) => x.origin || x.id, surf = d.surface === 'wet' || d.surface === 'ice' ? d.surface : '';
+      const r = await ApexSync.apiFetch(`/api/board/ghosts?canons=${encodeURIComponent(mine.slice(0, 20).map((x) => canon(x.seg)).join(','))}${surf ? `&surface=${surf}` : ''}`);
+      const ghosts = r.ok ? await r.json() : [];
+      if (run !== dvRun || !Array.isArray(ghosts)) return;
+      const pick = mine.map((x) => ({ ...x, g: ghosts.find((g) => g.canon_id === canon(x.seg)) })).find((x) => x.g);
+      if (!pick) return;
+      const { seg, p, g } = pick, fine = G.splitsOf(Core, d, p.lo, p.hi), cs = G.cornerSplits(fine, g.splits);
+      if (!fine || !Number.isFinite(cs.total)) return;
+      const who = `@${g.handle || 'friend'}`, words = ApexDriveView.noteWordsPref ? ApexDriveView.noteWordsPref() : undefined;
+      // a stretch is named by the corner its split was taken at (the friend's apex, within 100 m of one of yours)
+      const nameOf = (row) => {
+        if (row.b >= 1) return 'To the finish';
+        const at = p.lo + row.b * (p.hi - p.lo);
+        let best = null;
+        (d.corners || []).forEach((c, k) => { const m = Math.abs(c.apex - at); if (m <= 20 && (!best || m < best.m)) best = { m, k, c }; });
+        return best ? `Corner ${best.k + 1} \u00b7 ${ApexDriveView.cornerCall(best.c, words)}` : `Corner stretch ${row.k}`;
+      };
+      const fmt = (x) => `${x >= 0.05 ? '+' : x <= -0.05 ? '\u2212' : ''}${Math.abs(x).toFixed(1)} s`;
+      $('dvGhostHead').textContent = `${seg.name || 'Stage'} vs ${who}`;
+      $('dvGhostLine').innerHTML = `<b class="${cs.total > 0.05 ? 'loss' : cs.total < -0.05 ? 'gain' : ''}">${Math.abs(cs.total) < 0.05 ? `Level with ${escH(who)}` : `${Math.abs(cs.total).toFixed(1)} s ${cs.total > 0 ? 'behind' : 'ahead of'} ${escH(who)}`}</b>`
+        + ` <span class="note">their best${g.driven_on ? `, ${escH(ApexFormat.dayShort(g.driven_on))}` : ''}${g.surface === 'wet' || g.surface === 'ice' ? ` \u00b7 ${g.surface === 'ice' ? 'icy' : 'wet'} road` : ''}</span>`;
+      const st = G.standout(cs.rows, 3), list = (title, rows) => rows.length
+        ? `<h3>${title}</h3><ol class="dv-time">${rows.map((x) => `<li><span>${escH(nameOf(x))}</span><em class="${x.gap_s > 0 ? 'loss' : 'gain'}">${fmt(x.gap_s)}</em></li>`).join('')}</ol>` : '';
+      $('dvGhostRows').innerHTML = list(`Where ${escH(who)} was quicker`, st.lost) + list('Where you were quicker', st.gained);
+      panel.dataset.stage = seg.id; panel.dataset.who = g.handle || ''; panel.dataset.gap = String(cs.total);
+      panel.hidden = false;
+    }
     function renderRecce(d) {
       const t = { lat: d.lat, lon: d.lon, events: d.events || [] }, notes = ApexRecce.load(localStorage), mine = ApexRecce.onTrack(notes, t);
       const b = (label, fn, cls = 'btn') => { const n = document.createElement('button'); n.className = cls; n.textContent = label; n.addEventListener('click', fn); return n; };
@@ -691,12 +727,12 @@
       await stagePasses();
       for (const s of segs.filter(x => x.synced)) {
         const best = passesFor(s).filter(x => x.p.score != null && /^\d{4}-\d{2}-\d{2}/.test(x.d.date)).sort((p, q) => q.p.score - p.p.score)[0];
-        if (best) await ApexSync.publishScore(s.id, best.p.score, best.p.time_s, best.d.date.slice(0, 10), best.p.components ? best.p.components.smoothness : null);
+        if (best) await ApexSync.publishScore(s.id, best.p.score, best.p.time_s, best.d.date.slice(0, 10), best.p.components ? best.p.components.smoothness : null, { splits: best.p.splits, surface: best.p.surface });
         // each recent day's best too, once, so the board can count days for its local legend (IDEAS S-08)
         let sent = {};
         try { sent = JSON.parse(localStorage.getItem('apex.publishedDays') || '{}') || {}; } catch (_) {}
         for (const b of ApexLegends.toPublish(s.id, ApexLegends.dayBests(passesFor(s)), sent)) {
-          if (await ApexSync.publishScore(s.id, b.score, b.time_s, b.day, b.smoothness)) sent[`${s.id}|${b.day}`] = b.score;
+          if (await ApexSync.publishScore(s.id, b.score, b.time_s, b.day, b.smoothness, { splits: b.splits, surface: b.surface })) sent[`${s.id}|${b.day}`] = b.score;
         }
         try { localStorage.setItem('apex.publishedDays', JSON.stringify(sent)); } catch (_) {}
       }
@@ -998,7 +1034,7 @@
         if (dvView) dvView.destroy();
         dvView = null; dvCurrent = null; dvInfo = null; dcPanel = null;
         $('dvRoot').replaceChildren(); $('dvDashcam').replaceChildren();
-        for (const k of ['dvRoad', 'dvVote', 'dvRecce', 'dvFlyby', 'dvTouch', 'dvBest']) $(k).hidden = true;
+        for (const k of ['dvRoad', 'dvGhost', 'dvVote', 'dvRecce', 'dvFlyby', 'dvTouch', 'dvBest']) $(k).hidden = true;
       }
       // The drive's name is the page title (you arrive from the Log list); the picker stays only as this view's state.
       $('dvTitle').textContent = s.name;
@@ -1039,6 +1075,7 @@
             videoUrl: (name) => `${window.APEX_DRIVECAM || 'drivecam/'}${encodeURIComponent(name)}` } : {}) }));
       } else { dcPanel = null; $('dvDashcam').replaceChildren(); }
       renderRoadHistory(d, dvInfo.road || []);
+      renderGhost(d, run).catch(() => { $('dvGhost').hidden = true; });
       renderTouch(dvInfo.touch || null);
       loadRoadFeel(d, dvView);
       renderTags(d);
