@@ -2757,6 +2757,11 @@ flow('CarPlay: the car is in every drive: a free drive from its Drive key, a con
     const t = window.apexDebug.track; return { changed: t !== before, via: t.request && t.request.via, active: window.apexDebug.driveActive }; }, stops.list[0]);
   check(via.changed && via.active && via.via.some((v) => v.label === 'Bean There Coffee'), 'the stop joins the route, the drive goes on: ' + JSON.stringify(via));
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'stop', lat: 1, lon: 1, name: 'Nowhere' }));   // not on the list: nothing
+  // at the end of the route the car says Arrived (CarPlay's own paused trip), not "Arriving" at 0 ft for the rest of the drive
+  const arrived = await page.evaluate(async () => { const t = window.apexDebug.track, n = t.lat.length; window.__car = [];
+    for (let k = 6; k >= 0; k--) { const i = n - 1 - k * 2; window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 8, course_deg: 45, has_fix: true }); await new Promise((r) => setTimeout(r, 300)); }
+    return window.__car.filter((m) => m.kind === 'paused'); });
+  check(arrived.length === 1 && arrived[0].reason === 'arrived' && /^Arrived/.test(arrived[0].text), 'Arrived at the end, once: ' + JSON.stringify(arrived));
   await page.evaluate(() => { window.__car = []; for (let i = 0; i < 2; i++) window.apex.onNative({ type: 'carplay', action: 'end' }); });
   await page.waitForFunction(() => !window.apexDebug.driveActive);
   const after = await page.evaluate(() => window.__car.map((m) => m.kind));
@@ -2957,9 +2962,12 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
     car.overview(); await wait();
     const b = car.map.getBounds(), inView = [[35.40, -84.10], [35.45, -84.02], [35.50, -84.10]].every(([la, lo]) => b.contains([lo, la]));
     const o = { z0, z: car.map.getZoom(), pitch: car.map.getPitch(), bearing: car.map.getBearing(), follow: car.state.follow, inView };
+    // a reroute during Overview: the new route whole
+    car.route([[35.40, -84.10], [35.30, -84.30]]); await wait();
+    const b2 = car.map.getBounds(); o.rerouted = [[35.40, -84.10], [35.30, -84.30]].every(([la, lo]) => b2.contains([lo, la]));
     car.recentre(); await wait(); o.after = { follow: car.state.follow, pitch: car.map.getPitch() };
     return o; });
-  check(ov.inView && ov.z < ov.z0 && ov.pitch === 0 && ov.bearing === 0 && ov.follow === false && ov.after.follow && ov.after.pitch > 0,
+  check(ov.inView && ov.rerouted && ov.z < ov.z0 && ov.pitch === 0 && ov.bearing === 0 && ov.follow === false && ov.after.follow && ov.after.pitch > 0,
     'Overview: the whole route, flat, then Recentre follows the car again: ' + JSON.stringify(ov));
 });
 
