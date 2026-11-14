@@ -37,6 +37,8 @@ import MediaPlayer
 
 @main
 struct ApexNavApp: App {
+    // push notifications: the device token and a tap on a push (ApexPush.swift)
+    @UIApplicationDelegateAdaptor(ApexAppDelegate.self) private var appDelegate
     // the builds-you-follow refresh (ApexBuildNotifier.swift) must be registered before launch finishes
     // native crashes and hangs from earlier launches go to our own Worker (ApexCrashReports.swift)
     init() { ApexBuildNotifier.register(); ApexCrashReports.start() }
@@ -114,7 +116,7 @@ enum ApexWebBundle {
 
     /// "Open in the app" links from the web (apexnav://open?invite=…): the page's own link parameters, and only those, carried
     /// over to the cockpit page, which handles them exactly as it does on the web. Anything else opens the app as usual.
-    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy", "go", "q", "road", "roadbook"]   // q: a place said to Siri (base64url, ApexIntents.swift)   // go=drive: start a drive (IDEAS C-05); road: a road someone sent (web/road_link.js)
+    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy", "go", "q", "road", "roadbook", "view", "friend", "post"]   // q: a place said to Siri (base64url, ApexIntents.swift); go=drive: start a drive (IDEAS C-05); road: a road someone sent (web/road_link.js); view/friend/post: a push's tap (ApexPush.swift)
     private static let linkValue = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
     /// The link's parameters the page understands, or nil when the link isn't one of ours or carries none.
     static func linkItems(_ url: URL) -> [URLQueryItem]? {
@@ -502,6 +504,11 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
         }
         // The weekly reminder (panel round 1, R-1): off until the driver turns it on in Garage > Reminder; only then is the
         // notification permission asked. The page says when and what (web/your_roads.js); one pending request at most.
+        // Push notifications (ApexPush.swift): permission asked when the driver turns them on; the token goes to the page.
+        if cmd == "push", let dict = body as? [String: Any] {
+            ApexPush.handle(dict, shell: shell)
+            return
+        }
         if cmd == "nudge", let dict = body as? [String: Any] {
             ApexNudge.handle(dict, shell: shell)
             return
