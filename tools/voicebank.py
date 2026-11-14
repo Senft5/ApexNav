@@ -393,6 +393,7 @@ class Listener:
             if n < 1000: return ones[n // 100] + " " + (say(n % 100) if n % 100 else "hundred") if n % 100 and n // 100 and n % 100 >= 10 else ones[n // 100] + " hundred" + ("" if n % 100 == 0 else " " + say(n % 100))
             return "one thousand"
         s = s.lower().replace("-", " ").replace("off camber", "offcamber")
+        s = s.replace("meter", "metre")   # Whisper spells it the American way
         s = re.sub(r"\d+", lambda m: " " + say(int(m.group())) + " ", s)
         return re.sub(r"[^a-z ]+", " ", s).split()
 

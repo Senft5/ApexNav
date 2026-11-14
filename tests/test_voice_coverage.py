@@ -45,6 +45,24 @@ for (const n of [3, 9, 24, 140]) { const t = CA.text({ startM: 1000, endM: 4000,
 add('descent', BH.descentCall({ grade: 0.08, start_m: 0, end_m: 5000 }), said(BH.descentCall({ grade: 0.08, start_m: 0, end_m: 5000 })));
 add('brakes', BH.CALL_TEXT, said(BH.CALL_TEXT));
 add('sun', SA.TEXT, said(SA.TEXT));
+// live coaching against your fastest pass (pass_coach.js line), gaps up to 5 s and stretches of points
+const PC = require(R + '/web/pass_coach.js');
+for (let g = -5; g <= 5.001; g += 0.05) for (const early of [false, true]) {
+  for (const ev of [{ kind: 'corner', gap: g, early }, { kind: 'stretch', gap: g }]) { const t = PC.line(ev); if (t) add('coach', t, said(t)); } }
+for (let d = -12; d <= 12; d++) { const t = PC.line({ kind: 'stretch', gap: null, delta: d }); if (t) add('coach', t, said(t)); }
+for (const k of ['best', 'smooth', 'brake', 'stretch_best', 'stretch_level', 'brake_later', 'brake_here']) add('coach', PC.SPOKEN[k], said(PC.SPOKEN[k]));
+// along the way (along_ahead.js): the last fuel or charger, a viewpoint or a waterfall, at every speed and distance it says
+const A = require(R + '/web/along_ahead.js');
+{
+  const KY = 110540, kx = 111320 * Math.cos(35.5 * Math.PI / 180), n = 4001, dist = Array.from({ length: n }, (_, i) => i * 50);
+  const lat = dist.map((m) => 35.5 + m / KY), lon = dist.map(() => -83.9), off = (m, e) => ({ lat: 35.5 + m / KY, lon: -83.9 + e / kx, m });
+  const scenic = [{ kind: 'fuel', ...off(20000, 80) }, { kind: 'view', name: "Wiseman's View", ...off(30000, -150) }, { kind: 'view', name: null, ...off(40000, 0) },
+    { kind: 'falls', name: null, ...off(60000, 200) }, { kind: 'fuel', ...off(110000, -40) }, { kind: 'charge', ...off(130000, 30) }];
+  const t = { dist, lat, lon, scenic };
+  for (metric of [false, true]) for (const v of [6, 15, 25, 40]) for (const electric of [false, true]) for (let m = 0; m < 200000; m += 50) {
+    const a = A.due(t, m, v, { spoken: units.spokenShort, metric, electric });
+    if (a) add('along', a.bare || a.text, said(a.bare || a.text)); }
+}
 // the DOTs' traffic events (hazard_reports.js: "<label> ahead"), every label backend/src/traffic.ts gives
 for (const l of JSON.parse(process.argv[2])) add('dot', `${l} ahead`, said(`${l} ahead`));
 // how far the quiet lasts, and the drive's opener, in each pack
@@ -141,3 +159,9 @@ def test_a_road_mark_in_a_rally_call_plays_its_own_clip():
     # the plain call carries its clips, and so does every line said by its text
     assert "tokens: opt.advice ? pt({ advice: opt.advice, adviceToken: opt.adviceToken }) : bareTokens" in cockpit
     assert "ApexVoiceLines.forText(text) || ApexVoiceLines.compose(text)" in cockpit
+
+
+@pytest.mark.parametrize("pid", PACKS)
+def test_every_bank_entry_has_its_file(pid):
+    gone = [k for k, v in bank(pid).items() if not v.get("file") or not os.path.exists(os.path.join(ROOT, "web", "voices", pid, v["file"]))]
+    assert gone == [], gone[:10]

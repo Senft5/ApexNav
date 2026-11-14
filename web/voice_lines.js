@@ -106,7 +106,40 @@
     "pl:in:300 metres": "in 300 metres", "pl:in:310 metres": "in 310 metres", "pl:in:320 metres": "in 320 metres", "pl:in:330 metres": "in 330 metres",
     "pl:in:340 metres": "in 340 metres", "pl:in:350 metres": "in 350 metres", "pl:in:360 metres": "in 360 metres", "pl:in:370 metres": "in 370 metres",
     "pl:in:380 metres": "in 380 metres", "pl:in:390 metres": "in 390 metres", "pl:in:400 metres": "in 400 metres", "pl:in:410 metres": "in 410 metres",
-    "pl:in:420 metres": "in 420 metres"
+    "pl:in:420 metres": "in 420 metres",
+    "pl:in:half a mile": "in half a mile", "pl:in:three quarters of a mile": "in three quarters of a mile", "pl:in:a mile": "in a mile",
+    "pl:in:1.1 miles": "in 1.1 miles", "pl:in:a kilometre": "in a kilometre", "pl:in:430 metres": "in 430 metres", "pl:in:440 metres": "in 440 metres",
+    "pl:in:450 metres": "in 450 metres", "pl:in:460 metres": "in 460 metres", "pl:in:470 metres": "in 470 metres", "pl:in:480 metres": "in 480 metres",
+    "pl:in:490 metres": "in 490 metres", "pl:in:500 metres": "in 500 metres", "pl:in:510 metres": "in 510 metres", "pl:in:520 metres": "in 520 metres",
+    "pl:in:530 metres": "in 530 metres", "pl:in:540 metres": "in 540 metres", "pl:in:550 metres": "in 550 metres", "pl:in:560 metres": "in 560 metres",
+    "pl:in:570 metres": "in 570 metres", "pl:in:580 metres": "in 580 metres", "pl:in:590 metres": "in 590 metres", "pl:in:600 metres": "in 600 metres",
+    "pl:in:610 metres": "in 610 metres", "pl:in:620 metres": "in 620 metres", "pl:in:630 metres": "in 630 metres", "pl:in:640 metres": "in 640 metres",
+    "pl:in:650 metres": "in 650 metres", "pl:in:660 metres": "in 660 metres", "pl:in:670 metres": "in 670 metres", "pl:in:680 metres": "in 680 metres",
+    "pl:in:690 metres": "in 690 metres", "pl:in:700 metres": "in 700 metres", "pl:in:710 metres": "in 710 metres", "pl:in:720 metres": "in 720 metres",
+    "pl:in:730 metres": "in 730 metres", "pl:in:740 metres": "in 740 metres", "pl:in:750 metres": "in 750 metres", "pl:in:760 metres": "in 760 metres",
+    "pl:in:770 metres": "in 770 metres", "pl:in:780 metres": "in 780 metres", "pl:in:790 metres": "in 790 metres", "pl:in:800 metres": "in 800 metres",
+    "pl:in:810 metres": "in 810 metres", "pl:in:820 metres": "in 820 metres", "pl:in:830 metres": "in 830 metres", "pl:in:840 metres": "in 840 metres",
+    "pl:in:850 metres": "in 850 metres", "pl:in:860 metres": "in 860 metres", "pl:in:870 metres": "in 870 metres", "pl:in:880 metres": "in 880 metres",
+    "pl:in:890 metres": "in 890 metres", "pl:in:900 metres": "in 900 metres", "pl:in:910 metres": "in 910 metres", "pl:in:920 metres": "in 920 metres",
+    "pl:in:930 metres": "in 930 metres", "pl:in:940 metres": "in 940 metres", "pl:in:950 metres": "in 950 metres", "pl:in:960 metres": "in 960 metres",
+    "pl:in:970 metres": "in 970 metres", "pl:in:980 metres": "in 980 metres", "pl:in:990 metres": "in 990 metres", "pl:in:1.1 kilometres": "in 1.1 kilometres",
+    "pl:in:1.2 kilometres": "in 1.2 kilometres", "pl:in:1.3 kilometres": "in 1.3 kilometres", "pl:in:1.4 kilometres": "in 1.4 kilometres",
+    "pl:in:1.5 kilometres": "in 1.5 kilometres", "pl:in:1.6 kilometres": "in 1.6 kilometres", "pl:in:1.7 kilometres": "in 1.7 kilometres",
+    "pl:in:1.8 kilometres": "in 1.8 kilometres", "pl:in:1.9 kilometres": "in 1.9 kilometres", "frag:last_fuel_for": "Last fuel for",
+    "frag:last_charger_for": "Last charger for", "frag:last_fuel_route": "Last fuel of the route,", "frag:last_charger_route": "Last charger of the route,",
+    "frag:on_left": "on the left.", "frag:on_right": "on the right.", "frag:on_left_c": "on the left,", "frag:on_right_c": "on the right,",
+    "frag:viewpoint": "A viewpoint", "frag:waterfall": "A waterfall", "frag:best_yet": "Best yet.", "frag:up": "up.", "frag:down": "down.",
+    "frag:that_stretch": "That stretch:", "frag:down_best": "down on your best.", "gap:t1": "One tenth", "gap:t2": "Two tenths",
+    "gap:t3": "Three tenths", "gap:t4": "Four tenths", "gap:t5": "Five tenths", "gap:t6": "Six tenths", "gap:t7": "Seven tenths",
+    "gap:t8": "Eight tenths", "gap:t9": "Nine tenths", "gap:s1.0": "1.0 seconds", "gap:s1.1": "1.1 seconds", "gap:s1.2": "1.2 seconds",
+    "gap:s1.3": "1.3 seconds", "gap:s1.4": "1.4 seconds", "gap:s1.5": "1.5 seconds", "gap:s1.6": "1.6 seconds", "gap:s1.7": "1.7 seconds",
+    "gap:s1.8": "1.8 seconds", "gap:s1.9": "1.9 seconds", "gap:s2.0": "2.0 seconds", "gap:s2.1": "2.1 seconds", "gap:s2.2": "2.2 seconds",
+    "gap:s2.3": "2.3 seconds", "gap:s2.4": "2.4 seconds", "gap:s2.5": "2.5 seconds", "gap:s2.6": "2.6 seconds", "gap:s2.7": "2.7 seconds",
+    "gap:s2.8": "2.8 seconds", "gap:s2.9": "2.9 seconds", "gap:s3.0": "3.0 seconds", "gap:s3.1": "3.1 seconds", "gap:s3.2": "3.2 seconds",
+    "gap:s3.3": "3.3 seconds", "gap:s3.4": "3.4 seconds", "gap:s3.5": "3.5 seconds", "gap:s3.6": "3.6 seconds", "gap:s3.7": "3.7 seconds",
+    "gap:s3.8": "3.8 seconds", "gap:s3.9": "3.9 seconds", "gap:s4.0": "4.0 seconds", "gap:s4.1": "4.1 seconds", "gap:s4.2": "4.2 seconds",
+    "gap:s4.3": "4.3 seconds", "gap:s4.4": "4.4 seconds", "gap:s4.5": "4.5 seconds", "gap:s4.6": "4.6 seconds", "gap:s4.7": "4.7 seconds",
+    "gap:s4.8": "4.8 seconds", "gap:s4.9": "4.9 seconds", "gap:s5.0": "5.0 seconds"
   } /* END_VOICE_LINES_JSON */;
 
   // Valhalla maneuver type -> verb token (web/directions.js VERB says the same words with the street name).
@@ -185,6 +218,23 @@
     }
     if ((m = /^Twisty section ahead\. (\d+) corners\.$/.exec(t))) { const c = nums(+m[1]); return c ? ['frag:twisty', ...c, 'frag:corners'] : null; }
     if ((m = /^(.+) ahead\.?$/.exec(t)) && DOT[m[1].toLowerCase()]) return [DOT[m[1].toLowerCase()]];
+    // live coaching (pass_coach.js line): the gap to your fastest pass, in tenths or seconds, or points on a stretch
+    const gap = (g) => { const x = /^(one|two|three|four|five|six|seven|eight|nine) tenths?$/i.exec(g), y = /^(\d\.\d) seconds$/.exec(g), z = /^\d+$/.exec(g);
+      return x ? [`gap:t${WORD_N[x[1].toLowerCase()]}`] : y && TEXT[`gap:s${y[1]}`] ? [`gap:s${y[1]}`] : z ? nums(+g) : null; };
+    if ((m = /^Best yet\. (.+) up\.$/.exec(t)) && !/^\d+$/.test(m[1]) && gap(m[1])) return ['frag:best_yet', ...gap(m[1]), 'frag:up'];
+    if ((m = /^(.+) down\.( Brake later\.)?$/.exec(t)) && !/^\d+$/.test(m[1]) && !/:/.test(m[1]) && gap(m[1])) return [...gap(m[1]), 'frag:down', ...(m[2] ? ['line:pass_brake_later'] : [])];
+    if ((m = /^Best stretch yet\. (.+) up\.$/.exec(t)) && gap(m[1])) return ['line:pass_stretch_best', ...gap(m[1]), 'frag:up'];
+    if ((m = /^That stretch: (.+) down on your best\.$/.exec(t)) && gap(m[1])) return ['frag:that_stretch', ...gap(m[1]), 'frag:down_best'];
+    // along the way (along_ahead.js): the last fuel or charger, a viewpoint or a waterfall (a named one: its plain line)
+    const tail = (d, side, comma) => { if (!TEXT[`pl:in:${d}`]) return null; return side ? [`pl:in:${d}`, `frag:on_${side}`] : [`pl:in:${d}`]; };
+    if ((m = /^Last (fuel|charger) for (\d+) (miles|kilometres), in (.+?)(?:, on the (left|right))?\.$/.exec(t))) {
+      const n = nums(+m[2]), w = tail(m[4], m[5]);
+      return n && w ? [`frag:last_${m[1]}_for`, ...n, m[3] === 'miles' ? 'frag:miles_c' : 'frag:kilometres_c', ...w] : null;
+    }
+    if ((m = /^Last (fuel|charger) of the route, in (.+?)(?:, on the (left|right))?\.$/.exec(t))) { const w = tail(m[2], m[3]); return w ? [`frag:last_${m[1]}_route`, ...w] : null; }
+    if ((m = /^(A viewpoint|A waterfall)(?: on the (left|right),)? in (.+)\.$/.exec(t)) && TEXT[`pl:in:${m[3]}`]) {
+      return [m[1] === 'A viewpoint' ? 'frag:viewpoint' : 'frag:waterfall', ...(m[2] ? [`frag:on_${m[2]}_c`] : []), `pl:in:${m[3]}`];
+    }
     return null;
   }
 
