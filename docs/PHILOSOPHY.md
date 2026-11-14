@@ -21,21 +21,22 @@ as rally pace notes, scores how cleanly you drove it, and keeps a shared road bo
 1. **Commitment, said honestly.** The Vetta Score rewards using the grip a corner offers, smoothly: Pace (40 %, full
    credit from 85 % of the corner's estimated grip limit, penalised past it), Smooth, Brakes and Rhythm
    (`core/drive_analysis.py`). It never uses absolute or top speed. Crew boards add up shared Scores; Stage times and gaps
-   are shared only with the friends and crews you switch on (owner, 2026-11-10). Copy never claims "never how fast";
-   it says what the score rewards. No public speed or time leaderboards; lap times only on a mapped raceway. On a road you have driven before, the live
+   go to friends and private crews from the start, each with a switch (owner, 2026-11-10 and 11-11), and each area's
+   time attack loops have boards every member sees (owner, 2026-11-12). Copy never claims "never how fast" or "no top
+   speeds" (2026-11-14); it says what the score rewards. Never a top-speed board. On a road you have driven before, the live
    coach may say the time gap to your own fastest pass and "brake later" (owner, 2026-11-14; web/pass_coach.js).
 2. **Unknown stays unknown.** A value that was not measured is `--` or `null`, never 0 and never a guess. A route from map
    shape alone says "From the map only". This rule covers our own certainty too: a measurement shown without saying how
    sure it is (banking from one phone, one pass) is a partial lie. See §4.
-3. **Your drives never become evidence against you.** Traces, speeds and times stay on the phone. What is shared is road
-   physics (banking, roughness, crests) as anonymous 5 m bins, never a path; friends and crews see only what you switch on
-   for them, per friend and per crew. The rules in force are in `docs/ROAD_DATA.md` and `docs/SOCIAL.md` §1.
+3. **Your drives never become evidence against you.** Traces and speeds stay on the phone. What is shared is road
+   physics (banking, roughness, crests) as anonymous 5 m bins, never a path; Scores and times go to friends and private
+   crews from the start (a switch for each), to time attack boards only when you enter, and never with a trace or a speed. The rules in force are in `docs/ROAD_DATA.md` and `docs/SOCIAL.md` §1.
 4. **Cameras and police, in the open.** Vetta shows plate-reading (ALPR) and speed cameras from OpenStreetMap and can
    route around them, and drivers report police as a hazard and as a convoy leader call (owner, 2026-11-10). This is
    legal in the US and common in navigation apps; the listing names it plainly and APP_REVIEW.md covers it. Never
    reported: drunk-driving checkpoints (App Review guidelines allow only checkpoints the police publish). Routes can avoid
    drivers' live Police reports and a convoy's Police call (Avoid → Police reports, owner 2026-11-11, docs/ROUTING.md).
-5. **Friends, not the public.** No public boards. Convoys leave nothing stored. Sharing is said once, at the moment you share.
+5. **Friends first.** Public crews and time attack boards are opt-in. Convoys leave nothing stored. Sharing is said once, at the moment you share.
 6. **Free to drive.** Driving, pace notes, directions, routes and loops, safety, privacy controls, your drives and your
    exports are free and stay free. Vetta Pro is optional and must never gate safety, privacy or your own data
    (`tests/test_pro.py`). **Pro is looks only** (owner, 2026-11-10): themes (with their voices) and crew liveries. Route
