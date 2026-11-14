@@ -5420,6 +5420,39 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
   await page.waitForFunction(() => /Sign in to follow a roadbook/.test(document.getElementById('toast').textContent));
 }, { geolocation: { latitude: 35.6, longitude: -83.8 }, permissions: ['geolocation'] });
 
+flow('roadbooks: Drive them all routes from where you are through the book\'s roads, nearest first, each from its nearer end (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  // three roads going north ([lon, lat]): A near you, B beyond it (drawn south to north), C past B but drawn north to south
+  const road = (lat0, n, dir = 1) => { const g = Array.from({ length: n }, (_, i) => [-83.8 + Math.sin(i / 5) * 3e-4, lat0 + i * 3e-4]); return dir > 0 ? g : g.reverse(); };
+  const A = road(35.62, 40), B = road(35.70, 40), C = road(35.78, 40, -1), far = road(37.5, 40);
+  const book = { id: 'BBBBBBBBBBBBBBBB', name: 'Smokies day out', about: null, visibility: 'public', by: 'cara', mine: false, followers: 2, following: true, lat: 35.7, lon: -83.8,
+    road_list: [{ id: 'c', name: 'Road C', geom: C, length_m: 1300, stamps: 0, stamped: false }, { id: 'f', name: 'Far road', geom: far, length_m: 1300, stamps: 0, stamped: false },
+      { id: 'a', name: 'Road A', geom: A, length_m: 1300, stamps: 0, stamped: false }, { id: 'b', name: 'Road B', geom: B, length_m: 1300, stamps: 0, stamped: false }] };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/roadbooks/BBBBBBBBBBBBBBBB') return json({ ...book, roads: 4, length_m: 5200 });
+    if (u.pathname === '/api/roadbooks') return json({ mine: [], following: [] });
+    return json([]);
+  });
+  const asked = [];
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => { const req = JSON.parse(route.request().postData() || '{}'); asked.push(req.locations);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) }); });
+  await page.goto(base + '/index.html?roadbook=BBBBBBBBBBBBBBBB');
+  await page.waitForSelector('.rb-pop.open button:has-text("Drive them all")', { timeout: 15000 });
+  await page.click('.rb-pop.open button:has-text("Drive them all")');
+  await page.waitForFunction(() => window.apexDebug && apexDebug.track && apexDebug.track.id === 'roadbook_all_BBBBBBBBBBBBBBBB', null, { timeout: 20000 });
+  const locs = asked.find((l) => Array.isArray(l) && l.length > 3) || [];
+  const near = (a, q) => Math.abs(a.lat - q[1]) < 1e-4 && Math.abs(a.lon - q[0]) < 1e-4;
+  const at = (q) => locs.findIndex((l) => near(l, q));
+  const order = [at(A[0]), at(A[A.length - 1]), at(B[0]), at(B[B.length - 1]), at(C[C.length - 1]), at(C[0])];
+  check(near(locs[0], [-83.8, 35.6]) && order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1])) && at(far[0]) < 0 && at(far[far.length - 1]) < 0 && locs.length <= 10,
+    'from where you are, then A, B and C in that order, C from its north end, the far road left out: ' + JSON.stringify({ order, n: locs.length }));
+  const after = await page.evaluate(() => ({ note: document.getElementById('routeProgress').textContent, req: apexDebug.track.request, name: apexDebug.track.name }));
+  check(after.name === 'Smokies day out' && /^3 roads of its 4 from Smokies day out, nearest first: [\d.]+ (mi|km)$/.test(after.note), 'the card says how many of its roads, nearest first: ' + JSON.stringify({ note: after.note, name: after.name }));
+  check(after.req && after.req.from === null && after.req.via.length >= 5 && after.req.via.every((v) => v.shaping), 'a reroute keeps to the roads: ' + JSON.stringify(after.req && after.req.via.length));
+}, { geolocation: { latitude: 35.6, longitude: -83.8 }, permissions: ['geolocation'] });
+
 flow('crash check: a hard impact then a stop asks "Are you OK?"; no answer offers a call and a text to the contact (IDEAS D-17)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.crashContact', JSON.stringify({ name: 'Sam', phone: '+1 555 010 2030' })); } catch (_) {} });
   await page.goto(base + '/index.html');
@@ -5454,6 +5487,9 @@ flow('no signal: a hazard report waits on the phone and goes when the connection
   // fresh fix within before Debris was tapped, and nothing was saved (CI 2026-11-11; as "review mode (U-94)")
   await page.evaluate(() => { const fix = () => window.apex.live({ lat: 35.6, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 90, has_fix: true }); fix(); window.__fixes = setInterval(fix, 500); });
   await page.click('#hzReportBtn');
+  // the sheet slides up (sheet-up, 0.2 s): on a loaded runner a tap mid-slide missed the key and nothing was reported, so tap
+  // once it has settled, as a driver does (CI 2026-11-14, shard 1 and 2)
+  await page.waitForFunction(() => { const o = document.getElementById('hzOverlay'); return o.classList.contains('show') && o.getAnimations({ subtree: true }).length === 0; });
   await page.click('#hzKinds button:has-text("Debris")');
   // CI 2026-11-14: twice this wait ran out on shard 2 and never locally; on a timeout, say what the page shows instead
   await saidOn(page, /Debris saved/, { timeout: 15000 }).catch(async (e) => {
@@ -7274,6 +7310,8 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   const posted = [];
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method(), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/users/search') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(u.searchParams.get('q') === 'ga'
+      ? [{ handle: 'gab', photo_id: null, you: null }, { handle: 'cara_ga', photo_id: null, you: 'friend' }] : []) });
     if (m === 'POST' && u.pathname === '/api/invites') { posted.push([m, u.pathname, null]); return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ url: 'https://vettadrive.app/?invite=TOKEN' + posted.length }) }); }
     if (m !== 'GET' && u.pathname !== '/api/crews/invite/preview') { posted.push([m, u.pathname, route.request().postData()]); return route.fulfill({ status: 204 }); }
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me', requests: 1 });
@@ -7360,6 +7398,15 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   await page.waitForSelector('.side-pop.open[aria-label="Invite"]');
   const inv = await page.textContent('.side-pop.open[aria-label="Invite"]');
   check(/^Send a friend link$/.test((await page.textContent('.side-pop.open .ink-btn.solid')).trim()) && /A link anyone can use/.test(inv) && !/New to Vetta|Already on Vetta/.test(inv) && !/invite-only/i.test(inv) && !/@dan|Accept/.test(inv) && await page.isVisible('.side-pop.open input[aria-label="Friend handle"]'), 'the Invite sheet: an invite link and add by handle, no requests: ' + inv);
+  // (2026-11-14) typing a handle finds the members whose handle starts with it, each with Add (a friend says so)
+  await page.fill('.side-pop.open input[aria-label="Friend handle"]', '@Ga');
+  await page.waitForSelector('.side-pop.open .find-list .find-row');
+  const found = await page.$$eval('.side-pop.open .find-list .find-row', (l) => l.map((r) => [r.querySelector('.find-h').textContent, (r.querySelector('button, small') || {}).textContent]));
+  check(JSON.stringify(found) === JSON.stringify([['@gab', 'Add'], ['@cara_ga', 'Friends']]), 'people found as you type: ' + JSON.stringify(found));
+  await page.click('.side-pop.open .find-row button[aria-label="Add @gab"]');
+  await page.waitForSelector('.side-pop.open .find-row small:text-is("Sent")');
+  check(posted.some(([m, p, b]) => m === 'POST' && p === '/api/friends/request' && /"handle":"gab"/.test(b)), 'Add sends the request');
+  await page.fill('.side-pop.open input[aria-label="Friend handle"]', '');
   // (2026-11-14) Show my code: a friend link as a QR code, a new one for the next person
   await page.click('.side-pop.open button:has-text("Show my code")');
   await page.waitForSelector('.side-pop.open .friend-qr canvas[aria-label="Your friend code"]');

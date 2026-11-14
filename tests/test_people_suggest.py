@@ -18,6 +18,8 @@ console.log(JSON.stringify({
   shown: S.shown(list, ['dave']).map((s) => s.handle),
   max: S.shown(list, [], 1).length,
   bad: [S.shown(null, null), S.shown('x', 'y')],
+  q: ['@Sam ', 's', 'sam r', 'sam_r', null, 'x'.repeat(21)].map(S.searchQ),
+  stand: ['friend', 'sent', 'asked', null].map(S.stand),
 }));
 """
 
@@ -28,3 +30,10 @@ def test_reasons_and_hidden():
     assert r["shown"] == ["erin", "fay"]          # dave hidden on this phone; broken rows dropped
     assert r["max"] == 1
     assert r["bad"] == [[], []]
+
+
+def test_find_by_handle():
+    """Find people: what is looked for (2 to 20 handle characters, no @), and the key on a row."""
+    r = json.loads(subprocess.run([NODE, "-e", RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["q"] == ["sam", None, None, "sam_r", None, None]
+    assert r["stand"] == ["Friends", "Sent", "Accept", "Add"]

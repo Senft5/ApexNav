@@ -7177,6 +7177,34 @@
         await buildRoute(null, t.id, road.name, t);
         toast(`${road.name}, from ${book.name}: ${ApexUnits.long(totalM(), 1)}.`);
       },
+      // Drive them all (roadbooks.js tour): the book's roads in one drive from where you are, nearest first, each from its
+      // nearer end; from here to the first road's start, then through each (shaping points keep it on them), as driveStage
+      driveBook: async (book) => {
+        if (loopBusy || optionBusy || state.mode === 'live') return;
+        closeSheet(); showView(null);
+        const here = await locate().catch(() => null), legs = ApexRoadbooks.tour(here, book.road_list || []);
+        if (legs.length < 2) { toast(here ? `Its roads are too far apart for one drive. Drive them one at a time.` : `Couldn\u2019t find where you are.`); return; }
+        loopBusy = true;
+        const ui = planBusy();
+        try {
+          ui.step('Routing\u2026');
+          const ls = legs.map(({ road, fwd }) => ({ s: { lat: road.geom.map((q) => q[1]), lon: road.geom.map((q) => q[0]), km: (road.length_m || 0) / 1000 }, fwd }));
+          const from = here || { lat: ls[0].s.lat[0], lon: ls[0].s.lon[0] };
+          const pts = ApexStages.waypoints(from, { legs: ls }).slice(here ? 0 : 1, -1);
+          const [r] = await routePoints(pts);
+          if (state.mode === 'live') return;
+          const name = String(book.name || 'Roadbook').slice(0, 60), end = pts[pts.length - 1], id = `roadbook_all_${book.id}`;
+          const t = await trackFromPolyline(r.coords, id, name);
+          if (state.mode === 'live') return;
+          Object.assign(t, { fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), steps: stepsOf(t, r), unavoided: FunRoute.unavoided(avoid, r),
+                             request: { from: null, to: { lat: end.lat, lon: end.lon }, via: pts.slice(1, -1).map((q) => ({ lat: q.lat, lon: q.lon, shaping: true })) } });
+          ownInstructLater(t, r);
+          await buildRoute(null, id, name, t);
+          const n = (book.road_list || []).length, of = legs.length < n ? ` of its ${n}` : '';
+          cardNote(`${legs.length} roads${of} from ${name}, nearest first: ${ApexUnits.long(totalM(), 1)}`);
+        } catch (_) { toast('Couldn\u2019t route through those roads. Drive them one at a time.'); }
+        finally { loopBusy = false; ui.done(); }
+      },
     }) : null; } catch (e) { console.error('roadbooks', e); } });
     let booksRowCount = null;
     onSocial(() => { if (roadbooks) {
@@ -7697,6 +7725,13 @@
         el('div', { className: 'stack-8' },
           btn('Send a friend link', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Link copied. You\'re friends once they open it, and you both get 5 points when they first share road data.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
           el('div', { className: 'row' }, add, btn('Send request', sendRequest)),
+          // (2026-11-14) as you type, the members whose handle starts with it, each with Add: no guessing at a handle
+          ...(peopleSuggest && me.member ? [peopleSuggest.finder(add, async (h) => {
+            const r = await apiCall('POST', '/api/friends/request', { handle: h }).catch(() => null);
+            if (!r || !r.ok) { toast('Couldn’t send that. Try again.'); return false; }
+            setSent([...sentList().filter((x) => x !== h), h]);
+            return true;
+          })] : []),
           btn('A link anyone can use', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'), 'linkbtn'),
           btn('Show my code', () => showFriendQr(qrBox), 'linkbtn'), qrBox),
         reqSec);

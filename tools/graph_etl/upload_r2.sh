@@ -3,7 +3,7 @@
 # .github/workflows/data-mirror.yml. Auth is the run's GitHub OIDC token (audience vetta-data, `id-token: write`), asked
 # for again every BATCH files so it never expires mid-run. Graph tiles go up under their build first; the index last, so the
 # Worker switches to the new build only when all its tiles are there. Unchanged files are skipped by the Worker (same sha).
-#   tools/graph_etl/upload_r2.sh DATA_DIR [BASE_URL]   (DATA_DIR = a checkout of graph-data: v1/, ctx/v1/, cameras/v1/; or osm-ctx.yml's osm/v1/)
+#   tools/graph_etl/upload_r2.sh DATA_DIR [BASE_URL]   (DATA_DIR = a checkout of graph-data: v1/, ctx/v1/, cameras/v1/; or osm-ctx.yml's osm/v2/)
 set -euo pipefail
 dir=$(cd "$1" && pwd); base="${2:-https://apexnav.senftns.workers.dev}"
 BATCH=150; PAR=8
@@ -53,10 +53,10 @@ if [ -d "$dir/ctx/v1" ]; then
   ( cd "$dir/ctx/v1" && find 8 -name '*.vcg' 2>/dev/null | sed "s|.*|$dir/ctx/v1/& ctx/v1/&|" ) | upload || fail=1
   [ -f "$dir/ctx/v1/index.json" ] && { echo "$dir/ctx/v1/index.json ctx/v1/index.json" | upload || fail=1; }
 fi
-if [ -d "$dir/osm/v1" ]; then   # the OSM route context bundles (.github/workflows/osm-ctx.yml), the index last
+if [ -d "$dir/osm/v2" ]; then   # the OSM route context bundles (.github/workflows/osm-ctx.yml), the index last
   echo "osm route context:"
-  ( cd "$dir/osm/v1" && ls *.txt.gz 2>/dev/null | sed "s|.*|$dir/osm/v1/& osm/v1/&|" ) | upload || fail=1
-  [ -f "$dir/osm/v1/index.json" ] && { echo "$dir/osm/v1/index.json osm/v1/index.json" | upload || fail=1; }
+  ( cd "$dir/osm/v2" && ls *.bin 2>/dev/null | sed "s|.*|$dir/osm/v2/& osm/v2/&|" ) | upload || fail=1
+  [ -f "$dir/osm/v2/index.json" ] && { echo "$dir/osm/v2/index.json osm/v2/index.json" | upload || fail=1; }
 fi
 if [ -f "$dir/cameras/v1/region.json" ]; then
   echo "cameras:"

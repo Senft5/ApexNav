@@ -184,6 +184,10 @@ and in random batches so a trace cannot be re-assembled.
   with Add (the same request the Invite sheet sends) and × (hidden on this phone, `apex.suggestHidden`).
 - Never a friend, a request either way, someone blocked either way, or someone three reports hid. Crew-mates come first.
 - `GET /api/friends/suggested` (`friendSuggestions` in `backend/src/social.ts`), `web/people_suggest.js`. No table.
+- Find people (2026-11-14): typing in the Invite sheet's handle field lists the members whose handle starts with it
+  (two characters at least, eight at most, the exact one first, then friends), each with Add, Accept (they asked you) or
+  where you stand. Never you, someone blocked either way, or someone three reports hid. `GET /api/users/search`
+  (`userSearch`), `finder` in `web/people_suggest.js`.
 - Show my code (2026-11-14): on the Invite sheet, a friend link as a QR code for a meet. Their phone camera opens it, they
   tap Accept and you're friends. It's the same one-use link Send a friend link makes (10 open at most), so New code makes
   the next one. Drawn on a canvas by `vendor/qrcode.js`, which loads only when it's asked for.

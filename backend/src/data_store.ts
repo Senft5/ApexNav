@@ -7,7 +7,7 @@
 //
 // Keys:  graph/v1/index.json            the live index (its `build` names the tile set)
 //        graph/v1/b/<build>/<i>_<j>.vgr  one build's tiles: a new build is written beside the old, then the index switches
-//        ctx/v1/index.json, ctx/v1/8/<x>/<y>.vcg, cameras/v1/region.json, osm/v1/<bi>_<bj>.txt.gz (+ index.json)
+//        ctx/v1/index.json, ctx/v1/8/<x>/<y>.vcg, cameras/v1/region.json, osm/v2/<bi>_<bj>.bin (+ index.json)
 import { verifyGitHubOidc } from "./github_oidc";
 import { Env, HttpError, json } from "./util";
 
@@ -17,7 +17,7 @@ const KEYS = [
   /^graph\/v1\/b\/[\w.:-]{1,64}\/\d{1,4}_\d{1,4}\.vgr$/,
   /^ctx\/v1\/(index\.json|8\/\d{1,3}\/\d{1,3}\.vcg)$/,
   /^cameras\/v1\/region\.json$/,
-  /^osm\/v1\/(index\.json|-?\d{1,4}_-?\d{1,4}\.txt\.gz)$/,   // the OSM route context bundles (tools/osm_ctx/build.py, osm_relay.ts)
+  /^osm\/v2\/(index\.json|-?\d{1,4}_-?\d{1,4}\.bin)$/,   // the OSM route context bundles (tools/osm_ctx/build.py, osm_relay.ts)
 ];
 export const MAX_BYTES = 50 * 1024 * 1024;   // a graph tile is about 0.4 MB, the largest bundle a few MB
 const KEEP_BUILDS = 2;                        // the live build and the one before it (a phone mid-route may still ask)

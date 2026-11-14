@@ -58,6 +58,15 @@ def test_every_spoken_maneuver_and_a_whole_route_have_tokens():
     assert by["At the roundabout, take the 2nd exit onto A"] == ["nav:rb2"]
     assert by["Arriving at your destination"] == ["nav:arrive"]
     assert all(k for _, k in r["lines"]), r["lines"]
+    # the side of the road the destination is on (#804): the router's 5/6, or the step's side; each has its clip
+    sides = node(r"""
+    const L = require(process.argv[1] + '/web/voice_lines.js');
+    process.stdout.write(JSON.stringify([{ type: 5 }, { type: 6 }, { type: 4, side: 'left' }, { type: 4, side: 'right' }, { type: 4 }].map((s) => L.maneuver(s))));
+    """)
+    assert sides == [["nav:arrive_right"], ["nav:arrive_left"], ["nav:arrive_left"], ["nav:arrive_right"], ["nav:arrive"]]
+    import voicebank
+    for k, words in (("nav:arrive_right", "Your destination is on the right"), ("nav:arrive_left", "Your destination is on the left")):
+        assert voicebank.voice_lines()[k].rstrip(".") == words
 
 
 def test_the_fixed_lines_the_page_says_are_in_the_table_word_for_word():

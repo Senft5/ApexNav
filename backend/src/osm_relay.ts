@@ -104,20 +104,21 @@ export async function diag(tile: string, fetcher: typeof fetch = fetch, ms = MIR
 const cacheKey = (tile: string) => new Request(`https://apexnav.cache/osm/v1/${tile}`);
 
 // Built tiles (tools/osm_ctx/build.py, .github/workflows/osm-ctx.yml, 2026-11-14): the same elements built each week from
-// the Geofabrik extracts and kept in R2 (DATA, osm/v1/<bi>_<bj>.txt.gz, one 0.25° bundle of 25 tiles, a line each:
-// "<tile>\t<json>"), read before Overpass, which timed out or refused on nearly every service check from 2026-11-12. A
-// tile outside the built region, or across its border (not in its bundle), still goes to Overpass.
-// A city bundle is about 5 MB gzipped and 30 MB of text, more than a Worker should hold: it is read as a stream, a line at
-// a time, the asked tile answered as soon as its line has passed, and every line kept in the Cache API as it goes by
-// (`keep`), so the bundle's other tiles answer from the cache next. One pass per bundle at a time per isolate.
-export const BUNDLE = 5;
-export const bundleKey = (tile: string) => { const [i, j] = tile.split("_").map(Number); return `osm/v1/${Math.floor(i / BUNDLE)}_${Math.floor(j / BUNDLE)}.txt.gz`; };
-type R2Get = { get(k: string): Promise<{ body: ReadableStream } | null>; head?(k: string): Promise<unknown> };
-type Keep = (tile: string, body: string) => Promise<void> | void;
-type Pass = { waiters: Map<string, ((v: string | null) => void)[]>; passed: Map<string, string | null>; done: Promise<void> };
-const passes = new Map<string, Pass>();
+// the Geofabrik extracts and kept in R2 (DATA), read before Overpass, which timed out or refused on nearly every service
+// check from 2026-11-12. A tile outside the built region, or across its border (not in its bundle), still goes to Overpass.
+// One 0.25° bundle of 25 tiles per object, osm/v2/<bi>_<bj>.bin: a HEAD-byte JSON header, space padded,
+// {"t": {"<tile>": [offset, length]}}, then each tile's compact JSON as its own gzip member. A tile is two ranged reads
+// (the header, kept per isolate, then its member), so a city bundle (5 MB) is never read whole: v1 streamed the whole
+// bundle and took up to 7 s for the first tile of a bundle on prod.
+export const BUNDLE = 5, HEAD = 4096, BUILT = "osm/v2";
+export const bundleKey = (tile: string) => { const [i, j] = tile.split("_").map(Number); return `${BUILT}/${Math.floor(i / BUNDLE)}_${Math.floor(j / BUNDLE)}.bin`; };
+type R2Range = { offset: number; length: number };
+type R2Get = { get(k: string, o?: { range?: R2Range }): Promise<{ body: ReadableStream } | null>; head?(k: string): Promise<unknown> };
+type Header = Record<string, [number, number]>;
+const HEADERS_MAX = 400;
+const heads = new Map<string, { at: number; t: Header | null }>();
 
-// whether a build is in R2 at all (osm/v1/index.json), asked at most every 10 minutes per isolate: with one, a tile it
+// whether a build is in R2 at all (osm/v2/index.json), asked at most every 10 minutes per isolate: with one, a tile it
 // doesn't hold (outside the three states, or across their border) answers 504 at once instead of holding the plan while
 // Overpass is tried (still tried in the background and kept, for the next plan there)
 let builtIndex: { at: number; on: boolean } | null = null;
@@ -125,69 +126,35 @@ export async function hasBuild(data: { head?(k: string): Promise<unknown> } | un
   if (!data || typeof data.head !== "function") return false;
   if (builtIndex && now - builtIndex.at < 600_000) return builtIndex.on;
   let on = false;
-  try { on = !!(await data.head("osm/v1/index.json")); } catch { on = false; }
+  try { on = !!(await data.head(`${BUILT}/index.json`)); } catch { on = false; }
   builtIndex = { at: now, on };
   return on;
 }
-export function resetBuiltForTest(): void { passes.clear(); builtIndex = null; }
+export function resetBuiltForTest(): void { heads.clear(); builtIndex = null; }
 
-function startPass(data: R2Get, key: string, keep?: Keep): Pass {
-  const pass: Pass = { waiters: new Map(), passed: new Map(), done: Promise.resolve() };
-  const line = async (text: string) => {
-    const tab = text.indexOf("\t");
-    if (tab <= 0) return;
-    const name = text.slice(0, tab), body = text.slice(tab + 1);
-    for (const w of pass.waiters.get(name) ?? []) w(body);
-    pass.waiters.delete(name);
-    pass.passed.set(name, pass.waiters.size ? body : null);   // the body only while others still wait (they may ask it)
-    if (keep) { try { await keep(name, body); } catch { /* the cache is a speed-up */ } }
-  };
-  pass.done = (async () => {
-    try {
-      const o = await data.get(key);
-      if (!o) return;
-      const reader = o.body.pipeThrough(new DecompressionStream("gzip")).pipeThrough(new TextDecoderStream()).getReader();
-      let buf = "";
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buf += value;
-        let nl: number;
-        while ((nl = buf.indexOf("\n")) >= 0) { await line(buf.slice(0, nl)); buf = buf.slice(nl + 1); }
-      }
-      if (buf) await line(buf);
-    } catch { /* R2 or the stream failed: those still waiting go to Overpass */ } finally {
-      for (const ws of pass.waiters.values()) for (const w of ws) w(null);
-      pass.waiters.clear();
-      passes.delete(key);
-    }
-  })();
-  passes.set(key, pass);
-  return pass;
+async function header(data: R2Get, key: string, now = Date.now()): Promise<Header | null> {
+  const had = heads.get(key);
+  if (had && now - had.at < 600_000) return had.t;   // a new build replaces the bundles weekly; ten minutes is plenty
+  const o = await data.get(key, { range: { offset: 0, length: HEAD } });
+  let t: Header | null = null;
+  if (o) { const j = JSON.parse((await new Response(o.body).text()).trim()) as { t?: Header }; t = j && j.t ? j.t : null; }
+  if (heads.size >= HEADERS_MAX) heads.delete(heads.keys().next().value as string);
+  heads.set(key, { at: now, t });
+  return t;
 }
 
-/**
- * The tile's built elements (compact JSON text), or null when it wasn't built (Overpass then). `keep` gets every tile of
- * the bundle as the pass reads it; `waiter` keeps the pass running past the answer.
- */
-export async function builtTile(data: R2Get | undefined, tile: string, keep?: Keep, waiter?: Waiter): Promise<string | null> {
+/** The tile's built elements (compact JSON text), or null when it wasn't built (Overpass then). */
+export async function builtTile(data: R2Get | undefined, tile: string): Promise<string | null> {
   if (!data) return null;
   const key = bundleKey(tile);
-  let pass = passes.get(key);
-  if (pass && pass.passed.has(tile)) {
-    const body = pass.passed.get(tile);
-    if (body != null) return body;
-    await pass.done;                     // already gone by in a pass still running: kept in the cache by then
-    pass = undefined;
-  }
-  if (!pass) pass = startPass(data, key, keep);
-  const p = pass;
-  if (waiter) waiter.waitUntil(p.done);
-  return new Promise<string | null>((resolve) => {
-    const ws = p.waiters.get(tile) ?? [];
-    ws.push(resolve);
-    p.waiters.set(tile, ws);
-  });
+  try {
+    const t = await header(data, key);
+    const at = t && t[tile];
+    if (!at) return null;
+    const o = await data.get(key, { range: { offset: at[0], length: at[1] } });
+    if (!o) return null;
+    return await new Response(o.body.pipeThrough(new DecompressionStream("gzip"))).text();
+  } catch { return null; }   // R2 or the member failed: Overpass, as for a tile not built
 }
 
 const inflight = new Map<string, Promise<string | null>>();
@@ -209,11 +176,11 @@ export async function osmTile(url: URL, env: { OSM?: Kv; DATA?: R2Get }, waiter?
     const kv = env.OSM ? await env.OSM.get(kvKey, "text") : null;
     if (kv) { if (cache) await cache.put(key, new Response(kv, { headers })); return new Response(kv, { headers: { ...headers, "x-cache": "kv" } }); }
   } catch { /* the cache is a speed-up, never a failure */ }
-  const keepTile = async (name: string, body: string) => {
-    if (cache) await cache.put(new Request(`https://apexnav.cache/osm/v1/${name}`), new Response(body, { headers }));
-  };
-  const built = await builtTile(env.DATA, tile, keepTile, waiter);
-  if (built != null) return new Response(built, { headers: { ...headers, "x-cache": "built" } });
+  const built = await builtTile(env.DATA, tile);
+  if (built != null) {
+    try { if (cache) await cache.put(key, new Response(built, { headers })); } catch { /* the cache is a speed-up */ }
+    return new Response(built, { headers: { ...headers, "x-cache": "built" } });
+  }
   let job = inflight.get(tile);
   if (!job) {
     job = (async () => {
