@@ -24,6 +24,9 @@ from tools.graph_etl.region_blocks import BLOCK, MARGIN
 
 LOWER48 = (-125.0, 24.0, -66.0, 50.0)   # whole degrees round the lower 48 (west, south, east, north)
 CHUNK_DEG = 15.0
+# east of DENSE_WEST the chunks are DENSE_CHUNK_DEG wide: the -95..-80 chunks took up to 4 h 17 min of the runner's 5 h 45 min
+# (Chicago, Detroit and Cleveland: bands 41 to 43, 2026-11-14), the West's under 2 h 15 min
+DENSE_WEST, DENSE_CHUNK_DEG = -100.0, 8.0   # whole degrees: the blocks stay on the 1 degree grid
 
 
 def _ring_box(coords, box):
@@ -81,7 +84,7 @@ def jobs(st, only=None):
     while band < n - 1e-9:
         lo = w
         while lo < e - 1e-9:
-            hi = min(e, lo + CHUNK_DEG)
+            hi = min(e, lo + (DENSE_CHUNK_DEG if lo >= DENSE_WEST - 1e-9 else CHUNK_DEG), DENSE_WEST if lo < DENSE_WEST - 1e-9 else e)
             bl, need = [], set()
             x = lo
             while x < hi - 1e-9:
