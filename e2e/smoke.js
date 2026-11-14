@@ -5069,7 +5069,7 @@ flow('review mode (U-94): the recording\'s hazard report is the sheet, Undo and 
   await page.evaluate(() => clearInterval(window.__fixes));
 });
 
-flow('your data: Settings counts what the phone holds and downloads drives as GPX, offline data deleted (IDEAS Z-03/Z-04, F-06)', async (page, base) => {
+flow('your data: Settings counts what the phone holds and downloads drives as GPX, offline data deleted; a key with nothing to act on is not shown (IDEAS Z-03/Z-04, F-06)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.ApexRecording && window.ApexMyData);
@@ -5078,21 +5078,26 @@ flow('your data: Settings counts what the phone holds and downloads drives as GP
   await page.click('.tab[data-view="garage"]');
   await openSetting(page, 'data');
   await page.waitForFunction(() => /1 drive \(0.2 mi\)/.test(document.getElementById('myDataNote').textContent));
+  const shown = () => page.evaluate(() => ['myGpxBtn', 'myDrivesDelBtn', 'myOfflineDelBtn'].map((id) => document.getElementById(id).checkVisibility()));
+  check(JSON.stringify(await shown()) === '[true,true,false]', 'a drive: Download and Delete drives; nothing offline, no Delete offline data: ' + JSON.stringify(await shown()));
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#myGpxBtn')]);
   const gpx = require('fs').readFileSync(await dl.path(), 'utf8');
   check(/<trk><name>Test road<\/name>/.test(gpx) && (gpx.match(/<trkpt /g) || []).length === 3, 'the GPX holds the drive');
   await page.click('#myDrivesDelBtn');
   await page.click('.confirm-sheet .cs-yes:has-text("Delete drives")');             // the confirm sheet, not a system alert (REVIEW.md 1.2)
   await page.waitForFunction(() => /^Nothing on this phone yet/.test(document.getElementById('myDataNote').textContent));   // U-126: no line of zeros
+  check(JSON.stringify(await shown()) === '[false,false,false]', 'no drives: no Download or Delete drives (free roamer B, 2026-11-14): ' + JSON.stringify(await shown()));
   // offline data (IDEAS F-06): a saved route counted, then deleted; the drives are not touched by it
   await page.evaluate(() => { localStorage.setItem('apex.savedRoutes', JSON.stringify([{ id: 'r1', coords: [[0, 0], [1, 1]] }])); document.querySelector('.tab[data-view="garage"]').click(); });
   // the Garage tab again closes the Menu; since AM-1 a closed Menu can't be reached, so it is opened once more
   if (!(await page.evaluate(() => document.getElementById('sheet').classList.contains('open')))) await page.click('.tab[data-view="garage"]');
   await openSetting(page, 'data');
   await page.waitForFunction(() => /Offline data: 1 saved route /.test(document.getElementById('myOfflineNote').textContent));
+  check(await page.evaluate(() => document.getElementById('myOfflineDelBtn').checkVisibility()), 'a saved route: Delete offline data is there');
   await page.click('#myOfflineDelBtn');
   await page.click('.confirm-sheet .cs-yes');
   await page.waitForFunction(() => /^Nothing saved for offline/.test(document.getElementById('myOfflineNote').textContent));
+  check(!(await page.evaluate(() => document.getElementById('myOfflineDelBtn').checkVisibility())), 'deleted: the key goes with it');
   check((await page.evaluate(() => localStorage.getItem('apex.savedRoutes'))) === null, 'saved routes gone');
 });
 
@@ -9686,8 +9691,8 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   const rowsOf = await page.evaluate(() => { const box = document.querySelector('.data-rows'); return { groups: [...box.querySelectorAll('.nav-group')].map((h) => h.textContent),
     rows: [...box.querySelectorAll('.nav-row')].filter((r) => !r.hidden).map((r) => {   // signed out: no Delete account row
       const b = r.getBoundingClientRect(); return [r.id, Math.round(b.left), Math.round(b.width), Math.round(b.height)]; }) }; });
-  check(rowsOf.groups.join() === 'Take a copy,Offline,Remove' && rowsOf.rows.length === 7 && new Set(rowsOf.rows.map((r) => r[1] + '/' + r[2])).size === 1 && rowsOf.rows.every((r) => r[3] >= 44),
-    'Your data: seven rows in three groups, one edge and width, 44 pt or more: ' + JSON.stringify(rowsOf));
+  check(rowsOf.groups.join() === 'Take a copy,Offline,Remove' && rowsOf.rows.length === 6 && !rowsOf.rows.some((r) => r[0] === 'myOfflineDelBtn') && new Set(rowsOf.rows.map((r) => r[1] + '/' + r[2])).size === 1 && rowsOf.rows.every((r) => r[3] >= 44),
+    'Your data: six rows in three groups (nothing saved offline: no Delete offline data), one edge and width, 44 pt or more: ' + JSON.stringify(rowsOf));
   let alerted = false; page.on('dialog', (d) => { alerted = true; d.dismiss(); });
   await page.evaluate(() => document.getElementById('myEraseBtn').click());
   await page.waitForSelector('.confirm-sheet [role="alertdialog"], .confirm-sheet .cs-box[role="alertdialog"]');

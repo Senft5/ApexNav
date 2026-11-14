@@ -7853,6 +7853,8 @@
       if (sums.missing) sums = (await ApexAnalysis.job('summaries')).list;   // drives saved before summaries: built in the worker
       const list = sums.map((s) => ({ dist: [s.len_m || 0], battery: s.battery }));
       const s = ApexMyData.phoneSummary(list, localStorage);
+      // no drives on the phone: no Download drives and no Delete drives that could only say so (free roamer B, 2026-11-14)
+      $('myGpxBtn').hidden = $('myDrivesDelBtn').hidden = !list.length;
       $('myDataNote').textContent = ApexMyData.phoneText(s, (m) => ApexUnits.long(m))   // U-126: counts only what exists
         + (() => { const b = window.ApexBattery ? ApexBattery.overall(list) : null; return b ? ` Driving uses about ${b.perHour}% battery an hour on this phone (${b.drives} drive${b.drives === 1 ? '' : 's'}).` : ''; })();
       renderOffline();
@@ -7872,6 +7874,7 @@
       const o = ApexMyData.offlineSummary(localStorage, await voiceCacheBytes(), est.usage, est.quota);
       renderAreas();
       const note = $('myOfflineNote'); if (note) note.textContent = ApexMyData.offlineText(o);
+      $('myOfflineDelBtn').hidden = !(o.routes > 0) && !(o.areas > 0) && !(o.voiceBytes > 0);   // "Nothing saved for offline": nothing to delete
     }
     // a download on the web, the share sheet in the iOS app (save_file.js): a download link does nothing in the app's web view
     const saveFile = (text, name, type) => ApexSaveFile.saveFile(text, name, type);
