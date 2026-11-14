@@ -10,6 +10,9 @@ by the weekly OSM build (.github/workflows/osm-ctx.yml): Overpass timed out or r
     OUT/osm/v2/places/<bi>_<bj>.json = [[lat, lon, name, {tags}], ...], one file per covered cell (an empty list too)
         named places with hours or contact tags (PKEYS), for a place card's open now, Call and Website (web/place_info.js,
         backend/src/osm_relay.ts placeTags): a cell at a time, so the server reads only the cells a lookup touches
+    OUT/osm/v2/points/<bi>_<bj>.json = {"fuel": [[lat, lon], ...], "schools": [...], "worship": [...]}, one per covered cell
+        fuel stations (web/route_ctx/car.js, the fuel-stop spacing) and schools and places of worship (route_ctx/events.js,
+        school-run and church traffic), 5 decimal places, positions only (backend/src/osm_relay.ts pointCells)
 
 Waterfalls:
 A node or a way tagged natural=waterfall or waterway=waterfall, a way at the mean of its nodes, one per place (4 decimal
@@ -33,6 +36,7 @@ from tools.osm_ctx.build import read_poly
 
 STEP = 0.25
 PKEYS = ("opening_hours", "phone", "contact:phone", "website", "contact:website")   # place_info.js contact() and read()
+POINTS = {"fuel": "fuel", "school": "schools", "place_of_worship": "worship"}   # amenity -> the file's list (car.js, events.js)
 CKEYS = ("motor_vehicle:conditional", "motorcar:conditional", "vehicle:conditional", "access:conditional")   # conditional_closures.js KEYS
 
 
@@ -88,6 +92,39 @@ def places_by_cell(places, cs) -> dict:
         k = (math.floor(la / STEP), math.floor(lo / STEP))
         if k in by:
             by[k].append([la, lo, nm, t])
+    return by
+
+
+def read_points(paths) -> list:
+    """[(kind, lat, lon)] for every node or way with amenity in POINTS (a way at the mean of its nodes), sorted."""
+    out, seen = [], set()
+    for path in paths:
+        for o in osmium.FileProcessor(path).with_locations():
+            kind = POINTS.get(o.tags.get("amenity", "")) if (o.is_node() or o.is_way()) else None
+            key = ("n" if o.is_node() else "w", o.id)
+            if not kind or key in seen:
+                continue
+            if o.is_node():
+                if not o.location.valid():
+                    continue
+                la, lo = o.location.lat, o.location.lon
+            else:
+                pts = [(n.location.lat, n.location.lon) for n in o.nodes if n.location.valid()]
+                if not pts:
+                    continue
+                la, lo = sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
+            seen.add(key)
+            out.append((kind, round(la, 5), round(lo, 5)))
+    return sorted(out)
+
+
+def points_by_cell(points, cs) -> dict:
+    """{(bi, bj): {"fuel": [[lat, lon]], "schools": [...], "worship": [...]}} for every covered cell, empty ones included."""
+    by = {tuple(c): {k: [] for k in POINTS.values()} for c in cs}
+    for kind, la, lo in points:
+        k = (math.floor(la / STEP), math.floor(lo / STEP))
+        if k in by:
+            by[k][kind].append([la, lo])
     return by
 
 
@@ -162,7 +199,14 @@ def main(argv=None):
         with open(os.path.join(a.out, "osm", "v2", "places", f"{bi}_{bj}.json"), "w") as f:
             json.dump(rows, f, separators=(",", ":"), ensure_ascii=False)
     n = sum(len(v) for v in by.values())
-    print(f"falls: {len(d['falls'])}, roads with conditional access: {len(c['ways'])}, places with hours or contact: {n}, in {len(cs)} cells")
+    pts = points_by_cell(read_points(a.pbf), cs)
+    os.makedirs(os.path.join(a.out, "osm", "v2", "points"), exist_ok=True)
+    for (bi, bj), body in pts.items():
+        with open(os.path.join(a.out, "osm", "v2", "points", f"{bi}_{bj}.json"), "w") as f:
+            json.dump(body, f, separators=(",", ":"))
+    m = {k: sum(len(v[k]) for v in pts.values()) for k in POINTS.values()}
+    print(f"falls: {len(d['falls'])}, roads with conditional access: {len(c['ways'])}, places with hours or contact: {n}, "
+          f"fuel {m['fuel']}, schools {m['schools']}, worship {m['worship']}, in {len(cs)} cells")
 
 
 if __name__ == "__main__":

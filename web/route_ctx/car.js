@@ -1,7 +1,8 @@
 // Route context: the car (builder E). Range and fuel-stop spacing, phone signal along the way, and the offline prep that
 // follows from it. The car's width and ride height already shape the router's costing (fun_route.js costing, carNote); this
 // adds what the router can't know. Sources: the Garage's daily car (fuel, range_km; kept on the phone as apex.routingCar),
-// fuel stations from OpenStreetMap (amenity=fuel via Overpass, ODbL, 0.25-degree tiles cached FUEL_MS), EV chargers from
+// fuel stations from OpenStreetMap (amenity=fuel, ODbL, 0.25-degree tiles cached FUEL_MS: our weekly build's GET /api/ctx/points
+// inside Ohio, Kentucky and Indiana since 2026-11-14, Overpass for a tile outside it), EV chargers from
 // the Alternative Fuel Stations API of NLR, ex-NREL (developer.nlr.gov; public domain, US DOE; through our Worker, GET /api/chargers, which holds the free
 // key the owner creates: docs/OWNER_TODO.md; no key = status 'no-key'), and builder C's `mobile_coverage` channel when the
 // engine passes it in opts.peer (no grid builds it today, so it is unknown). Overpass and our Worker get tile ids/boxes, never the route.
@@ -211,8 +212,16 @@
       need.splice(0, need.length, ...answered);
       got = parts;
     } else {
-      const j = fetchFn ? await raceOverpass(fetchFn, fuelQuery(need), signal) : null;
-      got = j ? parseFuel(j) : null;
+      // our weekly build first (U.builtPoints, Ohio, Kentucky, Indiana): only the tiles it doesn't cover go to Overpass
+      const ours = await U.builtPoints(apiGet, need);
+      const left = need.filter((k) => !ours.has(k));
+      got = []; for (const k of need) if (ours.has(k)) got.push(...ours.get(k).fuel);
+      if (left.length) {
+        const j = fetchFn ? await raceOverpass(fetchFn, fuelQuery(left), signal) : null;
+        if (j) got.push(...parseFuel(j));
+        else if (!ours.size) got = null;
+        else { status = 'partial'; need.splice(0, need.length, ...need.filter((k) => ours.has(k))); }
+      }
     }
     if (!got) return none('unavailable');
     for (const k of need) {
@@ -223,7 +232,7 @@
     return { stations: [...have, ...got], status, covered };
   }
 
-  const FUEL_WAIT_MS = 0, fuelFlight = new Map();
+  const FUEL_WAIT_MS = 0, OURS_WAIT_MS = 3000, fuelFlight = new Map();
   /** One fuel query per set of tiles at a time, shared by the plans that ask while it runs; never tied to a plan's clock. */
   function fuelInBackground(tiles, fetchFn, storage) {
     const key = tiles.join(',');
@@ -246,9 +255,15 @@
       st = await U.within(stationsFor(tiles, { electric, apiGet: opts.apiGet, storage, signal: ac ? ac.signal : opts.signal }), budget, opts.signal, null);
       if (ac) ac.abort();
     } else {
-      // fuel from Overpass, off the critical path: the public servers often take 10 s or fail, so the plan waits FUEL_WAIT_MS
+      // our weekly build (GET /api/ctx/points, a fast answer from R2) inside the region: the plan waits for it up to
+      // OURS_WAIT_MS, and when it covers every tile that's the answer
+      if (typeof opts.apiGet === 'function') {
+        const ours = await U.within(stationsFor(tiles, { electric: false, apiGet: opts.apiGet, storage }), Math.min(budget, OURS_WAIT_MS), opts.signal, null);
+        if (ours && ours.status === 'ok' && ours.covered.size === tiles.length) st = ours;
+      }
+      // the rest from Overpass, off the critical path: the public servers often take 10 s or fail, so the plan waits FUEL_WAIT_MS
       // (0: not at all) and goes on with the stations kept from earlier plans; the query runs on and is kept (14 days)
-      st = await U.within(fuelInBackground(tiles, opts.fetch || (root.fetch && root.fetch.bind(root)), storage), Math.min(budget, FUEL_WAIT_MS), opts.signal, null);
+      if (!st) st = await U.within(fuelInBackground(tiles, opts.fetch || (root.fetch && root.fetch.bind(root)), storage), Math.min(budget, FUEL_WAIT_MS), opts.signal, null);
       if (!st) st = await stationsFor(tiles, { electric: false, storage });
     }
     if (!st) st = { stations: null, status: 'unavailable' };

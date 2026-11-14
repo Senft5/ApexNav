@@ -411,11 +411,38 @@
     return s <= n && w <= e ? [s, w, n, e] : null;
   }
 
+  // The region's OSM points from our weekly build (backend/src/osm_relay.ts pointCells, tools/osm_ctx/region.py): fuel
+  // stations (car.js) and schools and places of worship (events.js) for the 0.25 degree cells it covers, as
+  // Map key -> { fuel, schools, worship } of [{ lat, lon }]. A cell it doesn't cover (outside Ohio, Kentucky and Indiana)
+  // or a request that failed is left out, and the caller asks Overpass for it as before. Only cell ids are sent.
+  // apiGet is the app's (cockpit.js routeCtxOpts): the parsed JSON or null.
+  const POINT_KINDS = ['fuel', 'schools', 'worship'], POINTS_PATH = '/api/ctx/points?cells=';
+  async function builtPoints(apiGet, keys) {
+    const out = new Map();
+    if (typeof apiGet !== 'function' || !keys || !keys.length) return out;
+    const parts = [];
+    for (let s = 0; s < keys.length; s += 40) parts.push(keys.slice(s, s + 40));
+    await Promise.all(parts.map(async (part) => {
+      let j = null;
+      try { j = await apiGet(POINTS_PATH + part.join(',')); } catch (_) { j = null; }
+      const cells = j && j.cells && typeof j.cells === 'object' ? j.cells : null;
+      if (!cells) return;
+      for (const k of part) {
+        const c = cells[k];
+        if (!c || typeof c !== 'object') continue;
+        const o = {};
+        for (const kind of POINT_KINDS) o[kind] = (Array.isArray(c[kind]) ? c[kind] : []).filter((p) => Array.isArray(p) && finite(p[0]) && finite(p[1])).map((p) => ({ lat: p[0], lon: p[1] }));
+        out.set(k, o);
+      }
+    }));
+    return out;
+  }
+
   const api = {
     finite, DEG, register, registry, nanArray, emptyResult, allStatus, spansWhere, metres, bearing, angleOff, nearestSample, samplesWithin, runs,
     unionBox, boxOf, cellsAlong, cellBox, cellCentre, cellOf, zoneAt, localTime, stateAt, chan, gradeOf, keyFor, loadKeys, cacheGet, cachePut, prune,
-    getJSON, pool, within, linked, env, PREFIX, nan, cellKey, paint, lookup, CELL_M,
-    E: { registry, nan, finite, spansWhere: eSpansWhere, within: eWithin, cellKey, paint, lookup, metres: eMetres, unionBox: eUnionBox, CELL_M },
+    getJSON, pool, within, linked, env, PREFIX, nan, cellKey, paint, lookup, CELL_M, builtPoints, POINTS_PATH,
+    E: { registry, nan, finite, spansWhere: eSpansWhere, within: eWithin, cellKey, paint, lookup, metres: eMetres, unionBox: eUnionBox, CELL_M, builtPoints },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRouteCtxUtil = api;
 })(typeof window !== 'undefined' ? window : globalThis);
