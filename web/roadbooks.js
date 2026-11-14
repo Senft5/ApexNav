@@ -524,14 +524,16 @@
     function nearSection() { const box = el('div', { className: 'stack-8' }); near(box); return box; }
 
     /** On the route card's Share: keep the planned road in one of your books (or a new one). → an element, or null signed out. */
-    function addPart(done) {
+    // what goes in: the planned route (its first 400 m and your privacy zones left out), or src() → { name, geom } | null
+    const plannedRoad = () => { const t = page.planned && page.planned(), geom = t ? fromTrack(t, page.zones ? page.zones() : []) : null; return geom ? { name: t.name, geom } : null; };
+    function addPart(done, src = plannedRoad, say = 'Or keep it in a roadbook. Its first 400 m and your privacy zones are left out.') {
       if (!member()) return null;
-      const part = el('div', { className: 'stack-8 rb-add' }, el('p', { className: 'note', textContent: 'Or keep it in a roadbook. Its first 400 m and your privacy zones are left out.' }));
+      const part = el('div', { className: 'stack-8 rb-add' }, el('p', { className: 'note', textContent: say }));
       const chips = el('div', { className: 'row', style: 'flex-wrap:wrap' });
       const addTo = async (id, bookName) => {
-        const t = page.planned && page.planned(), geom = t ? fromTrack(t, page.zones ? page.zones() : []) : null;
-        if (!geom) { toast('This route is too short to keep once its private ends are left out.'); return; }
-        const r = await call('POST', `/api/roadbooks/${encodeURIComponent(id)}/roads`, { name: String(t.name || 'Road').slice(0, 60), geom });
+        const t = src();
+        if (!t) { toast('This road is too short to keep once its private ends are left out.'); return; }
+        const r = await call('POST', `/api/roadbooks/${encodeURIComponent(id)}/roads`, { name: String(t.name || 'Road').slice(0, 60), geom: t.geom });
         if (!r.ok) { toast(r.status === 429 ? 'That roadbook is full (40 roads), or that’s enough for today.' : why(r, 'Couldn’t add it. Try again.')); return; }
         loadLists().then(() => page.changed && page.changed()).catch(() => {});
         toast(`Added to ${bookName}.`, { label: 'Open', onClick: () => open(id) });
@@ -547,9 +549,23 @@
       return part;
     }
 
+    /**
+     * Keep in a roadbook, from a Feed post's ···: the line as it was posted (pts [[lat, lon]], its owner's private ends
+     * already cut), without anything inside your own privacy zones; nothing else of the drive goes in. → false signed out.
+     */
+    function keep(name, pts) {
+      if (!member()) { toast('Sign in to keep roads in a roadbook.'); return false; }
+      const geom = fromStage({ geom: pts }, page.zones ? page.zones() : []);
+      if (!geom) { toast('This road is too short to keep once your privacy zones are left out.'); return false; }
+      const s = sheet('Keep in a roadbook');
+      const part = addPart(s.close, () => ({ name, geom }), `${String(name || 'This road').slice(0, 60)}: its line goes in, nothing else of the drive.`);
+      s.pop.append(part);
+      return true;
+    }
+
     /** Has this member any book of their own or followed (as last read, or as this phone kept it)? People shows the row then. */
     const hasAny = () => { const l = lists || readJson(CACHE_KEY, null); return !!l && ((l.books && l.books.length > 0) || (l.mine && (l.mine.length + l.following.length) > 0)); };
-    return { section, nearSection, open, addPart, afterDrive, scanLog, hasAny, lists: () => lists, reload: loadLists };
+    return { section, nearSection, open, addPart, keep, afterDrive, scanLog, hasAny, lists: () => lists, reload: loadLists };
   }
 
   const api = { fromTrack, fromStage, coverage, overlaps, boxOf, lengthM, progress, bookLine, overview, overviewFrame, tour, link, mount, TOUR_MAX, STAMP_AT, TRIM_M, MAX_POINTS, MIN_ROAD_M };

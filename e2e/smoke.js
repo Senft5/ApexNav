@@ -6960,6 +6960,36 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   check(p.crew_id === 'k1' && p.caption === 'First run with the crew.' && p.score === 790 && p.title === 'Cherohala Skyway' && first > 35.36 + 0.0044,
     'the post: to the crew, the caption, the Score, and the line starting 500 m in: ' + JSON.stringify({ ...p, line: p.line.length, first }));
 });
+flow('the Feed: Keep in a roadbook on a friend\'s post puts the road it drew into one of your roadbooks, nothing else of the drive (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const enc = (pts) => { let o = '', a0 = 0, b0 = 0; const e = (v) => { v = v < 0 ? ~(v << 1) : v << 1; while (v >= 32) { o += String.fromCharCode((32 | (v & 31)) + 63); v >>= 5; } o += String.fromCharCode(v + 63); };
+    for (const [a, b] of pts) { const x = Math.round(a * 1e5), y = Math.round(b * 1e5); e(x - a0); e(y - b0); a0 = x; b0 = y; } return o; };
+  const line = Array.from({ length: 80 }, (_, i) => [39.1 + i * 0.0004, -84.6 + Math.sin(i / 6) * 0.004]);   // ~3.5 km
+  const post = { id: 'P1AAAAAAAAAAAAAA', handle: 'bob', photo_id: null, mine: false, crew: null, title: 'Kellogg bends', caption: null, driven_on: '2026-11-12', length_m: 3500, score: 801,
+    roads: [], stages: [], line: enc(line), created_at: '2026-11-12 10:00:00', kudos: 0, my_kudos: false, comments: 0 };
+  const posted = [];
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/feed') return json([post]);
+    if (u.pathname === '/api/roadbooks') return json({ mine: [{ id: 'KKKKKKKKKKKKKKKK', name: 'Ohio favourites', visibility: 'private', mine: true, roads: 0, length_m: 0, road_list: [] }], following: [] });
+    if (u.pathname === '/api/roadbooks/KKKKKKKKKKKKKKKK/roads' && m === 'POST') { posted.push(JSON.parse(route.request().postData())); return json({ id: 'r1', length_m: 3500 }, 201); }
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card', { timeout: 15000 });
+  await page.click('#accountBody .feed-card .feed-head .feed-more');
+  await page.click('.feed-menu button:has-text("Keep in a roadbook")');
+  await page.waitForSelector('.rb-pop.open .rb-add button:has-text("Ohio favourites")', { timeout: 8000 });
+  check(/Kellogg bends: its line goes in, nothing else of the drive\./.test(await page.textContent('.rb-pop.open .rb-add')), 'the sheet says what goes in, in one line');
+  await page.click('.rb-pop.open .rb-add button:has-text("Ohio favourites")');
+  await page.waitForFunction(() => /Added to Ohio favourites\./.test(document.getElementById('toast').textContent), null, { timeout: 8000 });
+  const g = posted[0] && posted[0].geom, d0 = g ? Math.hypot((g[0][1] - line[0][0]) * 110540, (g[0][0] - line[0][1]) * 86000) : -1;
+  check(posted.length === 1 && posted[0].name === 'Kellogg bends' && g.length >= 60 && d0 < 2 && Object.keys(posted[0]).sort().join() === 'geom,name',
+    'their line went in under the post\'s name, [lon, lat], from where their post starts; no handle, Score or day: ' + JSON.stringify({ d0, n: g && g.length, keys: Object.keys(posted[0] || {}) }));
+  check(!(await page.locator('.rb-pop.open').count()), 'the sheet closes once it is kept');
+});
 flow('the Feed: each post\'s line is on the real map, two posts drawn by one hidden map, and a map that can\'t load leaves the plain line (post_map.js, 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   // the map's style, plain paper (no tiles here); counted, so one map is seen to draw both posts

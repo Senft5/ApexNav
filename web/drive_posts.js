@@ -254,7 +254,7 @@
   };
 
   /**
-   * page: el, btn, toast, apiCall, jsonOf, avatar(photo_id, handle, px), fmtLen(m), report({kind,target,label,who}),
+   * page: el, btn, toast, apiCall, jsonOf, avatar(photo_id, handle, px), fmtLen(m), report({kind,target,label,who}), keepRoad(name, pts) (Keep in a roadbook on ···),
    * block(handle), crews() → a promise of [{id, name}], inZone(lat, lon) (your privacy zones), openFriend(handle) (their profile),
    * driveLine(stops, post) (Drive it: a route through stops along the post's line).
    */
@@ -401,6 +401,9 @@
         e.stopPropagation();
         const s = sheet('This post', 'feed-menu');
         const keys = el('div', { className: 'row', style: 'flex-wrap:wrap' });
+        // the road it drew, into one of your roadbooks (roadbooks.js keep): a friend's road, or your own drive's
+        const line = page.keepRoad && typeof p.line === 'string' ? decode(p.line) : [];
+        if (line.length > 1) keys.append(btn('Keep in a roadbook', () => { s.close(); page.keepRoad(p.title || 'Road', line); }, 'ink-btn'));
         if (p.mine) keys.append(btn('Edit', () => { s.close(); edit(p, o, b.closest('.feed-card')); }, 'ink-btn'));
         if (p.mine) keys.append(btn('Delete post', async () => {
           s.close();

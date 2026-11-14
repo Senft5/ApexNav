@@ -174,3 +174,14 @@ def test_a_stage_goes_into_a_roadbook_as_marked_without_the_zones():
     assert r["arr"]
     cockpit = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
     assert re.search(r"mapUnder,\n\s+stages: \(\) =>", cockpit)
+
+
+def test_keep_a_posts_road_in_a_roadbook_is_wired():
+    rb = open(os.path.join(ROOT, "web", "roadbooks.js"), encoding="utf-8").read()
+    posts = open(os.path.join(ROOT, "web", "drive_posts.js"), encoding="utf-8").read()
+    cockpit = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    # the post's ··· offers it; the line goes through fromStage (your privacy zones out, nothing trimmed) and only name + geom are sent
+    assert "btn('Keep in a roadbook'" in posts and "page.keepRoad(p.title || 'Road', line)" in posts
+    assert "const geom = fromStage({ geom: pts }, page.zones ? page.zones() : [])" in rb
+    assert "{ name: String(t.name || 'Road').slice(0, 60), geom: t.geom }" in rb
+    assert "keepRoad: (name, pts) => { if (roadbooks) roadbooks.keep(name, pts); }" in cockpit

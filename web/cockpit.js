@@ -7331,6 +7331,7 @@
       myHandle: () => (accountMe && accountMe.handle) || null,
       upload: (path, blob, type) => ApexSync.apiFetch(path, { method: 'PUT', headers: { 'content-type': type }, body: blob }),
       mapUnder,
+      keepRoad: (name, pts) => { if (roadbooks) roadbooks.keep(name, pts); },
       openFriend: (h) => { document.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); if (window.apexOpenFriend) window.apexOpenFriend(String(h).toLowerCase()); },
       // Drive it on a post: a route through stops along its line, on real roads (the line is thinned, so it is not driven as drawn)
       driveLine: async (stops, p) => {
