@@ -2068,14 +2068,10 @@
             </section>
             <section id="routeCard" hidden>
               <h3 id="routeCardName"></h3>
-              <!-- The card as a page (design pass, 2026-11-10): the headline is the bar above (the route's name) and this stat line,
-                   time, distance, corners; then the profile, the card's one graphic, with the apex dot where you are on it; then the
-                   one choice (the level cards, or a loop's length and ways); everything else in quiet groups under it. -->
+              <!-- The card as a page (design pass, 2026-11-10; reordered 2026-11-14): the headline is the bar above (the route's name)
+                   and this stat line, time, distance, corners; then the one choice (the level cards, or a loop's length and ways);
+                   then the profile, the card's one graphic, with the apex dot where you are on it; everything else in quiet groups. -->
               <div class="rc-stats" id="routeCardStats"></div>
-              <!-- finding 2: the profile's room is kept before it loads, so nothing under it jumps -->
-              <div class="rc-profile-box" id="routeCardProfile"></div>
-              <!-- finding 1: the plan's progress, then what the ranking did ("Better route found: +8 min, 52 more corners") -->
-              <p class="rc-progress" id="routeProgress" role="status" aria-live="polite"></p>
               <!-- finding 6: a loop's length, in your units, on its card -->
               <div class="rc-loop" id="routeCardLoop" role="group" aria-label="Loop length" hidden><span class="rc-loop-label">Length</span><div class="detents" id="cardLoopDetents"></div></div>
               <div class="rc-levels rc-ways" id="routeCardWays" role="radiogroup" aria-label="Which way the loop heads" hidden></div>
@@ -2085,6 +2081,12 @@
               <div class="rc-levels" id="routeCardFun" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false"><b>Quick</b><span class="rc-lv"></span></button><button data-fun="fun" role="radio" aria-checked="false"><b>Fun</b><span class="rc-lv"></span></button><button data-fun="max" role="radio" aria-checked="false"><b>Long way</b><span class="rc-lv"></span></button></div>
               <div class="rc-pager" id="routeCardPager" role="img" hidden></div>
               <p class="rc-levels-note" id="routeCardLevelsNote" hidden></p>
+              <!-- finding 1: the plan's progress, then what the ranking did ("Better route found: +8 min, 52 more corners"), under
+                   the choice it changed -->
+              <p class="rc-progress" id="routeProgress" role="status" aria-live="polite"></p>
+              <!-- finding 2: the profile's room is kept before it loads, so nothing under it jumps. 2026-11-14 IA pass: under the
+                   choice, not over it (Apple Maps' route card leads with the routes to pick from; the choice sat at the fold) -->
+              <div class="rc-profile-box" id="routeCardProfile"></div>
               <p class="note rc-via" id="routeCardWhy" hidden></p>
               <!-- There and back (graph_router.js roundTrip): the trip home again by other road, the destination a stop -->
               <button type="button" class="ink-btn rc-round" id="routeRoundBtn" hidden>There and back, home another way</button>
