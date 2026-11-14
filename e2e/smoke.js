@@ -5557,7 +5557,8 @@ flow('your best pass: on a road driven before (no stage saved) the bar shows the
 flow('your best pass on a wet road: an ODOT sensor reads the road wet, so your dry best is no time to chase: said once, no gap, no "brake later" (pass_coach.js setSurface)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   await page.route('**/api.open-meteo.com/**', (route) => route.fulfill({ status: 404, body: '' }));
   await page.route('**/api.weather.gov/**', (route) => route.fulfill({ status: 404, body: '' }));
   await page.route('**/nominatim.openstreetmap.org/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
@@ -5640,7 +5641,8 @@ flow('wet roads: rain where you are (the place plate\'s weather) brings the note
 flow('a wet road from ODOT\'s sensor: dry weather, a wet sensor near you: the road reads wet, it is said once, and the drive is kept as a wet one (road_surface.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   await page.route('**/api.open-meteo.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json',
     body: JSON.stringify({ current: { temperature_2m: 14, precipitation: 0, weather_code: 1 }, hourly: { time: [new Date(Date.now() - 3600e3).toISOString().slice(0, 16)], precipitation: [0] } }) }));
   await page.route('**/api.weather.gov/**', (route) => route.fulfill({ status: 404, body: '' }));
