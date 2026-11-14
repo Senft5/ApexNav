@@ -10206,6 +10206,33 @@ flow('corners ahead: after a long straight on the planned route, the co-driver s
   check((await twisty()).length === 1, 'once: ' + JSON.stringify(await twisty()));
 });
 
+flow('along the way: a viewpoint on the planned route is said by name and side as it comes up, once (along_ahead.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexAlongAhead);
+  const KY = 110540, kx = 111320 * Math.cos(35.5 * Math.PI / 180), gpx = [];
+  for (let m = 0; m <= 5000; m += 5) gpx.push(`<trkpt lat="${(35.5 + m / KY).toFixed(7)}" lon="-83.9000000"/>`);
+  await page.setInputFiles('#gpxFile', { name: 'parkway.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Parkway</name><trkseg>${gpx.join('')}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Parkway', null, { timeout: 10000 });
+  await page.waitForTimeout(1500);                                                        // the map's own places, if any, have landed
+  // the map's viewpoint 150 m west of the road at 2 km (as scenic.js along puts it on the route)
+  await page.evaluate(({ KY, kx }) => { apexDebug.track.scenic = [{ kind: 'view', name: 'Craggy Pinnacle', lat: 35.5 + 2000 / KY, lon: -83.9 - 150 / kx, m: 2000, offM: 150 }]; }, { KY, kx });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const views = () => page.evaluate(() => window.__said.filter((s) => /Craggy/.test(s)));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  for (let i = 100; i <= 280; i += 5) { await at(i); await page.waitForTimeout(50); }       // 0.5 to 1.4 km: not yet
+  check((await views()).length === 0, 'not yet: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  for (let i = 280; i <= 380 && !(await views()).length; i += 2) { await at(i); await page.waitForTimeout(80); }
+  const said = await views();
+  check(said.length === 1 && /^Craggy Pinnacle on the left, in (\d+ feet|a quarter mile)\.$/.test(said[0]), 'the call: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  for (let i = 380; i <= 420; i += 2) { await at(i); await page.waitForTimeout(40); }
+  check((await views()).length === 1, 'once: ' + JSON.stringify(await views()));
+});
+
 for (const [when, iso, expect] of [['at dusk', '2026-06-21T00:30:00Z', 1], ['at noon', '2026-06-21T17:00:00Z', 0]]) {
   flow(`a mapped deer crossing ${when}: called in cruise from dusk to dawn, left to the notes by day (road_marks.js cruiseWorthy)`, async (page, base) => {
     await page.clock.setFixedTime(new Date(iso));
