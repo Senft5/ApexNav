@@ -1040,6 +1040,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         liveInFlight = 0; liveStalled = false; backlogInFlight = false
         // what the driver picks on the car's screen goes to the page (CarPlay/ApexCarPlay.swift)
         ApexCar.shared.toPage = { [weak self] obj in self?.sendToPage(obj) }
+        ApexCarOffline.shared.toPage = { [weak self] obj in self?.sendToPage(obj) }
         pushLiveFrame()
         offerDriveIfReady()
         if let g = pendingGpx { pendingGpx = nil; deliverGpx(g) }
