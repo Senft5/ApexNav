@@ -4,17 +4,22 @@
 (function (root) {
   'use strict';
   const inApp = () => typeof location !== 'undefined' && location.protocol === 'apexnav:';
+  // opts.caption: words for the post (a clip's road, call and tags), put on the clipboard as the file is shared, so they
+  // paste into Reels or TikTok; opts.copied() is told when they were. The shell copies them (UIPasteboard); the web tries.
   async function saveFile(data, name, type, opts = {}) {
     const blob = data instanceof Blob ? data : new Blob([data], { type });
     const share = opts.share != null ? opts.share : inApp();
+    const caption = typeof opts.caption === 'string' ? opts.caption.slice(0, 500) : '';
     // the map page's handler when this is its Log frame (sync.js handlers): the shell listens to the main frame only
     const wk = root.ApexSync && root.ApexSync.handlers ? root.ApexSync.handlers() : (root.webkit && root.webkit.messageHandlers);
     const native = share && wk && wk.apex;
     if (native) {                                                  // no tap needed, unlike the web share sheet after a network wait
       const b64 = await new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = fail; r.readAsDataURL(blob); });
-      native.postMessage({ cmd: 'shareFile', name, type, data: b64 });
+      native.postMessage({ cmd: 'shareFile', name, type, data: b64, ...(caption ? { caption } : {}) });
+      if (caption && opts.copied) opts.copied();
       return 'shared';
     }
+    if (caption && await copyText(caption) && opts.copied) opts.copied();
     if (share && typeof File === 'function' && root.navigator && root.navigator.canShare) {
       const file = new File([blob], name, { type });
       if (root.navigator.canShare({ files: [file] })) {
@@ -39,6 +44,9 @@
     }
     try { await nav.clipboard.writeText(url ? (words && words !== title ? words + ' ' + url : url) : words); return 'copied'; } catch (_) { return 'failed'; }
   }
-  const api = { saveFile, shareLink };
+  async function copyText(text) {
+    try { const c = root.navigator && root.navigator.clipboard; if (!c || !c.writeText) return false; await c.writeText(text); return true; } catch (_) { return false; }
+  }
+  const api = { saveFile, shareLink, copyText };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSaveFile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

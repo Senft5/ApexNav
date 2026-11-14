@@ -104,6 +104,9 @@
     .feed-stats b span { font-family: inherit; font-size: 15px; font-weight: 600; color: var(--panel-dim); margin-left: 3px; }
     .feed-line { width: 100%; height: auto; aspect-ratio: 2 / 1; display: block; background: var(--well, rgba(0,0,0,0.05)); }
     .feed-line path { fill: none; stroke: var(--accent); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
+    .feed-line .casing { display: none; }
+    .feed-line.on-map { background-size: 100% 100%; background-position: center; }
+    .feed-line.on-map .casing { display: inline; stroke: var(--panel, #fff); stroke-width: 7; }
     .feed-line .go { fill: var(--panel, #fff); stroke: var(--panel-ink); stroke-width: 2.5; }
     .feed-line .end { fill: var(--accent); stroke: none; }
     .feed-facts { color: var(--panel-dim); font-size: 14px; margin: 0; overflow-wrap: anywhere; }
@@ -213,11 +216,17 @@
       if (pts.length > 1) {                                             // the road it drew, wide, from the start ring to the red finish dot
         const W = 340, H = 170, NS = 'http://www.w3.org/2000/svg', svg = doc.createElementNS(NS, 'svg'), path = doc.createElementNS(NS, 'path');
         svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('class', 'feed-line'); svg.setAttribute('aria-hidden', 'true');
-        const d = lineSvg(pts, W, H, 18); path.setAttribute('d', d); svg.append(path);
+        const d = lineSvg(pts, W, H, 18), casing = doc.createElementNS(NS, 'path');
+        casing.setAttribute('d', d); casing.setAttribute('class', 'casing'); path.setAttribute('d', d); svg.append(casing, path);
         const xy = d.match(/-?[\d.]+ -?[\d.]+/g) || [];
         [[xy[0], 'go', 5.5], [xy[xy.length - 1], 'end', 6]].forEach(([q, cls, r]) => { if (!q) return; const [x, y] = q.split(' ');
           const c = doc.createElementNS(NS, 'circle'); c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', r); c.setAttribute('class', cls); svg.append(c); });
         box.append(svg);
+        // the streets round it (post_map.js): one still picture of the real map, laid exactly under the line once drawn
+        if (page.mapUnder) near(svg, () => Promise.resolve(page.mapUnder(p.id, pts, W, H, 18)).then((url) => {
+          if (!url || !svg.isConnected) return;
+          svg.style.backgroundImage = `url("${url}")`; svg.classList.add('on-map');
+        }).catch(() => {}));
       }
       if (p.media) box.append(mediaBox(p));
       if (Array.isArray(p.stages) && p.stages.length) {                // the saved stages it went over, each with its Score
