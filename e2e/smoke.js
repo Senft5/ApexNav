@@ -5451,6 +5451,16 @@ flow('roadbooks: Drive them all routes from where you are through the book\'s ro
   const after = await page.evaluate(() => ({ note: document.getElementById('routeProgress').textContent, req: apexDebug.track.request, name: apexDebug.track.name }));
   check(after.name === 'Smokies day out' && /^3 roads of its 4 from Smokies day out, nearest first: [\d.]+ (mi|km)$/.test(after.note), 'the card says how many of its roads, nearest first: ' + JSON.stringify({ note: after.note, name: after.name }));
   check(after.req && after.req.from === null && after.req.via.length >= 5 && after.req.via.every((v) => v.shaping), 'a reroute keeps to the roads: ' + JSON.stringify(after.req && after.req.via.length));
+  // (2026-11-14) Drive it on one road leads from where you are to its start, then the road as drawn
+  asked.length = 0;
+  await page.goto(base + '/index.html?roadbook=BBBBBBBBBBBBBBBB');
+  await page.waitForSelector('.rb-pop.open .rb-road:has-text("Road B") button:has-text("Drive it")', { timeout: 15000 });
+  await page.click('.rb-pop.open .rb-road:has-text("Road B") button:has-text("Drive it")');
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.id === 'roadbook_b' && /to the start/.test(document.getElementById('toast').textContent), null, { timeout: 20000 });
+  const lead = asked.find((l) => Array.isArray(l) && l.length === 2) || [];
+  const one = await page.evaluate(() => ({ toast: document.getElementById('toast').textContent, lat: [apexDebug.track.lat[0], apexDebug.track.lat[apexDebug.track.lat.length - 1]] }));
+  check(lead.length === 2 && near(lead[0], [-83.8, 35.6]) && near(lead[1], B[0]) && Math.abs(one.lat[0] - 35.6) < 1e-3 && Math.abs(one.lat[1] - B[B.length - 1][1]) < 1e-4
+    && /^Road B, from Smokies day out: [\d.]+ (mi|km) to the start, then [\d.]+ (mi|km) of it\.$/.test(one.toast), 'one road: from you to its start, then all of it: ' + JSON.stringify({ lead, one }));
 }, { geolocation: { latitude: 35.6, longitude: -83.8 }, permissions: ['geolocation'] });
 
 flow('crash check: a hard impact then a stop asks "Are you OK?"; no answer offers a call and a text to the contact (IDEAS D-17)', async (page, base) => {

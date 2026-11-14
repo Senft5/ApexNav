@@ -7156,9 +7156,20 @@
       report: (o) => safety && safety.report(o), changed: () => { if (booksRowCount) booksRowCount(); },
       driveRoad: async (road, book) => {
         closeSheet();
-        const t = await trackFromPolyline(road.geom, `roadbook_${road.id}`, road.name);
+        // from where you are to the road's start, then the road as drawn (as Drive it on a post leads to their line); close
+        // by, far off, with no fix or no route there, the road alone, as before
+        const here = await locate().catch(() => null), [lon0, lat0] = road.geom[0];
+        const away = here ? Math.hypot((here.lat - lat0) * 110540, (here.lon - lon0) * 111320 * Math.cos(lat0 * Math.PI / 180)) : Infinity;
+        let lead = null;
+        if (Number.isFinite(away) && away > 300 && away < 150000) {
+          try { [lead] = await routePoints([{ lat: here.lat, lon: here.lon }, { lat: lat0, lon: lon0 }]); } catch (_) { lead = null; }
+        }
+        const leadIn = lead && Array.isArray(lead.coords) && lead.coords.length > 1 ? lead.coords : null;
+        const t = await trackFromPolyline(leadIn ? [...leadIn, ...road.geom.slice(1)] : road.geom, `roadbook_${road.id}`, road.name);
         await buildRoute(null, t.id, road.name, t);
-        toast(`${road.name}, from ${book.name}: ${ApexUnits.long(totalM(), 1)}.`);
+        if (!leadIn) { toast(`${road.name}, from ${book.name}: ${ApexUnits.long(totalM(), 1)}.`); return; }
+        const toStart = t.dist[Core.nearestIndex(lat0, lon0, t.lat, t.lon, -1).index] || 0;
+        toast(`${road.name}, from ${book.name}: ${ApexUnits.long(toStart, 1)} to the start, then ${ApexUnits.long(Math.max(0, totalM() - toStart), 1)} of it.`);
       },
       // Drive them all (roadbooks.js tour): the book's roads in one drive from where you are, nearest first, each from its
       // nearer end; from here to the first road's start, then through each (shaping points keep it on them), as driveStage
