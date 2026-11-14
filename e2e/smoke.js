@@ -974,6 +974,40 @@ flow('Where to?: with the search and routing services unreachable, a search fail
   await page.waitForFunction(() => /Search is offline/.test(document.getElementById('toast').textContent), null, { timeout: 15000 });
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('Where to? with no signal: the towns and places on the map kept on the phone are suggested by name, nearest first, and Search finds one (IDEAS F-02)', async (page, base) => {
+  // our own router off: its worker's files can't load with the test's whole page offline (an app's own files always do)
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.ownRouting', '0'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexStages && window.ApexPlaceSearch);
+  // what the kept tiles hold round here (stages.js reads them from the phone with no signal); asked only with no signal
+  await page.evaluate(() => {
+    window.__keptAsked = 0;
+    ApexStages.places = async ([p]) => { window.__keptAsked++; return [{ name: 'Tellico Plains', cls: 'town', lat: 35.366, lon: -84.296 }, { name: 'Tellico Plains', cls: 'village', lat: 35.9, lon: -84.29 }]; };
+    ApexStages.poisAll = async ([p]) => { if (Math.abs(p.lat - 35.36) > 0.05) throw new Error('not kept'); return [{ name: 'Tellico Beach Cafe', cls: 'cafe', sub: null, lat: 35.37, lon: -84.3 }]; };
+  });
+  await page.context().setOffline(true);
+  await page.click('#destInput');
+  await page.fill('#destInput', 'tellico');
+  await page.waitForFunction(() => document.querySelectorAll('#placeList button.place').length >= 3, null, { timeout: 15000 });
+  const rows = await page.$$eval('#placeList button.place', (bs) => bs.map((b) => b.textContent));
+  check(/Tellico Plains.*Town/.test(rows[0]) && /Tellico Beach Cafe.*Cafe/.test(rows[1]) && /Tellico Plains.*Village/.test(rows[2]), 'the kept map\'s places, nearest first, a tile not kept skipped: ' + JSON.stringify(rows));
+  await page.fill('#destInput', 'zzyzx');
+  await page.waitForFunction(() => /no match on the map kept on this phone/.test(document.getElementById('placeList').textContent), null, { timeout: 15000 });
+  // Search (Enter) where the map search can't be reached takes the nearest kept match instead of saying search is offline
+  // (the page itself back on line, so the router's worker loads, as the app's own files always do on a phone)
+  await page.context().setOffline(false);
+  await page.route('https://nominatim.openstreetmap.org/**', (route) => route.abort());
+  await page.route('https://photon.komoot.io/**', (route) => route.abort());
+  const asked = [];
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => { const req = JSON.parse(route.request().postData() || '{}'); asked.push(req.locations);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) }); });
+  await page.fill('#destInput', 'beach cafe');
+  await page.press('#destInput', 'Enter');
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.kind === 'route' && /Tellico Beach Cafe/.test(window.apexDebug.track.name), null, { timeout: 20000 });
+  const to = await page.evaluate(() => apexDebug.track.request && apexDebug.track.request.to);
+  check(to && Math.abs(to.lat - 35.37) < 1e-6 && Math.abs(to.lon + 84.3) < 1e-6, 'the route goes to the kept place: ' + JSON.stringify(to));
+}, { geolocation: { latitude: 35.36, longitude: -84.29 }, permissions: ['geolocation'] });
+
 // 2026-11-10: a place you pin or tap on the map is called by its name, in the field and on the route, never by coordinates
 flow('a pin has a name: Go here routes "To <the road>", a tap on the map is a "Dropped pin", neither is coordinates; a spot rating fills its stars; the notes name the Search key', async (page, base) => {
   // the real map style is offline here: a bare one (with a glyphs address, so the app's own labelled layers are taken and its
@@ -4496,6 +4530,9 @@ flow('a saved route keeps its reports: Save asks for the cells it runs through, 
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.routeReports') || '{}'));
   const id = Object.keys(kept)[0], rows = id ? Object.values(kept[id].cells).flat().map((h) => h.id) : [];
   check(rows.includes('gravel') && rows.includes('brief'), 'the reports along it are kept with the route: ' + JSON.stringify(kept));
+  // the Log's frame warms a few seconds after launch (cockpit.js prewarmLog); let it finish first, as on a phone, so going
+  // offline mid-load doesn't leave it half loaded (CI 2026-11-14: analysis_page.js without themes.js)
+  await page.waitForFunction(() => { const f = document.getElementById('logFrame'); return f && f.contentWindow && f.contentWindow.ApexLogFrame; }, null, { timeout: 30000 });
   // no signal; time passes the brief report's expiry; the route opened again from the car's Places
   offline = true;
   await page.context().setOffline(true);
@@ -4539,6 +4576,9 @@ flow('a saved route keeps its road feel: Save keeps what members measured along 
   // signal they'd fall back to the shipped copy's path for every tile, a 404 here once the flow is back online
   await page.waitForFunction(() => window.ApexContextGrid && ApexContextGrid.urlsNear, null, { timeout: 20000 });
   await page.evaluate(() => ApexContextGrid.urlsNear(35.8, -83.92, 1));
+  // the Log's frame warms a few seconds after launch (cockpit.js prewarmLog); let it finish first, as on a phone, so going
+  // offline mid-load doesn't leave it half loaded (CI 2026-11-14: analysis_page.js without themes.js)
+  await page.waitForFunction(() => { const f = document.getElementById('logFrame'); return f && f.contentWindow && f.contentWindow.ApexLogFrame; }, null, { timeout: 30000 });
   // no signal: membership can't be asked and nothing is measured; the route opened again from the car's Places
   await page.context().setOffline(true);
   await page.evaluate(() => { ApexSync.member = async () => { throw new Error('offline'); }; window.__asked = 0; document.getElementById('measuredNote').textContent = '';
