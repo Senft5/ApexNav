@@ -3806,6 +3806,28 @@ flow('drive ended: your best on this road on the card, and the pack closes with 
   check(JSON.stringify(out.played) === JSON.stringify(['sys:end', 'end:score', 'n:h2', 'end:best']), 'Marguerite closes with the score from her clips: ' + JSON.stringify(out.played));
 });
 
+flow('drive ended on a wet road: the card says so, and your best wet drive here is a best though a dry one scored higher (road_surface.js alike)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    const S = window.speechSynthesis; if (S) S.speak = (u) => setTimeout(() => u.onend && u.onend(), 20); });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording && window.ApexEndLine && window.ApexRoadSurface);
+  const out = await page.evaluate(async () => {
+    ApexCore.driverScore = (v) => ({ score: v.length, components: {} });
+    const rec = (id, n, day, surface) => { const lat = [], lon = []; for (let i = 0; i < n; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
+      return { id, name: 'Cherohala Skyway', date: `2026-10-${day}T15:00:00Z`, lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+        lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [], ...(surface ? { surface } : {}) }; };
+    await ApexRecording.store(rec('dry1', 300, '10'));
+    await ApexRecording.store(rec('wet1', 100, '20', 'wet'));
+    const d = rec('wet2', 200, '29', 'wet');
+    await ApexRecording.store(d);
+    apexDebug.showEndCard(d, Date.now() - 30 * 60000);
+    for (let i = 0; i < 50 && document.getElementById('endScore').textContent !== '200'; i++) await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 300));
+    return { line: document.getElementById('endLine').textContent, score: document.getElementById('endScore').textContent };
+  });
+  check(out.score === '200' && /^Your best wet drive on this road\./.test(out.line) && !/Wet road\./.test(out.line), 'the card: ' + JSON.stringify(out));
+});
+
 flow('first open in the app: the welcome runs, and Start is what asks the shell for location (REVIEW4 U-65, U-68, U-80)', async (page, base) => {
   await page.addInitScript(() => { window.__native = []; window.APEX_EMBED = true; window.APEX_PLATFORM = 'ios';
     window.webkit = { messageHandlers: { apex: { postMessage(m) { window.__native.push(m && m.cmd ? m.cmd : m); } } } }; });
