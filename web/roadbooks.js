@@ -204,7 +204,7 @@
     .rb-map .rb-casing { display: none; } .rb-map.on-map svg { background-size: 100% 100%; background-position: center; } .rb-map.on-map .rb-casing { display: inline; stroke: var(--panel, #fff); }
     .rb-meter { height: 6px; background: color-mix(in srgb, var(--panel-ink) 14%, transparent); } .rb-meter > i { display: block; height: 100%; background: var(--accent); }
     .rb-road { display: grid; grid-template-columns: 88px 1fr; gap: 4px 12px; padding: 12px 0; border-top: 1px solid var(--hair, var(--panel-dim)); align-items: start; }
-    .rb-road .rb-thumb { grid-row: 1 / span 3; border: 1px solid var(--rule); line-height: 0; } .rb-road .rb-thumb svg { width: 100%; height: auto; display: block; }
+    .rb-road .rb-thumb { grid-row: 1 / span 3; border: 1px solid var(--rule); line-height: 0; } .rb-road .rb-thumb svg { width: 100%; height: auto; display: block; } .rb-road .rb-thumb.on-map svg { background-size: 100% 100%; background-position: center; }
     .rb-road b { font-size: 16px; } .rb-road .note { margin: 0; }
     .rb-road .rb-acts { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
     .rb-stamp { display: inline-block; padding: 1px 6px; border: 1.5px solid var(--accent); color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; transform: rotate(-3deg); }
@@ -309,6 +309,12 @@
       return { pop: p, head: h, close: () => { p.classList.remove('open'); setTimeout(() => p.remove(), 300); } };
     }
     const row = (b, sub, onOpen) => { const r = el('button', { className: 'rb-row', type: 'button' }, el('b', { textContent: b.name }), el('i', { 'aria-hidden': 'true' }), el('span', { textContent: sub })); r.addEventListener('click', onOpen); return r; };
+    // run go() once el comes within a screen of view (at once where there's no IntersectionObserver)
+    const nearby = (node, go) => {
+      if (!root.IntersectionObserver) { go(); return; }
+      const io = new root.IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { io.disconnect(); go(); } }, { rootMargin: '600px 0px' });
+      io.observe(node);
+    };
     const svgBox = (cls, svg) => { const d = el('div', { className: cls }); if (svg) d.innerHTML = svg; return d; };   // our own SVG string (overview / ApexRouteThumb): numbers, and a label both escape
 
     /** A roadbook's page: its roads on one map, your progress, each road with Drive it; its owner's keys or Follow, Share, Report. */
@@ -329,7 +335,7 @@
       const kids = [], c = colours(), p = progress(book.road_list);
       kids.push(el('p', { className: 'rb-by', textContent: [book.mine ? `Yours · ${VIS[book.visibility]}` : `By @${book.by || '?'}`, bookLine(book, fmtLen)].join(' · ') }));
       if (book.about) kids.push(el('p', { className: 'people-lead', textContent: book.about }));
-      const map = overview(book.road_list, { line: c.line, hi: c.hi, label: `${book.name}: its roads on a map` });
+      const map = overview(book.road_list, { line: c.line, hi: c.hi, width: 3.5, label: `${book.name}: its roads on a map` });
       if (map) {
         const box = svgBox('rb-map', map), frame = overviewFrame(book.road_list), svg = box.firstElementChild;
         kids.push(box);
@@ -372,7 +378,13 @@
       roads.forEach((road, i) => {
         const T = page.thumb || root.ApexRouteThumb;
         const thumb = T ? T.svg(road.geom.map((q) => q[1]), road.geom.map((q) => q[0]), { w: 176, h: 120, pad: 12, line: road.stamped ? c.hi : c.line, hi: road.stamped ? c.hi : c.line, width: 4, label: `${road.name} on a map` }) : null;
-        const box = el('div', { className: 'rb-road' }, svgBox('rb-thumb', thumb));
+        const tb = svgBox('rb-thumb', thumb), box = el('div', { className: 'rb-road' }, tb);
+        // its own streets under it too, drawn once the row comes near the screen (a book holds up to 40)
+        if (thumb && page.mapUnder) nearby(tb, () => Promise.resolve(page.mapUnder(`rbt_${road.id}`, overviewFrame([road]), 176, 120, 12)).then((url) => {
+          const svg = tb.firstElementChild;
+          if (!url || !svg || !tb.isConnected) return;
+          svg.style.backgroundImage = `url("${url}")`; tb.classList.add('on-map');
+        }).catch(() => {}));
         const title = el('div', { className: 'row', style: 'align-items:center;gap:8px;flex-wrap:wrap' }, el('b', { textContent: road.name }));
         if (road.stamped) title.append(el('span', { className: 'rb-stamp', textContent: 'Driven' }));
         const day = road.stamped ? stampDay(road.id) : null;
@@ -408,9 +420,9 @@
       if (book.mine && page.stages) {
         const have = new Set(roads.map((x) => x.name)), left = (page.stages() || []).filter((st) => st && st.name && st.geom && !have.has(String(st.name).slice(0, 60)));
         if (left.length) {
-          const chips = el('div', { className: 'row rb-stages', style: 'flex-wrap:wrap' });
-          chips.hidden = true;
-          const more = btn('Add one of your stages', () => { more.hidden = true; chips.hidden = false; }, 'linkbtn');
+          const chips = el('div', { className: 'row rb-stages', style: 'flex-wrap:wrap' }), pick = el('div', { className: 'stack-8' }, el('h4', { textContent: 'Your stages' }), chips);
+          pick.hidden = true;
+          const more = btn('Add one of your stages', () => { more.hidden = true; pick.hidden = false; }, 'linkbtn');
           left.slice(0, 12).forEach((st) => {
             const b = btn(String(st.name).slice(0, 60), async () => {
               const geom = fromStage(st, page.zones ? page.zones() : []);
@@ -425,7 +437,7 @@
             }, 'ink-btn');
             chips.append(b);
           });
-          kids.push(el('div', { className: 'stack-8' }, more, chips));
+          kids.push(el('div', { className: 'stack-8' }, more, pick));
         }
       }
       body.replaceChildren(...kids);
