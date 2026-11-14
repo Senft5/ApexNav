@@ -51,7 +51,7 @@ export async function exportMyData(env: Env, v: Viewer): Promise<Record<string, 
     // audiences are named by what you see in the app (a friend's handle, a crew's name), never by someone else's internal id
     grants: q(`SELECT g.audience_type, COALESCE(u.handle, c.name) AS audience, g.share_scores, g.share_times FROM grants g
                        LEFT JOIN users u ON g.audience_type = 'friend' AND u.id = g.audience_id LEFT JOIN crews c ON g.audience_type = 'crew' AND c.id = g.audience_id WHERE g.user_id = ?`),
-    published_results: q(`SELECT s.name AS segment, e.audience_type, COALESCE(u.handle, c.name) AS audience, e.driver_score, e.time_s, e.smoothness, e.driven_on FROM board_entries e
+    published_results: q(`SELECT s.name AS segment, e.audience_type, COALESCE(u.handle, c.name) AS audience, e.driver_score, e.time_s, e.smoothness, e.splits, e.surface, e.driven_on FROM board_entries e
                        JOIN segments s ON s.id = e.segment_id LEFT JOIN users u ON e.audience_type = 'friend' AND u.id = e.audience_id
                        LEFT JOIN crews c ON e.audience_type = 'crew' AND c.id = e.audience_id WHERE e.user_id = ?`),
     drive_scores_shared: q("SELECT c.name AS crew, d.score, d.driven_on, d.created_at FROM drive_scores d JOIN crews c ON c.id = d.crew_id WHERE d.user_id = ?"),

@@ -43,7 +43,9 @@
   <script src="brake_heat.js"></script>
   <script src="drive_view.js"></script>
   <script src="road_surface.js"></script>
+  <script src="ghost_duel.js"></script>
   <script src="drive_card.js"></script>
+  <script src="dna_card.js"></script>      <!-- Your driving DNA: the six skills as one picture to share -->
   <script src="year_review.js"></script>
   <script src="drive_tags.js"></script>
   <script src="flyby.js"></script>
@@ -396,13 +398,14 @@
       <div class="panel" id="dvFlyby" hidden><h2>Friends on these roads that day</h2><div id="dvFlybyList" class="stack-8"></div></div>
       <div class="panel" id="dvTouch" hidden><h2>Your touch on this drive</h2><div id="dvTouchList" class="stack-8"></div></div>
       <div class="panel" id="dvBest" hidden><h2>Against your records</h2><div id="dvBestList" class="stack-8"></div></div>
+      <div class="panel" id="dvGhost" hidden><h2 id="dvGhostHead"></h2><p class="dv-road-since" id="dvGhostLine"></p><div id="dvGhostRows"></div><div class="dv-ghost-acts" id="dvGhostActs"></div></div>
       <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><p class="dv-road-since" id="dvRoadSince" hidden></p><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
     </section>
 
     <!-- ============================ YOUR DRIVING ============================ -->
     <section id="tab-driving" class="stack-12" hidden>
       <div><a href="#" class="back" data-to="history">‹ Log</a></div>
-      <div class="bar-top"><h1 class="stages-h">Your driving</h1></div>
+      <div class="bar-top"><h1 class="stages-h">Your driving</h1><button type="button" class="linkbtn" id="drivingShare" hidden>Share my DNA</button></div>
       <div id="drivingRoot" class="stack-12"></div>
     </section>
 
