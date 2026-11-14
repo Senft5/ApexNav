@@ -38,6 +38,15 @@ const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.
   const b2 = O.createOutbox(store2, async () => { n2++; await new Promise(r => setTimeout(r, 10)); return 200; }, () => t);
   b2.add('/x', {}); b2.add('/y', {});
   await Promise.all([b2.flush(), b2.flush()]); out.once = n2;
+  // a drive post past the day's ten (429, `capped`) is dropped, not held in front of a hazard report; a plain 429 waits
+  const store3 = mem(), got3 = [];
+  const b3 = O.createOutbox(store3, async (path) => { got3.push(path); return path === '/api/posts' ? 429 : 201; }, () => t);
+  b3.add('/api/posts', { title: 'x' }, false, { capped: true }); b3.add('/api/hazards', { kind: 'gravel' }, true);
+  out.capped429 = [await b3.flush(), b3.size(), got3];
+  const store4 = mem();
+  const b4 = O.createOutbox(store4, async () => 429, () => t);
+  b4.add('/api/hazards', {}); b4.add('/api/hazards', {});
+  out.plain429 = [await b4.flush(), b4.size()];
   console.log(JSON.stringify(out));
 })();
 """
@@ -71,6 +80,11 @@ def test_capped_in_count_and_age(out):
 
 def test_concurrent_flushes_send_once(out):
     assert out["once"] == 2
+
+
+def test_a_capped_send_refused_for_the_day_is_dropped(out):
+    assert out["capped429"] == [1, 0, ["/api/posts", "/api/hazards"]]
+    assert out["plain429"] == [0, 2]
 
 
 def test_wired():

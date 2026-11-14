@@ -5080,7 +5080,7 @@ flow('no signal: a hazard report waits on the phone and goes when the connection
   check(await page.evaluate(() => JSON.parse(localStorage.getItem('apex.outbox')).length) === 1, 'kept on the phone');
   offline = false;
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
-  await saidOn(page, /Sent what you reported/, { timeout: 5000 });
+  await saidOn(page, /Sent what waited for signal/, { timeout: 5000 });
   check(posted.length === 1 && posted[0].kind === 'debris' && posted[0].heading === 90 && Number.isInteger(posted[0].age_s), 'sent with its age');
   check(await page.evaluate(() => localStorage.getItem('apex.outbox')) === null, 'and gone from the phone');
 });
@@ -6176,18 +6176,62 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
     await ApexRecording.store(d);
     apexDebug.showEndCard(d, Date.now() - 30 * 60000, { quiet: true });
   });
-  await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !b.hidden && !b.getAttribute('aria-disabled'); }, null, { timeout: 15000 });
-  check(await page.evaluate(() => document.getElementById('endPost').classList.contains('solid') && !document.getElementById('endShare').classList.contains('solid')), 'Post is the solid key; Share card sits beside it');
+  await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !document.getElementById('endPostRow').hidden && !b.getAttribute('aria-disabled'); }, null, { timeout: 15000 });
+  check(await page.evaluate(() => document.getElementById('endPost').classList.contains('solid') && !document.getElementById('endShare').classList.contains('solid') && document.getElementById('endPost').textContent === 'Post to friends'), 'Post to friends is the solid key; Share card sits beside it');
+  // one tap (2026-11-14): Post to friends sends it at once, no sheet; Undo in the toast takes it back
   await page.click('#endPost');
+  await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Posted to friends');
+  const one = JSON.parse(sent.filter((x) => x.p === '/api/posts').pop().b);
+  check(one.crew_id === null && one.score === 790 && one.title === 'Cherohala Skyway' && !(await page.$('.post-sheet')), 'one tap posts the drive to your friends, no sheet: ' + JSON.stringify({ ...one, line: one.line && one.line.length }));
+  await page.click('#toast .toast-key:text-is("Undo")');
+  await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Post to friends' && !document.getElementById('endPost').disabled);
+  check(sent.some((x) => x.m === 'DELETE' && x.p === '/api/posts/C2AAAAAAAAAAAAAA'), 'Undo takes the post back');
+  // ··· beside it: the sheet, for a caption or a crew
+  await page.click('#endPostMore');
   await page.waitForSelector('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")');
   await page.click('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")');
   await page.fill('.post-sheet textarea', 'First run with the crew.');
   await page.click('.post-sheet button:text-is("Post")');
   await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Posted');
-  const p = JSON.parse(sent.find((x) => x.p === '/api/posts').b);
+  const p = JSON.parse(sent.filter((x) => x.p === '/api/posts').pop().b);
   const first = (() => { const s = p.line; let i = 0, r = 0, sh = 0, b; do { b = s.charCodeAt(i++) - 63; r |= (b & 31) << sh; sh += 5; } while (b >= 32); return (r & 1 ? ~(r >> 1) : r >> 1) / 1e5; })();
   check(p.crew_id === 'k1' && p.caption === 'First run with the crew.' && p.score === 790 && p.title === 'Cherohala Skyway' && first > 35.36 + 0.0044,
     'the post: to the crew, the caption, the Score, and the line starting 500 m in: ' + JSON.stringify({ ...p, line: p.line.length, first }));
+});
+flow('a drive posted with no signal waits on the phone and goes up once there is one (Worker stubbed, IDEAS F-05)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  let down = false; const posted = [];
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/posts' && m === 'POST') { if (down) return route.abort('internetdisconnected'); posted.push(JSON.parse(route.request().postData())); return json({ id: 'P9AAAAAAAAAAAAAA' }, 201); }
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording && window.ApexDrivePosts);
+  await page.evaluate(() => document.querySelector('.tab[data-view="map"]').click());
+  await page.evaluate(async () => {
+    ApexCore.driverScore = (v) => ({ score: 790, components: {} });
+    const lat = [], lon = []; for (let i = 0; i < 600; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
+    const d = { id: 'pd2', name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] };
+    await ApexRecording.store(d);
+    apexDebug.showEndCard(d, Date.now() - 30 * 60000, { quiet: true });
+  });
+  await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !b.hidden && !b.getAttribute('aria-disabled'); }, null, { timeout: 15000 });
+  down = true;
+  await page.click('#endPost');
+  await page.waitForSelector('.post-sheet textarea');
+  await page.fill('.post-sheet textarea', 'No bars up top.');
+  await page.click('.post-sheet button:text-is("Post")');
+  await page.waitForFunction(() => /goes up when you have one/.test(document.getElementById('toast').textContent), null, { timeout: 10000 });
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.outbox') || '[]'));
+  check(kept.length === 1 && kept[0].path === '/api/posts' && kept[0].body.caption === 'No bars up top.' && kept[0].capped === true && !(await page.$('.post-sheet')), 'the post waits on the phone, the sheet closed: ' + JSON.stringify(kept).slice(0, 300));
+  // signal back: it goes up, once
+  down = false;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForFunction(() => /Sent what waited for signal/.test(document.getElementById('toast').textContent), null, { timeout: 10000 });
+  check(posted.length === 1 && posted[0].caption === 'No bars up top.' && posted[0].score === 790 && await page.evaluate(() => !localStorage.getItem('apex.outbox')), 'sent once signal is back: ' + JSON.stringify(posted).slice(0, 300));
 });
 flow('push notifications: Garage > Notifications asks iOS only at the switch, hands the phone\'s token to the Worker, a push\'s tap opens the post, and off takes the token back (Worker and shell stubbed, docs/SOCIAL.md 2.12)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
@@ -8382,6 +8426,44 @@ flow('corner clips: with the video lined up, a corner it holds comes out as a po
   check(await page.evaluate(() => document.querySelector('#dvDashcam .dc-clips button').disabled), 'nothing to clip, the key is off');
 });
 
+flow('best corner clip off the Log: on the map page a filmed drive gives its best corner, where it is in the video, and the clip (best_clip.js, for the end card post)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} window.APEX_DRIVECAM = '/__drivecam/'; });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.ApexBestClip && window.ApexRecording && window.ApexLazy);
+  const T0 = 1763000000000;
+  const b64 = await page.evaluate(async (t0) => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 300; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9); }
+    await ApexRecording.store({ id: 'bc1', name: 'Filmed road', date: '2026-11-13T15:00:00Z', t0, t_s: lat.map((_, i) => i / 3), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => -0.1), lat_g: lat.map((_, i) => Math.sin(i / 3) * 0.4), g_known: null, elev: null, hz: 1, source: 'web-gps',
+      events: [{ type: 'corner', code: 'L4', call: 'Left 4', index: 9, dist_m: 45, start_m: 30, end_m: 60, radius_m: 80, apex_mph: 30, dir: 'L', severity: 4 },
+               { type: 'corner', code: 'R3', call: 'Right 3', index: 18, dist_m: 90, start_m: 75, end_m: 105, radius_m: 60, apex_mph: 30, dir: 'R', severity: 3 }] });
+    const c = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }), g = c.getContext('2d');
+    const rec = new MediaRecorder(c.captureStream(15), { mimeType: 'video/webm' }), parts = [];
+    rec.ondataavailable = (e) => parts.push(e.data);
+    const stop = new Promise((ok) => { rec.onstop = ok; });
+    rec.start(); let f = 0; const t = setInterval(() => { g.fillStyle = `hsl(${f++ * 12},60%,50%)`; g.fillRect(0, 0, 320, 180); }, 66);
+    await new Promise((r) => setTimeout(r, 7200)); clearInterval(t); rec.stop(); await stop;
+    const buf = new Uint8Array(await new Blob(parts).arrayBuffer());
+    let bin = ''; for (let k = 0; k < buf.length; k += 0x8000) bin += String.fromCharCode(...buf.subarray(k, k + 0x8000));
+    return btoa(bin);
+  }, T0);
+  const name = `${T0 + 1500}.mov`;
+  await page.route('**/__drivecam/index.json', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify([{ name, start_ms: T0 + 1500, dur_s: 7.2 }]) }));
+  await page.route(`**/__drivecam/${name}`, (r) => r.fulfill({ contentType: 'video/webm', body: Buffer.from(b64, 'base64') }));
+  const before = await page.evaluate(() => !!window.ApexCornerClip);
+  const found = await page.evaluate(() => ApexBestClip.find('bc1'));
+  check(!before && found && found.url === `/__drivecam/${encodeURIComponent(found.name)}` && found.name.endsWith('.mov'), 'found, its helpers loaded only when asked: ' + JSON.stringify(found));
+  check(/^Corner [12] · (Left 4|Right 3)$/.test(found.label) && found.end > found.start && found.start >= 0 && found.end <= 7.2, 'a corner the video holds, as seconds in it');
+  const made = await page.evaluate(async () => { const f = await ApexBestClip.find('bc1'), r = await ApexBestClip.make(f); return { size: r.blob.size, mime: r.mime, left: document.querySelectorAll('video').length }; });
+  check(made.size > 500 && /^video\//.test(made.mime), 'the clip is made on the page: ' + JSON.stringify(made));
+  check(made.left === 0, 'nothing left behind on the page');
+  const none = await page.evaluate(async () => { await ApexRecording.store({ id: 'bc2', name: 'Not filmed', date: '2026-11-13T15:00:00Z', t0: 1700000000000, lat: [35.6, 35.61], lon: [-83.9, -83.9], dist: [0, 5], speed_mps: [15, 15], lon_g: [0, 0], lat_g: [0, 0], events: [] });
+    return ApexBestClip.find('bc2'); });
+  check(none === null, 'a drive with no film has no clip');
+});
+
 flow('film the drive: the app\'s own video of a drive is offered on its page, lined up by itself, and cuts a corner clip and a best-corners reel (big bet 5)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} window.APEX_DRIVECAM = '/__drivecam/'; });
   await page.goto(base + '/analysis.html');
@@ -8561,6 +8643,20 @@ flow('Compare with a single drive: one line says it needs two, no empty panels; 
   await storeDashDrive(page, 'cp2', 'Compare road');
   const two = await look();
   check(/Shared road/.test(two.cards) && !two.road && !two.corners && !two.pick, 'two drives: the comparison is drawn: ' + JSON.stringify(two));
+});
+
+flow('Compare two drives on different roads: one line says they share no road, no gap chart or corner table of dashes (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  // the same profile 2 km apart (seed 0 and 1): nothing of one road lies on the other
+  await page.evaluate(async (src) => { const gen = eval(src);
+    for (let k = 0; k < 2; k++) await ApexRecording.store(ApexRecording.parse(ApexCore, gen('saw', k), 'X' + k + '.csv', { id: 'X' + k, name: ['Dry Ridge Rd', 'Pebble Ridge'][k], date: `2026-0${7 + k}-01T09:00`, source: 'web-gps' })); }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html?tab=compare');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && /share|Shared/.test(document.querySelector('#cards').textContent), null, { timeout: 20000 });
+  const r = await page.evaluate(() => ({ cards: document.getElementById('cards').textContent.trim(), road: document.getElementById('cmpRoad').hidden,
+    corners: document.getElementById('cmpCorners').hidden, pick: document.querySelector('.compare-pick').hidden }));
+  check(/share no road/.test(r.cards) && r.road && r.corners && !r.pick, 'different roads: one line, the pickers stay, nothing empty under it: ' + JSON.stringify(r));
 });
 
 flow('the drive page\'s map: with no map to be had the picture keeps its blank panel; MapLibre loads only for it (TestFlight 15)', async (page, base) => {
