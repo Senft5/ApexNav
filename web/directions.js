@@ -40,7 +40,7 @@
   function phrase(s) {
     const verb = VERB[s.type];
     if (!verb) return null;
-    if (ARRIVE.has(s.type)) return 'Arriving at your destination';
+    if (ARRIVE.has(s.type)) return sideOf(s) ? `Your destination is on the ${sideOf(s)}` : 'Arriving at your destination';
     // a numbered exit says its number and where it goes, as the sign does (IDEAS R-29): "Take exit 386B toward Airport"
     if (s.exit && s.type >= 17 && s.type <= 21) return `Take exit ${s.exit}${s.toward ? ` toward ${s.toward}` : s.street ? ` onto ${s.street}` : ''}`;
     const onto = s.street ? ` onto ${s.street}` : s.toward && s.type >= 17 && s.type <= 25 ? ` toward ${s.toward}` : '';
@@ -147,6 +147,28 @@
     return out;
   }
 
+  // Which side of the road the destination is on, as Apple and Google Maps say it: the router's own word (Valhalla 5 is
+  // on the right, 6 on the left), else the side the place itself lies (arrivalSide), else nothing.
+  const sideOf = (s) => (s.type === 5 ? 'right' : s.type === 6 ? 'left' : s.side === 'left' || s.side === 'right' ? s.side : null);
+  /**
+   * The side of the road a place lies, from the route's last 25 m (lat[], lon[]) and where the place is (dest {lat, lon}):
+   * 'left' | 'right', or null when it is straight ahead, on the road itself (within 6 m), or too far from the route's end
+   * to be "on" a side (over 200 m). Pure.
+   */
+  function arrivalSide(lat, lon, dest) {
+    const n = lat && lat.length;
+    if (!n || n < 2 || !dest || !finite(dest.lat) || !finite(dest.lon)) return null;
+    const e = n - 1, c = Math.cos(lat[e] * Math.PI / 180), X = (i, lo) => (lo - lon[i]) * 111320 * c, Y = (i, la) => (la - lat[i]) * 110540;
+    let k = e - 1;
+    while (k > 0 && Math.hypot(X(k, lon[e]), Y(k, lat[e])) < 25) k--;
+    const hx = X(k, lon[e]), hy = Y(k, lat[e]), hl = Math.hypot(hx, hy);
+    const dx = X(e, dest.lon), dy = Y(e, dest.lat), dl = Math.hypot(dx, dy);
+    if (hl < 5 || dl < 6 || dl > 200) return null;
+    const perp = (hx * dy - hy * dx) / hl, along = (hx * dx + hy * dy) / hl;   // left of the heading is +
+    if (Math.abs(perp) < 6 || Math.abs(perp) < 0.5 * Math.max(0, along)) return null;
+    return perp > 0 ? 'left' : 'right';
+  }
+
   // For the road-book strip: a short verb, the road, and how the tulip draws it (dir L/R/S/U/O/A, angle in degrees).
   const SHORT = {
     9: ['Bear right', 'R', 45], 10: ['Right', 'R', 90], 11: ['Sharp right', 'R', 135], 12: ['U-turn', 'U', 180], 13: ['U-turn', 'U', 180],
@@ -159,9 +181,9 @@
     const x = SHORT[s.type];
     if (!x) return null;
     const code = s.type === 26 && finite(s.exits) && s.exits > 0 ? `Roundabout · exit ${s.exits}` : s.exit && s.type >= 17 && s.type <= 21 ? `Exit ${s.exit}` : x[0];
-    return { code, call: ARRIVE.has(s.type) ? 'Destination' : s.street || s.toward || '', dir: x[1], angle: x[2], ...(s.lanes ? { lanes: s.lanes } : {}) };
+    return { code, call: ARRIVE.has(s.type) ? (sideOf(s) ? `Destination on the ${sideOf(s)}` : 'Destination') : s.street || s.toward || '', dir: x[1], angle: x[2], ...(s.lanes ? { lanes: s.lanes } : {}), ...(ARRIVE.has(s.type) && sideOf(s) ? { side: sideOf(s) } : {}) };
   }
 
-  const api = { due, phrase, distWords, atJunction, placeSteps, stripNote, pendingAt, createProgress, TAKEN_M, VERB };
+  const api = { due, phrase, distWords, atJunction, placeSteps, stripNote, pendingAt, createProgress, arrivalSide, TAKEN_M, VERB };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDirections = api;
 })(typeof window !== 'undefined' ? window : globalThis);
