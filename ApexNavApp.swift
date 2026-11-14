@@ -119,10 +119,19 @@ enum ApexWebBundle {
     /// over to the cockpit page, which handles them exactly as it does on the web. Anything else opens the app as usual.
     static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy", "go", "q", "road", "roadbook", "view", "friend", "post"]   // q: a place said to Siri (base64url, ApexIntents.swift); go=drive: start a drive (IDEAS C-05); road: a road someone sent (web/road_link.js); view/friend/post: a push's tap (ApexPush.swift)
     private static let linkValue = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
+    /// Universal links (the owner's domain, 2026-11-14): a shared link on vettadrive.app opens here when the app is installed
+    /// (project.yml associated-domains; the Worker's apple-app-site-association lists which). A road comes in the fragment
+    /// (#road=, web/road_link.js), which the page reads as ?road= in the app.
+    static let linkHosts: Set<String> = ["vettadrive.app", "www.vettadrive.app"]
     /// The link's parameters the page understands, or nil when the link isn't one of ours or carries none.
     static func linkItems(_ url: URL) -> [URLQueryItem]? {
-        guard url.scheme == scheme, url.host() == "open",
-              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return nil }
+        let isOurs = (url.scheme == scheme && url.host() == "open")
+            || (url.scheme == "https" && linkHosts.contains(url.host() ?? "") && (url.path.isEmpty || url.path == "/"))
+        guard isOurs, let comps = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        var items = comps.queryItems ?? []
+        if url.scheme == "https", let frag = comps.fragment, frag.hasPrefix("road=") {
+            items.append(URLQueryItem(name: "road", value: String(frag.dropFirst("road=".count))))
+        }
         let kept = items.filter { item in
             guard linkKeys.contains(item.name), let v = item.value, (1...200).contains(v.count) else { return false }
             return v.unicodeScalars.allSatisfy { linkValue.contains($0) }
