@@ -50,5 +50,5 @@ owner's rows are also in docs/OWNER_TODO.md. Apple's rules in detail: docs/APP_R
 |---|---|---|
 | Name in the app, listing, pages, marketing | Done (code identifiers keep ApexNav; users never see them) | — |
 | Trademark: attorney knockout for VETTA in classes 9 and 42, then USPTO filing | Not started | owner |
-| Domain vettadrive.com / vettadrive.app, email routing | Not bought | owner |
+| Domain vettadrive.com / vettadrive.app, email routing | Both bought (Cloudflare Registrar, 2026-11-14); wiring the Worker and links to them is with the production-ready thread; Email Routing (hello@, press@) still to turn on | owner: Email Routing |
 | Social handles (same handle everywhere) | Not made | owner |
