@@ -147,9 +147,10 @@
     const postBtn = el('button', { className: 'btn solid dc-post', textContent: 'Post this clip', type: 'button', hidden: true });
     // Show speed: on this phone, for every clip made here (corner_clip.js speedShown); off for a Reel of a public road
     const speedBox = el('input', { type: 'checkbox', className: 'dc-speed' });
+    speedBox.style.cssText = 'width:24px;height:24px;margin:0 10px 0 0;flex:none';   // a target big enough to hit
     speedBox.checked = !CC || !CC.speedShown || CC.speedShown();
     speedBox.addEventListener('change', () => { if (CC && CC.setSpeedShown) CC.setSpeedShown(speedBox.checked); if (!clipSaid) listClips(); });
-    const speedRow = el('label', { className: 'dc-row dc-speed-row' }, speedBox, el('span', { textContent: 'Show speed on clips' }));
+    const speedRow = el('label', { className: 'dc-row dc-speed-row', style: 'display:flex;align-items:center;min-height:44px' }, speedBox, el('span', { textContent: 'Show speed on clips' }));
     const clips = el('div', { className: 'dc-clips', hidden: true }, el('h3', { textContent: 'Corner clips' }), el('div', { className: 'dc-row' }, clipPick, clipBtn), el('div', { className: 'dc-row' }, reelBtn), speedRow, clipCanvas, el('div', { className: 'dc-row' }, postBtn), clipNote);
     let clipList = [], clipBusy = false, clipSaid = '', reel = [];   // clipSaid: how the last clip went, kept until the video moves
     let made = null;                                                 // the last clip made: { blob, mime, label, call }
