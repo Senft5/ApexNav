@@ -167,9 +167,13 @@
   async function shareCard(canvas, fileName) {
     const blob = await new Promise((ok) => canvas.toBlob(ok, 'image/png'));
     if (!blob) return 'failed';
+    return shareFile(blob, fileName, 'image/png');
+  }
+  /** Any file the same way (the end card's best corner clip too). */
+  async function shareFile(blob, fileName, mime) {
     // the shell's share sheet in the app (save_file.js), where a download link does nothing (feedback 07)
-    if (root.ApexSaveFile && typeof location !== 'undefined' && location.protocol === 'apexnav:') return root.ApexSaveFile.saveFile(blob, fileName, 'image/png', { share: true });
-    const file = typeof File === 'function' ? new File([blob], fileName, { type: 'image/png' }) : null;
+    if (root.ApexSaveFile && typeof location !== 'undefined' && location.protocol === 'apexnav:') return root.ApexSaveFile.saveFile(blob, fileName, mime, { share: true });
+    const file = typeof File === 'function' ? new File([blob], fileName, { type: mime }) : null;
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file] }); return 'shared'; } catch (e) { if (e && e.name === 'AbortError') return 'cancelled'; }
     }
@@ -178,6 +182,6 @@
     return 'saved';
   }
 
-  const api = { cardModel, cardTitle, mixLine, silhouette, trimEnds, TRIM_M, cornerMix, drawCard, shareCard, PARTS, W, H };
+  const api = { cardModel, cardTitle, mixLine, silhouette, trimEnds, TRIM_M, cornerMix, drawCard, shareCard, shareFile, PARTS, W, H };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveCard = api;
 })(typeof window !== 'undefined' ? window : globalThis);
