@@ -2560,12 +2560,20 @@
         const k = ApexRouteFeel.load(localStorage, String(t.id), t.dist);
         if (k) t.measured = k;
       }
-      const keptFeel = !!(t.measured && t.measured.keptAt != null);
+      // one bar that carries nothing (the phone says online, nothing gets through): signed in on this phone, but membership
+      // or the members' data couldn't be asked, so the kept copy stands in, as with no signal
+      const keptCopy = () => (window.ApexRouteFeel && t.id && Array.isArray(t.dist) && ApexSavedRoutes.has(localStorage, t.id) && window.ApexSync && ApexSync.signedIn()
+        ? ApexRouteFeel.load(localStorage, String(t.id), t.dist) : null);
+      let keptFeel = !!(t.measured && t.measured.keptAt != null);
       if (!window.ApexContributor || !t.lat || t.lat.length < 40) return;
-      if (!keptFeel && (!window.ApexSync || !(await ApexSync.member()))) return;
+      if (!keptFeel && t.measured === undefined) {
+        const me = window.ApexSync ? await RouteLoading.optional(ApexSync.member(), 8000) : null;
+        if (!me) { const k = keptCopy(); if (!k) return; t.measured = k; keptFeel = true; }
+      } else if (!keptFeel && (!window.ApexSync || !(await ApexSync.member()))) return;
       if (t.measured === undefined) {
         try { t.measured = await ApexContributor.measuredAlong(t, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }); }
         catch (_) { t.measured = null; }
+        if (t.measured == null) { const k = keptCopy(); if (k) t.measured = k; }
         keepFeelAlong(t);
       }
       if (t === plannedRoute) paintRouteReports(t);
@@ -2586,7 +2594,7 @@
           (m.avgPasses != null ? ` · ${m.avgPasses.toFixed(1)} runs on average` : '') +
           (t.crowdCorrected >= 30 ? ` · corners from members' drives on ${ApexUnits.long(t.crowdCorrected, 1)}` : '') +
           (t.crowdBumps > 0 ? ` · ${t.crowdBumps === 1 ? 'a bump' : `${t.crowdBumps} bumps`} members felt` : '') +
-          (keptFeel ? ` (kept ${keptWhen(m.keptAt)})` : '');
+          (m.keptAt != null ? ` (kept ${keptWhen(m.keptAt)})` : '');
     }
     // A saved route keeps what members measured along it (route_feel.js), refreshed whenever its card asks with signal.
     function keepFeelAlong(t) {
@@ -2607,10 +2615,14 @@
       for (let i = 0; i < t.lat.length; i += 200) pts.push({ lat: t.lat[i], lon: t.lon[i] });
       pts.push({ lat: t.lat[t.lat.length - 1], lon: t.lon[t.lon.length - 1] });
       // no signal: the reports kept when the route was saved (route_reports.js), expired ones dropped, with their age
-      const kept = navigator.onLine === false && window.ApexRouteReports && t.id ? ApexRouteReports.load(localStorage, String(t.id)) : null;
-      let list = [];
+      // (or one bar that carries nothing: the live ask didn't get through in 8 s)
+      const keptCopy = () => (window.ApexRouteReports && t.id ? ApexRouteReports.load(localStorage, String(t.id)) : null);
+      let kept = navigator.onLine === false ? keptCopy() : null, list = [];
+      if (!kept) {
+        try { list = await RouteLoading.optional(hazardsAround(pts), 8000); } catch (_) { return; }
+        if (!list || list.unknown) { kept = keptCopy(); if (!kept) return; }
+      }
       if (kept) list = kept.rows;
-      else try { list = await hazardsAround(pts); } catch (_) { return; }
       if (plannedRoute !== t) return;
       let text = ApexRoadPage.routeReportsLine(ApexRoadPage.onThisRoad(t, null, Array.isArray(list) ? list : []), (m) => ApexUnits.long(m, 1));
       if (text && kept) text += ` (as of ${new Date(kept.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${Date.now() - kept.at > 864e5 ? `, ${new Date(kept.at).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''})`;
@@ -2932,12 +2944,16 @@
       if (hazardsCover(points)) return closureCache.list;
       if (closureCache.asking && closureCache.askMid && points.every((p) => p && FunRoute.kmBetween(p, closureCache.askMid) <= 35)) return closureCache.asking;
       const ask = (async () => {
-        let list = [];
+        let list = null;
         try {
           const r = await ApexSync.apiFetch(`/api/hazards?${ApexPrivacyZones.cellQuery(mid.lat, mid.lon, 50)}`, { method: 'GET' });   // VI-1: by cell
-          if (r.ok) list = await r.json();
-        } catch (_) { /* offline or signed out: no closures known */ }
-        Object.assign(closureCache, { key: `${mid.lat.toFixed(1)},${mid.lon.toFixed(1)}`, mid: { lat: mid.lat, lon: mid.lon }, at: performance.now(), list: Array.isArray(list) ? list : [], asking: null });
+          list = r.ok ? await r.json() : [];                                                 // signed out: an answer, none for you
+        } catch (_) { list = null; }
+        // the ask never got through (no signal, or one bar that carries nothing): not "none reported", so not kept as the
+        // area's answer for 5 min; the next plan asks again, and a saved route falls back to the reports kept with it
+        if (!Array.isArray(list) && list !== null) list = [];
+        if (list === null) { closureCache.asking = null; return Object.assign([], { unknown: true }); }
+        Object.assign(closureCache, { key: `${mid.lat.toFixed(1)},${mid.lon.toFixed(1)}`, mid: { lat: mid.lat, lon: mid.lon }, at: performance.now(), list, asking: null });
         // the reports landed after the card went up (a slow answer; a plan waits 0.2 s at most): its word again (police
         // reports with Avoid police on, and a reported closure the route passes, always)
         if (plannedRoute && !driveActive && typeof renderRouteCard === 'function') setTimeout(() => { try { if (plannedRoute) renderRouteCard(plannedRoute); } catch (_) {} }, 0);
@@ -9203,6 +9219,10 @@
       }
       reported.aheadFor = t;
       const got = await askCellsAlong(t, () => reported.aheadFor === t);
+      if (reported.aheadFor !== t) return;
+      // a cell the live ask couldn't get (one bar, a dead stretch at the start): the reports kept with a saved route fill it
+      const kept = window.ApexRouteReports && t.id && window.ApexSync && ApexSync.signedIn() ? ApexRouteReports.load(localStorage, String(t.id)) : null;
+      if (kept) for (const [k, rows] of Object.entries(kept.cells)) if (!got || !(k in got)) reported.ahead.set(k, rows);
       if (!got) return;
       for (const [k, rows] of Object.entries(got)) reported.ahead.set(k, rows);
       if (window.apexDebug) window.apexDebug.askedAhead = Object.keys(got).length;
