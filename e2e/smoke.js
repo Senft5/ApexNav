@@ -6157,6 +6157,10 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   // the Garage: Who sees what under You; the pioneer count with Road feel; no points board anywhere
   await page.evaluate(() => document.querySelector('.tab[data-view="garage"]').click());
   await page.waitForSelector('#garageMeBody .nav-row:has-text("Who sees what")');
+  // one rule between things, never two: none over You (the header draws one), none under Who sees what (Your cars' does)
+  const rules = await page.evaluate(() => { const b = document.getElementById('garageMeBody'), you = b.querySelector(':scope > :first-child > h3'), last = b.querySelector('.nav-rows:last-child > .nav-row:last-child');
+    return [you.textContent, getComputedStyle(you).borderTopStyle === 'none' || parseFloat(getComputedStyle(you).borderTopWidth) === 0, parseFloat(getComputedStyle(last).borderBottomWidth) === 0]; });
+  check(JSON.stringify(rules) === '["You",true,true]', 'the Garage draws one rule between things, not two: ' + JSON.stringify(rules));
   check(/Roads you mapped first: 3/.test(await page.textContent('#garageRoadFeelBody')), 'roads you mapped first, in the Garage (Settings → Road feel)');
   // Crews: the crew things, none of the friend things; with no crew, one row
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
