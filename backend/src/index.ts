@@ -62,6 +62,7 @@ import { highlightCreate, highlightDelete, highlightList, highlightRate } from "
 export { ConvoyIndex, ConvoyRoom } from "./convoy";
 import { crewHomeSet, crewMeetCells } from "./crew_meet";
 import { chargers } from "./chargers";
+import { trafficResponse } from "./traffic";
 import { dailyServerCheck, serverSide, serviceHistory, serviceReport } from "./service_check";
 import { QUERY_WARN, countedDb } from "./query_budget";
 import { SHED_ROUTES, countedKv, countedR2, flushUsage, usageState } from "./usage";
@@ -311,6 +312,8 @@ on("GET", "/api/ctx/v1/8/:x/:y", (_req, env, m) => ctxServe(env, `v1/8/${m.group
 // Vetta's own scored road network beyond Cincinnati (src/graph.ts): tiles from the repository's graph-data branch
 on("GET", "/api/graph/v1/index.json", (req, env) => graphIndex(req, fetch, env));
 on("GET", "/api/graph/v1/:name", (req, env, m) => graphTile(req, m.groups!.name, fetch, env));
+// Official traffic events from the state DOTs' free feeds (traffic.ts; web/road_events.js): public, the whole region, cached 5 min
+on("GET", "/api/traffic/v1/events.json", (_req, env) => trafficResponse(env));
 // Avoid cameras' own camera list for the region (graph.ts cameraList; web/cameras.js), from the graph-data branch
 on("GET", "/api/cameras/v1/region.json", (_req, env) => cameraList(fetch, env));
 // CI's upload of the map data into R2 (src/data_store.ts): a GitHub OIDC token of this repository's main branch, no secret

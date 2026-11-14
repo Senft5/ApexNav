@@ -2721,7 +2721,7 @@
       const list = await hazardsAround(points);
       // with the closures the drive has fetched round you (newer than this trip's for one that landed mid-drive: Go round)
       let mine = [];
-      try { mine = reported.list.filter((h) => h && h.kind === 'closure'); } catch (_) { mine = []; }   // (not yet set up at boot)
+      try { mine = reported.list.filter((h) => h && h.kind === 'closure' && !h.official).concat(roadEvents.closures); } catch (_) { mine = []; }   // (not yet set up at boot)
       const ids = new Set(mine.map((h) => h.id));
       return ApexHazardReports.closuresFor(mine.length ? [...mine, ...list.filter((h) => !h || !ids.has(h.id))] : list, points);
     }
@@ -2769,12 +2769,14 @@
     function closedOnCard(t) {
       if (!t || !(t.id === 'route_dest' || /^loop_/.test(t.id || '')) || !Array.isArray(t.lat) || t.lat.length < 2 || !window.ApexHazardReports) return null;
       const ends = [{ lat: t.lat[0], lon: t.lon[0] }, { lat: t.lat[t.lat.length - 1], lon: t.lon[t.lon.length - 1] }];
-      if (!hazardsCover(ends)) return null;
-      const list = closureCache.list, kept = closedSeen.get(t);
-      if (kept && kept.list === list) return kept.r;
-      const pts = ApexHazardReports.closuresFor(list, ends);
+      let dot = [];
+      try { dot = roadEvents.closures; } catch (_) { dot = []; }       // the DOTs' full closures (road_events.js), signed in or not
+      if (!hazardsCover(ends) && !dot.length) return null;
+      const list = hazardsCover(ends) ? closureCache.list : [], kept = closedSeen.get(t);
+      if (kept && kept.list === list && kept.dot === dot) return kept.r;
+      const pts = ApexHazardReports.closuresFor(dot.length ? [...list, ...dot] : list, ends);
       const r = pts.length > 0 && ApexHazardReports.passesNear(t.lat.map((la, i) => [t.lon[i], la]), pts, 40);
-      closedSeen.set(t, { list, r });
+      closedSeen.set(t, { list, dot, r });
       return r;
     }
     let camWarmAt = -1e9;
@@ -2782,6 +2784,7 @@
       const p = state.lastPosition;
       // (the reports round you: police for Avoid police, and the closures every plan keeps off, closedForTrip)
       if (p && window.ApexSync && ApexSync.signedIn() && !policeCached([p])) hazardsAround([p]).catch(() => {});
+      loadRoadEvents().catch(() => {});                                  // the DOTs' closures and roadwork (road_events.js)
       // the camera tiles round where you are, so a plan that avoids cameras finds them kept (camsForTrip)
       if (avoid.cameras && p && window.ApexCameras && performance.now() - camWarmAt > 60000 && (camWarmAt = performance.now())) alprNodesIn(p.lat - 0.15, p.lon - 0.15, p.lat + 0.15, p.lon + 0.15).catch(() => {});
     }
@@ -2802,7 +2805,10 @@
       } catch (_) { return []; }
     }
     async function closedForTrip(points) {
-      if (!window.ApexHazardReports || !memberNow()) return [];
+      if (!window.ApexHazardReports) return [];
+      try { loadRoadEvents().catch(() => {}); } catch (_) { /* (not yet set up at boot) */ }
+      // signed out: the DOTs' full closures alone (road_events.js), which need no sign-in; the members' reports need one
+      if (!memberNow()) { try { return ApexHazardReports.closuresFor(roadEvents.closures, points); } catch (_) { return []; } }
       if (hazardsCover(points)) return closuresAround(points);   // (with the drive's own, newer: closuresAround)
       const list = await RouteLoading.optional(closuresAround(points), POLICE_WAIT_MS).catch(() => null);
       return Array.isArray(list) ? list : [];
@@ -2914,7 +2920,7 @@
       try { return await valhallaRoutesExcluding(points, throughRoadsOnly, alternates, extra, excl); }
       catch (e) {
         if (!excl.length) throw e;
-        toast('A reported road closure is in the way and there\'s no road around it. Check it before you go.');
+        toast('A road closure is in the way and there\'s no road around it. Check it before you go.');
         return valhallaRoutesExcluding(points, throughRoadsOnly, alternates, extra, []);
       }
     }
@@ -3329,7 +3335,7 @@
       // Avoid police reports: the live reports near this route, from the reports as they are now (they can land after the
       // plan: the card is painted again then, policeLanded); none known: nothing said
       const pol = policeOnCard(t);
-      const closed = closedOnCard(t) ? 'Passes a reported road closure · ' : '';
+      const closed = closedOnCard(t) ? 'Passes a road closure · ' : '';
       const around = pol && pol.n && !pol.passes ? `Around ${pol.n === 1 ? 'a police report' : `${pol.n} police reports`} · ` : '';
       const missedPolice = pol && pol.passes && !(t.unavoided || []).includes('police') ? 'Couldn\'t avoid police reports · ' : '';
       // Planned routes only: a driven track's own time has passed.
@@ -9002,10 +9008,41 @@
     const reported = { list: [], at: -Infinity, cellKey: '', busy: false, said: new Set(), mine: new Set(), pins: new Map(), watch: ApexHazardReports.createPassWatch(), asking: null, local: [],
                        cells: ApexPrivacyZones.cellCache(120e3), ahead: ApexPrivacyZones.cellCache(6 * 3600e3, 16), aheadFor: null };
     if (window.apexDebug) { window.apexDebug.loadReported = (force) => loadReported(force); window.apexDebug.reportedIds = () => reported.list.map((h) => h.id); }   // e2e: a report that lands mid-drive
+    // ---- the DOTs' own traffic events (road_events.js; backend/src/traffic.ts) ------------------------------------------
+    // Closures, lane closures, roadwork, slow traffic and crashes from INDOT, KYTC (and ODOT with the owner's key): the whole
+    // region asked every 5 min while planning or driving, never where you are; signed in or not. What is near you joins the
+    // drivers' reports in reported.list (`official`), so it gets the same pins, plate, voice and car plates; the full
+    // closures (both ways) are routed round like a reported closure.
+    const roadEvents = { list: [], closures: [], at: NaN, busy: false, mergedAt: null };
+    if (window.apexDebug) window.apexDebug.loadRoadEvents = () => loadRoadEvents(true);
+    function roadEventsNear(p) { return p && window.ApexRoadEvents ? ApexRoadEvents.near(roadEvents.list, p.lat, p.lon, Date.now()) : []; }
+    async function loadRoadEvents(force = false) {
+      if (!window.ApexRoadEvents || !window.ApexSync || roadEvents.busy || window.APEX_REVIEW) return;
+      if (!force && !ApexRoadEvents.due(roadEvents.at, Date.now())) return;
+      roadEvents.busy = true; roadEvents.at = Date.now();
+      try {
+        const r = await ApexSync.apiFetch('/api/traffic/v1/events.json', { method: 'GET' });
+        if (!r.ok) return;                                                 // a feed down: what we had stays, asked again in 5 min
+        roadEvents.list = ApexRoadEvents.rows(await r.json());
+        roadEvents.closures = ApexRoadEvents.closures(roadEvents.list);
+        mergeRoadEvents(true);
+        // they landed after the route card went up: its word again (a closure the route passes)
+        if (plannedRoute && !driveActive && typeof renderRouteCard === 'function') setTimeout(() => { try { if (plannedRoute) renderRouteCard(plannedRoute); } catch (_) {} }, 0);
+      } catch (_) { /* offline: what we had */ }
+      finally { roadEvents.busy = false; }
+    }
+    // the events round where you are now, into reported.list: on new ones, or once you're 1 km from the last merge
+    function mergeRoadEvents(force = false) {
+      const p = state.lastPosition;
+      if (!p || !window.ApexRoadEvents || (!force && !ApexRoadEvents.moved(roadEvents.mergedAt, p))) return;
+      roadEvents.mergedAt = { lat: p.lat, lon: p.lon };
+      reported.list = reported.list.filter((h) => h && !h.official).concat(roadEventsNear(p));
+      paintReported(); carHazards();
+    }
     async function loadReported(force = false) {
       const p = state.lastPosition, c = p && ApexPrivacyZones.cell(p.lat, p.lon);
       if (!c || reported.busy || !window.ApexSync || !nearLookupOk(p)) return;
-      const keep = (rows) => { reported.list = ApexPrivacyZones.nearFirst(rows, p.lat, p.lon, 20).concat(reported.local); paintReported(); carHazards(); };
+      const keep = (rows) => { roadEvents.mergedAt = { lat: p.lat, lon: p.lon }; reported.list = ApexPrivacyZones.nearFirst(rows, p.lat, p.lon, 20).concat(reported.local, roadEventsNear(p)); paintReported(); carHazards(); };
       const kept = force ? undefined : reported.cells.get(c.key);
       if (kept) { if (c.key !== reported.cellKey) { reported.cellKey = c.key; keep(kept); } return; }   // a cell asked for under 2 min ago
       if (!force && c.key === reported.cellKey && performance.now() - reported.at < 120e3) return;
@@ -9543,7 +9580,8 @@
       for (const [id, mk] of reported.pins) if (!keep.has(id)) { mk.remove(); reported.pins.delete(id); }
       for (const h of reported.list) {
         if (reported.pins.has(h.id)) continue;
-        const el = document.createElement('div'); el.className = 'hz-pin'; el.textContent = (ApexHazardReports.LABEL[h.kind] || 'Hazard').toUpperCase();
+        const el = document.createElement('div'); el.className = h.official ? 'hz-pin hz-dot' : 'hz-pin';   // a DOT's event: its own word
+        el.textContent = ((h.official && h.label) || ApexHazardReports.LABEL[h.kind] || 'Hazard').toUpperCase();
         reported.pins.set(h.id, new maplibregl.Marker({ element: el }).setLngLat([h.lon, h.lat]).addTo(map));
       }
     }
@@ -9597,6 +9635,7 @@
       if (lookupEdge.last) lookupEdge.m += ApexPrivacyZones.metres(lookupEdge.last.lat, lookupEdge.last.lon, frame.lat, frame.lon);
       lookupEdge.last = { lat: frame.lat, lon: frame.lon };
       loadReported();
+      loadRoadEvents().catch(() => {}); mergeRoadEvents();
       const me = { lat: frame.lat, lon: frame.lon, heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null };
       const v = Number.isFinite(frame.speed_mps) ? frame.speed_mps : 0;
       const next = ApexHazardReports.nextAhead(reported.list, me, Math.max(150, Math.min(600, v * 8)), reported.said);

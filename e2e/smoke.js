@@ -2148,10 +2148,37 @@ flow('a reported road closure the route still drives is on the route card (Worke
   await page.waitForSelector('#placeList .place', { timeout: 10000 });
   await page.click('#placeList .place');
   await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 20000 });
-  await page.waitForFunction(() => /Passes a reported road closure/.test(document.getElementById('routeCardSub').textContent), null, { timeout: 10000 });
+  await page.waitForFunction(() => /Passes a road closure/.test(document.getElementById('routeCardSub').textContent), null, { timeout: 10000 });
   check(Array.isArray(await page.evaluate(() => apexDebug.lastClosed)), 'the plan carried the closures to our router');
   const rh = await page.evaluate(() => apexDebug.lastRoadHazards);
   check(JSON.stringify(rh) === JSON.stringify([{ lat: 35.85, lon: -83.94 }]), 'the plan carried the confirmed pothole to our router, not the unconfirmed gravel: ' + JSON.stringify(rh));
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
+flow('a DOT road closure the route still drives is on the route card and goes to the router, signed out (Worker and router stubbed)', async (page, base) => {
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/traffic/v1/events.json') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ sources: ['KYTC'], events: [
+      { id: 'dot:KY:1', kind: 'closure', label: 'Road closed', lat: 35.86255, lon: -83.94135, road: 'US 129', until: null, src: 'KYTC' },
+      { id: 'dot:KY:2', kind: 'lane', label: 'Lane closed', lat: 35.85, lon: -83.94, road: 'US 129', until: null, src: 'KYTC' }] }) });   // shown, never routed round
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('#destInput'); await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 20000 });
+  await page.waitForFunction(() => /Passes a road closure/.test(document.getElementById('routeCardSub').textContent), null, { timeout: 10000 });
+  // asked as Where to? opened, so in hand for the plan: the router is told of the full closure alone, not the lane closure
+  const closed = await page.evaluate(() => apexDebug.lastClosed);
+  check(JSON.stringify(closed) === JSON.stringify([{ lat: 35.86255, lon: -83.94135 }]), 'the plan carried the DOT closure to our router: ' + JSON.stringify(closed));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('avoid police reports, driving: a report that lands on the route ahead is offered once with Go round, which routes round it (Worker and router stubbed)', async (page, base) => {
@@ -4680,6 +4707,48 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   await page.waitForTimeout(5500);
   check(reports.length === 1, 'the undone report was never sent: ' + JSON.stringify(reports.map((r) => r.kind)));
   await page.evaluate(() => clearInterval(window.__fixes));
+});
+
+flow('the DOTs\' traffic events: a lane closure pinned, plated with its road and agency, called ahead, never "still there?", and on the car (Worker stubbed)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__said = []; const S = window.speechSynthesis;
+    if (S) S.speak = (u) => { window.__said.push(u.text); setTimeout(() => u.onend && u.onend(), 30); }; });
+  const N = (m) => m / 110540, asked = [];
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/traffic/v1/events.json') { asked.push(u.search); return json({ at: Date.now(), sources: ['INDOT'], failed: [], events: [
+      { id: 'dot:IN:1', kind: 'lane', label: 'Lane closed', lat: 35.6 + N(200), lon: -83.9, road: 'IN 114', until: null, src: 'INDOT' },
+      { id: 'dot:IN:2', kind: 'roadwork', label: 'Roadwork', lat: 35.9, lon: -83.9, road: 'I-65', until: null, src: 'INDOT' },   // 33 km off: not shown
+    ] }); }
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.evaluate(async () => {   // heading north at 15 m/s, from 0 m to 330 m
+    for (let i = 0; i <= 220; i++) { window.apex.live({ lat: 35.6 + (i * 1.5) / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' });
+      const k = window.apexDebug.state.lastSaid;
+      if (k && window.__said[window.__said.length - 1] !== k) window.__said.push(k);
+      if (i === 40) window.__plate = { hidden: document.getElementById('hzPlate').hidden, title: document.getElementById('hzPlateTitle').textContent, detail: document.getElementById('hzPlateDetail').textContent,
+        pins: [...document.querySelectorAll('.hz-pin.hz-dot')].map((e) => e.textContent) };
+      await new Promise(r => setTimeout(r, 20)); }
+  });
+  await page.waitForTimeout(600);
+  const got = await page.evaluate(() => ({ plate: window.__plate, said: window.__said, ask: !document.getElementById('hzAsk').hidden, ids: apexDebug.reportedIds() }));
+  check(asked.length === 1 && asked[0] === '', 'the whole region asked once, never where you are: ' + JSON.stringify(asked));
+  check(got.plate && !got.plate.hidden && got.plate.title === 'Lane closed' && /IN 114 · INDOT/.test(got.plate.detail) && !/reported/.test(got.plate.detail), 'plated with its road and agency, no age: ' + JSON.stringify(got.plate));
+  check(got.plate.pins.length === 1 && got.plate.pins[0] === 'LANE CLOSED', 'pinned in its own word, roadwork 33 km off left out: ' + JSON.stringify(got.plate.pins));
+  check(got.said.some((t) => /^lane closed ahead$/i.test(t)) && !got.said.some((t) => /lane closed reported/i.test(t)), 'called "ahead", not "reported ahead": ' + JSON.stringify(got.said));
+  check(!got.ask, 'never asked "still there?" about a DOT\'s word');
+  // the car gets it as a hazard plate: the stub is set late (from the load, the page takes the app's API base)
+  await page.evaluate(() => { window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } };
+    window.apex.onNative({ type: 'carplay', action: 'hello' }); });
+  await page.waitForTimeout(400);
+  await page.evaluate(() => window.apex.live({ lat: 35.6 + 2000 / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' }));   // 1.7 km on: merged again
+  await page.waitForTimeout(300);
+  const hz = await page.evaluate(() => window.__car.filter((m) => m.kind === 'hazards').pop());
+  check(hz && hz.list.some((h) => h.id === 'dot:IN:1' && h.title === 'Lane closed'), 'the car has it as a hazard: ' + JSON.stringify(hz));
 });
 
 flow('review mode (U-94): the recording\'s hazard report is the sheet, Undo and a pin, and nothing reaches the server', async (page, base) => {
