@@ -3719,6 +3719,7 @@
       for (let i = 0; i < t.lat.length; i += step) add(t.lat[i], t.lon[i]);
       add(t.lat[t.lat.length - 1], t.lon[t.lon.length - 1]);
       if (vehicle) add(vehicle.lat, vehicle.lon);
+      for (const g of calloutTags(t)) add(g.lat, g.lon);                 // the other routes' tags in view too, as Apple and Google Maps frame them
       if (!(e >= w && n >= so)) return;
       holdFollow();
       const bottom = routeBottom(aboveCard);
@@ -4795,6 +4796,31 @@
       const o = routeOptions;
       map.getSource('apex-alt-src').setData(optionsOffered(plannedRoute) && track === plannedRoute ? { type: 'FeatureCollection', features: o.list.map((c, i) => ({ type: 'Feature', properties: { i },
         geometry: { type: 'LineString', coordinates: c.route.coords } })).filter(f => f.properties.i !== o.picked) } : emptyFC());
+      paintCallouts();
+    }
+    // Each route's time and corners on the map, where it runs apart from the others (route_callouts.js), as Apple and Google
+    // Maps tag the routes they offer: the picked one's tag filled, a tap on another's takes it.
+    let callouts = [];
+    function calloutTags(t) {
+      const o = routeOptions;
+      if (!window.ApexRouteCallouts || !optionsOffered(t)) return [];
+      return ApexRouteCallouts.tags(o.list.map((c) => ({ route: c.route, timeS: c.timeS, corners: ApexRouteCard.cornersOf(c) })), o.picked);
+    }
+    function paintCallouts() {
+      for (const m of callouts) m.remove();
+      callouts = [];
+      if (!mapReady || !window.ApexRouteCallouts || !(optionsOffered(plannedRoute) && track === plannedRoute)) return;
+      for (const g of calloutTags(plannedRoute)) {
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'route-callout' + (g.on ? ' on' : '');
+        el.dataset.i = String(g.i);
+        if (g.on) el.setAttribute('aria-current', 'true');
+        el.append(Object.assign(document.createElement('b'), { textContent: g.time }), Object.assign(document.createElement('small'), { textContent: g.corners }));
+        el.addEventListener('click', (e) => { e.stopPropagation(); suppressMapClickUntil = Date.now() + 400; if (!g.on) pickOption(g.i); });
+        callouts.push(new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -6] }).setLngLat([g.lon, g.lat]).addTo(map));
+        el.setAttribute('aria-label', g.label);                            // after the Marker, which labels it "Map marker"
+      }
     }
     function setFunLevel(level) {
       if (!FunRoute.LEVELS[level]) return;
@@ -6002,9 +6028,12 @@
     }
     // Siri (ApexIntents.swift DriveToIntent): "Drive somewhere with Vetta", then the place said aloud. Where to? as if it
     // were typed and Go pressed: your own places by that name first, then the map's search. Never over a drive.
-    function goSpoken(words) {
+    // A plan still settling (its first route already up, the rest still ranked) holds the new ask until it is done, never
+    // drops it: routeToQuery ignores a search while the panel is busy (CI 2026-11-14: the second ask said nothing at all).
+    async function goSpoken(words) {
       const q = String(words || '').replace(/\s+/g, ' ').trim().slice(0, 120);
       if (!q) return null;
+      for (const until = Date.now() + 30000; $('planPanel').classList.contains('busy') && Date.now() < until;) await new Promise((r) => setTimeout(r, 150));
       if (driveActive) { toast('End the drive to plan a new route.'); return null; }
       closeSheet(); openPlan(true);
       $('destInput').value = q; $('fromInput').value = ''; paintTask();

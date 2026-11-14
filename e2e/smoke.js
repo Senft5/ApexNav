@@ -2769,6 +2769,9 @@ flow('Siri: "Drive somewhere with Vetta" plans to the place said, your own first
   const toasts = await page.evaluate(async (q) => { const before = window.apexDebug.track;
     const fix = () => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true });
     fix(); window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } };
+    // asked while the last plan is still settling (its route up, the rest still ranked, as on a slow CI runner): the ask
+    // waits for it, never dropped (CI 2026-11-14: nothing said at all)
+    const panel = document.getElementById('planPanel'); panel.classList.add('busy'); setTimeout(() => panel.classList.remove('busy'), 1500);
     window.apex.onNative({ type: 'link', params: { go: 'to', q } });
     // The phone's GPS keeps reporting while it waits (the flow gave one fix at the start: 5 s on, the page rightly said "GPS
     // lost" and went to the replay, and an ask still in flight then was dropped, failing this flow on a slow runner).
@@ -10955,6 +10958,38 @@ flow('taste from picks: Start on another route than Vetta\'s pick teaches the ta
   if (got.pick.lean) {
     await page.waitForFunction(() => /Noted: you picked the more (technical|flowing|smooth) road/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
   }
+}, { ...IPHONE, funLevel: 'fun' });
+
+flow('route callouts: each route found is tagged on the map with its time and corners, the picked one filled; a tap on another tag takes that route (route_callouts.js)', async (page, base) => {
+  const asked = [];
+  await page.clock.setFixedTime(new Date('2026-11-10T17:00:00Z'));
+  await planRouter(page, asked);
+  await funTiles(page, true);
+  const { tap } = await planPage(page, base);
+  await tap('#destInput', 'Where to?');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await planDone(page);
+  await page.waitForFunction(() => window.apexDebug.refineDone === true, null, { timeout: 20000 });
+  const tags = () => page.evaluate(() => [...document.querySelectorAll('.route-callout')].map((b) => ({ i: +b.dataset.i, on: b.classList.contains('on'), cur: b.getAttribute('aria-current'),
+    time: b.querySelector('b').textContent, corners: b.querySelector('small').textContent, label: b.getAttribute('aria-label') })));
+  await page.waitForFunction(() => document.querySelectorAll('.route-callout').length >= 2, null, { timeout: 5000 });
+  const first = await tags();
+  const on = first.filter((g) => g.on);
+  check(on.length === 1 && on[0].cur === 'true' && first.every((g) => /^(\d+ min|\d+:\d\d h)$/.test(g.time) && /^\d+ corners?$/.test(g.corners)),
+    'every route tagged with its time and corners, one filled: ' + JSON.stringify(first));
+  check(on[0].label.startsWith('This route: ') && first.filter((g) => !g.on).every((g) => g.label.startsWith('Take this route: ')), 'the tags say what a tap does: ' + JSON.stringify(first));
+  const pager = () => page.evaluate(() => document.getElementById('routeCardPager').getAttribute('aria-label') || '');
+  check(new RegExp(`^Route ${on[0].i + 1} of `).test(await pager()), 'the filled tag is the card\'s route: ' + await pager());
+  const other = first.find((g) => !g.on);
+  await page.click(`.route-callout[data-i="${other.i}"]`);
+  await page.waitForFunction((i) => new RegExp(`^Route ${i + 1} of `).test(document.getElementById('routeCardPager').getAttribute('aria-label') || '') && !document.getElementById('planPanel').classList.contains('busy'), other.i, { timeout: 15000 });
+  await page.waitForFunction((i) => { const b = document.querySelector(`.route-callout[data-i="${i}"]`); return b && b.classList.contains('on') && document.querySelectorAll('.route-callout.on').length === 1; }, other.i, { timeout: 5000 });
+  await tap('#routeDriveBtn', 'Start');
+  await page.waitForFunction(() => window.apexDebug.driveActive, null, { timeout: 10000 });
+  await page.waitForFunction(() => document.querySelectorAll('.route-callout').length === 0, null, { timeout: 5000 });
 }, { ...IPHONE, funLevel: 'fun' });
 
 flow('there and back: a trip to a place comes home another way in one tap, the destination a stop, the way out kept off the way home (graph_router.js roundTrip; Valhalla where our tiles don\'t reach)', async (page, base) => {
