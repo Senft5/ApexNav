@@ -31,6 +31,7 @@ const items = [
   { kind: 'post_mention', at, handle: 'sam', title: 'Cherohala dawn', post_id: 'p2', yours: false, owner: 'cara', others: 0 },
   { kind: 'book_roads', at, handle: 'cara', book: 'Smokies classics', book_id: 'b', n: 1, road: 'Cherohala Skyway' },
   { kind: 'book_roads', at, handle: 'cara', book: 'Smokies classics', book_id: 'b', n: 3, road: null },
+  { kind: 'book_roads', at, handle: null, book: 'Crew favourites', book_id: 'c', n: 2, road: null },
   { kind: 'something_new', at },
 ];
 const now = Date.parse('2026-11-11T12:00:00Z');
@@ -70,7 +71,8 @@ def test_every_kind_is_a_sentence_with_one_key_at_most():
     assert lines[14] == ["Mention", "@sam mentioned you on @cara’s Cherohala dawn.", "post"]
     assert lines[15] == ["Roadbook", "@cara added Cherohala Skyway to Smokies classics.", "book"]   # a road in a book you follow
     assert lines[16] == ["Roadbook", "@cara added 3 roads to Smokies classics.", "book"]
-    assert lines[17] is None                                                              # an unknown kind says nothing
+    assert lines[17] == ["Roadbook", "2 new roads in Crew favourites.", "book"]           # crew-mates, more than one: nobody named
+    assert lines[18] is None                                                              # an unknown kind says nothing
     for l in lines:
         if l:
             assert l[1].endswith((".", "?")), l                                          # BRAND: every message is a sentence
@@ -82,7 +84,7 @@ def test_ago_in_plain_words():
 
 def test_badge_counts_what_is_new_or_waiting():
     r = _run()
-    assert r["freshAll"] == 17                      # everything but the unknown kind
+    assert r["freshAll"] == 18                      # everything but the unknown kind
     assert r["freshSeen"] == 2                      # the request still waits, and the one newer than seen
     assert r["freshNone"] == [0, 0]
     assert r["carded"] == ["duel_ask", "request"]   # People shows these as cards; the list doesn't repeat them
