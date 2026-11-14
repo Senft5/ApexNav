@@ -36,6 +36,8 @@ def test_saving_an_area_keeps_its_graph_tiles():
     src = open(os.path.join(ROOT, "web", "offline_tiles.js")).read()
     assert "root.ApexGraphTiles.prefetchArea({ s: lat - dLat, w: lon - dLon, n: lat + dLat, e: lon + dLon })" in src
     assert '<script src="graph_tiles.js" defer></script>' in open(os.path.join(ROOT, "web", "index.html")).read()
+    # a saved route keeps the network along it too (graph_tiles.js prefetchAlong), so a reroute with no signal has roads
+    assert "root.ApexGraphTiles.prefetchAlong(along.lat, along.lon)" in src
 
 
 RECENT = r"""
