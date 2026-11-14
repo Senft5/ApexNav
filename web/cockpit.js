@@ -1499,6 +1499,7 @@
     const speech = { busy: false, queue: ApexSpeechQueue.createSpeechQueue(), current: null, talkingUntil: 0, nativeTimer: 0, via: null, chime: null };
     const MEMO_S = 5;   // a remembered coaching tip takes up to this long to say
     let brakeSay = null;  // the brake heat call waiting for a quiet moment (noteBrakes), said before a break cue
+    let limitSay = null;  // "Limit 35 ahead." waiting for a quiet moment (limit_ahead.js, the notes loop), before all the others
     let sunSay = null;    // "Sun in your eyes ahead." waiting for a quiet moment (sun_ahead.js, the notes loop), after brake heat
     let breakSay = null;  // a break suggestion waiting for a quiet moment (noteRest sets it, the notes loop says it)
     let flowSay = null, flowQueue = [];   // flowQueue: the next ones, in order, when two land close together; "Five clean in a row." (noteFlow, flow_live.js), the lowest of the quiet slots, never in Quiet notes
@@ -2038,17 +2039,29 @@
           drive.sunAt = nowS; sunSay = { text: ApexSunAhead.TEXT, until: performance.now() + 15000 };
         }
       }
+      // A posted limit that drops ahead (limit_ahead.js): said once per drop, before the sign, when you're over the new one;
+      // first through the quiet gate (a limit has a place: 8 s, then the sign is close and the line goes stale).
+      if (live && !offRoute && !limitSay && track && track.limitMps && window.ApexLimitAhead && vMps != null) {
+        const drop = ApexLimitAhead.next(track, state.cursorM), said = drive.limitSaid || (drive.limitSaid = new Set());
+        const key = drop && `${track.id}:${Math.round(drop.atM)}`;
+        if (drop && !said.has(key) && ApexLimitAhead.due(drop, state.cursorM, vMps)) {
+          said.add(key);
+          const text = ApexLimitAhead.text(drop.limitMps, ApexUnits.speed);
+          if (text) limitSay = { text, until: performance.now() + 8000 };
+        }
+      }
+      if (limitSay && performance.now() > limitSay.until) limitSay = null;
       if (sunSay && performance.now() > sunSay.until) sunSay = null;
       if (brakeSay && performance.now() > brakeSay.until) brakeSay = null;
       if (breakSay && performance.now() > breakSay.until) breakSay = null;
       if (flowSay && (performance.now() > flowSay.until || state.notesMode === 'quiet')) { flowSay = null; flowQueue = []; }
-      const quiet = brakeSay || sunSay || breakSay || flowSay;
+      const quiet = limitSay || brakeSay || sunSay || breakSay || flowSay;
       if (quiet && live && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size && performance.now() > speech.talkingUntil) {
         const quietReach = lead + vMps * (0.6 + 0.07 * quiet.text.length + 2);
         const callDue = ev.some(e => noteM(e) - state.cursorM < quietReach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`)
           && (e.type === 'corner' ? spirited : (spirited || noteworthyInCruise(e))));
         const bumpDue = ApexRoadMemory.upcoming(hazardMemory, state.live, 0, quietReach, { has: () => false });
-        if (!callDue && !bumpDue) { say(quiet.text); if (quiet === brakeSay) brakeSay = null; else if (quiet === sunSay) sunSay = null; else if (quiet === breakSay) breakSay = null; else { flowSay = flowQueue.shift() || null; if (flowSay) flowSay.until = performance.now() + 20000; } }
+        if (!callDue && !bumpDue) { say(quiet.text); if (quiet === limitSay) limitSay = null; else if (quiet === brakeSay) brakeSay = null; else if (quiet === sunSay) sunSay = null; else if (quiet === breakSay) breakSay = null; else { flowSay = flowQueue.shift() || null; if (flowSay) flowSay.until = performance.now() + 20000; } }
       }
     }
 
@@ -5398,6 +5411,9 @@
       // frame loaded 1.5 s into a plan): again once the plan is over
       const planAt = window.apexDebug && window.apexDebug.planStartAt, busy = $('planPanel').classList.contains('busy');
       if (busy || (planAt != null && performance.now() - planAt < 4000)) { setTimeout(() => idle(prewarmLog), 3000); return; }
+      // the website with no signal: its scripts can't be fetched, and a Log loaded half (no ApexCore) would be the one kept;
+      // again once back online (the app's own files are on the phone: it warms either way)
+      if (/^https?:$/.test(location.protocol) && navigator.onLine === false) { window.addEventListener('online', () => idle(prewarmLog), { once: true }); return; }
       logFrameEl('analysis.html?tab=log');
     }
     window.addEventListener('resize', () => { if (logFrame.el && !logFrame.el.hidden) logInsets(); });
@@ -5649,13 +5665,24 @@
     // search's top row when it lands (placesFor), before a full geocode (routeToQuery). A start typed too: routeToQuery.
     function goTyped() {
       const q = $('destInput').value.trim(), top = shownRows.q === q && shownRows.rows[0];
-      const take = (p) => { if (p.saved) openSaved(p.saved); else routeToPlace(p); };
-      if (top) { take(top); return; }
-      if ($('fromInput').value.trim() || $('planPanel').classList.contains('busy')) { routeToQuery(); return; }
+      const take = (p) => (p.saved ? openSaved(p.saved) : routeToPlace(p));
+      if (top) return take(top);
+      if ($('fromInput').value.trim() || $('planPanel').classList.contains('busy')) return routeToQuery();
       clearTimeout(suggestTimer);
       if (placesAsk.q === q) toast('Searching…');
       const near = window.ApexNearby && ApexNearby.categoryOf(q, isElectric());   // "gas" with none found: the list says so
-      placesFor(q).then((p) => { if ($('destInput').value.trim() !== q) return; if (p) take(p); else if (!near) routeToQuery(); }).catch(() => { if (!near) routeToQuery(); });
+      return placesFor(q).then((p) => { if ($('destInput').value.trim() !== q) return null; if (p) return take(p); return near ? null : routeToQuery(); }).catch(() => (near ? null : routeToQuery()));
+    }
+    // Siri (ApexIntents.swift DriveToIntent): "Drive somewhere with Vetta", then the place said aloud. Where to? as if it
+    // were typed and Go pressed: your own places by that name first, then the map's search. Never over a drive.
+    function goSpoken(words) {
+      const q = String(words || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+      if (!q) return null;
+      if (driveActive) { toast('End the drive to plan a new route.'); return null; }
+      closeSheet(); openPlan(true);
+      $('destInput').value = q; $('fromInput').value = ''; paintTask();
+      clearTimeout(suggestTimer); renderPlaces();                       // the search for these words starts now (placesAsk)
+      return goTyped();
     }
     // Your places by name while typing (pinned first, then recent; tests/test_place_search.py): on the phone, so the list's
     // top row, and Enter, need no network for a place you've been (2026-11-08)
@@ -5670,6 +5697,10 @@
     // to?, and "gas", "coffee near me" or "food" typed lists the nearest by name from the map's own tiles (stages.js
     // poisAll, kept on the phone: works with no signal where the map was seen), the same places the car's Places name.
     const isElectric = () => { const c = routingCar(); return !!(c && c.fuel === 'electric'); };
+    // the keys' glyphs (24 px grid, BRAND.md Icons): a pump, a bolt, a cup, a fork and knife
+    const NEARBY_GLYPH = { gas: 'M5 21V5.5A1.5 1.5 0 0 1 6.5 4h6A1.5 1.5 0 0 1 14 5.5V21M3.5 21h12M7.5 9h4M14 10h1.5a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 0 3 0V8.5L17.5 6',
+      charge: 'M13 3 6 13.5h5L10 21l7-10.5h-5z', coffee: 'M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 11h1.5a2.5 2.5 0 0 1 0 5H16M9 3.5v2.5M12.5 3.5v2.5',
+      food: 'M7 3v7M5 3v5a2 2 0 0 0 4 0V3M7 10v11M17 21V3c-2 1.5-3 4.5-3 9h3' };
     function paintNearbyKeys() {
       const box = $('nearbyKeys');
       if (!window.ApexNearby) { box.hidden = true; return; }
@@ -5678,7 +5709,9 @@
         box.dataset.keys = want;
         box.replaceChildren(...ApexNearby.keys(isElectric()).map((k) => {
           const b = document.createElement('button'), c = ApexNearby.CATS[k];
-          b.className = 'chip'; b.textContent = c.label; b.setAttribute('aria-label', `${c.label} nearby`);
+          b.className = 'chip rkey'; b.setAttribute('aria-label', `${c.label} nearby`);
+          const i = document.createElement('i'); i.setAttribute('aria-hidden', 'true'); i.innerHTML = `<svg viewBox="0 0 24 24"><path d="${NEARBY_GLYPH[k]}"/></svg>`;
+          b.append(i, c.label);
           b.addEventListener('click', () => { $('destInput').value = c.label; clearTimeout(suggestTimer); renderPlaces(); paintTask(); });
           return b;
         }));
@@ -6017,10 +6050,14 @@
       $('loopDialMark').style.transform = `rotate(${-120 + 240 * i / Math.max(1, all.length - 1)}deg)`;
       document.querySelectorAll('#loopTicks line').forEach((l, k) => l.classList.toggle('on', k === i));
       try { localStorage.setItem(LOOP_PICK, String(i)); } catch (_) {}
+      $('loopRowLen').textContent = b.textContent.trim();
       // the idle map's "Loop from here · 45 mi" is this dial's loop: it says the length now picked, not the one at launch
       try { paintLoopSuggest(); } catch (_) { /* at launch the deck isn't set up yet; it paints itself */ }
     }
     document.querySelectorAll('#loopDetents button').forEach(b => b.addEventListener('click', () => pickLoop(b)));
+    // the folded dial (2026-11-13 IA pass): one row with the length; a tap opens the dial under it
+    function openLoopDial(open) { $('loopBody').hidden = !open; $('loopRow').setAttribute('aria-expanded', String(open)); }
+    $('loopRow').addEventListener('click', () => openLoopDial($('loopBody').hidden));
     // the ticks on the dial's rim, and turning it: drag round the dial and it clicks to the nearest length
     $('loopTicks').innerHTML = [-120, -60, 0, 60, 120].map((a) => { const r = (a * Math.PI) / 180, s = Math.sin(r), c = Math.cos(r);
       return `<line x1="${(60 + 50 * s).toFixed(1)}" y1="${(60 - 50 * c).toFixed(1)}" x2="${(60 + 58 * s).toFixed(1)}" y2="${(60 - 58 * c).toFixed(1)}"/>`; }).join('');
@@ -7628,7 +7665,10 @@
       if (areaBusy || !window.ApexOfflineTiles) return;
       areaBusy = true; btn.disabled = true;
       try {
-        const a = await ApexOfflineTiles.download({ lat, lon, radiusKm, styleUrl: MAP_STYLE, id, name: name || `Around ${lat.toFixed(2)}, ${lon.toFixed(2)}`,
+        // a new area is named for its town (the map's reverse geocode, as the place plate asks it: to 0.01°), else its place
+        let town = null;
+        if (!name) { try { town = ApexPlacePlate.town(await RouteLoading.json(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat.toFixed(2)}&lon=${lon.toFixed(2)}&zoom=12&addressdetails=1`, {}, 6000)); } catch (_) {} }
+        const a = await ApexOfflineTiles.download({ lat, lon, radiusKm, styleUrl: MAP_STYLE, id, name: name || (town ? `Around ${town}` : `Around ${lat.toFixed(2)}, ${lon.toFixed(2)}`),
           onProgress: (d, n) => { if (d % 25 === 0 || d === n) btn.textContent = `Saving the map… ${Math.round(100 * d / n)}%`; } });
         // members' road feel for the area too (signed in as a member): measured roads plan the same with no signal
         let roads = null;
@@ -9982,7 +10022,7 @@
       startStageWatch(); startCoach();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
@@ -10719,12 +10759,27 @@
         else if (p.go === 'nextstage') nextStageAnswer();
         else if (p.go === 'skipstage') skipStage();
         else if (p.go === 'nextfuel' || p.go === 'nextcafe') nextPlaceAnswer(p.go === 'nextfuel' ? 'fuel' : 'cafe');
+        else spokenLink(p.go, p.q);
         return;
       }
       // a push's tap (backend/src/push.ts): the post it is about, or the friend, or People's side
       showView(ok(p.crew) || ok(p.convoy) || p.view === 'crews' ? 'crews' : 'friends');
       if (ok(p.post)) needSocial().then(() => { if (drivePosts) drivePosts.open(p.post); });
       if (ok(p.friend) && /^[A-Za-z0-9_]{3,20}$/.test(p.friend)) window.apexOpenFriend(p.friend.toLowerCase()); else renderAccount();
+    }
+    // Siri: go=to with the place said (q, base64url UTF-8: ApexIntents.swift linkWords), go=loop60 for "Find a 1 hour loop".
+    // Through carAsked, so a place that can't be found or planned says why on the car's screen too.
+    function linkWords(b) {
+      if (typeof b !== 'string' || !/^[A-Za-z0-9_-]{1,200}$/.test(b)) return '';
+      try { const bin = atob(b.replace(/-/g, '+').replace(/_/g, '/')); return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))); } catch (_) { return ''; }
+    }
+    function spokenLink(go, q) {
+      const loopMin = /^loop(\d{2,3})$/.exec(go || '');
+      if (go === 'to') carAsked(() => goSpoken(linkWords(q)));
+      else if (loopMin && LOOP_MINUTES.includes(+loopMin[1])) {
+        if (driveActive) toast('End the drive to find a loop.');
+        else { closeSheet(); carAsked(() => loop({ minutes: +loopMin[1] })); }
+      }
     }
     // Siri (IDEAS V-07): "how far to the next stage" says it aloud; "skip this stage" drops the stage you're on or the next
     // one and reroutes to your next stop or the destination (only on a fun route with stages, during a drive).
@@ -11003,6 +11058,7 @@
       if (params.get('book') === '1' || params.get('view') === 'route' || params.get('view') === 'drives') openPlan(true);
       if (VIEW_TITLES[params.get('view')] || PEOPLE_SIDES[params.get('view')] || params.get('view') === 'setup') openSheet(params.get('view'));
       if (params.get('go') === 'drive') driveFromLink();
+      else if (params.get('go')) spokenLink(params.get('go'), params.get('q'));   // Siri from a cold start: a place, a loop
       if (/^[A-Za-z0-9_-]{16}$/.test(params.get('roadbook') || '')) openRoadbookLink(params.get('roadbook'));   // ?roadbook=: a roadbook's link
       roadFromLocation(location.search);                               // DA-4: ?road= (the app), #road= (the website)
       if (params.get('again')) driveAgain(params.get('again'));      // panel D-1: Drive it again from a Log page opened on its own   // the app opened from apexnav://open?go=drive (IDEAS C-05)
