@@ -20,6 +20,7 @@ export const AASA = {
         { "/": "/api/*", exclude: true },
         ...["invite", "crew", "add", "convoy", "road", "roadbook", "friend", "post"].map((k) => ({ "/": "/", "?": { [k]: "?*" } })),
         { "/": "/", "#": "road=*" },
+        { "/": "/", "#": "place=*" },                                       // a place someone sent (web/place_link.js)
       ],
     }],
   },

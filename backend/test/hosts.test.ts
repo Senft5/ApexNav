@@ -34,5 +34,6 @@ describe("hosts", () => {
     expect(d.components[0]).toEqual({ "/": "/api/*", exclude: true });
     expect(d.components).toContainEqual({ "/": "/", "?": { road: "?*" } });
     expect(d.components).toContainEqual({ "/": "/", "#": "road=*" });
+    expect(d.components).toContainEqual({ "/": "/", "#": "place=*" });
   });
 });
