@@ -30,7 +30,8 @@ const T = Core.elapsedS(a.speed_mps);
 let s = Infinity, n = -Infinity, w = Infinity, e = -Infinity;
 for (let i = 0; i < a.lat.length; i++) { s = Math.min(s, a.lat[i]); n = Math.max(n, a.lat[i]); w = Math.min(w, a.lon[i]); e = Math.max(e, a.lon[i]); }
 console.log(JSON.stringify({ sa, sf, scoreOf: Rec.scoreOf(Core, a).ds, corners: Rec.scoreOf(Core, a).corners.map((c) => [c.start, c.end, c.apex]), secs: T[T.length - 1], bbox: [s, n, w, e],
-  bytes: JSON.stringify(sa).length, rowBytes: JSON.stringify(a).length, noCore: Rec.summarize(null, a) }));
+  bytes: JSON.stringify(sa).length, rowBytes: JSON.stringify(a).length, noCore: Rec.summarize(null, a),
+  ends: [[a.lat[0], a.lon[0]], [a.lat[1199], a.lon[1199]]], gaps: Rec.shapeOf({ lat: [1, null, 2], lon: [3, 4, null] }), few: Rec.shapeOf({ lat: [35, 35.001, 35.002], lon: [-84, -84, -84] }) }));
 """
 
 
@@ -58,3 +59,11 @@ def test_what_the_list_needs_and_no_rows(out):
     for k in ("lat", "lon", "speed_mps", "lat_g", "lon_g", "dist", "events", "kappa"):
         assert k not in s, k
     assert out["bytes"] * 50 < out["rowBytes"], (out["bytes"], out["rowBytes"])
+
+
+def test_the_shape_for_the_logs_row(out):
+    sh = out["sa"]["shape"]
+    assert len(sh) == 32, "32 points of the road, evenly spaced, for the row's thumbnail"
+    assert sh[0] == [round(v, 5) for v in out["ends"][0]] and sh[-1] == [round(v, 5) for v in out["ends"][1]], "from its start to its finish"
+    assert out["gaps"] is None, "under two known points: no shape, nothing drawn"
+    assert out["few"] == [[35, -84], [35.001, -84], [35.002, -84]], "a short drive keeps the points it has"

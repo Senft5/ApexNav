@@ -167,8 +167,8 @@ def test_summary_hierarchy_and_scrub_readout(r):
     for removed in ("Top speed", "Peak lateral", "Peak braking", "Climb"):
         assert removed not in h
     u = r["unscoredHeadHtml"]
-    assert "><b class=\"score big\"><i class=\"unk\">--</i></b> <small>/1000</small>" in u   # unknown stays "--", in pencil (REVIEW2.md U-34)
-    assert "Pace --" in u and "Smooth --" in u and "Brakes --" in u and "Rhythm --" in u
+    # no Score: the reason in the score's place, as on the end card (D-6 / R-5); no number invented, no empty bars
+    assert "corners to score</b>" in u and "/1000" not in u and "Pace" not in u and "Rhythm" not in u
     assert r["hiddenBeforeScrub"] is True and r["hiddenAfterKeyScrub"] is False
     assert r["hiddenBeforeZoom"] is True and r["hiddenAfterZoom"] is False
 

@@ -1,0 +1,125 @@
+{
+"results": [
+{
+"links": [
+{
+"href": "https://publicapi.ohgo.com/api/v1/incidents/00001113002330",
+"rel": "self"
+}
+],
+"id": "00001113002330",
+"latitude": 40.080546,
+"longitude": -82.886855,
+"location": "Ramp SR-161 Westbound to I-270.",
+"description": "Ramp SR-161 West to I-270 CLOSED because of a crash.",
+"category": "Crash",
+"direction": "W",
+"routeName": "Ramp SR-161 West to I-270",
+"roadStatus": "Closed",
+"roadClosureDetails": null
+},
+{
+"links": [
+{
+"href": "https://publicapi.ohgo.com/api/v1/incidents/00001113002210",
+"rel": "self"
+}
+],
+"id": "00001113002210",
+"latitude": 41.419711,
+"longitude": -81.816262,
+"location": "Ramp I-71 Northbound to I-480 Westbound.",
+"description": "Ramp I-71 North to I-480 West CLOSED because of repairs/maintenance.",
+"category": "Repairs/Maintenance",
+"direction": "W",
+"routeName": "Ramp I-71 North to I-480 West",
+"roadStatus": "Closed",
+"roadClosureDetails": null
+},
+{
+"links": [
+{
+"href": "https://publicapi.ohgo.com/api/v1/incidents/00001113002260",
+"rel": "self"
+}
+],
+"id": "00001113002260",
+"latitude": 41.497388,
+"longitude": -81.675267,
+"location": "I-90 Eastbound.",
+"description": "All lanes are closed on I-90 East at Carnegie Ave, due to repairs/maintenance.",
+"category": "Repairs/Maintenance",
+"direction": "E",
+"routeName": "I-90 East",
+"roadStatus": "Closed",
+"roadClosureDetails": {
+"closureStartLocation": [
+-81.675267,
+41.497388
+],
+"closureEndLocation": [
+-81.670613,
+41.500245
+],
+"polyline": [
+[
+-81.67527,
+41.49739
+],
+[
+-81.67522,
+41.49741
+],
+[
+-81.67472,
+41.49765
+],
+[
+-81.67304,
+41.49851
+],
+[
+-81.67229,
+41.4989
+],
+[
+-81.67204,
+41.49904
+],
+[
+-81.67181,
+41.49918
+],
+[
+-81.6716,
+41.49933
+],
+[
+-81.67139,
+41.49949
+],
+[
+-81.67119,
+41.49966
+],
+[
+-81.671,
+41.49982
+],
+[
+-81.67082,
+41.50002
+],
+[
+-81.67067,
+41.50019
+],
+[
+-81.67062,
+41.50025
+]
+]
+}
+}
+]
+}

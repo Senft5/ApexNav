@@ -114,6 +114,20 @@
     cache.full.set(id, { d, sum: stamp(sum) });
     return d;
   }
+  /** The saved stages (apex.segments) a stored drive went over, in the order driven, at most three: [{ name, score }] (score
+   *  rounded, null when the pass had too few clean corners). For the drive's post (drive_posts.js), never its times. */
+  async function stagesOn(Core, id, segs) {
+    if (!Array.isArray(segs) || !segs.length) return [];
+    const d = await full(id);
+    if (!d) return [];
+    const out = [];
+    for (const seg of segs) {
+      if (!seg || !seg.name || ![seg.lat0, seg.lon0, seg.lat1, seg.lon1].every(Number.isFinite)) continue;
+      const p = Core.segmentPass(seg, d);
+      if (p) out.push({ lo: p.lo, name: String(seg.name).slice(0, 60), score: Number.isFinite(p.score) ? Math.max(0, Math.min(1000, Math.round(p.score))) : null });
+    }
+    return out.sort((a, b) => a.lo - b.lo).slice(0, 3).map(({ name, score }) => ({ name, score }));
+  }
   const memo = { key: null, out: null };                         // the cockpit's road memory, until the library changes
   const fullAll = async (sums) => (await Promise.all(sums.map((s) => full(s.id, s)))).filter(Boolean);
 
@@ -232,7 +246,7 @@
      * End (F-04): the recording as the recorder holds it, parsed, scored and stored here, with its summary; and your
      * earlier drives with the same name, by their summaries, for "your best on this road".
      */
-    async save({ state, rows, fileName, meta, extra, plan }) {
+    async save({ state, rows, fileName, meta, extra, plan, segs }) {
       const Core = CoreOf(), rec = root.ApexSensors.Recorder.restore(state, rows);
       const d = Object.assign(Rec().parse(Core, rec.toCsv(), fileName, meta), extra || {});
       const summary = (await Rec().store(d)) || Rec().summarize(Core, d);
@@ -246,8 +260,10 @@
       let coach = null;                                                // U-111: the Log's sentence, written once, here
       // the road's line leaves out "Lost most: <skill>" when the practice line above it already names that skill
       try { coach = await coachLineOf(Core, d.id, sums, practice && plan ? plan.skill : null); } catch (_) { coach = null; }
+      let stages = [];                                                 // your saved stages this drive went over, for its post
+      try { stages = await stagesOn(Core, d.id, segs); } catch (_) { stages = []; }
       release();
-      return { driveId: d.id, summary, others, card, coach, practice };   // (never `id`: the message's own)
+      return { driveId: d.id, summary, others, card, coach, practice, stages };   // (never `id`: the message's own)
     },
 
     /** U-111: a stored drive's coaching sentence, the Log's (coachLineOf); { coach: null } when there is none. */
@@ -266,6 +282,14 @@
       try { practice = raw ? practiceOf(Core, raw, plan) : null; } catch (_) { practice = null; }
       release();
       return { practice };
+    },
+
+    /** Your saved stages a stored drive went over (stagesOn), for its post; { stages: [] } with none. */
+    async stagesOf({ id, segs }) {
+      let stages = [];
+      try { stages = await stagesOn(CoreOf(), id, segs); } catch (_) { stages = []; }
+      release();
+      return { stages };
     },
 
     /** A few fields of a stored drive (tags, a note, shared), its summary kept in step. */
