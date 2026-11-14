@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { api } from "./helpers";
-import { IN_EVENTS, KY_WZDX, OHGO, KY_CAMS, camerasResponse, parseKyCams, parseOhgoCams, parseIndiana, parseOhgo, parseOhgoSigns, parseOhgoSlow, parseOhgoWeather, parseWzdx, trafficEvents } from "../src/traffic";
+import { IN_EVENTS, KY_WZDX, OHGO, KY_CAMS, camerasResponse, ohgoKey, parseKyCams, parseOhgoCams, parseIndiana, parseOhgo, parseOhgoSigns, parseOhgoSlow, parseOhgoWeather, parseWzdx, trafficEvents, trafficResponse } from "../src/traffic";
 import inFeed from "./fixtures/traffic_in.json";
 import kyFeed from "./fixtures/traffic_ky.json";
 import ohInc from "./fixtures/traffic_oh_incidents.json";
@@ -146,7 +146,8 @@ describe("GET /api/traffic/v1/events.json", () => {
 
 describe("GET /api/traffic/v1/cameras.json (Ohio's and Kentucky's traffic cameras)", () => {
   const c = () => (caches as unknown as { default: Cache }).default;
-  const CK = "https://apexnav.cache/traffic/v1/cameras.json?v=3";
+  const CKS = ["https://apexnav.cache/traffic/v1/cameras.json?v=4&oh=0", "https://apexnav.cache/traffic/v1/cameras.json?v=4&oh=1"];
+  const clear = async () => { for (const k of CKS) await c().delete(new Request(k)); };
   const stub = (seen: string[], kyOk = true) => (async (input: RequestInfo | URL) => {
     const u = String(input); seen.push(u);
     if (u === KY_CAMS) return kyOk ? new Response(JSON.stringify(kyCams)) : new Response("down", { status: 500 });
@@ -154,7 +155,7 @@ describe("GET /api/traffic/v1/cameras.json (Ohio's and Kentucky's traffic camera
   }) as typeof fetch;
 
   it("Kentucky's need no key; without the owner's key Ohio's are not asked for", async () => {
-    await c().delete(new Request(CK));
+    await clear();
     const seen: string[] = [];
     const r = await camerasResponse({} as never, stub(seen));
     expect(r.status).toBe(200);
@@ -165,7 +166,7 @@ describe("GET /api/traffic/v1/cameras.json (Ohio's and Kentucky's traffic camera
     expect(j.cams.every((x) => x.src === "KYTC" && x.id.startsWith("ky-") && x.views[0].url.startsWith("https://www.trimarc.org/"))).toBe(true);
   });
   it("reads every OHGO page, keeps pictures on ODOT's own image host only, without the :443", async () => {
-    await c().delete(new Request(CK));
+    await clear();
     const seen: string[] = [];
     const r = await camerasResponse({ OHGO_API_KEY: "k3" } as never, stub(seen));
     expect(r.status).toBe(200);
@@ -179,20 +180,35 @@ describe("GET /api/traffic/v1/cameras.json (Ohio's and Kentucky's traffic camera
     expect(parseOhgoCams({ results: [{ id: "z", latitude: 40, longitude: -83, cameraViews: [{ largeUrl: "http://itscameras.dot.state.oh.us/a.jpg" }] }] })).toEqual([]);
   });
   it("one state down: the other's cameras, kept 10 minutes; both down: 502", async () => {
-    await c().delete(new Request(CK));
+    await clear();
     const r = await camerasResponse({ OHGO_API_KEY: "k3" } as never, stub([], false));
     expect(r.status).toBe(200);
     expect(r.headers.get("cache-control")).toBe("public, max-age=600");
     expect(await r.json()).toMatchObject({ sources: ["ODOT"], failed: ["KYTC"] });
-    await c().delete(new Request(CK));
+    await clear();
     expect((await camerasResponse({} as never, stub([], false))).status).toBe(502);
     expect(parseKyCams({ features: [{ attributes: { snapshot: "https://evil.example/a.jpg", latitude: 38, longitude: -85 } }] })).toEqual([]);
     expect(parseKyCams(null)).toEqual([]);
     // OHGO answering 200 with no cameras (an error as JSON) is a failure: kept 10 minutes, never a day without Ohio
-    await c().delete(new Request(CK));
+    await clear();
     const empty = (async (input: RequestInfo | URL) => new Response(String(input) === KY_CAMS ? JSON.stringify(kyCams) : JSON.stringify({ results: [] }))) as typeof fetch;
     const e = await camerasResponse({ OHGO_API_KEY: "k3" } as never, empty);
     expect(e.headers.get("cache-control")).toBe("public, max-age=600");
     expect(await e.json()).toMatchObject({ sources: ["KYTC"], failed: ["ODOT"] });
+  });
+  it("a keyless answer (a preview's: no secrets) is never served where the key is set", async () => {
+    await clear();
+    const seen: string[] = [];
+    expect(((await (await camerasResponse({} as never, stub(seen))).json()) as { sources: string[] }).sources).toEqual(["KYTC"]);
+    const keyedAnswer = (await (await camerasResponse({ OHGO_API_KEY: "k3" } as never, stub(seen))).json()) as { sources: string[] };
+    expect(keyedAnswer.sources).toEqual(["ODOT", "KYTC"]);   // asked afresh, not the keyless one from the cache
+    expect(seen.filter((u) => u.includes("api-key=k3")).length).toBeGreaterThan(0);
+    await c().delete(new Request("https://apexnav.cache/traffic/v1/events.json?oh=0"));
+    await c().delete(new Request("https://apexnav.cache/traffic/v1/events.json?oh=1"));
+    const ev = (async (input: RequestInfo | URL) => new Response(String(input).includes("ohgo") ? JSON.stringify({ results: [] }) : "{}")) as typeof fetch;
+    await trafficResponse({} as never, ev);
+    expect(await c().match(new Request("https://apexnav.cache/traffic/v1/events.json?oh=1"))).toBeUndefined();
+    expect(ohgoKey({ CTX_KEYS: '{"ohgoApiKey":"a"}', OHGO_API_KEY: "b" } as never)).toBe("a");
+    expect(ohgoKey({ CTX_KEYS: "bad" } as never)).toBeNull();
   });
 });
