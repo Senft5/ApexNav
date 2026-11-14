@@ -23,7 +23,7 @@ export const DEFAULT_FLAGS: Record<string, Rule> = {
   // no hour and the server stores and shows none (contribute.ts, roads.ts check serverFlag too). Turn on: FLAGS {"quiet_hours":{"on":true}}
   quiet_hours: { on: false },
   // The phone asking our Worker's OSM relay (osm_relay.ts) for map features: ON since 2026-11-14. The relay answers from the
-  // tiles built weekly from the Geofabrik extracts (tools/osm_ctx/build.py, .github/workflows/osm-ctx.yml, R2 osm/v1/) and
+  // tiles built weekly from the Geofabrik extracts (tools/osm_ctx/build.py, .github/workflows/osm-ctx.yml, R2 osm/v2/) and
   // asks Overpass only for a border tile; a tile it can't answer is a 504 at once and the phone asks Overpass itself, off the
   // plan's clock, as before. Turn off: FLAGS {"osm_relay":{"on":false}}
   osm_relay: { on: true },

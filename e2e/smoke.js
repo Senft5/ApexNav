@@ -5451,6 +5451,16 @@ flow('roadbooks: Drive them all routes from where you are through the book\'s ro
   const after = await page.evaluate(() => ({ note: document.getElementById('routeProgress').textContent, req: apexDebug.track.request, name: apexDebug.track.name }));
   check(after.name === 'Smokies day out' && /^3 roads of its 4 from Smokies day out, nearest first: [\d.]+ (mi|km)$/.test(after.note), 'the card says how many of its roads, nearest first: ' + JSON.stringify({ note: after.note, name: after.name }));
   check(after.req && after.req.from === null && after.req.via.length >= 5 && after.req.via.every((v) => v.shaping), 'a reroute keeps to the roads: ' + JSON.stringify(after.req && after.req.via.length));
+  // (2026-11-14) Drive it on one road leads from where you are to its start, then the road as drawn
+  asked.length = 0;
+  await page.goto(base + '/index.html?roadbook=BBBBBBBBBBBBBBBB');
+  await page.waitForSelector('.rb-pop.open .rb-road:has-text("Road B") button:has-text("Drive it")', { timeout: 15000 });
+  await page.click('.rb-pop.open .rb-road:has-text("Road B") button:has-text("Drive it")');
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.id === 'roadbook_b' && /to the start/.test(document.getElementById('toast').textContent), null, { timeout: 20000 });
+  const lead = asked.find((l) => Array.isArray(l) && l.length === 2) || [];
+  const one = await page.evaluate(() => ({ toast: document.getElementById('toast').textContent, lat: [apexDebug.track.lat[0], apexDebug.track.lat[apexDebug.track.lat.length - 1]] }));
+  check(lead.length === 2 && near(lead[0], [-83.8, 35.6]) && near(lead[1], B[0]) && Math.abs(one.lat[0] - 35.6) < 1e-3 && Math.abs(one.lat[1] - B[B.length - 1][1]) < 1e-4
+    && /^Road B, from Smokies day out: [\d.]+ (mi|km) to the start, then [\d.]+ (mi|km) of it\.$/.test(one.toast), 'one road: from you to its start, then all of it: ' + JSON.stringify({ lead, one }));
 }, { geolocation: { latitude: 35.6, longitude: -83.8 }, permissions: ['geolocation'] });
 
 flow('crash check: a hard impact then a stop asks "Are you OK?"; no answer offers a call and a text to the contact (IDEAS D-17)', async (page, base) => {
@@ -11017,6 +11027,20 @@ flow('taste from picks: Start on another route than Vetta\'s pick teaches the ta
     await page.waitForFunction(() => /Noted: you picked the more (technical|flowing|smooth) road/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
   }
 }, { ...IPHONE, funLevel: 'fun' });
+
+flow('GPS accuracy: a faint disc round the idle arrow as wide as the fix is unsure, gone when the fix is sharp (gps_halo.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.context().grantPermissions(['geolocation']);
+  await page.context().setGeolocation({ latitude: 39.1035, longitude: -84.512, accuracy: 120 });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => { const h = document.querySelector('.gps-halo'); return h && !h.hidden && h.offsetWidth > 0; }, null, { timeout: 20000 });
+  const got = await page.evaluate(() => { const h = document.querySelector('.gps-halo'), m = window.apexDebug.map, c = m.getCenter();
+    return { w: h.offsetWidth, want: 2 * ApexGpsHalo.radiusPx(120, c.lat, m.getZoom()), hit: getComputedStyle(h).pointerEvents, aria: h.getAttribute('aria-hidden'), label: h.getAttribute('aria-label') }; });
+  check(Math.abs(got.w - got.want) <= 4 && got.w > 40, 'the disc is as wide as the fix\'s 120 m: ' + JSON.stringify(got));
+  check(got.hit === 'none' && got.aria === 'true' && !got.label, 'the disc is never a tap or a spoken thing: ' + JSON.stringify(got));
+  await page.context().setGeolocation({ latitude: 39.1036, longitude: -84.512, accuracy: 4 });
+  await page.waitForFunction(() => document.querySelector('.gps-halo').hidden, null, { timeout: 15000 });
+}, IPHONE);
 
 flow('route callouts: each route found is tagged on the map with its time and corners, the picked one filled; a tap on another tag takes that route (route_callouts.js)', async (page, base) => {
   const asked = [];

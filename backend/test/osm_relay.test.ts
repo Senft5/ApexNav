@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { api } from "./helpers";
 import { env } from "cloudflare:workers";
-import { builtTile, bundleKey, compact, KEEP, MIRRORS, osmTile, query, resetBuiltForTest, tileOf } from "../src/osm_relay";
+import { builtTile, bundleKey, compact, HEAD, KEEP, MIRRORS, osmTile, query, resetBuiltForTest, tileOf } from "../src/osm_relay";
 import fx from "./fixtures/overpass_tile.json";
 
 // A real Overpass answer's elements (Dry Ridge Road, Colerain Township; OSM ODbL) with two tags the phone never reads.
@@ -81,13 +81,22 @@ describe("OSM relay (/api/ctx/osm)", () => {
     expect(c).toEqual({ elements: [{ type: "node", id: 1, lat: 39.123457, lon: -84.1, tags: { highway: "stop" } }] });
   });
 
-  describe("built tiles (tools/osm_ctx/build.py, R2 osm/v1)", () => {
+  describe("built tiles (tools/osm_ctx/build.py, R2 osm/v2)", () => {
     const DATA = (env as unknown as { DATA: R2Bucket }).DATA;
-    const gz = async (text: string) => new Response(new Blob([text]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
+    const gz = async (text: string) => new Uint8Array(await new Response(new Blob([text]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+    // as tools/osm_ctx/build.py pack(): a HEAD-byte header {"t": {tile: [offset, length]}}, then a gzip member per tile
+    const pack = async (tiles: [string, unknown[]][]) => {
+      const t: Record<string, [number, number]> = {}, parts: Uint8Array[] = [];
+      let off = HEAD;
+      for (const [name, els] of tiles) { const m = await gz(JSON.stringify({ elements: els })); t[name] = [off, m.length]; parts.push(m); off += m.length; }
+      const out = new Uint8Array(off);
+      out.set(new TextEncoder().encode(JSON.stringify({ t }).padEnd(HEAD, " ")));
+      let at = HEAD; for (const m of parts) { out.set(m, at); at += m.length; }
+      return out;
+    };
     // tiles 700_-1600 .. 704_-1596 are one bundle (140_-320); 700_-1600 and 700_-1599 are in it, 701_-1600 isn't (a border)
-    const line = (t: string, els: unknown[]) => `${t}\t${JSON.stringify({ elements: els })}\n`;
     const way = { type: "way", id: 7, tags: { highway: "secondary", name: "Built Road" }, geometry: [{ lat: 35, lon: -80 }, { lat: 35.01, lon: -80 }], nodes: [1, 2] };
-    const put = async () => { resetBuiltForTest(); await DATA.put("osm/v1/140_-320.txt.gz", await gz(line("700_-1600", [way]) + line("700_-1599", []))); };
+    const put = async () => { resetBuiltForTest(); await DATA.put("osm/v2/140_-320.bin", await pack([["700_-1600", [way]], ["700_-1599", []]])); };
 
     it("answers a built tile from R2 without asking Overpass, and keeps it in the cache", async () => {
       await put();
@@ -100,8 +109,28 @@ describe("OSM relay (/api/ctx/osm)", () => {
       expect(empty.status).toBe(200);
       expect(await empty.json()).toEqual({ elements: [] });                 // built and empty: no roads there, not unknown
       expect(seen).toEqual([]);
-      await DATA.delete("osm/v1/140_-320.txt.gz"); resetBuiltForTest();
+      await DATA.delete("osm/v2/140_-320.bin"); resetBuiltForTest();
       expect((await api(null, "GET", "/api/ctx/osm?bbox=35,-80,35.05,-79.95")).headers.get("x-cache")).toBe("hit");
+    });
+
+    it("reads a tile with two ranged reads, the header once per isolate", async () => {
+      resetBuiltForTest();
+      const blob = await pack([["700_-1600", [way]], ["700_-1599", []]]);
+      const asked: (string | null)[] = [];
+      const data = {
+        async get(_k: string, o?: { range?: { offset: number; length: number } }) {
+          const r = o?.range;
+          asked.push(r ? `${r.offset}+${r.length}` : null);
+          return { body: new Blob([r ? blob.slice(r.offset, r.offset + r.length) : blob]).stream() };
+        },
+      };
+      expect(JSON.parse((await builtTile(data, "700_-1600"))!)).toEqual({ elements: [way] });
+      expect(JSON.parse((await builtTile(data, "700_-1599"))!)).toEqual({ elements: [] });
+      expect(await builtTile(data, "701_-1600")).toBeNull();
+      expect(asked.length).toBe(3);                       // the header, then each tile's member; never the whole bundle
+      expect(asked[0]).toBe(`0+${HEAD}`);
+      expect(asked.every((a) => a !== null)).toBe(true);
+      resetBuiltForTest();
     });
 
     it("a tile its bundle leaves out (across the border) or with no bundle goes to Overpass", async () => {
@@ -113,14 +142,14 @@ describe("OSM relay (/api/ctx/osm)", () => {
       expect(seen.length).toBeGreaterThan(0);
       expect(await builtTile(DATA, "690_-1600")).toBeNull();
       expect(await builtTile(undefined, "700_-1600")).toBeNull();
-      expect(bundleKey("700_-1600")).toBe("osm/v1/140_-320.txt.gz");
-      expect(bundleKey("-3_-1")).toBe("osm/v1/-1_-1.txt.gz");
-      await DATA.delete("osm/v1/140_-320.txt.gz"); resetBuiltForTest();
+      expect(bundleKey("700_-1600")).toBe("osm/v2/140_-320.bin");
+      expect(bundleKey("-3_-1")).toBe("osm/v2/-1_-1.bin");
+      await DATA.delete("osm/v2/140_-320.bin"); resetBuiltForTest();
     });
 
     it("with a build in R2, a tile it doesn't hold answers 504 at once and Overpass is still asked for the next plan", async () => {
       resetBuiltForTest();
-      await DATA.put("osm/v1/index.json", JSON.stringify({ built: "2026-11-18", bundles: 1 }));
+      await DATA.put("osm/v2/index.json", JSON.stringify({ built: "2026-11-18", bundles: 1 }));
       const box = fresh();
       let release: () => void = () => {};
       const gate = new Promise<void>((r) => { release = r; });
@@ -132,7 +161,7 @@ describe("OSM relay (/api/ctx/osm)", () => {
       expect(Date.now() - t0).toBeLessThan(1000);
       release(); await Promise.all(later);
       expect((await osmTile(new URL(`https://x/api/ctx/osm?bbox=${box}`), { DATA })).headers.get("x-cache")).toBe("hit");
-      await DATA.delete("osm/v1/index.json"); resetBuiltForTest();
+      await DATA.delete("osm/v2/index.json"); resetBuiltForTest();
     });
   });
 });
