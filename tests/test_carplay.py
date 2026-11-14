@@ -702,3 +702,36 @@ def test_the_cars_search_puts_your_own_places_first():
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
     assert "ApexCar.shared.places.filter { $0.name.localizedCaseInsensitiveContains(q) }" in swift
     assert "done(mine + found)" in swift and "if let ref = item.userInfo as? PlaceRef { open(place: ref.place); return }" in swift
+
+
+ARROW_RUNNER = r"""
+const C = require(process.argv[1] + '/web/carplay.js'), A = require(process.argv[1] + '/web/turn_arrow.js');
+const t = { lat: [], lon: [], dist: [] };
+for (let k = 0; k <= 60; k++) { const n = Math.min(k, 30) * 10, e = Math.max(0, k - 30) * 10;
+  t.lat.push(39.1 + n / 111195); t.lon.push(-84.5 + e / (111195 * Math.cos(39.1 * Math.PI / 180))); t.dist.push(k * 10); }
+console.log(JSON.stringify({
+  one: C.arrowMessage(A.arrow(t, { m: 300, type: 10 }, { before: 70, after: 45, head: 22, halfW: 16 })),
+  none: [C.arrowMessage(null), C.arrowMessage({ features: [] }), C.arrowMessage({ features: [{ properties: { part: 'shaft' }, geometry: { coordinates: [[1, 2]] } }] })],
+}));
+"""
+
+
+def test_the_car_gets_the_turn_arrow():
+    """The next turn's arrow on the car's map (CarPlay/ApexCarMap.swift, web/carmap.js): [lat, lon] pairs, the shaft along
+    the route and the head's three corners; empty lists, never a guess, for none."""
+    out = json.loads(subprocess.run([NODE, "-e", ARROW_RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
+    one = out["one"]
+    assert one["kind"] == "arrow" and len(one["head"]) == 3 and len(one["shaft"]) >= 3
+    assert all(39 < p[0] < 39.2 and -84.6 < p[1] < -84.4 for p in one["shaft"] + one["head"])   # lat first, as the car takes it
+    assert one["shaft"][0][1] == pytest.approx(-84.5, abs=1e-6)                                  # it starts on the northbound leg
+    assert all(m == {"kind": "arrow", "shaft": [], "head": []} for m in out["none"])
+
+
+def test_every_car_screen_draws_the_arrow():
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift")).read()
+    native = open(os.path.join(ROOT, "CarPlay", "ApexCarMap.swift")).read()
+    carmap = open(os.path.join(ROOT, "web", "carmap.js")).read()
+    assert 'case "arrow":' in swift and "showArrow()" in swift
+    assert "func setTurnArrow(shaft:" in native and '"car-arrow-src"' in native
+    assert "arrow(a) {" in carmap and "'car-arrow-src'" in carmap
+    assert "ApexCarPlay.arrowMessage" in cockpit_source()
