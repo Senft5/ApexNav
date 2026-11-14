@@ -95,7 +95,13 @@ jobs:
       - name: The extract
         run: |
           mkdir -p osm
-          curl -fSL --retry 8 --retry-delay 30 --retry-all-errors -o "osm/${{ matrix.state }}.osm.pbf" "${{ matrix.url }}"
+          # Geofabrik refuses some runners' addresses for minutes at a time (florida, 2026-11-13: 9 tries over 4 min):
+          # three rounds, five minutes apart, before the job fails
+          for round in 1 2 3; do
+            curl -fSL --retry 8 --retry-delay 30 --retry-all-errors -o "osm/${{ matrix.state }}.osm.pbf" "${{ matrix.url }}" && break
+            [ "$round" = 3 ] && exit 1
+            echo "round $round refused; waiting 5 min"; sleep 300
+          done
           ls -la osm
       - uses: actions/upload-artifact@v4
         with:
