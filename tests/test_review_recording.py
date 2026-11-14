@@ -58,7 +58,7 @@ def test_recording_reaches_the_corners_and_maps_lines_to_video():
         assert "from: Self.TWISTIES" in body, f"{t} starts before the corners"
     free = flows.split("func test05FreeDrive()")[1].split("func test")[0]
     assert "from:" not in free, "free-drive keeps the drive's real start (the interstate join)"
-    assert 'let use = "Use \\(name)"' in flows and 'web.buttons["Use Roadbook"]' in flows, "themes by their Use key, then checked"
+    assert 'let use = "Use \\(name)"' in flows and 'web.buttons["Use Vetta"]' in flows, "themes by their Use key, then checked"
     assert "People still shows the sign-in page" in flows
     yml = read(".github", "workflows", "app-review.yml")
     assert "phone-start.txt" in yml and "car-start.txt" in yml

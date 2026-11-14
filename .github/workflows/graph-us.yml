@@ -272,12 +272,31 @@ jobs:
         with:
           python-version: "3.12"
       - uses: actions/download-artifact@v4
+        if: needs.plan.outputs.reuse == ''
         with:
           pattern: graph-us-*
           path: bands
-          run-id: ${{ needs.plan.outputs.reuse || github.run_id }}
-          github-token: ${{ github.token }}
           merge-multiple: true
+      # another run's bands: download-artifact lists only the first 100 of another run's artifacts (2026-11-14: 100 of
+      # 141 bands published, the rest of the country left out), so each is fetched by id from a paginated listing
+      - name: The bands of run ${{ needs.plan.outputs.reuse }}
+        if: needs.plan.outputs.reuse != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ needs.plan.outputs.reuse }}
+        run: |
+          set -o pipefail
+          mkdir -p bands
+          gh api --paginate "repos/${{ github.repository }}/actions/runs/$RUN/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.name | startswith("graph-us-")) | select(.expired | not) | "\(.id) \(.name)"' > arts.txt
+          bands=$(gh api --paginate "repos/${{ github.repository }}/actions/runs/$RUN/jobs?per_page=100" --jq '.jobs[] | select(.name | startswith("band")) | .name' | wc -l)
+          echo "$(wc -l < arts.txt) band artifacts for $bands bands in run $RUN" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$(wc -l < arts.txt)" -eq "$bands" ] && [ "$bands" -gt 0 ] || { echo "::error::not every band of run $RUN has its artifact"; exit 1; }
+          while read -r id name; do
+            for k in 1 2 3 4 5; do gh api "repos/${{ github.repository }}/actions/artifacts/$id/zip" > a.zip && break; echo "retry $name"; sleep $((k * 10)); done
+            unzip -q -o a.zip -d bands && rm a.zip
+          done < arts.txt
+          ls bands | wc -l
       - name: Merge and pack
         run: |
           python -m tools.graph_etl.merge_index merged/v1 bands/*/v1 | tee -a "$GITHUB_STEP_SUMMARY"

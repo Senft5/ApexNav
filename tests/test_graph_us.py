@@ -176,7 +176,10 @@ def test_a_publish_can_take_an_earlier_runs_bands():
         assert part.index("if: needs.plan.outputs.reuse == ''") < part.index("steps:"), job
     pub = wf[wf.index("\n  publish:"):]
     assert "needs.plan.outputs.reuse != '' && needs.band.result == 'skipped'" in pub
-    assert "run-id: ${{ needs.plan.outputs.reuse || github.run_id }}" in pub
+    # download-artifact sees only 100 of another run's artifacts (100 of 141 bands went live, 2026-11-14): by id, paginated
+    assert "run-id:" not in pub
+    assert 'gh api --paginate "repos/${{ github.repository }}/actions/runs/$RUN/artifacts?per_page=100"' in pub
+    assert "not every band of run $RUN has its artifact" in pub
     assert "python -m tools.graph_etl.check" not in pub, "the spot roads are Cincinnati's: graph-region.yml checks them"
 
 
