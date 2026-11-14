@@ -21,6 +21,7 @@ targets:
       - path: ApexBuildNotifier.swift                   # new steps on builds you follow (REVIEW.md 5.3)
       - path: ApexCrashReports.swift                    # native crashes and hangs (MetricKit) to /api/errors
       - path: ApexPush.swift                            # push notifications: the device token and a tap (docs/SOCIAL.md 2.12)
+      - path: DriveCam.swift                            # films the drive from the mount (big bet 5)
       - path: CarPlay/ApexCarPlay.swift                 # the car's screen (docs/CARPLAY.md)
       - path: CarPlay/ApexCarMap.swift                  # its map, MapLibre Native (F-07)
       - path: LiveActivity/ApexDriveAttributes.swift   # shared with the ApexNavLive extension
@@ -40,6 +41,10 @@ targets:
     # Sign in with Apple (IDEAS O-05, App Review 4.8). The App ID has the capability (enabled through the App Store Connect API).
     # CarPlay navigation (docs/CARPLAY.md): Apple assigned com.apple.developer.carplay-maps to the account on 2026-10-29, so
     # device builds carry it too; cloud signing (-allowProvisioningUpdates) puts it on the App ID and the profile.
+    # Owner, 2026-11-13: Time Sensitive Notifications, WeatherKit, Siri, App Attest and Data Protection on the App ID.
+    # Push (aps-environment) comes with the push PR. tools/asc_capabilities.py switches on what the App Store Connect API
+    # knows (Push, Siri, Data Protection); the rest go onto the App ID through cloud signing, as CarPlay did. Data protection
+    # stays at iOS's default class, so a drive recorded with the phone locked in its mount can still write its files.
     entitlements:
       path: ApexNav.entitlements
       properties:
@@ -47,6 +52,11 @@ targets:
         com.apple.developer.carplay-maps: true
         # push notifications (ApexPush.swift); the App Store export signs it as production
         aps-environment: development
+        com.apple.developer.usernotifications.time-sensitive: true
+        com.apple.developer.weatherkit: true
+        com.apple.developer.siri: true
+        com.apple.developer.devicecheck.appattest-environment: production
+        com.apple.developer.default-data-protection: NSFileProtectionCompleteUntilFirstUserAuthentication
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -112,7 +122,7 @@ targets:
         NSLocationAlwaysAndWhenInUseUsageDescription: "Required for live turn-by-turn navigation and road-feel mapping."
         NSMotionUsageDescription: "Required to paint live G-load and surface feel onto the road map."
         # the spot dialog's photo picker offers Take Photo (IDEAS S-18); without this string iOS ends the app
-        NSCameraUsageDescription: "Lets you take a photo of a spot you save. The photo stays on this phone."
+        NSCameraUsageDescription: "Films the road from the mount while you drive, when you turn on Film the drive, and takes a photo of a spot you save. Videos and photos stay on this phone."
         # route context (web/route_ctx/ios_context.js, ApexContext): asked only when the driver taps My free time / This album
         NSCalendarsFullAccessUsageDescription: "When you tap My free time, Vetta reads when your next event starts to size a drive that gets you back in time. Only the start time is used, on this phone."
         NSCalendarsUsageDescription: "When you tap My free time, Vetta reads when your next event starts to size a drive that gets you back in time. Only the start time is used, on this phone."

@@ -1,0 +1,28 @@
+# The App ID's capabilities (tools/asc_capabilities.py) switched on through the App Store Connect API, with the
+# TestFlight job's key. On demand only; prints capability names only.
+name: App ID capabilities
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List only, change nothing"
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  capabilities:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install "pyjwt[crypto]"
+      - name: Capabilities
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          KEY="$RUNNER_TEMP/AuthKey.p8"
+          tools/write_asc_key.sh "$KEY"
+          ASC_KEY_PATH="$KEY" python tools/asc_capabilities.py ${{ inputs.dry_run && '--dry-run' || '' }}
+          rm -f "$KEY"

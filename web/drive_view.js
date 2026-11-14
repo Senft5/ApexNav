@@ -110,6 +110,7 @@
    * (a clear braking point on three or more passes). Fewer than 3 such
    * corners: [] (too little to rank).
    */
+  const CORNERS_SHOWN = 8;                        // a drive's corner list shows this many, then All N corners
   const VARIES_M = 10, VARIES_MIN_PASSES = 5;   // a braking point that typically moves this much (and twice your usual), over 5+ passes
   function consistencyRows(co) {
     if (!co || !co.corners) return [];
@@ -551,6 +552,7 @@
       move(state.i);
     }
     const cornerAt = (i) => d.corners.findIndex((c) => i >= c.start && i <= c.end);
+    let unfold = null;                                                 // set when the corner list folds (below)
     function move(i) {
       i = Math.max(0, Math.min(n - 1, Math.round(i))); state.i = i;
       const hair = lanes.querySelector('#dvHair'); if (hair && geo) { const gx = geo.X(i); hair.setAttribute('x1', gx); hair.setAttribute('x2', gx); hair.style.display = i < state.v0 || i > state.v1 ? 'none' : ''; }
@@ -565,6 +567,7 @@
         + (feel ? cell(`Banking${trustLabel(feel, i, 'cam')}`, finite(feel.cam[i]) ? `${Math.round(feel.cam[i])}\u00b0` : '--')
           + cell(`Roughness${trustLabel(feel, i, 'rough')}`, finite(feel.rough[i]) ? `${feel.rough[i].toFixed(2)} g` : '--') + cell('Runs', feel.n[i] != null ? feel.n[i] : '--') : '');
       list.querySelectorAll('.dv-corner').forEach((r, q) => r.classList.toggle('on', q === k));
+      if (k >= CORNERS_SHOWN && unfold) unfold();                    // a folded corner picked on the map or the lanes: show them all
       if (gg) gg.show(c, k);
     }
     // pointer scrubbing on the lanes and taps on map corners
@@ -607,7 +610,7 @@
         b.setAttribute('aria-label', `Corner ${r.k + 1}, ${callOf(c)}: braking point ±${m(r.brake_sd_m)} over ${r.passes} passes`
           + `${r.min_sd_m != null ? `, slowest point ±${m(r.min_sd_m)}` : ''}${r.turn_sd_m != null ? `, turn-in ±${m(r.turn_sd_m)}` : ''}`
           + `${r.speed_sd_mps != null ? `, speed ±${spd(r.speed_sd_mps)}` : ''}${v ? '. Pick a braking marker you can always make' : ''}`);
-        b.onclick = () => { pick(c.apex, c.start, c.end); if (overlayable(r.k)) openOverlay(r.k, b); };
+        b.onclick = () => { pick(c.apex, c.start, c.end); openCorner(r.k, b); };
         li.append(b); ul.append(li);
       });
       const speeds = reps.map((r) => r.speed_sd_mps).filter((x) => x != null).sort((p, q) => p - q);
@@ -634,6 +637,34 @@
     // cornerTrace job); a second tap on the same corner closes it
     let ovl = null, ovlK = -1, ovlAt = null;
     const overlayable = (k) => !!(o.traceOf && co && co.corners[k] && co.corners[k].best && co.corners[k].best_from >= 0);
+    // One tap from a corner to a clip to share (big bet 5): when the app filmed this drive and its video holds the corner
+    const actKey = (cls, label, run) => {                          // a key that makes a clip and says how it went
+      const b = el('button', `btn dv-clip ${cls}`, label); b.type = 'button';
+      b.onclick = async (e) => {
+        e.stopPropagation();
+        b.disabled = true; b.textContent = 'Making the clip\u2026';
+        let ok = false;
+        try { ok = await run(); } catch (_) { ok = false; }
+        b.disabled = false; b.textContent = ok ? 'Clip made \u00b7 make another' : 'Couldn\u2019t make the clip';
+      };
+      return b;
+    };
+    function clipKey(k) {
+      const c = d.corners[k];
+      if (!o.canClip || !o.clip || !o.canClip(c.start, c.end)) return null;
+      return actKey('solid', 'Clip this corner', () => o.clip(c.start, c.end));
+    }
+    // a corner with no best pass to lay over it: just its clip key, when there is a video of it
+    function openClipOnly(k, after) {
+      if (ovl) { ovl.remove(); ovl = null; }
+      if (ovlAt) ovlAt.setAttribute('aria-expanded', 'false');
+      if (ovlK === k && ovlAt === after) { ovlK = -1; ovlAt = null; return; }
+      const key = clipKey(k);
+      if (!key) { ovlK = -1; ovlAt = null; return; }
+      ovlK = k; ovlAt = after; after.setAttribute('aria-expanded', 'true');
+      const box = el('div', 'dv-ovl'); box.append(key); after.after(box); ovl = box;
+    }
+    const openCorner = (k, after) => { if (overlayable(k)) openOverlay(k, after); else openClipOnly(k, after); };
     async function openOverlay(k, after) {
       if (ovl) { ovl.remove(); ovl = null; }
       if (ovlAt) ovlAt.setAttribute('aria-expanded', 'false');
@@ -641,6 +672,7 @@
       ovlK = k; ovlAt = after; after.setAttribute('aria-expanded', 'true');
       const box = el('div', 'dv-ovl'), from = co.others && co.others[co.corners[k].best_from];
       box.innerHTML = `<h3 class="dv-ovl-h">Corner ${k + 1} against your best pass</h3><p class="dv-ovl-when">${from ? `Best pass ${esc(from.date)}` : ''}</p><p class="dv-ovl-wait">Reading both passes\u2026</p>`;
+      const ck = clipKey(k); if (ck) box.querySelector('.dv-ovl-when').after(ck);
       after.after(box); ovl = box;
       let r = null;
       try { r = await o.traceOf(k); } catch (_) { r = null; }
@@ -652,6 +684,12 @@
       const pic = el('div', 'dv-ovl-pic', overlaySvg(tr, C, MPH, Math.round(Math.min(560, (box.clientWidth || 340)))));
       const key = el('div', 'dv-ovl-key', `<span class="a">This drive</span><span class="b">Best pass</span>`);
       box.append(pic, key, ...T.rows(tr, fmt).map((t) => el('p', 'dv-ovl-row', esc(t))));
+      // both passes filmed: the two videos side by side, the gap counting (ghost_clip.js)
+      if (o.ghostOf) Promise.resolve(o.ghostOf(k, r)).then((go) => {
+        if (!go || ovl !== box) return;
+        const g = actKey('dv-ghost', 'Side by side with your best pass', go), at = box.querySelector('.dv-clip');
+        if (at) at.after(g); else box.querySelector('.dv-ovl-when').after(g);
+      }).catch(() => {});
     }
     if (co && co.top.length) {                                      // where the time is: the biggest gaps to your own best passes
       const ul = el('ol', 'dv-time');
@@ -659,7 +697,7 @@
         const x = co.corners[k], c = d.corners[k], from = x.best ? co.others[x.best_from] : null, li = el('li'), b = el('button');
         b.innerHTML = `<b>${k + 1}</b><span>${esc(callOf(c))}</span><em class="loss">${fmtD(x.gain_s)}</em>`
           + `<span class="note">${esc(tipText(x, MPH) || 'Same technique, quicker all the way through')}${from ? ` \u00b7 best pass ${esc(from.date)}` : ''}</span>`;
-        b.onclick = () => { pick(c.apex, c.start, c.end); if (overlayable(k)) openOverlay(k, b); };
+        b.onclick = () => { pick(c.apex, c.start, c.end); openCorner(k, b); };
         li.append(b); ul.append(li);
       }
       list.prepend(el('h2', null, 'Where to find time'), ul);
@@ -672,12 +710,21 @@
         // say it in their delta, so cards don't repeat "your best pass was 4 mph quicker" (TestFlight 2026-11-12, "text walls")
         + (co && tipText(co.corners[k], MPH) && !co.top.includes(k) && (!co.corners[k].best || co.corners[k].tip.vs_best === false)
           ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
-      r.onclick = () => { pick(c.apex, c.start, c.end); if (overlayable(k)) openOverlay(k, r); };
+      r.onclick = () => { pick(c.apex, c.start, c.end); openCorner(k, r); };
       if (overlayable(k)) r.setAttribute('aria-expanded', 'false');
       grid2.append(r);
     });
     if (!d.corners.length) grid2.append(el('p', 'note', 'No corners detected on this drive.'));
     list.append(grid2);
+    // a long road is a long list (36 cards, five screens on a phone; walkthrough 2026-11-13): the first few, then one key for
+    // the rest. The map and the lanes still reach every corner, and picking a folded one opens the list
+    if (d.corners.length > CORNERS_SHOWN + 2) {
+      const all = el('button', 'linkbtn dv-all', `All ${d.corners.length} corners`);
+      grid2.classList.add('folded');
+      unfold = () => { grid2.classList.remove('folded'); all.remove(); unfold = null; };
+      all.onclick = unfold;
+      list.append(all);
+    }
 
     // Zoom: the lanes show the whole drive, or a window around the cursor (a corner pick recentres it).
     const ZOOMS = U() && U().metric() ? [['All', 0], ['3 km', 3000], ['1 km', 1000], ['250 m', 250]] : [['All', 0], ['2 mi', 2 * 1609.344], ['0.5 mi', 0.5 * 1609.344], ['0.15 mi', 0.15 * 1609.344]];

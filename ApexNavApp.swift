@@ -150,6 +150,7 @@ final class ApexBundleSchemeHandler: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
         guard let url = task.request.url else { return }
         let rel = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
+        if rel.hasPrefix("drivecam/") { serveDriveCam(String(rel.dropFirst("drivecam/".count)), url: url, task: task); return }
         let file = root.appendingPathComponent(rel.isEmpty ? "index.html" : rel).standardizedFileURL
         guard file.path.hasPrefix(root.path + "/") else {
             task.didFailWithError(URLError(.fileDoesNotExist))
@@ -174,6 +175,56 @@ final class ApexBundleSchemeHandler: NSObject, WKURLSchemeHandler {
     }
 
     func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) { pending.remove(ObjectIdentifier(task)) }
+
+    /// The drive cam's files (DriveCam.swift): index.json lists them; a file is served in the byte ranges the video element
+    /// asks for (it seeks by Range, and a whole drive's video is far too big to read at once).
+    private func serveDriveCam(_ name: String, url: URL, task: WKURLSchemeTask) {
+        let id = ObjectIdentifier(task)
+        pending.insert(id)
+        let range = task.request.value(forHTTPHeaderField: "Range")
+        io.async {
+            var status = 200, body = Data(), headers: [String: String] = ["Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"]
+            if name == "index.json" {
+                body = (try? JSONSerialization.data(withJSONObject: ApexDriveCam.list())) ?? Data("[]".utf8)
+                headers["Content-Type"] = "application/json"
+            } else if ApexDriveCam.validName(name), let dir = ApexDriveCam.directory,
+                      let h = try? FileHandle(forReadingFrom: dir.appendingPathComponent(name)) {
+                defer { try? h.close() }
+                let size = Int((try? h.seekToEnd()) ?? 0)
+                var lo = 0, hi = size - 1
+                // no Range on a big file: answered as its first part (206), never read whole into memory
+                if size > 0, range != nil || size > 4_000_000 {
+                    let parts = (range ?? "bytes=0-").dropFirst(6).split(separator: "-", omittingEmptySubsequences: false)
+                    if parts.count == 2 {
+                        if let a = Int(parts[0]) { lo = a; if let b = Int(parts[1]) { hi = min(b, size - 1) } }
+                        else if let n = Int(parts[1]) { lo = max(0, size - n) }
+                    }
+                    hi = min(hi, lo + 4_000_000 - 1)                           // at most 4 MB an answer; the player asks for more
+                    status = 206
+                }
+                if size == 0 || lo > hi || lo >= size { status = 416; headers["Content-Range"] = "bytes */\(size)" }
+                else {
+                    try? h.seek(toOffset: UInt64(lo))
+                    body = (try? h.read(upToCount: hi - lo + 1)) ?? Data()
+                    if status == 206 { headers["Content-Range"] = "bytes \(lo)-\(lo + body.count - 1)/\(size)" }
+                }
+                headers["Content-Type"] = "video/quicktime"
+                headers["Accept-Ranges"] = "bytes"
+            } else {
+                status = 404
+            }
+            headers["Content-Length"] = "\(body.count)"
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.pending.remove(id) != nil else { return }
+                guard let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers) else {
+                    task.didFailWithError(URLError(.badServerResponse)); return
+                }
+                task.didReceive(response)
+                if !body.isEmpty { task.didReceive(body) }
+                task.didFinish()
+            }
+        }
+    }
 }
 
 // What the share sheet carries: a file the app wrote, or an invite's words and link (`shareText`, feedback 07).
@@ -499,6 +550,11 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
         // a web view. The name is cleaned to letters, digits, dot, dash and underscore; the file goes in the app's temp folder.
         if cmd == "shareFile", let dict = body as? [String: Any], let b64 = dict["data"] as? String, let data = Data(base64Encoded: b64) {
             shell?.shareFile(name: (dict["name"] as? String) ?? "ApexNav", data: data)
+            return
+        }
+        // Film the drive (DriveCam.swift, big bet 5): on when a drive starts with the switch set, off when it ends
+        if cmd == "driveCam", let dict = body as? [String: Any] {
+            shell?.driveCam(on: (dict["on"] as? Bool) ?? false)
             return
         }
         // An invite or a share link (feedback 07): the real share sheet (Messages, AirDrop, Copy), never a "Copy this link" box.
@@ -1736,6 +1792,12 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         isRecording = true
         updateSensorStack()
         speak("Mapping 5 meter road feel.")
+    }
+
+    /// The drive cam on or off for the page's drive; what it is doing goes back to the page as { type: "driveCam", state }.
+    func driveCam(on: Bool) {
+        ApexDriveCam.shared.onState = { [weak self] msg in self?.sendToPage(msg) }
+        ApexDriveCam.shared.set(on: on)
     }
 
     func shareFile(name: String, data: Data) {

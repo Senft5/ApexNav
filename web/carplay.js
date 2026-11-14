@@ -210,8 +210,25 @@
                type: cornerType(co.dir, v), corner: { dir: co.dir, sev: v }, distM: Math.max(0, Math.round(coM - cursorM)), ...remain };
     }
     const instruction = phrase(st), short = shortForms(instruction, [phrase({ ...st, street: '', toward: '' })]);
+    // the junction's lanes (web/lanes.js pack), as the phone's road book draws them under the turn: the page draws them for
+    // the card's junction image (cockpit.js carLanes) and leaves them out of the message
     return { kind: 'guide', key: `${t.id || ''}:${Math.round(st.m)}`, instruction, ...(short.length ? { short } : {}), street: st.street || '', type: st.type,
-             distM: Math.max(0, Math.round(st.m - cursorM)), ...remain };
+             distM: Math.max(0, Math.round(st.m - cursorM)), ...remain, ...(Array.isArray(st.lanes) && st.lanes.length > 1 ? { lanes: st.lanes } : {}) };
+  }
+
+  /**
+   * The lanes on the car's guidance card (CPManeuver.junctionImage), drawn as the phone's road book draws them
+   * (web/instruments.js): one arrow per lane, left to right, in a 24-unit box each. `lanes` is ApexLanes.lanes(packed):
+   * [{ angle, use, ok }]. Each glyph: { d, rotate, alpha } with the lanes to use at full ink, the ones that also work at
+   * 0.55, the rest at 0.22. [] with fewer than two lanes or more than 8 (too narrow to read on the card).
+   */
+  const LANE_UTURN = 'M4 10 V-2 A4 4 0 0 0 -4 -2 V4 M-7 1 L-4 4 L-1 1', LANE_ARROW = 'M0 10 V-8 M-5 -3 L0 -8 L5 -3', LANES_MAX = 8;
+  function laneGlyphs(lanes) {
+    if (!Array.isArray(lanes) || lanes.length < 2 || lanes.length > LANES_MAX || !lanes.some((l) => l && (l.use || l.ok))) return [];
+    return lanes.map((l) => {
+      const a = l && finite(l.angle) ? l.angle : 0, u = Math.abs(a) >= 170;
+      return { d: u ? LANE_UTURN : LANE_ARROW, rotate: u ? 0 : a, alpha: l && l.use ? 1 : l && l.ok ? 0.55 : 0.22 };
+    });
   }
 
   /**
@@ -476,6 +493,17 @@
   }
 
   /**
+   * The posted speed limit for the car's map (web/carmap.js and CarPlay/ApexCarMap.swift draw the sign at the bottom left,
+   * where Apple Maps and Waze show it): { kind:'limit', value, unit, round } in the driver's units, `round` for the
+   * km/h sign (the red ring) and false for the US "SPEED LIMIT" one. value null: unknown, no sign (the map never guesses).
+   */
+  function limitMessage(limit, unit) {
+    const u = String(unit || '').toUpperCase(), km = /^KM/.test(u);
+    if (!finite(limit) || limit <= 0 || limit > 200) return { kind: 'limit', value: null, unit: '', round: false };
+    return { kind: 'limit', value: Math.round(limit / 5) * 5 || Math.round(limit), unit: km ? 'KM/H' : 'MPH', round: km };
+  }
+
+  /**
    * Panel round 2 (TH-2, IN-3): what the sight plate under the arrow draws, on the phone and on the car (web/carmap.js and
    * CarPlay/ApexCarMap.swift draw the same). null draws nothing: unknown, or OPEN (nothing ahead limits you; the binnacle's
    * Sight cell says Open). Else { label, text, short }: "SIGHT" by the number and no unit, so it never reads as a limit sign;
@@ -537,7 +565,7 @@
     return { step, reset };
   }
 
-  const api = { sightMessage, line, routeMessage, loopsMessage, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
+  const api = { sightMessage, limitMessage, line, routeMessage, loopsMessage, laneGlyphs, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
                 recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
   api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
   api.sightTag = sightTag;                                             // panel round 2, TH-2

@@ -76,9 +76,27 @@
     return false;
   }
 
-  /** page: el, Core, drive d, fmtSpeed, save(blob, name, type) → Promise. Returns the panel element. */
+  /**
+   * Big bet 5: the app's own videos of this drive (DriveCam.swift index.json: [{ name, start_ms, dur_s }]) that overlap it,
+   * from t0 (the drive's start, Unix ms) for totalS seconds, in order: [{ name, offsetS, durS, label }]. offsetS is where
+   * the video starts in the drive, so it lines up by itself. A file without a length is not offered (it can't be placed).
+   */
+  function ownVideos(list, t0, totalS) {
+    if (!Array.isArray(list) || !finite(t0) || !(totalS > 0)) return [];
+    const mins = (s) => (s < 90 ? `${Math.max(1, Math.round(s))} s` : `${Math.round(s / 60)} min`);
+    const out = list.filter((v) => v && typeof v.name === 'string' && finite(v.start_ms) && finite(v.dur_s) && v.dur_s > 0)
+      .map((v) => ({ name: v.name, offsetS: (v.start_ms - t0) / 1000, durS: v.dur_s }))
+      .filter((v) => v.offsetS < totalS && v.offsetS + v.durS > 0)
+      .sort((a, b) => a.offsetS - b.offsetS);
+    return out.map((v, k) => ({ ...v, label: out.length === 1 ? `This drive's video \u00b7 ${mins(v.durS)}` : `Video ${k + 1} \u00b7 ${mins(v.durS)}` }));
+  }
+
+  /**
+   * page: el, Core, drive d, fmtSpeed, save(blob, name, type) → Promise, and ownVideos() → Promise of the app's video list
+   * (optional; videoUrl(name) is where one plays). Returns the panel element.
+   */
   function mount(page) {
-    const { el, Core, d } = page, T = Core.elapsedS(d.speed_mps), total = T[T.length - 1] || 0, calls = cornerCalls(d);
+    const { el, Core, d } = page, R = root.ApexRecording, T = R && R.timesOf ? R.timesOf(Core, d) : Core.elapsedS(d.speed_mps), total = T[T.length - 1] || 0, calls = cornerCalls(d);
     // a rule-separated section, not a box; the picker is an ink key, the offset the balance slider (REVIEW2.md U-18)
     const box = el('section', { className: 'dc-section' }, el('h2', { textContent: 'Dashcam overlay' }));
     const input = el('input', { type: 'file', accept: 'video/*', hidden: true }); input.setAttribute('aria-label', 'A video from this drive');
@@ -94,7 +112,7 @@
     // the made video's own canvas: in the page (WebKit streams a canvas as it renders it), shown only while it is made
     const canvas = el('canvas'), g = canvas.getContext('2d');
     canvas.style.cssText = 'width:100%;max-width:640px;display:none;background:#000';
-    const step = '0.5';
+    const step = '0.1';                                           // (0.1: the app's own video lines up to a tenth)
     const offset = el('input', { type: 'range', min: '-600', max: String(Math.max(600, Math.ceil(total))), step, value: '0' }); offset.setAttribute('aria-label', 'When the video starts in the drive (s)');
     const balance = el('label', { className: 'balance' }, el('span', { textContent: 'Earlier' }), offset, el('span', { textContent: 'Later' }));
     const offsetNote = el('p', { className: 'note', textContent: offsetText(0) });
@@ -120,8 +138,20 @@
     const clipCanvas = el('canvas', { className: 'dc-clip-canvas' });
     clipCanvas.style.cssText = 'width:min(100%,270px);display:none;background:#000;margin:8px 0';
     const clipNote = el('p', { className: 'note dc-clip-note' }); clipNote.setAttribute('role', 'status');
-    const clips = el('div', { className: 'dc-clips', hidden: true }, el('h3', { textContent: 'Corner clips' }), el('div', { className: 'dc-row' }, clipPick, clipBtn), clipCanvas, clipNote);
-    let clipList = [], clipBusy = false, clipSaid = '';   // clipSaid: how the last clip went, kept until the video moves
+    // a reel: the drive's best corners the video holds (their own Driver Score), one after another in one portrait video
+    const reelBtn = el('button', { className: 'btn', type: 'button', hidden: true });
+    const clips = el('div', { className: 'dc-clips', hidden: true }, el('h3', { textContent: 'Corner clips' }), el('div', { className: 'dc-row' }, clipPick, clipBtn), el('div', { className: 'dc-row' }, reelBtn), clipCanvas, clipNote);
+    let clipList = [], clipBusy = false, clipSaid = '', reel = [];   // clipSaid: how the last clip went, kept until the video moves
+    const labelOf = (c) => { const all = CC.cornersOf(d), k = all.findIndex((x) => x.start === c.start && x.end === c.end);
+      return { k: Math.max(0, k), label: k >= 0 ? [`Corner ${k + 1}`, all[k].call].filter(Boolean).join(' \u00b7 ') : (c.call || '') }; };
+    function listReel() {
+      const R = root.ApexRecording, scored = R && R.cornersOf ? (() => { try { return R.cornersOf(d); } catch (_) { return []; } })() : [];
+      const best = CC.bestOf(Core, d, scored, (c) => !!CC.clipWindow(T, c, off(), duration()), 3);
+      reel = best.map((b) => { const c = scored[b.k]; return { ...labelOf(c), w: CC.clipWindow(T, c, off(), duration()) }; });
+      reelBtn.hidden = reel.length < 2;
+      reelBtn.textContent = `Your best ${reel.length} corners in one clip`;
+      reelBtn.disabled = clipBusy || frameOk !== true;
+    }
     function listClips() {
       if (!CC || clipBusy) return;
       const keep = clipPick.value;
@@ -130,6 +160,7 @@
       if (clipList.some((x) => String(x.k) === keep)) clipPick.value = keep;
       clips.hidden = !opened;
       clipBtn.disabled = !clipList.length || frameOk !== true;
+      listReel();
       clipNote.textContent = clipList.length ? clipSaid || 'A portrait clip of the corner, with its call, speed and g, ready for Reels or a message.'
         : 'No corner falls inside the video at this setting.';
     }
@@ -186,7 +217,7 @@
     }
     function setOffset(v) {
       const lo = Number(offset.min), hi = Number(offset.max);
-      offset.value = String(Math.max(lo, Math.min(hi, Math.round(v * 2) / 2)));
+      offset.value = String(Math.max(lo, Math.min(hi, Math.round(v * 10) / 10)));
       offsetNote.textContent = offsetText(off());
       clipSaid = ''; follow(); listClips();
     }
@@ -208,17 +239,37 @@
     input.addEventListener('change', () => {
       const f = input.files && input.files[0];
       if (!f) return;
-      pick.firstChild.textContent = 'Pick another video';
+      pick.firstChild.textContent = 'Pick another video'; shownOwn = '';
+      openSrc(URL.createObjectURL(f), null);
+    });
+    /** Opens a video (a picked file, or the app's own film of the drive with where it starts in the drive). */
+    function openSrc(src, startS) {
+      if (startS != null) setOffset(startS);
       opened = false; frameOk = null; tries = 0; clearTimeout(retry); anchor = -1; busy = false; pending = null; dur = 0; clipSaid = '';
       stage.hidden = true; tools.hidden = true; exportBtn.disabled = true;
       say('Opening the video…');
-      video.src = URL.createObjectURL(f);
+      video.src = src;
       video.load();
       // a muted play and pause makes iOS fetch and decode it (preload alone may not); then the preview seeks
       Promise.resolve(video.play()).catch(() => {}).then(() => { video.pause(); });
       clearTimeout(openTimer);
       openTimer = setTimeout(() => { if (!opened) say('No preview: this phone hasn’t opened the video in the app. Try picking it again, or a video from the Camera app.'); }, 10000);
-    });
+    }
+    // the app's own film of this drive (DriveCam.swift): one key per video, lined up by itself
+    const own = el('div', { className: 'dc-row dc-own', hidden: true });
+    let vids = [], shownOwn = '', ownList = [];
+    if (typeof page.ownVideos === 'function') {
+      Promise.resolve().then(() => page.ownVideos()).then((list) => {
+        ownList = Array.isArray(list) ? list : []; vids = ownVideos(ownList, d.t0, total);
+        own.replaceChildren(...vids.map((v) => {
+          const b = el('button', { className: 'btn solid', type: 'button', textContent: v.label });
+          b.addEventListener('click', () => { shownOwn = v.name; pick.firstChild.textContent = 'Pick another video'; openSrc(page.videoUrl(v.name), Math.max(-600, v.offsetS)); });
+          return b;
+        }));
+        own.hidden = !vids.length;
+        if (vids.length) note.textContent = 'Vetta filmed this drive: open the video and it is lined up already. Corner clips are under it.';
+      }).catch(() => {});
+    }
     video.addEventListener('loadedmetadata', () => {
       if (finite(video.duration)) { ready(); return; }
       // a recorded WebM can say its length is unknown until a seek far past its end finds it
@@ -277,25 +328,87 @@
       exportBtn.disabled = frameOk === false;
       follow();
     });
-    clipBtn.addEventListener('click', async () => {
-      const x = clipList.find((c) => String(c.k) === clipPick.value);
-      if (!x || clipBusy) return;
+    /** Makes and shares the clip of x ({ k, label, w }); true when it was handed to the share sheet. */
+    async function makeClip(x, parts = null) {
+      if (!x || clipBusy) return false;
+      let ok = false;
       clipBusy = true; clipBtn.disabled = true; clipNote.textContent = 'Making the clip: it plays through once.';
       clipCanvas.style.display = 'block';
       try {
         const { blob, mime } = await CC.record({ video, d, T, w: x.w, offsetS: off(), fmtSpeed: page.fmtSpeed, canvas: clipCanvas,
-          meta: { title: d.name || '', label: x.label } });
-        await page.save(blob, root.ApexFlyoverVideo.fileName(`${d.name || 'drive'}-corner-${x.k + 1}`, mime), mime.split(';')[0]);
-        clipSaid = 'Done. The sound isn\u2019t kept.';
+          meta: { title: d.name || '', label: x.label }, ...(parts ? { parts } : {}) });
+        await page.save(blob, root.ApexFlyoverVideo.fileName(`${d.name || 'drive'}-${parts ? 'best-corners' : `corner-${x.k + 1}`}`, mime), mime.split(';')[0]);
+        clipSaid = 'Done. The sound isn\u2019t kept.'; ok = true;
       } catch (_) { clipSaid = 'Couldn\u2019t make the clip on this phone.'; }
       clipNote.textContent = clipSaid;
-      clipCanvas.style.display = 'none'; clipBusy = false; clipBtn.disabled = !clipList.length || frameOk !== true;
+      clipCanvas.style.display = 'none'; clipBusy = false; clipBtn.disabled = !clipList.length || frameOk !== true; reelBtn.disabled = frameOk !== true;
       follow();
-    });
-    box.append(note, pick, status, stage, tools, canvas, balance, fine, offsetNote, exportBtn, clips);
+      return ok;
+    }
+    clipBtn.addEventListener('click', () => makeClip(clipList.find((c) => String(c.k) === clipPick.value)));
+    reelBtn.addEventListener('click', () => { if (reel.length >= 2) { reelBtn.disabled = true; makeClip(reel[0], reel.map((r) => ({ w: r.w, label: r.label }))); } });
+
+    // One tap from a corner on the drive's page (drive_view.js): the app's own video that holds the corner (start, end in
+    // 5 m samples), opened lined up if it isn't yet, and the clip made from it
+    const ownFor = (start, end) => (CC ? vids.find((v) => CC.clipWindow(T, { start, end }, v.offsetS, v.durS)) : null);
+    box.canClip = (start, end) => !!ownFor(start, end);
+    // Side by side (ghost_clip.js): this pass and the best pass, when the app filmed both drives. other: { d (that drive),
+    // bWin: [start, end] of the corner on it, trace (corner_trace.js), when }
+    function ghostPlan(start, end, other) {
+      const GC = root.ApexGhostClip, R = root.ApexRecording;
+      if (!GC || !R || !other || !other.d || !Array.isArray(other.bWin) || !Array.isArray(other.d.speed_mps)) return null;
+      const va = ownFor(start, end);
+      if (!va) return null;
+      const Tb = R.timesOf(Core, other.d), [bs, be] = other.bWin;
+      for (const vb of ownVideos(ownList, other.d.t0, Tb[Tb.length - 1] || 0)) {
+        const a = { T, start, end, offsetS: va.offsetS, dur: va.durS, d }, b = { T: Tb, start: bs, end: be, offsetS: vb.offsetS, dur: vb.durS, d: other.d };
+        const w = GC.windows(a, b);
+        if (w) return { va, vb, a, b, w };
+      }
+      return null;
+    }
+    box.canGhost = (start, end, other) => !!ghostPlan(start, end, other);
+    box.ghost = async (start, end, other) => {
+      const p = ghostPlan(start, end, other);
+      if (!p || clipBusy) return false;
+      clipBusy = true; clipBtn.disabled = true; reelBtn.disabled = true; clipNote.textContent = 'Making the side-by-side clip: both play through once.';
+      // the two videos shown small while they play (WebKit decodes a video it shows), the clip's canvas beside them
+      const mkv = (name) => { const v = el('video', { muted: true, playsInline: true, preload: 'auto' }); v.setAttribute('playsinline', ''); v.setAttribute('muted', '');
+        v.style.cssText = 'width:72px;height:auto;margin-right:6px'; v.src = page.videoUrl(name); return v; };
+      const va = mkv(p.va.name), vb = mkv(p.vb.name), row = el('div', { className: 'dc-row dc-ghost-src' }, va, vb);
+      clips.insertBefore(row, clipCanvas); clipCanvas.style.display = 'block';
+      const opened = (v) => new Promise((ok, no) => { if (v.readyState >= 1) { ok(); return; } v.addEventListener('loadedmetadata', ok, { once: true }); v.addEventListener('error', no, { once: true }); setTimeout(no, 12000); });
+      let ok = false;
+      try {
+        va.load(); vb.load();
+        await Promise.all([opened(va), opened(vb)]);
+        const lab = labelOf({ start, end });
+        const { blob, mime } = await root.ApexGhostClip.record({ va, vb, a: p.a, b: p.b, w: p.w, trace: other.trace, fmtSpeed: page.fmtSpeed, canvas: clipCanvas,
+          meta: { title: d.name || '', label: lab.label, whenB: other.when || '' } });
+        await page.save(blob, root.ApexFlyoverVideo.fileName(`${d.name || 'drive'}-side-by-side-${lab.k + 1}`, mime), mime.split(';')[0]);
+        clipSaid = 'Done. The sound isn\u2019t kept.'; ok = true;
+      } catch (_) { clipSaid = 'Couldn\u2019t make the side-by-side clip on this phone.'; }
+      for (const v of [va, vb]) { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (_) {} }
+      row.remove(); clipCanvas.style.display = 'none'; clipNote.textContent = clipSaid;
+      clipBusy = false; clipBtn.disabled = !clipList.length || frameOk !== true; reelBtn.disabled = frameOk !== true;
+      return ok;
+    };
+    box.clip = async (start, end) => {
+      const v = ownFor(start, end);
+      if (!v || clipBusy) return false;
+      if (shownOwn !== v.name) { shownOwn = v.name; pick.firstChild.textContent = 'Pick another video'; openSrc(page.videoUrl(v.name), Math.max(-600, v.offsetS)); }
+      for (let n = 0; n < 60 && frameOk !== true; n++) {               // opened and its frames copyable, up to 12 s
+        if (frameOk === false) return false;
+        await new Promise((ok) => setTimeout(ok, 200));
+      }
+      const w = frameOk === true && CC.clipWindow(T, { start, end }, off(), duration());
+      if (!w) return false;
+      return makeClip({ ...labelOf({ start, end }), w });
+    };
+    box.append(note, own, pick, status, stage, tools, canvas, balance, fine, offsetNote, exportBtn, clips);
     return box;
   }
 
-  const api = { indexAt, overlayAt, drawOverlay, mount, supported, cornerCalls, videoTimeFor, stepCall, offsetText, frameDrawn };
+  const api = { indexAt, overlayAt, drawOverlay, mount, supported, ownVideos, cornerCalls, videoTimeFor, stepCall, offsetText, frameDrawn };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDashcam = api;
 })(typeof window !== 'undefined' ? window : globalThis);

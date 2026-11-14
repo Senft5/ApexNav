@@ -202,7 +202,24 @@
       lon_g: prepared.lon_g, lat_g: prepared.lat_g, g_known: gKnown.every(Boolean) ? null : gKnown, elev: cols.elevation_m && cols.elevation_m.some(Number.isFinite) ? cols.elevation_m : null, events: prof.events,
       camber: nul(cols.camber_deg), rough: nul(cols.roughness_rms), crest: nul(cols.crest_vertical_g), vpeak: nul(cols.vert_peak_g), kappa: Array.from(Core.computeCurvature(cols.lat, cols.lon).kappa),
       envMps: nul(prof.envMps), sightM: nul(prof.sightM), hz: HAZARD_VERSION,
+      ...(cols.t_s && cols.t_s.some(Number.isFinite) ? { t_s: nul(cols.t_s) } : {}), ...(Number.isFinite(meta.t0) ? { t0: meta.t0 } : {}),
     };
+  }
+
+  /**
+   * Big bet 5: seconds since the start at each 5 m sample, as the clock ran (a stop counts), so a video lines up through
+   * stops. From the drive's own t_s where it was recorded; a gap in it, or a drive without it, carries on at the speed's
+   * pace (Core.elapsedS), which is all an older drive knows.
+   */
+  function timesOf(Core, d) {
+    const T = Core.elapsedS(d.speed_mps), t = d.t_s;
+    if (!Array.isArray(t) || t.length !== T.length || !t.some(Number.isFinite)) return T;
+    const out = new Float64Array(T.length);
+    for (let i = 0; i < T.length; i++) {
+      const v = t[i], step = i ? T[i] - T[i - 1] : 0;
+      out[i] = Number.isFinite(v) && (!i || v >= out[i - 1]) ? v : (i ? out[i - 1] + step : 0);
+    }
+    return out;
   }
 
   /**
@@ -341,6 +358,6 @@
     return `${s.hits >= 2 ? 'Confirmed' : 'Seen'} on ${s.hits} of ${s.passes} drives`;
   }
 
-  const api = { all, get, ids, store, patch, summaries, summarize, runOf, remove, keepPut, keepAll, keepRemove, parse, repair, scorableCorners, toTrack, corroborate, seenLabel, cornersOf, scoreOf, DB_VERSION, SUMMARY_VERSION };
+  const api = { all, get, ids, store, patch, summaries, summarize, runOf, remove, keepPut, keepAll, keepRemove, parse, timesOf, repair, scorableCorners, toTrack, corroborate, seenLabel, cornersOf, scoreOf, DB_VERSION, SUMMARY_VERSION };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRecording = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -41,7 +41,9 @@ final class ApexCar {
     /// `short` (U-112): the same instruction in fewer words, longest first, for a glance; `drivenM` (U-120): a record card's
     /// distance driven, for the trip strip.
     struct Guide { let key: String; let instruction: String; let street: String; let type: Int; let distM: Double?; let timeS: Double?; let remainM: Double?; let remainS: Double?; let symbol: UIImage?; var recording = false
-                   var short: [String] = []; var drivenM: Double? = nil }
+                   var short: [String] = []; var drivenM: Double? = nil
+                   /// the junction's lanes, drawn by the page (cockpit.js carLanes) for the card's junction image
+                   var lanes: UIImage? = nil }
     /// U-59: a free drive's card until the page's first guide message (web/carplay.js recordingMessage) says how far it has gone.
     static let recordingGuide = Guide(key: "rec:", instruction: "Recording · the road ahead", street: "Recording", type: 8, distM: nil, timeS: nil,
                                       remainM: nil, remainS: nil, symbol: nil, recording: true, short: ["Recording"])
@@ -83,6 +85,8 @@ final class ApexCar {
     private(set) var hazardsJSON = "[]"
     /// The sight-line speed under the car's arrow (web/carplay.js sightMessage), null when unknown or not driving.
     private(set) var sightJSON = "null"
+    /// The posted speed limit's sign on the car's map (web/carplay.js limitMessage), nil when unknown or not driving.
+    private(set) var limit: ApexCarLimit?
     /// The same, parsed for the native car map (ApexCarMap.swift, F-07).
     private(set) var cornerPlates: [ApexCarPlateData] = []
     private(set) var hazardPlates: [ApexCarPlateData] = []
@@ -213,7 +217,8 @@ final class ApexCar {
                           distM: d.map { max(0, $0) }, timeS: Self.num(dict["timeS"]), remainM: Self.num(dict["remainM"]), remainS: Self.num(dict["remainS"]),
                           symbol: symbol, recording: recording,
                           short: ((dict["short"] as? [Any]) ?? []).prefix(3).compactMap { $0 as? String }.map { String($0.prefix(80)) },
-                          drivenM: Self.num(dict["drivenM"]).map { max(0, $0) })
+                          drivenM: Self.num(dict["drivenM"]).map { max(0, $0) },
+                          lanes: (dict["lanes"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { UIImage(data: $0, scale: 3) })
             if !driving { driving = true; eachMap { $0.setMode() }; scene?.driveStarted() }
             scene?.guideChanged()
         case "start":
@@ -227,12 +232,17 @@ final class ApexCar {
                 scene?.driveStarted()
                 scene?.guideChanged()
             }
+        case "limit":
+            let v = Self.num(dict["value"]).map { Int($0.rounded()) }
+            limit = v.flatMap { $0 > 0 && $0 <= 200 ? ApexCarLimit(value: $0, round: (dict["round"] as? Bool) ?? false) : nil }
+            eachMap { $0.showLimit() }
         case "end":
             driving = false
             guide = nil
             sightJSON = "null"
             sight = nil
-            eachMap { $0.showSight() }
+            limit = nil
+            eachMap { $0.showSight(); $0.showLimit() }
             eachMap { $0.setMode() }
             scene?.driveEnded()
         case "ending":
@@ -677,6 +687,8 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             } else {
                 m.symbolImage = ApexCar.symbol(g.type)
             }
+            // the lanes to be in, as the phone's road book draws them under the turn (Apple Maps shows lanes here too)
+            if let lanes = g.lanes { m.junctionImage = lanes.withRenderingMode(.alwaysOriginal) }
             m.initialTravelEstimates = est
             maneuver = m
             maneuverKey = g.key
@@ -949,7 +961,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
         }
         view.addSubview(m)
         native = m
-        showLook(); showRoute(); showCorners(); showHazards(); showPlaces(); setMode(); showPosition(); showSight()
+        showLook(); showRoute(); showCorners(); showHazards(); showPlaces(); setMode(); showPosition(); showSight(); showLimit()
     }
 
     @MainActor private func fallBackToWeb() {
@@ -986,7 +998,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
         loaded = true
         sentMode = ""
         MainActor.assumeIsolated {
-            fitViewport(); showLook(); showRoute(); showCorners(); showHazards(); showPlaces(); setMode(); showPosition(); showSight()
+            fitViewport(); showLook(); showRoute(); showCorners(); showHazards(); showPlaces(); setMode(); showPosition(); showSight(); showLimit()
         }
     }
 
@@ -1046,6 +1058,16 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
     @MainActor func showSight() {
         let sight = role == .cluster ? nil : ApexCar.shared.sight
         if let native { native.setSight(sight) } else { js("car.sight(\(role == .cluster ? "null" : ApexCar.shared.sightJSON))") }
+    }
+    /// The posted limit's sign: the main screen and the Dashboard; never the cluster, beside the car's own limit.
+    @MainActor func showLimit() {
+        let l = role == .cluster ? nil : ApexCar.shared.limit
+        if let native { native.setLimit(l); return }
+        let json = l.map { Self.limitJSON($0) } ?? "null"
+        js("car.limit(" + json + ")")
+    }
+    private static func limitJSON(_ l: ApexCarLimit) -> String {
+        "{\"value\":" + String(l.value) + ",\"round\":" + (l.round ? "true" : "false") + "}"
     }
     /// F-01: the fix with its speed and age, so the arrow is dead reckoned to where the car is now.
     @MainActor func showPosition() {

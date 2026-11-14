@@ -85,30 +85,61 @@ function rowsOf(r: D1Result | undefined): unknown[][] {
   return (r?.results ?? []).map((row) => Object.values(row as Record<string, unknown>));
 }
 
-/** Write this week's dump to KV and drop copies beyond KEEP. Returns the key written. */
+/** Where the weekly copies go: R2 (`ARCHIVE`, Workers Paid, no size cap worth naming) when it is bound, else KV
+ *  (`BACKUPS`, 25 MiB a value). Both list, read the date out of the key, and delete the same way. */
+interface Store { name: "r2" | "kv"; keep: number; max: number; put(key: string, sql: string, meta: Record<string, unknown>): Promise<void>; keys(prefix: string): Promise<string[]>; drop(key: string): Promise<void> }
+export const R2_KEEP = 26;                        // half a year of weekly copies (R2 storage is cents)
+export const R2_MAX_BYTES = 100 * 1024 * 1024;    // the whole dump is built in the Worker's 128 MB of memory first
+function storeOf(env: Env): Store | null {
+  const r2 = env.ARCHIVE, kv = env.BACKUPS;
+  if (r2) return {
+    name: "r2", keep: R2_KEEP, max: R2_MAX_BYTES,
+    async put(key, sql, meta) {
+      await r2.put(key, sql, { httpMetadata: { contentType: "application/sql" }, customMetadata: Object.fromEntries(Object.entries(meta).map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)])) });
+    },
+    async keys(prefix) {
+      const out: string[] = [];
+      let cursor: string | undefined;
+      do { const l = await r2.list({ prefix, cursor }); out.push(...l.objects.map((o) => o.key)); cursor = l.truncated ? l.cursor : undefined; } while (cursor);
+      return out;
+    },
+    async drop(key) { await r2.delete(key); },
+  };
+  if (kv) return {
+    name: "kv", keep: KEEP, max: MAX_BYTES,
+    async put(key, sql, meta) {
+      // KV metadata holds at most 1024 bytes: the counts of every table outgrew it (migration 0045 added three, and the put
+      // failed), so only tables with rows are listed, and past META_MAX only the totals (the dump itself is whole either way).
+      const m = JSON.stringify(meta).length > META_MAX ? { ...meta, counts: {} } : meta;
+      await kv.put(key, sql, { metadata: m });
+    },
+    async keys(prefix) { return (await kv.list({ prefix })).keys.map((k) => k.name); },
+    async drop(key) { await kv.delete(key); },
+  };
+  return null;
+}
+
+/** Write this week's dump (to R2 when bound, else KV) and drop copies beyond what that store keeps. Returns the key written. */
 export async function backupDatabase(env: Env, now = new Date()): Promise<string | null> {
-  if (!env.BACKUPS) return null;
+  const store = storeOf(env);
+  if (!store) return null;
   const { statements, counts } = await dumpStatements(env.DB);
   const sql = statements.join("\n") + "\n";
   const bytes = new TextEncoder().encode(sql).byteLength;
   const day = now.toISOString().slice(0, 10);
-  if (bytes > MAX_BYTES) {
-    console.error(JSON.stringify({ event: "backup_failed", reason: "too_big", bytes }));
+  if (bytes > store.max) {
+    console.error(JSON.stringify({ event: "backup_failed", reason: "too_big", bytes, store: store.name }));
     return null;
   }
   const key = `d1/apexnav-db/${day}.sql`;
-  // KV metadata holds at most 1024 bytes: the counts of every table outgrew it (migration 0045 added three, and the put failed),
-  // so only tables with rows are listed, and past META_MAX only the totals (the dump itself is whole either way).
   const rows = Object.values(counts).reduce((a, b) => a + b, 0), tables = Object.keys(counts).length;
-  let metadata: Record<string, unknown> = { bytes, counts: Object.fromEntries(Object.entries(counts).filter(([, n]) => n > 0)), tables, rows, at: now.toISOString() };
-  if (JSON.stringify(metadata).length > META_MAX) metadata = { bytes, counts: {}, tables, rows, at: now.toISOString() };
-  await env.BACKUPS.put(key, sql, { metadata });
-  const kept = (await env.BACKUPS.list({ prefix: "d1/apexnav-db/" })).keys.map((k) => k.name).sort().reverse();
+  await store.put(key, sql, { bytes, counts: Object.fromEntries(Object.entries(counts).filter(([, n]) => n > 0)), tables, rows, at: now.toISOString() });
+  const kept = (await store.keys("d1/apexnav-db/")).sort().reverse();
   // A run killed for CPU time writes no log line, so the next run reports the hole it finds.
   const prev = kept.find((k) => k < key);
   if (prev && now.getTime() - Date.parse(prev.slice(-14, -4)) > 8 * 86400_000) console.error(JSON.stringify({ event: "backup_gap", since: prev }));
-  const old = kept.slice(KEEP);
-  await Promise.all(old.map((k) => env.BACKUPS!.delete(k)));
-  console.log(JSON.stringify({ event: "backup", key, bytes, tables: Object.keys(counts).length, rows: Object.values(counts).reduce((a, b) => a + b, 0), dropped: old.length }));
+  const old = kept.slice(store.keep);
+  await Promise.all(old.map((k) => store.drop(k)));
+  console.log(JSON.stringify({ event: "backup", key, store: store.name, bytes, tables, rows, dropped: old.length }));
   return key;
 }

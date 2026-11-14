@@ -23,6 +23,7 @@ import {
   myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
+import { itemsDelete, itemsGet, itemsPut } from "./member_items";
 import * as drivePosts from "./drive_posts";
 import { afterCrewDrive, afterDuel, afterFriend, afterKudos, afterPostComment, afterPostKudos, pushForget, pushQuiet, pushRegister } from "./push";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
@@ -33,6 +34,7 @@ import { buildChatDelete, buildChatList, buildChatPost, buildCreate, buildDelete
 import { photoDelete, photoList, photoServe, photoUpload, photoUse } from "./photos";
 import { ctxServe } from "./context_grid";
 import { cameraList, graphIndex, graphTile } from "./graph";
+import { dataPut } from "./data_store";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
@@ -62,6 +64,7 @@ import { crewHomeSet, crewMeetCells } from "./crew_meet";
 import { chargers } from "./chargers";
 import { dailyServerCheck, serverSide, serviceHistory, serviceReport } from "./service_check";
 import { QUERY_WARN, countedDb } from "./query_budget";
+import { SHED_ROUTES, countedKv, countedR2, flushUsage, usageState } from "./usage";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
 type Handler = (req: Request, env: Env, m: RegExpMatchArray, ctx?: ExecutionContext) => Promise<Response>;
@@ -149,6 +152,10 @@ on("POST", "/api/invites", async (req, env) => json(await createInvite(env, awai
 // Signed in is enough to take your data or close your account, member or not (someone removed by the owner keeps both rights).
 on("GET", "/api/me/export", async (req, env) => json(await exportMyData(env, await requireUser(req, env))));
 on("DELETE", "/api/me", async (req, env) => deleteAccount(env, await requireUser(req, env), req));
+// Saved routes and pinned places on your account (member_items.ts): signed in is enough, they are your own
+on("GET", "/api/me/items", async (req, env) => json(await itemsGet(env, await requireUser(req, env), new URL(req.url))));
+on("PUT", "/api/me/items", async (req, env) => json(await itemsPut(env, await requireUser(req, env), req)));
+on("DELETE", "/api/me/items", async (req, env) => { await itemsDelete(env, await requireUser(req, env), new URL(req.url)); return noContent(); });
 on("PUT", "/api/me/handle", async (req, env) => { await setHandle(env, await requireMember(req, env), req); return noContent(); });
 
 on("PUT", "/api/me/contribute", async (req, env) => { await setContribute(env, await requireMember(req, env), req); return noContent(); });
@@ -302,10 +309,12 @@ on("POST", "/api/presence", async (req, env) => { await presencePublish(env, awa
 on("GET", "/api/ctx/v1/index.json", (_req, env) => ctxServe(env, "v1/index.json"));
 on("GET", "/api/ctx/v1/8/:x/:y", (_req, env, m) => ctxServe(env, `v1/8/${m.groups!.x}/${m.groups!.y}`));
 // Vetta's own scored road network beyond Cincinnati (src/graph.ts): tiles from the repository's graph-data branch
-on("GET", "/api/graph/v1/index.json", (req) => graphIndex(req));
-on("GET", "/api/graph/v1/:name", (req, _env, m) => graphTile(req, m.groups!.name));
+on("GET", "/api/graph/v1/index.json", (req, env) => graphIndex(req, fetch, env));
+on("GET", "/api/graph/v1/:name", (req, env, m) => graphTile(req, m.groups!.name, fetch, env));
 // Avoid cameras' own camera list for the region (graph.ts cameraList; web/cameras.js), from the graph-data branch
-on("GET", "/api/cameras/v1/region.json", () => cameraList());
+on("GET", "/api/cameras/v1/region.json", (_req, env) => cameraList(fetch, env));
+// CI's upload of the map data into R2 (src/data_store.ts): a GitHub OIDC token of this repository's main branch, no secret
+on("PUT", "/api/ops/data", (req, env, _m, ctx) => dataPut(req, env, ctx));
 // photos (src/photos.ts, REVIEW.md 5.2): JPEG in, metadata out; members only
 on("POST", "/api/photos", async (req, env) => json(await photoUpload(env, await requireMember(req, env), req), 201));
 on("GET", "/api/photos", async (req, env) => json(await photoList(env, await requireMember(req, env), new URL(req.url))));
@@ -445,8 +454,8 @@ export default {
     if (req.method === "OPTIONS") return fromApp ? new Response(null, { status: 204, headers: APP_CORS }) : new Response(null, { status: 405 });
     const t0 = Date.now(), seen = { route: "" };
     // every D1 query this request makes is counted (src/query_budget.ts); tests set QUERY_LIMIT to fail like production would
-    const q = { n: 0 }, db = countedDb(env.DB, q, env.QUERY_LIMIT ? Number(env.QUERY_LIMIT) : undefined);
-    const res = await handle(req, new Proxy(env, { get: (t, k) => (k === "DB" ? db : Reflect.get(t, k)) }), seen, ctx);
+    const q = { n: 0 }, res = await handle(req, metered(env, q, env.QUERY_LIMIT ? Number(env.QUERY_LIMIT) : undefined), seen, ctx);
+    if (ctx) ctx.waitUntil(flushUsage(env));   // the usage guard's count (src/usage.ts), every 30 s per isolate
     if (ctx && q.n > QUERY_WARN) ctx.waitUntil(countError(env, { source: "server", kind: "queries", message: `${q.n} D1 queries in one request`, page: seen.route || "(none)", stack: "" }));
     // latency and error rates (IDEAS Y-17): sampled, 5xx always; written after the response
     const sampled = Math.random() < 1 / STATS_SAMPLE;
@@ -454,17 +463,36 @@ export default {
     return fromApp ? withAppCors(res) : res;
   },
   // Cron triggers (wrangler.jsonc triggers): the weekly database backup, and the daily sweep of expired rows.
-  async scheduled(ctrl: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(ctrl: ScheduledController, raw: Env, ctx: ExecutionContext): Promise<void> {
+    const env = metered(raw, { n: 0 });
     if (ctrl.cron === BACKUP_CRON) {
       ctx.waitUntil(runCron(env, "backup", async () => {
-        if (env.BACKUPS && !(await backupDatabase(env))) throw new Error("backup not written (too big)");
-      }));
+        // near this month's included D1 / KV amounts the backup waits for the 1st (src/usage.ts); last week's copy stays
+        if ((await usageState(env))?.shedding) { console.log(JSON.stringify({ event: "backup_skipped", reason: "usage" })); return; }
+        if ((env.ARCHIVE || env.BACKUPS) && !(await backupDatabase(env))) throw new Error("backup not written (too big)");
+      }).finally(() => flushUsage(raw, true)));
     } else {
-      ctx.waitUntil(runCron(env, "sweep", () => sweepExpired(env)));
+      ctx.waitUntil(runCron(env, "sweep", () => sweepExpired(env)).finally(() => flushUsage(raw, true)));
       ctx.waitUntil(dailyServerCheck(env));   // the service check's server side once a day, no phone needed (source 'server')
     }
   },
 };
+
+// The env a request or cron sees: its D1 queries counted (src/query_budget.ts) and its D1 rows and KV calls metered for
+// the usage guard (src/usage.ts).
+const KV_BINDINGS = new Set<PropertyKey>(["BACKUPS", "PHOTOS", "OSM", "CTX"]), R2_BINDINGS = new Set<PropertyKey>(["ARCHIVE", "DATA"]);
+function metered(env: Env, q: { n: number }, limit?: number): Env {
+  const db = countedDb(env.DB, q, limit), wrapped = new Map<PropertyKey, unknown>();
+  return new Proxy(env, {
+    get(t, k) {
+      if (k === "DB") return db;
+      const v = Reflect.get(t, k);
+      if (!v || !(KV_BINDINGS.has(k) || R2_BINDINGS.has(k))) return v;
+      if (!wrapped.has(k)) wrapped.set(k, KV_BINDINGS.has(k) ? countedKv(v as KVNamespace) : countedR2(v as R2Bucket));
+      return wrapped.get(k);
+    },
+  });
+}
 
 const D1_DAILY = /exceeded D1's free tier daily/i;
 const untilMidnightUtc = () => { const d = new Date(); return Math.max(60, Math.ceil((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) - d.getTime()) / 1000)); };
@@ -479,6 +507,10 @@ async function handle(req: Request, env: Env, seen: { route: string } = { route:
           route = name; seen.route = `${method} ${name}`;
           csrfCheck(req, env);
           await rateCheck(req, env, url.pathname);
+          if (SHED_ROUTES.has(route)) {   // near this month's included usage: optional uploads wait for the 1st (src/usage.ts)
+            const u = await usageState(env);
+            if (u?.shedding) return json({ error: "service_unavailable", scope: "uploads", until: u.until }, 503, { "retry-after": "3600" });
+          }
           return await handler(req, env, m, ctx);
         }
       }
@@ -490,7 +522,8 @@ async function handle(req: Request, env: Env, seen: { route: string } = { route:
       // service being down for the day, not a bug in the route (and it can't be counted: the count is a D1 write too)
       if (D1_DAILY.test(String(e instanceof Error ? e.message : e))) {
         console.error(JSON.stringify({ event: "d1_daily_limit", route }));
-        return json({ error: "service_unavailable" }, 503, { "retry-after": String(untilMidnightUtc()) });
+        const wait = untilMidnightUtc();
+        return json({ error: "service_unavailable", until: new Date(Date.now() + wait * 1000).toISOString() }, 503, { "retry-after": String(wait) });
       }
       console.error(e);
       await serverError(env, route || "(no route)", e);

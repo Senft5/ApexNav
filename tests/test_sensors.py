@@ -113,7 +113,7 @@ def test_recording_is_5m_samples_with_blanks(r):
     rec = r["rec"]
     assert rec["gaps"] and rec["km"] == pytest.approx(1.0, abs=0.01) and 195 <= rec["n"] <= 201
     assert rec["camberBlank"] and rec["src"] == "web-gps"
-    assert rec["head"] == "segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,roughness_rms,crest_vertical_g,vert_peak_g,source,camber_v"
+    assert rec["head"] == "segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,roughness_rms,crest_vertical_g,vert_peak_g,source,camber_v,t_s"
     assert rec["peakBlank"]                                                                # a browser cannot measure the spike
     assert rec["mph"] == pytest.approx(44.7, abs=0.2)
 

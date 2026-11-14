@@ -96,6 +96,8 @@ export async function exportMyData(env: Env, v: Viewer): Promise<Record<string, 
     road_first_drives_held: q("SELECT way_id, dir, slot, driven_on FROM rank_slots WHERE user_id = ?"),
     stage_shares: q(`SELECT s.name AS segment, x.audience_type, COALESCE(u.handle, c.name) AS audience FROM segment_shares x JOIN segments s ON s.id = x.segment_id
                        LEFT JOIN users u ON x.audience_type = 'friend' AND u.id = x.audience_id LEFT JOIN crews c ON x.audience_type = 'crew' AND c.id = x.audience_id WHERE s.owner = ?`),
+    // saved routes and pinned places kept on your account (member_items.ts); a removed one shows with body null until swept
+    saved_routes_and_places: q("SELECT kind, item_id AS id, body, at, seen FROM member_items WHERE user_id = ?"),
     octane_redemptions: q("SELECT item, octane, created_at FROM redemptions WHERE user_id = ?"),
     note: "Merged road data (banking, roughness, crests per 5 m bin) is anonymous once merged (what still waits to merge is in road_data_waiting) and cannot be traced to you, so it is not part of this export and is not deleted with your account.",
   };

@@ -959,7 +959,7 @@
       if (dvCurrent && dvCurrent.id !== id) {                            // another drive: nothing of the last one stays on its page
         $('tab-drive').insertBefore(dvActs, $('dvRoot'));
         if (dvView) dvView.destroy();
-        dvView = null; dvCurrent = null; dvInfo = null;
+        dvView = null; dvCurrent = null; dvInfo = null; dcPanel = null;
         $('dvRoot').replaceChildren(); $('dvDashcam').replaceChildren();
         for (const k of ['dvRoad', 'dvVote', 'dvRecce', 'dvFlyby', 'dvTouch', 'dvBest']) $(k).hidden = true;
       }
@@ -975,15 +975,28 @@
       if (dvView) dvView.destroy();
       const reference = dvInfo.reference || null, coach = dvInfo.coach || null;
       $('tab-drive').insertBefore(dvActs, $('dvRoot'));                // out of the root before it is redrawn
-      dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach, mapPalette: () => look.map, traceOf: (k) => ApexAnalysis.job('cornerTrace', { id, k }) }); dvCurrent = d;
+      dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach, mapPalette: () => look.map, traceOf: (k) => ApexAnalysis.job('cornerTrace', { id, k }),
+        // one tap from a corner to its clip, from the app's own video of the drive (the Dashcam panel below, big bet 5)
+        canClip: (s, e) => !!(dcPanel && dcPanel.canClip && dcPanel.canClip(s, e)), clip: (s, e) => (dcPanel && dcPanel.clip ? dcPanel.clip(s, e) : false),
+        // and the best pass's video beside it, when that drive was filmed too (ghost_clip.js)
+        ghostOf: async (k, r) => {
+          if (!dcPanel || !dcPanel.canGhost || !r || !r.other || !r.trace || !r.trace.b_win || !d.corners[k]) return null;
+          const raw = await ApexRecording.get(r.other.id), c = d.corners[k];
+          const other = raw ? { d: raw, bWin: r.trace.b_win, trace: r.trace, when: r.other.date } : null;
+          return other && dcPanel.canGhost(c.start, c.end, other) ? () => dcPanel.ghost(c.start, c.end, other) : null;
+        } }); dvCurrent = d;
       const dvHead = $('dvRoot').querySelector('.dv-head');
       if (dvHead) dvHead.after(dvActs);                                  // the score first, then Replay
       // a video from this drive with its numbers on it (dashcam.js, IDEAS D-11)
       if (window.ApexDashcam && ApexDashcam.supported() && Array.isArray(d.speed_mps) && d.speed_mps.length > 20) {
         const mk = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
-        $('dvDashcam').replaceChildren(ApexDashcam.mount({ el: mk, Core, d, fmtSpeed: (v) => `${Math.round(ApexUnits.speed(v))} ${ApexUnits.speedU()}`,
-          save: (blob, name, type) => ApexSaveFile.saveFile(blob, name, type) }));
-      } else $('dvDashcam').replaceChildren();
+        $('dvDashcam').replaceChildren(dcPanel = ApexDashcam.mount({ el: mk, Core, d, fmtSpeed: (v) => `${Math.round(ApexUnits.speed(v))} ${ApexUnits.speedU()}`,
+          save: (blob, name, type) => ApexSaveFile.saveFile(blob, name, type),
+          // the app's own film of the drive (DriveCam.swift, big bet 5): served by the app at drivecam/; the web has none
+          ...(location.protocol === 'apexnav:' || window.APEX_DRIVECAM ? {
+            ownVideos: () => fetch(`${window.APEX_DRIVECAM || 'drivecam/'}index.json`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : [])),
+            videoUrl: (name) => `${window.APEX_DRIVECAM || 'drivecam/'}${encodeURIComponent(name)}` } : {}) }));
+      } else { dcPanel = null; $('dvDashcam').replaceChildren(); }
       renderRoadHistory(d, dvInfo.road || []);
       renderTouch(dvInfo.touch || null);
       loadRoadFeel(d, dvView);
@@ -1039,6 +1052,7 @@
       }));
       $('dvNoteText').value = d.note || '';
     }
+    let dcPanel = null;                                                // the Dashcam panel of the drive shown (its one-tap clips)
     let dvCurrent = null;                                              // the drive the page shows, whole
     const currentDrive = () => (dvCurrent && dvCurrent.id === $('dvPick').value ? dvCurrent : null);
     async function addTag() {

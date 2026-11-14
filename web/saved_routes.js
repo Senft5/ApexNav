@@ -38,7 +38,23 @@
       fun: t.fun || null, timeS: finite(t.timeS) ? t.timeS : null, why: typeof t.why === 'string' ? t.why : null,
       unavoided: Array.isArray(t.unavoided) ? t.unavoided : [], townKm: finite(t.townKm) || t.townKm === null ? t.townKm : undefined,
       miles: Array.isArray(t.dist) && t.dist.length ? Math.round(t.dist[t.dist.length - 1] / 160.9344) / 10 : null,
+      // the road marks the map gave (road_marks.js: stop signs, rail crossings, one-lane bridges, bumps), so they are
+      // called with no signal too; kept by distance along the route
+      marks: Array.isArray(t.marks) && t.marks.length ? t.marks.filter((m) => m && finite(m.dist_m)).map((m) => ({ kind: m.kind, code: m.code, call: m.call, m: Math.round(m.dist_m), lat: r6(m.lat), lon: r6(m.lon) })) : undefined,
     };
+  }
+
+  /** Saved road marks back as note events on a rebuilt track's distances, or undefined (none kept: the map is asked). */
+  function marksOn(saved, dist) {
+    if (!Array.isArray(saved) || !saved.length || !Array.isArray(dist) || !dist.length) return undefined;
+    const out = [];
+    for (const k of saved) {
+      if (!k || !finite(k.m) || typeof k.call !== 'string' || k.m > dist[dist.length - 1] + 1) continue;
+      let lo = 0, hi = dist.length - 1;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (dist[mid] < k.m) lo = mid + 1; else hi = mid; }
+      out.push({ type: 'mark', kind: k.kind, code: k.code, call: k.call, index: lo, dist_m: dist[lo], lat: k.lat, lon: k.lon });
+    }
+    return out.length ? out : undefined;
   }
 
   /** The fields to put back on a track rebuilt from `p.coords` (its `dist`, metres along it). */
@@ -48,6 +64,7 @@
       request: p.request || null, steps: Array.isArray(p.steps) ? p.steps : [], timeMarks: Array.isArray(p.timeMarks) ? p.timeMarks : [],
       limitMps: limits || undefined, fun: p.fun || null, timeS: finite(p.timeS) ? p.timeS : null,
       why: typeof p.why === 'string' ? p.why : null, unavoided: Array.isArray(p.unavoided) ? p.unavoided : [], townKm: p.townKm,
+      marks: marksOn(p.marks, dist),
     };
   }
 

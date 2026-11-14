@@ -66,7 +66,7 @@ export async function serverError(env: Env, route: string, err: unknown): Promis
 const REPEAT_N = 25, REPEAT_MIN = 30;
 export async function failingRoutes(env: Env): Promise<string[]> {
   const rows = (await env.DB.prepare(
-    `SELECT kind, SUM(n) AS n FROM error_counts WHERE source = 'server' AND day = date('now') AND kind NOT LIKE 'cron %' AND kind NOT IN ('service', 'queries')
+    `SELECT kind, SUM(n) AS n FROM error_counts WHERE source = 'server' AND day = date('now') AND kind NOT LIKE 'cron %' AND kind NOT IN ('service', 'queries', 'usage')
       GROUP BY kind HAVING SUM(n) >= ?1 AND MAX(last_at) > datetime('now', ?2) ORDER BY n DESC LIMIT 5`)
     .bind(REPEAT_N, `-${REPEAT_MIN} minutes`).all<{ kind: string }>()).results;
   return rows.map((r) => r.kind);
@@ -79,7 +79,7 @@ export async function errorSummary(env: Env, url: URL) {
     `SELECT source, kind, message, page, SUM(n) AS n, COUNT(*) AS days, MIN(day) AS first_day, MAX(last_at) AS last_at,
             (SELECT stack FROM error_counts s WHERE s.source = e.source AND s.kind = e.kind AND s.message = e.message AND s.page = e.page
               ORDER BY day DESC LIMIT 1) AS stack
-       FROM error_counts e WHERE day >= date('now', ?) AND kind != 'service' GROUP BY source, kind, message, page ORDER BY n DESC LIMIT 200`)
+       FROM error_counts e WHERE day >= date('now', ?) AND kind NOT IN ('service', 'usage') GROUP BY source, kind, message, page ORDER BY n DESC LIMIT 200`)
     .bind(`-${days - 1} days`).all()).results;
   return { days, errors: rows };
 }
