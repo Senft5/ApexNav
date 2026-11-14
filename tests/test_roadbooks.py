@@ -48,6 +48,12 @@ out.link = [R.link('https://vetta.example/', 'AbCdEfGhIjKlMnOp'), R.link('https:
 const svg = R.overview([{ geom: g, stamped: true }, { geom: g.map(([lo, la]) => [lo, la + 0.01]) }, { geom: [[1, 1]] }], { line: 'var(--panel-dim)', hi: 'var(--accent)' });
 out.esc = R.overview([{ geom: g }], { label: 'A "book" <img src=x onerror=1> & more' });
 out.svg = [(svg.match(/<path /g) || []).length, svg.indexOf('var(--panel-dim)') < svg.indexOf('var(--accent)'), /NaN|undefined/.test(svg), R.overview([]), R.overview([{ geom: [[1, 1]] }])];
+// Drive them all: nearest first from here, each from its nearer end, a road out of reach left out, at most four
+const rd = (id, lat0, rev) => { const gg = Array.from({ length: 20 }, (_, i) => [-84, lat0 + i * 0.001]); return { id, geom: rev ? gg.reverse() : gg }; };
+const T = (here, roads, max) => R.tour(here, roads, max).map((l) => l.road.id + (l.fwd ? '>' : '<'));
+const set = [rd('c', 35.2, true), rd('far', 37), rd('a', 35.0), rd('b', 35.1)];
+out.tour = { here: T({ lat: 34.99, lon: -84 }, set), noHere: T(null, set), cap: T({ lat: 34.99, lon: -84 }, [rd('a', 35), rd('b', 35.1), rd('c', 35.2), rd('d', 35.3), rd('e', 35.4)]),
+  two: T({ lat: 34.99, lon: -84 }, set, 2), away: T({ lat: 40, lon: -84 }, set), none: T({ lat: 35, lon: -84 }, []) };
 console.log(JSON.stringify(out));
 """
 
@@ -89,3 +95,12 @@ def test_wired_into_the_app():
         assert needle in cockpit, needle
     # the app's link handler passes the key on (apexnav://open?roadbook=…)
     assert '"roadbook"' in re.search(r"static let linkKeys: Set<String> = \[([^\]]*)\]", open(os.path.join(ROOT, "ApexNavApp.swift"), encoding="utf-8").read()).group(1)
+
+
+def test_drive_them_all_goes_nearest_first(out):
+    t = out["tour"]
+    assert t["here"] == ["a>", "b>", "c<"]            # c is drawn north to south: driven from its nearer (south) end
+    assert t["noHere"] == ["c>", "b<", "a<"]          # no location: the book's first road as drawn, then nearest
+    assert t["cap"] == ["a>", "b>", "c>", "d>"]       # four at most
+    assert t["two"] == ["a>", "b>"]
+    assert t["away"] == [] and t["none"] == []         # nothing within 150 km of here
