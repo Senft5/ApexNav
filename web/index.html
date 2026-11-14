@@ -1966,6 +1966,19 @@
       background: linear-gradient(var(--panel-ink), var(--panel-ink)) 0 0 / 30% 100% no-repeat var(--hair); animation: hud-seek 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
     @keyframes hud-seek { from { background-position: 0 0; } to { background-position: 100% 0; } }
     #driveBar[data-state="off"] .ds-main, #driveBar[data-state="zone"] .ds-main { color: var(--panel-ink); }
+    /* on a route, the trip figures as Apple and Google Maps set them: arrival, time left, distance left, big figures with
+       their units small under them; the recording and sharing a small line below */
+    #dsMain.has-trip { display: flex; flex-direction: column; gap: 3px; padding-bottom: 0; color: var(--panel-ink); }
+    #dsMain.has-trip::before, #dsMain.has-trip::after { display: none; }
+    #dsMain .trip { display: flex; flex-wrap: wrap; gap: 4px clamp(10px, 4vw, 18px); align-items: flex-end; white-space: nowrap; }   /* a figure too many for the width goes under, never past End */
+    #dsMain .tf { display: flex; flex-direction: column; line-height: 1; }
+    #dsMain .tf b { font-size: clamp(21px, 6.6vw, 26px); font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+    #dsMain .tf small { margin-top: 3px; font-size: 13px; font-weight: 600; color: var(--panel-dim); }
+    html[data-theme="tapedeck"] #dsMain .tf b { font-size: clamp(18px, 5.6vw, 24px); }   /* the dot font is wide (U-100) */
+    html[data-theme="tapedeck"] #dsMain .trip { column-gap: clamp(8px, 3.4vw, 16px); }
+    @media (max-width: 340px) { #app #hzReportBtn { padding: 0 6px; } }   /* the figures' room on a 320 px phone */
+    #dsMain .ds-sub { font-size: 13px; font-weight: 600; color: var(--panel-dim); }
+    #dsMain .ds-sub b { font-size: 13px; color: var(--panel-ink); }
     #app .transport { padding: 0 6px 10px; border-bottom: 1px solid var(--hair); }
     /* the replay's transport in the same hand: the trace bare on the paper, the speeds as numerals with the chosen one
        underlined in ink, Video a word; Done is the one key. The replay's name is a paper tag on the map. */

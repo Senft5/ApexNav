@@ -108,6 +108,26 @@
     return `${Math.round(leftS / 60)} min left`;
   }
 
+  /**
+   * The trip figures under the map on a route, as Apple and Google Maps set them: the arrival, the time left and the distance
+   * left, each { v, u } (the figure big, its unit small under it). `clock`: the arrival as the phone formats it ("2:36 PM",
+   * "14:36"); its AM/PM is dropped, the hour says it. `dist`: the distance left as words ("1.9 mi"), or '' unknown (no
+   * cell). Rough (under five miles of evidence) rounds to 5 min and says "~". null when there is no time left to show.
+   */
+  function figures(leftS, rough, clock, dist) {
+    if (!finite(leftS) || typeof clock !== 'string' || !clock.trim()) return null;
+    const out = [{ v: clock.replace(/\s*[AaPp]\.?\s?[Mm]\.?$/, '').trim(), u: 'arrival' }];
+    if (leftS < 60) out.push({ v: '<1', u: 'min' });
+    else {
+      const approx = rough && leftS > ROUGH_MIN_LEFT_S, min = approx ? Math.max(1, Math.round(leftS / ROUND_S)) * ROUND_S / 60 : Math.round(leftS / 60);
+      const v = min < 60 ? String(min) : `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
+      out.push({ v: (approx ? '~' : '') + v, u: min < 60 ? 'min' : 'hr' });
+    }
+    const d = typeof dist === 'string' ? dist.trim().match(/^(\S+)\s+(\S+)$/) : null;
+    if (d) out.push({ v: d[1], u: d[2] });
+    return out;
+  }
+
   // "Home by" on a loop (IDEAS R-37): offer the way home when the live arrival is more than LATE_GRACE_MS past the time the
   // driver set, once, and again only after REOFFER_MS if still late. `offeredAt` is when it was last offered (or null).
   const LATE_GRACE_MS = 5 * 60000, REOFFER_MS = 10 * 60000;
@@ -178,7 +198,7 @@
     return { timeS: s, marks };
   }
 
-  const api = { routerLeft, cornerSections, createEta, leftText, homeByOffer, homeByAction, homeByAt, envelopeTime, PACE_MIN, PACE_MAX, LATE_GRACE_MS };
+  const api = { routerLeft, cornerSections, createEta, leftText, figures, homeByOffer, homeByAction, homeByAt, envelopeTime, PACE_MIN, PACE_MAX, LATE_GRACE_MS };
   api.ENVELOPE = { ENVELOPE_SHARE, OPEN_LIMIT_MPS, TOWN_SHARE, UNPOSTED_MPS, UNKNOWN_MPS, FLOOR_MPS };   // U-97 (tests)
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexEta = api;
 })(typeof window !== 'undefined' ? window : globalThis);
