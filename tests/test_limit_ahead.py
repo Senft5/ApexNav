@@ -64,6 +64,6 @@ def test_the_line_in_the_drivers_units(out):
 
 def test_wired_first_through_the_quiet_gate():
     js = open(os.path.join(ROOT, "web", "cockpit.js")).read()
-    assert "const quiet = limitSay || brakeSay || sunSay || breakSay || flowSay;" in js
+    assert "const quiet = limitSay || briefSay || brakeSay || sunSay || breakSay || flowSay;" in js
     assert "ApexLimitAhead.due(drop, state.cursorM, vMps)" in js and "drive.limitSaid = null" in js
     assert '<script src="limit_ahead.js" defer></script>' in open(os.path.join(ROOT, "web", "index.html")).read()
