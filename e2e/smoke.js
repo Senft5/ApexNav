@@ -6986,7 +6986,7 @@ flow('post media: a friend\'s photo shows on their post in the Feed, and Add a p
   check(order[0] === 'POST /api/posts application/json' && order[1] === 'PUT /api/posts/P2AAAAAAAAAAAAAA/media image/jpeg' && posts[1].n > 100, 'the post, then its photo as a JPEG: ' + JSON.stringify(order));
   check(/Posted to your friends\./.test(await page.textContent('#toast')), 'and it says where it went');
 });
-flow('the full Feed picks whose posts: All, Friends or one crew (Worker stubbed, 2026-11-14)', async (page, base) => {
+flow('the full Feed picks whose posts (All, Friends or one crew) and mutes a driver (Worker stubbed, 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   const asked = [];
   const post = (n, crew) => ({ id: `P${n}AAAAAAAAAAAAAAA`.slice(0, 16), handle: 'bob', photo_id: null, mine: false, crew, title: `Drive ${n}`, caption: null, driven_on: '2026-11-12',
@@ -7018,6 +7018,16 @@ flow('the full Feed picks whose posts: All, Friends or one crew (Worker stubbed,
   await page.waitForFunction(() => [...document.querySelectorAll('.people-pop.open .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 5,Drive 3');
   check(asked.includes('?friends=1') && asked.includes('?crew=k1'), 'each pick asks the Worker for its posts: ' + JSON.stringify(asked));
   check(await page.getAttribute('.people-pop.open .feed-pick button:has-text("Ridge Runners")', 'aria-checked') === 'true', 'the crew is the one on');
+  // (2026-11-14) Mute: ··· on bob's post, Mute @bob; his drives leave the Feed, Muted lists him, Unmute brings them back
+  await page.click('.people-pop.open .feed-pick button:has-text("All")');
+  await page.waitForFunction(() => document.querySelectorAll('.people-pop.open .feed-card').length === 5);
+  await page.click('.people-pop.open .feed-card .feed-more');
+  await page.click('.feed-menu button:has-text("Mute @bob")');
+  await page.waitForFunction(() => !document.querySelector('.people-pop.open .feed-card') && !document.querySelector('#accountBody .feed-sec .feed-card'));
+  check(await page.textContent('.people-pop.open .feed-muted') === 'Muted@bobUnmute' && await page.evaluate(() => localStorage.getItem('apex.feedMuted')) === '["bob"]',
+    'muted, kept on the phone: ' + await page.textContent('.people-pop.open .feed-muted'));
+  await page.click('.people-pop.open .feed-muted button:has-text("Unmute")');
+  await page.waitForFunction(() => document.querySelectorAll('.people-pop.open .feed-card').length === 5 && document.querySelector('.people-pop.open .feed-muted').hidden);
 });
 
 flow('Garage → You shows your own drive posts, three and See all, with Delete on each (Worker stubbed, docs/SOCIAL.md 2.13)', async (page, base) => {

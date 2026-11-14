@@ -157,6 +157,9 @@
   }
   /** The board is worth showing once someone besides you posted this week. */
   const weekShown = (rows) => Array.isArray(rows) && rows.some((r) => r && !r.you);
+  /** The Feed without the drivers you muted (muted: a Set of handles); your own posts always stay. Not their profile,
+   *  not a crew's page: muting only quiets your Feed. */
+  const unmuted = (rows, muted) => (Array.isArray(rows) ? rows.filter((p) => p && (p.mine || p.you || !muted.has(p.handle))) : rows);
   /** The card's facts, in the order a driver reads them: length, then the roads (two named, the rest counted). */
   function facts(p, fmtLen) {
     const roads = Array.isArray(p.roads) ? p.roads : [];
@@ -247,6 +250,16 @@
     const withMentions = (text) => el('p', {}, ...mentionParts(text).map(([at, t]) => (at ? el('b', { textContent: t }) : root.document.createTextNode(t))));
     const doc = root.document;
     if (doc && !doc.getElementById('drivePostsStyle')) doc.head.append(el('style', { id: 'drivePostsStyle', textContent: STYLE }));
+    // Mute (2026-11-14): whose drives stay off your Feed, kept on this phone only (apex.feedMuted, handles)
+    const MUTE_KEY = 'apex.feedMuted';
+    const muted = new Set((() => { try { const l = JSON.parse(root.localStorage.getItem(MUTE_KEY) || '[]'); return Array.isArray(l) ? l.filter((h) => typeof h === 'string') : []; } catch (_) { return []; } })());
+    const keepMuted = () => { try { root.localStorage.setItem(MUTE_KEY, JSON.stringify([...muted])); } catch (_) {} };
+    const onMute = new Set();   // the Feed's lists, each redrawn when someone is muted or unmuted
+    const setMuted = (handle, on) => { if (on) muted.add(handle); else muted.delete(handle); keepMuted(); onMute.forEach((f) => f()); };
+    const mute = (handle) => {
+      setMuted(handle, true);
+      toast(`Muted @${handle}. Their drives are off your Feed.`, { label: 'Undo', onClick: () => setMuted(handle, false) });
+    };
     const face = (p, px) => (page.avatar ? page.avatar(p.photo_id || null, p.handle, px) : el('span'));
     const sheet = (label, cls = '') => {
       const ov = el('div', { className: `overlay dim show ${cls}` });
@@ -388,6 +401,7 @@
         }, 'ink-btn'));
         else {
           if (page.report) keys.append(btn('Report', () => { s.close(); page.report({ kind: 'drive', target: p.id, label: `@${p.handle}'s drive "${p.title}"`, who: p.handle }); }, 'ink-btn'));
+          if (p.handle && o.mute) keys.append(btn(`Mute @${p.handle}`, () => { s.close(); o.mute(p.handle); }, 'ink-btn'));
           if (page.block && p.handle) keys.append(btn(`Block @${p.handle}`, () => { s.close(); page.block(p.handle); }, 'ink-btn'));
         }
         keys.append(btn('Cancel', s.close, 'linkbtn'));
@@ -508,8 +522,10 @@
       const wrow = el('div', { className: 'week-row', role: 'group', 'aria-label': 'This week' });
       week.append(el('b', { textContent: 'This week' }), wrow);
       const fmtLen = page.fmtLen || ((m) => `${(m / 1000).toFixed(1)} km`);
-      apiCall('GET', '/api/feed/week').then(jsonOf).then((rows) => {
-        if (!weekShown(rows)) return;
+      const wk = () => apiCall('GET', '/api/feed/week').then(jsonOf).then((all) => {
+        const rows = unmuted(all, muted);
+        week.hidden = !weekShown(rows);
+        if (week.hidden) return;
         wrow.replaceChildren(...rows.map((r, i) => {
           const tap = !r.you && page.openFriend;   // your own card is a plain card, a friend's opens their profile
           const c = el(tap ? 'button' : 'div', { ...(tap ? { type: 'button' } : {}), className: 'week-card', 'aria-label': `${i + 1}. ${r.you ? 'You' : '@' + r.handle}, ${weekLine(r, fmtLen)}` },
@@ -517,16 +533,20 @@
           if (tap) c.addEventListener('click', () => page.openFriend(r.handle));
           return c;
         }));
-        week.hidden = false; box.hidden = false;
+        box.hidden = false;
       }).catch(() => {});
+      wk();
       box.append(el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Feed' }), all), week, list);
-      const redo = () => apiCall('GET', '/api/feed').then(jsonOf).then((rows) => {
+      const redo = () => apiCall('GET', '/api/feed').then(jsonOf).then((got) => {
+        const rows = unmuted(got, muted);
         if (!Array.isArray(rows)) return;
-        list.replaceChildren(...rows.slice(0, PREVIEW).map((p) => card(p, { after: redo })));
+        list.replaceChildren(...rows.slice(0, PREVIEW).map((p) => card(p, { after: redo, mute })));
         all.hidden = rows.length <= PREVIEW;
         box.hidden = !rows.length && week.hidden;
       }).catch(() => {});
       redo();
+      const again = () => { if (!box.isConnected) { onMute.delete(again); return; } wk(); redo(); };   // a redrawn People drops the old one
+      onMute.add(again);
       return box;
     }
     /** A friend's drives on their profile (author: their user id): their newest posts you can see, as cards. Hidden while
@@ -559,7 +579,7 @@
         const g = gen, q = [only, last ? `before=${encodeURIComponent(last)}` : ''].filter(Boolean).join('&');
         return apiCall('GET', `/api/feed${q ? `?${q}` : ''}`).then(jsonOf).then((rows) => {
           if (g !== gen || !Array.isArray(rows)) return;   // a newer pick is loading
-          list.append(...rows.map((p) => card(p, {})));
+          list.append(...unmuted(rows, muted).map((p) => card(p, { mute })));
           last = rows.length ? rows[rows.length - 1].created_at : last;
           more.hidden = rows.length < 30;
           if (!list.childElementCount) list.append(el('p', { className: 'note', textContent: only ? 'Nothing posted here yet.' : 'No drives posted yet. Post yours from the card after a drive.' }));
@@ -567,6 +587,7 @@
       };
       const show = (q) => {
         only = q; last = null; gen += 1; list.replaceChildren();
+        paintMuted();
         pick.querySelectorAll('button').forEach((b) => { const on = b.dataset.q === q; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
         load();
       };
@@ -577,8 +598,17 @@
         pick.replaceChildren(...opts.map(([q, label]) => { const b = btn(label, () => show(q), 'chip'); b.dataset.q = q; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(q === only)); b.classList.toggle('on', q === only); return b; }));
         pick.hidden = false;
       }).catch(() => {});
+      // who you muted, under the list, each with Unmute (kept on this phone)
+      const mutedBox = el('div', { className: 'stack-8 feed-muted' });
+      const paintMuted = () => {
+        mutedBox.hidden = !muted.size;
+        mutedBox.replaceChildren(el('b', { textContent: 'Muted' }), ...[...muted].map((h) => el('div', { className: 'row feed-muted-row' },
+          el('span', { textContent: `@${h}` }), btn('Unmute', () => setMuted(h, false), 'linkbtn'))));
+      };
+      onMute.add(() => show(only));
+      paintMuted();
       load();
-      return el('div', { className: 'stack-12' }, pick, list, more);
+      return el('div', { className: 'stack-12' }, pick, list, more, mutedBox);
     }
     // a post's body: the drive's card, its line without its ends (trimLine), to a crew (to) or your friends (null)
     function bodyOf(d, to, caption) {
@@ -686,6 +716,6 @@
     return { section, full, open, compose, post, remove, card, drivesOf, crewDrives };
   }
 
-  const api = { trimLine, encode, decode, throughPoints, stretch, rivalsOf, rivalLine, lineSvg, ago, facts, weekLine, weekShown, mentionParts, mentionAt, suggest, kudosLine, mount, CUT_M, MAX_POINTS };
+  const api = { unmuted, trimLine, encode, decode, throughPoints, stretch, rivalsOf, rivalLine, lineSvg, ago, facts, weekLine, weekShown, mentionParts, mentionAt, suggest, kudosLine, mount, CUT_M, MAX_POINTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDrivePosts = api;
 })(typeof window !== 'undefined' ? window : globalThis);
