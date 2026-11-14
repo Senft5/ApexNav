@@ -6,10 +6,11 @@
   // at sign-in lives in the iOS Keychain (IDEAS Z-10) and the shell makes the call (ApexApiBridge, `apexApi`), so page
   // script never holds it. On the web it is same-origin with the session cookie (HttpOnly).
   const IN_APP = typeof location !== 'undefined' && location.protocol === 'apexnav:';
-  const API_BASE = IN_APP ? 'https://apexnav.senftns.workers.dev' : '';
   // Links people share (a road, a roadbook, a convoy, an ETA, a friend) are on vettadrive.app (backend/src/hosts.ts), which opens
   // the app where it is installed (apple-app-site-association) and the web app where it isn't. A preview keeps its own host.
   const SITE = 'https://vettadrive.app';
+  // The app's /api calls go there too (since 2026-11-14); apexnav.senftns.workers.dev stays on for builds from before.
+  const API_BASE = IN_APP ? SITE : '';
   const SITE_BASE = IN_APP || (typeof location !== 'undefined' && location.hostname === 'apexnav.senftns.workers.dev') ? SITE
     : (typeof location !== 'undefined' ? location.origin : SITE);
   const TOKEN_KEY = 'apex.session', SIGNED_KEY = 'apex.signedIn';   // the token (older builds only) / a plain "signed in" flag

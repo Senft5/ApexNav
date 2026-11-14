@@ -114,11 +114,17 @@ export async function inbox(env: Env, v: Viewer) {
         WHERE c.author != ?1 AND p.author != ?1 AND u.handle IS NOT NULL AND c.created_at > datetime('now', '-${DAYS} days') AND c.body LIKE ?2
           AND ${NO_BLOCK("c.author", "?1")} AND NOT ${reportedSql("comment", "c.id")} AND ${POST_SEEN("p")}
         ORDER BY c.created_at DESC LIMIT 50`, me, `%@${v.handle}%`) : Promise.resolve([]),
-    // new roads in a roadbook you follow, added after you followed it, while you may still open it (one row a book)
-    all<{ book_id: string; book: string; by: string | null; n: number; road: string; at: string }>(env,
-      `SELECT b.id AS book_id, b.name AS book, u.handle AS by, COUNT(*) AS n, MAX(r.name) AS road, MAX(r.created_at) AS at
-         FROM roadbook_follows f JOIN roadbooks b ON b.id = f.book_id JOIN roadbook_roads r ON r.book_id = b.id JOIN users u ON u.id = b.owner
-        WHERE f.user_id = ?1 AND b.owner != ?1 AND r.created_at > f.created_at AND r.created_at > datetime('now', '-${DAYS} days') AND ${BOOK_SEEN}
+    // new roads someone else put in a roadbook you follow (after you followed it), keep, or share with a crew you are in
+    // (migration 0063), while you may still open it: one row a book, named by who added them when that is one member
+    all<{ book_id: string; book: string; by: string | null; n: number; road: string; at: string; people: number }>(env,
+      `SELECT b.id AS book_id, b.name AS book, MAX(u.handle) AS by, COUNT(*) AS n, MAX(r.name) AS road, MAX(r.created_at) AS at,
+              COUNT(DISTINCT COALESCE(r.added_by, b.owner)) AS people
+         FROM roadbooks b JOIN roadbook_roads r ON r.book_id = b.id JOIN users u ON u.id = COALESCE(r.added_by, b.owner)
+         LEFT JOIN roadbook_follows f ON f.book_id = b.id AND f.user_id = ?1
+        WHERE COALESCE(r.added_by, b.owner) != ?1 AND r.created_at > datetime('now', '-${DAYS} days')
+          AND (r.created_at > f.created_at OR b.owner = ?1
+               OR (b.crew_id IS NOT NULL AND EXISTS (SELECT 1 FROM crew_members cm WHERE cm.crew_id = b.crew_id AND cm.user_id = ?1)))
+          AND ${NO_BLOCK("u.id", "?1")} AND ${BOOK_SEEN}
         GROUP BY b.id ORDER BY at DESC LIMIT 10`, me),
   ]);
   const items: Item[] = [];
@@ -139,7 +145,7 @@ export async function inbox(env: Env, v: Viewer) {
       items.push({ kind: "duel_over", at: `${d.ends_on} 23:59:59`, handle: d.with, stage: d.stage, duel_kind: d.kind, result: duelOutcome(d) });
   }
   for (const f of follows) items.push({ kind: "follows", at: f.at, book_id: f.book_id, book: f.book, n: f.n });
-  for (const r of bookRoads) items.push({ kind: "book_roads", at: r.at, book_id: r.book_id, book: r.book, handle: r.by, n: r.n, road: r.n === 1 ? r.road : null });
+  for (const r of bookRoads) items.push({ kind: "book_roads", at: r.at, book_id: r.book_id, book: r.book, handle: r.people === 1 ? r.by : null, n: r.n, road: r.n === 1 ? r.road : null });
   for (const e of drives) items.push({ kind: "crew_drive", at: e.at, event_id: e.event_id, title: e.title, starts_at: e.starts_at, crew: e.crew, crew_id: e.crew_id });
   // a mention says more than "also commented": one row per post, the mention's
   const mentions = perPost(mentioned.filter((r) => mentionsOf(r.body, null).includes(v.handle!)).map(({ body: _b, ...r }) => r)), mPosts = new Set(mentions.map((g) => g.post_id));

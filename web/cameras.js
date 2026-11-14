@@ -13,7 +13,7 @@
   const KEEP_MS = 7 * 864e5, OLD_MS = 90 * 864e5, PREFIX = 'apex.cam.', MAX_TILES = 400, TIMEOUT_MS = 12000;
   const SERVERS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter',
     'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
-  const REGION_PATH = '/api/cameras/v1/region.json', WORKER = 'https://apexnav.senftns.workers.dev', REGION_WAIT_MS = 8000, REGION_RETRY_MS = 10 * 60000;
+  const REGION_PATH = '/api/cameras/v1/region.json', WORKER = 'https://vettadrive.app', REGION_WAIT_MS = 8000, REGION_RETRY_MS = 10 * 60000;
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
   const keyOf = (i, j) => `${i}_${j}`;

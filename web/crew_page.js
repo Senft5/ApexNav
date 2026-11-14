@@ -354,7 +354,7 @@
         // P-03: the run, the people, what they said, then the board. Nate 2026-11-12 (as easy as a big social app): three tabs
         // under the crew's name, Drives (with the members), Chat and Board, not one long page of all of it; the livery last
         const panes = {
-          drives: [driveSec, members(c), ...(page.posts ? [page.posts(c)] : []), ...(c.pinned ? [pinnedRow(c)] : []), meetShare(c)],   // posts: what members posted to the crew (drive_posts.js)
+          drives: [driveSec, members(c), ...(page.posts ? [page.posts(c)] : []), ...(page.books ? [page.books(c)].filter(Boolean) : []), ...(c.pinned ? [pinnedRow(c)] : []), meetShare(c)],   // posts: what members posted to the crew (drive_posts.js)
           chat: [chat(c, draw)],
           board: [boardSec, ...(c.house ? [houseBoard(c)] : []), buildsRow(c)],
         };
