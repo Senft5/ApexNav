@@ -823,7 +823,9 @@
     if (!Array.isArray(rows)) return null;
     const me = rows.findIndex((r) => r && r.self);
     if (me <= 0) return null;
-    const first = rows.slice(0, me).find((r) => r && r.matched >= 3 && Number.isFinite(r.delta_s));
+    // like with like (road_surface.js alike): a wet drive's first wet pass here, a dry drive's first dry (or unknown) one
+    const S = root.ApexRoadSurface, alike = (r) => !S || S.alike(rows[me].surface, r.surface);
+    const first = rows.slice(0, me).find((r) => r && alike(r) && r.matched >= 3 && Number.isFinite(r.delta_s));
     if (!first) return null;
     const a = rows[me].score, b = first.score;
     return { since: first.dateLabel || '', score_d: Number.isFinite(a) && Number.isFinite(b) ? a - b : null, gain_s: first.delta_s, matched: first.matched };

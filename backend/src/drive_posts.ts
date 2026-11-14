@@ -6,7 +6,7 @@
 // and the owner's queue can remove it. The author deletes their post; a comment's author or the post's author deletes it.
 // Nothing is kept about a drive but what the card shows: no times along the line, no speeds.
 import type { Viewer } from "./auth";
-import { DATE_RE, Env, HttpError, body, randomToken } from "./util";
+import { DATE_RE, Env, HANDLE_RE, HttpError, body, randomToken } from "./util";
 import { cleanText } from "./convoy";
 import { isCrewMember } from "./social";
 import { reportedSql } from "./reports_sql";
@@ -190,7 +190,7 @@ export async function postKudos(env: Env, v: Viewer, id: string, give: boolean):
 }
 
 /** POST /api/posts/:id/comments {body}: plain text, 280 characters at most, MAX_COMMENTS_HOUR an hour. → { id } and who to tell. */
-export async function commentCreate(env: Env, v: Viewer, id: string, req: Request): Promise<{ id: string; author: string; title: string }> {
+export async function commentCreate(env: Env, v: Viewer, id: string, req: Request): Promise<{ id: string; author: string; title: string; mentions: string[] }> {
   const p = await seenPost(env, v, id);
   const { body: text } = await body<{ body?: unknown }>(req);
   const t = cleanText(text, 280)?.trim();
@@ -203,7 +203,18 @@ export async function commentCreate(env: Env, v: Viewer, id: string, req: Reques
   if (total.results[0].n >= MAX_COMMENTS) throw new HttpError(409, "post_full");
   const cid = randomToken(12);
   await env.DB.prepare("INSERT INTO drive_comments (id, post_id, author, body) VALUES (?, ?, ?, ?)").bind(cid, id, v.id, t).run();
-  return { id: cid, author: p.author, title: p.title };
+  return { id: cid, author: p.author, title: p.title, mentions: mentionsOf(t, v.handle) };
+}
+
+/** The handles a comment @mentions (lower case, each once, five at most, never the writer's own). */
+export function mentionsOf(text: string, own: string | null): string[] {
+  const out = new Set<string>();
+  for (const m of text.matchAll(/(?:^|[^A-Za-z0-9_@])@([A-Za-z0-9_]{3,20})(?![A-Za-z0-9_])/g)) {
+    const h = m[1].toLowerCase();
+    if (HANDLE_RE.test(h) && h !== own) out.add(h);
+    if (out.size >= 5) break;
+  }
+  return [...out];
 }
 
 /** DELETE /api/comments/:id: the comment's author, or the post's author. */

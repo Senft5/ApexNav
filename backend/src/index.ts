@@ -27,7 +27,7 @@ import { deleteAccount, exportMyData } from "./account";
 import { itemsDelete, itemsGet, itemsPut } from "./member_items";
 import * as drivePosts from "./drive_posts";
 import { mediaGet, mediaPut } from "./post_media";
-import { afterCrewDrive, afterDuel, afterFriend, afterKudos, afterPostComment, afterPostKudos, pushForget, pushQuiet, pushRegister } from "./push";
+import { afterCrewDrive, afterDuel, afterFriend, afterKudos, afterPostComment, afterPostKudos, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewBadge, crewFeed, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
 import { decalsPlace } from "./livery";
@@ -396,7 +396,7 @@ on("POST", "/api/posts/:id/kudos", async (req, env, m, ctx) => {
 on("DELETE", "/api/posts/:id/kudos", async (req, env, m) => { await drivePosts.postKudos(env, await requireMember(req, env), m.groups!.id, false); return noContent(); });
 on("POST", "/api/posts/:id/comments", async (req, env, m, ctx) => {
   const v = await requireMember(req, env), c = await drivePosts.commentCreate(env, v, m.groups!.id, req);
-  await later(ctx, afterPostComment(env, v, m.groups!.id, c.author, c.title));
+  await later(ctx, afterPostComment(env, v, m.groups!.id, c.author, c.title, c.mentions));
   return json({ id: c.id }, 201);
 });
 on("PUT", "/api/posts/:id/media", async (req, env, m) => json(await mediaPut(env, await requireMember(req, env), m.groups!.id, req)));
@@ -409,6 +409,8 @@ on("POST", "/api/kudos", async (req, env, _m, ctx) => {
 });
 // push notifications (src/push.ts): this phone's APNs token, kept while signed in
 on("POST", "/api/push/token", async (req, env) => json(await pushRegister(env, await requireUser(req, env), req)));
+on("GET", "/api/push/kinds", async (req, env) => json(await pushKindsGet(env, await requireUser(req, env))));
+on("PUT", "/api/push/kinds", async (req, env) => json(await pushKindsPut(env, await requireUser(req, env), req)));
 on("PUT", "/api/push/quiet", async (req, env) => { await pushQuiet(env, await requireMember(req, env), req); return noContent(); });
 on("DELETE", "/api/push/token", async (req, env) => { const v = await requireUser(req, env); const b = (await req.json().catch(() => ({}))) as { token?: unknown }; await pushForget(env, v.id, b.token); return noContent(); });
 on("DELETE", "/api/kudos", async (req, env) => { await kudosTake(env, await requireMember(req, env), req); return noContent(); });

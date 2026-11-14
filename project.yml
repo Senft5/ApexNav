@@ -24,6 +24,7 @@ targets:
       - path: DriveCam.swift                            # films the drive from the mount (big bet 5)
       - path: CarPlay/ApexCarPlay.swift                 # the car's screen (docs/CARPLAY.md)
       - path: CarPlay/ApexCarMap.swift                  # its map, MapLibre Native (F-07)
+      - path: CarPlay/ApexCarOffline.swift              # its offline maps: the saved areas as MapLibre packs (F-02)
       - path: LiveActivity/ApexDriveAttributes.swift   # shared with the ApexNavLive extension
       - path: Assets.xcassets      # AppIcon: web/brand/icon-1024.png (single-size iOS icon)
       # Apple's privacy manifest (required for App Store uploads): no tracking, the App Privacy answers in docs/LISTING.md, and

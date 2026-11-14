@@ -10,6 +10,7 @@
 import { Env, HttpError } from "./util";
 import { serverError } from "./errors";
 import { Viewer } from "./auth";
+import { POST_SEEN } from "./drive_posts";
 import { apnsConfigured, sendAlert, TOKEN, type ApnsEnv } from "./apns";
 
 const MAX_TOKENS = 3;
@@ -45,9 +46,9 @@ export async function pushRegister(env: Env, v: Viewer, req: Request): Promise<{
   return { ok: true, sending: pushConfigured(env) };
 }
 
-/** DELETE /api/push/token {token}: this phone signs out or turns pushes off. No token: every phone of this person. */
+/** DELETE /api/push/token {token}: this phone signs out or turns pushes off. No token: every phone of this person, and the kinds turned off (Delete account). */
 export async function pushForget(env: Env, userId: string, token?: unknown): Promise<void> {
-  if (token === undefined || token === null || token === "") { await writeTokens(env, userId, []); return; }
+  if (token === undefined || token === null || token === "") { await writeTokens(env, userId, []); if (env.PHOTOS) await env.PHOTOS.delete(offKey(userId)); return; }
   const t = tokenOf(token);
   const list = await readTokens(env, userId);
   if (list.some((x) => x.t === t)) await writeTokens(env, userId, list.filter((x) => x.t !== t));
@@ -62,6 +63,32 @@ export async function pushQuiet(env: Env, v: Viewer, req: Request): Promise<void
   else await env.PHOTOS.delete(`pushquiet/${v.id}`);
 }
 
+/** The kinds a driver can each turn off (Garage → Settings → Notifications), and which pushes each holds. */
+export const PUSH_GROUPS: Record<string, string[]> = {
+  friends: ["request", "friend"], kudos: ["kudos", "post_kudos"], comments: ["post_comment"], duels: ["duel"], crews: ["crew_drive"],
+};
+const offKey = (userId: string) => `pushoff/${userId}`;
+const groupOf = (kind: string) => Object.keys(PUSH_GROUPS).find((g) => PUSH_GROUPS[g].includes(kind)) || null;
+async function offOf(env: Env, userId: string): Promise<string[]> {
+  if (!env.PHOTOS) return [];
+  try { const v = JSON.parse((await env.PHOTOS.get(offKey(userId))) || "[]"); return Array.isArray(v) ? v.filter((g) => typeof g === "string" && g in PUSH_GROUPS) : []; } catch (_) { return []; }
+}
+
+/** GET /api/push/kinds → { off }: the kinds this person turned off (none: every kind is on). */
+export async function pushKindsGet(env: Env, v: Viewer): Promise<{ off: string[]; kinds: string[] }> {
+  return { off: await offOf(env, v.id), kinds: Object.keys(PUSH_GROUPS) };
+}
+/** PUT /api/push/kinds {off}: kept in KV beside the tokens, written only when it changes, erased with the account. */
+export async function pushKindsPut(env: Env, v: Viewer, req: Request): Promise<{ off: string[] }> {
+  const b = (await req.json().catch(() => ({}))) as { off?: unknown };
+  if (!Array.isArray(b.off) || b.off.some((g) => typeof g !== "string" || !(g in PUSH_GROUPS))) throw new HttpError(400, "bad_kinds");
+  const off = Object.keys(PUSH_GROUPS).filter((g) => (b.off as string[]).includes(g));
+  if (!env.PHOTOS) return { off };
+  const was = await offOf(env, v.id);
+  if (was.join() !== off.join()) { if (off.length) await env.PHOTOS.put(offKey(v.id), JSON.stringify(off)); else await env.PHOTOS.delete(offKey(v.id)); }
+  return { off };
+}
+
 /** What a push says and where its tap goes: `link` is an app link the shell opens as any other (apexnav://open?view=friends). */
 export interface Push { kind: string; title: string; body: string; link: string }
 
@@ -74,6 +101,8 @@ export async function notify(env: Env, userIds: string[], p: Push): Promise<numb
     for (const id of [...new Set(userIds)].slice(0, 60)) {
       const list = await readTokens(env, id);
       if (!list.length || (await env.PHOTOS!.get(`pushquiet/${id}`))) continue;   // no phone, or driving now
+      const g = groupOf(p.kind);
+      if (g && (await offOf(env, id)).includes(g)) continue;                       // this kind turned off
       const gone: string[] = [];
       for (const k of list) {
         const r = await sendAlert(env, k.t, alert, (k.e ?? "production") as ApnsEnv);
@@ -98,6 +127,8 @@ export const PUSH = {
   duelOn: (from: string | null, stage: string): Push => ({ kind: "duel", title: "Duel on", body: `${at(from)} took your duel on ${stage}.`, link: `${LINK}?view=friends` }),
   postKudos: (from: string | null, title: string, post: string): Push => ({ kind: "post_kudos", title: "Kudos", body: `${at(from)} gave kudos to ${title}.`, link: `${LINK}?view=friends&post=${post}` }),
   postComment: (from: string | null, title: string, post: string): Push => ({ kind: "post_comment", title, body: `${at(from)} commented on your drive.`, link: `${LINK}?view=friends&post=${post}` }),
+  postAlso: (from: string | null, owner: string | null, title: string, post: string): Push => ({ kind: "post_comment", title, body: `${at(from)} also commented on ${owner ? `@${owner}'s` : "a"} drive.`, link: `${LINK}?view=friends&post=${post}` }),
+  postMention: (from: string | null, owner: string | null, title: string, post: string): Push => ({ kind: "post_comment", title, body: `${at(from)} mentioned you on ${owner ? `@${owner}'s` : "a"} drive.`, link: `${LINK}?view=friends&post=${post}` }),
   crewDrive: (crew: string, title: string, by: string | null): Push => ({ kind: "crew_drive", title: crew, body: `${at(by)} planned ${title}. Are you going?`, link: `${LINK}?view=crews` }),
 };
 
@@ -142,7 +173,26 @@ export async function afterPostKudos(env: Env, v: Viewer, post: string, author: 
   await notify(env, [author], PUSH.postKudos(v.handle, title, post));
 }
 
-/** A comment on your drive post, from someone else. Never the comment's words: a push is seen on a lock screen. */
-export async function afterPostComment(env: Env, v: Viewer, post: string, author: string, title: string): Promise<void> {
+/** A comment on your drive post, from someone else; to anyone it @mentions who can see the post; and to the others who
+ *  commented on it before (who can still see it), as any social app does. Never to or from someone blocked, never twice to
+ *  one person, and never the comment's words: a push is seen on a lock screen. */
+export async function afterPostComment(env: Env, v: Viewer, post: string, author: string, title: string, mentions: string[] = []): Promise<void> {
   if (author !== v.id) await notify(env, [author], PUSH.postComment(v.handle, title, post));
+  if (!pushConfigured(env)) return;
+  const told = new Set([author, v.id]);
+  const NO_BLOCK = (who: string) => `NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ${who} AND b.blocked = ?3) OR (b.blocker = ?3 AND b.blocked = ${who}))`;
+  if (mentions.length) {
+    const r = await env.DB.prepare(`SELECT u.id, ou.handle AS owner FROM users u JOIN drive_posts p ON p.id = ?2 JOIN users ou ON ou.id = p.author
+       WHERE u.handle IN (${mentions.map((_, i) => `?${i + 4}`).join(", ")}) AND u.id != ?3 AND ${NO_BLOCK("u.id")} AND ${POST_SEEN("p").replaceAll("?1", "u.id")}`)
+      .bind(null, post, v.id, ...mentions).all<{ id: string; owner: string | null }>();
+    const to = r.results.filter((x) => !told.has(x.id));
+    for (const x of to) told.add(x.id);
+    if (to.length) await notify(env, to.map((x) => x.id), PUSH.postMention(v.handle, to[0].owner, title, post));
+  }
+  const seen = POST_SEEN("p").replaceAll("?1", "c.author");   // the post as each earlier commenter sees it
+  const r = await env.DB.prepare(`SELECT DISTINCT c.author AS id, ou.handle AS owner FROM drive_comments c JOIN drive_posts p ON p.id = c.post_id JOIN users ou ON ou.id = p.author
+     WHERE c.post_id = ?2 AND c.author != ?3 AND c.author != p.author AND ${NO_BLOCK("c.author")} AND ${seen}
+     LIMIT 20`).bind(null, post, v.id).all<{ id: string; owner: string | null }>();
+  const rows = r.results.filter((x) => !told.has(x.id));
+  if (rows.length) await notify(env, rows.map((x) => x.id), PUSH.postAlso(v.handle, rows[0].owner, title, post));
 }

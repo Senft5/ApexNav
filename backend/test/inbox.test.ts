@@ -2,7 +2,8 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { api, befriend, freshDb, makeSegment, makeUser, ok, type TestUser } from "./helpers";
-import { duelOutcome } from "../src/inbox";
+import { duelOutcome, perPost } from "../src/inbox";
+import { encodeLine, mentionsOf } from "../src/drive_posts";
 
 beforeEach(freshDb);
 type Msg = Record<string, any>;
@@ -88,6 +89,51 @@ describe("For you", () => {
     await env.DB.prepare("UPDATE ta_weeks SET removed = 1").run();
     expect(kinds(await inbox(a))).not.toContain("passed");
     await env.DB.prepare("UPDATE ta_weeks SET removed = 0").run();
+  });
+
+  it("kudos and comments on your drive post; a comment after yours on a friend's post; blocks hide them", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob"), c = await makeUser("cara");
+    await befriend(a, b); await befriend(a, c);
+    const line = encodeLine(Array.from({ length: 91 }, (_, i) => [35 + i * 0.001, -84] as [number, number]));
+    const { id } = await json(api(a, "POST", "/api/posts", { title: "Cherohala Skyway", driven_on: today, length_m: 10000, line }));
+    await ok(api(b, "POST", `/api/posts/${id}/kudos`));
+    await ok(api(b, "POST", `/api/posts/${id}/comments`, { body: "That fog!" }));
+    await env.DB.prepare("UPDATE drive_comments SET created_at = datetime('now', '-1 minute')").run();   // bob's comment came first
+    await ok(api(c, "POST", `/api/posts/${id}/kudos`));
+    await ok(api(c, "POST", `/api/posts/${id}/comments`, { body: "Next time I'm in" }));
+    const mine = (await inbox(a)).items;
+    expect(mine.find((i) => i.kind === "post_kudos")).toMatchObject({ post_id: id, title: "Cherohala Skyway", others: 1, yours: true });
+    expect(mine.find((i) => i.kind === "post_comment")).toMatchObject({ post_id: id, handle: "cara", others: 1, yours: true });
+    expect((await inbox(b)).items.filter((i) => i.kind.startsWith("post_"))).toEqual([expect.objectContaining({ kind: "post_comment", handle: "cara", owner: "alice", yours: false, others: 0 })]);
+    expect((await inbox(c)).items.filter((i) => i.kind.startsWith("post_"))).toEqual([]);   // nothing came after her comment
+    await ok(api(b, "POST", "/api/blocks", { handle: "cara" }));
+    expect((await inbox(b)).items.filter((i) => i.kind.startsWith("post_"))).toEqual([]);
+    await ok(api(a, "POST", "/api/blocks", { handle: "cara" }));
+    expect((await inbox(a)).items.find((i) => i.kind === "post_comment")).toMatchObject({ handle: "bob", others: 0 });
+  });
+
+  it("an @mention on a friend's post you can see; reads only real mentions; your own posts' comments stay comments", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob"), c = await makeUser("cara");
+    await befriend(a, b); await befriend(a, c);
+    const line = encodeLine(Array.from({ length: 91 }, (_, i) => [35 + i * 0.001, -84] as [number, number]));
+    const { id } = await json(api(a, "POST", "/api/posts", { title: "Cherohala Skyway", driven_on: today, length_m: 10000, line }));
+    await ok(api(c, "POST", `/api/posts/${id}/comments`, { body: "first" }));
+    await env.DB.prepare("UPDATE drive_comments SET created_at = datetime('now', '-1 minute')").run();
+    await ok(api(b, "POST", `/api/posts/${id}/comments`, { body: "@cara look, and @alice" }));
+    await ok(api(b, "POST", `/api/posts/${id}/comments`, { body: "mail me at x@carab.com" }));
+    const cs = (await inbox(c)).items.filter((i) => i.kind.startsWith("post_"));
+    expect(cs).toEqual([expect.objectContaining({ kind: "post_mention", post_id: id, handle: "bob", owner: "alice", others: 0 })]);   // not "also commented" too
+    expect(cs[0].body).toBeUndefined();
+    expect((await inbox(a)).items.filter((i) => i.kind.startsWith("post_")).map((i) => i.kind)).toEqual(["post_comment"]);
+    expect(mentionsOf("@Sam hi @sam, @al @bob_1 x@y.com @me", "me")).toEqual(["sam", "bob_1"]);
+  });
+
+  it("groups a post's rows: the newest person, how many others, at most ten posts", () => {
+    const r = (post_id: string, handle: string, at: string) => ({ post_id, title: post_id, handle, at, yours: 1, owner: null });
+    expect(perPost([r("p", "cara", "3"), r("p", "bob", "2"), r("p", "cara", "1"), r("q", "bob", "1")])).toEqual([
+      { post_id: "p", title: "p", handle: "cara", at: "3", yours: true, owner: null, others: 1 },
+      { post_id: "q", title: "q", handle: "bob", at: "1", yours: true, owner: null, others: 0 }]);
+    expect(perPost(Array.from({ length: 12 }, (_, i) => r(`p${i}`, "bob", "1"))).length).toBe(10);
   });
 
   it("a duel's outcome from your side, by Score or by time", () => {

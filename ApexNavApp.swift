@@ -545,6 +545,11 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             ApexCar.shared.receive(dict)
             return
         }
+        // The car map's offline maps (CarPlay/ApexCarOffline.swift): the page's saved areas, the whole list each time.
+        if cmd == "offlinePacks", let dict = body as? [String: Any] {
+            ApexCarOffline.shared.receive(dict)
+            return
+        }
         // The drive journal (Round 3, web/drive_keep.js): the fixes the page has not yet kept.
         if cmd == "journal", let dict = body as? [String: Any] {
             shell?.handleJournal(dict)
@@ -1035,6 +1040,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         liveInFlight = 0; liveStalled = false; backlogInFlight = false
         // what the driver picks on the car's screen goes to the page (CarPlay/ApexCarPlay.swift)
         ApexCar.shared.toPage = { [weak self] obj in self?.sendToPage(obj) }
+        ApexCarOffline.shared.toPage = { [weak self] obj in self?.sendToPage(obj) }
         pushLiveFrame()
         offerDriveIfReady()
         if let g = pendingGpx { pendingGpx = nil; deliverGpx(g) }
