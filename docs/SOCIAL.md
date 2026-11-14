@@ -153,8 +153,10 @@ and in random batches so a trace cannot be re-assembled.
 - A clip or a photo on a post (built 2026-11-13, `backend/src/post_media.ts`, migration 0061): Add a photo on the Post
   sheet (redrawn as a JPEG on the phone, so no EXIF), or the corner clip a drive's page hands over; in R2 (`MEDIA`,
   `post/<id>`), seen by exactly who sees the post, gone with it. In the Feed a clip plays muted and looping, a tap stops it.
-- Next: "Post to crew" from a corner clip on the drive's page (analysis thread adds the key, `page.post(blob, meta)`),
-  stages on the card. Kudos and comments push (2.12).
+- Stages on a post (built 2026-11-14): the stages you saved in the Log that the drive went over (at most three, in the
+  order driven) go on its post, each with its Vetta Score there (`--` when too few clean corners); never a time.
+- Next: "Post to crew" from a corner clip on the drive's page (analysis thread adds the key, `page.post(blob, meta)`).
+  Kudos and comments push (2.12).
 
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.

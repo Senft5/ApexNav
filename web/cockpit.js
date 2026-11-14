@@ -10413,7 +10413,10 @@
         if (plan && window.ApexAnalysis) try { practice = (await ApexAnalysis.job('practiceLine', { id: d.id, plan })).practice || null; } catch (_) { practice = null; }
         let coach = null, road = null;                                 // U-111: the Log's sentence, when the drive is stored; with it the road's line, which skips the practised skill
         if (d.ds.score != null && window.ApexAnalysis) try { const r = await ApexAnalysis.job('coachLine', { id: d.id, skip: practice && plan ? plan.skill : null }); coach = r.coach || null; road = r.road || null; } catch (_) { coach = null; road = null; }
-        endCardScored({ ...c, corners: d.corners.length, ds: d.ds, coach, practice, road }, others, opts);
+        let stages = [];                                               // your saved stages it went over, for its post
+        const segs = savedStages();
+        if (segs.length && window.ApexAnalysis) try { stages = (await ApexAnalysis.job('stagesOf', { id: d.id, segs })).stages || []; } catch (_) { stages = []; }
+        endCardScored({ ...c, corners: d.corners.length, ds: d.ds, coach, practice, road, stages }, others, opts);
       })();
     }
     // U-88: behind the card, the map is the drive: fitted to its trail above the card, the trail drawn at the route's width in
@@ -10511,8 +10514,10 @@
     const endPostOf = () => {
       const roads = Object.entries(drive.roads || {}).filter(([, m]) => m >= 500).sort((a, b) => b[1] - a[1]).map(([n]) => n);
       const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      return { name: endDrive.name, driven_on: day, len_m: endDrive.len_m, score: endDrive.ds && endDrive.ds.score, lat: endDrive.lat, lon: endDrive.lon, roads };
+      return { name: endDrive.name, driven_on: day, len_m: endDrive.len_m, score: endDrive.ds && endDrive.ds.score, lat: endDrive.lat, lon: endDrive.lon, roads, stages: endDrive.stages || [] };
     };
+    // your saved stages (the Log's, apex.segments), for the stages a drive's post shows with their Scores
+    function savedStages() { try { const l = JSON.parse(localStorage.getItem('apex.segments') || '[]'); return Array.isArray(l) ? l : []; } catch (_) { return []; } }
     const endPosted = (said) => { $('endPost').textContent = said; $('endPost').disabled = true; $('endPostMore').hidden = true; };
     const endPostReady = () => !!endDrive && !!drivePosts && !$('endPost').disabled && $('endPost').getAttribute('aria-disabled') !== 'true';   // not while scoring
     $('endPost').addEventListener('click', async () => {
@@ -10632,11 +10637,11 @@
         endCardOpen(card);
         try {
           const { rows: _, ...recState } = rec.snapshot(rec.samples);
-          const res = await ApexAnalysis.job('save', { state: recState, rows: rec.rows, fileName: job.fileName, meta: job.meta, extra, plan: practicePlan() });
+          const res = await ApexAnalysis.job('save', { state: recState, rows: rec.rows, fileName: job.fileName, meta: job.meta, extra, plan: practicePlan(), segs: savedStages() });
           keepDone(kept);
           const s = res.summary || {};
           endCardScored({ ...card, id: res.driveId, len_m: s.len_m ?? card.len_m, secs: s.secs ?? card.secs, corners: Array.isArray(s.corners) ? s.corners.length : null,
-                          ds: s.ds || { score: null, components: null }, card: res.card || null, coach: res.coach || null, practice: res.practice || null }, res.others || [], { quiet: !!ended });
+                          ds: s.ds || { score: null, components: null }, card: res.card || null, coach: res.coach || null, practice: res.practice || null, stages: res.stages || [] }, res.others || [], { quiet: !!ended });
           idle(() => refreshSavedDrives().catch(() => {}));            // the road memory learns this drive, off the card's moment
           if (live) {
             live.finish().then(async (shared) => {
