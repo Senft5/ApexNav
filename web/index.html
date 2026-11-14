@@ -113,6 +113,7 @@
   <script src="directions.js" defer></script>
   <script src="carplay.js" defer></script>
   <script src="cameras.js" defer></script>
+  <script src="place_info.js" defer></script>
   <script src="route_ctx/osm_common.js" defer></script>
   <script src="whats_new.js" defer></script>
   <script src="saved_routes.js" defer></script>
@@ -409,6 +410,10 @@
     .poi-pin { cursor: pointer; }
     .pinned-row { flex-wrap: nowrap; align-items: stretch; } .pinned-row .place { flex: 1; min-width: 0; }
     .dropped-pin { width: 24px; height: 24px; border: 3px solid var(--panel); background: var(--accent); border-radius: 50%; box-shadow: 0 0 0 2px var(--panel-ink); }
+    .pin-hours { margin: 2px 0 0; font-weight: 700; color: var(--panel-ink); }
+    .pin-hours.closed { color: var(--panel-dim); }   /* closed is not a warning: the signal colour stays for hazards */
+    .pin-contact { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 2px; }
+    .pin-contact a { flex: 1 1 0; min-width: 0; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pin-actions { display: grid; gap: 8px; }
     .pin-actions .ink-btn { width: 100%; text-align: left; }
     .spot-chips, .spot-stars { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -2478,6 +2483,9 @@
         <div class="card-sheet">
           <h2 id="pinPlace">--</h2>
           <p class="note" id="pinKind" hidden></p>
+          <!-- a named place's hours, phone and site, from its OSM tags (place_info.js); nothing until known -->
+          <p class="pin-hours" id="pinHours" hidden></p>
+          <div class="pin-contact" id="pinContact" hidden></div>
           <div class="pin-actions">
             <button class="ink-btn solid" id="pinGoBtn">Go here</button>
             <button class="ink-btn" id="pinFromBtn">Start from here</button>

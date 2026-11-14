@@ -10213,6 +10213,10 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
     if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(style) });
     if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
     return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) }); });
+  // the place's own OSM tags, from Overpass (place_info.js): open all day, a phone and a site
+  let asked = '';
+  await page.route(/^https:\/\/overpass/, (route) => { asked = decodeURIComponent(route.request().postData() || ''); return route.fulfill({ contentType: 'application/json',
+    body: JSON.stringify({ elements: [{ type: 'node', id: 1, tags: { name: 'Bean There Coffee', opening_hours: '24/7', phone: '+1 513 555 0101', website: 'beanthere.example.com' } }] }) }); });
   // on by default since the owner said yes (2026-11-14); apex.mapPlaces = '0' turns it off
   await planPage(page, base);
   await page.waitForFunction(() => apexDebug.map.getLayer('apex-places'), null, { timeout: 10000 });
@@ -10238,6 +10242,11 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
   await page.waitForSelector('#pinOverlay.show', { timeout: 3000 });
   const card = await page.evaluate(() => ({ name: document.getElementById('pinPlace').textContent, kind: document.getElementById('pinKind').textContent, go: !!document.getElementById('pinGoBtn').offsetParent }));
   check(card.name === 'Bean There Coffee' && /^Café · 0\.\d mi$/.test(card.kind) && card.go, 'the place card: its name, kind and how far: ' + JSON.stringify(card));
+  // then whether it is open, and Call and Website, from its own tags (2026-11-14, as Apple Maps' card)
+  await page.waitForFunction(() => !document.getElementById('pinHours').hidden && !document.getElementById('pinContact').hidden, null, { timeout: 5000 });
+  const more = await page.evaluate(() => ({ hours: document.getElementById('pinHours').textContent, keys: [...document.querySelectorAll('#pinContact a')].map((a) => [a.textContent, a.getAttribute('href'), a.getBoundingClientRect().height]) }));
+  check(more.hours === 'Open 24 hours' && JSON.stringify(more.keys.map((k) => k.slice(0, 2))) === '[["Call","tel:+15135550101"],["Website","https://beanthere.example.com/"]]' && more.keys.every((k) => k[2] >= 44)
+    && /"name"="Bean There Coffee"/.test(asked), 'the card says it is open and offers Call and Website: ' + JSON.stringify({ more, asked }));
   await page.click('#pinCancelBtn');
   // in a drive the map carries the road, not the shops
   await page.evaluate(() => { for (let i = 0; i < 5; i++) window.apex.live({ lat: 39.155 + i * 1e-5, lon: -84.615, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0, lon_g: 0 }); });
