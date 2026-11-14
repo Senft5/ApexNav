@@ -46,6 +46,21 @@
     try { while (i < s.length) { la += next(); lo += next(); pts.push([la / 1e5, lo / 1e5]); } } catch (_) { return []; }
     return pts;
   }
+  /** Up to max points along a post's line, evenly by distance, both ends kept: the stops a route is laid through so it
+   *  follows the friend's roads (the line itself is thinned, too coarse to draw corners from). [] for under two points. */
+  function throughPoints(pts, max = 12) {
+    if (!Array.isArray(pts) || pts.length < 2) return [];
+    const m = (a, b) => Math.hypot((b[0] - a[0]) * 111320, (b[1] - a[1]) * 111320 * Math.cos(a[0] * Math.PI / 180));
+    const along = [0];
+    for (let k = 1; k < pts.length; k++) along.push(along[k - 1] + m(pts[k - 1], pts[k]));
+    const total = along[along.length - 1], n = Math.max(2, Math.min(max, Math.round(total / 1500) + 1)), out = [];
+    for (let j = 0, k = 0; j < n; j++) {
+      const want = total * j / (n - 1);
+      while (k < pts.length - 1 && along[k] < want) k++;
+      if (!out.length || out[out.length - 1] !== pts[k]) out.push(pts[k]);
+    }
+    return out.map(([lat, lon]) => ({ lat, lon }));
+  }
   /** An SVG path for the line in a w×h box, north up, its shape kept (longitude scaled by the latitude), with a margin. */
   function lineSvg(pts, w, h, pad = 8) {
     if (!Array.isArray(pts) || pts.length < 2) return '';
@@ -114,12 +129,14 @@
     .feed-acts { display: flex; gap: 22px; }
     .feed-acts button { border: 0; background: none; color: var(--panel-ink); font: inherit; font-weight: 600; min-height: 40px; padding: 0; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
     .feed-acts button[aria-pressed="true"] { color: var(--accent); }
+    .feed-acts .feed-drive { margin-left: auto; }
     .feed-acts svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
     .feed-acts button[aria-pressed="true"] svg { fill: currentColor; }
     .feed-comments { display: grid; gap: 10px; }
     .feed-comment { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: start; }
     .feed-comment p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
     .feed-comment small { color: var(--panel-dim); font-size: 12px; }
+    .feed-comment .feed-more { width: 44px; height: 44px; display: grid; place-items: center; text-decoration: none; font-size: 20px; color: var(--panel-ink); }
     .feed-say { display: flex; gap: 8px; }
     .feed-say .field { flex: 1; min-width: 0; }
     .post-sheet textarea { width: 100%; min-height: 72px; resize: vertical; }
@@ -127,11 +144,13 @@
   const ICON = {
     kudos: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11v9H4v-9zM7 11l4-7c1.5 0 2.5 1 2 3l-1 4h6a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 16.8 21H7"/></svg>',
     comment: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>',
+    drive: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 18-7-4-7 4z"/></svg>',
   };
 
   /**
    * page: el, btn, toast, apiCall, jsonOf, avatar(photo_id, handle, px), fmtLen(m), report({kind,target,label,who}),
-   * block(handle), crews() → a promise of [{id, name}], inZone(lat, lon) (your privacy zones), openFriend(handle) (their profile).
+   * block(handle), crews() → a promise of [{id, name}], inZone(lat, lon) (your privacy zones), openFriend(handle) (their profile),
+   * driveLine(stops, post) (Drive it: a route through stops along the post's line).
    */
   function mount(page) {
     const { el, btn, toast, apiCall, jsonOf } = page;
@@ -243,6 +262,13 @@
         c.addEventListener('click', () => open(p.id, { focus: true, after: o.after }));
         acts.append(c);
       }
+      // Drive it: the route laid along the friend's line (its stops on their roads), as a roadbook road is
+      if (pts.length > 1 && page.driveLine) {
+        const d = el('button', { type: 'button', className: 'feed-drive' }); d.innerHTML = ICON.drive; d.append(el('span', { textContent: 'Drive it' }));
+        d.setAttribute('aria-label', p.mine ? `Drive ${p.title} again` : `Drive @${p.handle || '?'}'s ${p.title}`);
+        d.addEventListener('click', () => { doc.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); page.driveLine(throughPoints(pts), p); });
+        acts.append(d);
+      }
       box.append(acts);
       return box;
     }
@@ -279,7 +305,7 @@
       const draw = () => list.replaceChildren(...p.comment_list.map((c) => {
         const row = el('div', { className: 'feed-comment' }, face(c, 30),
           el('div', {}, el('b', { textContent: c.mine ? 'You' : `@${c.handle || '?'}` }), el('small', { textContent: ` ${ago(c.created_at, Date.now())}` }), el('p', { textContent: c.body })));
-        const k = el('button', { type: 'button', className: 'linkbtn', textContent: '···' }); k.setAttribute('aria-label', 'More for this comment');
+        const k = el('button', { type: 'button', className: 'linkbtn feed-more', textContent: '···' }); k.setAttribute('aria-label', 'More for this comment');
         k.addEventListener('click', () => {
           const m = sheet('This comment', 'feed-menu'); const keys = el('div', { className: 'row', style: 'flex-wrap:wrap' });
           if (c.can_delete) keys.append(btn('Delete', async () => {
@@ -459,6 +485,6 @@
     return { section, full, open, compose, post, remove, card, drivesOf };
   }
 
-  const api = { trimLine, encode, decode, lineSvg, ago, facts, mount, CUT_M, MAX_POINTS };
+  const api = { trimLine, encode, decode, throughPoints, lineSvg, ago, facts, mount, CUT_M, MAX_POINTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDrivePosts = api;
 })(typeof window !== 'undefined' ? window : globalThis);

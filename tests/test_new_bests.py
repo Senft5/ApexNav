@@ -49,3 +49,22 @@ def test_road_progress_is_against_your_first_drive_here():
     assert out["p"] == {"since": "Jul 1", "score_d": 120, "gain_s": 1.4, "matched": 8}
     assert out["first"] is None and out["none"] is None
     assert out["noScore"]["score_d"] is None and out["noScore"]["gain_s"] == 1.4
+
+
+RUNNER3 = r"""
+globalThis.ApexRoadSurface = require(process.argv[1] + '/web/road_surface.js');
+const V = require(process.argv[1] + '/web/drive_view.js');
+const rows = [{ dateLabel: 'Jun 1', score: 610, matched: 8, delta_s: 3, surface: 'wet' }, { dateLabel: 'Jul 1', score: 640, matched: 8, delta_s: 1.4 },
+  { dateLabel: 'Aug 1', score: 700, matched: 9, delta_s: 0.2, surface: 'wet' }];
+console.log(JSON.stringify({ dry: V.roadProgress([...rows, { self: true, score: 760 }]), wet: V.roadProgress([...rows, { self: true, score: 720, surface: 'wet' }]),
+  icy: V.roadProgress([...rows, { self: true, score: 500, surface: 'ice' }]) }));
+"""
+
+
+def test_road_progress_is_like_with_like():
+    """A dry drive is set against your first dry (or unknown) pass here, a wet one against your first wet one; an icy
+    drive with no icy pass before it has nothing to compare with."""
+    out = json.loads(subprocess.run([NODE, "-e", RUNNER3, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["dry"]["since"] == "Jul 1"
+    assert out["wet"] == {"since": "Jun 1", "score_d": 110, "gain_s": 3, "matched": 8}
+    assert out["icy"] is None
