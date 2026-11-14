@@ -3958,6 +3958,37 @@ flow('the Log list: each drive has its road\'s shape beside its name; a summary 
   check(old && old.sv === 3 && old.n === 32 && old.score === 777 && rows.find((r) => r.id === 'sh2').score.trim() === '777', 'the old summary got its shape and kept its score (not scored again): ' + JSON.stringify(sum));
 });
 
+flow('the App Store rating: asked on the end card after a good drive, parked, from the third drive, once per version; never moving (guideline 5.6.1)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__posted = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { window.__posted.push(m); } } } }; });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apex && window.ApexRecording && window.ApexEndLine);
+  await page.clock.install();
+  const end = (id, score, mps) => page.evaluate(async ([id, score, mps]) => {
+    document.getElementById('endDone').click();
+    ApexCore.driverScore = () => ({ score, components: {} });
+    window.apex.live({ lat: 35.36, lon: -84.29, accuracy_m: 5, speed_mps: mps, course_deg: 0, has_fix: true });
+    const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + Math.sin(i / 40) * 0.0015); }
+    const d = { id, name: 'Road ' + id, date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15), lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] };
+    await ApexRecording.store(d);
+    apexDebug.showEndCard(d, Date.now() - 600e3, { quiet: true });
+  }, [id, score, mps]);
+  const asked = () => page.evaluate(() => window.__posted.filter((m) => m && m.cmd === 'askReview').length);
+  const settle = async () => { for (let i = 0; i < 20; i++) { await page.clock.runFor(250); await page.waitForTimeout(20); } };
+  await end('r1', 820, 0); await settle();
+  await end('r2', 820, 0); await settle();
+  check(await asked() === 0, 'not before the third drive');
+  await end('r3', 820, 6); await settle();
+  check(await asked() === 0, 'never while moving');
+  await end('r4', 610, 0); await settle();
+  check(await asked() === 0, 'an ordinary drive: no');
+  await end('r5', 820, 0); await settle();
+  check(await asked() === 1 && await page.evaluate(() => localStorage.getItem('vetta.reviewAsked')) === '1.4', 'a good drive, parked, from the third: asked once, for this version');
+  await end('r6', 900, 0); await settle();
+  check(await asked() === 1, 'once per version');
+}, { userAgent: 'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 ApexNav/1.4 (77)' });
+
 flow('drive ended: Open in the Log is the solid key with no score, Share card with one, fixed from the first frame; a drive on a route keeps its name (REVIEW4 U-75, REVIEW5 U-118)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
