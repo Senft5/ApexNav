@@ -1176,8 +1176,9 @@ flow('design pass 2: the route card\'s last row is one ruled strip of keys, and 
     const credit = await page.evaluate(() => { const a = document.querySelector('.maplibregl-ctrl-attrib'); if (!a) return null;
       a.classList.remove('maplibregl-attrib-empty', 'maplibregl-compact-show'); a.classList.add('maplibregl-compact');
       const c = getComputedStyle(a), b = a.querySelector('.maplibregl-ctrl-attrib-button'), cb = getComputedStyle(b), panel = getComputedStyle(document.querySelector('.plan')).backgroundColor;
-      return { radius: c.borderTopLeftRadius, bg: c.backgroundColor, panel, border: c.borderTopWidth, img: cb.backgroundImage, i: getComputedStyle(b, '::before').content, bradius: cb.borderTopLeftRadius }; });
-    check(credit && credit.radius === '0px' && credit.bradius === '0px' && credit.bg === credit.panel && parseFloat(credit.border) >= 1 && credit.img === 'none' && credit.i === '"i"', 'the credit is a square plate on the page\'s paper with its own "i": ' + JSON.stringify(credit));
+      const box = b.getBoundingClientRect();
+      return { radius: c.borderTopLeftRadius, bg: c.backgroundColor, panel, border: c.borderTopWidth, img: cb.backgroundImage, i: getComputedStyle(b, '::before').content, bradius: cb.borderTopLeftRadius, w: box.width, h: box.height }; });
+    check(credit && credit.radius === '0px' && credit.bradius === '0px' && credit.bg === credit.panel && parseFloat(credit.border) >= 1 && credit.img === 'none' && /^"i"/.test(credit.i) && credit.w >= 44 && credit.h >= 44, 'the credit is a square plate on the page\'s paper with its own "i", a 44 pt key (Apple\'s audit, U-15): ' + JSON.stringify(credit));
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
@@ -9573,9 +9574,13 @@ flow('road marks on a route set during a drive: the map is asked for this route 
     { type: 'way', id: 1, tags: { highway: 'tertiary', name: 'Straight Road' }, nodes: ids, geometry: ids.map((_, k) => g(k * 100)) },
     { type: 'node', id: 1012, ...g(1200), tags: { traffic_calming: 'hump' } },
   ];
-  let mapUp = false;                                         // the map's server is down while the route is planned
+  // the map's server doesn't answer while the route is planned: a hang the plan gives up on (an error the plan saw itself
+  // would back the map off for a minute, osm_overpass.js BACKOFF_MS, and whether the error or the plan's own deadline came
+  // first was a race: this flow failed one run in six)
+  let mapUp = false;
+  const hung = (route) => new Promise((r) => setTimeout(r, 30000)).then(() => route.abort().catch(() => {}));
   for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
-    await page.route(`https://${host}/**`, (route) => (mapUp ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }) : route.abort()));
+    await page.route(`https://${host}/**`, (route) => (mapUp ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }) : hung(route)));
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
   const gpx = []; for (let m = 0; m <= 3000; m += 5) gpx.push(`<trkpt lat="${lat(m).toFixed(7)}" lon="${LON.toFixed(7)}"/>`);

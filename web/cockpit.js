@@ -903,6 +903,8 @@
     // turn to landscape and back), which lands it over a replay or a drive like a toast. It stays behind its ⓘ key and opens
     // only when that key is tapped.
     let attribAsked = 0;
+    // Apple's audit (app tour): the key's drawn "i" stood in for its name and its 4 pt frame for its 44 pt one; it is named
+    document.querySelectorAll('.maplibregl-ctrl-attrib-button').forEach(b => { b.setAttribute('aria-label', 'Map credits'); b.title = 'Map credits'; });
     document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('.maplibregl-ctrl-attrib-button')) attribAsked = performance.now(); }, true);
     // feedback 03: a written field (textarea.field) starts at its rows and grows with what's written, up to 40% of the screen
     document.addEventListener('input', (e) => {
@@ -9091,15 +9093,18 @@
       whenAbort = null; whenState = null;
       $('routeCardWhen').hidden = true; $('routeWhenPanel').hidden = true; $('routeWhenLine').setAttribute('aria-expanded', 'false');
     }
-    // Stop signs, railway crossings, one-lane bridges and speed bumps from the route's context (road_marks.js): note events
-    // read with the pace notes and pinned on the map. None without a context (no invented marks).
-    // The map's answer comes off the plan's critical path (osm_overpass.js WAIT_MS: a plan never waits for Overpass; the
-    // late answer is kept for the next ask), so with none yet it asks again for this route alone, up to three times.
+    // Stop signs, railway crossings, one-lane bridges, speed bumps, deer crossings, gravel and rough road from the route's
+    // context (road_marks.js): note events read with the pace notes and pinned on the map. None without a context (no
+    // invented marks). The map's answer (Overpass) comes off the plan's critical path (osm_overpass.js WAIT_MS: a plan never
+    // waits for it; the late answer is kept for the next ask), so until it has answered for this route it asks again for this
+    // route alone, up to three times; what the tiles gave meanwhile (gravel) stays, and each answer only adds marks.
     function attachMarks(t, c, tries = 0) {
-      if (!window.ApexRoadMarks || (t.marks && t.marks.length)) return;
-      t.marks = ApexRoadMarks.events(c.ctx, c.corridor, t, (la, lo, lats, lons) => Core.nearestIndex(la, lo, lats, lons, -1));
-      if (track === t && t.marks.length) { loadTrackOnMap(); render(false); }
-      if (t.marks.length || tries >= 3) return;   // (a route with none asks three times; a kept answer costs no request)
+      if (!window.ApexRoadMarks || t.marksFromMap) return;
+      const before = (t.marks || []).length;
+      t.marks = ApexRoadMarks.union(t.marks, ApexRoadMarks.events(c.ctx, c.corridor, t, (la, lo, lats, lons) => Core.nearestIndex(la, lo, lats, lons, -1)));
+      if (track === t && t.marks.length > before) { loadTrackOnMap(); render(false); }
+      if (ApexRoadMarks.mapAnswered(c.ctx)) { t.marksFromMap = true; return; }
+      if (tries >= 3) return;   // (three asks at most; a kept answer costs no request)
       setTimeout(async () => {
         if (plannedRoute !== t) return;
         const again = { t, route: { coords: Array.from(t.lat, (la, i) => [t.lon[i], la]), times: null }, timeS: t.timeS };
@@ -9112,7 +9117,7 @@
     function attachMarksSoon(t) {
       if (!window.ApexRoadMarks || !t || !Array.isArray(t.lat) || t.lat.length < 2 || state.mode !== 'live') return;
       setTimeout(async () => {
-        if (plannedRoute !== t || (t.marks && t.marks.length)) return;
+        if (plannedRoute !== t || t.marksFromMap) return;
         const o = routeOptions, kept = o && o.current === t && o.list ? o.list[o.picked] : null;
         if (kept && kept.ctx && kept.corridor) { attachMarks(t, kept); return; }
         const c = { t, route: { coords: Array.from(t.lat, (la, i) => [t.lon[i], la]), times: null }, timeS: t.timeS };

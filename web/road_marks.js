@@ -1,7 +1,7 @@
 // Road marks the co-driver calls on a planned route (the route context's OpenStreetMap points and spans, route_ctx/
 // osm_overpass.js): a stop sign that applies to the route, a railway level crossing, a one-lane bridge on a two-way road,
-// speed bumps (one call for a run of them), a mapped deer (or other animal) crossing, horse-drawn buggies and a
-// covered bridge. On a back road picked for its corners these are what catch a driver out:
+// speed bumps (one call for a run of them), a mapped deer (or other animal) crossing, horse-drawn buggies, a
+// covered bridge, and where the road turns unpaved or rough. On a back road picked for its corners these are what catch a driver out:
 // a stop sign over a crest, a hump at the end of a fast straight. Each becomes a note event on the track (type 'mark'),
 // read with the pace notes when they are on and drawn on the strip and the map; a stop sign's call distance includes
 // braking to a stop (cockpit.js apexMpsOf). Only what the map has: a mark the map lacks is not invented, and with no route
@@ -17,11 +17,13 @@
     animal_crossing: { code: 'ANIMAL', call: 'Deer crossing' },
     buggy: { code: 'BUGGY', call: 'Horse-drawn buggies' },
     covered_bridge: { code: 'COVERED', call: 'Covered bridge' },
+    unpaved: { code: 'GRAVEL', call: 'Unpaved road' },
+    rough: { code: 'ROUGH', call: 'Rough road' },
   };
   // a mapped animal-crossing sign names its animal (osm_overpass.js hazardOf label); deer is the one on these roads
   const animalCall = (label) => { const a = String(label || 'animals').toLowerCase(); return a === 'deer' ? 'Deer crossing' : /^(horse|horses)$/.test(a) ? 'Horse crossing' : /^(cow|cows|cattle)$/.test(a) ? 'Cattle crossing' : 'Animal crossing'; };
   const BUMPS = new Set(['bump', 'hump', 'table', 'cushion', 'yes', 'dip', 'rumble_strip']);   // not chicanes, islands or chokers
-  const RUN_M = 200, SAME_M = 40, SNAP_M = 30;
+  const RUN_M = 200, SAME_M = 40, SNAP_M = 30, UNPAVED_MIN_M = 50, ROUGH_MIN_M = 100, SURFACE_GAP_M = 300;
 
   /** Where along a corridor ({lat, lon, distM}) metre m lies, as [lat, lon], or null. */
   function placeAt(c, m) {
@@ -39,7 +41,7 @@
    * Signs and crossings mapped twice within 40 m are one; bumps within 200 m of the last are one run. A one-lane or
    * covered bridge both on one span is two marks: different warnings (a covered bridge is often low as well as narrow).
    */
-  function marksOf(ctx) {
+  function marksOf(ctx, corridor) {
     if (!ctx) return [];
     const raw = [];
     for (const p of Array.isArray(ctx.points) ? ctx.points : []) {
@@ -57,7 +59,38 @@
       const m = { kind: r.kind, atM: r.atM, endM: r.atM, n: 1, ...(r.call ? { call: r.call } : {}) };
       out.push(m); last[r.kind] = m;
     }
+    out.push(...surfaceRuns(ctx, corridor));
+    out.sort((a, b) => a.atM - b.atM);
     return out.map(({ kind, atM, endM, n, call }) => ({ kind, atM, endM, n, ...(call ? { call } : {}) }));
+  }
+
+  /**
+   * Where the road turns unpaved, or rough, as marks { kind: 'unpaved' | 'rough', atM, endM, n: 1 } from the context's
+   * per-sample channels on the corridor's distances: unpaved from our tiles (`unpaved` 1) or Overpass (`surface_paved`
+   * 0); rough from Overpass `smoothness` 3+ (bad or worse) on a paved stretch. A run counts from 50 m (rough: 100 m);
+   * runs less than 300 m apart are one (a bridge deck or a patched bit is no new surface). Not at the very start: the car
+   * is already on it. Untagged samples are unknown, never paved or smooth.
+   */
+  function surfaceRuns(ctx, c) {
+    const ch = ctx.channels || {}, d = c && c.distM, out = [];
+    if (!d || !d.length) return out;
+    const val = (k, i) => (ch[k] && finite(ch[k][i]) ? ch[k][i] : null);
+    const unpaved = (i) => val('unpaved', i) === 1 || val('surface_paved', i) === 0;
+    const rough = (i) => !unpaved(i) && val('smoothness', i) !== null && val('smoothness', i) >= 3;
+    for (const [kind, test, minM] of [['unpaved', unpaved, UNPAVED_MIN_M], ['rough', rough, ROUGH_MIN_M]]) {
+      let run = null, cur = null;
+      const close = () => { if (run && run.endM - run.atM >= minM) out.push(run); };
+      for (let i = 0; i < d.length; i++) {
+        if (test(i)) { if (cur) cur.endM = d[i]; else cur = { atM: d[i], endM: d[i] }; continue; }
+        if (!cur) continue;
+        if (run && cur.atM - run.endM < SURFACE_GAP_M) run.endM = cur.endM;
+        else { close(); run = { kind, atM: cur.atM, endM: cur.endM, n: 1 }; }
+        cur = null;
+      }
+      if (cur) { if (run && cur.atM - run.endM < SURFACE_GAP_M) run.endM = cur.endM; else { close(); run = { kind, atM: cur.atM, endM: cur.endM, n: 1 }; } }
+      close();
+    }
+    return out.filter((m) => m.atM > d[0]);
   }
 
   /**
@@ -68,7 +101,7 @@
   function events(ctx, corridor, t, nearest) {
     if (!t || !t.dist || !t.dist.length || typeof nearest !== 'function') return [];
     const out = [];
-    for (const m of marksOf(ctx)) {
+    for (const m of marksOf(ctx, corridor)) {
       const at = placeAt(corridor, m.atM);
       if (!at) continue;
       const hit = nearest(at[0], at[1], t.lat, t.lon);
@@ -90,6 +123,16 @@
     return marks.filter((m) => m.kind !== 'calming' || !felt.some((b) => b >= m.dist_m - SNAP_M && b <= (finite(m.end_m) ? m.end_m : m.dist_m) + SNAP_M));
   }
 
-  const api = { marksOf, events, unfelt, placeAt, KINDS };
+  /** Whether the map (Overpass) answered for this context: its own channel is known somewhere (an 'unavailable' answer is all NaN). */
+  const mapAnswered = (ctx) => { const v = ctx && ctx.channels && ctx.channels.side_roads_per_km; return !!v && Array.prototype.some.call(v, finite); };
+
+  /** Marks a and the marks of b that a doesn't have yet (the same code within 40 m is the same thing), in order. */
+  function union(a, b) {
+    const out = Array.isArray(a) ? a.slice() : [];
+    for (const m of Array.isArray(b) ? b : []) if (!out.some((o) => o.code === m.code && Math.abs(o.dist_m - m.dist_m) < SAME_M)) out.push(m);
+    return out.sort((x, y) => x.dist_m - y.dist_m);
+  }
+
+  const api = { marksOf, events, unfelt, union, mapAnswered, placeAt, KINDS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadMarks = api;
 })(typeof window !== 'undefined' ? window : globalThis);
