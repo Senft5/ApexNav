@@ -172,6 +172,13 @@ and in random batches so a trace cannot be re-assembled.
 - Next: "Post to crew" from a corner clip on the drive's page (analysis thread adds the key, `page.post(blob, meta)`).
   Kudos and comments push (2.12).
 
+### 2.14 People you may know (members; built 2026-11-14)
+- On People → Friends, under the list once there is anyone: up to 8 cards of a member who shares a crew with you ("In
+  Ridge Runners") or who is friends with two or more of your friends ("2 friends in common", counted, never named), each
+  with Add (the same request the Invite sheet sends) and × (hidden on this phone, `apex.suggestHidden`).
+- Never a friend, a request either way, someone blocked either way, or someone three reports hid. Crew-mates come first.
+- `GET /api/friends/suggested` (`friendSuggestions` in `backend/src/social.ts`), `web/people_suggest.js`. No table.
+
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.
 

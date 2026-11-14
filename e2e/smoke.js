@@ -7141,6 +7141,28 @@ flow('Billet: a primary key is light metal with dark ink, not dark on dark (REVI
   check(/rgb\(242, 242, 244\)/.test(s.bg) && s.ink === 'rgb(13, 13, 14)', 'Sign in with Google under Billet: ' + JSON.stringify(s));
 });
 
+flow('People you may know: crew-mates and friends of friends on People, Add sends a request, × hides one on this phone (Worker stubbed, docs/SOCIAL.md 2.14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const sent = [];
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (m === 'POST' && u.pathname === '/api/friends/request') { sent.push(JSON.parse(route.request().postData()).handle); return route.fulfill({ status: 204 }); }
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me', id: 'ME1' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/friends/suggested') return json([{ handle: 'erin', photo_id: null, crew: 'Ridge Runners', mutual: 1 }, { handle: 'dave', photo_id: null, crew: null, mutual: 2 }]);
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .suggest-sec:not([hidden]) .suggest-card', { timeout: 15000 });
+  const cards = await page.$$eval('#accountBody .suggest-card', (l) => l.map((c) => [c.querySelector('.suggest-h').textContent, c.querySelector('small').textContent]));
+  check(JSON.stringify(cards) === JSON.stringify([['@erin', 'In Ridge Runners'], ['@dave', '2 friends in common']]), 'who, and why: ' + JSON.stringify(cards));
+  await page.click('#accountBody .suggest-card:has-text("@erin") button:has-text("Add")');
+  await page.waitForSelector('#accountBody .suggest-card:has-text("@erin") button:has-text("Sent")');
+  check(JSON.stringify(sent) === '["erin"]' && await page.evaluate(() => JSON.parse(localStorage.getItem('apex.sentRequests') || '[]').includes('erin')), 'Add sends the request and keeps it as sent: ' + JSON.stringify(sent));
+  await page.click('#accountBody .suggest-card:has-text("@dave") .suggest-x');
+  check(!(await page.$('#accountBody .suggest-card:has-text("@dave")')) && await page.evaluate(() => localStorage.getItem('apex.suggestHidden')) === '["dave"]', '× hides dave on this phone');
+});
+
 flow('People: two tabs; a request is a card on top, then you, then friends with where they are; a friend row is about the friend; one Invite key; links open their side (the owner, 2026-10-30; REVIEW_PEOPLE steps 5, 6)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const now = Date.now(), iso = (ms) => new Date(ms).toISOString();
