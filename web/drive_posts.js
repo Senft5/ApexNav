@@ -83,6 +83,11 @@
     .post-media { display: flex; align-items: center; gap: 10px; }
     .post-media img, .post-media video { width: 64px; height: 64px; object-fit: cover; background: #000; }
     .feed { display: grid; }
+    .feed-stages { display: grid; gap: 4px; }
+    .feed-stages small { color: var(--panel-dim); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+    .feed-stages div { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--rule); padding-top: 4px; }
+    .feed-stages span { overflow-wrap: anywhere; min-width: 0; }
+    .feed-stages b { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
     .feed-card { border-top: 1px solid var(--rule); color: var(--panel-ink); display: grid; gap: 10px; padding: 14px 0 4px; }
     .feed-sheet .feed-card { border-top: 0; padding-top: 0; }
     .feed-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -215,6 +220,10 @@
         box.append(svg);
       }
       if (p.media) box.append(mediaBox(p));
+      if (Array.isArray(p.stages) && p.stages.length) {                // the saved stages it went over, each with its Score
+        box.append(el('div', { className: 'feed-stages' }, el('small', { textContent: p.stages.length === 1 ? 'Stage' : 'Stages' }),
+          ...p.stages.map((x) => el('div', {}, el('span', { textContent: x.name }), el('b', { textContent: x.score == null ? '--' : String(x.score) })))));
+      }
       const f = facts({ roads: p.roads }, fmtLen);
       if (f) box.append(el('p', { className: 'feed-facts', textContent: f }));
       const acts = el('div', { className: 'feed-acts' }, kudosKey(p));
@@ -326,7 +335,8 @@
     function bodyOf(d, to, caption) {
       const line = trimLine(d.lat, d.lon, page.inZone || (() => false));
       return { title: String(d.name || 'Drive').slice(0, 60), caption: caption || null, driven_on: d.driven_on, length_m: Number.isFinite(d.len_m) ? Math.round(d.len_m) : null,
-        score: Number.isFinite(d.score) ? Math.round(d.score) : null, roads: (d.roads || []).slice(0, 8), line: line ? encode(line) : null, crew_id: to || null };
+        score: Number.isFinite(d.score) ? Math.round(d.score) : null, roads: (d.roads || []).slice(0, 8), line: line ? encode(line) : null, crew_id: to || null,
+        stages: (d.stages || []).filter((x) => x && x.name).slice(0, 3).map((x) => ({ name: String(x.name).slice(0, 60), score: Number.isFinite(x.score) ? Math.round(x.score) : null })) };
     }
     /** One tap (2026-11-14, the drive's card): the drive to your friends, no sheet. Resolves its id, or null (said in a toast). */
     async function post(d) {

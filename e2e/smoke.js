@@ -6197,14 +6197,16 @@ flow('landscape mount: the map takes the left, the instruments a column on the r
 }, { viewport: { width: 844, height: 390 } });
 
 flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew with its ends cut; the Feed on People shows friends\' posts with kudos and comments one tap in (Worker stubbed, docs/SOCIAL.md 2.13)', async (page, base) => {
-  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1');
+    // a stage saved in the Log, on the drive posted below
+    localStorage.setItem('apex.segments', JSON.stringify([{ id: 's1', name: 'Tellico climb', lat0: 35.36 + 50 * 5 / 110540, lon0: -84.29, lat1: 35.36 + 400 * 5 / 110540, lon1: -84.29, length_m: 1750 }])); } catch (_) {} });
   const sent = [];
   // bob's post: a line of 60 points north
   const enc = (pts) => { let o = '', a0 = 0, b0 = 0; const e = (v) => { v = v < 0 ? ~(v << 1) : v << 1; while (v >= 32) { o += String.fromCharCode((32 | (v & 31)) + 63); v >>= 5; } o += String.fromCharCode(v + 63); };
     for (const [a, b] of pts) { const x = Math.round(a * 1e5), y = Math.round(b * 1e5); e(x - a0); e(y - b0); a0 = x; b0 = y; } return o; };
   const line = enc(Array.from({ length: 60 }, (_, i) => [35.3 + i * 0.001, -84.1 + Math.sin(i / 6) * 0.004]));
   const bobPost = { id: 'P1AAAAAAAAAAAAAA', handle: 'bob', photo_id: null, mine: false, crew: null, title: 'Cherohala Skyway', caption: 'Fog on top, dry below.', driven_on: '2026-11-12',
-    length_m: 32000, score: 812, roads: ['Cherohala Skyway', 'TN-165', 'Tellico River Rd'], stages: [], line, created_at: new Date(Date.now() - 2 * 3600e3).toISOString().slice(0, 19).replace('T', ' '), kudos: 2, my_kudos: false, comments: 1 };
+    length_m: 32000, score: 812, roads: ['Cherohala Skyway', 'TN-165', 'Tellico River Rd'], stages: [{ name: 'Skyway summit', score: 801 }, { name: 'Tellico descent', score: null }], line, created_at: new Date(Date.now() - 2 * 3600e3).toISOString().slice(0, 19).replace('T', ' '), kudos: 2, my_kudos: false, comments: 1 };
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (m !== 'GET') { sent.push({ m, p: u.pathname, b: route.request().postData() }); return u.pathname.endsWith('/comments') || u.pathname === '/api/posts' ? json({ id: 'C2AAAAAAAAAAAAAA' }, 201) : route.fulfill({ status: 204 }); }
@@ -6228,6 +6230,8 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
       box: getComputedStyle(k).borderLeftWidth, titleRule: getComputedStyle(k.querySelector('.feed-title')).borderTopWidth }; });
   check(look.stats.length === 2 && /^Vetta Score812$/.test(look.stats[0]) && /^Distance19\.9\s*mi$/.test(look.stats[1]) && look.wide === 0 && look.below && look.go && look.end && look.box === '0px' && look.titleRule === '0px',
     'a post: Score and Distance in a row, the line full width under them with its start and finish: ' + JSON.stringify(look));
+  const st = await page.evaluate(() => [...document.querySelectorAll('#accountBody .feed-card .feed-stages > div')].map((d) => d.textContent));
+  check(JSON.stringify(st) === JSON.stringify(['Skyway summit801', 'Tellico descent--']), 'the stages it went over, each with its Score (unknown stays --): ' + JSON.stringify(st));
   // kudos: one tap, at once
   await page.click('#accountBody .feed-card .feed-acts button[aria-label^="Kudos"]');
   await page.waitForFunction(() => document.querySelector('#accountBody .feed-card .feed-acts button[aria-pressed="true"]'));
@@ -6259,11 +6263,12 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   });
   await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !document.getElementById('endPostRow').hidden && !b.getAttribute('aria-disabled'); }, null, { timeout: 15000 });
   check(await page.evaluate(() => document.getElementById('endPost').classList.contains('solid') && !document.getElementById('endShare').classList.contains('solid') && document.getElementById('endPost').textContent === 'Post to friends'), 'Post to friends is the solid key; Share card sits beside it');
-  // one tap (2026-11-14): Post to friends sends it at once, no sheet; Undo in the toast takes it back
+  // one tap (2026-11-14): Post to friends sends it at once, no sheet; Undo in the toast takes it back. It carries the saved
+  // stage it went over (a straight line has no corners, so its Score there is unknown: null)
   await page.click('#endPost');
   await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Posted to friends');
   const one = JSON.parse(sent.filter((x) => x.p === '/api/posts').pop().b);
-  check(one.crew_id === null && one.score === 790 && one.title === 'Cherohala Skyway' && !(await page.$('.post-sheet')), 'one tap posts the drive to your friends, no sheet: ' + JSON.stringify({ ...one, line: one.line && one.line.length }));
+  check(one.crew_id === null && one.score === 790 && one.title === 'Cherohala Skyway' && JSON.stringify(one.stages) === JSON.stringify([{ name: 'Tellico climb', score: null }]) && !(await page.$('.post-sheet')), 'one tap posts the drive to your friends, no sheet: ' + JSON.stringify({ ...one, line: one.line && one.line.length }));
   await page.click('#toast .toast-key:text-is("Undo")');
   await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Post to friends' && !document.getElementById('endPost').disabled);
   check(sent.some((x) => x.m === 'DELETE' && x.p === '/api/posts/C2AAAAAAAAAAAAAA'), 'Undo takes the post back');
