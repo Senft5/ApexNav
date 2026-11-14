@@ -7,3 +7,11 @@
 # CALL SHEET
 ## 2026-11-14 (route context keys): NASS's key is no longer handed to phones (claude/project-thread-39xbx9)
 USDA QuickStats answers without a CORS header, so the app's 15 calls a plan all failed; harvest traffic keeps the USDA typical windows (Handbook 628), as every phone already had. Removed from CTX_KEY_NAMES in backend/src/route_feeds.ts. Undo: add "nassApiKey" back once a Worker relay asks NASS on the phone's behalf.
+
+## 2026-11-14 (graph ETL tests): the posted-limit test picks its edge by the class estimate, and CI runs the module (claude/project-thread-39xbx9)
+test_travel_time_takes_the_road_inventorys_posted_limit... looked in the shipped Cincinnati tile for an edge the tile
+estimates (no OSM sign) that the road inventory covers: there is none (every long secondary edge HPMS covers has an OSM
+sign; the four estimated ones have no inventory), so nothing is dropped, the test's pick was stale. It now takes a long
+secondary edge HPMS covers whose limit differs from the class estimate, scored as unsigned, as the test always did. CI's
+pytest job installs tools/graph_etl/requirements.txt, so test_graph_etl.py runs there instead of skipping whole. Undo:
+the requirements line in core-tests.yml.
