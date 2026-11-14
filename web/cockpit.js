@@ -168,9 +168,10 @@
       for (let i = drives.length - 1; i >= 0; i--) if (drives[i].saved && !ids.has(drives[i].id)) drives.splice(i, 1);   // deleted in the Log
       hazardMemory = m.hazards || [];
       roadMemory = m.roadMemory || [];
+      passRefs = m.passRefs || [];
       return m;
     }
-    let roadMemory = [], hazardMemory = [];
+    let roadMemory = [], hazardMemory = [], passRefs = [];
     const hazardSaid = new Map(), HZ_REPEAT_MS = 5 * 60000, HZ_SAME_SPOT_M = 40;   // confirmed bump id -> when it was last said
     let track = null;
 
@@ -363,7 +364,7 @@
     });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p) };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p) };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -902,6 +903,8 @@
     // turn to landscape and back), which lands it over a replay or a drive like a toast. It stays behind its ⓘ key and opens
     // only when that key is tapped.
     let attribAsked = 0;
+    // Apple's audit (app tour): the key's drawn "i" stood in for its name and its 4 pt frame for its 44 pt one; it is named
+    document.querySelectorAll('.maplibregl-ctrl-attrib-button').forEach(b => { b.setAttribute('aria-label', 'Map credits'); b.title = 'Map credits'; });
     document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('.maplibregl-ctrl-attrib-button')) attribAsked = performance.now(); }, true);
     // feedback 03: a written field (textarea.field) starts at its rows and grows with what's written, up to 40% of the screen
     document.addEventListener('input', (e) => {
@@ -9824,6 +9827,33 @@
       toast(line);
       if (r.delta != null) sayQuietLine(line);   // the co-driver says how the stage went, once it's over (technique, never time)
     }
+    // ---- live coaching against your best pass, on any road driven before (web/pass_coach.js) ---------------------------
+    // Each remembered corner you finish is set against its best pass (technique, never time or speed). The bar shows the
+    // stretch's delta on the phone only (never on CarPlay) and gives way to a saved stage's bar. The co-driver speaks only
+    // with full notes on, in the quiet slot sayQuietLine waits for, and a corner line at most every 20 s; how a stretch went
+    // is always said.
+    let coachWatch = null;
+    function startCoach() {
+      coachWatch = window.ApexPassCoach && passRefs.length ? { coach: ApexPassCoach.createCoach(Core, passRefs), at: 0, saidAt: -Infinity } : null;
+      $('coachBar').hidden = true;
+    }
+    function feedCoach() {
+      const w = coachWatch, rows = drive.rec && drive.rec.rows;
+      if (!w || !rows || performance.now() - w.at < 1000) return;
+      w.at = performance.now();
+      const r = w.coach.update(rows), bar = $('coachBar');
+      for (const ev of r.events) {
+        if (!ev.say || !isSpirited()) continue;
+        if (ev.kind === 'corner' && performance.now() - w.saidAt < 20000) continue;
+        w.saidAt = performance.now(); sayQuietLine(ev.say);
+      }
+      const v = r.view;
+      bar.hidden = !v || v.delta == null || !$('stageBar').hidden;
+      if (bar.hidden) return;
+      $('coachDelta').textContent = ApexPassCoach.label(v.delta);
+      $('coachCount').textContent = `${v.n} corner${v.n === 1 ? '' : 's'}`;
+      bar.classList.toggle('ahead', v.delta > 0); bar.classList.toggle('behind', v.delta < 0);
+    }
     // Track day mode (track_mode.js, IDEAS D-15): only on a mapped raceway. Every 30 s while moving the map is asked whether
     // you're on one; then "Start/finish here" sets the line where you are, and the bar shows laps, sectors and the delta.
     const circuit = { checkedAt: 0, on: false, busy: false, timer: null, prev: null };
@@ -9911,7 +9941,7 @@
       carPost({ kind: 'start', title: track && track.kind === 'route' ? String(track.name || 'Route').slice(0, 80) : 'Drive' });
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0; drive.battery = null;
-      startStageWatch();
+      startStageWatch(); startCoach();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
       drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
@@ -9942,7 +9972,7 @@
             paintPerms();
             paintDriveStat();
           },
-          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.status.webMount = fr.web_mount || null; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); noteBrakes(fr); noteWet(); noteFlow(); feedStage(); feedTrack(fr);
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.status.webMount = fr.web_mount || null; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); noteBrakes(fr); noteWet(); noteFlow(); feedStage(); feedCoach(); feedTrack(fr);
             if (window.ApexBattery && webBattery) drive.battery = ApexBattery.feed(drive.battery, webBattery.level, webBattery.charging, Date.now());
             window.apex.live(fr); paintDriveStat(); },
         });
@@ -10234,7 +10264,7 @@
       if (pendingEnd) { clearTimeout(pendingEnd.timer); pendingEnd = null; paintEndUndo(); }   // I-3: any other way out ends it now
       driveActive = false; driveCam(false); soundtrackStop(); drive.wet = null; if (ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null);   // the dry road back
       const kept = keepStop();                                         // Round 3: no more checkpoints; dropped once saved
-      stageWatch = null; $('stageBar').hidden = true;
+      stageWatch = null; $('stageBar').hidden = true; coachWatch = null; $('coachBar').hidden = true;
       const laps = circuit.timer ? circuit.timer.state(Date.now()).laps : [];
       const battery = window.ApexBattery ? ApexBattery.summary(drive.battery) : null; drive.battery = null;
       resetCircuit();
@@ -10842,7 +10872,7 @@
         feedReported(frame); feedReaction(frame); feedCrash(frame);
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec && !(Number.isFinite(frame.seq) && keep.seq != null && frame.seq <= keep.seq)) {   // (taken in a backlog)
-          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); noteBrakes(frame); noteWet(); noteFlow(); feedStage(); feedTrack(frame);
+          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); noteBrakes(frame); noteWet(); noteFlow(); feedStage(); feedCoach(); feedTrack(frame);
           if (window.ApexBattery) drive.battery = ApexBattery.feed(drive.battery, frame.battery, frame.charging === true, Date.now());
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;
