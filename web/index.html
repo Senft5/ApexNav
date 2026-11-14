@@ -780,6 +780,7 @@
     .plan.open.routed .plan-foot { display: block; }
     .plan-foot .rc-go { margin: 0; }
     .rc-go .ink-btn { min-height: 52px; font-size: 17px; }
+    html[data-type-size] .plan-foot .rc-go { grid-template-columns: minmax(0, 1fr); gap: 8px; }   /* large text: Start over Fly-through, each whole (side by side, Fly-through ran off the screen) */
     /* ---------------- the plan sheet: basic level and More (REVIEW.md roadmap 6) ---------------- */
     /* the loop dial: one control, the value in its face, five lengths as ticks on an arc around it (REVIEW2.md U-31) */
     .loop-gauge { position: relative; width: 272px; height: 172px; margin: 6px auto 0; touch-action: none; }
@@ -1318,6 +1319,8 @@
     .route-bar b { font: 700 22px/1.05 var(--font-num); letter-spacing: 0.01em; }
     .route-bar span { margin-top: 1px; font: 600 16px/1.15 var(--font-num); letter-spacing: 0.02em; font-variant-numeric: tabular-nums; color: var(--panel-dim); }
     .plan.open.routed .route-bar b { font-size: 30px; font-weight: 800; line-height: 1; }
+    /* the name's line box is tighter than its letters: room under it for a y or g's tail, which overflow: hidden cut flat (the layout keeps its height) */
+    .route-bar b { padding-bottom: 0.14em; margin-bottom: -0.14em; }
     .plan.open.routed .route-bar span { display: none; }   /* the stat line right under it says the same, large */
     .plan.open.routed .plan-bar { padding-top: 12px; padding-bottom: 2px; }
     /* quiet groups under the choice: a small label, a hairline over it, rows inside */
