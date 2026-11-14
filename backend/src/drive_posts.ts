@@ -6,7 +6,7 @@
 // and the owner's queue can remove it. The author deletes their post; a comment's author or the post's author deletes it.
 // Nothing is kept about a drive but what the card shows: no times along the line, no speeds.
 import type { Viewer } from "./auth";
-import { DATE_RE, Env, HttpError, body, randomToken } from "./util";
+import { DATE_RE, Env, HANDLE_RE, HttpError, body, randomToken } from "./util";
 import { cleanText } from "./convoy";
 import { isCrewMember } from "./social";
 import { reportedSql } from "./reports_sql";
@@ -129,12 +129,16 @@ const shape = (r: Row, me: string) => ({
   line: r.line, media: (() => { const m = mediaOf(r.media); return m ? { kind: m.kind, label: m.label } : null; })(), created_at: r.created_at, kudos: r.kudos, my_kudos: !!r.my_kudos, comments: r.comments,
 });
 
-/** GET /api/feed?before=: the newest posts you can see (yours too), FEED_N at a time, older than `before` (a created_at). */
+/** GET /api/feed?before=&by=: the newest posts you can see (yours too), FEED_N at a time, older than `before` (a created_at);
+ *  `by` (a handle): only that person's, for their profile. Only what the feed would show you anyway. */
 export async function feed(env: Env, v: Viewer, url: URL) {
   const before = url.searchParams.get("before");
   const cut = before && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(before) ? before : "9999-12-31 23:59:59";
-  const rows = (await env.DB.prepare(`${SELECT} WHERE p.created_at < ?2 AND ${POST_SEEN("p")} ORDER BY p.created_at DESC, p.rowid DESC LIMIT ${FEED_N}`)
-    .bind(v.id, cut).all<Row>()).results;
+  const byRaw = url.searchParams.get("by");
+  const by = byRaw ? byRaw.replace(/^@/, "").toLowerCase() : null;
+  if (by !== null && !HANDLE_RE.test(by)) return [];
+  const rows = (await env.DB.prepare(`${SELECT} WHERE p.created_at < ?2 AND ${POST_SEEN("p")}${by ? " AND u.handle = ?3" : ""} ORDER BY p.created_at DESC, p.rowid DESC LIMIT ${FEED_N}`)
+    .bind(...(by ? [v.id, cut, by] : [v.id, cut])).all<Row>()).results;
   return rows.map((r) => shape(r, v.id));
 }
 

@@ -31,6 +31,20 @@ describe("drive posts", () => {
     expect((await api(c, "GET", `/api/posts/${id}`)).status).toBe(404);
   });
 
+  it("?by= is one person's posts for their profile, only those the feed shows you", async () => {
+    const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara")];
+    await befriend(a, b);
+    await befriend(b, c);
+    const { id } = await post(a);
+    const mine = (await post(b)).id;
+    const by = async (u: TestUser, h: string) => ((await json(api(u, "GET", `/api/feed?by=${encodeURIComponent(h)}`))) as any[]).map((p) => p.id);
+    expect(await by(b, "alice")).toEqual([id]);
+    expect(await by(b, "@Alice")).toEqual([id]);                              // as typed, @ and case
+    expect(await by(b, "bob")).toEqual([mine]);
+    expect(await by(c, "alice")).toEqual([]);                                 // not alice's friend: nothing, as on the feed
+    expect(await by(b, "no such one!")).toEqual([]);
+  });
+
   it("a post to a crew reaches that crew's members only; not to a crew you're not in", async () => {
     const [a, b, c, d] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara"), await makeUser("dan")];
     await befriend(a, d);

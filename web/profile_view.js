@@ -35,7 +35,7 @@
   /** Draws the profile into `box` (replacing what's there); `back` returns to the list. `keys` ([label, run] pairs) are
    *  the things to do with them, first; `foot` ([label, run, className] triples) the ways to end it, last. `avatar` (a node)
    *  and `status` ({ text, live }) put the person at the top. */
-  function show(box, p, { el, btn, back, keys = [], extra = [], foot = [], partial = false, avatar = null, status = null }) {
+  function show(box, p, { el, btn, back, keys = [], extra = [], after = [], foot = [], partial = false, avatar = null, status = null }) {
     const v = lines(p);
     // Nate 2026-11-12 (as easy as a big social app): the person first, their photo, who they are and what they are doing now
     // (status: the friend list's own line, "On the road · Cherohala Skyway" or "Seen 15 min ago"), then what to do with them
@@ -49,6 +49,7 @@
       ...extra,
       ...(partial ? [el('p', { className: 'note', textContent: 'Couldn’t load the rest. Check signal.' })]
         : [...v.sections.map((s) => el('div', { className: 'stack-8' }, el('b', { textContent: s.head }), ...s.rows.map((r) => el('p', { className: 'note', textContent: r }))))]),   // what they share with you, so no line saying so
+      ...after,                                                       // their drives (drive_posts.js of): what a profile scrolls into
       ...(foot.length ? [el('div', { className: 'row profile-foot' }, ...foot.map(([label, run, cls]) => btn(label, run, cls || 'linkbtn')))] : []));
   }
 

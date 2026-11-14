@@ -325,6 +325,21 @@
       redo();
       return box;
     }
+    /** A person's own posts on their profile (GET /api/feed?by=), newest first, as the Feed draws them: what a social app's
+     *  profile opens on. Only what the Feed would show you anyway. Hidden while there is none (or no signal). */
+    function of(handle) {
+      const box = el('section', { className: 'stack-8 feed-sec feed-of' }); box.hidden = true;
+      const list = el('div', { className: 'feed' });
+      box.append(el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Drives' })), list);
+      const redo = () => apiCall('GET', `/api/feed?by=${encodeURIComponent(String(handle || '').replace(/^@/, ''))}`).then(jsonOf).then((rows) => {
+        if (!Array.isArray(rows)) return;
+        const h = String(handle).replace(/^@/, '').toLowerCase(), own = rows.filter((p) => String(p.handle || '').toLowerCase() === h);   // a server from before ?by= sends the whole feed
+        list.replaceChildren(...own.slice(0, 10).map((p) => card(p, { after: redo })));
+        box.hidden = !own.length;
+      }).catch(() => {});
+      if (handle) redo();
+      return box;
+    }
     /** Every post, newest first, More for older ones. For a side sheet of its own. */
     function full() {
       const list = el('div', { className: 'feed' }), more = btn('More', () => load(), 'linkbtn');
@@ -442,7 +457,7 @@
       });
     }
 
-    return { section, full, open, compose, post, remove, card };
+    return { section, full, of, open, compose, post, remove, card };
   }
 
   const api = { trimLine, encode, decode, lineSvg, ago, facts, mount, CUT_M, MAX_POINTS };

@@ -6706,6 +6706,9 @@ flow('friend profile: a friend on People → Profile shows what the friend share
       stages: [{ stage: 'Esses', best: 812, days_month: 3, last: '2026-10-27' }], totals: { stages: 1, days_month: 3, best: 812 } });
     if (u.pathname === '/api/points') return json({ total: 0 });
     if (u.pathname === '/api/presence') return json([{ handle: 'bob', photo_id: null, delay_s: 0, fuzz: false, road: 'Dry Ridge Rd', lat: 38.7, lon: -84.6, at: new Date(Date.now() - 30e3).toISOString() }]);
+    // his drives, on his profile (GET /api/feed?by=bob); the Feed itself has none
+    if (u.pathname === '/api/feed' && u.searchParams.get('by') === 'bob') return json([{ id: 'P9AAAAAAAAAAAAAA', handle: 'bob', photo_id: null, mine: false, crew: null, title: 'Sunday on the Skyway', caption: null,
+      driven_on: '2026-11-09', length_m: 20000, score: 790, roads: [], stages: [], line: null, created_at: '2026-11-09 15:00:00', kudos: 1, my_kudos: false, comments: 0 }]);
     return json([]);
   });
   await page.goto(base + '/index.html');
@@ -6722,6 +6725,11 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   check(who && who.photo && who.live && who.first && /friends since September/.test(who.text) && /On the road · Dry Ridge Rd/.test(who.text), 'the profile opens on the person, photo and status: ' + JSON.stringify(who));
   const pk = await page.evaluate(() => ({ keys: [...document.querySelectorAll('.profile-view .profile-keys button')].map((b) => b.textContent), foot: [...document.querySelectorAll('.profile-view .profile-foot button')].map((b) => b.textContent),
     last: document.querySelector('.profile-view > :last-child').className }));
+  // his drives under who he is, as any social app's profile: the posts the Feed would show you, by him only, newest first
+  await page.waitForSelector('.profile-view .feed-of:not([hidden]) .feed-card', { timeout: 5000 });
+  const dv = await page.evaluate(() => { const s = document.querySelector('.profile-view .feed-of'), foot = document.querySelector('.profile-view .profile-foot');
+    return { head: s.querySelector('h3').textContent, titles: [...s.querySelectorAll('.feed-title')].map((t) => t.textContent), beforeFoot: !!(s.compareDocumentPosition(foot) & Node.DOCUMENT_POSITION_FOLLOWING) }; });
+  check(dv.head === 'Drives' && JSON.stringify(dv.titles) === '["Sunday on the Skyway"]' && dv.beforeFoot, 'his drives on his profile, above Unfriend: ' + JSON.stringify(dv));
   check(JSON.stringify(pk.keys) === '["On the map","Share a route","Invite to a drive","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
   await page.click('.profile-view button:has-text("Friends")');   // one back glyph and where it goes (REVIEW2.md)
   await page.waitForSelector('.side-pop.open .profile-view', { state: 'detached', timeout: 3000 }).catch(() => {});
