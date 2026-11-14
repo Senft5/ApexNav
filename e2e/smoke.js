@@ -4440,6 +4440,10 @@ flow('a saved route keeps its road feel: Save keeps what members measured along 
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.routeFeel') || '{}'));
   const e = Object.values(kept)[0];
   check(e && e.k.length === 1 && e.k[0][1].length === 20 && e.bumps.length === 2, 'Save keeps the bend and the bumps with the route: ' + JSON.stringify(kept).slice(0, 300));
+  // the context grid's indexes read with signal first (as a real phone would have them): read for the first time with no
+  // signal they'd fall back to the shipped copy's path for every tile, a 404 here once the flow is back online
+  await page.waitForFunction(() => window.ApexContextGrid && ApexContextGrid.urlsNear, null, { timeout: 20000 });
+  await page.evaluate(() => ApexContextGrid.urlsNear(35.8, -83.92, 1));
   // no signal: membership can't be asked and nothing is measured; the route opened again from the car's Places
   await page.context().setOffline(true);
   await page.evaluate(() => { ApexSync.member = async () => { throw new Error('offline'); }; window.__asked = 0; document.getElementById('measuredNote').textContent = '';
