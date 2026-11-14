@@ -4623,6 +4623,41 @@ flow('reports ahead of a dead zone: a drive on a planned route asks for the cell
   check(ids.includes('live35.8') && !ids.some((x) => x.startsWith('gone')), 'with no signal the report ahead is known, the expired one dropped: ' + JSON.stringify(ids));
 });
 
+flow('one bar at the start of a saved route: the phone says it is online but the asks for the reports ahead never get through, so those kept with the route stand in (Worker and router stubbed, IDEAS F-03)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(JSON.parse(route.request().postData() || '{}').locations)) }));
+  const soon = new Date(Date.now() + 40 * 60000).toISOString();
+  let weak = false;
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (weak) return route.abort('timedout');                       // nothing gets through, though the phone is "online"
+    if (u.pathname === '/api/me') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ signed_in: true, member: true, handle: 'e2e' }) });
+    if (u.pathname === '/api/hazards') {
+      const lat = Number(u.searchParams.get('lat'));
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify([{ id: 'kept' + lat.toFixed(1), kind: 'gravel', lat, lon: -83.92, heading: null, confirms: 2, clears: 0, expires_at: soon, m: 0 }]) });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.signedIn', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex && window.apex.live, null, { timeout: 20000 });
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.52, lon: -83.92 }, { lat: 36.08, lon: -83.92 }], 'route_dest', 'Up the valley', null,
+    { from: null, to: { lat: 36.08, lon: -83.92 }, via: [] }));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'route' && apexDebug.track.request, null, { timeout: 20000 });
+  await page.evaluate(() => document.getElementById('routeSaveBtn').click());
+  await page.waitForFunction(() => window.apexDebug.keptReports > 0, null, { timeout: 20000 });
+  // one bar from here: opened again from the car's Places and driven
+  weak = true;
+  await page.evaluate(() => { const p = JSON.parse(localStorage.getItem('apex.savedRoutes') || '[]')[0]; window.apex.onNative({ type: 'carplay', action: 'saved', id: p.id }); });
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.name === 'Up the valley' && apexDebug.track.kind === 'route', null, { timeout: 15000 });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.evaluate(async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.70 + i * 0.0025, lon: -83.92, accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, calibration: 'locked' }); await new Promise((r) => setTimeout(r, 10)); } });
+  await page.waitForFunction(() => { apexDebug.loadReported(true); return apexDebug.reportedIds().includes('kept35.8'); }, null, { timeout: 20000, polling: 1000 });
+  check(true, 'the report kept with the route is known ahead');
+});
+
 flow('a saved route keeps its reports: Save asks for the cells it runs through, and opened again with no signal its card names them with their age, expired ones dropped (Worker and router stubbed, IDEAS F-03)', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
     ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
@@ -4709,6 +4744,18 @@ flow('a saved route keeps its road feel: Save keeps what members measured along 
   // the Log's frame warms a few seconds after launch (cockpit.js prewarmLog); let it finish first, as on a phone, so going
   // offline mid-load doesn't leave it half loaded (CI 2026-11-14: analysis_page.js without themes.js)
   await page.waitForFunction(() => { const f = document.getElementById('logFrame'); return f && f.contentWindow && f.contentWindow.ApexLogFrame; }, null, { timeout: 30000 });
+  // one bar that carries nothing: the phone says it's online, but nothing gets through. Membership can't be asked
+  // (member() answers null when its call fails), or it can and the members' data can't: the kept copy stands in either way
+  const reopen = () => page.evaluate(() => { document.getElementById('measuredNote').textContent = '';
+    const p = JSON.parse(localStorage.getItem('apex.savedRoutes') || '[]')[0]; window.apex.onNative({ type: 'carplay', action: 'saved', id: p.id }); });
+  await page.evaluate(() => { localStorage.setItem('apex.signedIn', '1'); ApexSync.member = async () => null; window.__asked = 0; });
+  await reopen();
+  await page.waitForFunction(() => /\(kept \d/.test(document.getElementById('measuredNote').textContent), null, { timeout: 15000 });
+  check(await page.evaluate(() => apexDebug.track.crowdCorrected === 100 && window.__asked === 0), 'one bar, membership unasked: the kept corners, nothing measured');
+  await page.evaluate(() => { ApexSync.member = async () => ({ signed_in: true, member: true }); ApexContributor.measuredAlong = async () => { window.__asked++; throw new TypeError('Failed to fetch'); }; });
+  await reopen();
+  await page.waitForFunction(() => /\(kept \d/.test(document.getElementById('measuredNote').textContent), null, { timeout: 15000 });
+  check(await page.evaluate(() => apexDebug.track.crowdCorrected === 100 && window.__asked === 1), 'one bar, the members\' data unasked: the kept corners stand in');
   // no signal: membership can't be asked and nothing is measured; the route opened again from the car's Places
   await page.context().setOffline(true);
   await page.evaluate(() => { ApexSync.member = async () => { throw new Error('offline'); }; window.__asked = 0; document.getElementById('measuredNote').textContent = '';
