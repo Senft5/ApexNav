@@ -4476,6 +4476,9 @@ flow('a saved route keeps its reports: Save asks for the cells it runs through, 
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.routeReports') || '{}'));
   const id = Object.keys(kept)[0], rows = id ? Object.values(kept[id].cells).flat().map((h) => h.id) : [];
   check(rows.includes('gravel') && rows.includes('brief'), 'the reports along it are kept with the route: ' + JSON.stringify(kept));
+  // the Log's frame warms a few seconds after launch (cockpit.js prewarmLog); let it finish first, as on a phone, so going
+  // offline mid-load doesn't leave it half loaded (CI 2026-11-14: analysis_page.js without themes.js)
+  await page.waitForFunction(() => { const f = document.getElementById('logFrame'); return f && f.contentWindow && f.contentWindow.ApexLogFrame; }, null, { timeout: 30000 });
   // no signal; time passes the brief report's expiry; the route opened again from the car's Places
   offline = true;
   await page.context().setOffline(true);
@@ -4519,6 +4522,9 @@ flow('a saved route keeps its road feel: Save keeps what members measured along 
   // signal they'd fall back to the shipped copy's path for every tile, a 404 here once the flow is back online
   await page.waitForFunction(() => window.ApexContextGrid && ApexContextGrid.urlsNear, null, { timeout: 20000 });
   await page.evaluate(() => ApexContextGrid.urlsNear(35.8, -83.92, 1));
+  // the Log's frame warms a few seconds after launch (cockpit.js prewarmLog); let it finish first, as on a phone, so going
+  // offline mid-load doesn't leave it half loaded (CI 2026-11-14: analysis_page.js without themes.js)
+  await page.waitForFunction(() => { const f = document.getElementById('logFrame'); return f && f.contentWindow && f.contentWindow.ApexLogFrame; }, null, { timeout: 30000 });
   // no signal: membership can't be asked and nothing is measured; the route opened again from the car's Places
   await page.context().setOffline(true);
   await page.evaluate(() => { ApexSync.member = async () => { throw new Error('offline'); }; window.__asked = 0; document.getElementById('measuredNote').textContent = '';
