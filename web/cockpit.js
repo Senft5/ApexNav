@@ -3291,6 +3291,8 @@
     }
     const NO_FIX = 'Couldn\'t get your location. Type a start or tap the map.';
     let plannedRoute = null;
+    // Drive it on a friend's post (drive_posts.js rivalsOf): their stages with Scores, to set yours against when the drive ends
+    let postRival = null;
     // Avoid towns (R-15): km of each candidate near a city, town or village (FunRoute.townKm), which ranking then costs.
     // Only when the driver asked; unknown (no tiles) stays unknown and costs nothing.
     // (ms: the card waits that long for the map's place tiles, 0.4 s; the refine after it, longer)
@@ -7186,6 +7188,7 @@
         await buildRoute(pts, id, name, null, { from: null, to: { lat: last.lat, lon: last.lon }, via: stops.slice(0, -1).map((q) => ({ lat: q.lat, lon: q.lon, shaping: true })) });
         const t = plannedRoute;
         if (!t || t.id !== id) return;
+        postRival = Array.isArray(p.rivals) && p.rivals.length ? { rivals: p.rivals, handle: p.handle, mine: !!p.mine, at: Date.now() } : null;
         const whose = p.mine ? '' : `, @${p.handle}'s line`;
         if (!lead) { toast(`${name}${whose}: ${ApexUnits.long(totalM(), 1)}.`); return; }
         const toStart = t.dist[Core.nearestIndex(first.lat, first.lon, t.lat, t.lon, -1).index] || 0;
@@ -10619,6 +10622,7 @@
       $('endFeel').textContent = feel; $('endFeel').hidden = !feel;
       $('endPractice').textContent = ''; $('endPractice').hidden = true;   // IDEAS D-27: with the score (endCardScored)
       $('endRoad').textContent = ''; $('endRoad').hidden = true;           // the road's line, with the score too
+      $('endRival').textContent = ''; $('endRival').hidden = true;         // Drive it on a friend's post: with the score (endCardScored)
       $('endRun').textContent = ''; $('endRun').hidden = true;             // IDEAS D-30: a month's best run, with the score too
       // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
       $('endScore').textContent = '…'; $('endScore').classList.add('unk'); $('endScore').setAttribute('aria-busy', 'true');
@@ -10648,7 +10652,7 @@
     // asked for or earned first (the practice, a month's best run), then the road's and what the phone felt
     function endLinesCap() {
       let shown = 0;
-      for (const id of ['endPractice', 'endRun', 'endRoad', 'endFeel']) {
+      for (const id of ['endRival', 'endPractice', 'endRun', 'endRoad', 'endFeel']) {
         const n = $(id);
         if (!n.textContent) { n.hidden = true; continue; }
         n.hidden = shown >= 2; if (!n.hidden) shown++;
@@ -10723,6 +10727,23 @@
       const roadLine = typeof c.road === 'string' ? c.road : '';
       $('endRoad').textContent = roadLine; $('endRoad').hidden = !roadLine;
       endLinesCap();
+      // Drive it on a friend's post: your Score on their stages against theirs, from this drive's own passes of those stretches
+      // (segmentPass, the same that scored theirs). Said once; kept for 12 h until a drive goes over one of them.
+      const rv = postRival;
+      if (rv && Date.now() - rv.at > 12 * 3600e3) postRival = null;
+      else if (rv && window.ApexAnalysis && window.ApexDrivePosts) (async () => {
+        const segs = rv.rivals.map((r) => ({ name: r.name, lat0: r.ends[0], lon0: r.ends[1], lat1: r.ends[2], lon1: r.ends[3], length_m: r.length_m }));
+        let got = [];
+        try { got = (await ApexAnalysis.job('stagesOf', { id: c.id, segs })).stages || []; } catch (_) { got = []; }
+        if (!got.length || !endDrive || endDrive.id !== c.id) return;
+        if (postRival === rv) postRival = null;
+        const rows = got.map((g) => { const r = rv.rivals.find((x) => x.name === g.name); return { name: g.name, you: g.score, them: r ? r.score : null }; });
+        const line = ApexDrivePosts.rivalLine(rows, rv);
+        if (!line) return;
+        $('endRival').textContent = line; endLinesCap();
+        const sheet = $('endCard').querySelector('.card-sheet');      // a taller card: the drive is fitted again above it
+        if (endTrailOn && sheet && Math.abs(sheet.getBoundingClientRect().top - endTrailTop) > 4) showEndTrail(endDrive);
+      })();
       if (window.ApexEndLine && !opts.quiet) {                       // Round 3: never aloud to a parked car or a pocket
         const pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
         // one of the pack's sign-offs, the same for this drive every time, from a clip the loaded bank holds (U-113)

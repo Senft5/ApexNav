@@ -105,6 +105,28 @@
     if (i < 0 || j < 0 || j - i < 1) return null;
     return pts.slice(i, j + 1);
   }
+  /** The posted stages Drive it can compare you on afterwards: those with ends and a Score, [{ name, ends, score }]; with
+   *  `only` (a stage's index), that one alone. Each with its length along their line, [{ name, ends, length_m, score }]. */
+  function rivalsOf(p, only = null) {
+    const pts = p && typeof p.line === 'string' ? decode(p.line) : [];
+    return (p && Array.isArray(p.stages) ? p.stages : []).map((x, i) => {
+      if (!x || !x.name || !Number.isFinite(x.score) || (only != null && i !== only)) return null;
+      const part = stretch(pts, x.ends);                           // its length along their line: a pass is matched by length
+      if (!part) return null;
+      let m = 0;
+      for (let k = 1; k < part.length; k++) m += Math.hypot((part[k][0] - part[k - 1][0]) * 110540, (part[k][1] - part[k - 1][1]) * 111320 * Math.cos(part[k][0] * Math.PI / 180));
+      return m >= 200 ? { name: String(x.name).slice(0, 60), ends: x.ends.slice(), length_m: Math.round(m), score: x.score } : null;
+    }).filter(Boolean);
+  }
+  /** After you drove a posted line, your Score on its stages against theirs: "Gilmore Rd: 812, 34 under @bob's 846." One
+   *  sentence a stage, at most two; rows [{ name, you, them }] with `you` a number (a stage you didn't score is left out). */
+  function rivalLine(rows, who) {
+    const whose = who && who.mine ? 'your posted' : `@${(who && who.handle) || '?'}'s`;
+    return (Array.isArray(rows) ? rows : []).filter((r) => r && Number.isFinite(r.you) && Number.isFinite(r.them)).slice(0, 2).map((r) => {
+      const d = Math.round(r.you) - Math.round(r.them);
+      return `${r.name}: ${Math.round(r.you)}, ${d === 0 ? 'level with' : `${Math.abs(d)} ${d > 0 ? 'over' : 'under'}`} ${whose} ${Math.round(r.them)}.`;
+    }).join(' ');
+  }
   /** An SVG path for the line in a w×h box, north up, its shape kept (longitude scaled by the latitude), with a margin. */
   function lineSvg(pts, w, h, pad = 8) {
     if (!Array.isArray(pts) || pts.length < 2) return '';
@@ -312,7 +334,7 @@
             // a stage the server kept the ends of (on the line): a tap drives just that stretch of their line
             const b = el('button', { type: 'button', className: 'feed-stage' }, ...row.childNodes);
             b.setAttribute('aria-label', `Drive ${x.name}${x.score == null ? '' : `, ${p.mine ? 'your' : `@${p.handle || '?'}'s`} Score ${x.score}`}`);
-            b.addEventListener('click', () => { doc.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); page.driveLine(throughPoints(part, 6), { ...p, id: `${p.id}_s${si}`, title: x.name }); });
+            b.addEventListener('click', () => { doc.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); page.driveLine(throughPoints(part, 6), { ...p, id: `${p.id}_s${si}`, title: x.name, rivals: rivalsOf(p, si) }); });
             return b;
           })));
       }
@@ -330,7 +352,7 @@
       if (pts.length > 1 && page.driveLine) {
         const d = el('button', { type: 'button', className: 'feed-drive' }); d.innerHTML = ICON.drive; d.append(el('span', { textContent: 'Drive it' }));
         d.setAttribute('aria-label', p.mine ? `Drive ${p.title} again` : `Drive @${p.handle || '?'}'s ${p.title}`);
-        d.addEventListener('click', () => { doc.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); page.driveLine(throughPoints(pts), p); });
+        d.addEventListener('click', () => { doc.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); page.driveLine(throughPoints(pts), { ...p, rivals: rivalsOf(p) }); });
         acts.append(d);
       }
       box.append(acts);
@@ -592,6 +614,6 @@
     return { section, full, open, compose, post, remove, card, drivesOf };
   }
 
-  const api = { trimLine, encode, decode, throughPoints, stretch, lineSvg, ago, facts, mentionParts, mentionAt, suggest, kudosLine, mount, CUT_M, MAX_POINTS };
+  const api = { trimLine, encode, decode, throughPoints, stretch, rivalsOf, rivalLine, lineSvg, ago, facts, mentionParts, mentionAt, suggest, kudosLine, mount, CUT_M, MAX_POINTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDrivePosts = api;
 })(typeof window !== 'undefined' ? window : globalThis);
