@@ -65,4 +65,4 @@ def test_a_chart_day_reads_as_a_day():
     assert gb == ["30 Oct", "2 Nov", "", "", "", ""] and us == "Oct 30"      # a day that doesn't exist is no day
     page = (root / "web" / "analysis.html").read_text(encoding="utf-8") + (root / "web" / "analysis_page.js").read_text(encoding="utf-8")
     assert ".slice(5, 10)}</text>" not in page
-    assert "ApexFormat.dateTime(d.date.slice(0, 10))" in page and page.count("ApexFormat.dayShort(") == 2
+    assert "ApexFormat.dateTime(d.date.slice(0, 10))" in page and page.count("ApexFormat.dayShort(") == 3   # the road chart, the records, a ghost duel's day
