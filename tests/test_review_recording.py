@@ -77,7 +77,7 @@ def test_review_recording_writes_nothing_to_the_server():
     assert "if (window.APEX_REVIEW) r = reviewHazard(body);" in send and "else try { r = await ApexSync.apiFetch('/api/hazards'" in send
     review = html.split("function reviewHazard(body)")[1].split("\n    }\n")[0]
     assert "outbox" not in review and "apiFetch" not in review and "reported.local.push(h)" in review and "paintReported()" in review
-    assert ".concat(reported.local)" in html, "a reload of the server's hazards keeps the review's own pin"
+    assert ".concat(reported.local, roadEventsNear(p))" in html, "a reload of the server's hazards keeps the review's own pin"
     still = html.split("async function answerStill(still)")[1].split("\n    }\n")[0]
     assert "if (window.APEX_REVIEW) r = new Response(null, { status: 204 });" in still
     assert "navigator.onLine === false || window.APEX_REVIEW) return; outbox.flush()" in html

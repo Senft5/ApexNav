@@ -1,0 +1,935 @@
+[
+{
+"event-id": "CARSx-328098",
+"headline": {
+"category": "roadwork",
+"code": "roadwork"
+},
+"description": "I-65 southbound (Mile Point 0.1): Roadwork. Between Market St and the end of I-65 (Jeffersonville). Look out for roadwork. Left lane closed in the southbound direction of travel.",
+"editor": {
+"editor-identifier": "SYSTEM",
+"description": "FEUPoller"
+},
+"message-number": 68,
+"message-type-version": 1,
+"priority": 3,
+"update-number": 68,
+"update-time": {
+"time": 1794408863294,
+"nanos": 294000000,
+"timeZoneId": "America/Kentucky/Louisville",
+"utcOffset": -18000000
+},
+"update-expiry-time": {
+"time": 1914408863294,
+"nanos": 294000000,
+"timeZoneId": "America/Kentucky/Louisville",
+"utcOffset": -14400000
+},
+"status": "CURRENT",
+"details": [
+{
+"access": "PUBLIC_DOMAIN",
+"duration-was-specified": true,
+"duration": 2000000,
+"element-id": 1,
+"end-time": {
+"time": 1914408863294,
+"nanos": 294000000,
+"timeZoneId": "America/Kentucky/Louisville",
+"utcOffset": -14400000
+},
+"update-time": {
+"time": 1794408863294,
+"nanos": 294000000,
+"timeZoneId": "America/Kentucky/Louisville",
+"utcOffset": -18000000
+},
+"start-time": {
+"time": 1753688528342,
+"nanos": 342000000,
+"timeZoneId": "America/Kentucky/Louisville",
+"utcOffset": -14400000
+},
+"lanes": [
+{
+"lanes-type": "LEFT_LANE",
+"total-affected": 1,
+"total-original": 6,
+"link-direction": "NEGATIVE_DIRECTION",
+"lanes-affected": [
+true,
+false,
+false,
+false,
+false,
+false
+],
+"lanes-impact-type": "CLOSED"
+}
+],
+"locations": [
+{
+"location-type": "LinkLocation",
+"link-direction": "NEGATIVE_DIRECTION",
+"link-ownership": "Indiana",
+"primary-location": {
+"geo-location": {
+"location-type": "GeoLocation",
+"latitude": 38.268540531862946,
+"longitude": -85.7451032643109
+},
+"linear-reference": 0.10842062542245438
+},
+"route-designator": "I-65",
+"primary-location-route-ids": {
+"positive-direction-route-id": "10000000650000091"
+}
+}
+]
+}
+],
+"counties": [
+"Clark"
+],
+"districts": [
+"SEYMOUR"
+]
+},
+{
+"event-id": "CARSx-469755",
+"headline": {
+"category": "closure",
+"code": "exit ramp closed"
+},
+"description": "I-80 eastbound (Mile Point 10): Exit ramp closed. Between IN 53 and Georgia St (Gary). The exit ramp is closed because of roadwork. Exit ramp is closed in the eastbound direction of travel. Until November 20, 2026 at about 11:59PM CST.",
+"creator": {
+"contact-id": "Indiana DOT"
+},
+"editor": {
+"editor-identifier": "SYSTEM",
+"description": "FEUPoller"
+},
+"message-number": 8,
+"message-type-version": 1,
+"priority": 1,
+"update-number": 8,
+"update-time": {
+"time": 1793710952016,
+"nanos": 16000000,
+"timeZoneId": "America/Chicago",
+"utcOffset": -21600000
+},
+"update-expiry-time": {
+"time": 1795240740000,
+"timeZoneId": "America/Chicago",
+"utcOffset": -21600000
+},
+"status": "CURRENT",
+"details": [
+{
+"access": "PUBLIC_DOMAIN",
+"duration-was-specified": false,
+"element-id": 1,
+"end-time": {
+"time": 1795240740000,
+"timeZoneId": "America/Chicago",
+"utcOffset": -21600000
+},
+"update-time": {
+"time": 1793710952016,
+"nanos": 16000000,
+"timeZoneId": "America/Chicago",
+"utcOffset": -21600000
+},
+"start-time": {
+"time": 1791284835113,
+"nanos": 113000000,
+"timeZoneId": "America/Chicago",
+"utcOffset": -18000000
+},
+"lanes": [
+{
+"lanes-type": "EXIT_RAMP",
+"link-direction": "POSITIVE_DIRECTION",
+"lanes-impact-type": "CLOSED"
+}
+],
+"locations": [
+{
+"location-type": "LinkLocation",
+"link-direction": "POSITIVE_DIRECTION",
+"link-ownership": "Indiana",
+"primary-location": {
+"geo-location": {
+"location-type": "GeoLocation",
+"latitude": 41.567344164962165,
+"longitude": -87.33500998504483
+},
+"linear-reference": 9.944736919766157
+},
+"route-designator": "I-80",
+"primary-location-route-ids": {
+"positive-direction-route-id": "10000000800000001"
+}
+}
+]
+}
+],
+"counties": [
+"Lake"
+],
+"districts": [
+"LA PORTE"
+]
+},
+{
+"event-id": "CARSy-10",
+"headline": {
+"category": "restriction",
+"code": "width limit"
+},
+"description": "IN 14 in both directions (Mile Point 102.38 - 110.26): Width limit in effect. Between IN 105; IN 5 and IN 9 (7 miles east of the South Whitley area). There is a width limit in effect. Width limit 16'0\". Comment: SR 14 between SR 5 South Junction and SR 9 restricted to 16 feet wide.",
+"creator": {
+"contact-id": "Indiana DOT"
+},
+"editor": {
+"editor-identifier": "SYSTEM",
+"description": "FEUPoller"
+},
+"message-number": 1,
+"message-type-version": 1,
+"priority": 10,
+"update-number": 1,
+"update-time": {
+"time": 1784583341091,
+"nanos": 91000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"update-expiry-time": {
+"time": 1904583341091,
+"nanos": 91000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"status": "CURRENT",
+"details": [
+{
+"access": "PUBLIC_DOMAIN",
+"duration-was-specified": true,
+"duration": 2000000,
+"element-id": 1,
+"end-time": {
+"time": 1904583341091,
+"nanos": 91000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"update-time": {
+"time": 1784583341091,
+"nanos": 91000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"locations": [
+{
+"location-type": "LinkLocation",
+"link-direction": "BOTH_DIRECTIONS",
+"link-ownership": "Indiana",
+"primary-location": {
+"geo-location": {
+"location-type": "GeoLocation",
+"latitude": 41.07533168876214,
+"longitude": -85.62155028453962
+},
+"linear-reference": 99.89315795898438
+},
+"route-designator": "IN 14",
+"primary-location-route-ids": {
+"positive-direction-route-id": "90000000140000001",
+"negative-direction-route-id": "90000000140000091"
+},
+"secondary-location-route-ids": {
+"positive-direction-route-id": "90000000140000001",
+"negative-direction-route-id": "90000000140000091"
+},
+"secondary-location": {
+"geo-location": {
+"location-type": "GeoLocation",
+"latitude": 41.077586951767834,
+"longitude": -85.47016160113733
+},
+"linear-reference": 107.80982208251953
+}
+}
+]
+}
+],
+"counties": [
+"Whitley"
+],
+"districts": [
+"FORT WAYNE"
+]
+},
+{
+"event-id": "CARSy-113",
+"headline": {
+"category": "closure",
+"code": "closed"
+},
+"description": "IN 114 (Mile Point 52.86 - 52.75): Road closed. Between Main St and Wabash St (North Manchester). The road is closed due to water main work. A detour is in operation. See map for detour(s). Until November 24, 2026 at about 11:45PM EST. Comment: IN 114, between Main St and Wabash St (North Manchester). The road is closed due to water main work. A detour is in operation. See map for detour(s). Starting August 21, 2026 at about 12:00AM EDT until November 24, 2026 at about 11:45PM EDT.",
+"creator": {
+"contact-id": "Indiana DOT"
+},
+"editor": {
+"editor-identifier": "SYSTEM",
+"description": "FEUPoller"
+},
+"message-number": 2,
+"message-type-version": 1,
+"priority": 2,
+"update-number": 2,
+"update-time": {
+"time": 1794516314365,
+"nanos": 365000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -18000000
+},
+"update-expiry-time": {
+"time": 1795581900000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -18000000
+},
+"operator-comments": {
+"notes-and-comments": "Tobias Chalmers - 2608021459"
+},
+"status": "CURRENT",
+"details": [
+{
+"access": "PUBLIC_DOMAIN",
+"duration-was-specified": false,
+"element-id": 1,
+"end-time": {
+"time": 1795581900000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -18000000
+},
+"update-time": {
+"time": 1794516314365,
+"nanos": 365000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -18000000
+},
+"start-time": {
+"time": 1787284800000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"locations": [
+{
+"location-type": "LinkLocation",
+"link-direction": "NOT_DIRECTIONAL",
+"link-ownership": "Indiana",
+"primary-location": {
+"geo-location": {
+"location-type": "GeoLocation",
+"latitude": 40.999129619021275,
+"longitude": -85.78139819789185
+},
+"linear-reference": 48.01168629336549
+},
+"route-designator": "IN 114",
+"secondary-location": {
+"geo-location": {
+"location-type": "GeoLocation",
+"latitude": 40.99899591602029,
+"longitude": -85.77942359012144
+},
+"linear-reference": 48.11726379394531
+}
+}
+]
+}
+],
+"counties": [
+"Wabash"
+],
+"districts": [
+"FORT WAYNE"
+]
+},
+{
+"event-id": "CARSy-1289",
+"headline": {
+"category": "closure",
+"code": "lane closed"
+},
+"description": "US 20 westbound (Mile Point 41.2 - 40.47): Lane closed. Between Woodland Ave and US 421 (Michigan City). A lane is closed. Right lane closed in the westbound direction of travel.",
+"creator": {
+"contact-id": "Indiana DOT"
+},
+"editor": {
+"editor-identifier": "SYSTEM",
+"description": "FEUPoller"
+},
+"message-number": 1,
+"message-type-version": 1,
+"priority": 5,
+"update-number": 1,
+"update-time": {
+"time": 1785252634131,
+"nanos": 131000000,
+"timeZoneId": "America/Chicago",
+"utcOffset": -18000000
+},
+"update-expiry-time": {
+"time": 1905252634131,
+"nanos": 131000000,
+"timeZoneId": "America/Chicago",
+"utcOffset": -18000000
+},
+"status": "CURRENT",
+"details": [
+{
+"access": "PUBLIC_DOMAIN",
+"duration-was-specified": true,
+"duration": 2000000,
+"element-id": 1,
+"end-time": {
+"time": 1905252634131,
+"nanos": 131000000,
+"timeZoneId": "America/Chicago",
+"utcOffset": -18000000
+},
+"update-time": {
+"time": 1785252634131,
+"nanos": 131000000,
+"timeZoneId": "America/Chicago",
+"utcOffset": -18000000
+},
+"start-time": {
+"time": 1785251847457,
+"nanos": 457000000,
+"timeZoneId": "America/Chicago",
+"utcOffset": -18000000
+},
+"lanes": [
+{
+"lanes-type": "RIGHT_LANE",
+"total-affected": 1,
+"total-original": 2,
+"link-direction": "NEGATIVE_DIRECTION",
+"lanes-affected": [
+false,
+true
+],
+"lanes-impact-type": "CLOSED"
+}
+],
+"locations": [
+{
+"location-type": "LinkLocation",
+"link-direction": "NEGATIVE_DIRECTION",
+"link-ownership": "Indiana",
+"primary-location": {
+"geo-location": {
+"location-type": "GeoLocation",
+"latitude": 41.68098595198336,
+"longitude": -86.88513525155321
+},
+"linear-reference": 27.33297182729561
+},
+"route-designator": "US 20",
+"primary-location-route-ids": {
+"positive-direction-route-id": "20000000200000091"
+},
+"secondary-location-route-ids": {
+"positive-direction-route-id": "20000000200000091"
+},
+"secondary-location": {
+"geo-location": {
+"location-type": "GeoLocation",
+"latitude": 41.68736187871953,
+"longitude": -86.87450887945977
+},
+"linear-reference": 28.044777430787207
+}
+}
+]
+}
+],
+"counties": [
+"LaPorte"
+],
+"districts": [
+"LA PORTE"
+]
+},
+{
+"event-id": "CARSy-1935",
+"headline": {
+"category": "closure",
+"code": "road closure"
+},
+"description": "West 50 North in both directions: Road closed. At West 50 North in Lebanon. The road is closed. See map for detour(s). Comment: No access to SR 32 from CR 50 or to CR 50 from SR32. Road is closed to allow for new SR32 alignment construction.",
+"creator": {
+"contact-id": "Indiana DOT"
+},
+"editor": {
+"editor-identifier": "SYSTEM",
+"description": "FEUPoller"
+},
+"message-number": 1,
+"message-type-version": 1,
+"priority": 2,
+"update-number": 1,
+"update-time": {
+"time": 1788181069715,
+"nanos": 715000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"update-expiry-time": {
+"time": 1909383600000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"status": "CURRENT",
+"details": [
+{
+"access": "PUBLIC_DOMAIN",
+"duration-was-specified": true,
+"duration": 2020043,
+"element-id": 1,
+"end-time": {
+"time": 1909383600000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"update-time": {
+"time": 1788181069715,
+"nanos": 715000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"start-time": {
+"time": 1789383600000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"locations": [
+{
+"location-type": "LinkLocation",
+"link-direction": "BOTH_DIRECTIONS",
+"link-ownership": "local road",
+"primary-location": {
+"geo-location": {
+"location-type": "GeoLocation",
+"latitude": 40.04668,
+"longitude": -86.51958
+},
+"cross-street-designator": [
+"West 50 North"
+],
+"cross-street-name": [
+"West 50 North"
+],
+"signed-destination": [
+"in Lebanon"
+]
+},
+"route-designator": "West 50 North",
+"link-alignment": "EASTBOUND"
+}
+]
+}
+],
+"counties": [
+"Boone"
+],
+"districts": [
+"CRAWFORDSVILLE"
+]
+},
+{
+"event-id": "CARSy-2241",
+"headline": {
+"category": "traffic-condition",
+"code": "slow traffic"
+},
+"description": "East Main Street in both directions: Slow traffic. Between Clay St and Water St in Peru. Traffic is slow. Look out for flaggers. Look out for roadwork. Traffic is stop and go.",
+"creator": {
+"contact-id": "Indiana DOT"
+},
+"editor": {
+"editor-identifier": "SYSTEM",
+"description": "FEUPoller"
+},
+"message-number": 1,
+"message-type-version": 1,
+"priority": 4,
+"update-number": 1,
+"update-time": {
+"time": 1789468273593,
+"nanos": 593000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"update-expiry-time": {
+"time": 1909468273593,
+"nanos": 593000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"status": "CURRENT",
+"details": [
+{
+"access": "PUBLIC_DOMAIN",
+"duration-was-specified": true,
+"duration": 2000000,
+"element-id": 1,
+"end-time": {
+"time": 1909468273593,
+"nanos": 593000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"update-time": {
+"time": 1789468273593,
+"nanos": 593000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"start-time": {
+"time": 1789467416176,
+"nanos": 176000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"locations": [
+{
+"location-type": "LinkLocation",
+"link-direction": "BOTH_DIRECTIONS",
+"link-ownership": "local road",
+"primary-location": {
+"geo-location": {
+"location-type": "GeoLocation",
+"latitude": 40.755841323230584,
+"longitude": -86.06358269937002
+},
+"cross-street-designator": [
+"Clay St"
+],
+"cross-street-name": [
+"Clay St"
+],
+"signed-destination": [
+"in Peru"
+]
+},
+"route-designator": "East Main Street",
+"link-alignment": "EASTBOUND",
+"secondary-location": {
+"geo-location": {
+"location-type": "GeoLocation",
+"latitude": 40.755841323230584,
+"longitude": -86.06358269937002
+},
+"cross-street-designator": [
+"Water St"
+],
+"cross-street-name": [
+"Water St"
+]
+}
+}
+]
+}
+],
+"counties": [
+"Miami"
+],
+"districts": [
+"FORT WAYNE"
+]
+},
+{
+"event-id": "CARSy-3101",
+"headline": {
+"category": "special-event",
+"code": "parade"
+},
+"description": "IN 13 (Mile Point 25.69 - 25.18): Parade. Between S B St and N F St (Elwood). There is a parade. Starting November 28, 2026 at 8:00PM EST. Comment: Comment: US 13 closed in Elwood for Christmas Festival Parade Primary Contact: Christy Clark (765)623-8187 Detour and Traffic Control: Madison County Emergency Management Angency to provide local detour",
+"creator": {
+"contact-id": "Indiana DOT"
+},
+"editor": {
+"editor-identifier": "SYSTEM",
+"description": "FEUPoller"
+},
+"message-number": 1,
+"message-type-version": 1,
+"priority": 5,
+"update-number": 1,
+"update-time": {
+"time": 1793286161472,
+"nanos": 472000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"update-expiry-time": {
+"time": 1915914000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"operator-comments": {
+"notes-and-comments": "Comment: US 13 closed in Elwood for Christmas Festival Parade \nPrimary Contact: Christy Clark (765)623-8187\nDetour and Traffic Control: Madison County Emergency Management Angency to provide local detour"
+},
+"status": "CURRENT",
+"details": [
+{
+"access": "PUBLIC_DOMAIN",
+"duration-was-specified": true,
+"duration": 2043798,
+"element-id": 1,
+"end-time": {
+"time": 1915914000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"update-time": {
+"time": 1793286161472,
+"nanos": 472000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"start-time": {
+"time": 1795914000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -18000000
+},
+"locations": [
+{
+"location-type": "LinkLocation",
+"link-direction": "NOT_DIRECTIONAL",
+"link-ownership": "Indiana",
+"primary-location": {
+"geo-location": {
+"location-type": "GeoLocation",
+"latitude": 40.27503533764986,
+"longitude": -85.8418866881871
+},
+"linear-reference": 24.539703369140625
+},
+"route-designator": "IN 13",
+"secondary-location": {
+"geo-location": {
+"location-type": "GeoLocation",
+"latitude": 40.282470190711095,
+"longitude": -85.84181346113989
+},
+"linear-reference": 25.052478071577415
+}
+}
+]
+}
+],
+"counties": [
+"Madison"
+],
+"districts": [
+"GREENFIELD"
+]
+},
+{
+"event-id": "CARSy-3169",
+"headline": {
+"category": "closure",
+"code": "right shoulder closed"
+},
+"description": "US 31 northbound (Mile Point 131.1 - 131.54): Right shoulder closed. Between 161st St and Park St (Westfield). The right shoulder is closed. Outside shoulder is closed in the northbound direction of travel. Starting Monday at 7:00AM EST until November 18, 2026 at about 5:00PM EST. Comment: Between 161st St and Park St (Westfield). Outside shoulder is closed in the northbound direction of travel. Starting November 16, 2026 at 7:00AM EST until November 18, 2026 at about 5:00PM EST.",
+"creator": {
+"contact-id": "Indiana DOT"
+},
+"editor": {
+"editor-identifier": "SYSTEM",
+"description": "FEUPoller"
+},
+"message-number": 1,
+"message-type-version": 1,
+"priority": 7,
+"update-number": 1,
+"update-time": {
+"time": 1793650544644,
+"nanos": 644000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -18000000
+},
+"update-expiry-time": {
+"time": 1795039200000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -18000000
+},
+"operator-comments": {
+"notes-and-comments": "B-45797\nJake Beaty, Beaty Construction, 317-412-0465\nBrent Estes, INDOT, 765-745-1700"
+},
+"status": "CURRENT",
+"details": [
+{
+"access": "PUBLIC_DOMAIN",
+"duration-was-specified": false,
+"element-id": 1,
+"end-time": {
+"time": 1795039200000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -18000000
+},
+"update-time": {
+"time": 1793650544644,
+"nanos": 644000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -18000000
+},
+"start-time": {
+"time": 1794830400000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -18000000
+},
+"lanes": [
+{
+"lanes-type": "OUTSIDE_SHOULDER",
+"link-direction": "POSITIVE_DIRECTION",
+"lanes-impact-type": "CLOSED"
+}
+],
+"locations": [
+{
+"location-type": "LinkLocation",
+"link-direction": "POSITIVE_DIRECTION",
+"link-ownership": "Indiana",
+"primary-location": {
+"geo-location": {
+"location-type": "GeoLocation",
+"latitude": 40.02747601066792,
+"longitude": -86.13358945702286
+},
+"linear-reference": 114.95192757850172
+},
+"route-designator": "US 31",
+"primary-location-route-ids": {
+"positive-direction-route-id": "20000000310000001"
+},
+"secondary-location-route-ids": {
+"positive-direction-route-id": "20000000310000001"
+},
+"secondary-location": {
+"geo-location": {
+"location-type": "GeoLocation",
+"latitude": 40.03381382942842,
+"longitude": -86.13527816484763
+},
+"linear-reference": 115.39859206332869
+}
+}
+]
+}
+],
+"counties": [
+"Hamilton"
+],
+"districts": [
+"GREENFIELD"
+]
+},
+{
+"event-id": "CARSy-1288",
+"headline": {
+"category": "closure",
+"code": "closed"
+},
+"description": "I-70 eastbound: Road closed. At Entrance ramp from OLD US 35. The road is closed. The entrance ramp is closed. Major road construction work is in progress. Until Sunday, at about 11:59AM EST. Comment: Entrance Ramp from OLD US 35/WIlliamsburg Pike to I-70 Eastbound closed. Detour: Access I-70 Eastbound through roundabouts and head onto I-70 Westbound, exit at Centerville Road.",
+"creator": {
+"contact-id": "Indiana DOT"
+},
+"editor": {
+"editor-identifier": "SYSTEM",
+"description": "FEUPoller"
+},
+"message-number": 10,
+"message-type-version": 1,
+"priority": 2,
+"update-number": 10,
+"update-time": {
+"time": 1790337431112,
+"nanos": 112000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"update-expiry-time": {
+"time": 1794761940000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -18000000
+},
+"operator-comments": {
+"notes-and-comments": "Contract R-43375\nINDOT PS James R. Kase, 765-745-1707, JKase@indot.IN.gov\nINDOT PS Josh C. Wilson 765-745-1711, JWilson2@indot.IN.gov\nINDOT AE Andrew J. Wortkoetter, P.E. 317-448-6997, awortkoetter@indot.in.gov\n TCS MOT Supervisor James Oliver 574-806-5642.\nWalsh MOT Supervisor Erik Gardin 219-779-3547."
+},
+"status": "CURRENT",
+"details": [
+{
+"access": "PUBLIC_DOMAIN",
+"duration-was-specified": false,
+"element-id": 1,
+"end-time": {
+"time": 1794761940000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -18000000
+},
+"update-time": {
+"time": 1790337431112,
+"nanos": 112000000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"start-time": {
+"time": 1789603200000,
+"timeZoneId": "America/Indiana/Indianapolis",
+"utcOffset": -14400000
+},
+"locations": [
+{
+"location-type": "LinkLocation",
+"link-direction": "POSITIVE_DIRECTION",
+"link-ownership": "ramp event",
+"primary-location": {
+"geo-location": {
+"location-type": "GeoLocation",
+"latitude": 39.868142273008324,
+"longitude": -84.92012802436446
+},
+"cross-street-designator": [
+"Entrance ramp from OLD US 35"
+],
+"cross-street-name": [
+"Entrance ramp from OLD US 35"
+],
+"linear-reference": 148.001292895482
+},
+"route-designator": "I-70",
+"primary-location-route-ids": {
+"positive-direction-route-id": "10000000700000001"
+},
+"link-alignment": "EASTBOUND"
+}
+]
+}
+],
+"counties": [
+"Wayne"
+],
+"districts": [
+"GREENFIELD"
+]
+}
+]

@@ -27,7 +27,8 @@
       if (finite(h.heading) && angle(h.heading, me.heading) > SAME_WAY_DEG) continue;   // the other side of the road
       if (!best || r.m < best.m) best = { h, m: r.m };
     }
-    return best && { ...best.h, m: Math.round(best.m), text: `${best.h.label || LABEL[best.h.kind] || 'Hazard'} reported ahead` };   // a Factory crew's own word when it has one
+    // a Factory crew's own word when it has one; a DOT's event (road_events.js, `official`) is the agency's, not "reported"
+    return best && { ...best.h, m: Math.round(best.m), text: `${best.h.label || LABEL[best.h.kind] || 'Hazard'}${best.h.official ? '' : ' reported'} ahead` };
   }
 
   /**
@@ -40,7 +41,7 @@
       update(list, me, mine) {
         if (!me || !finite(me.lat) || !finite(me.lon)) return null;
         for (const h of list || []) {
-          if (asked.has(h.id) || (mine && mine.has(h.id))) continue;
+          if (!h || h.official || asked.has(h.id) || (mine && mine.has(h.id))) continue;   // a DOT's word isn't ours to vote on
           if (finite(h.heading) && finite(me.heading) && angle(h.heading, me.heading) > SAME_WAY_DEG) continue;   // the other side: not yours to judge
           const r = local(me, h);
           if (r.m <= PASSED_NEAR_M) { near.set(h.id, h); continue; }
@@ -79,6 +80,10 @@
     if (!h) return null;
     const parts = [];
     if (finite(h.m) && dist) parts.push(`in ${dist(h.m)}`);
+    if (h.official) {                                                   // a DOT's event: its road and the agency, never an age
+      for (const w of [h.road, h.src]) if (typeof w === 'string' && w.trim()) parts.push(w.trim());
+      return { title: h.label || LABEL[h.kind] || 'Hazard', detail: parts.join(' · ') };
+    }
     const at = typeof h.created_at === 'string' ? Date.parse(h.created_at.replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(h.created_at) ? '' : 'Z')) : NaN;
     if (Number.isFinite(at) && finite(nowMs) && nowMs >= at) {
       const min = Math.round((nowMs - at) / 60000);
