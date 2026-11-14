@@ -7,6 +7,18 @@
 (function (root) {
   'use strict';
   const CUT_M = 500, MAX_POINTS = 600, PREVIEW = 3;
+  /** A comment's text with each @handle in bold (the server tells whoever it names, if they can see the post). */
+  const MENTION = /(^|[^A-Za-z0-9_@])(@[A-Za-z0-9_]{3,20})(?![A-Za-z0-9_])/g;
+  function mentionParts(text) {
+    const out = []; let last = 0;
+    for (const m of String(text || '').matchAll(MENTION)) {
+      const start = m.index + m[1].length;
+      if (start > last) out.push([false, text.slice(last, start)]);
+      out.push([true, m[2]]); last = start + m[2].length;
+    }
+    if (last < String(text || '').length) out.push([false, text.slice(last)]);
+    return out;
+  }
 
   const metres = (a, b) => {
     const R = 6371000, r = Math.PI / 180, dLat = (b[0] - a[0]) * r, dLon = (b[1] - a[1]) * r;
@@ -154,6 +166,7 @@
    */
   function mount(page) {
     const { el, btn, toast, apiCall, jsonOf } = page;
+    const withMentions = (text) => el('p', {}, ...mentionParts(text).map(([at, t]) => (at ? el('b', { textContent: t }) : root.document.createTextNode(t))));
     const doc = root.document;
     if (doc && !doc.getElementById('drivePostsStyle')) doc.head.append(el('style', { id: 'drivePostsStyle', textContent: STYLE }));
     const face = (p, px) => (page.avatar ? page.avatar(p.photo_id || null, p.handle, px) : el('span'));
@@ -304,7 +317,7 @@
       const list = el('div', { className: 'feed-comments' });
       const draw = () => list.replaceChildren(...p.comment_list.map((c) => {
         const row = el('div', { className: 'feed-comment' }, face(c, 30),
-          el('div', {}, el('b', { textContent: c.mine ? 'You' : `@${c.handle || '?'}` }), el('small', { textContent: ` ${ago(c.created_at, Date.now())}` }), el('p', { textContent: c.body })));
+          el('div', {}, el('b', { textContent: c.mine ? 'You' : `@${c.handle || '?'}` }), el('small', { textContent: ` ${ago(c.created_at, Date.now())}` }), withMentions(c.body)));
         const k = el('button', { type: 'button', className: 'linkbtn feed-more', textContent: '···' }); k.setAttribute('aria-label', 'More for this comment');
         k.addEventListener('click', () => {
           const m = sheet('This comment', 'feed-menu'); const keys = el('div', { className: 'row', style: 'flex-wrap:wrap' });
@@ -488,6 +501,6 @@
     return { section, full, open, compose, post, remove, card, drivesOf };
   }
 
-  const api = { trimLine, encode, decode, throughPoints, lineSvg, ago, facts, mount, CUT_M, MAX_POINTS };
+  const api = { trimLine, encode, decode, throughPoints, lineSvg, ago, facts, mentionParts, mount, CUT_M, MAX_POINTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDrivePosts = api;
 })(typeof window !== 'undefined' ? window : globalThis);

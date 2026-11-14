@@ -27,6 +27,7 @@ console.log(JSON.stringify({
   inBox: xy.every(([x, y]) => x >= 0 && x <= 200 && y >= 0 && y <= 96),
   facts: D.facts({ length_m: 32000, roads: ['A', 'B', 'C', 'D'] }, (m) => (m / 1000).toFixed(1) + ' km'),
   factsNone: D.facts({ length_m: null, roads: [] }, String),
+  mentions: [D.mentionParts('@sam nice, and you@bob? @cara!'), D.mentionParts('no one here'), D.mentionParts('@ab @toolonghandle_toolong x')],
   ago: [D.ago('2026-11-13 12:00:00', Date.parse('2026-11-13T12:01:00Z')), D.ago('2026-11-13 12:00:00', Date.parse('2026-11-13T15:00:00Z'))],
 }));
 """
@@ -51,3 +52,10 @@ def test_codec_svg_and_facts():
     assert r["facts"] == "32.0 km · A, B +2"
     assert r["factsNone"] == ""
     assert r["ago"] == ["just now", "3 h"]
+
+
+def test_mentions_bold_handles_only():
+    m = run()["mentions"]
+    assert m[0] == [[True, "@sam"], [False, " nice, and you@bob? "], [True, "@cara"], [False, "!"]]   # an email-ish "you@bob" isn't one
+    assert m[1] == [[False, "no one here"]]
+    assert m[2] == [[False, "@ab @toolonghandle_toolong x"]]                                          # too short, too long

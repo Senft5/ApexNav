@@ -27,6 +27,10 @@ console.log(JSON.stringify({
   contact: P.contact({ phone: '+1 513-555-0101;+1 513 555 0199', website: 'www.skylinechili.com/menu' }, at(0, 9)),
   noContact: P.contact({ phone: 'call us', website: 'javascript:alert(1)' }, at(0, 9)),
   query: P.query('Joe\'s "Best" Diner', 39.1, -84.5),
+  many: P.queryMany([{ name: 'A', lat: 39, lon: -84 }, { name: 'B "2"', lat: 39.1, lon: -84.1 }]),
+  match: P.match([{ name: 'X', lat: 39, lon: -84 }, null, { name: 'Y', lat: 39, lon: -84 }, { name: 'Z', lat: 39, lon: -84 }],
+    [{ tags: { name: 'X', k: 'far' }, lat: 39.0010, lon: -84 }, { tags: { name: 'X', k: 'near' }, lat: 39.0002, lon: -84 },
+     { tags: { name: 'Y' }, lat: 39.01, lon: -84 }, { tags: { name: 'Z', k: 'way' }, center: { lat: 39.0001, lon: -84.0001 } }]),
 }));
 """
 
@@ -74,3 +78,10 @@ def test_phone_and_website_keys():
     assert r["contact"]["hours"] is None
     assert r["noContact"]["phone"] is None and r["noContact"]["web"] is None
     assert '["name"="Joe\'s \\"Best\\" Diner"]' in r["query"] and "around:60,39.100000,-84.500000" in r["query"]
+
+
+def test_a_list_in_one_query_each_to_its_own():
+    r = run()
+    assert r["many"].count("nwr(around:60,") == 2 and '["name"="B \\"2\\""]' in r["many"] and r["many"].endswith("out tags center;")
+    # the nearer of two by the name; a namesake 1 km off is not it; a way by its centre; a row with no name stays null
+    assert r["match"] == [{"name": "X", "k": "near"}, None, None, {"name": "Z", "k": "way"}]

@@ -5995,6 +5995,14 @@
       paintPlaces(q, out, out.length ? '' : ApexNearby.emptyLine(cat, failed, 8, (m) => ApexUnits.long(m)), 0);
       paintNearbyPins(rows, cat, here, out);
       warmPlace(out[0]);
+      // then whether each is open, under its name (place_info.js, one request for the list); unknown says nothing
+      if (window.ApexPlaceInfo && out.length) ApexPlaceInfo.lookupMany(rows.map((r) => (r.named ? { name: r.label, lat: r.lat, lon: r.lon } : null))).then((tags) => {
+        if (seq !== suggestSeq || !tags) return;
+        const now = new Date();
+        let any = false;
+        tags.forEach((t, i) => { const h = t ? ApexPlaceInfo.contact(t, now).hours : null; if (h) { out[i].sub = h.text; any = true; } });
+        if (any) paintPlaces(q, out, '', 0);
+      }).catch(() => {});
     }
     // the listed places on the map too, by name (an unnamed one by its stamp), the map fitted to them above the sheet; a tap
     // on one goes there, as its row does. They go when the list stops being a kind, the plan closes, or a route is planned.
