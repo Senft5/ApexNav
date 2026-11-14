@@ -165,3 +165,16 @@ def test_the_dense_east_is_cut_finer_and_the_matrix_fits():
     # the Great Lakes belt in 4 degree chunks (42_-92 at 8 degrees: past 3 h 45 min)
     assert {(j["west"], j["east"]) for j in js if j["band"] == 42 and -92 <= j["west"] < -76} == {(-92.0, -88.0), (-88.0, -84.0), (-84.0, -80.0), (-80.0, -76.0)}
     assert {(j["west"], j["east"]) for j in js if j["band"] == 39 and -92 <= j["west"] < -76} == {(-92.0, -84.0), (-84.0, -76.0)}
+
+
+def test_a_publish_can_take_an_earlier_runs_bands():
+    """2026-11-14: all 141 bands of the lower 48 built (13 h) and the publish runner died in the spot check, which decoded
+    every tile at once. bands_from publishes an earlier run's band artifacts with no download and no band."""
+    wf = open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "graph-us.yml")).read()
+    for job in ("osm", "osm-again", "band"):
+        part = wf[wf.index(f"\n  {job}:"):]
+        assert part.index("if: needs.plan.outputs.reuse == ''") < part.index("steps:"), job
+    pub = wf[wf.index("\n  publish:"):]
+    assert "needs.plan.outputs.reuse != '' && needs.band.result == 'skipped'" in pub
+    assert "run-id: ${{ needs.plan.outputs.reuse || github.run_id }}" in pub
+    assert "python -m tools.graph_etl.check" not in pub, "the spot roads are Cincinnati's: graph-region.yml checks them"
