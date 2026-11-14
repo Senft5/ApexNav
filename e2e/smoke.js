@@ -9000,6 +9000,32 @@ flow('post a corner clip: on the Log a clip made from the drive\'s own film goes
   check(/Posted to your friends\./.test(await fr.textContent('#dvDashcam .dc-clip-note')), 'the Log says where it went');
 });
 
+flow('your best yet: the drive page leads with the corners this drive beat every other pass of, and by how much (coach prior_s)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  // one road three times: the newest 4% quicker everywhere, the same smooth line
+  await page.evaluate(async (src) => {
+    const gen = eval(src);
+    const tweak = (csv, f) => csv.split('\n').map((l, i) => { if (!i || !l) return l; const c = l.split(','); c[5] = (+c[5] * f).toFixed(3); return c.join(','); }).join('\n');
+    const fs = [0.94, 0.96, 1.0];
+    for (let k = 0; k < 3; k++) {
+      const d = ApexRecording.parse(ApexCore, tweak(gen('clean', 0), fs[k]), 'b' + k + '.csv', { id: 'b' + k, name: 'Dry Ridge Rd', date: `2026-0${6 + k}-01T09:00`, source: 'web-gps' });
+      await ApexRecording.store(d);
+    }
+  }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html?tab=drive&drive=b2');
+  await page.waitForSelector('.dv-bests li button', { timeout: 20000 });
+  const r = await page.evaluate(() => ({ h: document.querySelector('.dv-bests').previousElementSibling.textContent,
+    rows: [...document.querySelectorAll('.dv-bests li button')].map((b) => b.textContent) }));
+  check(/^Your best yet (here|in \d corners)$/.test(r.h) && r.rows.length >= 1 && r.rows.every((t) => /−\d\.\d s/.test(t) && /vs your next best/.test(t)),
+    'the corners it beat your next best through, by how much: ' + JSON.stringify(r));
+  // a slower drive of the same road has none
+  await page.goto(base + '/analysis.html?tab=drive&drive=b0');
+  await page.waitForSelector('.dv-corners .dv-corner', { timeout: 20000 });
+  check(!(await page.$('.dv-bests')), 'the slowest pass has no best yet');
+});
+
 flow('side by side: a corner filmed on this drive and on your best pass plays as one clip, both from the same point, the gap counting (big bet 5)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} window.APEX_DRIVECAM = '/__drivecam/'; });
   let index = [], video = null;
