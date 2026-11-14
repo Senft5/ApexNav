@@ -651,7 +651,8 @@
     if (!worker) {
       worker = new root.Worker('stages_worker.js');
       worker.onmessage = (e) => { const w = waiting.get(e.data && e.data.id); if (!w) return; waiting.delete(e.data.id); if (e.data.error) w.reject(new Error(e.data.error)); else w.resolve(e.data.stages); };
-      worker.onerror = () => { for (const w of waiting.values()) w.reject(new Error('stages worker failed')); waiting.clear(); worker = null; };
+      // a worker that can't load (no signal on a web page) is handled here: the page discovers itself, no uncaught error
+      worker.onerror = (e) => { if (e && e.preventDefault) e.preventDefault(); for (const w of waiting.values()) w.reject(new Error('stages worker failed')); waiting.clear(); worker = null; };
     }
     const id = ++seq;
     return new Promise((resolve, reject) => { waiting.set(id, { resolve, reject }); worker.postMessage({ id, c: { lat: c.lat, lon: c.lon }, radiusKm, opts }); });

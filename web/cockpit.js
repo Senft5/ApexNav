@@ -11113,7 +11113,16 @@
       const a = document.createElement('a'); a.href = 'apexnav://open?' + q.toString(); a.textContent = 'Have the app? Open it there'; a.style.cssText = 'color:var(--accent);font-weight:600;white-space:nowrap';
       const x = document.createElement('button'); x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Stay in the browser'); x.className = 'linkbtn';
       x.onclick = () => { bar.remove(); try { sessionStorage.setItem('apex.stayInBrowser', '1'); } catch (_) {} };
-      bar.append(a, x); document.body.append(bar);
+      // Get the app (launch marketing, 2026-11-14): the App Store with a campaign tag (ct), so App Store Connect's own counts
+      // say which kind of link brought them; no tracking SDK. Hidden until the owner sets the app's id and provider token.
+      const APP_STORE_ID = null, APP_STORE_PT = null;                  // App Store Connect: the app's Apple ID (digits), the provider token (pt)
+      const ct = q.has('roadbook') ? 'route-share' : q.has('crew') ? 'crew' : q.has('convoy') ? 'convoy' : 'invite';
+      const kids = [a];
+      if (/^\d{6,12}$/.test(String(APP_STORE_ID || '')) && /^\d{1,12}$/.test(String(APP_STORE_PT || ''))) {
+        const g = document.createElement('a'); g.href = `https://apps.apple.com/app/id${APP_STORE_ID}?pt=${APP_STORE_PT}&ct=${ct}&mt=8`;
+        g.textContent = 'Get the app'; g.style.cssText = 'font-weight:600;white-space:nowrap'; kids.push(g);
+      }
+      bar.append(...kids, x); document.body.append(bar);
     })();
 
     // =======================================================================
