@@ -178,3 +178,11 @@ def test_a_publish_can_take_an_earlier_runs_bands():
     assert "needs.plan.outputs.reuse != '' && needs.band.result == 'skipped'" in pub
     assert "run-id: ${{ needs.plan.outputs.reuse || github.run_id }}" in pub
     assert "python -m tools.graph_etl.check" not in pub, "the spot roads are Cincinnati's: graph-region.yml checks them"
+
+
+def test_a_reused_publish_never_asks_geofabrik():
+    """2026-11-14: Geofabrik refused the plan runner of the first bands_from run, which needs nothing from it."""
+    wf = open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "graph-us.yml")).read()
+    plan = wf[wf.index("\n  plan:"):wf.index("\n  osm:")]
+    assert plan.index('if [ -n "$IN_BANDS" ]; then') < plan.index("download.geofabrik.de/index-v1.json")
+    assert "--retry-max-time 1500" in plan

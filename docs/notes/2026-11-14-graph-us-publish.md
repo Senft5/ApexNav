@@ -6,3 +6,6 @@
 # CALL SHEET
 ## 2026-11-14 (graph US publish): no spot check in the lower-48 publish (claude/project-thread-39xbx9)
 The spot roads (Colerain, Blue Rock, I-275 ...) are all Cincinnati's, and graph-region.yml checks them on the same build and model; through 62 million edges in Python the check is hours and took the runner down. Undo: put `python -m tools.graph_etl.check merged/v1 | tail -12` back in the publish's Merge and pack step (it streams now, but is still slow).
+
+## 2026-11-14 (graph US publish): a bands_from plan skips Geofabrik; a whole plan tries its index for 25 min (claude/project-thread-39xbx9)
+The first bands_from run failed in plan: Geofabrik refused that runner's index request six times in a minute, though the reuse needs no index. Now the plan outputs placeholders and stops before Geofabrik when bands_from is set, and a whole build's plan retries the index for up to 25 min (the refusals have lasted that long). Undo: drop the `if [ -n "$IN_BANDS" ]` block and put the curl back to --retry 5 --retry-delay 10.
