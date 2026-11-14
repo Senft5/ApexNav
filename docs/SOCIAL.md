@@ -109,7 +109,7 @@ and in random batches so a trace cannot be re-assembled.
   kudos and comments on your drive posts, or a new comment after yours on someone else's post, one row per post with the
   newest name and how many others (Open: the post and its comments; 2026-11-14). A comment that @mentions you on a post
   you can see shows as a Mention instead. Typing @ in a comment suggests the post's driver, who commented, then your
-  friends; a tap puts the handle in.
+  friends; a tap puts the handle in. Reply under someone's comment starts yours with their handle.
 - The People tab's badge counts what is new since you last had People → Friends on screen, plus what waits on you
   (friend requests, duels asked of you, a crew link, convoy invites). Asked when the app opens, comes to the front, and
   every five minutes while it is in front, never while driving.
