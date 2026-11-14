@@ -8387,6 +8387,44 @@ flow('corner clips: with the video lined up, a corner it holds comes out as a po
   check(await page.evaluate(() => document.querySelector('#dvDashcam .dc-clips button').disabled), 'nothing to clip, the key is off');
 });
 
+flow('best corner clip off the Log: on the map page a filmed drive gives its best corner, where it is in the video, and the clip (best_clip.js, for the end card post)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} window.APEX_DRIVECAM = '/__drivecam/'; });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.ApexBestClip && window.ApexRecording && window.ApexLazy);
+  const T0 = 1763000000000;
+  const b64 = await page.evaluate(async (t0) => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 300; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9); }
+    await ApexRecording.store({ id: 'bc1', name: 'Filmed road', date: '2026-11-13T15:00:00Z', t0, t_s: lat.map((_, i) => i / 3), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => -0.1), lat_g: lat.map((_, i) => Math.sin(i / 3) * 0.4), g_known: null, elev: null, hz: 1, source: 'web-gps',
+      events: [{ type: 'corner', code: 'L4', call: 'Left 4', index: 9, dist_m: 45, start_m: 30, end_m: 60, radius_m: 80, apex_mph: 30, dir: 'L', severity: 4 },
+               { type: 'corner', code: 'R3', call: 'Right 3', index: 18, dist_m: 90, start_m: 75, end_m: 105, radius_m: 60, apex_mph: 30, dir: 'R', severity: 3 }] });
+    const c = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }), g = c.getContext('2d');
+    const rec = new MediaRecorder(c.captureStream(15), { mimeType: 'video/webm' }), parts = [];
+    rec.ondataavailable = (e) => parts.push(e.data);
+    const stop = new Promise((ok) => { rec.onstop = ok; });
+    rec.start(); let f = 0; const t = setInterval(() => { g.fillStyle = `hsl(${f++ * 12},60%,50%)`; g.fillRect(0, 0, 320, 180); }, 66);
+    await new Promise((r) => setTimeout(r, 7200)); clearInterval(t); rec.stop(); await stop;
+    const buf = new Uint8Array(await new Blob(parts).arrayBuffer());
+    let bin = ''; for (let k = 0; k < buf.length; k += 0x8000) bin += String.fromCharCode(...buf.subarray(k, k + 0x8000));
+    return btoa(bin);
+  }, T0);
+  const name = `${T0 + 1500}.mov`;
+  await page.route('**/__drivecam/index.json', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify([{ name, start_ms: T0 + 1500, dur_s: 7.2 }]) }));
+  await page.route(`**/__drivecam/${name}`, (r) => r.fulfill({ contentType: 'video/webm', body: Buffer.from(b64, 'base64') }));
+  const before = await page.evaluate(() => !!window.ApexCornerClip);
+  const found = await page.evaluate(() => ApexBestClip.find('bc1'));
+  check(!before && found && found.url === `/__drivecam/${encodeURIComponent(found.name)}` && found.name.endsWith('.mov'), 'found, its helpers loaded only when asked: ' + JSON.stringify(found));
+  check(/^Corner [12] · (Left 4|Right 3)$/.test(found.label) && found.end > found.start && found.start >= 0 && found.end <= 7.2, 'a corner the video holds, as seconds in it');
+  const made = await page.evaluate(async () => { const f = await ApexBestClip.find('bc1'), r = await ApexBestClip.make(f); return { size: r.blob.size, mime: r.mime, left: document.querySelectorAll('video').length }; });
+  check(made.size > 500 && /^video\//.test(made.mime), 'the clip is made on the page: ' + JSON.stringify(made));
+  check(made.left === 0, 'nothing left behind on the page');
+  const none = await page.evaluate(async () => { await ApexRecording.store({ id: 'bc2', name: 'Not filmed', date: '2026-11-13T15:00:00Z', t0: 1700000000000, lat: [35.6, 35.61], lon: [-83.9, -83.9], dist: [0, 5], speed_mps: [15, 15], lon_g: [0, 0], lat_g: [0, 0], events: [] });
+    return ApexBestClip.find('bc2'); });
+  check(none === null, 'a drive with no film has no clip');
+});
+
 flow('film the drive: the app\'s own video of a drive is offered on its page, lined up by itself, and cuts a corner clip and a best-corners reel (big bet 5)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} window.APEX_DRIVECAM = '/__drivecam/'; });
   await page.goto(base + '/analysis.html');
@@ -8566,6 +8604,20 @@ flow('Compare with a single drive: one line says it needs two, no empty panels; 
   await storeDashDrive(page, 'cp2', 'Compare road');
   const two = await look();
   check(/Shared road/.test(two.cards) && !two.road && !two.corners && !two.pick, 'two drives: the comparison is drawn: ' + JSON.stringify(two));
+});
+
+flow('Compare two drives on different roads: one line says they share no road, no gap chart or corner table of dashes (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  // the same profile 2 km apart (seed 0 and 1): nothing of one road lies on the other
+  await page.evaluate(async (src) => { const gen = eval(src);
+    for (let k = 0; k < 2; k++) await ApexRecording.store(ApexRecording.parse(ApexCore, gen('saw', k), 'X' + k + '.csv', { id: 'X' + k, name: ['Dry Ridge Rd', 'Pebble Ridge'][k], date: `2026-0${7 + k}-01T09:00`, source: 'web-gps' })); }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html?tab=compare');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && /share|Shared/.test(document.querySelector('#cards').textContent), null, { timeout: 20000 });
+  const r = await page.evaluate(() => ({ cards: document.getElementById('cards').textContent.trim(), road: document.getElementById('cmpRoad').hidden,
+    corners: document.getElementById('cmpCorners').hidden, pick: document.querySelector('.compare-pick').hidden }));
+  check(/share no road/.test(r.cards) && r.road && r.corners && !r.pick, 'different roads: one line, the pickers stay, nothing empty under it: ' + JSON.stringify(r));
 });
 
 flow('the drive page\'s map: with no map to be had the picture keeps its blank panel; MapLibre loads only for it (TestFlight 15)', async (page, base) => {
