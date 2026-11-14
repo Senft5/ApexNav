@@ -10532,9 +10532,12 @@ const planDone = (page, timeout = 25000) => page.waitForFunction(() => !document
 const scan = async (page, where) => {
   await page.evaluate(() => { const st = document.querySelector('.stage'); if (st) st.scrollLeft = 0; });   // headless Chromium scrolls the stage sideways on a click into a field (TYPE_AT)
   const bad = await unsafe(page, SAFE.portrait); check(!bad.length, `${where}: under the island, the home bar or a corner, or keys on keys:\n  ${bad.join('\n  ')}`); };
-async function swipe(cdp, x0, y0, dx, dy) {
+async function swipe(cdp, x0, y0, dx, dy, holdMs = 0) {
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y: y0 }] });
   for (let i = 1; i <= 10; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + dx * i / 10, y: y0 + dy * i / 10 }] });
+  // holdMs: the finger rests before it lifts, so there is no fling. Ten moves sent back to back are a flick whose speed
+  // depends on how busy the runner is, and on a loaded one it flung the Garage's shelf past the next look (2026-11-14)
+  if (holdMs) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + dx, y: y0 + dy }] }); await new Promise((r) => setTimeout(r, holdMs)); }
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 }
 
@@ -11683,10 +11686,10 @@ flow('the Garage on a phone: the looks are a shelf turned sideways (one in view,
   const cdp = await page.context().newCDPSession(page);
   const y = await page.evaluate(() => { const r = document.querySelector('#themeCards .tc-head').getBoundingClientRect(); return r.top + r.height / 2; });
   await page.waitForFunction((y) => { const e = document.elementFromPoint(300, y); return !!(e && e.closest('#themeCards')); }, y, { timeout: 8000 });   // the splash has lifted
-  await swipe(cdp, 300, y, -260, 4);
+  await swipe(cdp, 300, y, -260, 4, 250);
   await page.waitForFunction(() => { const c = document.getElementById('themeCards'); return c.scrollLeft > 100 && Math.abs(c.children[1].getBoundingClientRect().left - 16) <= 2; }, null, { timeout: 5000 })
     .catch(async () => { throw new Error('a turn of the thumb brings the next look: ' + JSON.stringify(await shelf())); });
-  await swipe(cdp, 80, y, 260, 4);
+  await swipe(cdp, 80, y, 260, 4, 250);
   await page.waitForFunction(() => document.getElementById('themeCards').scrollLeft < 4, null, { timeout: 5000 });
   check((await shelf()).open, 'turning the shelf back to the right does not close the Garage');
   // Use on the second look: it is in use, and the shelf stays where the thumb left it

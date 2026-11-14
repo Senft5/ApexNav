@@ -11,3 +11,8 @@
 - What: no new server call. The comparison uses only posts the Feed already loaded, so a friend whose post you never scrolled to isn't compared.
 - Why: no backend change or migration, and nothing the member hasn't already been shown.
 - Undo: drop `keep(rows)` in drive_posts.js and the `theirs` pool in cockpit.js `endCardScored`.
+
+## 2026-11-14 The Garage shelf's swipe rests before it lifts (free roamer B)
+- What: e2e `swipe()` takes a `holdMs`; the Garage shelf flow's two swipes rest 250 ms before the finger lifts, so there is no fling.
+- Why: ten touch moves sent back to back are a flick whose speed depends on how loaded the runner is. After certain flows (it reproduced on main after "drive posts: Drive it on a friend's post"), the flick flung the shelf past the next look (scrollLeft 612) and failed CI on #811 and #817. A drag that rests then lifts snaps to the next look every time (4 of 4 runs of the failing pair, and shard 3/4 in full).
+- Undo: drop the `250` arguments in that flow.
