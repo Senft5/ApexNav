@@ -10063,8 +10063,8 @@
       if (r.delta != null) sayQuietLine(line);   // the co-driver says how the stage went, once it's over (technique, never time)
     }
     // ---- live coaching against your best pass, on any road driven before (web/pass_coach.js) ---------------------------
-    // Each remembered corner you finish is set against its best pass (technique, never time or speed). The bar shows the
-    // stretch's delta on the phone only (never on CarPlay) and gives way to a saved stage's bar. The co-driver speaks only
+    // Each remembered corner you finish is set against its fastest pass (the time gap, owner 2026-11-14) and its best
+    // technique (where no clock is known). The bar shows the stretch's gap on the phone only (never on CarPlay) and gives way to a saved stage's bar. The co-driver speaks only
     // with full notes on, in the quiet slot sayQuietLine waits for, and a corner line at most every 20 s; how a stretch went
     // is always said.
     let coachWatch = null;
@@ -10083,11 +10083,12 @@
         w.saidAt = performance.now(); sayQuietLine(ev.say);
       }
       const v = r.view;
-      bar.hidden = !v || v.delta == null || !$('stageBar').hidden;
+      bar.hidden = !v || (v.delta == null && v.gap == null) || !$('stageBar').hidden;
       if (bar.hidden) return;
-      $('coachDelta').textContent = ApexPassCoach.label(v.delta);
+      $('coachDelta').textContent = ApexPassCoach.label(v.delta, v.gap);
       $('coachCount').textContent = `${v.n} corner${v.n === 1 ? '' : 's'}`;
-      bar.classList.toggle('ahead', v.delta > 0); bar.classList.toggle('behind', v.delta < 0);
+      const up = Number.isFinite(v.gap) ? v.gap < -0.05 : v.delta > 0, down = Number.isFinite(v.gap) ? v.gap > 0.05 : v.delta < 0;
+      bar.classList.toggle('ahead', up); bar.classList.toggle('behind', down);
     }
     // Track day mode (track_mode.js, IDEAS D-15): only on a mapped raceway. Every 30 s while moving the map is asked whether
     // you're on one; then "Start/finish here" sets the line where you are, and the bar shows laps, sectors and the delta.
