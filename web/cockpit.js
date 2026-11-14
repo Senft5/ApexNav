@@ -4590,12 +4590,19 @@
     // a drive on a planned route (IDEAS F-04): our road network within 2 km of all of it kept on the phone as it starts, with
     // signal, so a reroute in a dead zone 40 km on still has roads (the 15 km round you above doesn't reach that far yet).
     // A few seconds in, after the drive's own start; bytes only, one tile at a time; tiles kept already are skipped.
+    // The map along it too (offline_tiles.js keepAhead), unless the route was saved for offline (its area holds more): a
+    // narrow corridor, so the drive screen and its dead zones have a map where only the overview was looked at.
     function keepNetworkAlong(t) {
       if (!t || t.kind !== 'route' || !Array.isArray(t.lat) || t.lat.length < 2 || navigator.onLine === false || window.APEX_REVIEW) return;
-      if (!window.ApexGraphTiles || !ApexGraphTiles.keepAlong || !ownOn() || localStorage.getItem('apex.ownWarm') === '0') return;
-      setTimeout(() => {
+      const net = !!(window.ApexGraphTiles && ApexGraphTiles.keepAlong && ownOn() && localStorage.getItem('apex.ownWarm') !== '0');
+      const map = !!(window.ApexOfflineTiles && ApexOfflineTiles.keepAhead && localStorage.getItem('apex.mapAhead') !== '0'
+        && !ApexOfflineTiles.areas().some((a) => a.id === routeAreaId(t)));
+      if (!net && !map) return;
+      setTimeout(async () => {
         if (track !== t) return;                                        // another route (or none) by then
-        ApexGraphTiles.keepAlong(t.lat, t.lon).then((k) => { if (window.apexDebug) window.apexDebug.keptAlong = k; }).catch(() => {});
+        if (net) await ApexGraphTiles.keepAlong(t.lat, t.lon).then((k) => { if (window.apexDebug) window.apexDebug.keptAlong = k; }).catch(() => {});
+        if (map && track === t) await ApexOfflineTiles.keepAhead({ lat: t.lat, lon: t.lon, styleUrl: MAP_STYLE })
+          .then((k) => { if (window.apexDebug) window.apexDebug.mapAhead = k; }).catch(() => {});
       }, 5000);
     }
     // at launch, before any position: the tiles' index (the region's is asked once a day, kept for offline) and the

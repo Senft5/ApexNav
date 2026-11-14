@@ -170,6 +170,29 @@
     } catch (_) {}
   }
 
+  /**
+   * The map ahead of a drive on a planned route (IDEAS F-03): its tiles z8-14 within bufferKm of the route kept as recent
+   * ones, so a dead zone on the way, a route not saved for offline, still has its map (only the tiles once looked at were
+   * kept). Narrow and capped (~4 MB per 100 km); held ones skipped; one at a time. Resolves { tiles, fetched, missing }.
+   */
+  const AHEAD_KM = 0.3, AHEAD_MAX = 400;
+  async function keepAhead({ lat, lon, styleUrl, bufferKm = AHEAD_KM, max = AHEAD_MAX, fetchFn = (u) => fetch(u) }) {
+    const json = async (url) => { const kept = await get(url); if (kept) return JSON.parse(new TextDecoder().decode(kept));
+      const r = await fetchFn(url); if (!r.ok) throw new Error(`HTTP ${r.status}`); const b = await r.arrayBuffer(); put(url, b); return JSON.parse(new TextDecoder().decode(b)); };
+    const style = await json(styleUrl);
+    const src = Object.values(style.sources || {}).find((x) => x.type === 'vector' && x.url);
+    const template = src ? ((await json(src.url)).tiles || [])[0] : null;
+    if (!template) throw new Error('no map tiles');
+    const list = tilesAlong(lat, lon, bufferKm, 8, 14).slice(0, max), now = Date.now();
+    let fetched = 0, missing = 0, miss = 0;
+    for (const [z, x, y] of list) {
+      const url = template.replace('{z}', z).replace('{x}', x).replace('{y}', y);
+      if (servable(await getRec(url), now)) continue;
+      try { const r = await fetchFn(url); if (!r.ok) continue; await keepRecent(url, await r.arrayBuffer()); fetched++; miss = 0; } catch (_) { missing++; if (++miss >= 5) break; }   // the signal's gone: stop
+    }
+    return { tiles: list.length, fetched, missing };
+  }
+
   const KEEP = new Set(['Style', 'Source', 'Glyphs']);   // small, needed to open the map offline: kept as they arrive
   /** For MapLibre's transformRequest: map requests through the protocol; anything else unchanged. */
   const transform = (url, type) => (/^https:\/\/tiles\.openfreemap\.org\//.test(url) && (type === 'Tile' || KEEP.has(type)) ? { url: `${PROTO}://${url}`, type } : undefined);
@@ -292,6 +315,6 @@
   /** Bytes saved, from the areas list. */
   const bytesSaved = () => areas().reduce((s, a) => s + (a.bytes || 0), 0);
 
-  const api = { tilesFor, plan, tilesAlong, planAlong, boxOf, lineOf, areasOf, servable, overflow, RECENT_MAX, RECENT_DAYS, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, ageOf, keptShare, packOf, packs, tellShell, STALE_DAYS, MAX_TILES, PROTO, DEM };
+  const api = { tilesFor, plan, tilesAlong, planAlong, boxOf, lineOf, areasOf, servable, overflow, RECENT_MAX, keepAhead, AHEAD_KM, AHEAD_MAX, RECENT_DAYS, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, ageOf, keptShare, packOf, packs, tellShell, STALE_DAYS, MAX_TILES, PROTO, DEM };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexOfflineTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);
