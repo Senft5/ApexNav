@@ -16,13 +16,13 @@ import { cronHealth, runCron } from "./cron_runs";
 import { appleSignIn } from "./apple";
 import { crewHazardKinds, hazardsNear, reportHazard, voteHazard } from "./hazards";
 import { routeDelete, routeGet, routesSharedWithMe, shareRoute } from "./routes_shared";
-import { bookCreate, bookDelete, bookFollow, bookGet, bookUpdate, booksFriends, booksMine, booksNear, roadAdd, roadRemove, roadStamp, roadUpdate } from "./roadbooks";
+import { bookCreate, bookDelete, bookFollow, bookGet, bookUpdate, booksCrew, booksFriends, booksMine, booksNear, roadAdd, roadRemove, roadStamp, roadUpdate } from "./roadbooks";
 import { duelAccept, duelCreate, duelEnd, duelList } from "./duels";
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
 import {
   boardActivity, boardFor, crewCreate, crewDiscover, crewInvite, crewInvitePreview, crewInvitesBy, crewInvitesRevoke, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendSuggestions, userSearch, friendRequest, friendRequestCancel,
-  myGrants, publish, removePair, setGrant, setHandle,
+  ghosts, myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
 import { itemsDelete, itemsGet, itemsPut } from "./member_items";
@@ -279,6 +279,7 @@ on("PUT", "/api/crews/:id/decals", async (req, env, m) => { await decalsPlace(en
 on("GET", "/api/crews/:id/chat", async (req, env, m) => json(await chatList(env, await requireMember(req, env), m.groups!.id, new URL(req.url))));
 on("POST", "/api/crews/:id/chat", async (req, env, m) => json(await chatPost(env, await requireMember(req, env), m.groups!.id, req), 201));
 on("DELETE", "/api/crews/:id/chat/:msg", async (req, env, m) => { await chatDelete(env, await requireMember(req, env), m.groups!.id, m.groups!.msg); return noContent(); });
+on("GET", "/api/crews/:id/roadbooks", async (req, env, m) => json(await booksCrew(env, await requireMember(req, env), m.groups!.id)));   // roadbooks.ts: kept with this crew
 on("GET", "/api/crews/:id/members", async (req, env, m) => json(await crewMembers(env, await requireMember(req, env), m.groups!.id)));
 // fair meeting points (crew_meet.ts): your rough home area for this crew, opt-in; the crew's cells without names
 on("PUT", "/api/crews/:id/home", async (req, env, m) => json(await crewHomeSet(env, await requireMember(req, env), m.groups!.id, req)));
@@ -459,6 +460,8 @@ on("GET", "/api/kudos", async (req, env) => json(await kudosReceived(env, await 
 // For you (src/inbox.ts): what happened to you socially, made from what each part already shows you; seen is kept on the phone.
 on("GET", "/api/inbox", async (req, env) => json(await inbox(env, await requireMember(req, env))));
 on("GET", "/api/board/activity", async (req, env) => json(await boardActivity(env, await requireMember(req, env))));
+on("GET", "/api/board/ghosts", async (req, env) => { const u = new URL(req.url);
+  return json(await ghosts(env, await requireMember(req, env), (u.searchParams.get("canons") || "").split(",").filter(Boolean), u.searchParams.get("surface"))); });
 on("GET", "/api/board/:canon", async (req, env, m) => json(await boardFor(env, await requireMember(req, env), m.groups!.canon)));
 
 on("POST", "/api/convoy", async (req, env) => json(await convoyCreate(env, await requireMember(req, env), req), 201));

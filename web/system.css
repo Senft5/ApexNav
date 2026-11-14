@@ -56,3 +56,12 @@
 [data-theme="roadbook"] .fp-ghost .hero-score { border-bottom-color: var(--hair); }
 [data-theme="roadbook"] .fp-digits i, [data-theme="roadbook"] .fp-ghost .stamp-d { border-radius: 10px; border-color: color-mix(in srgb, var(--panel-dim) 60%, transparent); }
 [data-theme="roadbook"] a.btn.fp-go { box-shadow: 0 6px 16px -8px rgb(0 0 0 / 0.35); }
+
+/* the binnacle (instruments.js mountLine): the speed line a rounded track with the speed filled in ink, the minor ticks
+   gone, the majors in the hair; Sight a raised pill beside the limit sign (not when short: its red word keeps the panel) */
+[data-theme="roadbook"] .sl-base { stroke: var(--raised); stroke-width: 8; stroke-linecap: round; }
+[data-theme="roadbook"] .sl-fill { stroke-width: 8; stroke-linecap: round; }
+[data-theme="roadbook"] .sl-tick { stroke: transparent; }
+[data-theme="roadbook"] .sl-tick.major { stroke: var(--hair); stroke-width: 2; }
+[data-theme="roadbook"] .sl-tip circle { stroke: var(--panel); stroke-width: 2.5; }
+[data-theme="roadbook"] .cluster-line .ro.ro-sight:not(.short) { background: var(--raised); border-radius: var(--r-key); padding: 6px 12px 7px; }

@@ -13,7 +13,7 @@ def test_started_at_launch_and_built():
 def test_goes_only_to_our_worker_anonymously():
     assert "MXMetricManager.shared.add(shared)" in SRC
     hosts = [l for l in SRC.splitlines() if "https://" in l]
-    assert hosts and all("apexnav.senftns.workers.dev/api/errors" in l for l in hosts)
+    assert hosts and all("vettadrive.app/api/errors" in l for l in hosts)
     assert "httpShouldHandleCookies = false" in SRC and "authorization" not in SRC.lower()
     assert '"kind": kind, "app": "ios"' in SRC
 

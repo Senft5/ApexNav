@@ -51,7 +51,7 @@ Applied to both `apexnav-db` and `apexnav-preview-db`: **0001_init.sql**, **0002
 | Segments & boards | `segments` (+`origin_id`), `segment_shares`, `grants` (**one row per friend or crew; Scores and Times on by default for friends and private crews, off for public crews; an "off" row is kept so a default never undoes it**), `board_entries` (+`canon_id`), `shared_routes` |
 | Crowd road data | `road_bins`, `hazard_obs`, `ingest_pending`, `rank_slots`, `road_floor`, `seen`, `points_ledger` (private tables: no API route reads or writes them directly) |
 | Road map lines | `road_ways` (a measured way's public OSM line, box, and since 0029 its road class `cls` and map length `len_m`: the open-road rule, docs/ROAD_DATA.md) |
-| Roadbooks | `roadbooks` (private / friends / public), `roadbook_roads` (planned shapes, never drives), `roadbook_follows`, `roadbook_stamps` (a keyed hash of the member, no user id). `GET /api/roadbooks/friends` (members): your accepted friends' friends or public books with a road in them, newest 30, cards only, never across a block |
+| Roadbooks | `roadbooks` (private / friends / public), `roadbook_roads` (planned shapes, never drives), `roadbook_follows`, `roadbook_stamps` (a keyed hash of the member, no user id). `GET /api/roadbooks/friends` (members): your accepted friends' friends or public books with a road in them, newest 30, cards only, never across a block. A crew's roadbook (migration 0063): `roadbooks.crew_id` (its members open it and `POST /:id/roads`), `roadbook_roads.added_by` (NULL = the keeper; a member removes their own, the crew's owner any); `crew` on create/update (a crew you are in, or null), `GET /api/crews/:id/roadbooks` (members), `GET /api/roadbooks` adds `crews` |
 | Your own items | `member_items` (0060: saved routes and pinned places on your account, `GET/PUT/DELETE /api/me/items`; newest `at` wins per item, a removal kept 60 days as body NULL then swept; only its owner reads it; member_items.ts) |
 | Highlights | `highlights` (author hidden), `highlight_ratings` (1–5, `visited` proved on the phone), `reports` |
 
@@ -88,6 +88,13 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
   audience exists. `GET /api/board/:canon` returns only entries published **to the viewer**, by someone who is still their friend / crew-mate, whose grant is
   still on, and not blocked either way. Times appear only with `share_times`. `GET /api/board/activity` (IDEAS S-03): the same visibility, the last
   14 days of others' best per day on stages the viewer has, with the viewer's rank on each; scores only, never times.
+- **Ghost splits (IDEAS D-04, migration 0062):** `POST /api/board` may carry `splits` ([[q, t]]: the fraction of the stage at
+  each of the run's corner apexes, at least 100 m apart, and the finish, with the seconds to there; `splitsOf` validates) and
+  `surface` (dry / wet / ice). Splits are stored only where the run's `time_s` is (an audience with `share_times`) and are
+  cleared with it when times stop being shared. `GET /api/board/ghosts?canons=a,b&surface=wet` (at most 20, one batch): per
+  stage, the quickest run with splits published to the viewer on a like surface (wet or ice only with the same; else dry or
+  unknown), an open duel's opponent first, under the board's visibility. Cut at corners only, so no straight's speed is ever
+  stored ("No top speeds").
 - **Duels (IDEAS S-24, migrations 0047, 0048):** `POST /api/duels {handle, segment_id, days: 3|7|14, kind?: score|time}` (an accepted friend, your own
   segment; 404 `no_friend` for strangers and unknown handles alike; 409 `duel_exists`; 10 open, 10 a day), `POST
   /api/duels/:id/accept` (opponent only; copies the stage), `DELETE /api/duels/:id` (decline or withdraw), `GET /api/duels`

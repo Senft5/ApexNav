@@ -313,6 +313,28 @@ def test_avoided_unpaved_roads_are_never_the_pick():
     assert r["avoided"] == ["Paved"] and "Forest Road" in r["allowed"], r
 
 
+def test_a_goal_part_way_along_a_long_edge_is_reached_inside_the_corridor():
+    """2026-11-14: every loop from Robbinsville at 100 km failed. A stage point 60 m along a 6 km mountain edge with no
+    junction: the edge's far end lay outside the leg's corridor ellipse, so the search never entered the edge the goal was
+    on. The ellipse bounds where the search goes on from, not the goal."""
+    r = case("ellipseGoal")
+    assert r == {"found": True, "n": 2}, r
+
+
+def test_a_start_on_a_road_joined_to_nothing_moves_to_one_that_leads_somewhere():
+    """2026-11-14: from La Cancada Flintridge the start snapped onto a 50 m bridge of Explorer Road cut off from the rest,
+    and no loop or route came back. snapLive skips a snap whose road reaches fewer than LIVE_NODES nodes."""
+    r = case("islandStart")
+    assert r == {"routed": True, "names": ["Main Road"]}, r
+
+
+def test_a_gravel_road_is_no_stage_when_unpaved_is_avoided():
+    """2026-11-14: Little Snowbird Road (forest gravel) was the best stage from Robbinsville, so loops were built round a
+    road their own legs avoid. With unpaved avoided (the app's default) explore leaves unpaved road out."""
+    r = case("dirtStage")
+    assert r == {"avoided": ["Paved Road"], "allowed": ["Gravel Road", "Paved Road"]}, r
+
+
 def test_a_two_lane_trunk_that_bends_is_a_riders_road():
     """2026-11-14 (tools/famous_roads.js): OSM tags many mountain US routes trunk, and Fun never drove The Snake (US 421,
     4.4 corner points a km). A two-way trunk whose road bends (TRUNK_FUN_KM) is not a highway; a straight one (Cincinnati's

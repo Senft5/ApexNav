@@ -11,7 +11,7 @@ import UserNotifications
 enum ApexBuildNotifier {
     static let taskId = "com.senft.ApexNav.builds"                       // BGTaskSchedulerPermittedIdentifiers (project.yml)
     private static let announcedKey = "apex.buildsAnnounced"            // build id -> new-step count already announced
-    private static let base = "https://apexnav.senftns.workers.dev"
+    private static let base = "https://vettadrive.app"
 
     /// Before the app finishes launching (ApexNavApp.init).
     static func register() {

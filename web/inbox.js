@@ -52,7 +52,8 @@
         return r ? { kicker: i.result === 'won' ? 'Duel won' : 'Duel over', text: r, key: null } : null;
       }
       case 'follows': return { kicker: 'Roadbook', text: i.n === 1 ? `Someone new follows ${i.book}.` : `${i.n} new people follow ${i.book}.`, key: { label: 'Open', act: 'book' } };
-      case 'book_roads': return { kicker: 'Roadbook', text: i.n === 1 && i.road ? `${who} added ${i.road} to ${i.book}.` : `${who} added ${i.n} roads to ${i.book}.`, key: { label: 'Open', act: 'book' } };
+      // no handle: crew-mates added them, more than one (a crew's roadbook, migration 0063)
+      case 'book_roads': return { kicker: 'Roadbook', text: !i.handle ? `${i.n} new roads in ${i.book}.` : i.n === 1 && i.road ? `${who} added ${i.road} to ${i.book}.` : `${who} added ${i.n} roads to ${i.book}.`, key: { label: 'Open', act: 'book' } };
       case 'crew_drive': { const d = when(i.starts_at); return { kicker: 'Crew drive', text: `${i.crew}: ${i.title}${d ? `, ${d}` : ''}. Are you going?`, key: { label: 'Answer', act: 'crews' } }; }
       case 'post_kudos': return { kicker: 'Kudos', text: `${who}${others(i.others)} gave kudos to ${i.title || 'your drive'}.`, key: { label: 'Open', act: 'post' } };
       case 'post_comment': return { kicker: 'Comment', text: i.yours ? `${who}${others(i.others)} commented on ${i.title || 'your drive'}.`

@@ -10,10 +10,12 @@ name: OSM route context (lower 48, R2)
 # osm-ctx.yml stays the region's weekly build and the only one writing falls.json, closures.json and index.json (single
 # region-wide files); this one adds and refreshes the per-cell files everywhere, inside the region too.
 #
-# Triggers: a manual run (`only`: Geofabrik state ids for a pilot, empty for the lower 48), or a push to
+# Triggers: weekly (Thursday), a manual run (`only`: Geofabrik state ids for a pilot, empty for the lower 48), or a push to
 # claude/roam-c-osm-ctx-us changing tools/osm_ctx/US_BUILD (its `only=` line), to try it before it is on main. Only a run
 # off main uploads (the Worker takes main's OIDC token only); elsewhere it is a dry run with the files as artifacts.
 on:
+  schedule:
+    - cron: "17 5 * * 4"   # Thursdays, the day after osm-ctx.yml's region build
   workflow_dispatch:
     inputs:
       only:
@@ -52,7 +54,7 @@ jobs:
       - name: Plan
         id: plan
         env:
-          IN_ONLY: ${{ inputs.only }}
+          IN_ONLY: ${{ inputs.only || '' }}
         run: |
           only="$IN_ONLY"
           if [ "${{ github.event_name }}" = "push" ]; then only=$(sed -n 's/^only=//p' tools/osm_ctx/US_BUILD | head -1); fi
@@ -140,6 +142,9 @@ jobs:
 
   band:
     needs: [plan, osm, osm-again]
+    # also when osm-again couldn't fetch every state (Geofabrik refused five for 20 min, 2026-11-14): the chunks that
+    # need a missing state fail on "no extract", the rest build and go up
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 345
     strategy:
@@ -216,7 +221,7 @@ jobs:
     needs: [plan, band]
     # a pilot uploads too: it only adds or refreshes cells, it never takes any away. So does a run with a failed chunk:
     # the chunks that built go up, the failed one's cells stay as they were (Overpass, or last week's)
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.result == 'success' }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && (needs.band.result == 'success' || needs.band.result == 'failure') }}
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:

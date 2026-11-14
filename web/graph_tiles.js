@@ -194,7 +194,7 @@
   // is the union of their indexes; the region's index is asked once a day (kept in IndexedDB for offline). A tile comes
   // from memory, then IndexedDB, then its source; one fetched from the Worker is kept in IndexedDB, so a road once
   // planned (or an area saved, prefetchArea) works offline.
-  const REGION_PATH = '/api/graph/v1/', DAY = 864e5, WORKER = 'https://apexnav.senftns.workers.dev';
+  const REGION_PATH = '/api/graph/v1/', DAY = 864e5, WORKER = 'https://vettadrive.app';
   const apiBase = (o) => (o.apiBase !== undefined ? o.apiBase : root.ApexSync && root.ApexSync.apiBase != null ? root.ApexSync.apiBase
     : root.location && root.location.protocol === 'apexnav:' ? WORKER : '');
   const regionBase = (o) => (o.region === null ? null : o.region || apiBase(o) + REGION_PATH);

@@ -1186,7 +1186,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     // The system sheet runs the Worker's Google flow with a PKCE challenge; the Worker's callback redirects to
     // apexnav://auth?code=... (single use, 2 min); the shell trades code + verifier for a session token and keeps it in
     // the Keychain; the page's /api calls go through ApexApiBridge, which adds it (IDEAS Z-10). No secrets in the bundle.
-    private static let apiBase = URL(string: "https://apexnav.senftns.workers.dev")!
+    private static let apiBase = URL(string: "https://vettadrive.app")!
     private var authSession: ASWebAuthenticationSession?
 
     private static func b64url(_ data: Data) -> String {
@@ -2352,7 +2352,7 @@ enum ApexKeychain {
 /// forgets it (`signOut`) and says whether there is one (`hasSession`). Only the app's own top-level page is answered.
 @MainActor
 final class ApexApiBridge: NSObject, WKScriptMessageHandlerWithReply {
-    private static let base = "https://apexnav.senftns.workers.dev"
+    private static let base = "https://vettadrive.app"
     private static let userAgent: String = {
         let info = Bundle.main.infoDictionary
         return "ApexNav/\(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))"

@@ -7,7 +7,7 @@ import { mediaErase, mediaOfAuthor } from "./post_media";
 import { Env, HttpError, body, cookie } from "./util";
 import { SESSION_COOKIE, type Viewer } from "./auth";
 import { convoysLeaveAll } from "./convoy";
-import { stampsErase, stampsOf } from "./roadbooks";
+import { addedErase, stampsErase, stampsOf } from "./roadbooks";
 
 const all = async <T>(env: Env, sql: string, ...a: unknown[]) => (await env.DB.prepare(sql).bind(...a).all<T>()).results;
 
@@ -29,7 +29,7 @@ export async function exportMyData(env: Env, v: Viewer): Promise<Record<string, 
     blocks: q("SELECT u.handle FROM blocks b JOIN users u ON u.id = b.blocked WHERE b.blocker = ?"),
     shared_routes: q("SELECT name, created_at FROM shared_routes WHERE owner = ?"),
     roadbooks: q("SELECT id, name, about, visibility, roads_n AS roads, created_at FROM roadbooks WHERE owner = ?"),
-    roadbook_roads: q("SELECT b.name AS roadbook, r.name, r.note, r.length_m, r.geom, r.created_at FROM roadbook_roads r JOIN roadbooks b ON b.id = r.book_id WHERE b.owner = ?"),
+    roadbook_roads: q("SELECT b.name AS roadbook, r.name, r.note, r.length_m, r.geom, r.created_at FROM roadbook_roads r JOIN roadbooks b ON b.id = r.book_id WHERE b.owner = ?1 OR r.added_by = ?1"),   // yours, and the ones you added to a crew's book
     roadbooks_followed: q("SELECT b.name, f.created_at FROM roadbook_follows f JOIN roadbooks b ON b.id = f.book_id WHERE f.user_id = ?"),
     roadbook_stamps: await stampsOf(env, v.id),
     // duels you made or were asked into: the stage, the other side's handle, the days and how it stands (Scores stay on the boards)
@@ -51,7 +51,7 @@ export async function exportMyData(env: Env, v: Viewer): Promise<Record<string, 
     // audiences are named by what you see in the app (a friend's handle, a crew's name), never by someone else's internal id
     grants: q(`SELECT g.audience_type, COALESCE(u.handle, c.name) AS audience, g.share_scores, g.share_times FROM grants g
                        LEFT JOIN users u ON g.audience_type = 'friend' AND u.id = g.audience_id LEFT JOIN crews c ON g.audience_type = 'crew' AND c.id = g.audience_id WHERE g.user_id = ?`),
-    published_results: q(`SELECT s.name AS segment, e.audience_type, COALESCE(u.handle, c.name) AS audience, e.driver_score, e.time_s, e.smoothness, e.driven_on FROM board_entries e
+    published_results: q(`SELECT s.name AS segment, e.audience_type, COALESCE(u.handle, c.name) AS audience, e.driver_score, e.time_s, e.smoothness, e.splits, e.surface, e.driven_on FROM board_entries e
                        JOIN segments s ON s.id = e.segment_id LEFT JOIN users u ON e.audience_type = 'friend' AND u.id = e.audience_id
                        LEFT JOIN crews c ON e.audience_type = 'crew' AND c.id = e.audience_id WHERE e.user_id = ?`),
     drive_scores_shared: q("SELECT c.name AS crew, d.score, d.driven_on, d.created_at FROM drive_scores d JOIN crews c ON c.id = d.crew_id WHERE d.user_id = ?"),
@@ -136,6 +136,7 @@ export async function deleteAccount(env: Env, v: Viewer, req: Request): Promise<
   // crews they only belong to: nothing else of theirs remains there after the cascade below, but their grants/entries use user_id and cascade too
   run("DELETE FROM highlights WHERE author_id = ?", v.id);
   if (v.handle) run("UPDATE feedback SET handle = NULL WHERE handle = ?", v.handle);   // feedback stays, without who sent it (L-05)          // their spots go with them (ratings by others on them cascade)
+  stmts.push(...(await addedErase(env, v.id)));                    // roads they added to someone else's crew roadbook
   stmts.push(...(await stampsErase(env, v.id)));                    // roadbook stamps are kept under a keyed hash, not a user id: removed by hand
   run("DELETE FROM users WHERE id = ?", v.id);                       // cascades: sessions, member, friendships, blocks, segments, grants, entries, ratings, pending uploads, points
   await env.DB.batch(stmts);
