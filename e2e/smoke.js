@@ -5522,6 +5522,21 @@ const PROFILE_CSV = `(fault, seed) => {
   return 'segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g\\n' + rows.join('\\n') + '\\n';
 }`;
 
+flow('the Log draws one rule between the drive list and Score over time, not two (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async (src) => { const gen = eval(src);
+    for (let k = 0; k < 3; k++) await ApexRecording.store(ApexRecording.parse(ApexCore, gen('saw', k), 'L' + k + '.csv', { id: 'L' + k, name: ['Dry Ridge Rd', 'Pebble Ridge', 'Hog Run'][k], date: `2026-0${7 + k}-01T09:00`, source: 'web-gps' })); }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#trendPanel:not([hidden])', { timeout: 20000 });
+  // the panel's top rule closes the list; the last row's own bottom line would sit a few px above it
+  const r = await page.evaluate(() => { const td = document.querySelector('#historyTable tr:last-child > td'), p = document.getElementById('trendPanel');
+    const visQuiet = [...document.querySelectorAll('#historyPanel ~ details.quiet')].some((d) => !d.hidden);
+    return { quiet: visQuiet, row: parseFloat(getComputedStyle(td).borderBottomWidth), panel: parseFloat(getComputedStyle(p).borderTopWidth) }; });
+  check(!r.quiet && (r.row === 0 && r.panel === 1), 'one rule between the list and the panel: ' + JSON.stringify(r));
+});
+
 flow('a drive\'s corners on a road driven four times: each says your cleanest pass there, and a tap opens the drive that holds it (driver_profile.js roadRecords rows)', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
@@ -6196,6 +6211,10 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   // the Garage: Who sees what under You; the pioneer count with Road feel; no points board anywhere
   await page.evaluate(() => document.querySelector('.tab[data-view="garage"]').click());
   await page.waitForSelector('#garageMeBody .nav-row:has-text("Who sees what")');
+  // one rule between things, never two: none over You (the header draws one), none under Who sees what (Your cars' does)
+  const rules = await page.evaluate(() => { const b = document.getElementById('garageMeBody'), you = b.querySelector(':scope > :first-child > h3'), last = b.querySelector('.nav-rows:last-child > .nav-row:last-child');
+    return [you.textContent, getComputedStyle(you).borderTopStyle === 'none' || parseFloat(getComputedStyle(you).borderTopWidth) === 0, parseFloat(getComputedStyle(last).borderBottomWidth) === 0]; });
+  check(JSON.stringify(rules) === '["You",true,true]', 'the Garage draws one rule between things, not two: ' + JSON.stringify(rules));
   check(/Roads you mapped first: 3/.test(await page.textContent('#garageRoadFeelBody')), 'roads you mapped first, in the Garage (Settings → Road feel)');
   // Crews: the crew things, none of the friend things; with no crew, one row
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
