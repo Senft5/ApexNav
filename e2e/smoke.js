@@ -6741,7 +6741,7 @@ flow('drive posts: Drive it from somewhere else leads from where you are to the 
   check(after.req && after.req.from === null && near(after.req.to, pts[pts.length - 1]) && after.req.via.length >= 8 && after.req.via.every((v) => v.shaping), 'a reroute keeps to their line (its stops kept as shaping points): ' + JSON.stringify(after.req && { to: after.req.to, via: after.req.via.length }));
 }, { geolocation: { latitude: 35.25, longitude: -84.1 }, permissions: ['geolocation'] });
 
-flow('drive posts: after you drive a friend\'s posted stage, the end card sets your Score there against theirs, once (free roamer B, 2026-11-14)', async (page, base) => {
+flow('drive posts: after you drive a friend\'s posted stage, the end card sets your Score there against theirs, with Drive it or without (free roamer B, 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { window.APEX_INLINE_JOBS = true; localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   const enc = (pts) => { let o = '', a0 = 0, b0 = 0; const e = (v) => { v = v < 0 ? ~(v << 1) : v << 1; while (v >= 32) { o += String.fromCharCode((32 | (v & 31)) + 63); v >>= 5; } o += String.fromCharCode(v + 63); };
     for (const [a, b] of pts) { const x = Math.round(a * 1e5), y = Math.round(b * 1e5); e(x - a0); e(y - b0); a0 = x; b0 = y; } return o; };
@@ -6778,12 +6778,24 @@ flow('drive posts: after you drive a friend\'s posted stage, the end card sets y
   await page.waitForFunction(() => document.getElementById('endRival').textContent, null, { timeout: 15000 });
   const r = await page.evaluate(() => ({ text: document.getElementById('endRival').textContent, hidden: document.getElementById('endRival').hidden }));
   check(r.text === 'Skyway summit: 780, 21 under @bob\'s 801.' && !r.hidden, 'the end card sets your Score on bob\'s stage against his: ' + JSON.stringify(r));
-  // said once: the next drive over it is just a drive
+  // (2026-11-14) without Drive it too: the Feed showed bob's stage, so a later drive over it is compared from the phone's copy
+  check(await page.evaluate(() => { const k = JSON.parse(localStorage.getItem('apex.friendStages') || '[]'); return k.length === 1 && k[0].handle === 'bob' && k[0].key === 'P1AAAAAAAAAAAAAA_0' && k[0].length_m > 8000; }),
+    'the Feed keeps bob\'s posted stage on the phone: ' + await page.evaluate(() => localStorage.getItem('apex.friendStages')));
   await page.click('#endDone');
   await end('rv2');
+  await page.waitForFunction(() => document.getElementById('endRival').textContent, null, { timeout: 15000 });
+  check(await page.evaluate(() => document.getElementById('endRival').textContent) === 'Skyway summit: 780, 21 under @bob\'s 801.', 'a drive over a friend\'s posted stage is compared without Drive it');
+  // a drive that never goes near it says nothing; signing out takes the friends' stages off the phone
+  await page.click('#endDone');
+  await page.evaluate(async () => {
+    const lat = [], lon = []; for (let i = 0; i < 600; i++) { lat.push(36.5 + i * 5 / 110540); lon.push(-85); }
+    const d = { id: 'rv3', name: 'Elsewhere', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] };
+    await ApexRecording.store(d); apexDebug.showEndCard(d, Date.now() - 30 * 60000, { quiet: true });
+  });
   await page.waitForFunction(() => document.getElementById('endCard').classList.contains('show') && !document.getElementById('endScore').hasAttribute('aria-busy'), null, { timeout: 15000 });
   await page.waitForTimeout(800);
-  check(await page.evaluate(() => document.getElementById('endRival').hidden && !document.getElementById('endRival').textContent), 'the comparison is said once');
+  check(await page.evaluate(() => document.getElementById('endRival').hidden && !document.getElementById('endRival').textContent), 'a drive elsewhere: no comparison');
 });
 
 flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew with its ends cut; the Feed on People shows friends\' posts with kudos and comments one tap in (Worker stubbed, docs/SOCIAL.md 2.13)', async (page, base) => {
@@ -10531,9 +10543,12 @@ const planDone = (page, timeout = 25000) => page.waitForFunction(() => !document
 const scan = async (page, where) => {
   await page.evaluate(() => { const st = document.querySelector('.stage'); if (st) st.scrollLeft = 0; });   // headless Chromium scrolls the stage sideways on a click into a field (TYPE_AT)
   const bad = await unsafe(page, SAFE.portrait); check(!bad.length, `${where}: under the island, the home bar or a corner, or keys on keys:\n  ${bad.join('\n  ')}`); };
-async function swipe(cdp, x0, y0, dx, dy) {
+async function swipe(cdp, x0, y0, dx, dy, holdMs = 0) {
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y: y0 }] });
   for (let i = 1; i <= 10; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + dx * i / 10, y: y0 + dy * i / 10 }] });
+  // holdMs: the finger rests before it lifts, so there is no fling. Ten moves sent back to back are a flick whose speed
+  // depends on how busy the runner is, and on a loaded one it flung the Garage's shelf past the next look (2026-11-14)
+  if (holdMs) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + dx, y: y0 + dy }] }); await new Promise((r) => setTimeout(r, holdMs)); }
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 }
 
@@ -11722,10 +11737,10 @@ flow('the Garage on a phone: the looks are a shelf turned sideways (one in view,
   const cdp = await page.context().newCDPSession(page);
   const y = await page.evaluate(() => { const r = document.querySelector('#themeCards .tc-head').getBoundingClientRect(); return r.top + r.height / 2; });
   await page.waitForFunction((y) => { const e = document.elementFromPoint(300, y); return !!(e && e.closest('#themeCards')); }, y, { timeout: 8000 });   // the splash has lifted
-  await swipe(cdp, 300, y, -260, 4);
+  await swipe(cdp, 300, y, -260, 4, 250);
   await page.waitForFunction(() => { const c = document.getElementById('themeCards'); return c.scrollLeft > 100 && Math.abs(c.children[1].getBoundingClientRect().left - 16) <= 2; }, null, { timeout: 5000 })
     .catch(async () => { throw new Error('a turn of the thumb brings the next look: ' + JSON.stringify(await shelf())); });
-  await swipe(cdp, 80, y, 260, 4);
+  await swipe(cdp, 80, y, 260, 4, 250);
   await page.waitForFunction(() => document.getElementById('themeCards').scrollLeft < 4, null, { timeout: 5000 });
   check((await shelf()).open, 'turning the shelf back to the right does not close the Garage');
   // Use on the second look: it is in use, and the shelf stays where the thumb left it

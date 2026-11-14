@@ -39,6 +39,11 @@ console.log(JSON.stringify({
     return { all: D.rivalsOf(p).map((r) => [r.name, r.length_m]), one: D.rivalsOf(p, 4).map((r) => r.name), none: D.rivalsOf({ stages: p.stages }) }; })(),
   rl: [D.rivalLine([{ name: 'A', you: 780, them: 801 }], { handle: 'bob' }), D.rivalLine([{ name: 'A', you: 830.4, them: 801 }, { name: 'B', you: 700, them: 700 }, { name: 'C', you: 1, them: 2 }], { mine: true }),
     D.rivalLine([{ name: 'A', you: null, them: 801 }], { handle: 'bob' })],
+  keep: (() => { const L = Array.from({ length: 100 }, (_, i) => [35 + i * 0.001, -84]), st = [{ name: 'A', score: 801, ends: [L[10][0], L[10][1], L[60][0], L[60][1]] }];
+    const now = Date.parse('2026-11-14T12:00:00Z'), old = { key: 'OLD_0', name: 'Old', ends: [0, 0, 0, 0], length_m: 900, score: 1, handle: 'x', at: now - 22 * 864e5 };
+    const k1 = D.keepStages([old, { key: 'P1_0', name: 'A', score: 700, at: now - 864e5 }], [{ id: 'P1', handle: 'bob', line: D.encode(L), stages: st }, { id: 'P2', mine: true, handle: 'me', line: D.encode(L), stages: st }], now);
+    const many = D.keepStages([], Array.from({ length: 50 }, (_, j) => ({ id: 'Q' + j, handle: 'h', line: D.encode(L), stages: st })), now);
+    return { keys: k1.map((x) => [x.key, x.handle, x.score]), many: many.length }; })(),
   ago: [D.ago('2026-11-13 12:00:00', Date.parse('2026-11-13T12:01:00Z')), D.ago('2026-11-13 12:00:00', Date.parse('2026-11-13T15:00:00Z'))],
 }));
 """
@@ -97,3 +102,10 @@ def test_rivals_and_the_end_card_line():
     assert r["rl"][0] == "A: 780, 21 under @bob's 801."
     assert r["rl"][1] == "A: 830, 29 over your posted 801. B: 700, level with your posted 700."
     assert r["rl"][2] == ""
+
+
+def test_the_feed_keeps_friends_stages_for_the_end_card():
+    r = run()
+    # bob's stage, fresh from the Feed, replaces the older copy of it; your own post and one 22 days old are left out
+    assert r["keep"]["keys"] == [["P1_0", "bob", 801]]
+    assert r["keep"]["many"] == 40
