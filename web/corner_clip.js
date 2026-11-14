@@ -29,7 +29,7 @@
   }
   /** The corners a clip can be cut for: [{ k, label, w }] in road order, label "Corner 3 \u00b7 Left 4". */
   function clippable(d, T, offsetS, dur) {
-    return cornersOf(d).map((c, k) => ({ k, label: [`Corner ${k + 1}`, c.call].filter(Boolean).join(' \u00b7 '), w: clipWindow(T, c, offsetS, dur) }))
+    return cornersOf(d).map((c, k) => ({ k, call: c.call || '', label: [`Corner ${k + 1}`, c.call].filter(Boolean).join(' \u00b7 '), w: clipWindow(T, c, offsetS, dur) }))
       .filter((x) => x.w);
   }
   /** The window's g, sample by sample: { lat: [...], lon: [...], t: [...] } (null where the phone did not measure it). */

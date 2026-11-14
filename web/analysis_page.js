@@ -996,6 +996,7 @@
       dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach, mapPalette: () => look.map, traceOf: (k) => ApexAnalysis.job('cornerTrace', { id, k }),
         // one tap from a corner to its clip, from the app's own video of the drive (the Dashcam panel below, big bet 5)
         canClip: (s, e) => !!(dcPanel && dcPanel.canClip && dcPanel.canClip(s, e)), clip: (s, e) => (dcPanel && dcPanel.clip ? dcPanel.clip(s, e) : false),
+        canPostClip: () => !!(dcPanel && dcPanel.canPost && dcPanel.canPost()), postClip: () => (dcPanel && dcPanel.post ? dcPanel.post() : null),
         // and the best pass's video beside it, when that drive was filmed too (ghost_clip.js)
         ghostOf: async (k, r) => {
           if (!dcPanel || !dcPanel.canGhost || !r || !r.other || !r.trace || !r.trace.b_win || !d.corners[k]) return null;
@@ -1010,6 +1011,8 @@
         const mk = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
         $('dvDashcam').replaceChildren(dcPanel = ApexDashcam.mount({ el: mk, Core, d, fmtSpeed: (v) => `${Math.round(ApexUnits.speed(v))} ${ApexUnits.speedU()}`,
           save: (blob, name, type) => ApexSaveFile.saveFile(blob, name, type),
+          // Post this clip (drive_posts.js on the map page, through ApexLogHost): a member's drive from the last 30 days
+          ...(hostPosts() ? { canPost: () => hostPosts().canPost(d.date_known === false ? null : d.date), post: (blob, meta) => hostPosts().post(blob, meta) } : {}),
           // the app's own film of the drive (DriveCam.swift, big bet 5): served by the app at drivecam/; the web has none
           ...(location.protocol === 'apexnav:' || window.APEX_DRIVECAM ? {
             ownVideos: () => fetch(`${window.APEX_DRIVECAM || 'drivecam/'}index.json`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : [])),
@@ -1022,6 +1025,10 @@
       renderVote(d);
       renderRecce(d);
       renderFlyby(d).catch(() => { $('dvFlyby').hidden = true; });
+    }
+    // the map page hosting the Log (index.html), when it can post (drive_posts.js): null on its own (the website's analysis.html)
+    function hostPosts() {
+      try { const h = window.parent && window.parent !== window ? window.parent.ApexLogHost : null; return h && typeof h.post === 'function' ? h : null; } catch (_) { return null; }
     }
     // A drive's own touch (driver_profile.js driveTouch, from the drive job), beside your usual; hidden when it has none
     function renderTouch(t) {
