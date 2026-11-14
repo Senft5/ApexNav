@@ -9503,6 +9503,10 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
   const layer = await page.evaluate(() => { const m = apexDebug.map, l = m.getLayer('apex-places'), order = m.getLayersOrder();
     return l ? { min: l.minzoom, vis: m.getLayoutProperty('apex-places', 'visibility'), font: m.getLayoutProperty('apex-places', 'text-font'), under: order.indexOf('apex-places') < order.indexOf(order.find((id) => /road.*label|label.*road|highway-name/i.test(id)) || order[order.length - 1]) } : null; });
   check(layer && layer.min === 15 && layer.vis === 'visible' && /Italic/.test(layer.font) && layer.under, 'the places layer: ' + JSON.stringify(layer));
+  // each kind its glyph before the name (2026-11-14), drawn for this look
+  const glyphs = await page.evaluate(() => { const m = apexDebug.map, ie = m.getLayoutProperty('apex-places', 'icon-image');
+    return { all: ['food', 'cafe', 'fuel', 'bar', 'shop', 'bed', 'car', 'sight'].every((k) => m.hasImage('pl-' + k)), cafe: JSON.stringify(ie).includes('"cafe","pl-cafe"'), anchor: m.getLayoutProperty('apex-places', 'text-anchor') }; });
+  check(glyphs.all && glyphs.cafe && glyphs.anchor === 'left', 'a glyph for each kind of place, its name after it: ' + JSON.stringify(glyphs));
   // a tap on a place (the tiles are offline here: the map is asked what is under the tap, and a café is there)
   await page.evaluate(() => { const m = apexDebug.map, real = m.queryRenderedFeatures.bind(m), c = m.getCenter();
     m.queryRenderedFeatures = (pt, o) => (o && o.layers && o.layers.includes('apex-places') ? [{ layer: { id: 'apex-places' }, geometry: { type: 'Point', coordinates: [c.lng, c.lat + 0.005] }, properties: { name: 'Bean There Coffee', class: 'cafe' } }] : real(pt, o));
