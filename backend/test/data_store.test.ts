@@ -13,7 +13,9 @@ const enc = (o: unknown) => b64(new TextEncoder().encode(JSON.stringify(o)));
 
 async function token(over: Record<string, unknown> = {}, kid = "k1"): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
-  const body = { iss: ISSUER, aud: AUDIENCE, repository: "Senft5/ApexNav", ref: "refs/heads/main", workflow: "Map data to R2", run_id: "77", sha: "abcdef1234567890", iat: now, nbf: now - 5, exp: now + 300, ...over };
+  const body = { iss: ISSUER, aud: AUDIENCE, repository: "Senft5/ApexNav", ref: "refs/heads/main", workflow: "Map data to R2", run_id: "77",
+    repository_id: "1432495043", repository_owner_id: "55918175", event_name: "workflow_run",
+    workflow_ref: "Senft5/ApexNav/.github/workflows/data-mirror.yml@refs/heads/main", sha: "abcdef1234567890", iat: now, nbf: now - 5, exp: now + 300, ...over };
   const h = enc({ alg: "RS256", kid, typ: "JWT" }), p = enc(body);
   const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", priv, new TextEncoder().encode(`${h}.${p}`));
   return `${h}.${p}.${b64(sig)}`;
@@ -39,7 +41,9 @@ describe("GitHub OIDC", () => {
   it("lets in this repository's main branch only, signed by GitHub's key, for our audience, not expired", async () => {
     expect(await verifyGitHubOidc(await token())).toMatchObject({ repository: "Senft5/ApexNav", ref: "refs/heads/main", run_id: "77" });
     for (const bad of [{ repository: "someone/ApexNav" }, { ref: "refs/heads/feature" }, { ref: "refs/pull/9/merge" }, { aud: "other" },
-      { iss: "https://example.test" }, { exp: Math.floor(Date.now() / 1000) - 600 }]) {
+      { iss: "https://example.test" }, { exp: Math.floor(Date.now() / 1000) - 600 },
+      { repository_id: "999" }, { repository_owner_id: "999" }, { event_name: "pull_request_target" },     // a reused name; a PR's code
+      { workflow_ref: "Senft5/ApexNav/.github/workflows/core-tests.yml@refs/heads/main" }]) {                 // any other workflow
       expect(await verifyGitHubOidc(await token(bad))).toBeNull();
     }
     expect(await verifyGitHubOidc(await token({}, "unknown-kid"))).toBeNull();

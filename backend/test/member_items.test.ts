@@ -42,6 +42,13 @@ describe("member items", () => {
     expect((await json(api(a, "GET", "/api/me/items"))).items).toEqual([]);
   });
 
+  it("a removal of an item the account never had keeps nothing", async () => {
+    const a = await makeUser("alice");
+    expect(await json(api(a, "PUT", "/api/me/items", { items: Array.from({ length: 25 }, (_, i) => ({ kind: "route", id: `made-up-${i}`, at: T, body: null })) })))
+      .toEqual({ taken: 0 });
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM member_items").first<{ n: number }>())!.n).toBe(0);
+  });
+
   it("your own: another account sees none of them", async () => {
     const [a, b] = [await makeUser("alice"), await makeUser("bob")];
     await ok(api(a, "PUT", "/api/me/items", { items: [place("Home", T)] }));
