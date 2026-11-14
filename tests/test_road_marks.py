@@ -111,3 +111,12 @@ def test_a_mapped_hump_the_track_already_calls_is_one_call(out):
 def test_a_later_answer_only_adds_and_the_map_answer_is_known(out):
     assert out["union"] == ["STOP100", "GRAVEL250"]          # the tiles' gravel stays; the map's same gravel is not twice
     assert out["answered"] == [True, False, False]          # an unavailable answer (all unknown) asks again
+
+
+def test_a_deer_crossing_is_called_in_cruise_from_dusk_to_dawn():
+    js = ("const M = require(process.argv[1] + '/web/road_marks.js'), r = Math.PI / 180, deer = { type: 'mark', kind: 'animal_crossing' };"
+          "console.log(JSON.stringify([M.cruiseWorthy(deer, 3 * r), M.cruiseWorthy(deer, -20 * r), M.cruiseWorthy(deer, 30 * r), M.cruiseWorthy(deer, null),"
+          "M.cruiseWorthy({ type: 'mark', kind: 'stop' }, -20 * r), M.cruiseWorthy(null, 0)]))")
+    got = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert got == [True, True, False, False, False, False]
+    assert "ApexRoadMarks.cruiseWorthy(e, sunAltNow())" in open(os.path.join(ROOT, "web", "cockpit.js")).read()
