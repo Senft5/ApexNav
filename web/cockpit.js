@@ -1405,15 +1405,26 @@
       if (pinMarker) { pinMarker.remove(); pinMarker = null; }
       droppedPin = null;
     }
+    // A position's place (a Nominatim-shaped reverse answer, or null): in the app Apple's geocoder (the shell's CLGeocoder,
+    // ApexPlacePlate.fromApple), since public Nominatim's usage policy doesn't allow an app's traffic; Nominatim on the
+    // website, or when Apple has nothing in 4 s. zoom: Nominatim's detail (18 a building, 12 a town).
+    async function reverseGeocode(lat, lon, zoom, timeoutMs) {
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      // a town's lookup is asked to about 1 km (2 decimals), of either service; only a dropped pin asks its exact spot
+      if (zoom < 18) { lat = Math.round(lat * 100) / 100; lon = Math.round(lon * 100) / 100; }
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex) {
+        const got = ApexPlacePlate.fromApple(await askNative({ cmd: 'placeReverse', lat, lon }, 4000));
+        if (got) return got;
+      }
+      const q = zoom >= 18 ? `lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}` : `lat=${lat.toFixed(2)}&lon=${lon.toFixed(2)}`;
+      try { return await RouteLoading.json(`https://nominatim.openstreetmap.org/reverse?format=json&${q}&zoom=${zoom}&addressdetails=1`, {}, timeoutMs); } catch (_) { return null; }
+    }
     async function reversePin(p) {
       const lookup = ++pinLookup;
       let name = '--';
       try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${encodeURIComponent(p.lat)}&lon=${encodeURIComponent(p.lon)}&zoom=18&addressdetails=1`);
-        if (response.ok) {
-          const place = await response.json();
-          name = place.name || place.address?.road || place.address?.hamlet || place.address?.village || place.address?.town || place.address?.city || place.display_name?.split(',')[0] || '--';
-        }
+        const place = await reverseGeocode(p.lat, p.lon, 18, 8000);
+        if (place) name = place.name || place.address?.road || place.address?.hamlet || place.address?.village || place.address?.town || place.address?.city || place.display_name?.split(',')[0] || '--';
       } catch (_) { /* An offline or unnamed place remains unknown. */ }
       if (lookup === pinLookup && droppedPin === p) $('pinPlace').textContent = name;
     }
@@ -8365,7 +8376,7 @@
       try {
         // a new area is named for its town (the map's reverse geocode, as the place plate asks it: to 0.01°), else its place
         let town = null;
-        if (!name) { try { town = ApexPlacePlate.town(await RouteLoading.json(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat.toFixed(2)}&lon=${lon.toFixed(2)}&zoom=12&addressdetails=1`, {}, 6000)); } catch (_) {} }
+        if (!name) { try { town = ApexPlacePlate.town(await reverseGeocode(lat, lon, 12, 6000)); } catch (_) {} }
         const a = await ApexOfflineTiles.download({ lat, lon, radiusKm, styleUrl: MAP_STYLE, id, name: name || (town ? `Around ${town}` : `Around ${lat.toFixed(2)}, ${lon.toFixed(2)}`),
           onProgress: (d, n) => { if (d % 25 === 0 || d === n) btn.textContent = `Saving the map… ${Math.round(100 * d / n)}%`; } });
         // members' road feel for the area too (signed in as a member): measured roads plan the same with no signal
@@ -8472,7 +8483,7 @@
       if (Date.now() - placeAsk.at < 20 * 60000 && moved < 5) return;
       placeAsk.at = Date.now(); placeAsk.lat = p.lat; placeAsk.lon = p.lon;
       const la = p.lat.toFixed(2), lo = p.lon.toFixed(2), d = {};
-      try { const r = await RouteLoading.json(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${la}&lon=${lo}&zoom=12&addressdetails=1`, {}, 6000); d.place = ApexPlacePlate.town(r); } catch (_) {}
+      try { d.place = ApexPlacePlate.town(await reverseGeocode(Number(la), Number(lo), 12, 6000)); } catch (_) {}
       // the forecast's now and its last 3 hours of rain, and (US) the nearest NWS stations' latest observation, together
       const om = RouteLoading.json(`https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}&current=temperature_2m,weather_code,precipitation&hourly=precipitation&past_hours=3&forecast_hours=1&timezone=GMT`, {}, 6000)
         .then((w) => { if (w && w.current) { d.tempC = w.current.temperature_2m; d.code = w.current.weather_code; d.mmNow = w.current.precipitation; } d.mm3h = ApexPlacePlate.pastMm(w); }).catch(() => {});
@@ -12069,7 +12080,7 @@
         if (msg && msg.type === 'driveCam') { driveCamSaid(msg.state); return; }
         if (msg && msg.type === 'carOffline') { carOfflineBytes = Number.isFinite(msg.bytes) ? msg.bytes : null; if (typeof renderOffline === 'function') renderOffline().catch(() => {}); return; }
         if (msg && msg.type === 'lifecycle') { if (driveActive) keepSave(); return; }   // going to the background: kept now
-        if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
+        if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'placeReversed' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'nudge') { nudgeAnswered(!!msg.granted); return; }
         if (msg && msg.type === 'push') { pushAnswered(!!msg.granted); return; }
         if (msg && msg.type === 'pushToken') { pushTokenIn(msg); return; }

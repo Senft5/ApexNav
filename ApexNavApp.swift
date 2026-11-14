@@ -613,6 +613,10 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
                 shell?.placeResolve(index: index, id: id)
                 return
             }
+            if cmd == "placeReverse", let lat = (dict["lat"] as? NSNumber)?.doubleValue, let lon = (dict["lon"] as? NSNumber)?.doubleValue {
+                shell?.placeReverse(lat: lat, lon: lon, id: id)
+                return
+            }
             if cmd == "trafficProbe", let chunks = dict["chunks"] as? [[String: Any]] {
                 // One entry per chunk, nil for a malformed one, so answers stay aligned with the page's chunks.
                 let pairs: [(CLLocationCoordinate2D, CLLocationCoordinate2D)?] = chunks.map { c in
@@ -1417,6 +1421,29 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         var payload: [String: Any] = ["type": "placeResolved", "id": id]
         if let lat, let lon, lat.isFinite, lon.isFinite { payload["lat"] = lat; payload["lon"] = lon }
         if let name { payload["name"] = name }
+        guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
+        evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
+    }
+
+    // MARK: Apple reverse geocoding (CLGeocoder, free, no key): a place's name and town for a dropped pin, a saved area or a
+    // drive's plate, instead of public Nominatim, whose usage policy doesn't allow an app's traffic. One position in, the
+    // placemark's parts out, answered with window.apex.onNative({type:'placeReversed'}); the page falls back to Nominatim.
+
+    func placeReverse(lat: Double, lon: Double, id: Int) {
+        guard lat.isFinite, lon.isFinite, abs(lat) <= 90, abs(lon) <= 180 else { sendPlaceReversed(id: id, mark: nil); return }
+        CLGeocoder().reverseGeocodeLocation(CLLocation(latitude: lat, longitude: lon)) { [weak self] marks, _ in
+            Task { @MainActor in self?.sendPlaceReversed(id: id, mark: marks?.first) }
+        }
+    }
+
+    private func sendPlaceReversed(id: Int, mark: CLPlacemark?) {
+        var payload: [String: Any] = ["type": "placeReversed", "id": id, "failed": mark == nil]
+        if let mark {
+            let parts: [(String, String?)] = [("name", mark.name), ("road", mark.thoroughfare), ("house", mark.subThoroughfare),
+                                              ("city", mark.locality), ("area", mark.subLocality), ("county", mark.subAdministrativeArea),
+                                              ("state", mark.administrativeArea), ("country", mark.isoCountryCode)]
+            for (k, v) in parts { if let v, !v.isEmpty { payload[k] = v } }
+        }
         guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
         evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
     }
