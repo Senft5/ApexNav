@@ -184,7 +184,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, nudge: false, push: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, nudge: false, push: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -839,6 +839,7 @@
       map.on('moveend', () => { clearTimeout(twisty.timer); twisty.timer = setTimeout(updateTwisty, 600); });
       updateCoverage();
       map.on('moveend', () => { clearTimeout(coverage.timer); coverage.timer = setTimeout(updateCoverage, 700); });
+      if (state.toggles.roadcams) map.once('idle', () => roadCamsLayer(true));   // left on last time: after the launch, never in its way
       if (track) loadTrackOnMap();
       // Tap a faint option on the map to take it.
       map.on('click', 'apex-alt', (e) => {
@@ -3907,7 +3908,26 @@
       const far = ApexUnits.long(hit.aheadM, 1);
       offerKey(`Road closed on your route in ${far}.`, `Road closed in ${far}`, { label: 'Go round', ms: 15000, onClick: () => goRoundClosed(t, hit, pts) });
     }
-    async function goRoundClosed(t, hit, pts) {
+    // The DOTs' word on the route ahead (road_events.js onRouteAhead, 2026-11-14): a crash or a one-way closure your way 1 to
+    // 20 km on is offered once with Go round, as a reported closure is; slow traffic is said once. Every 5 s at most.
+    const dotAhead = { at: 0, offered: new Set() };
+    function dotAheadTick(me) {
+      const t = track, now = Date.now();
+      if (!window.ApexRoadEvents || !t || !t.request || t.kind !== 'route' || state.mode !== 'live' || !driveActive || rerouter.off || now - dotAhead.at < 5000) return;
+      dotAhead.at = now;
+      const near = ApexRoadEvents.near(roadEvents.list, me.lat, me.lon, now);
+      const hit = near.length ? ApexRoadEvents.onRouteAhead(t, routeWatch.bestM, near, { maxM: 20000 }) : null;
+      if (window.apexDebug) window.apexDebug.dotAhead = { n: near.length, hit };
+      if (!hit || dotAhead.offered.has(hit.id)) return;
+      dotAhead.offered.add(hit.id);                                     // (the call 600 m out still comes: "Crash ahead")
+      const far = ApexUnits.long(hit.aheadM, 1), what = hit.kind === 'crash' ? 'Crash' : hit.kind === 'slow' ? (hit.label || 'Slow traffic') : hit.kind === 'ice' ? (hit.label || 'Icy road') : 'Road closed';
+      if (hit.kind === 'slow' || hit.kind === 'ice') { say(`${what} on your route in ${far}.`, false, null, null, { kind: 'hazard', key: `dot:${hit.id}`, alert: true, tokens: ['line:rep_hazard'], named: true }); return; }
+      const pts = [{ lat: hit.lat, lon: hit.lon }];
+      offerKey(`${what} on your route in ${far}.`, `${what} in ${far}`, { label: 'Go round', ms: 15000,
+        // (the public router hears of it with this session's own avoids, R-22: a crash is no closure in anyone's list)
+        onClick: () => { avoidPoints.push(pts[0]); goRoundClosed(t, pts[0], pts, hit.kind === 'crash' ? 'that crash' : 'that closure', hit.kind === 'crash' ? 'Going round the crash.' : 'Going round the road closure.'); } });
+    }
+    async function goRoundClosed(t, hit, pts, that = 'that closure', going = 'Going round the road closure.') {
       const L = state.live;
       if (track !== t || !L || !t.request) return;
       const ahead = waysAhead(t);
@@ -3915,11 +3935,11 @@
       try { [r] = await routePoints([{ lat: L.lat, lon: L.lon, heading: headingOf(L) }, ...ahead, t.request.to], { osrm: true, level: t.funLevel || (isLoop(t) ? LOOP_STYLE : 'quick'), avoid: { ...avoid, closed: pts } }); }
       catch (_) { toast('Couldn\'t plan a way round. Check signal.'); return; }
       if (track !== t || state.mode !== 'live') return;
-      if (!r || ApexHazardReports.passesNear(r.coords, [hit], 40)) { toast('No way round that closure. Staying on this route.'); return; }
+      if (!r || ApexHazardReports.passesNear(r.coords, [hit], 40)) { toast(`No way round ${that}. Staying on this route.`); return; }
       const nt = await trackAhead(t, r, ahead);
       if (track !== t || state.mode !== 'live') return;
       await buildRoute(null, t.id, t.name, nt);
-      toast('Going round the road closure.');
+      toast(going);
     }
     // Traffic ahead (iOS app only; docs/ARCHITECTURE.md section 8). Every 2 min while on a planned route, Apple times the next
     // 20 km in chunks, now and at 3 am. A jam (or a slowdown) costs the route fun even with no delay; on a jam, a detour that
@@ -8714,6 +8734,7 @@
           if (state.toggles.meets) toast(`Meets within ${ApexUnits.long(80000, 0)} of the map. Tap a pin.`);   // the Worker's 80 km, in the driver's units
         });
       }
+      if (k === 'roadcams') roadCamsLayer(state.toggles.roadcams);   // Ohio's traffic cameras (road_cams.js), loaded on first use
       if (k === 'coverage') {
         updateCoverage();
         if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Tap a road for what was measured. A road with no line earns its first drivers extra points.');
@@ -9044,6 +9065,22 @@
     const reported = { list: [], at: -Infinity, cellKey: '', busy: false, said: new Set(), mine: new Set(), pins: new Map(), watch: ApexHazardReports.createPassWatch(), asking: null, local: [],
                        cells: ApexPrivacyZones.cellCache(120e3), ahead: ApexPrivacyZones.cellCache(6 * 3600e3, 16), aheadFor: null };
     if (window.apexDebug) { window.apexDebug.loadReported = (force) => loadReported(force); window.apexDebug.reportedIds = () => reported.list.map((h) => h.id); }   // e2e: a report that lands mid-drive
+    // ---- Road cameras (road_cams.js, 2026-11-14): Ohio DOT's traffic cameras, an opt-in layer; a tap shows the road now ----
+    let roadCams = null;
+    async function roadCamsLayer(on) {
+      try {
+        if (!roadCams) {
+          if (!on) return;
+          await ApexLazy.load('roadcams');
+          const css = getComputedStyle(document.documentElement);
+          roadCams = ApexRoadCams.mount({ map, el, btn, toast, apiFetch: (path) => ApexSync.apiFetch(path, { method: 'GET' }),
+            driving: () => driveActive && state.mode === 'live',
+            ink: () => ({ dot: css.getPropertyValue('--panel-ink').trim() || '#1a1a1a', edge: css.getPropertyValue('--panel').trim() || '#ffffff' }) });
+        }
+        await roadCams.setLayer(on);
+      } catch (_) { if (on) toast('Road cameras didn\'t load. Check signal.'); }
+    }
+    if (window.apexDebug) window.apexDebug.roadCams = () => roadCams;
     // ---- the DOTs' own traffic events (road_events.js; backend/src/traffic.ts) ------------------------------------------
     // Closures, lane closures, roadwork, slow traffic and crashes from INDOT, KYTC (and ODOT with the owner's key): the whole
     // region asked every 5 min while planning or driving, never where you are; signed in or not. What is near you joins the
@@ -9680,6 +9717,7 @@
         tokens: [!next.label && ApexVoiceLines.TEXT[`line:rep_${next.kind}`] ? `line:rep_${next.kind}` : 'line:rep_hazard'], named: !!next.label }); }
       try { policeAheadTick(me); } catch (_) { /* never in the way of the drive */ }
       try { closedAheadTick(me); } catch (_) { /* never in the way of the drive */ }
+      try { dotAheadTick(me); } catch (_) { /* never in the way of the drive */ }
       const passed = reported.watch.update(reported.list, me, reported.mine);
       if (passed && !reported.asking) askStill(passed);
     }
@@ -9693,6 +9731,8 @@
       if (!p) return;
       if ($('hzPlateTitle').textContent !== p.title) $('hzPlateTitle').textContent = p.title;
       if ($('hzPlateDetail').textContent !== p.detail) $('hzPlateDetail').textContent = p.detail;
+      const wrap = !!(h && h.words);                                     // a sign's own words wrap, up to three lines
+      if ($('hzPlateDetail').classList.contains('wrap') !== wrap) $('hzPlateDetail').classList.toggle('wrap', wrap);
     }
     function askStill(h) {
       reported.asking = h;

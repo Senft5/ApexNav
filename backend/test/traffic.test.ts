@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { api } from "./helpers";
-import { IN_EVENTS, KY_WZDX, OHGO, parseIndiana, parseOhgo, parseWzdx, trafficEvents } from "../src/traffic";
+import { IN_EVENTS, KY_WZDX, OHGO, camerasResponse, parseOhgoCams, parseIndiana, parseOhgo, parseOhgoSigns, parseOhgoSlow, parseOhgoWeather, parseWzdx, trafficEvents } from "../src/traffic";
 import inFeed from "./fixtures/traffic_in.json";
 import kyFeed from "./fixtures/traffic_ky.json";
+import ohInc from "./fixtures/traffic_oh_incidents.json";
+import ohCon from "./fixtures/traffic_oh_construction.json";
+import ohWx from "./fixtures/traffic_oh_weather.json";
+import ohSigns from "./fixtures/traffic_oh_signs.json";
+import ohCams from "./fixtures/traffic_oh_cams.json";
 
 const NOW = Date.parse("2026-11-14T03:00:00Z");
 const real = globalThis.fetch;
@@ -54,15 +59,49 @@ describe("KYTC WZDx work zones", () => {
   });
 });
 
-describe("OHGO (with the owner's free key)", () => {
-  it("compacts incidents and construction", () => {
-    const rows = parseOhgo({ results: [
-      { id: "a1", latitude: 39.96, longitude: -83.0, category: "Crash", roadStatus: "Open", routeName: "I-71" },
-      { id: "a2", latitude: 39.9, longitude: -83.1, roadStatus: "Closed", direction: "Both", routeName: "SR 315" },
-      { id: "a3", latitude: 39.9, longitude: -83.1, roadStatus: "Lane Closed", routeName: "I-70" },
-      { id: "a4", latitude: 0, longitude: 0 },
-    ] }, "incident", NOW);
-    expect(rows.map((r) => [r.id, r.kind])).toEqual([["dot:OH:a1", "crash"], ["dot:OH:a2", "closure"], ["dot:OH:a3", "lane"]]);
+describe("OHGO (with the owner's free key), as its live answer reads (2026-11-14)", () => {
+  it("compacts incidents and construction: crashes, ramp closures, one-way and both-way closures, restrictions", () => {
+    const rows = byId([...parseOhgo(ohInc, "incident", NOW), ...parseOhgo(ohCon, "construction", NOW)]);
+    expect(rows["dot:OH:00001113002330"]).toMatchObject({ kind: "crash", label: "Crash", heading: 270, src: "ODOT" });
+    expect(rows["dot:OH:00001113002210"]).toMatchObject({ kind: "lane", label: "Ramp closed" });
+    expect(rows["dot:OH:00001113002260"]).toMatchObject({ kind: "closed_way", label: "Closed eastbound", heading: 90, road: "I-90 East" });
+    expect(rows["dot:OH:WZ000017367_24483"]).toMatchObject({ kind: "closure", label: "Road closed" });
+    expect(rows["dot:OH:WZ000017367_24483"].heading).toBeUndefined();
+    expect(rows["dot:OH:WZ000003986_05458"]).toMatchObject({ kind: "lane", label: "Lane closed", heading: 0 });
+    expect(rows["dot:OH:WZ000002580_21064"]).toMatchObject({ kind: "roadwork", label: "Roadwork", heading: 270 });
+    expect(rows["dot:OH:WZ000013109_18098"]).toMatchObject({ kind: "closed_way", label: "Closed northbound" });
+    expect(parseOhgo({ results: [{ id: "x", latitude: 0, longitude: 0 }, null] }, "incident", NOW)).toEqual([]);
+  });
+  it("slowdowns: a real delay or a speed well under normal is Slow traffic, under 15 mph Traffic stopped", () => {
+    const d = parseOhgoSlow({ results: [
+      { id: "d1", latitude: 39.96, longitude: -83.0, routeName: "I-71", direction: "N", delayTime: 6, currentAvgSpeed: 31, normalAvgSpeed: 62 },
+      { id: "d2", latitude: 39.96, longitude: -83.0, routeName: "I-70", direction: "E", delayTime: 0.5, currentAvgSpeed: 58, normalAvgSpeed: 62 },   // barely: left out
+      { id: "d3", latitude: 39.96, longitude: -83.0, routeName: "I-270", direction: "Both", delayTime: 12, currentAvgSpeed: 9, normalAvgSpeed: 60 },
+    ] }, "delay");
+    expect(d.map((r) => [r.id, r.kind, r.label, r.heading])).toEqual([["dot:OH:delay:d1", "slow", "Slow traffic", 0], ["dot:OH:delay:d3", "slow", "Traffic stopped", undefined]]);
+    const s = parseOhgoSlow({ results: [{ Id: "s1", Latitude: 41.4, Longitude: -81.8, RouteName: "I-90", Direction: "westbound", CurrentMPH: 22, NormalMPH: 60 }] }, "slowdown");
+    expect(s[0]).toMatchObject({ id: "dot:OH:slowdown:s1", kind: "slow", label: "Sudden slowdown", heading: 270, road: "I-90" });
+    expect(parseOhgoSlow(null, "delay")).toEqual([]);
+  });
+  it("road weather sensors: the worst surface at a site; dry and stale readings left out", () => {
+    const at = Date.parse("2026-11-14T05:30:00Z");                     // the fixture's readings: 00:25 Eastern
+    const rows = byId(parseOhgoWeather(ohWx, at));
+    expect(rows["dot:OH:wx:582008"]).toMatchObject({ kind: "ice", label: "Road near freezing", src: "ODOT sensor" });   // "Snow Watch"
+    expect(rows["dot:OH:wx:200098"]).toMatchObject({ kind: "wet", label: "Wet road" });
+    expect(rows["dot:OH:wx:200001"]).toBeUndefined();                  // dry
+    expect(parseOhgoWeather(ohWx, at + 3 * 3600e3)).toEqual([]);        // over 2 h old
+    const cold = { results: [{ id: "c", latitude: 40, longitude: -83, surfaceSensors: [{ status: "Wet", surfaceTemperature: 31, lastUpdate: "2026-11-14T00:20:00" }, { status: "Dry", surfaceTemperature: 30 }] }] };
+    expect(parseOhgoWeather(cold, at)[0]).toMatchObject({ kind: "ice", label: "Road may be icy" });
+  });
+  it("message signs: one readable line the way the sign faces; travel times and blank signs left out", () => {
+    const rows = parseOhgoSigns(ohSigns);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: "dot:OH:sign:211", kind: "sign", label: "Sign", heading: 180, road: "I-71 SB @ N of 17th Ave",
+      text: "Main st closed 3 miles ahead. 2 lt lns blocked on S I-71 3 miles ahead" });
+  });
+  it("drops construction that has ended", () => {
+    const old = { ...(ohCon as any).results[0], endDate: "2026-11-01T00:00:00" };
+    expect(parseOhgo({ results: [old] }, "construction", NOW)).toEqual([]);
   });
 });
 
@@ -95,7 +134,32 @@ describe("GET /api/traffic/v1/events.json", () => {
     const out = await trafficEvents({ CTX_KEYS: JSON.stringify({ ohgoApiKey: "k 1" }) } as never, f, NOW);   // the route context's key slot
     expect(out.sources).toEqual(["INDOT", "KYTC", "ODOT"]);
     expect(seen).toContain(`${OHGO}/incidents?api-key=k%201`);
-    expect(seen.filter((u) => u.includes("api-key"))).toHaveLength(2);
+    expect(seen.filter((u) => u.includes("api-key"))).toHaveLength(6);   // incidents, construction, travel delays, slowdowns, weather, signs
     expect((await trafficEvents({ CTX_KEYS: "not json" } as never, f, NOW)).sources).toEqual(["INDOT", "KYTC"]);
+    // or a secret of its own
+    seen.length = 0;
+    expect((await trafficEvents({ OHGO_API_KEY: "k2" } as never, f, NOW)).sources).toEqual(["INDOT", "KYTC", "ODOT"]);
+    expect(seen).toContain(`${OHGO}/construction?api-key=k2`);
+  });
+});
+
+describe("GET /api/traffic/v1/cameras.json (Ohio's traffic cameras)", () => {
+  it("needs the owner's key", async () => {
+    const r = await camerasResponse({} as never, (async () => new Response("{}")) as typeof fetch);
+    expect(r.status).toBe(503);
+  });
+  it("reads every page, keeps pictures on ODOT's own image host only, without the :443", async () => {
+    const seen: string[] = [];
+    const f = (async (input: RequestInfo | URL) => { seen.push(String(input)); return new Response(JSON.stringify(ohCams)); }) as typeof fetch;
+    const c = (caches as unknown as { default: Cache }).default;
+    await c.delete(new Request("https://apexnav.cache/traffic/v1/cameras.json"));
+    const r = await camerasResponse({ OHGO_API_KEY: "k3" } as never, f);
+    expect(r.status).toBe(200);
+    expect(r.headers.get("cache-control")).toBe("public, max-age=86400");
+    expect(seen).toEqual([`${OHGO}/cameras?api-key=k3`, `${OHGO}/cameras?page=2&api-key=k3`]);
+    const j = (await r.json()) as { cams: { id: string; views: { url: string }[] }[] };
+    expect(j.cams.map((x) => x.id)).toEqual(["00000000000001", (ohCams as any).results[1].id, "00000000000001", (ohCams as any).results[1].id]);   // (the stub answers both pages alike)
+    expect(j.cams.every((x) => x.views.every((v) => v.url.startsWith("https://itscameras.dot.state.oh.us/")))).toBe(true);
+    expect(parseOhgoCams({ results: [{ id: "z", latitude: 40, longitude: -83, cameraViews: [{ largeUrl: "http://itscameras.dot.state.oh.us/a.jpg" }] }] })).toEqual([]);
   });
 });

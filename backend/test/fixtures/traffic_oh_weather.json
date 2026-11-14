@@ -1,0 +1,112 @@
+{
+"results": [
+{
+"id": "582008",
+"latitude": 41.4085,
+"longitude": -84.058,
+"location": "D02 OH125F HEN US6 16.67- US6 @ Maumee River",
+"description": "",
+"severe": false,
+"condition": "",
+"averageAirTemperature": "32.2",
+"atmosphericSensors": [
+{
+"airTemperature": 32.2,
+"dewpointTemperature": 28.4,
+"humidity": 86,
+"averageWindSpeed": 3.1,
+"maximumWindSpeed": 5.6,
+"windDirection": "North",
+"pressure": 993,
+"precipitation": "None",
+"precipitationRate": 0.0,
+"precipitationAccumulation": 0,
+"precipitationintensity": "None",
+"visibility": 1.2,
+"lastUpdate": "2026-11-14T00:25:02"
+}
+],
+"surfaceSensors": [
+{
+"name": "No description available",
+"status": "Snow Watch",
+"surfaceTemperature": 34.5,
+"subSurfaceTemperature": -9999999,
+"lastUpdate": "2026-11-14T00:25:02"
+}
+]
+},
+{
+"id": "200098",
+"latitude": 40.7983,
+"longitude": -81.7427,
+"location": "D03 OH089FS WAY US30 21.39- US30 @ Harmony Lake",
+"description": "",
+"severe": false,
+"condition": "",
+"averageAirTemperature": "35.2",
+"atmosphericSensors": [
+{
+"airTemperature": 35.2,
+"dewpointTemperature": 34.0,
+"humidity": 95,
+"averageWindSpeed": 0.6,
+"maximumWindSpeed": 3.7,
+"windDirection": "North",
+"pressure": 976,
+"precipitation": "Unknown",
+"precipitationRate": 0.0,
+"precipitationAccumulation": 0.01,
+"precipitationintensity": "Unknown",
+"visibility": -1,
+"lastUpdate": "2026-11-14T00:25:02"
+}
+],
+"surfaceSensors": [
+{
+"name": "",
+"status": "Wet",
+"surfaceTemperature": 35.8,
+"subSurfaceTemperature": -9999999,
+"lastUpdate": "2026-11-14T00:25:02"
+}
+]
+},
+{
+"id": "200001",
+"latitude": 40.7332,
+"longitude": -83.8236,
+"location": "D01 OH002F HAR SR235 16.00- SR235 @ SR309",
+"description": "",
+"severe": false,
+"condition": "",
+"averageAirTemperature": "34.0",
+"atmosphericSensors": [
+{
+"airTemperature": 34.0,
+"dewpointTemperature": 29.5,
+"humidity": 83,
+"averageWindSpeed": 0.0,
+"maximumWindSpeed": 4.3,
+"windDirection": "North",
+"pressure": 65535,
+"precipitation": "None",
+"precipitationRate": 0.0,
+"precipitationAccumulation": 0,
+"precipitationintensity": "None",
+"visibility": -1,
+"lastUpdate": "2026-11-14T00:25:02"
+}
+],
+"surfaceSensors": [
+{
+"name": "SR309 EB Roadway",
+"status": "Dry",
+"surfaceTemperature": 40.1,
+"subSurfaceTemperature": 54.5,
+"lastUpdate": "2026-11-14T00:25:02"
+}
+]
+}
+]
+}

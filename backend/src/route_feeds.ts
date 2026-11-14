@@ -17,6 +17,7 @@ export function ctxKeys(env: Env): Response {
   try { all = env.CTX_KEYS ? JSON.parse(env.CTX_KEYS) : {}; } catch { all = {}; }
   const keys: Record<string, string> = {};
   for (const k of CTX_KEY_NAMES) if (typeof all[k] === "string" && all[k]) keys[k] = all[k] as string;
+  if (!keys.ohgoApiKey && env.OHGO_API_KEY) keys.ohgoApiKey = env.OHGO_API_KEY;   // Ohio's key as a secret of its own
   return json({ keys }, 200, { "cache-control": "private, max-age=3600" });
 }
 
