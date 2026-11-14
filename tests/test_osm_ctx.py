@@ -109,7 +109,7 @@ def test_kept_in_step_with_the_relay():
     drivable = re.search(r'export const DRIVABLE = "(.+?)";', src).group(1)
     assert drivable == B.DRIVABLE.pattern
     assert "export const BUNDLE = 5," in src and B.BUNDLE == 5 and B.TILE == 0.05
-    assert 'osm\\/v2\\/(index\\.json|-?\\d{1,4}_-?\\d{1,4}\\.bin)' in open(os.path.join(ROOT, "backend", "src", "data_store.ts")).read()
+    assert 'osm\\/v2\\/(index\\.json|falls\\.json|-?\\d{1,4}_-?\\d{1,4}\\.bin)' in open(os.path.join(ROOT, "backend", "src", "data_store.ts")).read()
     assert f"HEAD = {B.HEAD}," in src and 'BUILT = "osm/v2"' in src
 
 
@@ -130,3 +130,23 @@ def test_the_phone_reads_a_built_tile(tmp_path):
     if got is None:
         pytest.skip("osm_overpass.js exposes no parse for tests: " + out.stderr[-200:])
     assert sorted(got["ways"]) == [100, 101] and 2 in got["nodes"] and 40 in got["nodes"] and got["rels"] == [[500, [100]]]
+
+
+def test_the_regions_waterfalls(tmp_path):
+    """tools/osm_ctx/falls.py: natural=waterfall or waterway=waterfall, a node or a way at the mean of its nodes, one per
+    place, kept only in the 0.25 degree cells wholly inside the .poly, which the file lists so the phone knows where it ends."""
+    from tools.osm_ctx import falls as F
+    la = 39.12
+    nodes = {1: (la, -84.54, {"natural": "waterfall", "name": " Shaker Run Falls "}), 2: (la, -84.54, {"waterway": "waterfall"}),
+             3: (la + 0.01, -84.52, {}), 4: (la + 0.01, -84.50, {}), 5: (la + 0.5, -84.54, {"natural": "waterfall", "name": "Outside"}),
+             6: (la, -84.53, {"tourism": "viewpoint"})}
+    ways = {10: ([3, 4], {"waterway": "waterfall"})}
+    p = tmp_path / "f.osm.pbf"
+    write_osm(p, nodes, ways)
+    got = F.read([str(p)])
+    assert [(round(a, 4), round(b, 4), n) for a, b, n in got] == [(39.12, -84.54, "Shaker Run Falls"), (39.13, -84.51, None), (39.62, -84.54, "Outside")]
+    poly = tmp_path / "x.poly"
+    poly.write_text("x\n1\n  -84.80 38.95\n  -84.20 38.95\n  -84.20 39.30\n  -84.80 39.30\nEND\nEND\n")
+    d = F.doc(got, B.read_poly(str(poly)), built="2026-11-14")
+    assert d["bundle"] == 0.25 and sorted(map(tuple, d["cells"])) == [(156, -339), (156, -338)]
+    assert [f[2] for f in d["falls"]] == ["Shaker Run Falls", None], "a waterfall outside the covered cells is left out"

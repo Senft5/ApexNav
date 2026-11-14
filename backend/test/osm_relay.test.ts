@@ -133,6 +133,18 @@ describe("OSM relay (/api/ctx/osm)", () => {
       resetBuiltForTest();
     });
 
+    it("serves the region's waterfalls from R2, 404 before the first build", async () => {
+      await DATA.delete("osm/v2/falls.json");
+      expect((await api(null, "GET", "/api/ctx/falls.json")).status).toBe(404);
+      const doc = { built: "2026-11-14", bundle: 0.25, cells: [[156, -339]], falls: [[39.1, -84.6, "Shaker Run Falls"]] };
+      await DATA.put("osm/v2/falls.json", JSON.stringify(doc));
+      const r = await api(null, "GET", "/api/ctx/falls.json");
+      expect(r.status).toBe(200);
+      expect(r.headers.get("x-cache")).toBe("built");
+      expect(await r.json()).toEqual(doc);
+      await DATA.delete("osm/v2/falls.json");
+    });
+
     it("a tile its bundle leaves out (across the border) or with no bundle goes to Overpass", async () => {
       await put();
       const seen = stub(ok);
