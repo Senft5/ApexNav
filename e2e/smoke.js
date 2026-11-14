@@ -11078,6 +11078,26 @@ flow('taste from picks: Start on another route than Vetta\'s pick teaches the ta
   }
 }, { ...IPHONE, funLevel: 'fun' });
 
+flow('the compass: shows while the map is turned off north, its needle on north; a tap turns the map to north and holds it there', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded && document.getElementById('compassBtn'), null, { timeout: 20000 });
+  check(await page.evaluate(() => document.getElementById('compassBtn').hidden), 'north up: no compass');
+  await page.evaluate(() => { window.apexDebug.state.follow = false; window.apexDebug.map.jumpTo({ bearing: 40 }); });
+  await page.waitForFunction(() => !document.getElementById('compassBtn').hidden, null, { timeout: 3000 });
+  const c = await page.evaluate(() => { const b = document.getElementById('compassBtn'), r = b.getBoundingClientRect(); return { t: b.querySelector('svg').style.transform, w: r.width, h: r.height, label: b.getAttribute('aria-label') }; });
+  check(c.t === 'rotate(-40deg)' && c.w >= 44 && c.h >= 44 && c.label === 'Face north', 'the compass shows, its needle on north: ' + JSON.stringify(c));
+  // the keys under Layers take their own taps (the closed Layers panel's box lay over them: Recenter took none, 2026-11-14)
+  const hit = await page.evaluate(() => { document.getElementById('recenterBtn').classList.add('show');
+    return ['recenterBtn', 'compassBtn'].map((id) => { const b = document.getElementById(id).getBoundingClientRect(), e = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return !!(e && e.closest('#' + id)); }); });
+  check(hit[0] && hit[1], 'Recenter and the compass take their own taps: ' + JSON.stringify(hit));
+  await page.click('#compassBtn');
+  await page.waitForFunction(() => Math.abs(window.apexDebug.map.getBearing()) < 0.5 && document.getElementById('compassBtn').hidden, null, { timeout: 4000 });
+  await page.waitForTimeout(1500);
+  const after = await page.evaluate(() => ({ bearing: window.apexDebug.map.getBearing(), follow: window.apexDebug.state.follow, recenter: document.getElementById('recenterBtn').classList.contains('show') }));
+  check(Math.abs(after.bearing) < 0.5 && !after.follow && after.recenter, 'north up stays, with Recenter to go back: ' + JSON.stringify(after));
+}, IPHONE);
+
 flow('GPS accuracy: a faint disc round the idle arrow as wide as the fix is unsure, gone when the fix is sharp (gps_halo.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   await page.context().grantPermissions(['geolocation']);

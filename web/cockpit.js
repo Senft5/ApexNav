@@ -1044,6 +1044,16 @@
       }
     });
     map.getContainer().querySelectorAll('.maplibregl-ctrl-attrib').forEach((a) => attribWatch.observe(a, { attributes: true, attributeFilter: ['class'], attributeOldValue: true }));
+    // The compass (index.html #compassBtn): shown while the idle map is turned more than 3 degrees off north; its needle
+    // turns with the map; a tap turns the map to north and holds it there (follow pauses, Recenter brings the heading back)
+    function paintCompass() {
+      const b = $('compassBtn'), bear = ((map.getBearing() % 360) + 540) % 360 - 180, off = Math.abs(bear) > 3 && state.mode !== 'live';
+      if (b.hidden !== !off) b.hidden = !off;
+      if (off) b.querySelector('svg').style.transform = `rotate(${-bear}deg)`;
+    }
+    map.on('rotate', paintCompass);
+    map.on('moveend', paintCompass);
+    $('compassBtn').addEventListener('click', () => { pauseFollow(); map.easeTo({ bearing: 0, duration: 450 }); });
     $('recenterBtn').addEventListener('click', () => { if (locDenied && !track && $('app').classList.contains('idle')) { showPerms(); return; } resumeFollow(); render(false); });   // the idle map with Location off has nowhere to come back to: say so
 
     // =======================================================================

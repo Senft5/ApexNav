@@ -380,6 +380,9 @@
     /* ---------------- while-you-drive switches: an edge tab that slides a small panel over the map ---------------- */
     .edge { --edge-w: min(288px, calc(100vw - 64px)); position: absolute; right: 0; top: 38%; z-index: 4; display: flex; align-items: flex-start;
       transform: translateX(var(--edge-w)); transition: transform 0.12s cubic-bezier(0.2, 0.8, 0.2, 1); }   /* F-16: a small panel, 120 ms */
+    /* the edge's box runs as tall as its panel, so closed, the empty strip under the tab lay over the keys below it (Recenter
+       took no tap; 2026-11-14): only the tab, and the panel when open, take a touch */
+    .edge { pointer-events: none; } .edge-tab, .edge.open .edge-panel { pointer-events: auto; }
     .edge.open { transform: none; top: calc(12px + var(--safe-top)); }   /* opened: from the top down, clear of the deck (REVIEW2.md 1.9) */
     #app.live .edge.open { top: 12px; }
     .edge-tab { flex: none; width: 40px; height: 52px; background: var(--panel); color: var(--panel-ink);
@@ -398,6 +401,14 @@
        left before it recenters on its own is a bar along its foot that drains, and the seconds are in its label only */
     #recenterBtn { display: none; position: absolute; right: 0; top: calc(38% + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; }
     #recenterBtn.show { display: flex; align-items: center; justify-content: center; }
+    /* the compass (as Apple Maps shows one): only when the map is turned off north and you aren't driving; its needle points
+       north, under Recenter when that shows; a tap turns the map to face north and leaves it there */
+    #compassBtn { position: absolute; right: 0; top: calc(38% + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; display: flex; align-items: center; justify-content: center; }
+    #compassBtn[hidden], #app.sheet-open #compassBtn, #app.live #compassBtn { display: none; }
+    #recenterBtn.show ~ #compassBtn { top: calc(38% + 124px); }
+    #compassBtn svg { width: 28px; height: 28px; }
+    #compassBtn .cp-n { fill: var(--panel-ink); stroke: var(--panel-ink); stroke-width: 1.2; }
+    #compassBtn .cp-s { fill: none; stroke: var(--panel-ink); stroke-width: 1.2; }
     #recenterBtn svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
     #recenterBtn { overflow: hidden; }
     @media (prefers-reduced-motion: reduce) { #recenterBtn.counting .rc-left { transform: scaleX(1); } }
@@ -2063,6 +2074,7 @@
         <div class="plate trial-plate" id="trialPlate" role="status" hidden><span id="trialText"></span><span id="trialWatchSep"> · </span><button class="linkbtn" id="trialWatch">Watch a replay</button> · <button class="linkbtn" id="trialStop">Stop</button></div>
       </div>
       <button class="map-key recenter-key" id="recenterBtn" aria-label="Recenter"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="1.5"/></svg><span class="rc-left"></span></button>
+      <button class="map-key compass-key" id="compassBtn" aria-label="Face north" title="Face north" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path class="cp-n" d="M12 3 L15.5 12 H8.5 Z"/><path class="cp-s" d="M12 21 L8.5 12 H15.5 Z"/></svg></button>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
       <div class="sr-only" id="announcer" role="status" aria-live="polite"></div>
 
