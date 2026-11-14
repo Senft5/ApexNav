@@ -166,6 +166,9 @@ and in random batches so a trace cannot be re-assembled.
 - A friend's drives on their profile (built 2026-11-14): their newest posts you can see (`GET /api/feed?author=`, the
   Feed's own rules), with kudos and comments, between what to do with them and what they see of you. Your own posts
   sit under You in the Garage the same way, each with ··· to delete it (2026-11-14). Three show, then See all.
+- Who gave kudos (2026-11-14): under a post, "Kudos from @bob, @cara and 3 others" with their faces; a tap lists them
+  all (newest first, 50 at most, never someone blocked either way) and a name opens their profile. `kudos_from` on
+  `GET /api/posts/:id`.
 - Next: "Post to crew" from a corner clip on the drive's page (analysis thread adds the key, `page.post(blob, meta)`).
   Kudos and comments push (2.12).
 
