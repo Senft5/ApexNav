@@ -7,7 +7,7 @@ import { Env, HttpError, body, nearCell, randomToken } from "./util";
 import { cleanText } from "./convoy";
 import { reportedSql, removedSql } from "./reports_sql";
 
-export const MAX_BOOKS = 30, MAX_ROADS = 40, MAX_POINTS = 600, MAX_FOLLOWS = 100, ROADS_PER_DAY = 60, NEAR_KM = 160, NEAR_SHOWN = 20, FRIENDS_SHOWN = 30;
+export const MAX_BOOKS = 30, MAX_ROADS = 40, MAX_POINTS = 600, MAX_FOLLOWS = 100, ROADS_PER_DAY = 60, NEAR_KM = 160, NEAR_SHOWN = 20, FRIENDS_SHOWN = 30, CREW_SHOWN = 30;
 export const MIN_ROAD_M = 300, MAX_ROAD_M = 600_000;
 const ID_RE = /^[A-Za-z0-9_-]{16}$/;
 export const BIND_CHUNK = 90;
@@ -18,10 +18,13 @@ const first = <T>(env: Env, sql: string, ...a: unknown[]) => env.DB.prepare(sql)
 const all = async <T>(env: Env, sql: string, ...a: unknown[]) => (await env.DB.prepare(sql).bind(...a).all<T>()).results;
 const who = (v: Viewer | null) => v?.id ?? "";
 
-/** Who may open book `b`, for viewer ?1 ('' when signed out): its owner; anyone for a public one that reports haven't taken
- *  down; an accepted friend for a friends one. Never across a block. */
+/** Is viewer ?1 in the crew book `b` is kept with (migration 0063)? */
+const IN_CREW = `(b.crew_id IS NOT NULL AND EXISTS (SELECT 1 FROM crew_members cm WHERE cm.crew_id = b.crew_id AND cm.user_id = ?1))`;
+/** Who may open book `b`, for viewer ?1 ('' when signed out): its owner; a member of the crew it is kept with; anyone for a
+ *  public one that reports haven't taken down; an accepted friend for a friends one. Never across a block. */
 export const CAN_SEE = `(b.owner = ?1 OR ((
-     (b.visibility = 'public' AND NOT ${reportedSql("roadbook", "b.id")})
+     ${IN_CREW}
+     OR (b.visibility = 'public' AND NOT ${reportedSql("roadbook", "b.id")})
      OR (b.visibility = 'friends' AND EXISTS (SELECT 1 FROM friendships f WHERE f.status = 'accepted' AND f.user_a = MIN(b.owner, ?1) AND f.user_b = MAX(b.owner, ?1))))
    AND NOT EXISTS (SELECT 1 FROM blocks k WHERE (k.blocker = ?1 AND k.blocked = b.owner) OR (k.blocker = b.owner AND k.blocked = ?1))))`;
 
@@ -62,9 +65,25 @@ async function holderOf(env: Env, userId: string): Promise<ArrayBuffer> {
 const holderOrNull = async (env: Env, v: Viewer | null) => (v && env.PEPPER ? holderOf(env, v.id) : null);
 
 async function ownBook(env: Env, v: Viewer, id: string) {
-  const b = ID_RE.test(id) ? await first<{ id: string; visibility: Vis; roads_n: number }>(env, "SELECT id, visibility, roads_n FROM roadbooks WHERE id = ? AND owner = ?", id, v.id) : null;
+  const b = ID_RE.test(id) ? await first<{ id: string; visibility: Vis; roads_n: number; crew_id: string | null }>(env, "SELECT id, visibility, roads_n, crew_id FROM roadbooks WHERE id = ? AND owner = ?", id, v.id) : null;
   if (!b) throw new HttpError(404, "no_roadbook");
   return b;
+}
+/** A book the viewer may add roads to: their own, or one kept with a crew they are in (and can open: never across a block).
+ *  crew_owner: they own that crew, so they may take any road out of it, as they may take down anything in their crew. */
+async function addableBook(env: Env, v: Viewer, id: string) {
+  const b = ID_RE.test(id) ? await first<{ id: string; owner: string; roads_n: number; crew_owner: number }>(env,
+    `SELECT b.id, b.owner, b.roads_n, EXISTS (SELECT 1 FROM crew_members cm WHERE cm.crew_id = b.crew_id AND cm.user_id = ?1 AND cm.role = 'owner') AS crew_owner
+       FROM roadbooks b WHERE b.id = ?2 AND (b.owner = ?1 OR ${IN_CREW}) AND ${CAN_SEE}`, v.id, id) : null;
+  if (!b) throw new HttpError(404, "no_roadbook");
+  return b;
+}
+/** The crew a book may be kept with: one the viewer is in. */
+async function wantCrew(env: Env, v: Viewer, crew: unknown): Promise<string> {
+  const id = typeof crew === "string" ? crew : "";
+  if (!id || !(await first(env, "SELECT 1 FROM crew_members WHERE crew_id = ? AND user_id = ?", id, v.id))) throw new HttpError(403, "not_in_crew");
+  if (!v.handle) throw new HttpError(409, "handle_required");   // crew-mates see who keeps it
+  return id;
 }
 
 /** Counts, total length and the middle of the book, from its roads as they now are. */
@@ -88,21 +107,24 @@ async function mayShow(env: Env, v: Viewer, vis: Vis, id: string | null) {
 }
 
 export async function bookCreate(env: Env, v: Viewer, req: Request) {
-  const b = await body<{ name?: unknown; about?: unknown; visibility?: unknown }>(req);
+  const b = await body<{ name?: unknown; about?: unknown; visibility?: unknown; crew?: unknown }>(req);
   const name = text(b.name, "name", 60)!, about = text(b.about, "about", 280, false);
   const vis = b.visibility === undefined ? "private" : wantVis(b.visibility);
   await mayShow(env, v, vis, null);
+  const crew = b.crew == null ? null : await wantCrew(env, v, b.crew);
   const n = await first<{ n: number }>(env, "SELECT COUNT(*) AS n FROM roadbooks WHERE owner = ?", v.id);
   if ((n?.n ?? 0) >= MAX_BOOKS) throw new HttpError(429, "too_many_roadbooks");
   const id = randomToken(12);
-  await env.DB.prepare("INSERT INTO roadbooks (id, owner, name, about, visibility) VALUES (?, ?, ?, ?, ?)").bind(id, v.id, name, about, vis).run();
+  await env.DB.prepare("INSERT INTO roadbooks (id, owner, name, about, visibility, crew_id) VALUES (?, ?, ?, ?, ?, ?)").bind(id, v.id, name, about, vis, crew).run();
   return { id };
 }
 
 export async function bookUpdate(env: Env, v: Viewer, id: string, req: Request) {
   const book = await ownBook(env, v, id);
-  const b = await body<{ name?: unknown; about?: unknown; visibility?: unknown; order?: unknown }>(req);
+  const b = await body<{ name?: unknown; about?: unknown; visibility?: unknown; order?: unknown; crew?: unknown }>(req);
   const stmts: D1PreparedStatement[] = [];
+  // kept with a crew (its members open it and add roads), or with none again: the roads members added stay in it
+  if (b.crew !== undefined) stmts.push(env.DB.prepare("UPDATE roadbooks SET crew_id = ? WHERE id = ?").bind(b.crew === null ? null : await wantCrew(env, v, b.crew), id));
   if (b.name !== undefined) stmts.push(env.DB.prepare("UPDATE roadbooks SET name = ? WHERE id = ?").bind(text(b.name, "name", 60), id));
   if (b.about !== undefined) stmts.push(env.DB.prepare("UPDATE roadbooks SET about = ? WHERE id = ?").bind(text(b.about, "about", 280, false), id));
   if (b.visibility !== undefined) {
@@ -132,44 +154,62 @@ export async function bookDelete(env: Env, v: Viewer, id: string) {
 }
 
 export async function roadAdd(env: Env, v: Viewer, id: string, req: Request) {
-  const book = await ownBook(env, v, id);
+  const book = await addableBook(env, v, id);
   if (book.roads_n >= MAX_ROADS) throw new HttpError(429, "roadbook_full");
   const b = await body<{ name?: unknown; note?: unknown; geom?: unknown }>(req);
   const name = text(b.name, "name", 60)!, note = text(b.note, "note", 280, false), road = cleanRoad(b.geom);
   const today = await first<{ n: number }>(env,
-    "SELECT COUNT(*) AS n FROM roadbook_roads r JOIN roadbooks b ON b.id = r.book_id WHERE b.owner = ? AND r.created_at > datetime('now', '-1 day')", v.id);
+    "SELECT COUNT(*) AS n FROM roadbook_roads r JOIN roadbooks b ON b.id = r.book_id WHERE COALESCE(r.added_by, b.owner) = ? AND r.created_at > datetime('now', '-1 day')", v.id);
   if ((today?.n ?? 0) >= ROADS_PER_DAY) throw new HttpError(429, "daily_limit");
   const rid = crypto.randomUUID();
   await env.DB.batch([
-    env.DB.prepare(`INSERT INTO roadbook_roads (id, book_id, pos, name, note, geom, length_m, south, north, west, east)
-       VALUES (?1, ?2, COALESCE((SELECT MAX(pos) + 1 FROM roadbook_roads WHERE book_id = ?2), 0), ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`)
-      .bind(rid, id, name, note, JSON.stringify(road.geom), road.length_m, ...road.box),
+    env.DB.prepare(`INSERT INTO roadbook_roads (id, book_id, pos, name, note, geom, length_m, south, north, west, east, added_by)
+       VALUES (?1, ?2, COALESCE((SELECT MAX(pos) + 1 FROM roadbook_roads WHERE book_id = ?2), 0), ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`)
+      .bind(rid, id, name, note, JSON.stringify(road.geom), road.length_m, ...road.box, book.owner === v.id ? null : v.id),
     env.DB.prepare(RECOUNT).bind(id),
   ]);
   return { id: rid, length_m: road.length_m };
 }
 
+/** The book's owner changes any of its roads; a crew-mate only the ones they added. */
+const MAY_CHANGE = `(?6 = 1 OR added_by = ?7)`;
 export async function roadUpdate(env: Env, v: Viewer, id: string, rid: string, req: Request) {
-  await ownBook(env, v, id);
+  const book = await addableBook(env, v, id);
   const b = await body<{ name?: unknown; note?: unknown }>(req);
   if (b.name === undefined && b.note === undefined) throw new HttpError(400, "nothing_to_change");
-  const r = await env.DB.prepare("UPDATE roadbook_roads SET name = COALESCE(?1, name), note = CASE WHEN ?2 THEN ?3 ELSE note END WHERE id = ?4 AND book_id = ?5")
-    .bind(b.name === undefined ? null : text(b.name, "name", 60), b.note === undefined ? 0 : 1, b.note === undefined ? null : text(b.note, "note", 280, false), rid, id).run();
+  const r = await env.DB.prepare(`UPDATE roadbook_roads SET name = COALESCE(?1, name), note = CASE WHEN ?2 THEN ?3 ELSE note END WHERE id = ?4 AND book_id = ?5 AND ${MAY_CHANGE}`)
+    .bind(b.name === undefined ? null : text(b.name, "name", 60), b.note === undefined ? 0 : 1, b.note === undefined ? null : text(b.note, "note", 280, false), rid, id,
+      book.owner === v.id ? 1 : 0, v.id).run();
   if (!r.meta.changes) throw new HttpError(404, "no_road");
 }
 
+/** Out of the book: by its owner, the crew's owner, or the crew-mate who added it. */
 export async function roadRemove(env: Env, v: Viewer, id: string, rid: string) {
-  await ownBook(env, v, id);
-  await env.DB.batch([env.DB.prepare("DELETE FROM roadbook_roads WHERE id = ? AND book_id = ?").bind(rid, id), env.DB.prepare(RECOUNT).bind(id)]);
+  const book = await addableBook(env, v, id);
+  const [del] = await env.DB.batch([
+    env.DB.prepare("DELETE FROM roadbook_roads WHERE id = ?1 AND book_id = ?2 AND (?3 = 1 OR added_by = ?4)")
+      .bind(rid, id, book.owner === v.id || book.crew_owner ? 1 : 0, v.id),
+    env.DB.prepare(RECOUNT).bind(id)]);
+  if (!del.meta.changes) throw new HttpError(404, "no_road");
+}
+
+/** Leaving Vetta: the roads they added to other members' crew books go too (their own books cascade from users). */
+export async function addedErase(env: Env, userId: string): Promise<D1PreparedStatement[]> {
+  const books = await all<{ book_id: string }>(env, "SELECT DISTINCT book_id FROM roadbook_roads WHERE added_by = ?", userId);
+  return [env.DB.prepare("DELETE FROM roadbook_roads WHERE added_by = ?").bind(userId), ...books.map((b) => env.DB.prepare(RECOUNT).bind(b.book_id))];
 }
 
 interface BookRow { id: string; name: string; about: string | null; visibility: Vis; owner: string; by: string | null; roads_n: number; length_m: number;
-  area_lat: number | null; area_lon: number | null; followers: number; following: number; updated_at: string }
+  area_lat: number | null; area_lon: number | null; followers: number; following: number; updated_at: string;
+  crew_id: string | null; crew: string | null; in_crew: number }
 const BOOK_COLS = `b.id, b.name, b.about, b.visibility, b.owner, u.handle AS by, b.roads_n, b.length_m, b.area_lat, b.area_lon, b.updated_at,
   (SELECT COUNT(*) FROM roadbook_follows f WHERE f.book_id = b.id) AS followers,
-  EXISTS (SELECT 1 FROM roadbook_follows f WHERE f.book_id = b.id AND f.user_id = ?1) AS following`;
+  EXISTS (SELECT 1 FROM roadbook_follows f WHERE f.book_id = b.id AND f.user_id = ?1) AS following,
+  b.crew_id, (SELECT c.name FROM crews c WHERE c.id = b.crew_id) AS crew, ${IN_CREW} AS in_crew`;
+// crew: the crew it is kept with, named only to that crew's members (to anyone else it is the owner's book like any other)
 const card = (r: BookRow, me: string) => ({ id: r.id, name: r.name, about: r.about, visibility: r.visibility, by: r.by, mine: r.owner === me, roads: r.roads_n, length_m: r.length_m,
-  lat: r.area_lat, lon: r.area_lon, followers: r.followers, following: !!r.following, updated_at: r.updated_at });
+  lat: r.area_lat, lon: r.area_lon, followers: r.followers, following: !!r.following, updated_at: r.updated_at,
+  crew: r.crew_id && (r.in_crew || r.owner === me) ? { id: r.crew_id, name: r.crew } : null, can_add: r.owner === me || !!r.in_crew });
 
 /** One book with its roads and their shapes. Signed out works for a public one (its link). */
 export async function bookGet(env: Env, v: Viewer | null, id: string) {
@@ -177,10 +217,13 @@ export async function bookGet(env: Env, v: Viewer | null, id: string) {
   const b = ID_RE.test(id) ? await first<BookRow>(env, `SELECT ${BOOK_COLS} FROM roadbooks b JOIN users u ON u.id = b.owner WHERE b.id = ?2 AND ${CAN_SEE}`, me, id) : null;
   if (!b) throw new HttpError(404, "no_roadbook");
   const holder = await holderOrNull(env, v);
-  const roads = await all<{ id: string; name: string; note: string | null; geom: string; length_m: number; stamps: number; stamped: number }>(env,
-    `SELECT r.id, r.name, r.note, r.geom, r.length_m, r.stamps, EXISTS (SELECT 1 FROM roadbook_stamps s WHERE s.road_id = r.id AND s.holder = ?2) AS stamped
-       FROM roadbook_roads r WHERE r.book_id = ?1 ORDER BY r.pos, r.created_at`, id, holder);
-  return { ...card(b, me), road_list: roads.map((r) => ({ ...r, geom: JSON.parse(r.geom) as number[][], stamped: !!r.stamped })) };
+  // added_by: the crew-mate who put it in, by handle (null: the book's owner); yours: you added it, so you may take it out
+  const roads = await all<{ id: string; name: string; note: string | null; geom: string; length_m: number; stamps: number; stamped: number; added_by: string | null; yours: number }>(env,
+    `SELECT r.id, r.name, r.note, r.geom, r.length_m, r.stamps, EXISTS (SELECT 1 FROM roadbook_stamps s WHERE s.road_id = r.id AND s.holder = ?2) AS stamped,
+            CASE WHEN r.added_by IS NULL OR r.added_by = ?4 THEN NULL ELSE (SELECT a.handle FROM users a WHERE a.id = r.added_by) END AS added_by,
+            (r.added_by IS NOT NULL AND r.added_by = ?3) AS yours
+       FROM roadbook_roads r WHERE r.book_id = ?1 ORDER BY r.pos, r.created_at`, id, holder, me, b.owner);
+  return { ...card(b, me), road_list: roads.map((r) => ({ ...r, geom: JSON.parse(r.geom) as number[][], stamped: !!r.stamped, yours: !!r.yours })) };
 }
 
 /** Yours and the ones you follow, each with its roads' names and boxes (no shapes): what the phone needs to know which of
@@ -188,9 +231,9 @@ export async function bookGet(env: Env, v: Viewer | null, id: string) {
 export async function booksMine(env: Env, v: Viewer) {
   const rows = await all<BookRow>(env,
     `SELECT ${BOOK_COLS} FROM roadbooks b JOIN users u ON u.id = b.owner
-      WHERE (b.owner = ?1 OR EXISTS (SELECT 1 FROM roadbook_follows f WHERE f.book_id = b.id AND f.user_id = ?1)) AND ${CAN_SEE}
-      ORDER BY b.updated_at DESC LIMIT ${MAX_BOOKS + MAX_FOLLOWS}`, v.id);
-  if (!rows.length) return { mine: [], following: [] };
+      WHERE (b.owner = ?1 OR EXISTS (SELECT 1 FROM roadbook_follows f WHERE f.book_id = b.id AND f.user_id = ?1) OR ${IN_CREW}) AND ${CAN_SEE}
+      ORDER BY b.updated_at DESC LIMIT ${MAX_BOOKS + MAX_FOLLOWS + CREW_SHOWN}`, v.id);
+  if (!rows.length) return { mine: [], following: [], crews: [] };
   const holder = await holderOrNull(env, v);
   // D1 binds at most 100 values a query and a member can hold MAX_BOOKS + MAX_FOLLOWS books, so the roads come in chunks
   type RoadRow = { id: string; book_id: string; name: string; length_m: number; south: number; north: number; west: number; east: number; stamped: number };
@@ -204,7 +247,16 @@ export async function booksMine(env: Env, v: Viewer) {
   }
   const out = rows.map((r) => ({ ...card(r, v.id),
     road_list: roads.filter((x) => x.book_id === r.id).map((x) => ({ id: x.id, name: x.name, length_m: x.length_m, box: [x.south, x.north, x.west, x.east], stamped: !!x.stamped })) }));
-  return { mine: out.filter((b) => b.mine), following: out.filter((b) => !b.mine) };
+  // crews: your crews' books someone else keeps (you add roads to them); following: the rest you follow
+  return { mine: out.filter((b) => b.mine), following: out.filter((b) => !b.mine && !b.can_add), crews: out.filter((b) => !b.mine && b.can_add) };
+}
+
+/** A crew's books, for its members: the crew page's Roadbooks. Newest first. */
+export async function booksCrew(env: Env, v: Viewer, crewId: string) {
+  if (!(await first(env, "SELECT 1 FROM crew_members WHERE crew_id = ? AND user_id = ?", crewId, v.id))) throw new HttpError(404, "no_crew");
+  const rows = await all<BookRow>(env,
+    `SELECT ${BOOK_COLS} FROM roadbooks b JOIN users u ON u.id = b.owner WHERE b.crew_id = ?2 AND ${CAN_SEE} ORDER BY b.updated_at DESC LIMIT ${CREW_SHOWN}`, v.id, crewId);
+  return rows.map((r) => card(r, v.id));
 }
 
 /** Your friends' books you may open (friends or public, with a road in them), newest first: People → Roadbooks → From

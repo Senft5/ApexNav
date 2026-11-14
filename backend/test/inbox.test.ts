@@ -104,6 +104,20 @@ describe("For you", () => {
     await env.DB.prepare("UPDATE ta_weeks SET removed = 0").run();
   });
 
+  it("a road a crew-mate adds to your crew's roadbook is news to the crew and its keeper, not to who added it", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob"), c = await makeUser("cara"), s = await makeUser("stranger");
+    const crew = (await json(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).id as string;
+    for (const u of [b, c]) await env.DB.prepare("INSERT INTO crew_members (crew_id, user_id) VALUES (?, ?)").bind(crew, u.id).run();
+    const { id } = await json(api(a, "POST", "/api/roadbooks", { name: "Crew favourites", crew }));
+    await ok(api(b, "POST", `/api/roadbooks/${id}/roads`, { name: "Cherohala Skyway", geom: road() }));
+    for (const u of [a, c]) expect((await inbox(u)).items.find((i) => i.kind === "book_roads")).toMatchObject({ book_id: id, book: "Crew favourites", handle: "bob", n: 1, road: "Cherohala Skyway" });
+    for (const u of [b, s]) expect(kinds(await inbox(u))).not.toContain("book_roads");
+    // two members add: the count, with nobody named
+    await ok(api(c, "POST", `/api/roadbooks/${id}/roads`, { name: "Tellico Plains run", geom: road(35.3) }));
+    expect((await inbox(a)).items.find((i) => i.kind === "book_roads")).toMatchObject({ n: 2, handle: null, road: null });
+    expect((await inbox(b)).items.find((i) => i.kind === "book_roads")).toMatchObject({ n: 1, handle: "cara" });
+  });
+
   it("kudos and comments on your drive post; a comment after yours on a friend's post; blocks hide them", async () => {
     const a = await makeUser("alice"), b = await makeUser("bob"), c = await makeUser("cara");
     await befriend(a, b); await befriend(a, c);
