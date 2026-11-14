@@ -891,6 +891,7 @@
       const ma = cornerPhases(a.speed_mps, a.lon_g, a.lat_g, c.start, c.end, c.apex, c.apex_mps);
       if (ma.min_mps < STOPPED_MPS) { out.push({ apex: c.apex, m: ma, best: null, gain_s: null, tip: null, passes: 0 }); continue; }
       let best = ma, bestFrom = -1, passes = 1;
+      let prior = null, priorFrom = -1;                                 // your fastest other pass, within the grip ceiling
       const [oa, sa] = passMarks(a, c.start, c.end, c.apex);             // D-07 marks, in m along A's road from its apex
       const ta = turnIn(a, c.start, c.end);
       ma.turn_in_m = ta === null || ta > c.apex ? null : (c.apex - ta) * 5;
@@ -916,10 +917,12 @@
         mb.turn_in_m = tt === null || tt > c.apex ? null : (c.apex - tt) * 5;   // on A's road, m before its apex
         brakes.push(ob === null ? null : (c.apex - ob) * 5); mins.push(sb === null ? null : (sb - c.apex) * 5); froms.push(j); turns.push(mb.turn_in_m); speeds.push(mb.min_mps);
         if (mb.envelope_use <= PACE_CEILING && mb.time_s < best.time_s) { best = mb; bestFrom = j; }
+        if (mb.envelope_use <= PACE_CEILING && (!prior || mb.time_s < prior.time_s)) { prior = mb; priorFrom = j; }
       });
       const gain = ma.time_s - best.time_s;
       out.push({ apex: c.apex, m: ma, best: bestFrom < 0 ? null : best, best_from: bestFrom, gain_s: gain,
-                 tip: coachTip(ma, bestFrom >= 0 && gain >= TIP_GAIN_S ? best : null), passes, spread: spread(brakes, mins, passes, froms, turns, speeds) });
+                 tip: coachTip(ma, bestFrom >= 0 && gain >= TIP_GAIN_S ? best : null), passes, spread: spread(brakes, mins, passes, froms, turns, speeds),
+                 prior_s: prior ? prior.time_s : null, prior_from: priorFrom });
     }
     const clean = out.filter(x => x.gain_s !== null);
     const thisS = clean.reduce((s, x) => s + x.m.time_s, 0), gainS = clean.reduce((s, x) => s + (x.gain_s >= TIP_GAIN_S ? x.gain_s : 0), 0);

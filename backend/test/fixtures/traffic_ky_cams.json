@@ -1,0 +1,69 @@
+{
+ "features": [
+  {
+   "attributes": {
+    "description": "I-71 at Old Brownsboro Rd",
+    "snapshot": "https://www.trimarc.org/images/milestone/CCTV_05_71_0103.jpg",
+    "status": "Online",
+    "latitude": 38.320179,
+    "longitude": -85.561249
+   },
+   "geometry": {
+    "x": -85.56124899999998,
+    "y": 38.32017900000005
+   }
+  },
+  {
+   "attributes": {
+    "description": "I-265 at Brownsboro Rd",
+    "snapshot": "https://www.trimarc.org/images/milestone/CCTV_05_265_0340.jpg",
+    "status": "Online",
+    "latitude": 38.308761,
+    "longitude": -85.571482
+   },
+   "geometry": {
+    "x": -85.57148199999995,
+    "y": 38.30876100000006
+   }
+  },
+  {
+   "attributes": {
+    "description": "I-65 just South of I-265 Exit 6 Indiana",
+    "snapshot": "http://pws.trafficwise.org/pullover/172_65_56_11.jpg",
+    "status": null,
+    "latitude": 38.345217,
+    "longitude": -85.753507
+   },
+   "geometry": {
+    "x": -85.75350699999996,
+    "y": 38.34521700000005
+   }
+  },
+  {
+   "attributes": {
+    "description": "I-65 at UofL Medical Tower",
+    "snapshot": "https://www.trimarc.org/images/milestone/CCTV_05_65_1359.jpg",
+    "status": "Offline",
+    "latitude": 38.249331,
+    "longitude": -85.748483
+   },
+   "geometry": {
+    "x": -85.74848299999996,
+    "y": 38.24933100000004
+   }
+  },
+  {
+   "attributes": {
+    "description": "I-71 at Old Brownsboro Rd",
+    "snapshot": "https://www.trimarc.org/images/milestone/CCTV_05_71_0103.jpg",
+    "status": "Online",
+    "latitude": 38.320179,
+    "longitude": -85.561249
+   },
+   "geometry": {
+    "x": -85.56124899999998,
+    "y": 38.32017900000005
+   }
+  }
+ ]
+}

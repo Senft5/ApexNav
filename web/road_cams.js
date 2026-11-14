@@ -1,24 +1,28 @@
-// Road cameras (2026-11-14): Ohio DOT's traffic cameras as an opt-in map layer (Layers → Road cameras). A tap on a camera
-// opens its current still picture of the road, from ODOT's own image server, to see snow, ice or a wet road before a drive.
+// Road cameras (2026-11-14): Ohio DOT's and Kentucky's (KYTC, TRIMARC) traffic cameras as an opt-in map layer (Layers → Road
+// cameras). A tap opens its current still picture of the road, from the agency's own image server, to see snow, ice or a wet
+// road before a drive.
 // Traffic cameras only: speed and plate cameras are the Cameras layer and Avoid cameras (web/cameras.js), never these.
-// The list comes from our Worker (GET /api/traffic/v1/cameras.json, backend/src/traffic.ts: the whole state, no position
+// The list comes from our Worker (GET /api/traffic/v1/cameras.json, backend/src/traffic.ts: whole states, no position
 // sent), kept for a day. During a drive the picture waits until you stop. Loaded lazily (lazy.js 'roadcams').
 // Pure helpers: geojson, pictureUrl (tests/test_road_cams.py).
 (function (root) {
   'use strict';
-  const SRC = 'roadcams', LAYER = 'roadcams-dots', KEEP_MS = 24 * 3600e3, HOST = 'https://itscameras.dot.state.oh.us/';
+  const SRC = 'roadcams', LAYER = 'roadcams-dots', KEEP_MS = 24 * 3600e3;
+  // each picture host, and whose cameras they are (a camera's src); a picture anywhere else is never loaded
+  const HOSTS = { 'https://itscameras.dot.state.oh.us/': 'Ohio DOT', 'https://www.trimarc.org/': 'Kentucky TRIMARC' };
+  const hostOf = (url) => typeof url === 'string' ? Object.keys(HOSTS).find((h) => url.startsWith(h)) || null : null;
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
   /** The Worker's cameras as a GeoJSON FeatureCollection of points (id, name); malformed ones and other hosts left out. */
   function geojson(json) {
     const cams = json && Array.isArray(json.cams) ? json.cams : [];
     return { type: 'FeatureCollection', features: cams.filter((c) => c && typeof c.id === 'string' && finite(c.lat) && finite(c.lon)
-        && Array.isArray(c.views) && c.views.some((v) => v && typeof v.url === 'string' && v.url.startsWith(HOST)))
+        && Array.isArray(c.views) && c.views.some((v) => v && hostOf(v.url)))
       .map((c) => ({ type: 'Feature', id: c.id, geometry: { type: 'Point', coordinates: [c.lon, c.lat] }, properties: { id: c.id, name: String(c.name || 'Road camera').slice(0, 60) } })) };
   }
   /** A picture's address made fresh (ODOT replaces the file every few minutes; a cached one would be stale), or null. */
   function pictureUrl(url, nowMs) {
-    if (typeof url !== 'string' || !url.startsWith(HOST)) return null;
+    if (!hostOf(url)) return null;
     return `${url}${url.includes('?') ? '&' : '?'}t=${Math.floor((finite(nowMs) ? nowMs : Date.now()) / 60000)}`;   // a new address each minute
   }
 
@@ -76,11 +80,12 @@
       ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', c.name);
       const close = () => { ov.remove(); root.document.removeEventListener('keydown', esc); };
       const esc = (e) => { if (e.key === 'Escape') close(); };
-      const img = el('img', { className: 'rc-pic', alt: `The road at ${c.name}, from Ohio DOT's camera` });
+      const who = HOSTS[hostOf(views[0].url)];
+      const img = el('img', { className: 'rc-pic', alt: `The road at ${c.name}, from ${who}'s camera` });
       const note = el('p', { className: 'note', textContent: 'Loading the picture…' });
       const show = (v) => {
         note.textContent = 'Loading the picture…';
-        img.onload = () => { note.textContent = 'Ohio DOT\'s camera. The picture is a few minutes old at most.'; };
+        img.onload = () => { note.textContent = `${who}'s camera. The picture is a few minutes old at most.`; };
         img.onerror = () => { note.textContent = 'This camera\'s picture isn\'t available right now.'; };
         img.src = pictureUrl(v.url, Date.now());
       };
@@ -106,7 +111,7 @@
     return { setLayer, open };
   }
 
-  const api = { geojson, pictureUrl, mount };
+  const api = { geojson, pictureUrl, ownerOf: (url) => HOSTS[hostOf(url)] || null, mount };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ApexRoadCams = api;
 })(typeof window !== 'undefined' ? window : globalThis);
