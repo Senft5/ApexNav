@@ -9747,11 +9747,14 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
     if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(style) });
     if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
     return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) }); });
-  // off until the owner says yes (his decision card of 2026-11-13): the flag apex.mapPlaces switches it on
+  // on by default since the owner said yes (2026-11-14); apex.mapPlaces = '0' turns it off
   await planPage(page, base);
   await page.waitForFunction(() => apexDebug.map.getLayer('apex-places'), null, { timeout: 10000 });
-  check(await page.evaluate(() => apexDebug.map.getLayoutProperty('apex-places', 'visibility')) === 'none', 'places are off by default, until the owner says yes');
-  await page.evaluate(() => localStorage.setItem('apex.mapPlaces', '1'));
+  await page.evaluate(() => localStorage.setItem('apex.mapPlaces', '0'));
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && apexDebug.map && apexDebug.map.getLayer('apex-places'), null, { timeout: 20000 });
+  check(await page.evaluate(() => apexDebug.map.getLayoutProperty('apex-places', 'visibility')) === 'none', 'the flag set to 0 still turns places off');
+  await page.evaluate(() => localStorage.removeItem('apex.mapPlaces'));
   await page.reload();
   await page.waitForFunction(() => window.apexDebug && apexDebug.map && apexDebug.map.getLayer('apex-places') && apexDebug.state.lastPosition, null, { timeout: 20000 });
   await page.evaluate(() => apexDebug.map.jumpTo({ center: [-84.615, 39.155] }));   // the map opens on what it last showed: back over you
