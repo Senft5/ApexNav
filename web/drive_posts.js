@@ -61,6 +61,16 @@
     }
     return out.map(([lat, lon]) => ({ lat, lon }));
   }
+  /** The stretch of a post's line from the point nearest a stage's start to the one nearest its end ([lat0, lon0, lat1,
+   *  lon1]), in the order driven; null when the ends aren't on the line (over 150 m off) or it's under two points. */
+  function stretch(pts, ends) {
+    if (!Array.isArray(pts) || pts.length < 2 || !Array.isArray(ends) || ends.length !== 4 || !ends.every(Number.isFinite)) return null;
+    const nearest = (la, lo) => { let best = -1, bd = Infinity; const k = Math.cos(la * Math.PI / 180);
+      pts.forEach(([a, b], i) => { const d = Math.hypot((a - la) * 111320, (b - lo) * 111320 * k); if (d < bd) { bd = d; best = i; } }); return bd <= 150 ? best : -1; };
+    const i = nearest(ends[0], ends[1]), j = nearest(ends[2], ends[3]);
+    if (i < 0 || j < 0 || j - i < 1) return null;
+    return pts.slice(i, j + 1);
+  }
   /** An SVG path for the line in a w×h box, north up, its shape kept (longitude scaled by the latitude), with a margin. */
   function lineSvg(pts, w, h, pad = 8) {
     if (!Array.isArray(pts) || pts.length < 2) return '';
@@ -101,6 +111,8 @@
     .feed-stages { display: grid; gap: 4px; }
     .feed-stages small { color: var(--panel-dim); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
     .feed-stages div { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--rule); padding-top: 4px; }
+    .feed-stages button.feed-stage { display: flex; justify-content: space-between; gap: 12px; width: 100%; border: 0; border-top: 1px solid var(--rule); background: none; color: inherit; font: inherit; text-align: left; padding: 4px 0 0; min-height: 40px; align-items: center; cursor: pointer; }
+    .feed-stages button.feed-stage span { text-decoration: underline; text-underline-offset: 3px; }
     .feed-stages span { overflow-wrap: anywhere; min-width: 0; }
     .feed-stages b { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
     .feed-card { border-top: 1px solid var(--rule); color: var(--panel-ink); display: grid; gap: 10px; padding: 14px 0 4px; }
@@ -249,7 +261,16 @@
       if (p.media) box.append(mediaBox(p));
       if (Array.isArray(p.stages) && p.stages.length) {                // the saved stages it went over, each with its Score
         box.append(el('div', { className: 'feed-stages' }, el('small', { textContent: p.stages.length === 1 ? 'Stage' : 'Stages' }),
-          ...p.stages.map((x) => el('div', {}, el('span', { textContent: x.name }), el('b', { textContent: x.score == null ? '--' : String(x.score) })))));
+          ...p.stages.map((x, si) => {
+            const row = el('div', {}, el('span', { textContent: x.name }), el('b', { textContent: x.score == null ? '--' : String(x.score) }));
+            const part = page.driveLine && Array.isArray(x.ends) ? stretch(pts, x.ends) : null;
+            if (!part) return row;
+            // a stage the server kept the ends of (on the line): a tap drives just that stretch of their line
+            const b = el('button', { type: 'button', className: 'feed-stage' }, ...row.childNodes);
+            b.setAttribute('aria-label', `Drive ${x.name}${x.score == null ? '' : `, ${p.mine ? 'your' : `@${p.handle || '?'}'s`} Score ${x.score}`}`);
+            b.addEventListener('click', () => { doc.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); page.driveLine(throughPoints(part, 6), { ...p, id: `${p.id}_s${si}`, title: x.name }); });
+            return b;
+          })));
       }
       const f = facts({ roads: p.roads }, fmtLen);
       if (f) box.append(el('p', { className: 'feed-facts', textContent: f }));
@@ -384,7 +405,8 @@
       const line = trimLine(d.lat, d.lon, page.inZone || (() => false));
       return { title: String(d.name || 'Drive').slice(0, 60), caption: caption || null, driven_on: d.driven_on, length_m: Number.isFinite(d.len_m) ? Math.round(d.len_m) : null,
         score: Number.isFinite(d.score) ? Math.round(d.score) : null, roads: (d.roads || []).slice(0, 8), line: line ? encode(line) : null, crew_id: to || null,
-        stages: (d.stages || []).filter((x) => x && x.name).slice(0, 3).map((x) => ({ name: String(x.name).slice(0, 60), score: Number.isFinite(x.score) ? Math.round(x.score) : null })) };
+        stages: (d.stages || []).filter((x) => x && x.name).slice(0, 3).map((x) => ({ name: String(x.name).slice(0, 60), score: Number.isFinite(x.score) ? Math.round(x.score) : null,
+          ...(Array.isArray(x.ends) && x.ends.length === 4 && x.ends.every(Number.isFinite) ? { ends: x.ends } : {}) })) };
     }
     /** One tap (2026-11-14, the drive's card): the drive to your friends, no sheet. Resolves its id, or null (said in a toast). */
     async function post(d) {
@@ -484,6 +506,6 @@
     return { section, full, open, compose, post, remove, card, drivesOf };
   }
 
-  const api = { trimLine, encode, decode, throughPoints, lineSvg, ago, facts, mount, CUT_M, MAX_POINTS };
+  const api = { trimLine, encode, decode, throughPoints, stretch, lineSvg, ago, facts, mount, CUT_M, MAX_POINTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDrivePosts = api;
 })(typeof window !== 'undefined' ? window : globalThis);

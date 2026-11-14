@@ -53,6 +53,18 @@ export function cutLine(pts: [number, number][]): [number, number][] | null {
   return thin.slice(0, MAX_POINTS);
 }
 
+/** Whether (lat, lon) lies within ON_LINE_M of the polyline (each segment, in a flat frame about the point). */
+export const ON_LINE_M = 60;
+export function onLine(pts: [number, number][], lat: number, lon: number): boolean {
+  const k = Math.cos(lat * Math.PI / 180), xy = (p: [number, number]) => [(p[1] - lon) * 111320 * k, (p[0] - lat) * 111320];
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = xy(pts[i - 1]), [bx, by] = xy(pts[i]), dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
+    const t = L > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L)) : 0;
+    if (Math.hypot(ax + t * dx, ay + t * dy) <= ON_LINE_M) return true;
+  }
+  return false;
+}
+
 const NOT_BLOCKED = (who: string) => `NOT EXISTS (SELECT 1 FROM blocks bk WHERE (bk.blocker = ?1 AND bk.blocked = ${who}) OR (bk.blocker = ${who} AND bk.blocked = ?1))`;
 /** Who sees a post p (the viewer is ?1): its author; else, not across a block and not hidden by reports, the author's friends
  *  they share with (a post to friends: the per-friend Share switch, grants.share_scores, which a post's Score falls under)
@@ -91,10 +103,11 @@ export async function postCreate(env: Env, v: Viewer, req: Request): Promise<{ i
   const roads = names(b.roads, 8, "roads");
   if (b.stages !== undefined && b.stages !== null && (!Array.isArray(b.stages) || b.stages.length > 3)) throw new HttpError(400, "bad_stages");
   const stages = ((b.stages as unknown[]) || []).map((s) => {
-    const o = (s && typeof s === "object" ? s : {}) as { name?: unknown; score?: unknown };
+    const o = (s && typeof s === "object" ? s : {}) as { name?: unknown; score?: unknown; ends?: unknown };
     const n = cleanText(o.name, 60)?.trim(), sc = o.score === null || o.score === undefined ? null : Number(o.score);
     if (!n || (sc !== null && !(Number.isInteger(sc) && sc >= 0 && sc <= 1000))) throw new HttpError(400, "bad_stages");
-    return { name: n, score: sc };
+    const e = Array.isArray(o.ends) && o.ends.length === 4 && o.ends.every((x) => typeof x === "number" && Number.isFinite(x)) ? (o.ends as number[]).map((x) => Math.round(x * 1e5) / 1e5) : null;
+    return { name: n, score: sc, ends: e };
   });
   let line: string | null = null;
   if (b.line !== undefined && b.line !== null && b.line !== "") {
@@ -102,6 +115,9 @@ export async function postCreate(env: Env, v: Viewer, req: Request): Promise<{ i
     const cut = cutLine(decodeLine(b.line));
     line = cut ? encodeLine(cut) : null;
   }
+  // a stage's ends are kept only where both lie on the line as kept (its own ends cut): never a point the line hides
+  const kept = line ? decodeLine(line) : null;
+  const stagesOut = stages.map(({ name, score, ends }) => (ends && kept && onLine(kept, ends[0], ends[1]) && onLine(kept, ends[2], ends[3]) ? { name, score, ends } : { name, score }));
   const crew = b.crew_id === undefined || b.crew_id === null || b.crew_id === "" ? null : String(b.crew_id);
   if (crew && !(await isCrewMember(env, crew, v.id))) throw new HttpError(404, "no_crew");
   const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM drive_posts WHERE author = ? AND created_at > datetime('now', '-1 day')").bind(v.id).first<{ n: number }>();
@@ -109,7 +125,7 @@ export async function postCreate(env: Env, v: Viewer, req: Request): Promise<{ i
   const id = randomToken(12);
   await env.DB.prepare(`INSERT INTO drive_posts (id, author, crew_id, title, caption, driven_on, length_m, score, roads, stages, line) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(id, v.id, crew, title, caption, day, length === null ? null : Math.round(length), score, roads.length ? JSON.stringify(roads) : null,
-      stages.length ? JSON.stringify(stages) : null, line).run();
+      stagesOut.length ? JSON.stringify(stagesOut) : null, line).run();
   return { id };
 }
 
@@ -125,7 +141,7 @@ const SELECT = `SELECT p.id, p.author, u.handle, u.photo_id, p.crew_id, c.name A
 const shape = (r: Row, me: string) => ({
   id: r.id, handle: r.handle, photo_id: r.photo_id, mine: r.author === me, crew: r.crew_id ? { id: r.crew_id, name: r.crew_name } : null,
   title: r.title, caption: r.caption, driven_on: r.driven_on, length_m: r.length_m, score: r.score,
-  roads: r.roads ? (JSON.parse(r.roads) as string[]) : [], stages: r.stages ? (JSON.parse(r.stages) as { name: string; score: number | null }[]) : [],
+  roads: r.roads ? (JSON.parse(r.roads) as string[]) : [], stages: r.stages ? (JSON.parse(r.stages) as { name: string; score: number | null; ends?: number[] }[]) : [],
   line: r.line, media: (() => { const m = mediaOf(r.media); return m ? { kind: m.kind, label: m.label } : null; })(), created_at: r.created_at, kudos: r.kudos, my_kudos: !!r.my_kudos, comments: r.comments,
 });
 
