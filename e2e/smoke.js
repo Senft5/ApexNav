@@ -5412,6 +5412,39 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
   await page.waitForFunction(() => /Sign in to follow a roadbook/.test(document.getElementById('toast').textContent));
 }, { geolocation: { latitude: 35.6, longitude: -83.8 }, permissions: ['geolocation'] });
 
+flow('roadbooks: Drive them all routes from where you are through the book\'s roads, nearest first, each from its nearer end (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  // three roads going north ([lon, lat]): A near you, B beyond it (drawn south to north), C past B but drawn north to south
+  const road = (lat0, n, dir = 1) => { const g = Array.from({ length: n }, (_, i) => [-83.8 + Math.sin(i / 5) * 3e-4, lat0 + i * 3e-4]); return dir > 0 ? g : g.reverse(); };
+  const A = road(35.62, 40), B = road(35.70, 40), C = road(35.78, 40, -1), far = road(37.5, 40);
+  const book = { id: 'BBBBBBBBBBBBBBBB', name: 'Smokies day out', about: null, visibility: 'public', by: 'cara', mine: false, followers: 2, following: true, lat: 35.7, lon: -83.8,
+    road_list: [{ id: 'c', name: 'Road C', geom: C, length_m: 1300, stamps: 0, stamped: false }, { id: 'f', name: 'Far road', geom: far, length_m: 1300, stamps: 0, stamped: false },
+      { id: 'a', name: 'Road A', geom: A, length_m: 1300, stamps: 0, stamped: false }, { id: 'b', name: 'Road B', geom: B, length_m: 1300, stamps: 0, stamped: false }] };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/roadbooks/BBBBBBBBBBBBBBBB') return json({ ...book, roads: 4, length_m: 5200 });
+    if (u.pathname === '/api/roadbooks') return json({ mine: [], following: [] });
+    return json([]);
+  });
+  const asked = [];
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => { const req = JSON.parse(route.request().postData() || '{}'); asked.push(req.locations);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) }); });
+  await page.goto(base + '/index.html?roadbook=BBBBBBBBBBBBBBBB');
+  await page.waitForSelector('.rb-pop.open button:has-text("Drive them all")', { timeout: 15000 });
+  await page.click('.rb-pop.open button:has-text("Drive them all")');
+  await page.waitForFunction(() => window.apexDebug && apexDebug.track && apexDebug.track.id === 'roadbook_all_BBBBBBBBBBBBBBBB', null, { timeout: 20000 });
+  const locs = asked.find((l) => Array.isArray(l) && l.length > 3) || [];
+  const near = (a, q) => Math.abs(a.lat - q[1]) < 1e-4 && Math.abs(a.lon - q[0]) < 1e-4;
+  const at = (q) => locs.findIndex((l) => near(l, q));
+  const order = [at(A[0]), at(A[A.length - 1]), at(B[0]), at(B[B.length - 1]), at(C[C.length - 1]), at(C[0])];
+  check(near(locs[0], [-83.8, 35.6]) && order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1])) && at(far[0]) < 0 && at(far[far.length - 1]) < 0 && locs.length <= 10,
+    'from where you are, then A, B and C in that order, C from its north end, the far road left out: ' + JSON.stringify({ order, n: locs.length }));
+  const after = await page.evaluate(() => ({ note: document.getElementById('routeProgress').textContent, req: apexDebug.track.request, name: apexDebug.track.name }));
+  check(after.name === 'Smokies day out' && /^3 roads of its 4 from Smokies day out, nearest first: [\d.]+ (mi|km)$/.test(after.note), 'the card says how many of its roads, nearest first: ' + JSON.stringify({ note: after.note, name: after.name }));
+  check(after.req && after.req.from === null && after.req.via.length >= 5 && after.req.via.every((v) => v.shaping), 'a reroute keeps to the roads: ' + JSON.stringify(after.req && after.req.via.length));
+}, { geolocation: { latitude: 35.6, longitude: -83.8 }, permissions: ['geolocation'] });
+
 flow('crash check: a hard impact then a stop asks "Are you OK?"; no answer offers a call and a text to the contact (IDEAS D-17)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.crashContact', JSON.stringify({ name: 'Sam', phone: '+1 555 010 2030' })); } catch (_) {} });
   await page.goto(base + '/index.html');
