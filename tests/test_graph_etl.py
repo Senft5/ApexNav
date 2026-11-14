@@ -378,3 +378,26 @@ console.log(JSON.stringify(process.argv.slice(2).map((f) => { const b = fs.readF
         assert j["n"] == len(r["nodes"]["lat"]) and j["e"] == len(r["edges"]["to"]) and j["r"] == len(r["restrictions"])
         assert j["q"] == r["edges"]["quality"] and j["t"] == r["edges"]["t_ds"]
         assert j["g"] == pytest.approx([x / 1e6 for p in r["geom"](j["e"] - 1) for x in p], abs=1e-9)
+
+
+def test_a_box_with_no_road_chain_writes_an_empty_index(tmp_path):
+    """The lower-48 build's Lake Superior shore block (48N 89W): drivable ways but no chain left once car parks are left
+    out. An empty index and no tiles, not a crash (an empty array of lines broke shapely's query, failing the band)."""
+    d = 0.001
+    nodes = {k: (39.1, -84.5 + (k - 1) * d, {}) for k in range(1, 4)}
+    nodes[7] = (39.1005, -84.499, {"shop": "general", "name": "Store"})        # a business: near_counts had lines to query
+    ways = {1: ([1, 2, 3], {"highway": "service", "service": "parking_aisle"})}
+    p = tmp_path / "x.osm.pbf"
+    write_osm(p, nodes, ways)
+    out = tmp_path / "v1"
+    from tools.graph_etl import build
+    assert build.main(["--pbf", str(p), "--tiles=-84.51,39.09,-84.49,39.11", "--out", str(out), "--work", str(tmp_path / "w"), "--ctx", ""]) == 0
+    ix = json.load(open(out / "index.json"))
+    assert ix["tiles"] == {} and ix["build"] is None
+    assert not list(out.glob("*.vgr"))
+
+
+def test_near_counts_with_no_chains_is_empty():
+    from types import SimpleNamespace
+    from tools.graph_etl import features as F
+    assert F.near_counts(SimpleNamespace(chains=[], coords=[]), [(39.1, -84.5)], 30).shape == (0,)

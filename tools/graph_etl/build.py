@@ -447,16 +447,25 @@ def main(argv=None):
     log(f"{len(raw.ways)} drivable ways, {len(raw.pois)} businesses, {len(raw.buildings)} buildings, "
         f"{len(raw.landuse)} land-use polygons, {len(raw.restrictions)} restrictions")
     today = dt.date.today()
-    if not raw.ways:
-        # nothing drivable in this box (a lake, a state the extract doesn't cover): an empty index, no tiles
+
+    def nothing(why):
+        # nothing to route on in this box (a lake, a state the extract doesn't cover, one track in a wilderness): an
+        # empty index, no tiles
         with open(os.path.join(a.out, "index.json"), "w") as fh:
             json.dump({"version": T.VERSION, "build": None, "built": today.isoformat(), "bbox": [w, s, e, n], "tiles": {}, "bytes": 0}, fh)
-        log("no drivable ways here: nothing written")
+        log(f"{why}: nothing written")
         return 0
+
+    if not raw.ways:
+        return nothing("no drivable ways here")
     chains, _ = G.build_chains(raw)
     chains, trimmed = trim_service(chains, raw.coords)
     chains = split_long(raw, chains)
     log(f"{trimmed} car-park / campus service chains left out")
+    if not chains:
+        # the Lake Superior shore block (48N 89W) in the first lower-48 build: one way, no chain, and an empty array
+        # of lines broke shapely's query
+        return nothing("no road chains here")
     g, f = features(raw, chains)
     if a.dem_cache:
         tw = (i0 * T.TILE_DEG - 180, j0 * T.TILE_DEG - 90, (i1 + 1) * T.TILE_DEG - 180, (j1 + 1) * T.TILE_DEG - 90)
