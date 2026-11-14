@@ -2828,7 +2828,7 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
     .catch(async () => { throw new Error('the saved route from the car never opened: ' + JSON.stringify(await page.evaluate(() => window.apexDebug.track && window.apexDebug.track.id))); });
   await page.evaluate(() => { ApexSavedRoutes.remove(localStorage, 'saved_e2e'); localStorage.removeItem('apex.pinnedPlaces'); });
   // Nearby on the car (Apple Maps' Gas, Coffee, Food): the kinds head Places, and one kind comes back nearest first by name
-  check(placesCar.nearby && placesCar.nearby.map((k) => k.name).join('|') === 'Gas|Coffee|Food', 'Nearby heads the car\'s Places: ' + JSON.stringify(placesCar.nearby));
+  check(placesCar.nearby && placesCar.nearby.map((k) => k.name).join('|') === 'Gas|Coffee|Food|Parking', 'Nearby heads the car\'s Places: ' + JSON.stringify(placesCar.nearby));
   await page.evaluate(() => { window.__pois = ApexStages.poisAll; window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true });
     ApexStages.poisAll = async () => [{ cls: 'fuel', sub: '', name: 'Shell', lat: 35.6, lon: -84.09 }, { cls: 'fuel', sub: '', name: 'Pilot', lat: 35.601, lon: -84.1 },
       { cls: 'cafe', name: 'Bean There', lat: 35.6, lon: -84.1 }];
@@ -6692,6 +6692,51 @@ flow('drive posts: Drive it from somewhere else leads from where you are to the 
   check(after.req && after.req.from === null && near(after.req.to, pts[pts.length - 1]) && after.req.via.length >= 8 && after.req.via.every((v) => v.shaping), 'a reroute keeps to their line (its stops kept as shaping points): ' + JSON.stringify(after.req && { to: after.req.to, via: after.req.via.length }));
 }, { geolocation: { latitude: 35.25, longitude: -84.1 }, permissions: ['geolocation'] });
 
+flow('drive posts: after you drive a friend\'s posted stage, the end card sets your Score there against theirs, once (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { window.APEX_INLINE_JOBS = true; localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const enc = (pts) => { let o = '', a0 = 0, b0 = 0; const e = (v) => { v = v < 0 ? ~(v << 1) : v << 1; while (v >= 32) { o += String.fromCharCode((32 | (v & 31)) + 63); v >>= 5; } o += String.fromCharCode(v + 63); };
+    for (const [a, b] of pts) { const x = Math.round(a * 1e5), y = Math.round(b * 1e5); e(x - a0); e(y - b0); a0 = x; b0 = y; } return o; };
+  const pts = Array.from({ length: 200 }, (_, i) => [35.3 + i * 0.001, -84.1 + Math.sin(i / 6) * 0.004]);
+  const bobPost = { id: 'P1AAAAAAAAAAAAAA', handle: 'bob', photo_id: null, mine: false, crew: null, title: 'Cherohala Skyway', caption: '', driven_on: '2026-11-12',
+    length_m: 22000, score: 812, roads: [], line: enc(pts), created_at: new Date(Date.now() - 2 * 3600e3).toISOString().slice(0, 19).replace('T', ' '), kudos: 0, my_kudos: false, comments: 0,
+    stages: [{ name: 'Skyway summit', score: 801, ends: [pts[40][0], pts[40][1], pts[120][0], pts[120][1]] }] };
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/feed') return json([bobPost]);
+    return json([]);
+  });
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => { const req = JSON.parse(route.request().postData() || '{}');
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) }); });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card .feed-stage', { timeout: 15000 });
+  await page.click('#accountBody .feed-card .feed-stage');
+  await page.waitForFunction(() => window.apexDebug && apexDebug.track && apexDebug.track.id === 'post_P1AAAAAAAAAAAAAA_s0', null, { timeout: 20000 });
+  // your drive along bob's line, a fix every few metres; its pass of the stage is found by the real segmentPass, scored 780
+  const end = (id) => page.evaluate(async ([pts, id]) => {
+    const real = ApexCore.segmentPass;
+    ApexCore.segmentPass = (seg, d) => { const p = real(seg, d); return p && { ...p, score: 780 }; };
+    const lat = [], lon = [];
+    for (let i = 0; i + 1 < pts.length; i++) for (let k = 0; k < 22; k++) { lat.push(pts[i][0] + (pts[i + 1][0] - pts[i][0]) * k / 22); lon.push(pts[i][1] + (pts[i + 1][1] - pts[i][1]) * k / 22); }
+    const dist = [0]; for (let i = 1; i < lat.length; i++) dist.push(dist[i - 1] + Math.hypot((lat[i] - lat[i - 1]) * 110540, (lon[i] - lon[i - 1]) * 111320 * Math.cos(lat[i] * Math.PI / 180)));
+    const d = { id, name: 'Skyway summit', date: new Date().toISOString(), lat, lon, dist, speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] };
+    await ApexRecording.store(d);
+    apexDebug.showEndCard(d, Date.now() - 30 * 60000, { quiet: true });
+  }, [pts, id]);
+  await end('rv1');
+  await page.waitForFunction(() => document.getElementById('endRival').textContent, null, { timeout: 15000 });
+  const r = await page.evaluate(() => ({ text: document.getElementById('endRival').textContent, hidden: document.getElementById('endRival').hidden }));
+  check(r.text === 'Skyway summit: 780, 21 under @bob\'s 801.' && !r.hidden, 'the end card sets your Score on bob\'s stage against his: ' + JSON.stringify(r));
+  // said once: the next drive over it is just a drive
+  await page.click('#endDone');
+  await end('rv2');
+  await page.waitForFunction(() => document.getElementById('endCard').classList.contains('show') && !document.getElementById('endScore').hasAttribute('aria-busy'), null, { timeout: 15000 });
+  await page.waitForTimeout(800);
+  check(await page.evaluate(() => document.getElementById('endRival').hidden && !document.getElementById('endRival').textContent), 'the comparison is said once');
+});
+
 flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew with its ends cut; the Feed on People shows friends\' posts with kudos and comments one tap in (Worker stubbed, docs/SOCIAL.md 2.13)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1');
     // a stage saved in the Log, on the drive posted below
@@ -10553,7 +10598,7 @@ flow('find nearby: Where to? has Gas, Coffee and Food; a key, or "gas near me" t
       { cls: 'fuel', sub: null, name: 'Shell', lat, lon: lon + 0.0116 }, { cls: 'restaurant', name: null, lat: lat + 0.2, lon }]; }; });
   await tap('#destInput', 'Where to?');
   const keys = await page.evaluate(() => [...document.querySelectorAll('#nearbyKeys .chip')].map((b) => ({ t: b.textContent, h: Math.round(b.getBoundingClientRect().height), l: b.getAttribute('aria-label') })));
-  check(keys.map((k) => k.t).join() === 'Gas,Coffee,Food' && keys.every((k) => k.h >= 44 && / nearby$/.test(k.l)), 'three keys under Where to?: ' + JSON.stringify(keys));
+  check(keys.map((k) => k.t).join() === 'Gas,Coffee,Food,Parking' && keys.every((k) => k.h >= 44 && / nearby$/.test(k.l)), 'four keys under Where to? (Parking 2026-11-14): ' + JSON.stringify(keys));
   // each named place's own hours, in one Overpass request for the list (place_info.js lookupMany): the café open all day
   const overpass = [];
   await page.route(/^https:\/\/overpass/, (route) => { const q = decodeURIComponent((route.request().postData() || '').replace(/^data=/, '')); overpass.push(q);
@@ -10651,7 +10696,7 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
   // then whether it is open, and Call and Website, from its own tags (2026-11-14, as Apple Maps' card)
   await page.waitForFunction(() => !document.getElementById('pinHours').hidden && !document.getElementById('pinContact').hidden, null, { timeout: 5000 });
   const more = await page.evaluate(() => ({ hours: document.getElementById('pinHours').textContent, keys: [...document.querySelectorAll('#pinContact a')].map((a) => [a.textContent, a.getAttribute('href'), a.getBoundingClientRect().height]) }));
-  check(more.hours === 'Open 24 hours' && JSON.stringify(more.keys.map((k) => k.slice(0, 2))) === '[["Call","tel:+15135550101"],["Website","https://beanthere.example.com/"]]' && more.keys.every((k) => k[2] >= 44)
+  check(more.hours === 'Open 24 hours' && JSON.stringify(more.keys.map((k) => k.slice(0, 2))) === '[["Call","tel:+15135550101"],["Website","https://beanthere.example.com/"]]' && more.keys.every((k) => Math.round(k[2]) >= 44)
     && /"name"="Bean There Coffee"/.test(asked), 'the card says it is open and offers Call and Website: ' + JSON.stringify({ more, asked }));
   // and a street photo of it at the top, the one facing it, with who took it (2026-11-14, as Apple and Google Maps lead with one)
   await page.waitForFunction(() => !document.getElementById('pinPhoto').hidden, null, { timeout: 5000 })

@@ -34,6 +34,9 @@ console.log(JSON.stringify({
   food: N.list(pois, here, 'food').map((r) => r.label), none: N.list(pois, null, 'food'), max: N.list(pois, here, 'coffee', { max: 1 }).length,
   words: ['gas', 'Gas station', 'coffee near me', 'Cafés', 'food', 'restaurants nearby', 'gasoline alley', 'Gas'].map((q) => N.categoryOf(q, false)),
   ev: N.categoryOf('gas', true), keys: N.keys(false), evKeys: N.keys(true),
+  parkWords: ['parking', 'Parking near me', 'car park', 'parking garage', 'park', 'Eden Park'].map((q) => N.categoryOf(q, false)),
+  parking: N.list([{ cls: 'parking', name: null, lat: here.lat + dLat, lon: here.lon }, { cls: 'bicycle_parking', name: 'Bikes', lat: here.lat, lon: here.lon },
+    { cls: 'parking', name: 'Olympic Garage', lat: here.lat + 2 * dLat, lon: here.lon }], here, 'parking').map((r) => r.label),
   grid3: N.gridPoints(39.2, -84.6, 3).length, grid8: N.gridPoints(39.2, -84.6, 8).length, gridBad: N.gridPoints(NaN, 0, 3).length,
   empty: N.emptyLine('food', false, 8, (m) => `${(m / 1609.344).toFixed(0)} mi`), failed: N.emptyLine('food', true),
 }));
@@ -47,8 +50,10 @@ def test_find_nearby():
     assert out["gas"] == ["Shell"] and out["charge"] == ["Tesla Supercharger"], "the tiles file chargers under fuel"
     assert out["food"] == ["Skyline Chili", "Pho Real"] and out["none"] == [] and out["max"] == 1
     assert out["words"] == ["gas", "gas", "coffee", "coffee", "food", "food", None, "gas"]
-    assert out["ev"] == "charge" and out["keys"] == ["gas", "coffee", "food"] and out["evKeys"] == ["charge", "coffee", "food"]
+    assert out["ev"] == "charge" and out["keys"] == ["gas", "coffee", "food", "parking"] and out["evKeys"] == ["charge", "coffee", "food", "parking"]
     assert 0 < out["grid3"] < out["grid8"] <= 81 and out["gridBad"] == 0
+    assert out["parkWords"] == ["parking"] * 4 + [None, None], "a park is a place, never the parking list"
+    assert out["parking"] == ["Parking lot", "Olympic Garage"], "car parks only, never bike stands; an unnamed one is a parking lot"
     assert out["empty"] == "No food on the map within 5 mi." and "didn't load" in out["failed"]
 
 

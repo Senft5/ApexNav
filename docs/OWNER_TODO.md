@@ -24,6 +24,10 @@ Variables and Secrets → add secret **`CTX_KEYS`** with JSON like `{"seatgeekCl
 "ohgoApiKey": "…", "nassApiKey": "…"}` (leave out any you skip). Phones fetch them within a day; nothing is
 in the code. Until then each source is simply unknown on the route card, never guessed.
 
+**Fix (2026-11-14):** the `seatgeekClientId` in CTX_KEYS is refused by SeatGeek ("Invalid client credentials", 403). Copy the
+**Client ID** (not the secret) from seatgeek.com/account/develop and put it back in CTX_KEYS; event traffic stays unknown
+until then. The `nassApiKey` is no longer handed to phones (USDA's API can't be read from an app), so it can stay or go.
+
 | what | why | how long |
 |---|---|---|
 | **SeatGeek client id**: seatgeek.com/account/develop → New App (name Vetta), accept the API terms, copy the Client ID | NFL, MLS, NBA, NHL, college games, races and big concerts near a route at the hour you'd pass (MLB already works without a key). Without it only baseball traffic is known | 5 min |
