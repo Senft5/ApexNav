@@ -10,6 +10,7 @@
 import { Env, HttpError } from "./util";
 import { serverError } from "./errors";
 import { Viewer } from "./auth";
+import { POST_SEEN } from "./drive_posts";
 import { apnsConfigured, sendAlert, TOKEN, type ApnsEnv } from "./apns";
 
 const MAX_TOKENS = 3;
@@ -98,6 +99,7 @@ export const PUSH = {
   duelOn: (from: string | null, stage: string): Push => ({ kind: "duel", title: "Duel on", body: `${at(from)} took your duel on ${stage}.`, link: `${LINK}?view=friends` }),
   postKudos: (from: string | null, title: string, post: string): Push => ({ kind: "post_kudos", title: "Kudos", body: `${at(from)} gave kudos to ${title}.`, link: `${LINK}?view=friends&post=${post}` }),
   postComment: (from: string | null, title: string, post: string): Push => ({ kind: "post_comment", title, body: `${at(from)} commented on your drive.`, link: `${LINK}?view=friends&post=${post}` }),
+  postAlso: (from: string | null, owner: string | null, title: string, post: string): Push => ({ kind: "post_comment", title, body: `${at(from)} also commented on ${owner ? `@${owner}'s` : "a"} drive.`, link: `${LINK}?view=friends&post=${post}` }),
   crewDrive: (crew: string, title: string, by: string | null): Push => ({ kind: "crew_drive", title: crew, body: `${at(by)} planned ${title}. Are you going?`, link: `${LINK}?view=crews` }),
 };
 
@@ -142,7 +144,17 @@ export async function afterPostKudos(env: Env, v: Viewer, post: string, author: 
   await notify(env, [author], PUSH.postKudos(v.handle, title, post));
 }
 
-/** A comment on your drive post, from someone else. Never the comment's words: a push is seen on a lock screen. */
+/** A comment on your drive post, from someone else; and to the others who commented on it before (who can still see it,
+ *  and neither blocked nor blocked by this commenter), as any social app does. Never the comment's words: a push is seen
+ *  on a lock screen. */
 export async function afterPostComment(env: Env, v: Viewer, post: string, author: string, title: string): Promise<void> {
   if (author !== v.id) await notify(env, [author], PUSH.postComment(v.handle, title, post));
+  if (!pushConfigured(env)) return;
+  const seen = POST_SEEN("p").replaceAll("?1", "c.author");   // the post as each earlier commenter sees it
+  const r = await env.DB.prepare(`SELECT DISTINCT c.author AS id, ou.handle AS owner FROM drive_comments c JOIN drive_posts p ON p.id = c.post_id JOIN users ou ON ou.id = p.author
+     WHERE c.post_id = ?2 AND c.author != ?3 AND c.author != p.author
+       AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = c.author AND b.blocked = ?3) OR (b.blocker = ?3 AND b.blocked = c.author)) AND ${seen}
+     LIMIT 20`).bind(null, post, v.id).all<{ id: string; owner: string | null }>();
+  const rows = r.results;
+  if (rows.length) await notify(env, rows.map((x) => x.id), PUSH.postAlso(v.handle, rows[0].owner, title, post));
 }

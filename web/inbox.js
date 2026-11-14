@@ -1,6 +1,7 @@
 // For you (docs/SOCIAL.md 2.10; backend/src/inbox.ts): one list of what happened to you socially, newest first: a friend
 // topping your best Score on one of your stages, someone passing your time in this week's time attack, kudos, a duel
-// accepted or decided, new followers of a roadbook, a crew drive you haven't answered. Each row says it in a sentence and
+// accepted or decided, new followers of a roadbook, a crew drive you haven't answered, kudos and comments on your drive
+// posts (and new comments on a post you commented on). Each row says it in a sentence and
 // has at most one key that takes you there. What you have seen is kept on this phone (`apex.inboxSeen`, the server's own
 // clock), so the People tab's badge counts only what is new, plus what waits on you (friend requests, duels asked).
 // line(), fresh(), ago() are pure (tests/test_inbox.py); mount() draws the section on People → Friends.
@@ -24,6 +25,7 @@
     return d <= 1 ? 'yesterday' : `${d} days ago`;
   }
   const secs = (s) => (s < 60 ? `${Math.round(s)} s` : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`);
+  const others = (n) => (n > 0 ? ` and ${n === 1 ? '1 other' : `${n} others`}` : '');
   const nth = (n) => { const v = n % 100; return `${n}${v >= 11 && v <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th')}`; };
   const when = (iso) => {
     const t = tsOf(iso && iso.length > 19 ? iso.slice(0, 19).replace('T', ' ') : iso);
@@ -34,7 +36,8 @@
 
   /**
    * What one row says. i: an item of GET /api/inbox. → { kicker, text, key: null | { label, act } } where act is one of
-   * 'stage' (plan the stage), 'board' (this week's time attack), 'book' (open the roadbook), 'crews' (Crew drives). null
+   * 'stage' (plan the stage), 'board' (this week's time attack), 'book' (open the roadbook), 'crews' (Crew drives), 'post'
+   * (open the drive post). null
    * for a kind this build doesn't know (an older phone against a newer server shows nothing rather than something wrong).
    */
   function line(i) {
@@ -50,6 +53,9 @@
       }
       case 'follows': return { kicker: 'Roadbook', text: i.n === 1 ? `Someone new follows ${i.book}.` : `${i.n} new people follow ${i.book}.`, key: { label: 'Open', act: 'book' } };
       case 'crew_drive': { const d = when(i.starts_at); return { kicker: 'Crew drive', text: `${i.crew}: ${i.title}${d ? `, ${d}` : ''}. Are you going?`, key: { label: 'Answer', act: 'crews' } }; }
+      case 'post_kudos': return { kicker: 'Kudos', text: `${who}${others(i.others)} gave kudos to ${i.title || 'your drive'}.`, key: { label: 'Open', act: 'post' } };
+      case 'post_comment': return { kicker: 'Comment', text: i.yours ? `${who}${others(i.others)} commented on ${i.title || 'your drive'}.`
+        : `${who}${others(i.others)} also commented on ${i.owner ? `@${i.owner}’s` : 'a'} ${i.title || 'drive'}.`, key: { label: 'Open', act: 'post' } };
       case 'request': return { kicker: 'Friend request', text: `${who} wants to be your friend.`, key: null };
       case 'duel_ask': return { kicker: 'Duel', text: `${who} challenged you on ${stage}.`, key: null };
       default: return null;
@@ -77,7 +83,7 @@
   /**
    * page: el, btn, apiCall, jsonOf, signedIn() (a member is signed in), badge(n, data) (paints the People tab),
    * onScreen() (People → Friends is the open view),
-   * openStage(canonId, name), openBoard(), openBook(id), openCrews().
+   * openStage(canonId, name), openBoard(), openBook(id), openCrews(), openPost(id).
    */
   function mount(page) {
     const { el, btn, apiCall, jsonOf } = page;
@@ -103,6 +109,7 @@
       if (act === 'board') return page.openBoard();
       if (act === 'book') return page.openBook(i.book_id);
       if (act === 'crews') return page.openCrews();
+      if (act === 'post') return page.openPost ? page.openPost(i.post_id) : null;
       return null;
     };
 

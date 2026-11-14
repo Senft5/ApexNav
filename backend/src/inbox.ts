@@ -1,13 +1,16 @@
 // For you (docs/SOCIAL.md 2.10): one list of what happened to you socially, newest first, made only from what each part
 // already shows you elsewhere (no new table, nothing new shared). A friend topping your best Score on one of your stages,
 // someone passing your time in this week's time attack, kudos on your runs, a duel decided or accepted, new followers
-// of your roadbooks, a crew drive you haven't answered; and what waits on you (friend requests, duels asked of you).
+// of your roadbooks, a crew drive you haven't answered, kudos and comments on your drive posts (and new comments on a post
+// you commented on); and what waits on you (friend requests, duels asked of you).
 // What has been seen is kept on the phone (web/inbox.js), so this needs no write and no migration.
 import type { Viewer } from "./auth";
 import type { Env } from "./util";
 import { VISIBLE_FROM_OTHERS } from "./social";
 import { kudosReceived } from "./kudos";
 import { duelList } from "./duels";
+import { POST_SEEN } from "./drive_posts";
+import { reportedSql } from "./reports_sql";
 
 export const DAYS = 14, TOPPED_DAYS = 7, MAX_ITEMS = 40;
 const all = async <T>(env: Env, sql: string, ...a: unknown[]) => (await env.DB.prepare(sql).bind(...a).all<T>()).results;
@@ -15,6 +18,18 @@ const NO_BLOCK = (a: string, b: string) => `NOT EXISTS (SELECT 1 FROM blocks k W
 const WEEK = "date('now', '-6 days', 'weekday 1')";
 
 export type Item = { kind: string; at: string; [k: string]: unknown };
+
+type PostRow = { post_id: string; title: string; handle: string; at: string; yours: number; owner: string | null };
+/** One row per post, newest first (the rows come newest first): who did it last, how many others, whose post it is. */
+export function perPost(rows: PostRow[], max = 10) {
+  const by = new Map<string, { post_id: string; title: string; handle: string; at: string; yours: boolean; owner: string | null; people: Set<string> }>();
+  for (const r of rows) {
+    const g = by.get(r.post_id);
+    if (g) g.people.add(r.handle);
+    else if (by.size < max) by.set(r.post_id, { post_id: r.post_id, title: r.title, handle: r.handle, at: r.at, yours: !!r.yours, owner: r.yours ? null : r.owner, people: new Set([r.handle]) });
+  }
+  return [...by.values()].map(({ people, ...g }) => ({ ...g, others: people.size - 1 }));
+}
 
 /** A finished duel, from the viewer's side: won, lost, draw, or none (nobody's run reached the other). */
 export function duelOutcome(d: { kind: string; you: { score: number; time_s: number | null } | null; them: { score: number; time_s: number | null } | null }) {
@@ -30,7 +45,7 @@ export function duelOutcome(d: { kind: string; you: { score: number; time_s: num
 
 export async function inbox(env: Env, v: Viewer) {
   const me = v.id;
-  const [requests, topped, passed, passedFixed, kudos, duels, follows, drives] = await Promise.all([
+  const [requests, topped, passed, passedFixed, kudos, duels, follows, drives, postKudos, postComments] = await Promise.all([
     // a friend request waiting on you (the list shows it as a card; here it counts as waiting)
     all<{ handle: string; at: string }>(env,
       `SELECT u.handle, f.created_at AS at FROM friendships f JOIN users u ON u.id = f.requested_by
@@ -77,6 +92,20 @@ export async function inbox(env: Env, v: Viewer) {
         WHERE e.cancelled = 0 AND e.created_by != ?1 AND e.starts_at > datetime('now')
           AND NOT EXISTS (SELECT 1 FROM crew_event_rsvps r WHERE r.event_id = e.id AND r.user_id = ?1) AND ${NO_BLOCK("e.created_by", "?1")}
         ORDER BY e.starts_at LIMIT 10`, me),
+    // kudos on your drive posts (grouped per post below: the newest giver, and how many)
+    all<PostRow>(env,
+      `SELECT p.id AS post_id, p.title, u.handle, k.created_at AS at, 1 AS yours, NULL AS owner
+         FROM drive_post_kudos k JOIN drive_posts p ON p.id = k.post_id JOIN users u ON u.id = k.user_id
+        WHERE p.author = ?1 AND k.user_id != ?1 AND u.handle IS NOT NULL AND k.created_at > datetime('now', '-${DAYS} days') AND ${NO_BLOCK("k.user_id", "?1")}
+        ORDER BY k.created_at DESC LIMIT 200`, me),
+    // comments on your drive posts, and comments after yours on a post you commented on that you can still see
+    all<PostRow>(env,
+      `SELECT p.id AS post_id, p.title, u.handle, c.created_at AS at, p.author = ?1 AS yours, ou.handle AS owner
+         FROM drive_comments c JOIN drive_posts p ON p.id = c.post_id JOIN users u ON u.id = c.author JOIN users ou ON ou.id = p.author
+        WHERE c.author != ?1 AND u.handle IS NOT NULL AND c.created_at > datetime('now', '-${DAYS} days')
+          AND ${NO_BLOCK("c.author", "?1")} AND NOT ${reportedSql("comment", "c.id")}
+          AND (p.author = ?1 OR (c.created_at > (SELECT MAX(m.created_at) FROM drive_comments m WHERE m.post_id = p.id AND m.author = ?1) AND ${POST_SEEN("p")}))
+        ORDER BY c.created_at DESC LIMIT 200`, me),
   ]);
   const items: Item[] = [];
   for (const r of requests) items.push({ kind: "request", at: r.at, handle: r.handle, waiting: true });
@@ -97,6 +126,7 @@ export async function inbox(env: Env, v: Viewer) {
   }
   for (const f of follows) items.push({ kind: "follows", at: f.at, book_id: f.book_id, book: f.book, n: f.n });
   for (const e of drives) items.push({ kind: "crew_drive", at: e.at, event_id: e.event_id, title: e.title, starts_at: e.starts_at, crew: e.crew, crew_id: e.crew_id });
+  for (const [kind, rows] of [["post_kudos", postKudos], ["post_comment", postComments]] as const) for (const g of perPost(rows)) items.push({ kind, ...g });
   items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
   const list = items.slice(0, MAX_ITEMS);
   return { items: list, waiting: list.filter((i) => i.waiting).length, now: new Date().toISOString().replace("T", " ").slice(0, 19) };

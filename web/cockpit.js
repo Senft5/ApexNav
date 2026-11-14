@@ -7032,7 +7032,8 @@
       openStage: (canon, name) => (duels ? duels.openStage(canon, name) : null),
       openBoard: () => { closeSheet(); showView(null); openPlan(true); const d = $('planAttack'); if (d && !d.hidden) { d.open = true; d.scrollIntoView({ block: 'nearest' }); } },
       openBook: (id) => openRoadbookLink(id),
-      openCrews: () => setPeopleSide('crews') }) : null; } catch (e) { console.error('inbox', e); } });
+      openCrews: () => setPeopleSide('crews'),
+      openPost: (id) => (drivePosts ? drivePosts.open(id) : null) }) : null; } catch (e) { console.error('inbox', e); } });
     // Drive posts and the Feed (web/drive_posts.js, docs/SOCIAL.md 2.13): Post on the drive's card; the Feed on People → Friends
     let drivePosts = null;
     onSocial(() => { try { drivePosts = window.ApexDrivePosts ? ApexDrivePosts.mount({ el, btn, toast, apiCall, jsonOf,

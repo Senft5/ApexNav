@@ -105,6 +105,25 @@ describe("push notifications", () => {
       ["api.sandbox.push.apple.com", "Cherohala Skyway", "@bob commented on your drive."]]);
   });
 
+  it("a comment tells the others who commented before, unless blocked; never the one commenting or the post's author twice", async () => {
+    await configure();
+    const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara")];
+    await befriend(a, b); await befriend(a, c);
+    await ok(api(b, "POST", "/api/push/token", { token: tok(2) }));
+    const line = encodeLine(Array.from({ length: 91 }, (_, i) => [35 + i * 0.001, -84] as [number, number]));
+    const { id } = await json(api(a, "POST", "/api/posts", { title: "Cherohala Skyway", driven_on: today, length_m: 10000, line }));
+    await ok(api(b, "POST", `/api/posts/${id}/comments`, { body: "That fog!" }));
+    await ok(api(c, "POST", `/api/posts/${id}/comments`, { body: "Next time I'm in" }));
+    await settle(1);
+    expect(calls.map((x) => [x.token, x.body.aps.alert.title, x.body.aps.alert.body])).toEqual([[tok(2), "Cherohala Skyway", "@cara also commented on @alice's drive."]]);
+    calls.length = 0;
+    await ok(api(b, "POST", "/api/blocks", { handle: "cara" }));
+    await ok(api(c, "POST", `/api/posts/${id}/comments`, { body: "Again" }));
+    await ok(api(b, "POST", `/api/posts/${id}/comments`, { body: "Mine" }));      // bob's own comment never tells bob
+    await settle(1);
+    expect(calls).toEqual([]);
+  });
+
   it("a token Apple calls gone is dropped; sign-out drops this phone; Delete account drops them all; bad tokens are refused", async () => {
     await configure();
     const [a, b] = [await makeUser("alice"), await makeUser("bob")];

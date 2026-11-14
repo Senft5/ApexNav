@@ -120,6 +120,7 @@
     .feed-comment { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: start; }
     .feed-comment p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
     .feed-comment small { color: var(--panel-dim); font-size: 12px; }
+    .feed-comment .feed-more { width: 44px; height: 44px; display: grid; place-items: center; text-decoration: none; font-size: 20px; color: var(--panel-ink); }
     .feed-say { display: flex; gap: 8px; }
     .feed-say .field { flex: 1; min-width: 0; }
     .post-sheet textarea { width: 100%; min-height: 72px; resize: vertical; }
@@ -279,7 +280,7 @@
       const draw = () => list.replaceChildren(...p.comment_list.map((c) => {
         const row = el('div', { className: 'feed-comment' }, face(c, 30),
           el('div', {}, el('b', { textContent: c.mine ? 'You' : `@${c.handle || '?'}` }), el('small', { textContent: ` ${ago(c.created_at, Date.now())}` }), el('p', { textContent: c.body })));
-        const k = el('button', { type: 'button', className: 'linkbtn', textContent: '···' }); k.setAttribute('aria-label', 'More for this comment');
+        const k = el('button', { type: 'button', className: 'linkbtn feed-more', textContent: '···' }); k.setAttribute('aria-label', 'More for this comment');
         k.addEventListener('click', () => {
           const m = sheet('This comment', 'feed-menu'); const keys = el('div', { className: 'row', style: 'flex-wrap:wrap' });
           if (c.can_delete) keys.append(btn('Delete', async () => {
