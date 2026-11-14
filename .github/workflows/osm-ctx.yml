@@ -60,7 +60,7 @@ jobs:
         with:
           path: .graph_cache/osm
           key: graph-osm-${{ steps.week.outputs.w }}
-      - name: The states' outlines (once here: six bands asking Geofabrik at once had one refused)
+      - name: The states' outlines, once here (six bands asking Geofabrik at once had one refused)
         run: |
           mkdir -p polys
           for s in $STATES; do curl -fsSL --retry 6 --retry-delay 10 --retry-all-errors -o "polys/$s.poly" "https://download.geofabrik.de/north-america/us/$s.poly"; done
