@@ -527,7 +527,7 @@
       if (map.getSource('openmaptiles')) map.addLayer({ id: 'apex-places', type: 'symbol', source: 'openmaptiles', 'source-layer': 'poi', minzoom: 15,
         filter: ['all', ['has', 'name'], ['match', ['get', 'class'], PLACE_CLASSES, true, false]],
         layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Italic'], 'text-size': 11, 'text-max-width': 8, 'text-padding': 10,
-          'symbol-sort-key': ['get', 'rank'], visibility: state.mode === 'live' ? 'none' : 'visible' },
+          'symbol-sort-key': ['get', 'rank'], visibility: placesShown() ? 'visible' : 'none' },
         paint: { 'text-halo-width': 1.4 } }, firstSymbol);                // under the street and town names: they win a clash
       map.addSource('apex-ribbon-src', { type: 'geojson', data: emptyFC() }); ribbonKey = null;
       map.addLayer({ id: 'apex-ribbon', type: 'line', source: 'apex-ribbon-src', layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -538,7 +538,11 @@
     const PLACE_CLASSES = ['restaurant', 'fast_food', 'cafe', 'bar', 'beer', 'ice_cream', 'bakery', 'fuel', 'grocery', 'lodging', 'car', 'attraction', 'museum'];
     const PLACE_WORD = { restaurant: 'Restaurant', fast_food: 'Fast food', cafe: 'Café', bar: 'Bar', beer: 'Bar', ice_cream: 'Ice cream', bakery: 'Bakery',
       fuel: 'Fuel station', grocery: 'Grocery', lodging: 'Lodging', car: 'Car shop', attraction: 'Attraction', museum: 'Museum' };
-    function applyPlaces() { if (mapReady && map.getLayer('apex-places')) map.setLayoutProperty('apex-places', 'visibility', state.mode === 'live' ? 'none' : 'visible'); }
+    // OFF until the owner says yes (the decision card of 2026-11-13; the coordinator 2026-11-14: not on by default before he
+    // answers). Switched on by apex.mapPlaces = '1'; to ship it, make the default true here
+    const placesFlag = () => { try { return localStorage.getItem('apex.mapPlaces') === '1'; } catch (_) { return false; } };
+    const placesShown = () => placesFlag() && state.mode !== 'live';
+    function applyPlaces() { if (mapReady && map.getLayer('apex-places')) map.setLayoutProperty('apex-places', 'visibility', placesShown() ? 'visible' : 'none'); }
     // Satellite, for developers only (the owner, 2026-11-04: to troubleshoot picks like a neighbourhood ranked a best road):
     // USGS The National Map's orthoimagery (USDA NAIP and USGS, public domain; the US only; tiles to zoom 16, stretched past
     // it) over the base map's fills and road lines, under our twisty and measured roads, the labels and every route line,
