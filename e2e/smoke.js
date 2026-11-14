@@ -6783,6 +6783,28 @@ flow('post media: a friend\'s photo shows on their post in the Feed, and Add a p
   check(order[0] === 'POST /api/posts application/json' && order[1] === 'PUT /api/posts/P2AAAAAAAAAAAAAA/media image/jpeg' && posts[1].n > 100, 'the post, then its photo as a JPEG: ' + JSON.stringify(order));
   check(/Posted to your friends\./.test(await page.textContent('#toast')), 'and it says where it went');
 });
+flow('Garage → You shows your own drive posts, three and See all, with Delete on each (Worker stubbed, docs/SOCIAL.md 2.13)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const at = new Date(Date.now() - 3600e3).toISOString().slice(0, 19).replace('T', ' ');
+  const post = (n) => ({ id: `P${n}AAAAAAAAAAAAAAA`.slice(0, 16), handle: 'me', photo_id: null, mine: true, crew: null, title: `Drive ${n}`, caption: null, driven_on: '2026-11-12',
+    length_m: 20000, score: 700 + n, roads: [], stages: [], line: null, created_at: at, kudos: 0, my_kudos: false, comments: 0 });
+  const asked = [];
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, id: 'ME1', member: true, handle: 'me' });
+    if (u.pathname === '/api/feed') { asked.push(u.searchParams.get('author')); return json([1, 2, 3, 4, 5].map(post)); }
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForSelector('#garageMeBody .profile-drives:not([hidden]) .feed-card', { timeout: 15000 });
+  check(asked.includes('ME1'), 'asked for your own posts by your id: ' + JSON.stringify(asked));
+  check(await page.$$eval('#garageMeBody .profile-drives .feed-card', (l) => l.length) === 3, 'three at first');
+  check(await page.$$eval('#garageMeBody .profile-drives .feed-card .feed-more', (l) => l.length) === 3, 'each has its ··· (Delete)');
+  await page.click('#garageMeBody .profile-drives button:has-text("See all")');
+  await page.waitForFunction(() => document.querySelectorAll('#garageMeBody .profile-drives .feed-card').length === 5);
+  check(!(await page.$('#garageMeBody .profile-drives button:has-text("See all")')), 'See all goes once all are shown');
+});
+
 flow('a drive posted with no signal waits on the phone and goes up once there is one (Worker stubbed, IDEAS F-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   let down = false; const posted = [];

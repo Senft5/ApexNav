@@ -357,9 +357,12 @@
       const box = el('section', { className: 'stack-8 feed-sec profile-drives' }); box.hidden = true;
       const list = el('div', { className: 'feed' });
       box.append(el('b', { textContent: 'Drives' }), list);
+      let all = false;   // See all: every post the Feed gives (its latest page), in place
       const redo = () => apiCall('GET', `/api/feed?author=${encodeURIComponent(author)}`).then(jsonOf).then((rows) => {
         if (!Array.isArray(rows)) return;
-        list.replaceChildren(...rows.slice(0, PREVIEW).map((p) => card(p, { after: redo })));
+        const more = !all && rows.length > PREVIEW;
+        list.replaceChildren(...(all ? rows : rows.slice(0, PREVIEW)).map((p) => card(p, { after: redo })),
+          ...(more ? [btn('See all', () => { all = true; redo(); }, 'linkbtn feed-all')] : []));
         box.hidden = !rows.length;
       }).catch(() => {});
       redo();

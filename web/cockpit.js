@@ -7304,7 +7304,9 @@
       you.append(el('div', { className: 'row', style: 'align-items:center;gap:12px' }, ...(faceKey ? [faceKey] : []), el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' })));   // no "points": a number with no unit (REVIEW2.md U-41)
       // Who sees what (P-09): under You, every audience and what it gets
       if (whoSees) you.append(el('div', { className: 'nav-rows' }, whoSees.row()));
+      // your drive posts, as your friends see them on your profile (docs/SOCIAL.md 2.13), with kudos, comments and Delete
       gbody.append(you);
+      if (drivePosts && drivePosts.drivesOf && me.member && me.id) gbody.append(drivePosts.drivesOf(me.id));
       // Lists one tap away open as side sheets over People (REVIEW2.md U-30): each a row with its count and a chevron.
       const popSheet = (title) => { const p = el('aside', { className: 'side-pop people-pop' }); p.setAttribute('aria-label', title);
         p.append(el('div', { className: 'side-pop-head' }, el('h3', { textContent: title }), btn('Done', () => p.classList.remove('open'), 'linkbtn'))); return p; };
