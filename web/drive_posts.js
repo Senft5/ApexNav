@@ -297,6 +297,8 @@
           const body = { title: String(d.name || 'Drive').slice(0, 60), caption: say.value.trim() || null, driven_on: d.driven_on, length_m: Number.isFinite(d.len_m) ? Math.round(d.len_m) : null,
             score: Number.isFinite(d.score) ? Math.round(d.score) : null, roads: (d.roads || []).slice(0, 8), line: line ? encode(line) : null, crew_id: to };
           const r = await apiCall('POST', '/api/posts', body).catch(() => null);
+          // no signal (IDEAS F-05): the post waits on the phone and goes when there is one (outbox.js), as a hazard report does
+          if ((!r || r.status >= 500) && page.later) { page.later('/api/posts', body); s.close(); done(true); toast('No signal. Your post goes up when you have one.'); return; }
           if (!r || !r.ok) { post.disabled = false; toast(r && r.status === 429 ? 'That’s ten posts today.' : 'Couldn’t post it. Check signal.'); return; }
           s.close(); done(true);
           toast(to ? `Posted to ${(crews.find((c) => c.id === to) || {}).name || 'your crew'}.` : 'Posted to your friends.');
