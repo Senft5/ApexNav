@@ -3321,6 +3321,10 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.click('.cp-tabs [data-cp-tab="drives"]');
   const mem = await page.$$eval('.cp-member', (b) => b.map((x) => [x.querySelector('small').textContent, !!x.querySelector('em'), x.classList.contains('live')]));
   check(JSON.stringify(mem) === JSON.stringify([['You', true, false], ['@cara', false, true], ['@sam', false, false]]) && /3 members · 1 out now/.test(await page.textContent('.crew-page')), 'members: ' + JSON.stringify(mem));
+  // the lit ring (a 4 px shadow outside the face) is whole: the scrolling strip clips anything past its padding box
+  const ring = await page.evaluate(() => { const s = document.querySelector('.cp-members').getBoundingClientRect(), f = document.querySelector('.cp-member.live .avatar').getBoundingClientRect();
+    return { top: Math.round(f.top - 4 - s.top), left: Math.round(f.left - 4 - s.left) }; });
+  check(ring.top >= 0 && ring.left >= 0, 'the on-the-road ring is not cut by the members strip: ' + JSON.stringify(ring));
   await page.click('.cp-member:has-text("@sam")');
   await page.waitForSelector('.cp-member-sheet');
   check(await page.isVisible('.cp-member-sheet button:has-text("Report")') && await page.isVisible('.cp-member-sheet button:has-text("Block")'), 'Report and Block are on the member, one tap in');
