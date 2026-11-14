@@ -145,4 +145,5 @@ jobs:
                     open(os.path.join(d, 'index.json'), 'w'))"
           cat built/osm/v1/index.json | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Upload to R2
+        shell: bash   # -o pipefail: a refused upload fails the run, not only the script behind the tee
         run: tools/graph_etl/upload_r2.sh built | tee -a "$GITHUB_STEP_SUMMARY"
