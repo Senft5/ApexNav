@@ -5435,6 +5435,9 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
   const under = await page.evaluate(() => { const b = document.querySelector('.rb-pop.open .rb-map'); return b && { on: b.classList.contains('on-map'),
     bg: getComputedStyle(b.querySelector('svg')).backgroundImage.slice(0, 9), casing: getComputedStyle(b.querySelector('.rb-casing')).display }; });
   check(under && under.on && under.bg === 'url("blob' && under.casing === 'inline', 'the book\'s roads lie on the real map, each on its casing: ' + JSON.stringify(under));
+  await page.waitForSelector('.rb-pop.open .rb-road .rb-thumb.on-map', { timeout: 20000 }).catch(() => {});
+  check(/^url\("blob/.test(await page.evaluate(() => { const t = document.querySelector('.rb-pop.open .rb-road .rb-thumb.on-map svg'); return t ? getComputedStyle(t).backgroundImage : ''; })),
+    'each road\'s thumbnail is on its own streets too');
   check(/0 of 1 driven/.test(await page.textContent('.rb-pop.open')) && !/Nothing to tap|is stamped when/.test(await page.textContent('.rb-pop.open')), 'progress starts at none driven, the meter alone (no how-to line)');
   check(await page.evaluate(() => [...document.querySelectorAll('.side-pop .people-lead')].every((p) => !/Your lists of great roads/.test(p.textContent) || p.hidden)), 'with a roadbook of your own, no line saying what a roadbook is');
   await page.click('.rb-pop.open button:has-text("Edit")');

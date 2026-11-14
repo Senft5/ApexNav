@@ -203,10 +203,12 @@
       const parts = [];
       const answered = [];
       for (let s = 0; s < need.length; s += 40) {
+        // the app's apiGet (cockpit.js routeCtxOpts) answers the parsed JSON or null; a fetch-like one answers a Response
         const r = await apiGet(`/api/chargers?tiles=${need.slice(s, s + 40).join(',')}`).catch(() => null);
-        if (r && r.status === 503) return none('no-key');
-        const j = r && r.ok ? await r.json().catch(() => null) : null;
-        if (!j) { status = 'partial'; continue; }
+        const res = r && typeof r.ok === 'boolean' && typeof r.status === 'number';
+        if (res && r.status === 503) return none('no-key');
+        const j = res ? (r.ok && typeof r.json === 'function' ? await r.json().catch(() => null) : null) : r;
+        if (!j || !Array.isArray(j.stations)) { status = 'partial'; continue; }
         parts.push(...parseChargers(j)); answered.push(...need.slice(s, s + 40));
       }
       need.splice(0, need.length, ...answered);

@@ -139,6 +139,23 @@ def test_fuel_from_our_build_inside_the_region_overpass_only_outside():
     assert out["asked"].startswith("/api/ctx/points?cells=") and out["keys"] >= 1
     assert out["all"] == ["ok", True]                                 # every tile ours: no Overpass at all
     assert out["overOnce"] == 1 and out["leftHasLast"] and not out["leftHasFirst"]
+def test_chargers_through_the_apps_api_which_answers_json():
+    """The app's apiGet (cockpit.js routeCtxOpts) answers the parsed JSON or null, never a Response: chargers came back
+    unknown on every plan because car.js read it as a Response. Both shapes work; null is unknown, never "no chargers"."""
+    js = """(async () => {
+      const t = corridor(40), asked = [];
+      const json = await C.provider.fetch([t], { car: { fuel: 'electric', range_km: 300 }, storage: mem(),
+        apiGet: async (p) => { asked.push(p); return { stations: [{ ...at(5), dc: true }, { ...at(30), dc: false }], partial: false }; } });
+      const resp = await C.provider.fetch([corridor(40, 'c2')], { car: { fuel: 'electric', range_km: 300 }, storage: mem(),
+        apiGet: async () => ({ ok: true, status: 200, json: async () => ({ stations: [at(5)] }) }) });
+      const down = await C.provider.fetch([corridor(40, 'c3')], { car: { fuel: 'electric', range_km: 300 }, storage: mem(), apiGet: async () => null });
+      return { json: [json.c1.status, json.c1.note || null], asked: asked.length && asked[0].startsWith('/api/chargers?tiles='),
+               resp: resp.c2.status, down: [down.c3.status, down.c3.spans.filter((g) => g.hard).length] };
+    })()"""
+    out = run(js)
+    assert out["json"][0] == "ok" and "Couldn" not in (out["json"][1] or "") and out["asked"]
+    assert out["resp"] == "ok"
+    assert out["down"] == ["partial", 0]                              # unknown: no hard "no charger" stretch
 
 
 def test_fuel_query_off_the_critical_path():
