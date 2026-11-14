@@ -5544,6 +5544,32 @@ flow('wet roads: rain where you are (the place plate\'s weather) brings the note
   check(wetLead > dryLead, `the notes come earlier (${dryLead} → ${wetLead} m)`);
 });
 
+flow('a wet road from ODOT\'s sensor: dry weather, a wet sensor near you: the road reads wet, it is said once, and the drive is kept as a wet one (road_surface.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.route('**/api.open-meteo.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ current: { temperature_2m: 14, precipitation: 0, weather_code: 1 }, hourly: { time: [new Date(Date.now() - 3600e3).toISOString().slice(0, 16)], precipitation: [0] } }) }));
+  await page.route('**/api.weather.gov/**', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.route('**/nominatim.openstreetmap.org/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.ApexRoadSurface && window.apexDebug && window.apexDebug.setRoadEvents && window.ApexRecording);
+  await page.evaluate(() => apexDebug.setRoadEvents({ events: [{ id: 'dot:OH:wx:1', kind: 'wet', label: 'Wet road', lat: 40.02, lon: -83.0, src: 'ODOT sensor' }] }));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start', free: true }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  for (let burst = 0; burst < 10 && !(await page.evaluate(() => window.__said.some((t) => /^Wet roads/.test(t)))); burst++) {
+    await page.evaluate((burst) => { for (let j = 0; j < 40; j++) { const k = burst * 40 + j;
+      window.apex.live({ lat: 40.0 + k * 10 / 110540, lon: -83.0, accuracy_m: 4, speed_mps: 20, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); } }, burst);
+    await page.waitForTimeout(800);
+  }
+  check(await page.evaluate(() => window.apexDebug.wetRoad) === 'wet', 'the sensor\'s wet road counts');
+  check((await page.evaluate(() => window.__said.filter((t) => /^Wet roads/.test(t)))).length === 1, 'said once');
+  for (let i = 0; i < 2; i++) await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'end' }));
+  const kept = await page.waitForFunction(async () => { const all = await ApexRecording.all(); return all.length ? all[0].surface || 'none' : null; }, null, { timeout: 15000 }).then((h) => h.jsonValue());
+  check(kept === 'wet', 'the drive is kept as a wet one: ' + kept);
+});
+
 flow('cold tyres: a dry road at 4 degrees is said once, and not again on the next drive the same day (wet_roads.js coldLine)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;

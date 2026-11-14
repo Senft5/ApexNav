@@ -995,7 +995,8 @@
       $('dvAgain').hidden = !(Number.isFinite(s.len_m) && s.len_m >= 1000);   // panel D-1: a road to drive again, not an errand
       // Round 3 (drive_keep.js): a drive that ended itself, or was recovered after the app closed, says so
       const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(s) : null;
-      $('dvNote').textContent = [dateLabel(s), s.source === 'web-gps' ? 'Recorded on this phone' : s.source === 'imported' ? 'Imported' : 'Example drive', ended].filter(Boolean).join(' · ');
+      const wet = window.ApexRoadSurface ? ApexRoadSurface.label(s.surface) : '';   // a wet or icy road, said: its times aren't your dry ones
+      $('dvNote').textContent = [dateLabel(s), s.source === 'web-gps' ? 'Recorded on this phone' : s.source === 'imported' ? 'Imported' : 'Example drive', wet, ended].filter(Boolean).join(' · ');
       const [d, info] = await Promise.all([full(id), ApexAnalysis.job('drive', { id }).catch(() => null)]);
       if (run !== dvRun || !d) return;                                   // another drive opened meanwhile
       dvInfo = info || {};
