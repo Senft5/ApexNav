@@ -127,7 +127,10 @@
     const where = el('p', { className: 'note dc-where' }); where.setAttribute('aria-live', 'polite');
     const tools = el('div', { className: 'dc-tools', hidden: true }, scrubRow, callRow, where);
     const exportBtn = el('button', { className: 'btn', textContent: 'Make the video', disabled: true });
-    const note = el('p', { className: 'note', textContent: 'Pick a video you filmed on this drive. Step to a corner call and slide until the car is at that corner in the picture, then make the video. It stays on this phone.' });
+    // before a video: a line and the key (walkthrough 2026-11-13: the slider, the nudges and Make the video sat under a
+    // paragraph with nothing to act on); the lining up shows with the video, its line under the picture saying what to do
+    const note = el('p', { className: 'note', textContent: 'Your speed, g and calls on a video you filmed on this drive. It stays on this phone.' });
+    const lineup = el('div', { className: 'dc-lineup', hidden: true });
     const status = el('p', { className: 'note dc-status', hidden: true }); status.setAttribute('role', 'status');
     const say = (t) => { status.textContent = t || ''; status.hidden = !t; };
 
@@ -230,7 +233,7 @@
     function ready() {                                                 // the video opened: show it and pick where to look first
       if (opened) return;
       opened = true; clearTimeout(openTimer); openTimer = 0;
-      stage.hidden = false; tools.hidden = false; say('');
+      stage.hidden = false; tools.hidden = false; lineup.hidden = false; say('');
       dur = duration();
       scrub.max = String(Math.max(0.1, dur || 0));
       anchor = calls.findIndex((c) => { const v = videoTimeFor(T[c.i], off()); return v >= 0 && (!dur || v <= dur); });
@@ -246,7 +249,7 @@
     function openSrc(src, startS) {
       if (startS != null) setOffset(startS);
       opened = false; frameOk = null; tries = 0; clearTimeout(retry); anchor = -1; busy = false; pending = null; dur = 0; clipSaid = '';
-      stage.hidden = true; tools.hidden = true; exportBtn.disabled = true;
+      stage.hidden = true; tools.hidden = true; lineup.hidden = true; exportBtn.disabled = true;
       say('Opening the video…');
       video.src = src;
       video.load();
@@ -279,7 +282,7 @@
       setTimeout(() => { video.removeEventListener('durationchange', found); if (!opened) { video.currentTime = 0; ready(); } }, 3000);
     });
     video.addEventListener('error', () => {
-      clearTimeout(openTimer); stage.hidden = true; tools.hidden = true; exportBtn.disabled = true;
+      clearTimeout(openTimer); stage.hidden = true; tools.hidden = true; lineup.hidden = true; exportBtn.disabled = true;
       say('This phone couldn’t open that video, so there’s nothing to preview. A video from the Camera app (MP4 or MOV) works best.');
     });
     video.addEventListener('seeked', () => {
@@ -405,7 +408,8 @@
       if (!w) return false;
       return makeClip({ ...labelOf({ start, end }), w });
     };
-    box.append(note, own, pick, status, stage, tools, canvas, balance, fine, offsetNote, exportBtn, clips);
+    lineup.append(balance, fine, offsetNote, exportBtn);
+    box.append(note, own, pick, status, stage, tools, canvas, lineup, clips);
     return box;
   }
 
