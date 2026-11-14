@@ -158,7 +158,7 @@ jobs:
           for s in $STATES; do
             osmium tags-filter --overwrite -o "falls-$s.osm.pbf" ".graph_cache/osm/$s.osm.pbf" nwr/natural=waterfall nwr/waterway=waterfall \
               w/motor_vehicle:conditional w/motorcar:conditional w/vehicle:conditional w/access:conditional \
-              nw/opening_hours nw/phone nw/contact:phone nw/website nw/contact:website nw/amenity=fuel,school,place_of_worship
+              nw/opening_hours nw/phone nw/contact:phone nw/website nw/contact:website nw/amenity=fuel,school,place_of_worship w/lit w/tunnel=yes r/route=bicycle
             args="$args --pbf falls-$s.osm.pbf --poly polys/$s.poly"
           done
           python -m tools.osm_ctx.region $args --out out | tee -a "$GITHUB_STEP_SUMMARY"

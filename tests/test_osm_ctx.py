@@ -109,7 +109,7 @@ def test_kept_in_step_with_the_relay():
     drivable = re.search(r'export const DRIVABLE = "(.+?)";', src).group(1)
     assert drivable == B.DRIVABLE.pattern
     assert "export const BUNDLE = 5," in src and B.BUNDLE == 5 and B.TILE == 0.05
-    assert 'osm\\/v2\\/(index\\.json|falls\\.json|closures\\.json|-?\\d{1,4}_-?\\d{1,4}\\.bin|(places|points)\\/-?\\d{1,4}_-?\\d{1,4}\\.json)' in open(os.path.join(ROOT, "backend", "src", "data_store.ts")).read()
+    assert 'osm\\/v2\\/(index\\.json|falls\\.json|closures\\.json|-?\\d{1,4}_-?\\d{1,4}\\.bin|(places|points|lines)\\/-?\\d{1,4}_-?\\d{1,4}\\.json)' in open(os.path.join(ROOT, "backend", "src", "data_store.ts")).read()
     assert f"HEAD = {B.HEAD}," in src and 'BUILT = "osm/v2"' in src
 
 
@@ -210,3 +210,35 @@ def test_the_regions_fuel_schools_and_worship_points(tmp_path):
     by = F.points_by_cell(got, [[156, -339], [156, -338]])
     assert [len(by[(156, -339)]["fuel"]), len(by[(156, -339)]["schools"]), len(by[(156, -339)]["worship"])] == [2, 1, 1]
     assert by[(156, -338)] == {"fuel": [], "schools": [], "worship": []}
+
+
+def test_the_regions_lit_roads_tunnels_and_cycle_routes(tmp_path):
+    """tools/osm_ctx/region.py lines for route_ctx/driver.js: a driven road's lit tag (only the values driver.js LIT reads),
+    a road tunnel, a bicycle route's roads; in every 0.1 degree tile a line touches, bundled 5 x 5, empty tiles listed."""
+    from tools.osm_ctx import region as F
+    js = open(os.path.join(ROOT, "web", "route_ctx", "driver.js")).read()
+    lit = re.search(r"const LIT = \{(.+?)\};", js).group(1)
+    assert set(re.findall(r"'?([a-z0-9/-]+)'?:", lit)) == set(F.LIT)
+    assert "motorway|trunk|primary|secondary|tertiary|unclassified|residential" in js and "|".join(F.LINE_ROAD) in js
+    assert "w/lit w/tunnel=yes r/route=bicycle" in open(os.path.join(ROOT, ".github", "workflows", "osm-ctx.yml")).read()
+    la = 39.15
+    nodes = {1: (la, -84.55, {}), 2: (la, -84.5, {}), 3: (la, -84.45, {}),          # Main St crosses the tile edge at -84.5
+             4: (la + 0.01, -84.55, {}), 5: (la + 0.01, -84.54, {}),
+             6: (la + 0.02, -84.55, {}), 7: (la + 0.02, -84.54, {}),
+             8: (la + 0.03, -84.55, {}), 9: (la + 0.03, -84.54, {})}
+    ways = {100: ([1, 2, 3], {"highway": "secondary", "lit": "yes", "name": "Main St"}),
+            101: ([4, 5], {"highway": "primary", "tunnel": "yes", "lit": "maybe"}),     # an unknown lit value: dropped
+            102: ([6, 7], {"highway": "footway", "lit": "yes"}),                         # not a road
+            103: ([8, 9], {"highway": "tertiary"})}                                      # only as the cycle route's road
+    rels = [(500, ([("w", 103, "")], {"type": "route", "route": "bicycle"}))]
+    p = tmp_path / "l.osm.pbf"
+    write_osm(p, nodes, ways, rels)
+    got = F.read_lines([str(p)])
+    assert sorted((k, v) for k, v, _ in got) == [("cycle", 1), ("lit", "yes"), ("tunnel", 1)]
+    main = [g for k, _, g in got if k == "lit"][0]
+    assert main == [(la, -84.55), (la, -84.45)]                                          # the straight line simplified
+    by = F.lines_by_bundle(got, [(391, -846), (391, -845), (392, -846)])
+    t = {**by[(78, -170)]["t"], **by[(78, -169)]["t"]}
+    assert t["391_-846"]["lit"] == [["yes", [la, -84.55, la, -84.45]]] and t["391_-845"]["lit"] == t["391_-846"]["lit"]
+    assert len(t["391_-846"]["tunnel"]) == 1 and len(t["391_-846"]["cycle"]) == 1
+    assert t["392_-846"] == {"lit": [], "tunnel": [], "cycle": []}

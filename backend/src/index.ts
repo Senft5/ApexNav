@@ -43,7 +43,7 @@ import { pointsFor } from "./points";
 import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
 import { ctxKeys, workzones } from "./route_feeds";
-import { osmTile, placeTags, pointCells, regionList } from "./osm_relay";
+import { lineTiles, osmTile, placeTags, pointCells, regionList } from "./osm_relay";
 import { traceTile } from "./trace_relay";
 import { grantedThemes } from "./themes";
 import { isDeveloper } from "./developers";
@@ -191,6 +191,8 @@ on("GET", "/api/ctx/closures.json", async (_req, env) => regionList(env.DATA, "c
 on("GET", "/api/ctx/places", async (req, env) => placeTags(new URL(req.url), env.DATA));
 // Fuel stations, schools and places of worship by 0.25 degree cell for a plan (osm_relay.ts pointCells; route_ctx car.js, events.js)
 on("GET", "/api/ctx/points", async (req, env) => pointCells(new URL(req.url), env.DATA));
+// Lit roads, tunnels and cycle routes by 0.1 degree tile for a plan (osm_relay.ts lineTiles; route_ctx/driver.js)
+on("GET", "/api/ctx/lines", async (req, env) => lineTiles(new URL(req.url), env.DATA));
 // The router's edges for a stage cut from the map tiles (trace_relay.ts; route_ctx/router_edges.js), kept 3 days per shape
 on("GET", "/api/ctx/trace", async (req) => traceTile(new URL(req.url)));
 on("GET", "/api/shop", async (req, env) => json(await shop(env, await requireMember(req, env))));

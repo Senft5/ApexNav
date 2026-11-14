@@ -295,3 +295,34 @@ export async function pointCells(url: URL, data: R2Get | undefined): Promise<Res
     return json(200, { cells: Object.fromEntries(keys.map((k, i) => [k, got[i]])) }, "public, max-age=21600");
   } catch { return json(404, { error: "not_built" }); }
 }
+
+/**
+ * GET /api/ctx/lines?tiles=<i>_<j>[,...] (0.1 degree tiles, up to 40): each tile's lit roads, road tunnels and bicycle
+ * route roads from the weekly build (tools/osm_ctx/region.py, R2 osm/v2/lines/<bi>_<bj>.json, 5 x 5 tiles a bundle) for
+ * route_ctx/driver.js, as {tiles: {"<i>_<j>": {lit, tunnel, cycle} | null}}: null for a tile the build doesn't cover,
+ * which the phone then asks Overpass for. Tile ids only; nothing kept or logged.
+ */
+const LINE_BUNDLE = 5;
+const lineCache = new Map<string, { at: number; t: Record<string, unknown> | null }>();
+export function resetLinesForTest(): void { lineCache.clear(); }
+async function lineBundle(data: R2Get, key: string, now = Date.now()): Promise<Record<string, unknown> | null> {
+  const had = lineCache.get(key);
+  if (had && now - had.at < 600_000) return had.t;
+  const o = await data.get(`${BUILT}/lines/${key}.json`);
+  const t = o ? ((JSON.parse(await new Response(o.body).text()) as { t?: Record<string, unknown> }).t ?? null) : null;
+  if (lineCache.size >= 24) lineCache.delete(lineCache.keys().next().value as string);
+  lineCache.set(key, { at: now, t });
+  return t;
+}
+export async function lineTiles(url: URL, data: R2Get | undefined): Promise<Response> {
+  const json = (status: number, body: unknown, cache = "no-store") => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": cache, "x-content-type-options": "nosniff" } });
+  const keys = [...new Set((url.searchParams.get("tiles") || "").split(",").filter(Boolean))];
+  if (!keys.length || keys.length > POINT_CELLS_MAX || keys.some((k) => !CELL_ID.test(k))) return json(400, { error: "bad_tiles" });
+  if (!data) return json(404, { error: "not_built" });
+  try {
+    const bundleOf = (k: string) => { const [i, j] = k.split("_").map(Number); return `${Math.floor(i / LINE_BUNDLE)}_${Math.floor(j / LINE_BUNDLE)}`; };
+    const names = [...new Set(keys.map(bundleOf))];
+    const got = new Map(await Promise.all(names.map(async (b) => [b, await lineBundle(data, b)] as const)));
+    return json(200, { tiles: Object.fromEntries(keys.map((k) => [k, got.get(bundleOf(k))?.[k] ?? null])) }, "public, max-age=21600");
+  } catch { return json(404, { error: "not_built" }); }
+}
