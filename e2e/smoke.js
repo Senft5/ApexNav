@@ -10409,6 +10409,44 @@ flow('road marks: a stop sign and a railway crossing from the map are pinned on 
   check(await page.evaluate(() => window.__said.filter((s) => /Railway crossing/.test(s)).length) === 1, 'the crossing called once: ' + JSON.stringify(await page.evaluate(() => window.__said)));
 });
 
+flow('road marks on the road ahead: a free drive with no route still hears the stop sign from the map, once (attachHorizonMarks)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  const KY = 110540, lat = (m) => 35.5 + m / KY, LON = -83.9, kx = 111320 * Math.cos(35.5 * Math.PI / 180);
+  const g = (m, dx = 0) => ({ lat: lat(m), lon: LON + dx / kx });
+  const ids = []; for (let m = 0; m <= 3000; m += 100) ids.push(1000 + m / 100);
+  const elements = [
+    { type: 'way', id: 1, tags: { highway: 'tertiary', name: 'Straight Road' }, nodes: ids, geometry: ids.map((_, k) => g(k * 100)) },
+    { type: 'way', id: 2, tags: { highway: 'primary', name: 'Big Pike' }, nodes: [9001, 1015, 9002], geometry: [g(1500, -300), g(1500), g(1500, 300)] },
+    { type: 'node', id: 1015, ...g(1500), tags: { highway: 'stop' } },
+  ];
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const coords = []; for (let m = 0; m <= 2500; m += 10) coords.push([LON, lat(m)]);
+  await page.evaluate((coords) => apexDebug.horizonFrom(coords), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon' && Array.isArray(apexDebug.track.marks) && apexDebug.track.marks.length, null, { timeout: 30000 })
+    .catch(async () => { throw new Error('no marks on the road ahead: ' + JSON.stringify(await page.evaluate(() => [apexDebug.track && apexDebug.track.kind, apexDebug.lastCtx]))); });
+  const marks = await page.evaluate(() => apexDebug.track.marks.map((m) => [m.code, Math.round(m.dist_m)]));
+  check(marks.length === 1 && marks[0][0] === 'STOP' && Math.abs(marks[0][1] - 1500) <= 30, 'the stop on the road ahead: ' + JSON.stringify(marks));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 25, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const stops = () => page.evaluate(() => window.__said.filter((s) => /^Stop sign/.test(s)));
+  for (let i = await iAt(1000), end = await iAt(1490); i <= end && !(await stops()).length; i += 2) { await at(i); await page.waitForTimeout(40); }
+  check((await stops()).length === 1, 'the stop called on a free drive: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  // the next road ahead overlaps this one (rebuilt before its end): the stop it holds was said already
+  const c2 = []; for (let m = 1300; m <= 3000; m += 10) c2.push([LON, lat(m)]);
+  await page.evaluate((c) => apexDebug.horizonFrom(c), c2);
+  await page.waitForFunction(() => apexDebug.track.dist[apexDebug.track.dist.length - 1] < 2000 && Array.isArray(apexDebug.track.marks) && apexDebug.track.marks.length, null, { timeout: 30000 });
+  for (let i = 0, end = await iAt(400); i <= end; i += 2) { await at(i); await page.waitForTimeout(40); }
+  check((await stops()).length === 1, 'not again on the next road ahead: ' + JSON.stringify(await stops()));
+});
+
 flow('road marks on a route set during a drive: the map is asked for this route alone (road_marks.js, attachMarksSoon)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const KY = 110540, lat = (m) => 35.5 + m / KY, LON = -83.9, kx = 111320 * Math.cos(35.5 * Math.PI / 180);
