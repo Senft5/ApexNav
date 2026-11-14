@@ -1,5 +1,6 @@
-"""The stage briefing (web/briefing.js): as a planned drive starts, one line of what the road holds: how far, how many
-corners and hairpins, and the first two marks that change how you drive; nothing for a short or straight route."""
+"""The stage briefing (web/briefing.js): as a planned drive starts, one short line of what the road holds: how far in whole
+miles or kilometres, how many corners and hairpins (the marks are called when you reach them, not read out here, and the
+line is said from the voice pack's clips); nothing for a short or straight route."""
 import json
 import os
 import shutil
@@ -14,7 +15,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUNNER = r"""
 const B = require(process.argv[1] + '/web/briefing.js'), U = require(process.argv[1] + '/web/units.js');
 U.set && U.set('imperial');
-const spoken = (m) => U.spokenShort(m);
+const spoken = U;
 const dist = Array.from({ length: 4001 }, (_, i) => i * 5);                       // 20 km
 const corner = (m, sev = 4) => ({ type: 'corner', dist_m: m, severity: sev });
 const events = [...Array.from({ length: 40 }, (_, k) => corner(400 + k * 450)), corner(5000, 'HP'), corner(9000, 'HP'), { type: 'bump', dist_m: 700 }];
@@ -39,13 +40,13 @@ def out():
 
 
 def test_the_briefing_reads_the_stage(out):
-    assert out["full"] == "12.4 miles, 42 corners, 2 hairpins. Stop sign in 4.2 miles, unpaved road in 9 miles."
-    assert out["later"].startswith("8.1 miles, ") and out["later"].endswith(" Unpaved road in 4.7 miles, rough road in 5.6 miles.")
+    assert out["full"] == "12 miles, 42 corners, 2 hairpins."
+    assert out["later"].startswith("8 miles, ") and "Unpaved" not in out["later"]
 
 
 def test_only_what_the_road_has(out):
-    assert out["bare"] == "12.4 miles, 40 corners."
-    assert out["oneHp"] == "12.4 miles, 41 corners, 1 hairpin."
+    assert out["bare"] == "12 miles, 40 corners."
+    assert out["oneHp"] == "12 miles, 41 corners, 1 hairpin."
 
 
 def test_nothing_for_a_short_or_straight_route(out):

@@ -208,3 +208,30 @@ def test_the_map_ahead_of_a_drive_is_kept():
     src = open(os.path.join(ROOT, "web", "cockpit.js")).read()
     assert "ApexOfflineTiles.keepAhead({ lat: t.lat, lon: t.lon, styleUrl: MAP_STYLE })" in src
     assert "!ApexOfflineTiles.areas().some((a) => a.id === routeAreaId(t))" in src, "a saved route's area holds more already"
+
+
+CAR_AHEAD = r"""
+const ls = new Map(), sent = [];
+globalThis.localStorage = { getItem: (k) => ls.get(k) ?? null, setItem: (k, v) => ls.set(k, String(v)), removeItem: (k) => ls.delete(k) };
+globalThis.webkit = { messageHandlers: { apex: { postMessage: (m) => sent.push(m) } } };
+globalThis.indexedDB = { open() { const r = {}; setTimeout(() => { r.result = { transaction() { const t = {}; t.objectStore = () => ({ clear() { setTimeout(() => t.oncomplete && t.oncomplete()); } }); return t; } }; r.onsuccess(); }); return r; } };
+const O = require(process.argv[1] + '/web/offline_tiles.js');
+(async () => {
+  const lat = [], lon = []; for (let i = 0; i <= 100; i++) { lat.push(39.0 + i * 0.005); lon.push(-84.6); }
+  const id = O.setCarAhead(lat, lon), again = O.setCarAhead(lat, lon);
+  const p = sent[sent.length - 1].packs, d = p.find((x) => x.id === id);
+  await O.clear();
+  console.log(JSON.stringify({ id, again, n: p.length, squares: d && d.squares.length, at: d && d.at, afterClear: sent[sent.length - 1].packs.length, none: O.setCarAhead([1], [1]) }));
+})();
+"""
+
+
+def test_the_car_map_keeps_the_drive_ahead_too():
+    """CarPlay's map can't read the page's tiles, so the drive's corridor (keepAhead's) goes to the shell as one more pack:
+    the last planned route driven, replaced by the next, its id the route's box so driving it again fetches nothing new;
+    Delete offline data drops it too."""
+    out = json.loads(subprocess.run([NODE, "-e", CAR_AHEAD, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["id"].startswith("drive_") and out["again"] == out["id"] and len(out["id"]) <= 120
+    assert out["n"] == 1 and 10 < out["squares"] < 80 and out["at"] == ""
+    assert out["afterClear"] == 0 and out["none"] is None
+    assert "NATIVE_SHELL && ApexOfflineTiles.setCarAhead" in open(os.path.join(ROOT, "web", "cockpit.js")).read()

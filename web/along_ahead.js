@@ -53,7 +53,7 @@
   function due(t, cursorM, vMps, o) {
     const d = t && t.dist;
     if (!Array.isArray(d) || d.length < 2 || !Array.isArray(t.scenic) || !finite(cursorM) || !finite(vMps) || vMps < 5) return null;
-    const said = o.said || new Set(), say = (m) => String(o.spoken(m)).replace(/(\d)\.0\b/, '$1');
+    const said = o.said || new Set(), say = (m) => String(o.spoken(m)).replace(/(\d)\.0\b/, '$1').replace(/^1 kilometres$/, 'a kilometre');
     const inReach = (p, leadS) => { const left = p.m - cursorM; return left >= LATE_M && left <= Math.max(MIN_LEAD_M, vMps * leadS); };
     const where = (p) => { const s = side(t, p), w = say(p.m - cursorM); return s ? `in ${w}, on the ${s}` : `in ${w}`; };
     const kind = o.electric ? 'charge' : 'fuel';
@@ -70,7 +70,9 @@
       if (said.has(key) || !inReach(p, VIEW_LEAD_S)) continue;
       const name = typeof p.name === 'string' && p.name.trim() && p.name.trim().length <= NAME_MAX ? p.name.trim() : null;
       const what = name || (p.kind === 'falls' ? 'A waterfall' : 'A viewpoint'), s = side(t, p), w = say(p.m - cursorM);
-      return { key, view: true, text: s ? `${what} on the ${s}, in ${w}.` : `${what} in ${w}.` };
+      // bare: the line without the name, which the voice packs can say from their clips (the name stays on the screen)
+      const plain = p.kind === 'falls' ? 'A waterfall' : 'A viewpoint', line = (x) => (s ? `${x} on the ${s}, in ${w}.` : `${x} in ${w}.`);
+      return { key, view: true, text: line(what), ...(name ? { bare: line(plain) } : {}) };
     }
     return null;
   }

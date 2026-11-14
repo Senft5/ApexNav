@@ -163,14 +163,23 @@ async function seenPost(env: Env, v: Viewer, id: string): Promise<Row> {
   return r;
 }
 
-/** GET /api/posts/:id: the post and its comments, oldest first. */
+const KUDOS_SHOWN = 50;
+/** GET /api/posts/:id: the post, its comments oldest first, and who gave kudos (`kudos_from`, newest first). */
 export async function postGet(env: Env, v: Viewer, id: string) {
   const p = await seenPost(env, v, id);
-  const comments = (await env.DB.prepare(`SELECT dc.id, dc.body, dc.created_at, u.handle, u.photo_id, dc.author = ?1 AS mine
+  const [cs, ks] = await env.DB.batch([
+    env.DB.prepare(`SELECT dc.id, dc.body, dc.created_at, u.handle, u.photo_id, dc.author = ?1 AS mine
       FROM drive_comments dc JOIN users u ON u.id = dc.author
      WHERE dc.post_id = ?2 AND (dc.author = ?1 OR (${NOT_BLOCKED("dc.author")} AND NOT ${reportedSql("comment", "dc.id")}))
-     ORDER BY dc.created_at, dc.rowid LIMIT ${MAX_COMMENTS}`).bind(v.id, id).all<{ id: string; body: string; created_at: string; handle: string | null; photo_id: string | null; mine: number }>()).results;
-  return { ...shape(p, v.id), comment_list: comments.map((c) => ({ ...c, mine: !!c.mine, can_delete: !!c.mine || p.author === v.id })) };
+     ORDER BY dc.created_at, dc.rowid LIMIT ${MAX_COMMENTS}`).bind(v.id, id),
+    // who gave kudos, newest first (a handle and a face, as the post's comments show; never someone blocked either way)
+    env.DB.prepare(`SELECT u.handle, u.photo_id FROM drive_post_kudos k JOIN users u ON u.id = k.user_id
+     WHERE k.post_id = ?2 AND u.handle IS NOT NULL AND (k.user_id = ?1 OR ${NOT_BLOCKED("k.user_id")})
+     ORDER BY k.created_at DESC LIMIT ${KUDOS_SHOWN}`).bind(v.id, id),
+  ]);
+  const comments = cs.results as { id: string; body: string; created_at: string; handle: string | null; photo_id: string | null; mine: number }[];
+  return { ...shape(p, v.id), comment_list: comments.map((c) => ({ ...c, mine: !!c.mine, can_delete: !!c.mine || p.author === v.id })),
+    kudos_from: ks.results as { handle: string; photo_id: string | null }[] };
 }
 
 /** DELETE /api/posts/:id: yours only; its kudos and comments go with it. */

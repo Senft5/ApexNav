@@ -119,6 +119,11 @@ describe("drive posts", () => {
     await ok(api(b, "POST", "/api/blocks", { handle: "cara" }));
     const seen = await json(api(b, "GET", `/api/posts/${id}`));
     expect([seen.comments, seen.comment_list.length]).toEqual([0, 0]);      // cara's comment is gone for bob
+    await ok(api(c, "POST", `/api/posts/${id}/kudos`));
+    await env.DB.prepare("UPDATE drive_post_kudos SET created_at = datetime('now', '-1 minute')").run();   // cara's came first
+    await ok(api(b, "POST", `/api/posts/${id}/kudos`));
+    expect((await json(api(a, "GET", `/api/posts/${id}`))).kudos_from.map((k: any) => k.handle)).toEqual(["bob", "cara"]);   // newest first
+    expect((await json(api(b, "GET", `/api/posts/${id}`))).kudos_from.map((k: any) => k.handle)).toEqual(["bob"]);           // never someone blocked
     const { id: mine } = await post(c);
     expect((await feedOf(b)).map((p) => p.id)).toEqual([id]);                  // and cara's post
     expect((await api(b, "POST", "/api/reports", { kind: "drive", target: id, reason: "spam" })).status).toBe(204);
