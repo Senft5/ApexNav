@@ -1571,7 +1571,9 @@ flow('valhalla down: planning inside our tiles is unaffected', async (page, base
     await page.waitForFunction(() => Array.isArray(window.apexDebug.lastLoop) && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 15000 });
     const loopMs = Date.now() - loopAt;
     const loop = await page.evaluate(() => ({ won: (window.apexDebug.lastLoop.find((d) => d.picked) || {}).kind, name: apexDebug.track && apexDebug.track.name, steps: ((apexDebug.track || {}).steps || []).length }));
-    check(loop.won === 'own' && /loop$/.test(loop.name || '') && loopMs <= 1500, `a loop from our tiles within 1.5 s with Valhalla hanging (${loopMs} ms): ` + JSON.stringify(loop));
+    // 2 s: the loop itself takes 1.2 to 1.5 s here (a busy CI runner hit 1511 ms, 2026-11-14), and the shortest wait on a
+    // hanging Valhalla is OWN_CHECK_MS, 2.5 s, so a loop that waited on it still fails
+    check(loop.won === 'own' && /loop$/.test(loop.name || '') && loopMs <= 2000, `a loop from our tiles within 2 s with Valhalla hanging (${loopMs} ms): ` + JSON.stringify(loop));
     for (const r of runs) {
       const lab = `${r.mode} ${r.warm ? 'warm' : 'cold'}`;
       check(r.own.covered && r.own.used && r.kinds[0] === 'own' && r.kind === 'route', `${lab}: our route, from our tiles: ` + JSON.stringify(r));
