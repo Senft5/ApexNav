@@ -116,6 +116,28 @@
     if (b.followers > 0) bits.push(`${b.followers} following`);
     return bits.join(' · ');
   }
+  /**
+   * Drive them all: a book's roads as one drive from `here` ({lat, lon}), nearest first, each from its nearer end, the next
+   * road from where the last one ends. At most `max` roads (the route's stops run out), a first road within FIRST_KM of
+   * here and each next within NEXT_KM of the last exit; [{ road, fwd }] in driving order ([] when none is in reach).
+   * Without `here` it starts at the book's first road, as drawn.
+   */
+  const TOUR_MAX = 4, FIRST_KM = 150, NEXT_KM = 80;
+  function tour(here, roads, max = TOUR_MAX) {
+    const km = (a, b) => Math.hypot((a.lat - b.lat) * 110.54, (a.lon - b.lon) * 111.32 * Math.cos(a.lat * Math.PI / 180));
+    const left = (roads || []).filter((r) => r && Array.isArray(r.geom) && r.geom.length > 1), out = [];
+    const ends = (r) => ({ a: { lat: r.geom[0][1], lon: r.geom[0][0] }, b: { lat: r.geom[r.geom.length - 1][1], lon: r.geom[r.geom.length - 1][0] } });
+    let at = here && fin(here.lat) && fin(here.lon) ? here : null;
+    if (!at && left.length) { const r = left.shift(), e = ends(r); out.push({ road: r, fwd: true }); at = e.b; }
+    while (left.length && out.length < max) {
+      let best = null;
+      left.forEach((r, i) => { const e = ends(r), da = km(at, e.a), db = km(at, e.b), d = Math.min(da, db); if (!best || d < best.d) best = { i, d, fwd: da <= db, e }; });
+      if (best.d > (out.length ? NEXT_KM : FIRST_KM)) break;
+      out.push({ road: left.splice(best.i, 1)[0], fwd: best.fwd });
+      at = best.fwd ? best.e.b : best.e.a;
+    }
+    return out;
+  }
   const link = (origin, id) => `${String(origin || '').replace(/\/+$/, '')}/?roadbook=${encodeURIComponent(id)}`;
 
   /**
@@ -159,7 +181,7 @@
   /**
    * page: el, btn, toast, apiCall, jsonOf, copyText, me() → /api/me or null, here() → {lat, lon}|null, mayLookUp(p),
    * fmtLen(m), origin(), zones() → privacy zones, planned() → the planned route's track or null,
-   * driveRoad(road, book), report({kind, target, label, done}), recordings (ApexRecording), cellQuery(lat, lon),
+   * driveRoad(road, book), driveBook(book) (Drive them all), report({kind, target, label, done}), recordings (ApexRecording), cellQuery(lat, lon),
    * thumb (ApexRouteThumb), colours() → { line, hi }, changed() → the lists were changed (People redraws its count).
    */
   function mount(page) {
@@ -279,6 +301,8 @@
       }
       // keys: yours to run, or someone's to follow
       const keys = el('div', { className: 'row', style: 'flex-wrap:wrap' });
+      // a book of roads is a day out: one drive through them, nearest first (tour), from where you are
+      if (page.driveBook && (book.road_list || []).length > 1) keys.append(btn('Drive them all', () => { s.close(); page.driveBook(book); }, book.mine || book.following ? 'ink-btn solid' : 'ink-btn'));
       if (book.mine) {
         keys.append(btn('Edit', () => edit(book, () => paint(book, s, body)), 'ink-btn'));
         if (book.visibility !== 'private') keys.append(btn('Share', () => page.copyText(link(page.origin(), book.id), 'Link copied. Anyone it is shown to can open it.', book.name), 'ink-btn'));
@@ -460,6 +484,6 @@
     return { section, nearSection, open, addPart, afterDrive, scanLog, hasAny, lists: () => lists, reload: loadLists };
   }
 
-  const api = { fromTrack, coverage, overlaps, boxOf, lengthM, progress, bookLine, overview, link, mount, STAMP_AT, TRIM_M, MAX_POINTS, MIN_ROAD_M };
+  const api = { fromTrack, coverage, overlaps, boxOf, lengthM, progress, bookLine, overview, tour, link, mount, TOUR_MAX, STAMP_AT, TRIM_M, MAX_POINTS, MIN_ROAD_M };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadbooks = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -2769,6 +2769,9 @@ flow('Siri: "Drive somewhere with Vetta" plans to the place said, your own first
   const toasts = await page.evaluate(async (q) => { const before = window.apexDebug.track;
     const fix = () => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true });
     fix(); window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } };
+    // asked while the last plan is still settling (its route up, the rest still ranked, as on a slow CI runner): the ask
+    // waits for it, never dropped (CI 2026-11-14: nothing said at all)
+    const panel = document.getElementById('planPanel'); panel.classList.add('busy'); setTimeout(() => panel.classList.remove('busy'), 1500);
     window.apex.onNative({ type: 'link', params: { go: 'to', q } });
     // The phone's GPS keeps reporting while it waits (the flow gave one fix at the start: 5 s on, the page rightly said "GPS
     // lost" and went to the replay, and an ask still in flight then was dropped, failing this flow on a slow runner).
@@ -5417,6 +5420,39 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
   await page.waitForFunction(() => /Sign in to follow a roadbook/.test(document.getElementById('toast').textContent));
 }, { geolocation: { latitude: 35.6, longitude: -83.8 }, permissions: ['geolocation'] });
 
+flow('roadbooks: Drive them all routes from where you are through the book\'s roads, nearest first, each from its nearer end (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  // three roads going north ([lon, lat]): A near you, B beyond it (drawn south to north), C past B but drawn north to south
+  const road = (lat0, n, dir = 1) => { const g = Array.from({ length: n }, (_, i) => [-83.8 + Math.sin(i / 5) * 3e-4, lat0 + i * 3e-4]); return dir > 0 ? g : g.reverse(); };
+  const A = road(35.62, 40), B = road(35.70, 40), C = road(35.78, 40, -1), far = road(37.5, 40);
+  const book = { id: 'BBBBBBBBBBBBBBBB', name: 'Smokies day out', about: null, visibility: 'public', by: 'cara', mine: false, followers: 2, following: true, lat: 35.7, lon: -83.8,
+    road_list: [{ id: 'c', name: 'Road C', geom: C, length_m: 1300, stamps: 0, stamped: false }, { id: 'f', name: 'Far road', geom: far, length_m: 1300, stamps: 0, stamped: false },
+      { id: 'a', name: 'Road A', geom: A, length_m: 1300, stamps: 0, stamped: false }, { id: 'b', name: 'Road B', geom: B, length_m: 1300, stamps: 0, stamped: false }] };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/roadbooks/BBBBBBBBBBBBBBBB') return json({ ...book, roads: 4, length_m: 5200 });
+    if (u.pathname === '/api/roadbooks') return json({ mine: [], following: [] });
+    return json([]);
+  });
+  const asked = [];
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => { const req = JSON.parse(route.request().postData() || '{}'); asked.push(req.locations);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) }); });
+  await page.goto(base + '/index.html?roadbook=BBBBBBBBBBBBBBBB');
+  await page.waitForSelector('.rb-pop.open button:has-text("Drive them all")', { timeout: 15000 });
+  await page.click('.rb-pop.open button:has-text("Drive them all")');
+  await page.waitForFunction(() => window.apexDebug && apexDebug.track && apexDebug.track.id === 'roadbook_all_BBBBBBBBBBBBBBBB', null, { timeout: 20000 });
+  const locs = asked.find((l) => Array.isArray(l) && l.length > 3) || [];
+  const near = (a, q) => Math.abs(a.lat - q[1]) < 1e-4 && Math.abs(a.lon - q[0]) < 1e-4;
+  const at = (q) => locs.findIndex((l) => near(l, q));
+  const order = [at(A[0]), at(A[A.length - 1]), at(B[0]), at(B[B.length - 1]), at(C[C.length - 1]), at(C[0])];
+  check(near(locs[0], [-83.8, 35.6]) && order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1])) && at(far[0]) < 0 && at(far[far.length - 1]) < 0 && locs.length <= 10,
+    'from where you are, then A, B and C in that order, C from its north end, the far road left out: ' + JSON.stringify({ order, n: locs.length }));
+  const after = await page.evaluate(() => ({ note: document.getElementById('routeProgress').textContent, req: apexDebug.track.request, name: apexDebug.track.name }));
+  check(after.name === 'Smokies day out' && /^3 roads of its 4 from Smokies day out, nearest first: [\d.]+ (mi|km)$/.test(after.note), 'the card says how many of its roads, nearest first: ' + JSON.stringify({ note: after.note, name: after.name }));
+  check(after.req && after.req.from === null && after.req.via.length >= 5 && after.req.via.every((v) => v.shaping), 'a reroute keeps to the roads: ' + JSON.stringify(after.req && after.req.via.length));
+}, { geolocation: { latitude: 35.6, longitude: -83.8 }, permissions: ['geolocation'] });
+
 flow('crash check: a hard impact then a stop asks "Are you OK?"; no answer offers a call and a text to the contact (IDEAS D-17)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.crashContact', JSON.stringify({ name: 'Sam', phone: '+1 555 010 2030' })); } catch (_) {} });
   await page.goto(base + '/index.html');
@@ -5451,6 +5487,9 @@ flow('no signal: a hazard report waits on the phone and goes when the connection
   // fresh fix within before Debris was tapped, and nothing was saved (CI 2026-11-11; as "review mode (U-94)")
   await page.evaluate(() => { const fix = () => window.apex.live({ lat: 35.6, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 90, has_fix: true }); fix(); window.__fixes = setInterval(fix, 500); });
   await page.click('#hzReportBtn');
+  // the sheet slides up (sheet-up, 0.2 s): on a loaded runner a tap mid-slide missed the key and nothing was reported, so tap
+  // once it has settled, as a driver does (CI 2026-11-14, shard 1 and 2)
+  await page.waitForFunction(() => { const o = document.getElementById('hzOverlay'); return o.classList.contains('show') && o.getAnimations({ subtree: true }).length === 0; });
   await page.click('#hzKinds button:has-text("Debris")');
   // CI 2026-11-14: twice this wait ran out on shard 2 and never locally; on a timeout, say what the page shows instead
   await saidOn(page, /Debris saved/, { timeout: 15000 }).catch(async (e) => {
@@ -10966,6 +11005,38 @@ flow('taste from picks: Start on another route than Vetta\'s pick teaches the ta
   if (got.pick.lean) {
     await page.waitForFunction(() => /Noted: you picked the more (technical|flowing|smooth) road/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
   }
+}, { ...IPHONE, funLevel: 'fun' });
+
+flow('route callouts: each route found is tagged on the map with its time and corners, the picked one filled; a tap on another tag takes that route (route_callouts.js)', async (page, base) => {
+  const asked = [];
+  await page.clock.setFixedTime(new Date('2026-11-10T17:00:00Z'));
+  await planRouter(page, asked);
+  await funTiles(page, true);
+  const { tap } = await planPage(page, base);
+  await tap('#destInput', 'Where to?');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await planDone(page);
+  await page.waitForFunction(() => window.apexDebug.refineDone === true, null, { timeout: 20000 });
+  const tags = () => page.evaluate(() => [...document.querySelectorAll('.route-callout')].map((b) => ({ i: +b.dataset.i, on: b.classList.contains('on'), cur: b.getAttribute('aria-current'),
+    time: b.querySelector('b').textContent, corners: b.querySelector('small').textContent, label: b.getAttribute('aria-label') })));
+  await page.waitForFunction(() => document.querySelectorAll('.route-callout').length >= 2, null, { timeout: 5000 });
+  const first = await tags();
+  const on = first.filter((g) => g.on);
+  check(on.length === 1 && on[0].cur === 'true' && first.every((g) => /^(\d+ min|\d+:\d\d h)$/.test(g.time) && /^\d+ corners?$/.test(g.corners)),
+    'every route tagged with its time and corners, one filled: ' + JSON.stringify(first));
+  check(on[0].label.startsWith('This route: ') && first.filter((g) => !g.on).every((g) => g.label.startsWith('Take this route: ')), 'the tags say what a tap does: ' + JSON.stringify(first));
+  const pager = () => page.evaluate(() => document.getElementById('routeCardPager').getAttribute('aria-label') || '');
+  check(new RegExp(`^Route ${on[0].i + 1} of `).test(await pager()), 'the filled tag is the card\'s route: ' + await pager());
+  const other = first.find((g) => !g.on);
+  await page.click(`.route-callout[data-i="${other.i}"]`);
+  await page.waitForFunction((i) => new RegExp(`^Route ${i + 1} of `).test(document.getElementById('routeCardPager').getAttribute('aria-label') || '') && !document.getElementById('planPanel').classList.contains('busy'), other.i, { timeout: 15000 });
+  await page.waitForFunction((i) => { const b = document.querySelector(`.route-callout[data-i="${i}"]`); return b && b.classList.contains('on') && document.querySelectorAll('.route-callout.on').length === 1; }, other.i, { timeout: 5000 });
+  await tap('#routeDriveBtn', 'Start');
+  await page.waitForFunction(() => window.apexDebug.driveActive, null, { timeout: 10000 });
+  await page.waitForFunction(() => document.querySelectorAll('.route-callout').length === 0, null, { timeout: 5000 });
 }, { ...IPHONE, funLevel: 'fun' });
 
 flow('there and back: a trip to a place comes home another way in one tap, the destination a stop, the way out kept off the way home (graph_router.js roundTrip; Valhalla where our tiles don\'t reach)', async (page, base) => {

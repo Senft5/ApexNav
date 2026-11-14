@@ -8308,6 +8308,20 @@
    "text": "Icy today. Your best here was dry. Go gently.",
    "heard": 0.84,
    "voice": "bm_lewis"
+  },
+  "nav:arrive_right": {
+   "file": "nav_arrive_right.m4a",
+   "dur": 2.027,
+   "text": "Your destination is on the right.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:arrive_left": {
+   "file": "nav_arrive_left.m4a",
+   "dur": 2.048,
+   "text": "Your destination is on the left.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   }
  }
 }
