@@ -596,6 +596,9 @@
       ApexDriverProfile.render($('drivingRoot'), drives.length ? null : { corners: 0 });
       if (drives.length) drivingProfile((p, pr) => {
         if (view !== 'driving') return;
+        // Share my DNA (dna_card.js): the six skills as one picture, offered once all six are measured
+        const dna = window.ApexDnaCard ? ApexDnaCard.dnaModel(p) : null, share = $('drivingShare');
+        if (share) { share.hidden = !dna; driving.dna = dna; }
         ApexDriverProfile.render($('drivingRoot'), p || { corners: 0 }, { plan: pr ? planNow() : null, practice: pr, onPlan: (plan) => {
           ApexDriverProfile.savePlan(localStorage, plan);
           driving.moved = true; renderDriving();                         // the Practicing box in the Work on box's place
@@ -1267,6 +1270,16 @@
       const out = await ApexDriveCard.shareCard(cv, `${(d.name || 'drive').replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'drive'}.png`);
       const b = $('dvCard');
       if (out === 'saved') { b.textContent = 'Card saved'; setTimeout(() => { b.textContent = 'Share card'; }, 2000); }
+    });
+    // Share my DNA (dna_card.js): Your driving's six skills as one picture, sent the way the drive card is
+    $('drivingShare').addEventListener('click', async () => {
+      if (!driving.dna) return;
+      const css = getComputedStyle(document.documentElement);
+      const cv = ApexDnaCard.drawDna(document.createElement('canvas'), driving.dna,
+        { ...C, fontNum: css.getPropertyValue('--font-num').trim(), fontUi: css.getPropertyValue('--font-ui').trim() });
+      const out = await ApexDriveCard.shareCard(cv, 'driving-dna.png');
+      const b = $('drivingShare');
+      if (out === 'saved') { b.textContent = 'Card saved'; setTimeout(() => { b.textContent = 'Share my DNA'; }, 2000); }
     });
     // Compare with…: this drive against the best other drive on the same road (the drive job's reference), else any other
     const bestOther = (d) => summaryOf(dvInfo && dvInfo.bestOther) || drives.find((x) => x.id !== d.id) || null;
