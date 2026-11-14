@@ -5220,7 +5220,7 @@ flow('a saved stage: the live delta shows while you drive it and the result at t
   check(said.length === 1, `the result is said once (${JSON.stringify(said)})`);
 });
 
-flow('your best pass: on a road driven before (no stage saved) the bar shows the delta and the co-driver sums the stretch up (pass_coach.js)', async (page, base) => {
+flow('your best pass: on a road driven before (no stage saved) the bar shows the time gap and the co-driver sums the stretch up (pass_coach.js, owner 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
     window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
@@ -5241,41 +5241,42 @@ flow('your best pass: on a road driven before (no stage saved) the bar shows the
     const prof = Core.profileRecording({ lat, lon, distance_m: lat.map((_, i) => i * 5), speed_mph: v.map((x) => x * MPH), lon_g: lonG, lat_g: roughG });
     await ApexRecording.store({ id: 'e2e_before', name: 'Esses run', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: v, lon_g: lonG, lat_g: roughG,
       g_known: null, events: prof.events, elev: null, hz: 1 });
-    window.__road = { lat, lon, v, latG, lonG };
+    window.__road = { lat, lon, v, latG, lonG }; window.__clock = Date.now();
     await window.apexDebug.refreshSavedDrives();
   });
   check(await page.evaluate(() => window.apexDebug.passRefs) >= 6, 'the earlier drive\'s corners are remembered');
   await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
   await page.waitForTimeout(300);
   if (await page.isVisible('#permSheet.show')) await page.click('#permGo');
-  // drive it again, smoother, as the app's frames (half a bin apart), in bursts a second apart
+  // drive it again, smoother and 5 % quicker, as the app's frames (half a bin apart, each with its own clock), in bursts a second apart
   let barText = '';
   for (let burst = 0; burst < 10; burst++) {
     await page.evaluate((burst) => {
       const r = window.__road;
       for (let j = burst * 160; j < Math.min(1600, (burst + 1) * 160); j++) {
         const i = Math.min(799, Math.floor(j / 2)), f = (j % 2) / 2, k = Math.min(799, i + 1);
-        window.apex.live({ lat: r.lat[i] + (r.lat[k] - r.lat[i]) * f, lon: r.lon[i] + (r.lon[k] - r.lon[i]) * f, accuracy_m: 4, speed_mps: r.v[i], course_deg: 0,
-          lat_g: r.latG[i], lon_g: r.lonG[i], has_fix: true, calibration: 'locked' });
+        window.__clock += 2500 / (r.v[i] * 1.05);
+        window.apex.live({ lat: r.lat[i] + (r.lat[k] - r.lat[i]) * f, lon: r.lon[i] + (r.lon[k] - r.lon[i]) * f, accuracy_m: 4, speed_mps: r.v[i] * 1.05, course_deg: 0,
+          lat_g: r.latG[i] * 1.1025, lon_g: r.lonG[i], has_fix: true, calibration: 'locked', at: window.__clock });
       }
     }, burst);
     await page.waitForTimeout(1050);
     if (!barText && await page.isVisible('#coachBar')) barText = await page.textContent('#coachBar');
   }
-  check(/This stretch\s*\+\d+ vs best/.test(barText), `the bar showed the stretch ahead of your best (${JSON.stringify(barText)})`);
+  check(/This stretch\s*−\d+\.\d s vs best/.test(barText), `the bar showed the time gap, ahead of your best (${JSON.stringify(barText)})`);
   // then a straight: 600 m on with no remembered corner ends the stretch, and the co-driver says how it went, once
   for (let burst = 0; burst < 10 && !(await page.evaluate(() => window.__said.some((t) => /^Best stretch yet/.test(t)))); burst++) {
     await page.evaluate((burst) => {
       const r = window.__road, n = r.lat.length, dLa = r.lat[n - 1] - r.lat[n - 2], dLo = r.lon[n - 1] - r.lon[n - 2];
       for (let j = 1; j <= 80; j++) { const k = burst * 80 + j;
+        window.__clock += 125;
         window.apex.live({ lat: r.lat[n - 1] + dLa * k / 2, lon: r.lon[n - 1] + dLo * k / 2, accuracy_m: 4, speed_mps: 20, course_deg: 0,
-          lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); }
+          lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked', at: window.__clock }); }
     }, burst);
     await page.waitForTimeout(1000);
   }
   const said = await page.evaluate(() => window.__said.filter((t) => /stretch|your best|through there/i.test(t)));
-  check(said.filter((t) => /^Best stretch yet\. \d+ up\.$/.test(t)).length === 1, `the stretch is summed up once (${JSON.stringify(said)})`);
-  check(!said.some((t) => /faster|speed|later|sooner|second/i.test(t)), 'never time or speed');
+  check(said.filter((t) => /^Best stretch yet\. (\w+ tenths?|\d+\.\d seconds) up\.$/.test(t)).length === 1, `the stretch is summed up once, in time (${JSON.stringify(said)})`);
   check(!(await page.isVisible('#coachBar')), 'the bar goes when the stretch ends');
 });
 
