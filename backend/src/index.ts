@@ -1,5 +1,6 @@
-// ApexNav API Worker. Static files are served by Cloudflare's asset layer; only /api/* reaches this code
-// (wrangler.jsonc: assets.run_worker_first). Phones never talk to the database directly.
+// ApexNav API Worker. Static files are served by Cloudflare's asset layer; only /api/* and the front pages reach this code
+// (wrangler.jsonc: assets.run_worker_first; the front pages and app links: src/hosts.ts). Phones never talk to the database directly.
+import { routeHost } from "./hosts";
 import {
   APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, invitePreview, logout, redeemInvite, requireMember, requireUser, sessionCookie, sessionHash, viewer,
 } from "./auth";
@@ -458,6 +459,8 @@ function withAppCors(res: Response): Response {
 
 export default {
   async fetch(req: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
+    const site = await routeHost(req, env);   // www., the app-links file, and the front pages of vettadrive.app / .com (src/hosts.ts)
+    if (site) return site;
     const fromApp = req.headers.get("origin") === APP_ORIGIN;
     if (req.method === "OPTIONS") return fromApp ? new Response(null, { status: 204, headers: APP_CORS }) : new Response(null, { status: 405 });
     const t0 = Date.now(), seen = { route: "" };
