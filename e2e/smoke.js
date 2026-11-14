@@ -10518,6 +10518,16 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
   let asked = '';
   await page.route(/^https:\/\/overpass/, (route) => { asked = decodeURIComponent(route.request().postData() || ''); return route.fulfill({ contentType: 'application/json',
     body: JSON.stringify({ elements: [{ type: 'node', id: 1, tags: { name: 'Bean There Coffee', opening_hours: '24/7', phone: '+1 513 555 0101', website: 'beanthere.example.com' } }] }) }); });
+  // a street photo facing it (place_photo.js): Mapillary's images in the square round it, one 30 m south looking north
+  let photoAsked = '';
+  await page.route('**/api/ctx/keys', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ keys: { mapillaryToken: 'MLY|test' } }) }));
+  await page.route('https://graph.mapillary.com/**', (route) => { photoAsked = route.request().url();
+    const b = new URL(photoAsked).searchParams.get('bbox').split(',').map(Number), lon = (b[0] + b[2]) / 2, lat = (b[1] + b[3]) / 2;
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [
+      { id: '7', thumb_1024_url: 'https://scontent.test.fbcdn.net/away.jpg', computed_compass_angle: 180, captured_at: Date.UTC(2024, 0, 1), computed_geometry: { coordinates: [lon, lat - 30 / 111320] }, creator: { username: 'away' } },
+      { id: '8', thumb_1024_url: 'https://scontent.test.fbcdn.net/facing.jpg', computed_compass_angle: 2, captured_at: Date.UTC(2023, 5, 1), computed_geometry: { coordinates: [lon, lat - 30 / 111320] }, creator: { username: 'roadie' } }] }) }); });
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+  await page.route('https://scontent.test.fbcdn.net/**', (route) => route.fulfill({ contentType: 'image/png', body: PNG }));
   // on by default since the owner said yes (2026-11-14); apex.mapPlaces = '0' turns it off
   await planPage(page, base);
   await page.waitForFunction(() => apexDebug.map.getLayer('apex-places'), null, { timeout: 10000 });
@@ -10548,6 +10558,13 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
   const more = await page.evaluate(() => ({ hours: document.getElementById('pinHours').textContent, keys: [...document.querySelectorAll('#pinContact a')].map((a) => [a.textContent, a.getAttribute('href'), a.getBoundingClientRect().height]) }));
   check(more.hours === 'Open 24 hours' && JSON.stringify(more.keys.map((k) => k.slice(0, 2))) === '[["Call","tel:+15135550101"],["Website","https://beanthere.example.com/"]]' && more.keys.every((k) => k[2] >= 44)
     && /"name"="Bean There Coffee"/.test(asked), 'the card says it is open and offers Call and Website: ' + JSON.stringify({ more, asked }));
+  // and a street photo of it at the top, the one facing it, with who took it (2026-11-14, as Apple and Google Maps lead with one)
+  await page.waitForFunction(() => !document.getElementById('pinPhoto').hidden, null, { timeout: 5000 })
+    .catch(async () => { throw new Error('no photo on the card: ' + JSON.stringify({ photoAsked })); });
+  const photo = await page.evaluate(() => { const f = document.getElementById('pinPhoto'), r = f.getBoundingClientRect(), sheet = f.parentElement.getBoundingClientRect();
+    return { src: f.querySelector('img').getAttribute('src'), credit: f.querySelector('a').textContent, href: f.querySelector('a').getAttribute('href'), full: Math.abs(r.width - sheet.width) < 1, above: r.bottom <= document.getElementById('pinPlace').getBoundingClientRect().top }; });
+  check(photo.src === 'https://scontent.test.fbcdn.net/facing.jpg' && photo.credit === 'Photo: roadie · Mapillary · 2023 · CC BY-SA' && /pKey=8/.test(photo.href) && photo.full && photo.above
+    && /access_token=MLY%7Ctest/.test(photoAsked), 'the card leads with the photo facing the place, credited: ' + JSON.stringify(photo));
   await page.click('#pinCancelBtn');
   // in a drive the map carries the road, not the shops
   await page.evaluate(() => { for (let i = 0; i < 5; i++) window.apex.live({ lat: 39.155 + i * 1e-5, lon: -84.615, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0, lon_g: 0 }); });
