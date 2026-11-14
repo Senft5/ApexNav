@@ -37,6 +37,7 @@ console.log(JSON.stringify({
   t: [G.timeAt(sp, 0), G.timeAt(sp, 0.5), G.timeAt(sp, 1)], gap: G.gapAt(sp, 0.5, 26.2),
   same: live(20), slow: live(16), backwards: anyBack,
   corners: G.cornerSplits(fine.map(([q, t]) => [q, t * 1.1]), sp),
+  standout: G.standout([{ k: 1, gap_s: 0.5 }, { k: 2, gap_s: -1.2 }, { k: 3, gap_s: 0.02 }, { k: 4, gap_s: 2 }, { k: 5, gap_s: 0.3 }, { k: 6, gap_s: 0.1 }], 2),
   labels: [G.label(0.31, 'sam'), G.label(-1.24, '@sam'), G.label(0.01, 'sam'), G.label(null, 'sam')],
   spoken: [G.spoken(0.3, 'sam'), G.spoken(-1.4, '@sam'), G.spoken(0, 'sam'), G.spoken(null, 'sam')],
 }));
@@ -84,3 +85,8 @@ def test_corner_splits_and_words(out):
     assert c["rows"][0] == {"k": 1, "a": 0, "b": 0.15, "mine_s": 8.25, "ghost_s": 7.5, "gap_s": 0.75}
     assert out["labels"] == ["+0.3 s vs @sam", "−1.2 s vs @sam", "level with @sam", "--"]
     assert out["spoken"] == ["0.3 seconds down on sam.", "1.4 seconds up on sam.", "Level with sam.", None]
+
+
+def test_what_decided_it(out):
+    st = out["standout"]
+    assert [r["k"] for r in st["lost"]] == [4, 1] and [r["k"] for r in st["gained"]] == [2]

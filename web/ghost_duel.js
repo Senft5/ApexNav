@@ -93,6 +93,16 @@
     return { rows, total: finite(total) ? Math.round(total * 10) / 10 : null };
   }
 
+  /**
+   * The few stretches that decided it (cornerSplits rows): where you lost most to the ghost and where you gained most, at
+   * most n of each, each over 0.05 s, biggest first.
+   */
+  function standout(rows, n = 3) {
+    const ok = (rows || []).filter((r) => r && finite(r.gap_s));
+    return { lost: ok.filter((r) => r.gap_s > 0.05).sort((a, b) => b.gap_s - a.gap_s).slice(0, n),
+             gained: ok.filter((r) => r.gap_s < -0.05).sort((a, b) => a.gap_s - b.gap_s).slice(0, n) };
+  }
+
   /** "+0.3 vs @sam", "−1.2 vs @sam", "level with @sam"; "--" when nothing compares yet. */
   function label(gap, who) {
     const w = who ? `@${String(who).replace(/^@/, '')}` : 'them';
@@ -174,6 +184,6 @@
     };
   }
 
-  const api = { cutsOf, splitsOf, timeAt, gapAt, cornerSplits, label, spoken, createTracker, countFor, MAX };
+  const api = { cutsOf, splitsOf, timeAt, gapAt, cornerSplits, standout, label, spoken, createTracker, countFor, MAX };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexGhostDuel = api;
 })(typeof window !== 'undefined' ? window : globalThis);
