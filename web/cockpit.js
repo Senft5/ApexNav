@@ -5667,6 +5667,10 @@
     // to?, and "gas", "coffee near me" or "food" typed lists the nearest by name from the map's own tiles (stages.js
     // poisAll, kept on the phone: works with no signal where the map was seen), the same places the car's Places name.
     const isElectric = () => { const c = routingCar(); return !!(c && c.fuel === 'electric'); };
+    // the keys' glyphs (24 px grid, BRAND.md Icons): a pump, a bolt, a cup, a fork and knife
+    const NEARBY_GLYPH = { gas: 'M5 21V5.5A1.5 1.5 0 0 1 6.5 4h6A1.5 1.5 0 0 1 14 5.5V21M3.5 21h12M7.5 9h4M14 10h1.5a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 0 3 0V8.5L17.5 6',
+      charge: 'M13 3 6 13.5h5L10 21l7-10.5h-5z', coffee: 'M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 11h1.5a2.5 2.5 0 0 1 0 5H16M9 3.5v2.5M12.5 3.5v2.5',
+      food: 'M7 3v7M5 3v5a2 2 0 0 0 4 0V3M7 10v11M17 21V3c-2 1.5-3 4.5-3 9h3' };
     function paintNearbyKeys() {
       const box = $('nearbyKeys');
       if (!window.ApexNearby) { box.hidden = true; return; }
@@ -5675,7 +5679,9 @@
         box.dataset.keys = want;
         box.replaceChildren(...ApexNearby.keys(isElectric()).map((k) => {
           const b = document.createElement('button'), c = ApexNearby.CATS[k];
-          b.className = 'chip'; b.textContent = c.label; b.setAttribute('aria-label', `${c.label} nearby`);
+          b.className = 'chip rkey'; b.setAttribute('aria-label', `${c.label} nearby`);
+          const i = document.createElement('i'); i.setAttribute('aria-hidden', 'true'); i.innerHTML = `<svg viewBox="0 0 24 24"><path d="${NEARBY_GLYPH[k]}"/></svg>`;
+          b.append(i, c.label);
           b.addEventListener('click', () => { $('destInput').value = c.label; clearTimeout(suggestTimer); renderPlaces(); paintTask(); });
           return b;
         }));
