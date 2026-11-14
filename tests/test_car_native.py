@@ -186,3 +186,19 @@ def test_location_turned_off_is_said_and_settings_is_one_key_away():
     assert "if (frame && NATIVE_SHELL && typeof frame.location_off === 'boolean') setLocOff(frame.location_off);" in page
     assert "postMessage({ cmd: 'openSettings' })" in page
     assert "$('startDrive').disabled" not in page and "disabled: locDenied" not in page, "no key greyed out without a word"
+
+
+def test_every_live_frame_key_is_encoded():
+    """LiveFrame has its own encode(to:): a key in CodingKeys that it never encodes never reaches the page. location_off
+    was missing (the page waited on "Finding GPS" with Location off) until 2026-11-14; heading_deg feeds the heading beam."""
+    swift = read("ApexNavApp.swift")
+    keys = swift[swift.index("enum CodingKeys", swift.index("struct LiveFrame")):swift.index("static func r(")]
+    enc = swift[swift.index("func encode(to encoder: Encoder)", swift.index("struct LiveFrame")):swift.index("// MARK: - Native Sensor Shell")]
+    body = re.sub(r"//[^\n]*", "", keys.split("case", 1)[1].split("}", 1)[0])
+    names = [part.split("=")[0].strip() for part in body.replace("\n", " ").split(",") if part.strip()]
+    assert "headingDeg" in names and "locationOff" in names
+    for n in names:
+        assert f"forKey: .{n})" in enc, n
+    push = swift[swift.index("private func pushLiveFrame()"):swift.index("private static let liveQueue")]
+    assert "headingDeg: r(Date().timeIntervalSince(headingAt) < 5 ? headingDeg : nil, 0)" in push
+    assert "startUpdatingHeading()" in swift and "didUpdateHeading newHeading: CLHeading" in swift

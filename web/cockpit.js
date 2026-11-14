@@ -211,7 +211,7 @@
     const BACK_ON_QUIET_MS = 60000;
     const etaPace = ApexEta.createEta();   // live ETA on the current route: pace per section class, a slow arrival (paintEta, U-108)
     const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
-    let etaText = '', etaLeftS = null;
+    let etaText = '', etaLeftS = null, etaFig = null;
     let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
     const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, echo: 0, attacks: [], road: '', roadAt: -1e9, limitKey: '' };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
@@ -458,6 +458,19 @@
       halo.setLngLat([cam.pLon, cam.pLat]);
     }
     map.on('zoom', () => { if (fixAcc) paintHalo(); });
+    // the heading beam (gps_halo.js beam): a soft cone from the arrow toward where the phone points, from the app's compass,
+    // while you stand or walk (in a car the arrow points along the road); none without a compass reading
+    const beamEl = document.createElement('div');
+    beamEl.className = 'heading-beam'; beamEl.hidden = true; beamEl.setAttribute('aria-hidden', 'true');
+    beamEl.innerHTML = '<svg viewBox="0 0 120 120" width="120" height="120"><defs><radialGradient id="hbFade" cx="60" cy="60" r="58" gradientUnits="userSpaceOnUse"><stop offset="0.15" stop-color="currentColor" stop-opacity="0.7"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></radialGradient></defs><path d="M60 60 L38 6 A58 58 0 0 1 82 6 Z" fill="url(#hbFade)"/></svg>';
+    const beamMk = new maplibregl.Marker({ element: beamEl, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat([-84.70, 39.24]).addTo(map);
+    beamEl.removeAttribute('aria-label'); beamEl.removeAttribute('role'); beamEl.removeAttribute('tabindex');
+    let fixBeam = null;                                                 // { deg, at } from the last idle frame
+    function paintBeam() {
+      const on = fixBeam && performance.now() - fixBeam.at < 5000 && state.mode !== 'live' && !replayOn && cam.ready;
+      beamEl.hidden = !on;
+      if (on) beamMk.setLngLat([cam.pLon, cam.pLat]).setRotation(fixBeam.deg);
+    }
     const puckEl = document.createElement('div');
     puckEl.className = 'puck';
     puckEl.setAttribute('role', 'img');
@@ -515,6 +528,9 @@
       if (has('apex-alt')) map.setPaintProperty('apex-alt', 'line-color', C.route);
       if (has('apex-explore')) map.setPaintProperty('apex-explore', 'line-color', C.route);
       if (has('apex-twisty')) map.setPaintProperty('apex-twisty', 'line-color', C.amber);
+      for (const id of ['apex-turnarrow-casing', 'apex-turnarrow-headline']) if (has(id)) map.setPaintProperty(id, 'line-color', C.route);
+      if (has('apex-turnarrow')) map.setPaintProperty('apex-turnarrow', 'line-color', C.routeCasing);
+      if (has('apex-turnarrow-head')) map.setPaintProperty('apex-turnarrow-head', 'fill-color', C.routeCasing);
       if (has('apex-places')) { map.setPaintProperty('apex-places', 'text-color', P.label); map.setPaintProperty('apex-places', 'text-halo-color', P.halo); placeGlyphs(P.label, P.halo); }
       // Measured roads by the pavement measured there (coverage.js surface): smooth, fair, rough; ink where roughness is unknown
       if (has('apex-coverage')) map.setPaintProperty('apex-coverage', 'line-color', ['match', ['get', 's'], 1, C.gain, 2, C.amber, 3, C.signal, C.dim]);
@@ -578,8 +594,54 @@
       map.addSource('apex-ribbon-src', { type: 'geojson', data: emptyFC() }); ribbonKey = null;
       map.addLayer({ id: 'apex-ribbon', type: 'line', source: 'apex-ribbon-src', layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': ['get', 'c'], 'line-width': width(4, 9) } });
+      // the arrow at the next turn of a route being driven (turn_arrow.js), over the route line: the theme's paper inside the
+      // route's ink, the head a filled triangle. Its size is in pixels (paintTurnArrow builds it for the zoom it is seen at).
+      map.addSource('apex-turnarrow-src', { type: 'geojson', data: emptyFC() }); turnArrowKey = null; behindKey = '';
+      const isShaft = ['==', ['get', 'part'], 'shaft'], isHead = ['==', ['get', 'part'], 'head'], AC = look.colors || {};
+      map.addLayer({ id: 'apex-turnarrow-casing', type: 'line', source: 'apex-turnarrow-src', filter: isShaft, layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': AC.route || '#1C1A17', 'line-width': TURN_ARROW_PX.shaft + 2 * TURN_ARROW_PX.edge } });
+      map.addLayer({ id: 'apex-turnarrow-headline', type: 'line', source: 'apex-turnarrow-src', filter: isHead, layout: { 'line-join': 'round' },
+        paint: { 'line-color': AC.route || '#1C1A17', 'line-width': 2 * TURN_ARROW_PX.edge } });
+      map.addLayer({ id: 'apex-turnarrow', type: 'line', source: 'apex-turnarrow-src', filter: isShaft, layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': AC.routeCasing || '#F2EBDD', 'line-width': TURN_ARROW_PX.shaft } });
+      map.addLayer({ id: 'apex-turnarrow-head', type: 'fill', source: 'apex-turnarrow-src', filter: isHead,
+        paint: { 'fill-color': AC.routeCasing || '#F2EBDD', 'fill-antialias': true } });
     }
     const emptyFC = () => ({ type: 'FeatureCollection', features: [] });
+    // The next turn's arrow (turn_arrow.js) while a route is driven, from 2 km out until the turn is taken: drawn for the
+    // zoom it is seen at, so it keeps its size in pixels as the drive's camera zooms with speed. Off the route, an arrival,
+    // no route: none.
+    const TURN_ARROW_PX = { shaft: 10, edge: 3, halfW: 13, head: 17, before: 70, after: 40 }, TURN_ARROW_AHEAD_M = 2000;
+    let turnArrowKey = null;
+    function paintTurnArrow(steps, i) {
+      const src = mapReady && map.getSource('apex-turnarrow-src');
+      if (!src) return;
+      const st = steps && i >= 0 ? steps[i] : null, ahead = st ? st.m - state.cursorM : NaN;
+      const z = map.getZoom(), lat = map.getCenter().lat, zk = Math.round(z * 4) / 4;
+      const show = !!(st && (driveActive || state.playing) && window.ApexTurnArrow && window.ApexGpsHalo && track && ahead <= TURN_ARROW_AHEAD_M && zk >= 13);
+      const key = show ? `${track.id}:${i}:${zk}` : 'none';
+      if (key === turnArrowKey) return;
+      turnArrowKey = key;
+      let fc = null;
+      if (show) {
+        const mpp = ApexGpsHalo.metresPerPx(lat, zk), P = TURN_ARROW_PX;
+        // along the route at least 25 m before and 15 m past the turn, so a turn close in still reads as a turn
+        fc = ApexTurnArrow.arrow(track, st, { before: Math.max(25, P.before * mpp), after: Math.max(15, P.after * mpp), head: P.head * mpp, halfW: P.halfW * mpp });
+      }
+      src.setData(fc || emptyFC());
+      if (window.apexDebug) window.apexDebug.turnArrow = fc ? { step: i, m: st.m } : null;
+      carArrow(show ? st : null, show ? `${track.id}:${i}` : '');
+    }
+    // The car's map has the same arrow (CarPlay/ApexCarMap.swift, web/carmap.js), sized in metres for its street zoom; sent
+    // when the turn changes, empty for none.
+    const CAR_ARROW = { before: 70, after: 45, head: 22, halfW: 16 };
+    let carArrowKey = null;
+    function carArrow(st, key) {
+      if (key === carArrowKey || !window.ApexCarPlay || !ApexCarPlay.arrowMessage) return;
+      carArrowKey = key;
+      if (!driveActive && key) return;
+      carPost(ApexCarPlay.arrowMessage(st ? ApexTurnArrow.arrow(track, st, CAR_ARROW) : null));
+    }
     // the kinds of place drawn (OpenMapTiles poi classes): what a driver stops for
     const PLACE_CLASSES = ['restaurant', 'fast_food', 'cafe', 'bar', 'beer', 'ice_cream', 'bakery', 'fuel', 'grocery', 'lodging', 'car', 'attraction', 'museum'];
     const PLACE_WORD = { restaurant: 'Restaurant', fast_food: 'Fast food', cafe: 'Café', bar: 'Bar', beer: 'Bar', ice_cream: 'Ice cream', bakery: 'Bakery',
@@ -851,14 +913,16 @@
       if (!window.ApexScenic || !ApexScenic.declutter) return;
       // the route notes' stamps (LPR, SPD, a hazard) are `fixed`: always shown, the map's pins kept off them (scenic.js)
       const notePins = pins.map((p) => ({ marker: p.marker, el: p.el, kind: `note:${p.e.code}`, fixed: true, m: p.e.dist_m }));
-      const shown = poiDeclutter.pins.concat(notePins).filter((p) => p.el.style.display !== 'none' && p.el.isConnected), c = map.getContainer();
+      // the route tags (route_callouts.js) too: a stamp under one is hidden, the tag stays (it sits above its point)
+      const tagPins = callouts.map((mk) => ({ marker: mk, el: mk.getElement(), kind: 'callout', fixed: true, m: 0, tag: true }));
+      const shown = poiDeclutter.pins.concat(notePins, tagPins).filter((p) => p.el.style.display !== 'none' && p.el.isConnected), c = map.getContainer();
       const close = map.getZoom() >= VIEW_NAME_ZOOM;                    // a named viewpoint's name, only where it has room
       for (const p of shown) if (p.kind === 'view' && p.name) { const t = close ? p.name : SCENIC_LABEL.view; if (p.el.textContent !== t) p.el.textContent = t; }
       const keep = ApexScenic.declutter(shown.map((p) => {
-        const xy = map.project(p.marker.getLngLat());
-        return { kind: p.kind, named: p.named, fixed: !!p.fixed, m: p.m, x: xy.x, y: xy.y, w: p.el.offsetWidth, h: p.el.offsetHeight };
+        const xy = map.project(p.marker.getLngLat()), h = p.el.offsetHeight;
+        return { kind: p.kind, named: p.named, fixed: !!p.fixed, m: p.m, x: xy.x, y: p.tag ? xy.y - 6 - h / 2 : xy.y, w: p.el.offsetWidth, h };   // a tag's box is above its point
       }), { w: c.clientWidth, h: c.clientHeight });
-      shown.forEach((p, i) => { p.el.style.visibility = keep[i] ? '' : 'hidden'; });
+      shown.forEach((p, i) => { if (!p.tag) p.el.style.visibility = keep[i] ? '' : 'hidden'; });
     }
     map.on('move', declutterSoon);
     map.on('resize', declutterSoon);
@@ -1044,6 +1108,40 @@
       }
     });
     map.getContainer().querySelectorAll('.maplibregl-ctrl-attrib').forEach((a) => attribWatch.observe(a, { attributes: true, attributeFilter: ['class'], attributeOldValue: true }));
+    // The compass (index.html #compassBtn): shown while the idle map is turned more than 3 degrees off north; its needle
+    // turns with the map; a tap turns the map to north and holds it there (follow pauses, Recenter brings the heading back)
+    function paintCompass() {
+      const b = $('compassBtn'), bear = ((map.getBearing() % 360) + 540) % 360 - 180, off = Math.abs(bear) > 3 && state.mode !== 'live';
+      if (b.hidden !== !off) b.hidden = !off;
+      if (off) b.querySelector('svg').style.transform = `rotate(${-bear}deg)`;
+    }
+    map.on('rotate', paintCompass);
+    map.on('moveend', paintCompass);
+    $('compassBtn').addEventListener('click', () => { pauseFollow(); map.easeTo({ bearing: 0, duration: 450 }); });
+    // Route overview in a drive (as Apple and Google Maps have it): the rest of the route from where you are to the end, north
+    // up and flat, for OVERVIEW_S; then the drive's camera glides back by itself, as after a drag (Recenter counts it down,
+    // and a tap on it comes back at once). The key shows only while a route is driven and the camera follows.
+    const OVERVIEW_S = 10;
+    function routeOverview() {
+      const t = track;
+      if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
+      let w = 180, e = -180, so = 90, n = -90;
+      const add = (la, lo) => { if (!Number.isFinite(la) || !Number.isFinite(lo)) return; w = Math.min(w, lo); e = Math.max(e, lo); so = Math.min(so, la); n = Math.max(n, la); };
+      const from = Math.max(0, state.cursorIdx), step = Math.max(1, Math.floor((t.lat.length - from) / 400));
+      for (let i = from; i < t.lat.length; i += step) add(t.lat[i], t.lon[i]);
+      add(t.lat[t.lat.length - 1], t.lon[t.lon.length - 1]);
+      if (state.live) add(state.live.lat, state.live.lon);
+      if (!(e >= w && n >= so)) return;
+      pauseFollow();
+      fitInView([[w, so], [e, n]], viewInsets().b + 40);
+      scheduleResume(OVERVIEW_S);
+      paintOverviewKey();
+    }
+    function paintOverviewKey() {
+      const on = !!(driveActive && state.mode === 'live' && track && track.kind === 'route' && state.cursorIdx >= 0);
+      if ($('overviewBtn').hidden === on) $('overviewBtn').hidden = !on;
+    }
+    $('overviewBtn').addEventListener('click', routeOverview);
     $('recenterBtn').addEventListener('click', () => { if (locDenied && !track && $('app').classList.contains('idle')) { showPerms(); return; } resumeFollow(); render(false); });   // the idle map with Location off has nowhere to come back to: say so
 
     // =======================================================================
@@ -1223,6 +1321,7 @@
         puck.setLngLat([cam.pLon, cam.pLat]).setRotation(cam.pBear);
         sightTag.setLngLat([cam.pLon, cam.pLat]);
         if (fixAcc) paintHalo();
+        if (fixBeam) paintBeam();
       }
       if (!state.follow) return;
       const f = CAM_FEEL[state.camFeel] || CAM_FEEL.dynamic, t = camTargets();
@@ -1270,18 +1369,18 @@
     }
     // the app's own camera move (a route fit): follow pauses with no recenter key; a drag of the map brings it (U-122)
     function holdFollow() { state.follow = false; clearTimeout(resumeTimer); clearInterval(resumeTick); recenterLeft(0); }
-    function scheduleResume() {
+    function scheduleResume(total = FOLLOW_RESUME_S) {
       clearTimeout(resumeTimer); clearInterval(resumeTick);
-      let left = FOLLOW_RESUME_S;
-      recenterLeft(left);
-      resumeTick = setInterval(() => { left -= 1; if (left > 0) recenterLeft(left); }, 1000);
-      resumeTimer = setTimeout(resumeFollow, FOLLOW_RESUME_S * 1000);
+      let left = total;
+      recenterLeft(left, total);
+      resumeTick = setInterval(() => { left -= 1; if (left > 0) recenterLeft(left, total); }, 1000);
+      resumeTimer = setTimeout(resumeFollow, total * 1000);
     }
     // U-71: the key's face is always the glyph; a countdown drains a bar along its foot (restarted for each new one), and
     // the seconds go only to its label
-    function recenterLeft(s) {
+    function recenterLeft(s, total = FOLLOW_RESUME_S) {
       const b = $('recenterBtn'), bar = b.querySelector('.rc-left');
-      if (s === FOLLOW_RESUME_S) { b.classList.remove('counting'); void bar.offsetWidth; b.style.setProperty('--rc-s', `${s}s`); }
+      if (s === total) { b.classList.remove('counting'); void bar.offsetWidth; b.style.setProperty('--rc-s', `${s}s`); }
       b.classList.toggle('counting', s > 0);
       b.setAttribute('aria-label', s > 0 ? `Recenter (on its own in ${s} s)` : 'Recenter');
     }
@@ -1519,10 +1618,27 @@
     // line-color rules again.
     const PEN_LAYERS = ['apex-route-casing', 'apex-route'];
     let pen = null, penCarry = false;
+    // A route being driven: the part behind you faint (route_reveal.js behind), as Apple and Google Maps draw it, so the line
+    // on the map is the way still to go. A gradient on the same layers as the pen's, which never runs in a drive.
+    let behindKey = '';
+    function paintBehind() {
+      if (!mapReady || pen) return;
+      const T = totalM(), on = driveActive && state.mode === 'live' && track && track.kind === 'route' && !track.sectors && state.cursorIdx >= 0 && T > 0;
+      const p = on ? Math.round(1000 * Math.max(0, Math.min(T, state.cursorM)) / T) / 1000 : null, C = look.colors;
+      const key = on ? `${p}:${C.route}:${C.routeCasing}` : '';
+      if (key === behindKey) return;
+      behindKey = key;
+      const cols = { 'apex-route-casing': C.routeCasing, 'apex-route': C.route };
+      try {
+        for (const id of PEN_LAYERS) if (map.getLayer(id)) map.setPaintProperty(id, 'line-gradient', on && window.ApexReveal && ApexReveal.behind ? ApexReveal.behind(cols[id], p) || undefined : undefined);
+      } catch (_) { behindKey = ''; }
+      if (window.apexDebug) window.apexDebug.behind = on ? p : null;
+    }
     function penStop() {
       if (!pen) return;
       cancelAnimationFrame(pen.raf); clearTimeout(pen.timer); pen = null;
       try { for (const id of PEN_LAYERS) if (map.getLayer(id)) map.setPaintProperty(id, 'line-gradient', undefined); } catch (_) { /* the map went (a lost context): nothing to tidy */ }
+      behindKey = '';
     }
     function penDraw(t, ms) {
       if (pen && pen.t === t && !(ms > 0)) return;                      // the same route sent again mid-stroke: the stroke carries on
@@ -1975,6 +2091,9 @@
       for (let j = Math.max(0, pend); pend >= 0 && j < steps.length; j++) {
         if (ApexDirections.phrase(steps[j]) && !state.spoken.has(`${track.id}:dir:${j}:now`)) { turnHold.m = steps[j].m; break; }
       }
+      paintTurnArrow(steps, pend);
+      paintOverviewKey();
+      paintBehind();
       const moving = !!(state.playing || live) && vMps != null, now = performance.now();
       const reactS = reaction.reactionS;
       // U-58: Auto reads the road ahead. A corner within two leads (at least 800 m) that is tight or needs braking keeps
@@ -3919,8 +4038,13 @@
             if (b.kind === 'skip') skipStage(b.span); else headHome(); } }); }
       }
       etaLeftS = est ? est.leftS : null;
-      const text = est ? `${ApexEta.leftText(est.leftS, est.rough)} · ${etaClock().format(new Date(est.arriveAt))}` : '';
-      if (text !== etaText) { etaText = text; paintDriveStat(); }
+      const clock = est ? etaClock().format(new Date(est.arriveAt)) : '';
+      const text = est ? `${ApexEta.leftText(est.leftS, est.rough)} · ${clock}` : '';
+      // the figures under the map (eta.js figures): arrival, time left, distance left, set as Apple and Google Maps set them
+      const fig = est ? ApexEta.figures(est.leftS, est.rough, clock, ApexUnits.long(Math.max(0, totalM() - atM), 1)) : null;
+      const figKey = fig ? JSON.stringify(fig) : '', was = etaFig ? JSON.stringify(etaFig) : '';
+      etaFig = fig;
+      if (text !== etaText || figKey !== was) { etaText = text; paintDriveStat(); }
     }
     // Perf: one clock formatter (toLocaleTimeString built a new one with every fix); the same words as before
     let etaClockFmt = null;
@@ -4857,6 +4981,8 @@
         callouts.push(new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -6] }).setLngLat([g.lon, g.lat]).addTo(map));
         el.setAttribute('aria-label', g.label);                            // after the Marker, which labels it "Map marker"
       }
+      declutterSoon();                                                     // the stamps under a tag step aside
+      if (window.apexDebug) window.apexDebug.calloutAt = () => callouts.map((mk) => { const q = map.project(mk.getLngLat()), r = map.getContainer().getBoundingClientRect(); return [q.x + r.left, q.y + r.top]; });
     }
     function setFunLevel(level) {
       if (!FunRoute.LEVELS[level]) return;
@@ -6806,6 +6932,7 @@
           const missing = Object.entries(s.config).filter(([, v]) => !v).map(([k]) => k);
           box.append(el('p', { className: 'note', textContent: `Database ${s.db ? 'answers' : 'not answering'} · ${missing.length ? `not set: ${missing.join(', ')}` : 'every binding and secret set'}` }),
             el('p', { className: 'note', textContent: `Road graph on GitHub: ${s.graph_data.http === 200 ? `${s.graph_data.tiles} tiles` : `HTTP ${s.graph_data.http || '--'} ${s.graph_data.error || ''}`} · ${(s.graph_data.ms / 1000).toFixed(1)} s` }),
+            ...(s.realtime ? [el('p', { className: 'note', textContent: `${s.realtime.ok ? dot.up : dot.down} Convoy voice (Cloudflare Realtime): ${s.realtime.ok ? 'answers' : `HTTP ${s.realtime.http || '--'} ${s.realtime.error || ''}`} · ${(s.realtime.ms / 1000).toFixed(1)} s` })] : []),
             ...s.overpass.map((o) => el('p', { className: 'note', textContent: `${o.elements != null ? dot.up : dot.down} Overpass ${o.host} from the server: ${o.elements != null ? `${o.elements} features` : `HTTP ${o.http || '--'} ${o.error || ''}`} · ${(o.ms / 1000).toFixed(1)} s` })));
           // the usage guard (backend src/usage.ts): this month against the $5 plan's included amounts
           const u = s.usage;
@@ -7006,6 +7133,10 @@
       speak: (text, urgent) => { if (!state.toggles.voice) { toast(text); if (urgent && driveActive) carPost({ kind: 'hazard', title: text }); } else if (urgent) say(text, true, null, null, { kind: 'hazard', alert: true }); else sayNext(text, `convoy:${text}`); },
       onRegroup: (rg, convoyName) => regroupSay(rg, convoyName),
       drive: () => startDrive(),                                       // the convoy sheet's "Start the drive" (Convoy now, P-11)
+      // convoy voice (convoy_voice.js): the voices go down while the co-driver speaks; the iOS shell opens a call-style
+      // audio session (speaker, Bluetooth car audio, AirPods) while the channel is on
+      speaking: () => !!speech.busy,
+      nativeTalk: (on) => { if (NATIVE_SHELL) { try { window.webkit.messageHandlers.apex.postMessage({ cmd: 'talk', on: !!on }); } catch (_) {} } },
     }) : null; } catch (e) { console.error('convoy', e); convoy = null; } });   // the convoy never takes the page down
     // Garage (web/garage_ui.js): your cars, and the ones friends and crew-mates show.
     // Block and report (web/safety_ui.js) on every social surface below; the garage uses it for friends' cars.
@@ -7182,6 +7313,12 @@
         d.addEventListener('toggle', () => { if (!d.open) return; const sec = ta.section(); const h = sec.querySelector(':scope > h3'); if (h) h.remove(); $('planAttackBody').replaceChildren(sec); });
       }
     } catch (e) { console.error('time attack', e); } });
+    // the real map under a Feed post's line and a roadbook's roads (post_map.js), in the theme's palette; never while a drive is on
+    const mapUnder = (() => { let snap = null; return (id, pts, w, h, pad) => {
+        if (driveActive || !window.ApexPostMap || !window.maplibregl || !window.ApexBasemap) return null;
+        snap = snap || ApexPostMap.snapper({ gl: maplibregl, style: MAP_STYLE, palette: () => look.map, restyle: ApexBasemap.restyle,
+          transform: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
+        return snap.snap(`${look.map.bg}|${look.map.road}|${id}`, pts, w, h, pad); }; })();
     // Roadbooks (web/roadbooks.js, docs/SOCIAL.md 2.6): collections of great roads, yours, followed and public ones near you;
     // a road you drive is stamped from your own Log. In People (Friends), in Where to?, on a route card's Share, and by link.
     let roadbooks = null;
@@ -7189,7 +7326,8 @@
       me: () => accountMe, here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), mayLookUp: nearLookupOk,
       cellQuery: (lat, lon) => ApexPrivacyZones.cellQuery(lat, lon), fmtLen: (m) => ApexUnits.long(m, 1, true), origin: () => shareOrigin(),
       zones: () => privacyZones, planned: () => (plannedRoute && Array.isArray(plannedRoute.lat) && plannedRoute.lat.length > 1 ? plannedRoute : null),
-      report: (o) => safety && safety.report(o), changed: () => { if (booksRowCount) booksRowCount(); },
+      report: (o) => safety && safety.report(o), changed: () => { if (booksRowCount) booksRowCount(); }, mapUnder,
+      stages: () => { try { const l = JSON.parse(localStorage.getItem('apex.segments') || '[]'); return Array.isArray(l) ? l : []; } catch (_) { return []; } },
       driveRoad: async (road, book) => {
         closeSheet();
         // from where you are to the road's start, then the road as drawn (as Drive it on a post leads to their line); close
@@ -7299,12 +7437,8 @@
       inZone: (lat, lon) => { try { return !!(window.ApexPrivacyZones && ApexPrivacyZones.zoneAt(ApexPrivacyZones.load(localStorage), lat, lon)); } catch (_) { return false; } },
       myHandle: () => (accountMe && accountMe.handle) || null,
       upload: (path, blob, type) => ApexSync.apiFetch(path, { method: 'PUT', headers: { 'content-type': type }, body: blob }),
-      // the real map under each post's line (post_map.js), in the theme's palette; never while a drive is on
-      mapUnder: (() => { let snap = null; return (id, pts, w, h, pad) => {
-        if (driveActive || !window.ApexPostMap || !window.maplibregl || !window.ApexBasemap) return null;
-        snap = snap || ApexPostMap.snapper({ gl: maplibregl, style: MAP_STYLE, palette: () => look.map, restyle: ApexBasemap.restyle,
-          transform: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
-        return snap.snap(`${look.map.bg}|${look.map.road}|${id}`, pts, w, h, pad); }; })(),
+      mapUnder,
+      keepRoad: (name, pts) => { if (roadbooks) roadbooks.keep(name, pts); },
       openFriend: (h) => { document.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); if (window.apexOpenFriend) window.apexOpenFriend(String(h).toLowerCase()); },
       // Drive it on a post: a route through stops along its line, on real roads (the line is thinned, so it is not driven as drawn)
       driveLine: async (stops, p) => {
@@ -7658,7 +7792,7 @@
         const st = stateOf(f), photo = (where.get(f.handle) || {}).photo_id || null;
         ApexProfileView.show(view, p && !Array.isArray(p) ? p : { handle: f.handle, name: f.name }, { el, btn, back: () => closeProfile(), keys: keysFor(f),
           avatar: window.ApexPhotos ? ApexPhotos.avatar(photo, f.handle || '?', 56) : null, status: st && st.text ? { text: st.text, live: !!st.live } : null,
-          partial: !p || Array.isArray(p), extra: [...lastShare(f), ...(drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), aboutYou(f)],
+          partial: !p || Array.isArray(p), extra: [...lastShare(f), ...(drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), ...(roadbooks && f.handle ? [roadbooks.ofFriend(f.handle)] : []), aboutYou(f)],
           foot: [['Unfriend', async () => { if (await ApexConfirm.ask(`Unfriend @${f.handle}? This also stops all sharing.`, 'Unfriend')) { await apiCall('DELETE', `/api/friends/${f.id}`); closeProfile(); redo(); } }, 'danger-btn'],
             ...(safety && f.handle ? [['Report', () => safety.report({ kind: 'user', target: f.handle, label: `@${f.handle}`, who: f.handle, done: redo })],
                                      ['Block', () => safety.block(f.handle, () => { closeProfile(); redo(); })]] : [])] });
@@ -9276,7 +9410,8 @@
       else if (r && r.samples > 0) main.push(`<b>● Rec</b> ${ApexUnits.long((r.km) * 1000, 2)}`);
       else main.push(s.gps === 'on' ? 'Starting…' : 'Finding GPS…');
       if (s.mountSetUntil > performance.now()) main.push('Mount set');   // the calibration lock (U-74)
-      if (etaText) main.push(...etaText.split(' · '));                  // U-99: "25 min left" and "7:12" are parts of their own
+      // on a route the time is the trip figures, set apart (below); with no figures it is words in the line (U-99)
+      if (etaText && !etaFig) main.push(...etaText.split(' · '));
       if (NATIVE_SHELL) { const a = ambientStats(); if (a) main.push(a.error ? 'Sharing · retrying' : a.paused ? 'Sharing paused' : `Sharing ${ApexUnits.long((a.km) * 1000, 1)}`); }
       else if (drive.share === 'on') main.push(drive.shareErr ? 'Sharing · retrying' : `Sharing ${ApexUnits.long((drive.shareKm) * 1000, 1)}`);
       else if (drive.share === 'stopped') main.push('Sharing paused');
@@ -9296,7 +9431,12 @@
       // each part stays whole: a narrow screen breaks the line between parts, never inside "77 min left", and never cuts one
       // (U-99: the line was one nowrap run, so "25 min left · 7:12" ended "25…"). The dot rides with the part before it, so a
       // wrapped line never starts with one.
-      const m = main.map((x, i) => `<span>${x}${i < main.length - 1 ? ' ·' : ''}</span>`).join(' '), w = warn.join(' · ');
+      const line = main.map((x, i) => `<span>${x}${i < main.length - 1 ? ' ·' : ''}</span>`).join(' '), w = warn.join(' · ');
+      // on a route, as Apple and Google Maps: three figures you read at a glance (arrival, time left, distance left), the
+      // recording and sharing a small line under them; the line wrapped to three lines on a phone (2026-11-14)
+      const said = etaFig ? `Arriving ${etaText.split(' · ')[1] || ''}, ${etaText.split(' · ')[0]}${etaFig[2] ? `, ${etaFig[2].v} ${etaFig[2].u} to go` : ''}.` : '';
+      const m = etaFig ? `<span class="trip" aria-hidden="true">${etaFig.map((f) => `<span class="tf"><b>${f.v.replace(/</g, '&lt;')}</b><small>${f.u}</small></span>`).join('')}</span><span class="sr-only">${said}</span><span class="ds-sub">${line}</span>` : line;
+      if ($('dsMain').classList.contains('has-trip') !== !!etaFig) $('dsMain').classList.toggle('has-trip', !!etaFig);
       if ($('dsMain').innerHTML !== m) $('dsMain').innerHTML = m;
       // the line's state, for its drawing (index.html #driveBar[data-state]): seek until the first sample is kept
       const ds = s.gps === 'denied' ? 'off' : zoned ? 'zone' : r && r.samples > 0 ? 'rec' : 'seek';
@@ -9615,6 +9755,17 @@
     // line on the route card. Map data: a mapped viewpoint, a fuel station that may be closed. Nothing found says nothing.
     const scenicPins = [];
     const SCENIC_LABEL = { view: 'VIEW', falls: 'FALLS', cafe: 'CAFÉ', fuel: 'FUEL', charge: 'CHARGE' };
+    // The region's lists built weekly with the OSM tiles (tools/osm_ctx/region.py): waterfalls and roads with conditional
+    // access, the whole region in one file each (the request says nothing about the route), asked once a session; none
+    // (not built yet, offline): asked again after 10 minutes, and Overpass meanwhile.
+    const regionLists = {};
+    function regionList(name) {
+      if (!regionLists[name]) {
+        regionLists[name] = apiCall('GET', `/api/ctx/${name}.json`).then((r) => (r && r.ok ? r.json() : null)).catch(() => null)
+          .then((d) => { if (!d) setTimeout(() => { delete regionLists[name]; }, 10 * 60000); return d; });
+      }
+      return regionLists[name];
+    }
     // Seasonal and time-of-day closures (conditional_closures.js, IDEAS R-22): OSM conditional access tags on the roads the
     // route uses, read for when you'd get there. A trip over 1° across, or the map offline: nothing said.
     async function attachClosures(t) {
@@ -9623,7 +9774,11 @@
       let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
       for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
       if (n - s > 1 || e - w > 1) return;
-      const json = await ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexConditional.query(s - 0.005, w - 0.005, n + 0.005, e + 0.005)));   // every server raced
+      // inside Ohio, Kentucky and Indiana from the list built weekly with the OSM tiles (GET /api/ctx/closures.json, asked
+      // once a session), elsewhere from Overpass, every server raced
+      const box = [s - 0.005, w - 0.005, n + 0.005, e + 0.005];
+      const json = (ApexConditional.inRegion && ApexConditional.inRegion(await regionList('closures'), ...box))
+        || await ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexConditional.query(...box)));
       if (!json || plannedRoute !== t) return;
       const total = t.dist[t.dist.length - 1], now = leaveAt();
       const secAt = (m) => (Number.isFinite(t.timeS) ? t.timeS - ApexEta.routerLeft(m, total, t.timeS, t.timeMarks) : m / (50 / 3.6));
@@ -10045,16 +10200,13 @@
     // IDEAS R-24: waterfalls near the route, from OpenStreetMap (the map's tiles have none): inside Ohio, Kentucky and
     // Indiana from the list built weekly with the OSM tiles (GET /api/ctx/falls.json, asked once a session), elsewhere
     // through Overpass. A trip over 1° across, the servers down or offline: none, and the Along line says what the tiles gave.
-    let fallsRegion = null;
     async function fallsNear(t) {
       if (!window.ApexCameras || !ApexScenic.fallsQuery) return [];
       let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
       for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
       if (n - s > 1 || e - w > 1) return [];
       if (ApexScenic.fallsInRegion) {
-        if (!fallsRegion) fallsRegion = apiCall('GET', '/api/ctx/falls.json').then((r) => (r && r.ok ? r.json() : null)).catch(() => null)
-          .then((d) => { if (!d) setTimeout(() => { fallsRegion = null; }, 10 * 60000); return d; });
-        const got = ApexScenic.fallsInRegion(await fallsRegion, s - 0.005, w - 0.005, n + 0.005, e + 0.005);
+        const got = ApexScenic.fallsInRegion(await regionList('falls'), s - 0.005, w - 0.005, n + 0.005, e + 0.005);
         if (got) return got;
       }
       try {
@@ -11150,7 +11302,7 @@
     // ended: why a drive ended itself ('car', 'parked'; drive_keep.js EndWatch), or nothing for End
     async function leaveDrive(save, ended) {
       if (pendingEnd) { clearTimeout(pendingEnd.timer); pendingEnd = null; paintEndUndo(); }   // I-3: any other way out ends it now
-      driveActive = false; driveCam(false); pushQuiet(false); soundtrackStop(); drive.wet = null; if (ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null);   // the dry road back
+      driveActive = false; paintBehind(); paintOverviewKey(); paintTurnArrow(null, -1); driveCam(false); pushQuiet(false); soundtrackStop(); drive.wet = null; if (ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null);   // the dry road back
       const kept = keepStop();                                         // Round 3: no more checkpoints; dropped once saved
       stageWatch = null; $('stageBar').hidden = true; coachWatch = null; $('coachBar').hidden = true;
       const laps = circuit.timer ? circuit.timer.state(Date.now()).laps : [];
@@ -11848,12 +12000,14 @@
     let idleSnapped = false;
     function showIdleFix(frame) {
       refreshAutoNight();
-      if (replayOn || state.mode === 'live') { fixAcc = null; paintHalo(); return; }   // a replay or preview owns the map
+      if (replayOn || state.mode === 'live') { fixAcc = null; fixBeam = null; paintHalo(); paintBeam(); return; }   // a replay or preview owns the map
       fixAcc = Number.isFinite(frame.accuracy_m) ? { m: frame.accuracy_m, at: performance.now() } : null;
+      const hd = window.ApexGpsHalo ? ApexGpsHalo.beam(frame.heading_deg, frame.speed_mps) : null;
+      fixBeam = hd == null ? null : { deg: hd, at: performance.now() };
       setVehicle({ lat: frame.lat, lon: frame.lon, bearing: Number.isFinite(frame.course_deg) ? frame.course_deg : state.bearing,
                    vMps: Number.isFinite(frame.speed_mps) ? frame.speed_mps : 0, onTrack: false, latG: null, lonG: 0, rough: 0 }, !idleSnapped);
       idleSnapped = true;
-      paintHalo();
+      paintHalo(); paintBeam();
     }
     setInterval(() => {
       // A native drive keeps going through a GPS gap (tunnel): say so instead of dropping back to the replay.

@@ -26,7 +26,7 @@
    * zone (the longest stretch outside them is kept). Thinned to MAX_POINTS. null when under MIN_ROAD_M is left.
    * t: { lat, lon, dist } arrays. zones: [{ lat, lon, r }] (privacy_zones.js).
    */
-  function fromTrack(t, zones = []) {
+  function fromTrack(t, zones = [], trim = TRIM_M) {
     const n = t && Array.isArray(t.lat) ? Math.min(t.lat.length, t.lon.length, t.dist.length) : 0;
     if (n < 2) return null;
     const total = t.dist[n - 1], loop = metres(t.lat[0], t.lon[0], t.lat[n - 1], t.lon[n - 1]) <= LOOP_M;
@@ -34,7 +34,7 @@
     let best = null, run = null;
     const close = () => { if (run && (!best || t.dist[run[1]] - t.dist[run[0]] > t.dist[best[1]] - t.dist[best[0]])) best = run; run = null; };
     for (let i = 0; i < n; i++) {
-      const ok = fin(t.lat[i]) && fin(t.lon[i]) && t.dist[i] >= TRIM_M && (!loop || t.dist[i] <= total - TRIM_M) && !inZone(i);
+      const ok = fin(t.lat[i]) && fin(t.lon[i]) && t.dist[i] >= trim && (!loop || t.dist[i] <= total - trim) && !inZone(i);
       if (ok) { if (run) run[1] = i; else run = [i, i]; } else close();
     }
     close();
@@ -44,6 +44,22 @@
     for (let i = a; i < b; i += step) out.push(pt(i));
     out.push(pt(b));
     return out;
+  }
+
+  /**
+   * The road one of your saved stages (the Log's apex.segments: geom a JSON string of [lat, lon]) leaves in a roadbook: its
+   * line as marked, nothing trimmed from its ends (a stage is a road, not where a drive began), but without anything inside a
+   * privacy zone. null with no line, or under MIN_ROAD_M once the zones are left out.
+   */
+  function fromStage(seg, zones = []) {
+    let g = null;
+    try { g = typeof (seg && seg.geom) === 'string' ? JSON.parse(seg.geom) : seg && seg.geom; } catch (_) { g = null; }
+    if (!Array.isArray(g)) return null;
+    g = g.filter((p) => Array.isArray(p) && fin(p[0]) && fin(p[1]));
+    if (g.length < 2) return null;
+    const dist = [0];
+    for (let i = 1; i < g.length; i++) dist.push(dist[i - 1] + metres(g[i - 1][0], g[i - 1][1], g[i][0], g[i][1]));
+    return fromTrack({ lat: g.map((p) => p[0]), lon: g.map((p) => p[1]), dist }, zones, 0);
   }
 
   /** [south, north, west, east] of lat/lon arrays, or null. */
@@ -144,12 +160,27 @@
    * A book's roads on one small map (an SVG string, north up): each road a line, the ones you have driven in `o.hi`.
    * roads: [{ geom, stamped }]. null with nothing to draw.
    */
-  function overview(roads, o = {}) {
-    const w = o.w || 320, h = o.h || 150, pad = o.pad != null ? o.pad : 12;
-    const lines = (roads || []).filter((r) => r && Array.isArray(r.geom) && r.geom.length > 1);
-    if (!lines.length) return null;
+  const drawn = (roads) => (roads || []).filter((r) => r && Array.isArray(r.geom) && r.geom.length > 1);
+  function bounds(lines) {
     let s = Infinity, n = -Infinity, we = Infinity, e = -Infinity;
     for (const r of lines) for (const [lo, la] of r.geom) { if (la < s) s = la; if (la > n) n = la; if (lo < we) we = lo; if (lo > e) e = lo; }
+    return [s, n, we, e];
+  }
+  /**
+   * The two corners ([[lat, lon], [lat, lon]], south-west and north-east) whose fit is overview's: handed to post_map.js
+   * viewFor (with the same w, h and pad), the real map lies exactly under the book's lines. null with nothing to draw.
+   */
+  function overviewFrame(roads) {
+    const lines = drawn(roads);
+    if (!lines.length) return null;
+    const [s, n, we, e] = bounds(lines);
+    return [[s, we], [n, e]];
+  }
+  function overview(roads, o = {}) {
+    const w = o.w || 320, h = o.h || 150, pad = o.pad != null ? o.pad : 12;
+    const lines = drawn(roads);
+    if (!lines.length) return null;
+    const [s, n, we, e] = bounds(lines);
     const kx = Math.cos(((s + n) / 2) * Math.PI / 180), spanX = Math.max((e - we) * kx, 1e-5), spanY = Math.max(n - s, 1e-5);
     const k = Math.min((w - 2 * pad) / spanX, (h - 2 * pad) / spanY), ox = (w - spanX * k) / 2, oy = (h - spanY * k) / 2;
     const path = (g) => { const step = Math.max(1, Math.floor(g.length / 160)); return g.filter((_, i) => i % step === 0 || i === g.length - 1)
@@ -157,8 +188,10 @@
     const line = o.line || '#888', hi = o.hi || '#f60', sw = o.width || 2.5;
     const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));   // the label is a member's words
     // the driven ones last, so they sit on top where two roads share a stretch
+    // each line on a casing, shown only once the real map is under it (.on-map), so a road reads over the streets
     const body = [...lines.filter((r) => !r.stamped), ...lines.filter((r) => r.stamped)]
-      .map((r) => `<path d="${path(r.geom)}" fill="none" stroke="${r.stamped ? hi : line}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
+      .map((r) => { const d = path(r.geom); return `<path class="rb-casing" d="${d}" fill="none" stroke-width="${sw + 3}" stroke-linecap="round" stroke-linejoin="round"/>`
+        + `<path d="${d}" fill="none" stroke="${r.stamped ? hi : line}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/>`; }).join('');
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${esc(o.label || 'The roads on a map')}">${body}</svg>`;
   }
 
@@ -168,9 +201,10 @@
     .rb-row b { font-size: 16px; font-weight: 700; } .rb-row span { grid-column: 1; font-size: 13px; color: var(--panel-dim); }
     .rb-row i { grid-row: 1 / span 2; grid-column: 2; width: 9px; height: 9px; margin-right: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); }
     .rb-map { border: 1px solid var(--rule); line-height: 0; } .rb-map svg { width: 100%; height: auto; display: block; }
+    .rb-map .rb-casing { display: none; } .rb-map.on-map svg { background-size: 100% 100%; background-position: center; } .rb-map.on-map .rb-casing { display: inline; stroke: var(--panel, #fff); }
     .rb-meter { height: 6px; background: color-mix(in srgb, var(--panel-ink) 14%, transparent); } .rb-meter > i { display: block; height: 100%; background: var(--accent); }
     .rb-road { display: grid; grid-template-columns: 88px 1fr; gap: 4px 12px; padding: 12px 0; border-top: 1px solid var(--hair, var(--panel-dim)); align-items: start; }
-    .rb-road .rb-thumb { grid-row: 1 / span 3; border: 1px solid var(--rule); line-height: 0; } .rb-road .rb-thumb svg { width: 100%; height: auto; display: block; }
+    .rb-road .rb-thumb { grid-row: 1 / span 3; border: 1px solid var(--rule); line-height: 0; } .rb-road .rb-thumb svg { width: 100%; height: auto; display: block; } .rb-road .rb-thumb.on-map svg { background-size: 100% 100%; background-position: center; }
     .rb-road b { font-size: 16px; } .rb-road .note { margin: 0; }
     .rb-road .rb-acts { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
     .rb-stamp { display: inline-block; padding: 1px 6px; border: 1.5px solid var(--accent); color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; transform: rotate(-3deg); }
@@ -182,7 +216,9 @@
    * page: el, btn, toast, apiCall, jsonOf, copyText, me() → /api/me or null, here() → {lat, lon}|null, mayLookUp(p),
    * fmtLen(m), origin(), zones() → privacy zones, planned() → the planned route's track or null,
    * driveRoad(road, book), driveBook(book) (Drive them all), report({kind, target, label, done}), recordings (ApexRecording), cellQuery(lat, lon),
-   * thumb (ApexRouteThumb), colours() → { line, hi }, changed() → the lists were changed (People redraws its count).
+   * thumb (ApexRouteThumb), colours() → { line, hi }, changed() → the lists were changed (People redraws its count),
+   * mapUnder(key, pts, w, h, pad) → a picture of the real map under pts' fit, or null (post_map.js, cockpit.js),
+   * stages() → your saved stages (the Log's apex.segments).
    */
   function mount(page) {
     const { el, btn, toast, apiCall, jsonOf } = page;
@@ -273,6 +309,12 @@
       return { pop: p, head: h, close: () => { p.classList.remove('open'); setTimeout(() => p.remove(), 300); } };
     }
     const row = (b, sub, onOpen) => { const r = el('button', { className: 'rb-row', type: 'button' }, el('b', { textContent: b.name }), el('i', { 'aria-hidden': 'true' }), el('span', { textContent: sub })); r.addEventListener('click', onOpen); return r; };
+    // run go() once el comes within a screen of view (at once where there's no IntersectionObserver)
+    const nearby = (node, go) => {
+      if (!root.IntersectionObserver) { go(); return; }
+      const io = new root.IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { io.disconnect(); go(); } }, { rootMargin: '600px 0px' });
+      io.observe(node);
+    };
     const svgBox = (cls, svg) => { const d = el('div', { className: cls }); if (svg) d.innerHTML = svg; return d; };   // our own SVG string (overview / ApexRouteThumb): numbers, and a label both escape
 
     /** A roadbook's page: its roads on one map, your progress, each road with Drive it; its owner's keys or Follow, Share, Report. */
@@ -293,8 +335,16 @@
       const kids = [], c = colours(), p = progress(book.road_list);
       kids.push(el('p', { className: 'rb-by', textContent: [book.mine ? `Yours · ${VIS[book.visibility]}` : `By @${book.by || '?'}`, bookLine(book, fmtLen)].join(' · ') }));
       if (book.about) kids.push(el('p', { className: 'people-lead', textContent: book.about }));
-      const map = overview(book.road_list, { line: c.line, hi: c.hi, label: `${book.name}: its roads on a map` });
-      if (map) kids.push(svgBox('rb-map', map));
+      const map = overview(book.road_list, { line: c.line, hi: c.hi, width: 3.5, label: `${book.name}: its roads on a map` });
+      if (map) {
+        const box = svgBox('rb-map', map), frame = overviewFrame(book.road_list), svg = box.firstElementChild;
+        kids.push(box);
+        // the streets round the roads (post_map.js, as a Feed post's line): one still picture laid exactly under the lines
+        if (page.mapUnder && frame && svg) Promise.resolve(page.mapUnder(`rb_${book.id}_${book.road_list.map((x) => x.id).join('.')}`, frame, 320, 150, 12)).then((url) => {
+          if (!url || !box.isConnected) return;
+          svg.style.backgroundImage = `url("${url}")`; box.classList.add('on-map');
+        }).catch(() => {});
+      }
       if (p.of && member()) {
         const meter = el('div', { className: 'rb-meter', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(p.of), 'aria-valuenow': String(p.done), 'aria-label': p.text }, el('i', { style: `width:${(100 * p.done / p.of).toFixed(0)}%` }));
         kids.push(el('div', { className: 'stack-8' }, el('b', { textContent: p.text }), meter));   // the meter says it; the how-to line under it ("Nothing to tap") is gone
@@ -328,7 +378,13 @@
       roads.forEach((road, i) => {
         const T = page.thumb || root.ApexRouteThumb;
         const thumb = T ? T.svg(road.geom.map((q) => q[1]), road.geom.map((q) => q[0]), { w: 176, h: 120, pad: 12, line: road.stamped ? c.hi : c.line, hi: road.stamped ? c.hi : c.line, width: 4, label: `${road.name} on a map` }) : null;
-        const box = el('div', { className: 'rb-road' }, svgBox('rb-thumb', thumb));
+        const tb = svgBox('rb-thumb', thumb), box = el('div', { className: 'rb-road' }, tb);
+        // its own streets under it too, drawn once the row comes near the screen (a book holds up to 40)
+        if (thumb && page.mapUnder) nearby(tb, () => Promise.resolve(page.mapUnder(`rbt_${road.id}`, overviewFrame([road]), 176, 120, 12)).then((url) => {
+          const svg = tb.firstElementChild;
+          if (!url || !svg || !tb.isConnected) return;
+          svg.style.backgroundImage = `url("${url}")`; tb.classList.add('on-map');
+        }).catch(() => {}));
         const title = el('div', { className: 'row', style: 'align-items:center;gap:8px;flex-wrap:wrap' }, el('b', { textContent: road.name }));
         if (road.stamped) title.append(el('span', { className: 'rb-stamp', textContent: 'Driven' }));
         const day = road.stamped ? stampDay(road.id) : null;
@@ -360,6 +416,30 @@
         list.append(box);
       });
       kids.push(list);
+      // your own stages (the Log's) go in with a tap: the road as you marked it, privacy zones left out
+      if (book.mine && page.stages) {
+        const have = new Set(roads.map((x) => x.name)), left = (page.stages() || []).filter((st) => st && st.name && st.geom && !have.has(String(st.name).slice(0, 60)));
+        if (left.length) {
+          const chips = el('div', { className: 'row rb-stages', style: 'flex-wrap:wrap' }), pick = el('div', { className: 'stack-8' }, el('h4', { textContent: 'Your stages' }), chips);
+          pick.hidden = true;
+          const more = btn('Add one of your stages', () => { more.hidden = true; pick.hidden = false; }, 'linkbtn');
+          left.slice(0, 12).forEach((st) => {
+            const b = btn(String(st.name).slice(0, 60), async () => {
+              const geom = fromStage(st, page.zones ? page.zones() : []);
+              if (!geom) { toast('That stage is too short to keep once your privacy zones are left out.'); return; }
+              b.disabled = true;
+              const r = await call('POST', `/api/roadbooks/${encodeURIComponent(book.id)}/roads`, { name: String(st.name).slice(0, 60), geom });
+              if (!r.ok) { b.disabled = false; toast(r.status === 429 ? 'That roadbook is full (40 roads), or that’s enough for today.' : why(r, 'Couldn’t add it. Try again.')); return; }
+              const f = await call('GET', `/api/roadbooks/${encodeURIComponent(book.id)}`);
+              if (f.ok && f.data) Object.assign(book, f.data);
+              paint(book, s, body); loadLists().then(() => page.changed && page.changed()).catch(() => {});
+              toast(`${st.name} is in ${book.name}.`);
+            }, 'ink-btn');
+            chips.append(b);
+          });
+          kids.push(el('div', { className: 'stack-8' }, more, pick));
+        }
+      }
       body.replaceChildren(...kids);
     }
 
@@ -418,7 +498,8 @@
     /** People's Roadbooks sheet: yours, the ones you follow, public ones near you. count(text) gets the row's small line. */
     function section(count) {
       const sec = el('div', { className: 'stack-12' }, el('h3', { textContent: 'Roadbooks' }));
-      const mineBox = el('div', {}), followBox = el('div', {}), nearBox = el('div', { className: 'stack-8' });
+      const mineBox = el('div', {}), followBox = el('div', {}), friendsBox = el('div', {}), nearBox = el('div', { className: 'stack-8' });
+      let friendBooks = [];
       const lead = el('p', { className: 'people-lead', textContent: 'Your lists of great roads, for you, friends or everyone.' });
       const fill = (data) => {
         const mine = data ? data.mine : [], fol = data ? data.following : [];
@@ -426,15 +507,19 @@
         if (count) count([mine.length ? `${mine.length} yours` : '', fol.length ? `${fol.length} followed` : ''].filter(Boolean).join(' · '));
         const sub = (b) => [b.mine ? VIS[b.visibility] : `@${b.by || '?'}`, bookLine(b, fmtLen), progress(b.road_list).done ? progress(b.road_list).text : ''].filter(Boolean).join(' · ');
         mineBox.replaceChildren(...(mine.length ? mine.map((b) => row(b, sub(b), () => open(b.id))) : []));
+        // your friends' books you don't follow yet (GET /api/roadbooks/friends): without it a friends book opened only by its link
+        const fresh = friendBooks.filter((b) => !fol.some((x) => x.id === b.id));
+        friendsBox.replaceChildren(...(fresh.length ? [el('h4', { className: 'rb-h', textContent: 'From friends', style: 'margin:12px 0 0;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:var(--panel-dim)' }), ...fresh.map((b) => row(b, sub(b), () => open(b.id)))] : []));
         followBox.replaceChildren(...(fol.length ? [el('h4', { className: 'rb-h', textContent: 'Following', style: 'margin:12px 0 0;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:var(--panel-dim)' }), ...fol.map((b) => row(b, sub(b), () => open(b.id)))] : []));
       };
       liveFill = fill;
       const reload = () => loadLists().then((d) => { if (!d) fill(null); return d; });
       sec.append(lead,
-        newForm('New roadbook', (id) => { reload().then(() => page.changed && page.changed()); open(id); }), mineBox, followBox,
+        newForm('New roadbook', (id) => { reload().then(() => page.changed && page.changed()); open(id); }), mineBox, followBox, friendsBox,
         el('h4', { textContent: 'Near you', style: 'margin:12px 0 0;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:var(--panel-dim)' }), nearBox);
       if (lists) fill(lists);
       reload().catch((e) => console.error('roadbooks', e));
+      call('GET', '/api/roadbooks/friends').then((r) => { if (r.ok && Array.isArray(r.data)) { friendBooks = r.data; fill(lists); } }).catch(() => {});
       near(nearBox);
       sec._reload = reload;
       return sec;
@@ -456,14 +541,16 @@
     function nearSection() { const box = el('div', { className: 'stack-8' }); near(box); return box; }
 
     /** On the route card's Share: keep the planned road in one of your books (or a new one). → an element, or null signed out. */
-    function addPart(done) {
+    // what goes in: the planned route (its first 400 m and your privacy zones left out), or src() → { name, geom } | null
+    const plannedRoad = () => { const t = page.planned && page.planned(), geom = t ? fromTrack(t, page.zones ? page.zones() : []) : null; return geom ? { name: t.name, geom } : null; };
+    function addPart(done, src = plannedRoad, say = 'Or keep it in a roadbook. Its first 400 m and your privacy zones are left out.') {
       if (!member()) return null;
-      const part = el('div', { className: 'stack-8 rb-add' }, el('p', { className: 'note', textContent: 'Or keep it in a roadbook. Its first 400 m and your privacy zones are left out.' }));
+      const part = el('div', { className: 'stack-8 rb-add' }, el('p', { className: 'note', textContent: say }));
       const chips = el('div', { className: 'row', style: 'flex-wrap:wrap' });
       const addTo = async (id, bookName) => {
-        const t = page.planned && page.planned(), geom = t ? fromTrack(t, page.zones ? page.zones() : []) : null;
-        if (!geom) { toast('This route is too short to keep once its private ends are left out.'); return; }
-        const r = await call('POST', `/api/roadbooks/${encodeURIComponent(id)}/roads`, { name: String(t.name || 'Road').slice(0, 60), geom });
+        const t = src();
+        if (!t) { toast('This road is too short to keep once its private ends are left out.'); return; }
+        const r = await call('POST', `/api/roadbooks/${encodeURIComponent(id)}/roads`, { name: String(t.name || 'Road').slice(0, 60), geom: t.geom });
         if (!r.ok) { toast(r.status === 429 ? 'That roadbook is full (40 roads), or that’s enough for today.' : why(r, 'Couldn’t add it. Try again.')); return; }
         loadLists().then(() => page.changed && page.changed()).catch(() => {});
         toast(`Added to ${bookName}.`, { label: 'Open', onClick: () => open(id) });
@@ -479,11 +566,40 @@
       return part;
     }
 
+    /**
+     * Keep in a roadbook, from a Feed post's ···: the line as it was posted (pts [[lat, lon]], its owner's private ends
+     * already cut), without anything inside your own privacy zones; nothing else of the drive goes in. → false signed out.
+     */
+    function keep(name, pts) {
+      if (!member()) { toast('Sign in to keep roads in a roadbook.'); return false; }
+      const geom = fromStage({ geom: pts }, page.zones ? page.zones() : []);
+      if (!geom) { toast('This road is too short to keep once your privacy zones are left out.'); return false; }
+      const s = sheet('Keep in a roadbook');
+      const part = addPart(s.close, () => ({ name, geom }), `${String(name || 'This road').slice(0, 60)}: its line goes in, nothing else of the drive.`);
+      s.pop.append(part);
+      return true;
+    }
+
+    /** A friend's profile: their books you may open (GET /api/roadbooks/friends, by their handle), each a row that opens it.
+     *  An element that stays empty (and hidden) when they have none. */
+    function ofFriend(handle) {
+      const box = el('div', { className: 'stack-8 rb-of-friend' });
+      box.hidden = true;
+      const h = String(handle || '').toLowerCase();
+      call('GET', '/api/roadbooks/friends').then((r) => {
+        const theirs = r.ok && Array.isArray(r.data) ? r.data.filter((b) => String(b.by || '').toLowerCase() === h) : [];
+        if (!theirs.length || !h) return;
+        box.replaceChildren(el('b', { textContent: 'Roadbooks' }), ...theirs.map((b) => row(b, bookLine(b, fmtLen), () => open(b.id))));
+        box.hidden = false;
+      }).catch(() => {});
+      return box;
+    }
+
     /** Has this member any book of their own or followed (as last read, or as this phone kept it)? People shows the row then. */
     const hasAny = () => { const l = lists || readJson(CACHE_KEY, null); return !!l && ((l.books && l.books.length > 0) || (l.mine && (l.mine.length + l.following.length) > 0)); };
-    return { section, nearSection, open, addPart, afterDrive, scanLog, hasAny, lists: () => lists, reload: loadLists };
+    return { section, nearSection, open, addPart, keep, ofFriend, afterDrive, scanLog, hasAny, lists: () => lists, reload: loadLists };
   }
 
-  const api = { fromTrack, coverage, overlaps, boxOf, lengthM, progress, bookLine, overview, tour, link, mount, TOUR_MAX, STAMP_AT, TRIM_M, MAX_POINTS, MIN_ROAD_M };
+  const api = { fromTrack, fromStage, coverage, overlaps, boxOf, lengthM, progress, bookLine, overview, overviewFrame, tour, link, mount, TOUR_MAX, STAMP_AT, TRIM_M, MAX_POINTS, MIN_ROAD_M };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadbooks = api;
 })(typeof window !== 'undefined' ? window : globalThis);

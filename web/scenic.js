@@ -200,7 +200,7 @@
   }
 
   /**
-   * The waterfalls in a box from the region's built list (GET /api/ctx/falls.json, tools/osm_ctx/falls.py), as fallsFrom
+   * The waterfalls in a box from the region's built list (GET /api/ctx/falls.json, tools/osm_ctx/region.py), as fallsFrom
    * gives them; null when the list doesn't cover the whole box (a route near or past the region's border: ask Overpass).
    */
   function fallsInRegion(doc, s, w, n, e) {

@@ -1,10 +1,11 @@
 // What a place's card says beyond its name (the map's place card, cockpit.js showPin; Apple and Google Maps show the
 // same): whether it is open now and until when, its phone and its website, from the place's own OpenStreetMap tags
-// (opening_hours, phone, website), asked of Overpass once the card is up. Unknown stays unknown: hours OSM doesn't
+// (opening_hours, phone, website), asked of our server (inside Ohio, Kentucky and Indiana, from the weekly OSM build)
+// or else of Overpass once the card is up. Unknown stays unknown: hours OSM doesn't
 // have, or writes in a form read() doesn't follow (months, holidays only, sunrise...), say nothing rather than guess.
 //
 // Source: OpenStreetMap contributors, ODbL 1.0, via the Overpass API (as cameras.js and route_ctx/osm_overpass.js).
-// Overpass sees the tapped place's name and position, nothing of the driver (docs/APP_REVIEW.md, third parties).
+// Our server or Overpass sees the tapped place's name and position, nothing of the driver (docs/APP_REVIEW.md, third parties).
 // read(), status() and contact() are pure (tests/test_place_info.py).
 (function (root) {
   'use strict';
@@ -120,14 +121,32 @@
     return `[out:json][timeout:8];nwr(around:60,${(+lat).toFixed(6)},${(+lon).toFixed(6)})["name"="${n}"];out tags 1;`;
   }
 
+  // Inside Ohio, Kentucky and Indiana our server answers from the weekly OSM build (GET /api/ctx/places,
+  // backend/src/osm_relay.ts placeTags, tools/osm_ctx/region.py): { tags: [...] } in the places' order. Anything else (a
+  // place outside the region: 404; no signal; no app API here) is null, and the place is asked of Overpass as before.
+  const PLACES_PATH = '/api/ctx/places';
+  function placesPath(list) {
+    return PLACES_PATH + '?' + list.map((p) => 'p=' + encodeURIComponent(`${(+p.lat).toFixed(6)},${(+p.lon).toFixed(6)},${p.name}`)).join('&');
+  }
+  async function ours(list) {
+    const api = root.ApexSync && typeof root.ApexSync.apiFetch === 'function' ? root.ApexSync.apiFetch : null;
+    if (!api) return null;
+    try {
+      const r = await api(placesPath(list), { method: 'GET' });
+      const j = r && r.ok ? await r.json() : null;
+      return j && Array.isArray(j.tags) && j.tags.length === list.length ? j.tags : null;
+    } catch (_) { return null; }
+  }
+
   const kept = new Map();
   /** The place's OSM tags, or null (none found, no signal, every server slow). Kept for the session. */
   function lookup(name, lat, lon, fetchFn = root.fetch && root.fetch.bind(root)) {
     if (!name || !Number.isFinite(lat) || !Number.isFinite(lon) || !fetchFn || !root.ApexCameras) return Promise.resolve(null);
     const key = `${name}|${lat.toFixed(5)}|${lon.toFixed(5)}`;
     if (!kept.has(key)) {
-      kept.set(key, root.ApexCameras.fetchFirst(fetchFn, 'data=' + encodeURIComponent(query(name, lat, lon)), root.ApexCameras.SERVERS, 6000)
-        .then((j) => { const e = j && Array.isArray(j.elements) ? j.elements.find((x) => x && x.tags) : null; if (!e) kept.delete(key); return e ? e.tags : null; })
+      kept.set(key, ours([{ name, lat, lon }]).then((mine) => (mine ? mine[0] : root.ApexCameras.fetchFirst(fetchFn, 'data=' + encodeURIComponent(query(name, lat, lon)), root.ApexCameras.SERVERS, 6000)
+        .then((j) => { const e = j && Array.isArray(j.elements) ? j.elements.find((x) => x && x.tags) : null; return e ? e.tags : null; })))
+        .then((t) => { if (!t) kept.delete(key); return t || null; })
         .catch(() => { kept.delete(key); return null; }));
     }
     return kept.get(key);
@@ -144,8 +163,11 @@
   function lookupMany(places, fetchFn = root.fetch && root.fetch.bind(root)) {
     const list = (places || []).filter((p) => p && p.name && Number.isFinite(p.lat) && Number.isFinite(p.lon)).slice(0, 10);
     if (!list.length || !fetchFn || !root.ApexCameras) return Promise.resolve(null);
-    return root.ApexCameras.fetchFirst(fetchFn, 'data=' + encodeURIComponent(queryMany(list)), root.ApexCameras.SERVERS, 8000)
-      .then((j) => (j && Array.isArray(j.elements) ? match(places, j.elements) : null)).catch(() => null);
+    return ours(list).then((mine) => {
+      if (mine) { const by = new Map(list.map((p, i) => [p, mine[i]])); return (places || []).map((p) => (p && by.has(p) ? by.get(p) : null)); }
+      return root.ApexCameras.fetchFirst(fetchFn, 'data=' + encodeURIComponent(queryMany(list)), root.ApexCameras.SERVERS, 8000)
+        .then((j) => (j && Array.isArray(j.elements) ? match(places, j.elements) : null));
+    }).catch(() => null);
   }
   /** Overpass elements back to the places asked (pure): each place's nearest element of its name, within ~150 m. */
   function match(places, elements) {
@@ -163,6 +185,6 @@
     });
   }
 
-  const api = { read, status, contact, query, queryMany, lookup, lookupMany, match, clock };
+  const api = { read, status, contact, query, queryMany, placesPath, lookup, lookupMany, match, clock };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexPlaceInfo = api;
 })(typeof window !== 'undefined' ? window : globalThis);

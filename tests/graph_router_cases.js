@@ -41,6 +41,44 @@ const CASES = {
   },
 
   // turn restrictions (no and only), one-ways, U-turns only at dead ends
+  unpavedPick() {
+    // A to B by the Paved road (100 s, a few corners) or the Forest Road (unpaved, 120 s, many): the corners outweigh the
+    // search's unpaved cost, so the pick holds the line when unpaved roads are avoided (the app's default)
+    const nodes = [at(39.3, -84.6), at(39.3, -84.58), at(39.3, -84.56), at(39.31, -84.58)];
+    const edges = [];
+    two(edges, 0, 1, { quality: 0.7, cls: 3, name: 'Paved', t: 50, fun: 2 }); two(edges, 1, 2, { quality: 0.7, cls: 3, name: 'Paved', t: 50, fun: 2 });
+    two(edges, 0, 3, { quality: 0.85, cls: 4, name: 'Forest Road', t: 60, fun: 14, flags: 8 }); two(edges, 3, 2, { quality: 0.85, cls: 4, name: 'Forest Road', t: 60, fun: 14, flags: 8 });
+    const v = R.view(H.tiles(nodes, edges).tiles);
+    const run = (avoid) => R.plan(v, { from: { lat: 39.3, lon: -84.5999 }, to: { lat: 39.3, lon: -84.5601 }, level: 'fun', avoid }).routes[0].names.map((x) => x.name);
+    return { avoided: run({ unpaved: true }), allowed: run({ unpaved: false }) };
+  },
+  riderTrunk() {
+    // A to B by a two-way trunk (100 s) or the Back Road (a tertiary, 200 s, some corners): at Fun the trunk is a highway
+    // when straight (Cincinnati's US 127) and a rider's road when it bends (The Snake, US 421)
+    const run = (fun, flags) => {
+      const nodes = [at(39.3, -84.6), at(39.3, -84.58), at(39.3, -84.56), at(39.31, -84.58)];
+      const edges = [];
+      two(edges, 0, 1, { quality: 0.8, cls: 1, name: 'US 421', t: 50, fun, flags }); two(edges, 1, 2, { quality: 0.8, cls: 1, name: 'US 421', t: 50, fun, flags });
+      two(edges, 0, 3, { quality: 0.7, cls: 4, name: 'Back Road', t: 100, fun: 3 }); two(edges, 3, 2, { quality: 0.7, cls: 4, name: 'Back Road', t: 100, fun: 3 });
+      const v = R.view(H.tiles(nodes, edges).tiles);
+      return R.plan(v, { from: { lat: 39.3, lon: -84.5999 }, to: { lat: 39.3, lon: -84.5601 }, level: 'fun' }).routes[0].names.map((x) => x.name);
+    };
+    return { bends: run(12, 0), straight: run(0, 0), divided: run(12, 1) };
+  },
+  gates() {
+    // A to B by the Gated road (a gate halfway, 100 s) or the Detour (160 s): a gate on a through road is open, one on a
+    // residential street or with access private still blocks
+    const run = (cls, extra) => {
+      const nodes = [at(39.3, -84.6), at(39.305, -84.59), at(39.3, -84.58), at(39.3, -84.59, 8)];
+      const edges = [];
+      two(edges, 0, 3, { quality: 0.6, cls, name: 'Gated', t: 50, flags: 4096 | extra });
+      two(edges, 3, 2, { quality: 0.6, cls, name: 'Gated', t: 50, flags: 4096 | extra });
+      two(edges, 0, 1, { quality: 0.6, cls: 3, name: 'Detour', t: 80 }); two(edges, 1, 2, { quality: 0.6, cls: 3, name: 'Detour', t: 80 });
+      const v = R.view(H.tiles(nodes, edges).tiles);
+      return R.plan(v, { from: { lat: 39.3, lon: -84.5999 }, to: { lat: 39.3, lon: -84.5801 }, level: 'quick' }).quick.names.map((x) => x.name);
+    };
+    return { secondary: run(3, 0), tertiary: run(4, 0), residential: run(6, 0), privateSecondary: run(3, 512) };
+  },
   rules() {
     // a cross at C with arms N, E, S, W (400 m) and a block joining W and N round the north-west corner
     const C = [39.10, -84.50], d = 0.0036, e = 0.0046;

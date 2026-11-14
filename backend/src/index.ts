@@ -4,6 +4,7 @@ import { routeHost } from "./hosts";
 import {
   APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, invitePreview, logout, redeemInvite, requireMember, requireUser, sessionCookie, sessionHash, viewer,
 } from "./auth";
+import { voiceAnswer, voicePull, voiceStart, voiceStop } from "./convoy_voice";
 import { convoyAccept, convoyCode, convoyCodeJoin, convoyCodePreview, convoyConnect, convoyCreate, convoyDismiss, convoyInvitePeople, convoyInvites, convoyJoin, convoyPreview, convoyRoom, unwrap } from "./convoy_routes";
 import { Env, HttpError, body, json, str } from "./util";
 import { rateCheck } from "./ratelimit";
@@ -15,7 +16,7 @@ import { cronHealth, runCron } from "./cron_runs";
 import { appleSignIn } from "./apple";
 import { crewHazardKinds, hazardsNear, reportHazard, voteHazard } from "./hazards";
 import { routeDelete, routeGet, routesSharedWithMe, shareRoute } from "./routes_shared";
-import { bookCreate, bookDelete, bookFollow, bookGet, bookUpdate, booksMine, booksNear, roadAdd, roadRemove, roadStamp, roadUpdate } from "./roadbooks";
+import { bookCreate, bookDelete, bookFollow, bookGet, bookUpdate, booksFriends, booksMine, booksNear, roadAdd, roadRemove, roadStamp, roadUpdate } from "./roadbooks";
 import { duelAccept, duelCreate, duelEnd, duelList } from "./duels";
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
@@ -43,7 +44,7 @@ import { pointsFor } from "./points";
 import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
 import { ctxKeys, workzones } from "./route_feeds";
-import { fallsList, osmTile } from "./osm_relay";
+import { lineTiles, osmTile, placeTags, pointCells, regionList, wayShapes } from "./osm_relay";
 import { traceTile } from "./trace_relay";
 import { grantedThemes } from "./themes";
 import { isDeveloper } from "./developers";
@@ -184,8 +185,17 @@ on("GET", "/api/ctx/osm", async (req, env, _m, ctx) => {
   if (url.searchParams.get("diag") === "1" && !isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
   return osmTile(url, env, ctx);
 });
-// The region's waterfalls, built weekly with the OSM tiles (osm_relay.ts fallsList; web/scenic.js fallsInRegion)
-on("GET", "/api/ctx/falls.json", async (_req, env) => fallsList(env.DATA));
+// The region's waterfalls and roads with conditional access, built weekly with the OSM tiles (osm_relay.ts regionList)
+on("GET", "/api/ctx/falls.json", async (_req, env) => regionList(env.DATA, "falls.json"));
+on("GET", "/api/ctx/closures.json", async (_req, env) => regionList(env.DATA, "closures.json"));
+// A place card's hours, phone and website from the same build (osm_relay.ts placeTags; web/place_info.js)
+on("GET", "/api/ctx/places", async (req, env) => placeTags(new URL(req.url), env.DATA));
+// Fuel stations, schools and places of worship by 0.25 degree cell for a plan (osm_relay.ts pointCells; route_ctx car.js, events.js)
+on("GET", "/api/ctx/points", async (req, env) => pointCells(new URL(req.url), env.DATA));
+// Lit roads, tunnels and cycle routes by 0.1 degree tile for a plan (osm_relay.ts lineTiles; route_ctx/driver.js)
+on("GET", "/api/ctx/lines", async (req, env) => lineTiles(new URL(req.url), env.DATA));
+// A drive's ways' whole geometry from the built tiles, for road data (osm_relay.ts wayShapes; web/contributor.js)
+on("GET", "/api/ctx/ways", async (req, env) => wayShapes(new URL(req.url), env.DATA));
 // The router's edges for a stage cut from the map tiles (trace_relay.ts; route_ctx/router_edges.js), kept 3 days per shape
 on("GET", "/api/ctx/trace", async (req) => traceTile(new URL(req.url)));
 on("GET", "/api/shop", async (req, env) => json(await shop(env, await requireMember(req, env))));
@@ -351,6 +361,7 @@ on("GET", "/api/routes/:id", async (req, env, m) => json(await routeGet(env, awa
 on("DELETE", "/api/routes/:id", async (req, env, m) => json(await routeDelete(env, await requireMember(req, env), m.groups!.id)));
 // Roadbooks (src/roadbooks.ts): collections of great roads. A public one opens by its link with no account; the rest need a member.
 on("GET", "/api/roadbooks/near", async (req, env) => json(await booksNear(env, await viewer(req, env), new URL(req.url))));
+on("GET", "/api/roadbooks/friends", async (req, env) => json(await booksFriends(env, await requireMember(req, env))));
 on("GET", "/api/roadbooks", async (req, env) => json(await booksMine(env, await requireMember(req, env))));
 on("POST", "/api/roadbooks", async (req, env) => json(await bookCreate(env, await requireMember(req, env), req), 201));
 on("PUT", "/api/roadbooks/roads/:rid/stamp", async (req, env, m) => json(await roadStamp(env, await requireMember(req, env), m.groups!.rid, true)));
@@ -462,6 +473,11 @@ on("POST", "/api/convoy/:id/remove", async (req, env, m) => {
   return noContent();
 });
 // No sign-in check here on purpose: the socket's first frame carries a single-use ticket minted by POST .../ticket.
+// Convoy voice (src/convoy_voice.ts): an open channel for the people in a convoy, carried by Cloudflare Realtime
+on("POST", "/api/convoy/:id/voice", async (req, env, m) => json(await voiceStart(env, await requireMember(req, env), m.groups!.id, req)));
+on("POST", "/api/convoy/:id/voice/pull", async (req, env, m) => json(await voicePull(env, await requireMember(req, env), m.groups!.id, req)));
+on("PUT", "/api/convoy/:id/voice/answer", async (req, env, m) => json(await voiceAnswer(env, await requireMember(req, env), m.groups!.id, req)));
+on("DELETE", "/api/convoy/:id/voice", async (req, env, m) => json(await voiceStop(env, await requireMember(req, env), m.groups!.id)));
 on("GET", "/api/convoy/:id/connect", async (req, env, m) => convoyConnect(req, env, m.groups!.id));
 
 // CORS for the iOS shell only (pages at apexnav://app call this Worker cross-origin with a bearer token).

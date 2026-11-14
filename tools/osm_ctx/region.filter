@@ -1,0 +1,21 @@
+# osmium tags-filter expressions for tools/osm_ctx/region.py (osm-ctx.yml and osm-ctx-us.yml: `tags-filter -e`)
+# waterfalls (scenic.js)
+nwr/natural=waterfall
+nwr/waterway=waterfall
+# conditional access (conditional_closures.js)
+w/motor_vehicle:conditional
+w/motorcar:conditional
+w/vehicle:conditional
+w/access:conditional
+# place cards (place_info.js)
+nw/opening_hours
+nw/phone
+nw/contact:phone
+nw/website
+nw/contact:website
+# plan points (car.js, events.js)
+nw/amenity=fuel,school,place_of_worship
+# plan lines (driver.js)
+w/lit
+w/tunnel=yes
+r/route=bicycle

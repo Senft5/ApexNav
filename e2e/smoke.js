@@ -3053,6 +3053,84 @@ flow('turn by turn in road order: exit 19, then the sharp right a mile on, on th
     + JSON.stringify(guides.map((g) => [g.instruction, Math.round(g.at)])));
 });
 
+flow('the turn arrow and route overview: the next turn of a route being driven has an arrow on the map, gone once taken; one key shows the rest of the route; the route behind you fades; the car gets the arrow too', async (page, base) => {
+  // a road north 1.2 km, then right onto Main St for 600 m to the destination (turn_arrow.js)
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.APEX_REVIEW = true; window.__arrows = [];
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car' && m.kind === 'arrow') window.__arrows.push(m); } } } }; });
+  const KY = 110540, KX = 111320 * Math.cos(35.5 * Math.PI / 180), P = [];
+  for (let y = 0; y <= 1200; y += 10) P.push([y, 0]);
+  const TURN = P.length - 1;
+  for (let x = 10; x <= 600; x += 10) P.push([1200, x]);
+  const LL = P.map(([n, e]) => [35.5 + n / KY, -83.9 + e / KX]), end = LL[LL.length - 1];
+  await page.route('https://valhalla1.openstreetmap.de/**', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    if (!req.locations) return route.abort();
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ trip: { legs: [{ shape: polyline6(LL), maneuvers: [
+      { type: 1, begin_shape_index: 0, length: 1.2, time: 80, street_names: ['Oak St'] },
+      { type: 10, begin_shape_index: TURN, length: 0.6, time: 40, street_names: ['Main St'] },
+      { type: 4, begin_shape_index: LL.length - 1, length: 0, time: 0 }] }],
+      summary: { length: 1.8, time: 120, has_highway: false, has_toll: false, has_ferry: false } } }) });
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function' && window.apexDebug);
+  await page.evaluate(([lat, lon]) => window.apex.live({ lat, lon, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }), LL[0]);
+  await page.evaluate(([lat, lon]) => window.apex.onNative({ type: 'carplay', action: 'go', lat, lon, name: 'Main St' }), end);
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && (t.steps || []).length >= 2; }, null, { timeout: 20000 });
+  check(await page.evaluate(() => !window.apexDebug.turnArrow), 'no arrow on a route only planned');
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const turnM = await page.evaluate(() => apexDebug.track.steps.find((s) => s.type === 10).m);
+  const driveTo = (m) => page.evaluate((m) => { const t = apexDebug.track, i = t.dist.findIndex((d) => d >= m), a = Math.max(0, i - 2), b = Math.min(t.lat.length - 1, i + 2);
+    const crs = (Math.atan2((t.lon[b] - t.lon[a]) * Math.cos(t.lat[i] * Math.PI / 180), t.lat[b] - t.lat[a]) * 180 / Math.PI + 360) % 360;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 12, course_deg: crs, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, m);
+  for (let m = 100; m <= turnM - 60; m += 40) { await driveTo(m); await page.waitForTimeout(80); }
+  await page.waitForFunction((m) => window.apexDebug.turnArrow && Math.abs(window.apexDebug.turnArrow.m - m) < 1, turnM, { timeout: 5000 })
+    .catch(() => check(false, 'the arrow is at the turn: ' + JSON.stringify(turnM)));
+  await page.waitForTimeout(800);   // the drive's camera settles on the fix
+  const drawn = await page.evaluate(() => { const m = window.apexDebug.map;
+    return { shaft: m.queryRenderedFeatures({ layers: ['apex-turnarrow'] }).length, head: m.queryRenderedFeatures({ layers: ['apex-turnarrow-head'] }).length }; });
+  check(drawn.shaft > 0 && drawn.head > 0, 'the arrow is drawn on the map, shaft and head: ' + JSON.stringify(drawn));
+  const carGot = await page.evaluate(() => window.__arrows.slice());
+  check(carGot.length === 1 && carGot[0].shaft.length >= 2 && carGot[0].head.length === 3, 'the car is sent the arrow once: ' + JSON.stringify(carGot).slice(0, 300));
+  // the route behind you is faint: the route line's gradient steps up to the route's ink where the car is
+  const behind = await page.evaluate(() => ({ p: window.apexDebug.behind, at: window.apexDebug.state.cursorM / window.apexDebug.track.dist[window.apexDebug.track.dist.length - 1],
+    g: window.apexDebug.map.getPaintProperty('apex-route', 'line-gradient') }));
+  // within one fix (40 m of 1.8 km): the notes, which paint it, can run a frame behind the cursor
+  check(behind.p > 0.3 && Math.abs(behind.p - behind.at) < 0.04 && JSON.stringify(behind.g).includes('line-progress'), 'the route behind you fades where the car is: ' + JSON.stringify(behind));
+  // the route overview key: the rest of the route in view, north up and flat; Recenter takes its place and comes back at once
+  check(await page.isVisible('#overviewBtn'), 'a route being driven has the overview key');
+  await page.click('#overviewBtn');
+  await page.waitForTimeout(1200);
+  const ov = await page.evaluate(([lat, lon]) => { const m = window.apexDebug.map, b = m.getBounds();
+    return { end: b.contains([lon, lat]), pitch: m.getPitch(), bearing: m.getBearing(), follow: window.apexDebug.state.follow,
+      recenter: document.getElementById('recenterBtn').classList.contains('show'), key: getComputedStyle(document.getElementById('overviewBtn')).display }; }, end);
+  check(ov.end && ov.pitch < 1 && Math.abs(ov.bearing) < 1 && !ov.follow && ov.recenter && ov.key === 'none', 'the overview shows the rest of the route, Recenter in its key\'s place: ' + JSON.stringify(ov));
+  await page.click('#recenterBtn');
+  await page.waitForFunction(() => window.apexDebug.state.follow && getComputedStyle(document.getElementById('overviewBtn')).display !== 'none', null, { timeout: 3000 })
+    .catch(() => check(false, 'Recenter brings the drive camera and the overview key back'));
+  // a small phone (iPhone SE): the map between the strip and the gauges is about 230 px; Layers and the key under it stay
+  // clear of the map's credit key at its bottom right
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.waitForTimeout(400);
+  const keys = await page.evaluate(() => { const r = (q) => { const b = document.querySelector(q).getBoundingClientRect(); return { t: b.top, b: b.bottom, l: b.left, r: b.right }; };
+    return { tab: r('#swEdge .edge-tab'), key: r('#overviewBtn'), credit: r('.maplibregl-ctrl-attrib'), stage: r('#app > .stage') }; });
+  // the credit key sits 10 px in from the map's bottom right, 24 px tall (index.html .maplibregl-ctrl-attrib), drawn or not
+  // (these tiles are stubbed, so it is empty here)
+  const creditTop = keys.credit.b > 0 ? keys.credit.t : keys.stage.b - 34;
+  check(keys.key.b <= creditTop && keys.tab.b <= keys.key.t + 4 && keys.tab.t >= keys.stage.t, 'on a small phone the keys clear the credit: ' + JSON.stringify(keys));
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (let m = turnM + 20; m <= turnM + 200; m += 40) { await driveTo(m); await page.waitForTimeout(80); }
+  await page.waitForFunction(() => !window.apexDebug.turnArrow, null, { timeout: 5000 })
+    .catch(() => check(false, 'past the turn the arrow goes (the next step is the arrival): ' + JSON.stringify(turnM)));
+  const carLast = await page.evaluate(() => window.__arrows[window.__arrows.length - 1]);
+  check(carLast && carLast.shaft.length === 0, 'and the car\'s goes too: ' + JSON.stringify(carLast));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'end' }));
+  await page.waitForFunction(() => !window.apexDebug.driveActive, null, { timeout: 5000 }).catch(() => {});
+  const after = await page.evaluate(() => ({ behind: window.apexDebug.behind, g: window.apexDebug.map.getPaintProperty('apex-route', 'line-gradient') || null, key: getComputedStyle(document.getElementById('overviewBtn')).display }));
+  check(after.behind === null && !after.g && after.key === 'none', 'the drive ended: the whole line again, no overview key: ' + JSON.stringify(after));
+});
+
 flow('the sight-line speed rides under the position arrow, on the phone and on the car map (the owner, 2026-10-29)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html?drive=dry_ridge&play=1');
@@ -3101,6 +3179,12 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   check(!l2.hidden && l2.text === '80' && l2.round && l2.left === 324, 'km/h: the red ring, past Apple\'s card: ' + JSON.stringify(l2));
   await page.evaluate(() => { car.limit(null); car.inset(0); });
   check((await lim()).hidden, 'the limit gone: the sign goes');
+  // the next turn's arrow (web/carplay.js arrowMessage): drawn over the route, gone when the page sends none
+  const arrowN = () => page.evaluate(() => { const d = car.map.getSource('car-arrow-src').serialize().data; return d && d.features ? d.features.map((f) => f.geometry.type) : []; });
+  await page.evaluate(() => car.arrow({ shaft: [[35.4, -84.1], [35.401, -84.1], [35.401, -84.099]], head: [[35.4012, -84.099], [35.401, -84.0985], [35.4008, -84.099]] }));
+  check(JSON.stringify(await arrowN()) === '["LineString","Polygon"]', 'the car map draws the turn arrow: ' + JSON.stringify(await arrowN()));
+  await page.evaluate(() => car.arrow({ shaft: [], head: [] }));
+  check((await arrowN()).length === 0, 'and none when the page sends none');
   await page.evaluate(() => car.sight({ text: '43', unit: 'MPH', short: true }));
   // plates never pile up: three corners on one spot show one plate, the tight one when there is no car to measure from
   await page.evaluate(() => { car.mode('preview'); car.corners([{ at: [35.41, -84.1], text: 'R4', tight: false }, { at: [35.41, -84.1], text: 'L2', tight: true }, { at: [35.41001, -84.1], text: 'R3', tight: false }]); });
@@ -3479,6 +3563,65 @@ flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stub
   check(/Sunday run/.test(await page.textContent('.convoy-bar .cv-line')), 'in the convoy, the line names it');
   await page.evaluate(() => { document.querySelector('.tab[data-view="people"]').click(); document.querySelector('[data-people="crews"]').click(); });
   check(!(await page.$$eval('#crewsBody h3', (h) => h.filter((x) => /Convoy/.test(x.textContent)).length)), 'no Convoy heading on Crews');
+});
+
+flow('convoy voice: Talk joins the channel, the one key mutes and unmutes, and a new voice is listened to (Worker, socket and WebRTC stubbed)', async (page, base) => {
+  await page.addInitScript(() => {
+    try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.convoy', 'AAAAAAAAAAAAAAAAAAAAAA'); } catch (_) {}
+    // no real microphone or SFU here: a fake getUserMedia and RTCPeerConnection that answer like the real ones
+    const track = { enabled: true, stop() {} };
+    navigator.mediaDevices.getUserMedia = async () => ({ getAudioTracks: () => [track], getTracks: () => [track] });
+    window.__track = track;
+    window.RTCPeerConnection = class { constructor() { this.connectionState = 'new'; }
+      addTransceiver() { return { mid: '0', sender: { getParameters: () => ({ encodings: [{}] }), setParameters: async () => {} } }; }
+      async createOffer() { return { type: 'offer', sdp: 'v=0 offer' }; } async createAnswer() { return { type: 'answer', sdp: 'v=0 answer' }; }
+      async setLocalDescription(d) { this.localDescription = d; } async setRemoteDescription() {} close() {} };
+  });
+  const id = 'AAAAAAAAAAAAAAAAAAAAAA', until = Date.now() + 60 * 60000, calls = [], frames = [];
+  const ctx = { sessionId: id, name: 'Sunday run', role: 'member', you: 'k2', leaderKey: 'k1', expiresAtMs: until, seq: 0, leaderEpoch: 1, voiceReady: true, voice: [],
+    members: [{ key: 'k1', handle: 'lead', role: 'leader', online: true }, { key: 'k2', handle: 'me', role: 'member', online: true }] };
+  let sock = null;
+  await page.routeWebSocket(/\/api\/convoy\/.*\/connect/, (ws) => {
+    sock = ws;
+    ws.onMessage((m) => { const f = JSON.parse(m); frames.push(f); if (f.type === 'authenticate') ws.send(JSON.stringify({ type: 'ready', context: ctx, events: [], positions: [], route: null, regroup: null })); });
+  });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname.includes('/voice')) calls.push(`${m} ${u.pathname.replace(`/api/convoy/${id}`, '')}`);
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === `/api/convoy/${id}`) return json(ctx);
+    if (u.pathname === `/api/convoy/${id}/ticket`) return json({ ticket: 't'.repeat(32), expiresAtMs: Date.now() + 60000 }, 201);
+    if (u.pathname === `/api/convoy/${id}/voice` && m === 'POST') return json({ sdp: { type: 'answer', sdp: 'a=rtpmap:111 opus/48000/2\r\n' }, voice: [] });
+    if (u.pathname === `/api/convoy/${id}/voice/pull`) return json({ sdp: { type: 'offer', sdp: 'v=0 pull' }, tracks: [{ key: 'k1', mid: '1' }] });
+    if (u.pathname === `/api/convoy/${id}/voice/answer`) return json({ ok: true });
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForSelector('.convoy-bar.show .cv-talk', { timeout: 15000 });
+  check((await page.textContent('.convoy-bar .cv-talk')) === 'Talk', 'the convoy line has one Talk key');
+  const box = await page.$eval('.convoy-bar .cv-talk', (b) => { const r = b.getBoundingClientRect(); return [r.width, r.height]; });
+  check(box[0] >= 44 && box[1] >= 44, 'the key is thumb-sized for a car mount: ' + box);
+  await page.click('.convoy-bar .cv-talk');
+  await page.waitForFunction(() => document.querySelector('.convoy-bar .cv-talk').textContent === 'Mute', null, { timeout: 5000 });
+  check(calls[0] === 'POST /voice', 'Talk publishes the microphone through the Worker: ' + calls);
+  check(await page.$eval('.convoy-bar .cv-talk', (b) => b.classList.contains('on')), 'the key shows the mic is open');
+  check(frames.some((f) => f.type === 'voice' && f.muted === false), 'the convoy is told we are on, unmuted');
+  if (process.env.SHOTS) await page.screenshot({ path: path.join(process.env.SHOTS, 'convoy-voice-on.png') });
+  await page.click('.convoy-bar .cv-talk');
+  await page.waitForFunction(() => document.querySelector('.convoy-bar .cv-talk').textContent === 'Unmute', null, { timeout: 3000 });
+  check(await page.evaluate(() => window.__track.enabled === false) && frames.some((f) => f.type === 'voice' && f.muted === true), 'Mute turns the mic off and tells the convoy');
+  await page.click('.convoy-bar .cv-talk');
+  await page.waitForFunction(() => document.querySelector('.convoy-bar .cv-talk').textContent === 'Mute', null, { timeout: 3000 });
+  sock.send(JSON.stringify({ type: 'voice', key: 'k1', on: true, muted: false, joined: true }));
+  await page.waitForTimeout(300);
+  check(calls.includes('POST /voice/pull') && calls.includes('PUT /voice/answer'), 'a voice that comes on is listened to: ' + calls);
+  await page.click('.convoy-bar .cv-line');
+  await page.waitForSelector('.convoy-sheet button:has-text("Leave voice")');
+  await page.click('.convoy-sheet button:has-text("Leave voice")');
+  await page.waitForTimeout(200);
+  check(calls.at(-1) === 'DELETE /voice' && !(await page.evaluate(() => localStorage.getItem('apex.convoyVoice'))), 'Leave voice takes us off, and the next convoy will not join by itself');
 });
 
 flow('crew page: an old ?view=crew link opens People on Crews, at your crew; going, chat and the livery reach the Worker (Worker stubbed, REVIEW.md roadmap 20)', async (page, base) => {
@@ -4189,9 +4332,11 @@ flow('the status line wraps between its parts, never "25 min left…", at every 
   const pts = Array.from({ length: 600 }, (_, i) => `<trkpt lat="${(35.5 + i * 1e-4).toFixed(6)}" lon="-83.9"/>`).join('');
   const fits = () => page.evaluate(() => {
     const m = document.getElementById('dsMain'), box = m.getBoundingClientRect(), end = document.getElementById('driveEnd').getBoundingClientRect();
-    const parts = [...m.children].map((x) => x.getBoundingClientRect());
+    // on a route the figures (arrival, time left, distance left) and each part of the small line under them are the parts
+    const parts = [...m.querySelectorAll(m.classList.contains('has-trip') ? '.tf, .ds-sub > span' : ':scope > span')].map((x) => x.getBoundingClientRect());
     return { text: m.textContent, cut: getComputedStyle(m).textOverflow === 'ellipsis' && m.scrollWidth > m.clientWidth,
-      inside: parts.every((r) => r.left >= box.left - 0.5 && r.right <= box.right + 0.5 && r.right <= end.left), lines: new Set(parts.map((r) => Math.round(r.top))).size };
+      inside: parts.every((r) => r.left >= box.left - 0.5 && r.right <= box.right + 0.5 && r.right <= end.left), lines: new Set(parts.map((r) => Math.round(r.top))).size,
+      trip: [...m.querySelectorAll('.tf')].map((x) => x.textContent) };
   });
   for (const theme of ['roadbook', 'tapedeck', 'billet']) {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -4212,7 +4357,7 @@ flow('the status line wraps between its parts, never "25 min left…", at every 
         await page.evaluate((n) => { document.documentElement.dataset.mode = n ? 'night' : 'day'; }, night);
         await page.waitForTimeout(60);
         const r = await fits();
-        check(!r.cut && r.inside && /min left/.test(r.text), `${width} px ${theme}${night ? ' night' : ''}: ${JSON.stringify(r)}`);
+        check(!r.cut && r.inside && /min left/.test(r.text) && r.trip.length === 3, `${width} px ${theme}${night ? ' night' : ''}: ${JSON.stringify(r)}`);
       }
     }
     await page.evaluate(() => { for (let i = 0; i < 2; i++) window.apex.onNative({ type: 'carplay', action: 'end' }); });
@@ -4347,7 +4492,7 @@ flow('surfaces: Home by is the app\'s stepper, the replay has a Done key, the fi
   // U-80: before any stylesheet or script, the page's first paint is the launch screen's ink and lockup
   const first = await page.evaluate(() => { const st = document.head.querySelector('style'), firstScript = document.head.querySelector('script, link[rel=stylesheet]');
     return { before: !!(st && firstScript && (st.compareDocumentPosition(firstScript) & Node.DOCUMENT_POSITION_FOLLOWING)), css: st ? st.textContent : '' }; });
-  check(first.before && /#151310/.test(first.css) && /svg\+xml/.test(first.css) && /184px 50px/.test(first.css), 'the first paint is the launch screen: ' + JSON.stringify({ before: first.before }));
+  check(first.before && /#111214/.test(first.css) && /svg\+xml/.test(first.css) && /184px 50px/.test(first.css), 'the first paint is the launch screen: ' + JSON.stringify({ before: first.before }));
   // U-98: a loop's Home by is a stepper in the theme, "--:--" until a key sets a time
   const pts = Array.from({ length: 300 }, (_, i) => `<trkpt lat="${(35.5 + i * 1e-4).toFixed(6)}" lon="-83.9"/>`).join('');
   await page.setInputFiles('#gpxFile', { name: 'loop.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Loop</name><trkseg>${pts}</trkseg></trk></gpx>`) });
@@ -5309,6 +5454,10 @@ flow('shared routes: one a friend shared shows on People, Friends, under From fr
 
 flow('roadbooks: a planned road goes into a new roadbook from Share; People lists it; it is made public; one near you is followed; a road your Log covers is stamped; a link opens one signed out (Worker stubbed, SOCIAL 2.6)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  // the map's style, plain paper (no tiles here), so the book's map can be drawn on the real map (post_map.js)
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
   const geom = Array.from({ length: 240 }, (_, i) => [-83.9 + i * 4e-4 + Math.sin(i / 6) * 3e-4, 35.6 + i * 3e-4]);
   const other = Array.from({ length: 200 }, (_, i) => [-83.7 + i * 3e-4, 35.7 + Math.sin(i / 9) * 4e-4]);
   let signedIn = true, n = 0;
@@ -5328,6 +5477,7 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
     if (u.pathname === '/api/routes/RRRRRRRRRRRRRRRR') return json({ id: 'RRRRRRRRRRRRRRRR', name: 'Cherohala loop', geom, from_handle: 'alice' });
     if (u.pathname.startsWith('/api/roadbooks')) calls.push(`${m} ${u.pathname}${u.search}`);
     if (u.pathname === '/api/roadbooks/near') return json([...books.values()].filter((b) => !b.mine && b.visibility === 'public').map((b) => ({ ...card(b), km: 14 })));
+    if (u.pathname === '/api/roadbooks/friends') return json([{ id: 'FFFFFFFFFFFFFFFF', name: 'Dan\'s back roads', about: null, visibility: 'friends', by: 'dan', mine: false, roads: 3, length_m: 21000, lat: 35.6, lon: -83.8, followers: 0, following: false }]);
     if (u.pathname === '/api/roadbooks' && m === 'GET') return signedIn ? json({ mine: [...books.values()].filter((b) => b.mine).map(boxed), following: [...books.values()].filter((b) => b.following).map(boxed) }) : json({ error: 'sign_in_required' }, 401);
     if (u.pathname === '/api/roadbooks' && m === 'POST') { const id = 'MMMMMMMMMMMMMMM' + (n++); books.set(id, { id, name: body().name, about: null, visibility: 'private', by: 'me', mine: true, followers: 0, following: false, road_list: [] }); return json({ id }, 201); }
     if ((x = /^\/api\/roadbooks\/roads\/([^/]+)\/stamp$/.exec(u.pathname))) { for (const b of books.values()) for (const r of b.road_list) if (r.id === x[1]) { r.stamped = m === 'PUT'; r.stamps += m === 'PUT' ? 1 : -1; return json({ stamped: r.stamped, stamps: r.stamps }); } return json({}, 404); }
@@ -5369,10 +5519,21 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
   await page.waitForSelector('.side-pop.open .rb-row:has-text("Foothills Parkway set")');
   check(/@cara · 1 road · .* · 4 following · .* away/.test(await page.textContent('.side-pop.open .rb-row:has-text("Foothills Parkway set")')), 'a public book near you says whose, how big, who follows and how far');
   check(calls.some((c) => /^GET \/api\/roadbooks\/near\?lat=-?\d+\.\d&lon=-?\d+\.\d$/.test(c)), 'near you is asked by the coarse cell only: ' + calls.filter((c) => /near/.test(c)));
+  // a friend's friends-only book, found without a link (free roamer B, 2026-11-14)
+  await page.waitForSelector('.side-pop.open .rb-row:has-text("Dan\'s back roads")', { timeout: 8000 });
+  check(/@dan · 3 roads · /.test(await page.textContent('.side-pop.open .rb-row:has-text("Dan\'s back roads")')) && /From friends/i.test(await page.textContent('.side-pop.open')), 'a friend\'s book is listed under From friends, whose and how big');
   // your book's page: the map, the road with its thumbnail and Drive it; Edit makes it public
   await page.click('.side-pop.open .rb-row:has-text("Smokies classics")');
   await page.waitForSelector('.rb-pop.open .rb-road:has-text("Cherohala loop")');
-  check(await page.locator('.rb-pop.open .rb-map svg path').count() === 1 && await page.locator('.rb-pop.open .rb-road .rb-thumb svg').count() === 1, 'the book draws its road on a map, and the road has its thumbnail');
+  check(await page.locator('.rb-pop.open .rb-map svg path:not(.rb-casing)').count() === 1 && await page.locator('.rb-pop.open .rb-road .rb-thumb svg').count() === 1, 'the book draws its road on a map, and the road has its thumbnail');
+  // the streets under it: a still of the real map behind the line, and the line on its casing (free roamer B, 2026-11-14)
+  await page.waitForSelector('.rb-pop.open .rb-map.on-map', { timeout: 20000 }).catch(() => {});
+  const under = await page.evaluate(() => { const b = document.querySelector('.rb-pop.open .rb-map'); return b && { on: b.classList.contains('on-map'),
+    bg: getComputedStyle(b.querySelector('svg')).backgroundImage.slice(0, 9), casing: getComputedStyle(b.querySelector('.rb-casing')).display }; });
+  check(under && under.on && under.bg === 'url("blob' && under.casing === 'inline', 'the book\'s roads lie on the real map, each on its casing: ' + JSON.stringify(under));
+  await page.waitForSelector('.rb-pop.open .rb-road .rb-thumb.on-map', { timeout: 20000 }).catch(() => {});
+  check(/^url\("blob/.test(await page.evaluate(() => { const t = document.querySelector('.rb-pop.open .rb-road .rb-thumb.on-map svg'); return t ? getComputedStyle(t).backgroundImage : ''; })),
+    'each road\'s thumbnail is on its own streets too');
   check(/0 of 1 driven/.test(await page.textContent('.rb-pop.open')) && !/Nothing to tap|is stamped when/.test(await page.textContent('.rb-pop.open')), 'progress starts at none driven, the meter alone (no how-to line)');
   check(await page.evaluate(() => [...document.querySelectorAll('.side-pop .people-lead')].every((p) => !/Your lists of great roads/.test(p.textContent) || p.hidden)), 'with a roadbook of your own, no line saying what a roadbook is');
   await page.click('.rb-pop.open button:has-text("Edit")');
@@ -5420,6 +5581,41 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
   await page.waitForFunction(() => /Sign in to follow a roadbook/.test(document.getElementById('toast').textContent));
 }, { geolocation: { latitude: 35.6, longitude: -83.8 }, permissions: ['geolocation'] });
 
+flow('roadbooks: one of your stages goes into your roadbook with a tap, as you marked it, a privacy zone left out (free roamer B, 2026-11-14)', async (page, base) => {
+  // two stages of your Log (geom [lat, lon] as the Log keeps it), one already in the book; a privacy zone over the other's start
+  const st = Array.from({ length: 60 }, (_, i) => [+(35.6 + i * 3e-4).toFixed(6), +(-83.8 + Math.sin(i / 8) * 1e-3).toFixed(6)]);
+  await page.addInitScript((st) => { try {
+    localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1');
+    localStorage.setItem('apex.segments', JSON.stringify([{ id: 's1', name: 'Wears Valley bends', geom: JSON.stringify(st), length_m: 2000 }, { id: 's2', name: 'Road in it', geom: JSON.stringify(st), length_m: 2000 }]));
+    localStorage.setItem('apex.privacyZones', JSON.stringify([{ lat: st[0][0], lon: st[0][1], r: 200, name: 'Home' }]));
+  } catch (_) {} }, st);
+  const book = { id: 'SSSSSSSSSSSSSSSS', name: 'My Smokies', about: null, visibility: 'private', by: 'me', mine: true, followers: 0, following: false, lat: 35.6, lon: -83.8,
+    road_list: [{ id: 'r1', name: 'Road in it', geom: st.map(([a, b]) => [b, a]), length_m: 2000, stamps: 0, stamped: false }] };
+  const posted = [];
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/roadbooks/SSSSSSSSSSSSSSSS/roads' && m === 'POST') { const r = JSON.parse(route.request().postData()); posted.push(r);
+      book.road_list.push({ id: 'r2', name: r.name, geom: r.geom, length_m: 1800, stamps: 0, stamped: false }); return json({ id: 'r2', length_m: 1800 }, 201); }
+    if (u.pathname === '/api/roadbooks/SSSSSSSSSSSSSSSS') return json({ ...book, roads: book.road_list.length, length_m: 2000 * book.road_list.length });
+    if (u.pathname === '/api/roadbooks') return json({ mine: [], following: [] });
+    return json([]);
+  });
+  await page.goto(base + '/index.html?roadbook=SSSSSSSSSSSSSSSS');
+  await page.waitForSelector('.rb-pop.open button:has-text("Add one of your stages")', { timeout: 15000 });
+  check(await page.locator('.rb-pop.open .rb-stages').isHidden(), 'the stages wait behind one key, not a wall of chips');
+  await page.click('.rb-pop.open button:has-text("Add one of your stages")');
+  const chips = await page.locator('.rb-pop.open .rb-stages button').allInnerTexts();
+  check(chips.length === 1 && chips[0] === 'Wears Valley bends', 'only the stage not in the book yet: ' + JSON.stringify(chips));
+  await page.click('.rb-pop.open .rb-stages button:has-text("Wears Valley bends")');
+  await page.waitForSelector('.rb-pop.open .rb-road:has-text("Wears Valley bends")', { timeout: 8000 });
+  const g = posted[0] && posted[0].geom, away = g ? Math.hypot((g[0][1] - st[0][0]) * 110540, (g[0][0] - st[0][1]) * 90500) : -1;
+  const end = g ? Math.hypot((g[g.length - 1][1] - st[59][0]) * 110540, (g[g.length - 1][0] - st[59][1]) * 90500) : -1;
+  check(posted.length === 1 && posted[0].name === 'Wears Valley bends' && away > 190 && away < 260 && end < 1,
+    'it went in under its name, [lon, lat], starting where the privacy zone ends (not 400 m in) and ending where you marked it: ' + JSON.stringify({ away, end, n: g && g.length }));
+  check(/Wears Valley bends is in My Smokies\./.test(await page.textContent('#toast')) && !(await page.locator('.rb-pop.open button:has-text("Add one of your stages")').count()),
+    'the toast says so, and with every stage in, the key goes');
+});
 flow('roadbooks: Drive them all routes from where you are through the book\'s roads, nearest first, each from its nearer end (free roamer B, 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   // three roads going north ([lon, lat]): A near you, B beyond it (drawn south to north), C past B but drawn north to south
@@ -6845,8 +7041,9 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   check(JSON.stringify(st) === JSON.stringify(['Skyway summit801', 'Tellico descent--']), 'the stages it went over, each with its Score (unknown stays --): ' + JSON.stringify(st));
   // a tap on bob's name opens his profile, with his drives on it (?author=, his id)
   await page.click('#accountBody .feed-card .feed-head .who');
-  await page.waitForSelector('.profile-view .profile-drives:not([hidden]) .feed-card', { timeout: 10000 });
-  check(/Cherohala Skyway/.test(await page.textContent('.profile-view .profile-drives')), 'a friend\'s profile shows their drives');
+  // (the profile opened from This week above may still be closing: its empty copy can be the first in the page)
+  check(await page.waitForFunction(() => [...document.querySelectorAll('.profile-view .profile-drives:not([hidden])')].some((d) => /Cherohala Skyway/.test(d.textContent)), null, { timeout: 10000 }).then(() => true, () => false),
+    'a friend\'s profile shows their drives');
   await page.click('.profile-view .side-pop-head button');
   // kudos: one tap, at once
   await page.click('#accountBody .feed-card .feed-acts button[aria-label^="Kudos"]');
@@ -6915,6 +7112,36 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   const first = (() => { const s = p.line; let i = 0, r = 0, sh = 0, b; do { b = s.charCodeAt(i++) - 63; r |= (b & 31) << sh; sh += 5; } while (b >= 32); return (r & 1 ? ~(r >> 1) : r >> 1) / 1e5; })();
   check(p.crew_id === 'k1' && p.caption === 'First run with the crew.' && p.score === 790 && p.title === 'Cherohala Skyway' && first > 35.36 + 0.0044,
     'the post: to the crew, the caption, the Score, and the line starting 500 m in: ' + JSON.stringify({ ...p, line: p.line.length, first }));
+});
+flow('the Feed: Keep in a roadbook on a friend\'s post puts the road it drew into one of your roadbooks, nothing else of the drive (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const enc = (pts) => { let o = '', a0 = 0, b0 = 0; const e = (v) => { v = v < 0 ? ~(v << 1) : v << 1; while (v >= 32) { o += String.fromCharCode((32 | (v & 31)) + 63); v >>= 5; } o += String.fromCharCode(v + 63); };
+    for (const [a, b] of pts) { const x = Math.round(a * 1e5), y = Math.round(b * 1e5); e(x - a0); e(y - b0); a0 = x; b0 = y; } return o; };
+  const line = Array.from({ length: 80 }, (_, i) => [39.1 + i * 0.0004, -84.6 + Math.sin(i / 6) * 0.004]);   // ~3.5 km
+  const post = { id: 'P1AAAAAAAAAAAAAA', handle: 'bob', photo_id: null, mine: false, crew: null, title: 'Kellogg bends', caption: null, driven_on: '2026-11-12', length_m: 3500, score: 801,
+    roads: [], stages: [], line: enc(line), created_at: '2026-11-12 10:00:00', kudos: 0, my_kudos: false, comments: 0 };
+  const posted = [];
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/feed') return json([post]);
+    if (u.pathname === '/api/roadbooks') return json({ mine: [{ id: 'KKKKKKKKKKKKKKKK', name: 'Ohio favourites', visibility: 'private', mine: true, roads: 0, length_m: 0, road_list: [] }], following: [] });
+    if (u.pathname === '/api/roadbooks/KKKKKKKKKKKKKKKK/roads' && m === 'POST') { posted.push(JSON.parse(route.request().postData())); return json({ id: 'r1', length_m: 3500 }, 201); }
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card', { timeout: 15000 });
+  await page.click('#accountBody .feed-card .feed-head .feed-more');
+  await page.click('.feed-menu button:has-text("Keep in a roadbook")');
+  await page.waitForSelector('.rb-pop.open .rb-add button:has-text("Ohio favourites")', { timeout: 8000 });
+  check(/Kellogg bends: its line goes in, nothing else of the drive\./.test(await page.textContent('.rb-pop.open .rb-add')), 'the sheet says what goes in, in one line');
+  await page.click('.rb-pop.open .rb-add button:has-text("Ohio favourites")');
+  await page.waitForFunction(() => /Added to Ohio favourites\./.test(document.getElementById('toast').textContent), null, { timeout: 8000 });
+  const g = posted[0] && posted[0].geom, d0 = g ? Math.hypot((g[0][1] - line[0][0]) * 110540, (g[0][0] - line[0][1]) * 86000) : -1;
+  check(posted.length === 1 && posted[0].name === 'Kellogg bends' && g.length >= 60 && d0 < 2 && Object.keys(posted[0]).sort().join() === 'geom,name',
+    'their line went in under the post\'s name, [lon, lat], from where their post starts; no handle, Score or day: ' + JSON.stringify({ d0, n: g && g.length, keys: Object.keys(posted[0] || {}) }));
+  check(!(await page.locator('.rb-pop.open').count()), 'the sheet closes once it is kept');
 });
 flow('the Feed: each post\'s line is on the real map, two posts drawn by one hidden map, and a map that can\'t load leaves the plain line (post_map.js, 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
@@ -7158,7 +7385,7 @@ flow('push notifications: Garage > Notifications asks iOS only at the switch, ha
   // a push's tap: kudos on your post opens that post with its comments
   await page.evaluate(() => window.apex.onNative({ type: 'link', params: { view: 'friends', post: 'P1AAAAAAAAAAAAAA' } }));
   await page.waitForSelector('.feed-sheet', { timeout: 8000 });
-  // the sheet opens at once with Loading…, then the post (on a loaded runner the read came before the post had arrived)
+  // the sheet opens at once with "Loading…" and fills when the post arrives (CI 2026-11-14: read before it had, twice)
   await page.waitForFunction(() => /That fog!/.test((document.querySelector('.feed-sheet') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
   const sheet = await page.textContent('.feed-sheet');
   check(/Cherohala Skyway/.test(sheet) && /That fog!/.test(sheet), 'the tap opens the post it is about: ' + sheet.slice(0, 160));
@@ -7186,6 +7413,8 @@ flow('friend profile: a friend on People → Profile shows what the friend share
     if (u.pathname === '/api/friends/U1/profile') return json({ handle: 'bob', name: 'Bob <b>S</b>', friends_since: '2026-09-01', crews: ['Ridge Runners'], cars: [],
       stages: [{ stage: 'Esses', best: 812, days_month: 3, last: '2026-10-27' }], totals: { stages: 1, days_month: 3, best: 812 } });
     if (u.pathname === '/api/points') return json({ total: 0 });
+    if (u.pathname === '/api/roadbooks/friends') return json([{ id: 'BOBBOOKAAAAAAAAA', name: 'Bob\'s Kentucky', visibility: 'friends', by: 'bob', mine: false, roads: 4, length_m: 30000, followers: 0, following: false },
+      { id: 'CARABOOKAAAAAAAA', name: 'Cara\'s set', visibility: 'public', by: 'cara', mine: false, roads: 2, length_m: 9000, followers: 0, following: false }]);
     if (u.pathname === '/api/presence') return json([{ handle: 'bob', photo_id: null, delay_s: 0, fuzz: false, road: 'Dry Ridge Rd', lat: 38.7, lon: -84.6, at: new Date(Date.now() - 30e3).toISOString() }]);
     return json([]);
   });
@@ -7197,6 +7426,10 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   const t = await page.textContent('.profile-view');
   check(t.includes('@bob') && /Bob <b>S<\/b> · friends since September( 2026)?/.test(t) && t.includes('Esses · best 812 · 3 days this month') && t.includes('Ridge Runners'), 'the profile, as text: ' + t);
   check(!/Times are never shown|on them this month/.test(t), 'no line saying what is not shown, and "this month" once under its head: ' + t);
+  // their roadbooks you may open, on their profile (free roamer B, 2026-11-14): Bob's only
+  await page.waitForSelector('.profile-view .rb-of-friend:not([hidden]) .rb-row', { timeout: 8000 });
+  const rbs = await page.locator('.profile-view .rb-of-friend .rb-row b').allInnerTexts();
+  check(JSON.stringify(rbs) === '["Bob\'s Kentucky"]', 'their roadbooks are on their profile, nobody else\'s: ' + JSON.stringify(rbs));
   // the person first, as a social app opens a profile: their photo, who they are and what they are doing now (the list's line)
   const who = await page.evaluate(() => { const w = document.querySelector('.profile-view .profile-who'); return w && { photo: !!w.firstElementChild && w.firstElementChild.getBoundingClientRect().width >= 48,
     text: w.innerText, live: !!w.querySelector('small.live'), first: w.previousElementSibling.classList.contains('side-pop-head') }; });
@@ -10315,7 +10548,7 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   await openSetting(page, 'data');
   const g = await page.evaluate(() => { const s = document.getElementById('sheet'), e = getComputedStyle(document.getElementById('myEraseBtn'));
     return { title: s.querySelector('h2').textContent, themes: document.querySelectorAll('#themeCards > *').length, how: document.querySelectorAll('[data-panel~="garage"] details.how').length, bare: [...document.querySelectorAll('[data-panel~="garage"] > p.note')].filter((p) => !p.id && p.textContent.trim().length >= 140).length, octane: /Octane/.test(document.body.innerText), erase: e.color + '/' + e.textDecorationLine + '/' + e.borderTopStyle }; });
-  check(g.title === 'Garage' && g.themes === 3 && g.how >= 1 && g.bare === 0 && !g.octane && g.erase === 'rgb(200, 16, 46)/none/none', 'Garage: ' + JSON.stringify(g));
+  check(g.title === 'Garage' && g.themes === 3 && g.how >= 1 && g.bare === 0 && !g.octane && g.erase === 'rgb(224, 16, 42)/none/none', 'Garage: ' + JSON.stringify(g));
   // 2026-11-10: Your data is the Settings list's rows in three groups (it was eight keys of eight widths): one left edge, one width
   const rowsOf = await page.evaluate(() => { const box = document.querySelector('.data-rows'); return { groups: [...box.querySelectorAll('.nav-group')].map((h) => h.textContent),
     rows: [...box.querySelectorAll('.nav-row')].filter((r) => !r.hidden).map((r) => {   // signed out: no Delete account row
@@ -10326,7 +10559,7 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   await page.evaluate(() => document.getElementById('myEraseBtn').click());
   await page.waitForSelector('.confirm-sheet [role="alertdialog"], .confirm-sheet .cs-box[role="alertdialog"]');
   const cs = await page.evaluate(() => ({ yes: document.querySelector('.confirm-sheet .cs-yes').textContent, color: getComputedStyle(document.querySelector('.confirm-sheet .cs-yes')).color, focus: document.activeElement.className }));
-  check(!alerted && cs.yes === 'Erase everything' && cs.color === 'rgb(200, 16, 46)' && cs.focus === 'cs-no', 'the confirm sheet: ' + JSON.stringify(cs));
+  check(!alerted && cs.yes === 'Erase everything' && cs.color === 'rgb(224, 16, 42)' && cs.focus === 'cs-no', 'the confirm sheet: ' + JSON.stringify(cs));
   await page.keyboard.press('Escape');
   check(!(await page.$('.confirm-sheet')) && (await page.evaluate(() => ApexRecording.all())).length === 1, 'Cancel (Escape) keeps everything');
   await page.mouse.click(200, 30); await page.waitForTimeout(300);   // a tap outside slides the settings sheets away
@@ -10338,9 +10571,9 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   await page.evaluate(() => document.querySelectorAll('#themeCards .theme-card')[1].querySelector('.theme-preview').scrollIntoView());
   await page.click('#themeCards .theme-card:nth-child(2) .theme-preview');
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'tapedeck');
-  const used = await page.evaluate(() => ({ inUse: document.querySelector('#themeCards .theme-card.in-use .tc-head b').textContent, back: !!document.querySelector('#themeCards [aria-label="Use Roadbook"]') }));
+  const used = await page.evaluate(() => ({ inUse: document.querySelector('#themeCards .theme-card.in-use .tc-head b').textContent, back: !!document.querySelector('#themeCards [aria-label="Use Vetta"]') }));
   check(used.inUse === 'Tapedeck' && used.back, 'the Tapedeck preview, touched, is in use: ' + JSON.stringify(used));
-  await page.click('#themeCards [aria-label="Use Roadbook"]');
+  await page.click('#themeCards [aria-label="Use Vetta"]');
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'roadbook');
 });
 
@@ -11115,6 +11348,45 @@ flow('taste from picks: Start on another route than Vetta\'s pick teaches the ta
   }
 }, { ...IPHONE, funLevel: 'fun' });
 
+flow('the compass: shows while the map is turned off north, its needle on north; a tap turns the map to north and holds it there', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded && document.getElementById('compassBtn'), null, { timeout: 20000 });
+  check(await page.evaluate(() => document.getElementById('compassBtn').hidden), 'north up: no compass');
+  await page.evaluate(() => { window.apexDebug.state.follow = false; window.apexDebug.map.jumpTo({ bearing: 40 }); });
+  await page.waitForFunction(() => !document.getElementById('compassBtn').hidden, null, { timeout: 3000 });
+  const c = await page.evaluate(() => { const b = document.getElementById('compassBtn'), r = b.getBoundingClientRect(); return { t: b.querySelector('svg').style.transform, w: r.width, h: r.height, label: b.getAttribute('aria-label') }; });
+  check(c.t === 'rotate(-40deg)' && c.w >= 44 && c.h >= 44 && c.label === 'Face north', 'the compass shows, its needle on north: ' + JSON.stringify(c));
+  // the keys under Layers take their own taps (the closed Layers panel's box lay over them: Recenter took none, 2026-11-14)
+  const hit = await page.evaluate(() => { document.getElementById('recenterBtn').classList.add('show');
+    return ['recenterBtn', 'compassBtn'].map((id) => { const b = document.getElementById(id).getBoundingClientRect(), e = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return !!(e && e.closest('#' + id)); }); });
+  check(hit[0] && hit[1], 'Recenter and the compass take their own taps: ' + JSON.stringify(hit));
+  await page.click('#compassBtn');
+  await page.waitForFunction(() => Math.abs(window.apexDebug.map.getBearing()) < 0.5 && document.getElementById('compassBtn').hidden, null, { timeout: 4000 });
+  await page.waitForTimeout(1500);
+  const after = await page.evaluate(() => ({ bearing: window.apexDebug.map.getBearing(), follow: window.apexDebug.state.follow, recenter: document.getElementById('recenterBtn').classList.contains('show') }));
+  check(Math.abs(after.bearing) < 0.5 && !after.follow && after.recenter, 'north up stays, with Recenter to go back: ' + JSON.stringify(after));
+}, IPHONE);
+
+flow('the heading beam: in the app, a cone from the idle arrow toward where the phone points, from its compass; none moving or without one (gps_halo.js beam)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.webkit = { messageHandlers: { apex: { postMessage() {} } } }; });   // the app's shell: its frames are the idle fixes
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function' && window.apexDebug && window.apexDebug.map.loaded());
+  const frame = (o) => page.evaluate((o) => window.apex.live({ lat: 39.1035, lon: -84.512, accuracy_m: 5, speed_mps: 0, course_deg: null, has_fix: true, recording: false, location_off: false, ...o }), o);
+  const beam = () => page.evaluate(() => { const b = document.querySelector('.heading-beam'); return { shown: !!b && !b.hidden && b.offsetWidth > 0, t: b && b.style.transform, aria: b && b.getAttribute('aria-hidden'), hit: b && getComputedStyle(b).pointerEvents }; });
+  await frame({ heading_deg: 120 });
+  await page.waitForFunction(() => { const b = document.querySelector('.heading-beam'); return b && !b.hidden; }, null, { timeout: 8000 });
+  const on = await beam();
+  check(on.shown && /rotateZ\(120deg\)|rotate\(120deg\)/.test(on.t) && on.aria === 'true' && on.hit === 'none', 'the beam points where the phone does: ' + JSON.stringify(on));
+  await frame({ heading_deg: 120, speed_mps: 12 });
+  await page.waitForFunction(() => document.querySelector('.heading-beam').hidden, null, { timeout: 3000 });
+  await frame({ heading_deg: 200 });
+  await page.waitForFunction(() => !document.querySelector('.heading-beam').hidden, null, { timeout: 3000 });
+  await frame({ heading_deg: null });
+  await page.waitForFunction(() => document.querySelector('.heading-beam').hidden, null, { timeout: 3000 });
+}, IPHONE);
+
 flow('GPS accuracy: a faint disc round the idle arrow as wide as the fix is unsure, gone when the fix is sharp (gps_halo.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   await page.context().grantPermissions(['geolocation']);
@@ -11150,6 +11422,20 @@ flow('route callouts: each route found is tagged on the map with its time and co
   check(on.length === 1 && on[0].cur === 'true' && first.every((g) => /^(\d+ min|\d+:\d\d h)$/.test(g.time) && /^\d+ corners?$/.test(g.corners)),
     'every route tagged with its time and corners, one filled: ' + JSON.stringify(first));
   check(on[0].label.startsWith('This route: ') && first.filter((g) => !g.on).every((g) => g.label.startsWith('Take this route: ')), 'the tags say what a tap does: ' + JSON.stringify(first));
+  // each tag sits just above its own point on the route (a CSS position on the tag once pushed every tag after the first down by
+  // the ones before it), and no map stamp is left showing under a tag
+  await page.waitForTimeout(400);
+  const placed = await page.evaluate(() => {
+    const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const tags = [...document.querySelectorAll('.route-callout')].map((b) => b.getBoundingClientRect());
+    const at = window.apexDebug.calloutAt(), els = [...document.querySelectorAll('.route-callout')];
+    const off = els.map((b, i) => { const t = b.getBoundingClientRect(); return Math.round(Math.abs(t.bottom + 6 - at[i][1]) + Math.abs((t.left + t.right) / 2 - at[i][0])); });
+    const stamps = [...document.querySelectorAll('.poi-pin')].filter((e) => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden')
+      .map((e) => e.getBoundingClientRect());
+    return { off, under: stamps.filter((s) => tags.some((t) => hit(s, t))).length, n: stamps.length };
+  });
+  check(placed.off.length >= 2 && placed.off.every((d) => d <= 2), 'each tag sits just above its own point, not pushed down by the tags before it: ' + JSON.stringify(placed));
+  check(placed.under === 0, 'no map stamp shows under a route tag: ' + JSON.stringify(placed));
   const pager = () => page.evaluate(() => document.getElementById('routeCardPager').getAttribute('aria-label') || '');
   check(new RegExp(`^Route ${on[0].i + 1} of `).test(await pager()), 'the filled tag is the card\'s route: ' + await pager());
   const other = first.find((g) => !g.on);

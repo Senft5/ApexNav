@@ -125,7 +125,7 @@ console.log(JSON.stringify({ q: S.fallsQuery(35, -84.1, 35.2, -83.9), falls, lis
 
 
 def test_waterfalls_from_the_regions_built_list():
-    """Inside the built region the waterfalls come from GET /api/ctx/falls.json (tools/osm_ctx/falls.py), not Overpass: those
+    """Inside the built region the waterfalls come from GET /api/ctx/falls.json (tools/osm_ctx/region.py), not Overpass: those
     in the box, as fallsFrom gives them. A box reaching a 0.25 degree cell the list doesn't cover (across the border) is
     null, so the phone asks Overpass instead of saying "no waterfalls" where the list simply stops."""
     src = r"""

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { api } from "./helpers";
 import { env } from "cloudflare:workers";
-import { builtTile, bundleKey, compact, HEAD, KEEP, MIRRORS, osmTile, query, resetBuiltForTest, tileOf } from "../src/osm_relay";
+import { builtTile, bundleKey, compact, HEAD, KEEP, MIRRORS, osmTile, query, resetBuiltForTest, resetLinesForTest, resetPlacesForTest, resetPointsForTest, tileOf } from "../src/osm_relay";
 import fx from "./fixtures/overpass_tile.json";
 
 // A real Overpass answer's elements (Dry Ridge Road, Colerain Township; OSM ODbL) with two tags the phone never reads.
@@ -133,7 +133,7 @@ describe("OSM relay (/api/ctx/osm)", () => {
       resetBuiltForTest();
     });
 
-    it("serves the region's waterfalls from R2, 404 before the first build", async () => {
+    it("serves the region's waterfalls and closures from R2, 404 before the first build", async () => {
       await DATA.delete("osm/v2/falls.json");
       expect((await api(null, "GET", "/api/ctx/falls.json")).status).toBe(404);
       const doc = { built: "2026-11-14", bundle: 0.25, cells: [[156, -339]], falls: [[39.1, -84.6, "Shaker Run Falls"]] };
@@ -143,6 +143,60 @@ describe("OSM relay (/api/ctx/osm)", () => {
       expect(r.headers.get("x-cache")).toBe("built");
       expect(await r.json()).toEqual(doc);
       await DATA.delete("osm/v2/falls.json");
+      expect((await api(null, "GET", "/api/ctx/closures.json")).status).toBe(404);
+      await DATA.put("osm/v2/closures.json", JSON.stringify({ built: "2026-11-14", bundle: 0.25, cells: [], ways: [] }));
+      expect(((await (await api(null, "GET", "/api/ctx/closures.json")).json()) as { ways: unknown[] }).ways).toEqual([]);
+      await DATA.delete("osm/v2/closures.json");
+    });
+
+    it("finds a place's hours and contact by its name in the built cells, 404 outside them", async () => {
+      resetPlacesForTest();
+      await DATA.put("osm/v2/places/156_-339.json", JSON.stringify([[39.1, -84.6, "Bean", { opening_hours: "24/7", phone: "+1 513 555 0100" }], [39.2, -84.7, "Bean", { phone: "far" }]]));
+      const q = (ps: string[]) => api(null, "GET", "/api/ctx/places?" + ps.map((p) => "p=" + encodeURIComponent(p)).join("&"));
+      const r = await q(["39.1005,-84.6005,Bean", "39.1,-84.6,Nope"]);
+      expect(r.status).toBe(200);
+      expect(await r.json()).toEqual({ tags: [{ name: "Bean", opening_hours: "24/7", phone: "+1 513 555 0100" }, null] });
+      expect((await q(["39.249,-84.6,Bean"])).status).toBe(404);           // near the cell's north edge: the next cell isn't built
+      expect((await q(["40.5,-84.6,Bean"])).status).toBe(404);
+      expect((await q(["not,a,place"])).status).toBe(400);
+      expect((await api(null, "GET", "/api/ctx/places")).status).toBe(400);
+      await DATA.delete("osm/v2/places/156_-339.json"); resetPlacesForTest();
+    });
+
+    it("answers a plan's cells' fuel, schools and places of worship, null for a cell the build doesn't cover", async () => {
+      resetPointsForTest();
+      const cell = { fuel: [[39.1, -84.6]], schools: [[39.11, -84.61]], worship: [] };
+      await DATA.put("osm/v2/points/156_-339.json", JSON.stringify(cell));
+      const r = await api(null, "GET", "/api/ctx/points?cells=156_-339,160_-339");
+      expect(r.status).toBe(200);
+      expect(await r.json()).toEqual({ cells: { "156_-339": cell, "160_-339": null } });
+      expect((await api(null, "GET", "/api/ctx/points")).status).toBe(400);
+      expect((await api(null, "GET", "/api/ctx/points?cells=1.5_2")).status).toBe(400);
+      expect((await api(null, "GET", "/api/ctx/points?cells=" + Array.from({ length: 41 }, (_, i) => `1_${i}`).join(","))).status).toBe(400);
+      await DATA.delete("osm/v2/points/156_-339.json"); resetPointsForTest();
+    });
+
+    it("answers a plan's 0.1 degree tiles' lit roads, tunnels and cycle roads from their bundle, null where not built", async () => {
+      resetLinesForTest();
+      const tile = { lit: [["yes", [39.15, -84.55, 39.15, -84.45]]], tunnel: [], cycle: [] }, empty = { lit: [], tunnel: [], cycle: [] };
+      await DATA.put("osm/v2/lines/78_-170.json", JSON.stringify({ t: { "391_-846": tile, "392_-846": empty } }));
+      const r = await api(null, "GET", "/api/ctx/lines?tiles=391_-846,392_-846,393_-846,391_-845");
+      expect(r.status).toBe(200);
+      expect(await r.json()).toEqual({ tiles: { "391_-846": tile, "392_-846": empty, "393_-846": null, "391_-845": null } });
+      expect((await api(null, "GET", "/api/ctx/lines")).status).toBe(400);
+      expect((await api(null, "GET", "/api/ctx/lines?tiles=x_1")).status).toBe(400);
+      await DATA.delete("osm/v2/lines/78_-170.json"); resetLinesForTest();
+    });
+
+    it("hands a drive's ways their whole geometry from the built tiles, leaving out a way it doesn't have", async () => {
+      await put();
+      const r = await api(null, "GET", "/api/ctx/ways?tiles=700_-1599,700_-1600,701_-1600&ids=7,8");
+      expect(r.status).toBe(200);
+      expect(await r.json()).toEqual({ ways: { "7": [[35, -80], [35.01, -80]] } });
+      expect((await api(null, "GET", "/api/ctx/ways?tiles=700_-1600")).status).toBe(400);
+      expect((await api(null, "GET", "/api/ctx/ways?tiles=700_-1600&ids=7x")).status).toBe(400);
+      expect((await api(null, "GET", "/api/ctx/ways?ids=7")).status).toBe(400);
+      await DATA.delete("osm/v2/140_-320.bin"); resetBuiltForTest();
     });
 
     it("a tile its bundle leaves out (across the border) or with no bundle goes to Overpass", async () => {

@@ -77,6 +77,19 @@ describe("For you", () => {
     const f = (await inbox(a)).items.find((i) => i.kind === "follows")!;
     expect(f).toMatchObject({ book_id: book, book: "Smokies classics", n: 2 });
     expect(JSON.stringify(f)).not.toMatch(/bob|outsider/);
+    // a road added to a book you follow, after you followed it: one row for the book, the owner named; none for its owner
+    expect(kinds(await inbox(b))).not.toContain("book_roads");    // the road before the follow isn't news
+    await env.DB.prepare("UPDATE roadbook_roads SET created_at = datetime('now', '-2 hours')").run();      // The Dragon, then the follows
+    await env.DB.prepare("UPDATE roadbook_follows SET created_at = datetime('now', '-1 hour')").run();
+    await ok(api(a, "POST", `/api/roadbooks/${book}/roads`, { name: "Cherohala Skyway", geom: road() }));
+    expect((await inbox(b)).items.find((i) => i.kind === "book_roads")).toMatchObject({ book_id: book, book: "Smokies classics", handle: "alice", n: 1, road: "Cherohala Skyway" });
+    expect(kinds(await inbox(a))).not.toContain("book_roads");
+    await ok(api(a, "POST", `/api/roadbooks/${book}/roads`, { name: "Tellico Plains run", geom: road() }));
+    expect((await inbox(out)).items.find((i) => i.kind === "book_roads")).toMatchObject({ n: 2, road: null });
+    // made private again: the book is closed to its followers, and so is the news
+    await ok(api(a, "PUT", `/api/roadbooks/${book}`, { visibility: "private" }));
+    expect(kinds(await inbox(b))).not.toContain("book_roads");
+    await ok(api(a, "PUT", `/api/roadbooks/${book}`, { visibility: "public" }));
     // time attack: bob goes quicker than alice after her time went up
     const week = (await env.DB.prepare("SELECT date('now', '-6 days', 'weekday 1') AS w").first<{ w: string }>())!.w;
     // (the week's loop is named on its row, migration 0054, and has no stage of its own)

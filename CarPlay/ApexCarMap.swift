@@ -41,14 +41,14 @@ struct ApexCarPalette {
     /// The Roadbook's (web/themes.js roadbook.map and its route and panel inks; tests/test_car_native.py keeps them equal),
     /// for the moment before the page's first look message: a car that opens the app cold.
     static let roadbook: (day: ApexCarPalette, night: ApexCarPalette) = (
-        ApexCarPalette(["bg": "#F2EBDD", "water": "#CFD8D3", "waterLine": "#7F9A9A", "land": "#EFE7D8", "wood": "#E3DCC5", "road": "#FFFFFF",
-                        "roadMinor": "#FFFFFF", "casing": "#1C1A17", "label": "#1C1A17", "halo": "#F2EBDD", "boundary": "#8C8373",
-                        "shadow": "#A08F6E", "highlight": "#FFFFFF", "accentShade": "#B59E78",
-                        "route": "#1C1A17", "plate": "#EDE4D3", "plateInk": "#1C1A17", "accent": "#C8102E"])!,
-        ApexCarPalette(["bg": "#1B1712", "water": "#10161A", "waterLine": "#26343A", "land": "#1D1914", "wood": "#1F1C15", "road": "#36312A",
-                        "roadMinor": "#2B2721", "casing": "#A99F8C", "label": "#A89E8C", "halo": "#1B1712", "boundary": "#332F28",
-                        "shadow": "#080706", "highlight": "#28231C", "accentShade": "#14120E",
-                        "route": "#EDE4D3", "plate": "#151310", "plateInk": "#EDE4D3", "accent": "#E65252"])!
+        ApexCarPalette(["bg": "#EEF0F3", "water": "#B9D3EE", "waterLine": "#8DB3DB", "land": "#F3F4F6", "wood": "#DCEBD9", "road": "#FFFFFF",
+                        "roadMinor": "#FFFFFF", "casing": "#C5C9D1", "label": "#2A2D33", "halo": "#FFFFFF", "boundary": "#9AA0AA",
+                        "shadow": "#9AA3B0", "highlight": "#FFFFFF", "accentShade": "#C2C8D2",
+                        "route": "#0B0B0C", "plate": "#FFFFFF", "plateInk": "#0B0B0C", "accent": "#E0102A"])!,
+        ApexCarPalette(["bg": "#0E1013", "water": "#0B1A2A", "waterLine": "#1C3550", "land": "#121418", "wood": "#111A15", "road": "#2C2F36",
+                        "roadMinor": "#22252B", "casing": "#3A3E46", "label": "#C4C8D0", "halo": "#0E1013", "boundary": "#3A3E46",
+                        "shadow": "#000000", "highlight": "#1E2127", "accentShade": "#0A0B0D",
+                        "route": "#F5F5F7", "plate": "#111214", "plateInk": "#F5F5F7", "accent": "#FF3341"])!
     )
 }
 
@@ -98,6 +98,7 @@ final class ApexNativeCarMap: UIView {
     // what the page said, and how to draw it
     private var palette = ApexCarPalette.roadbook.night
     private var route: [CLLocationCoordinate2D] = []
+    private var arrowShaft: [CLLocationCoordinate2D] = [], arrowHead: [CLLocationCoordinate2D] = []
     private var corners: [ApexCarPlateData] = []
     private var hazards: [ApexCarPlateData] = []
     private var places: [ApexCarPlateData] = []
@@ -188,9 +189,25 @@ final class ApexNativeCarMap: UIView {
             l.lineWidth = w
             s.addLayer(l)
         }
+        // the next turn's arrow (web/carmap.js addLayers): the paper inside the route's ink, over the route
+        let arrowSrc = MLNShapeSource(identifier: "car-arrow-src", shape: nil, options: nil)
+        s.addSource(arrowSrc)
+        let isShaft = NSPredicate(format: "part == 'shaft'"), isHead = NSPredicate(format: "part == 'head'")
+        for (id, w, shaft) in [("car-arrow-casing", 16.0, true), ("car-arrow-headline", 6.0, false), ("car-arrow", 10.0, true)] {
+            let l = MLNLineStyleLayer(identifier: id, source: arrowSrc)
+            l.predicate = shaft ? isShaft : isHead
+            if shaft { l.lineCap = NSExpression(forConstantValue: "round") }
+            l.lineJoin = NSExpression(forConstantValue: "round")
+            l.lineWidth = NSExpression(forConstantValue: w)
+            s.addLayer(l)
+        }
+        let head = MLNFillStyleLayer(identifier: "car-arrow-head", source: arrowSrc)
+        head.predicate = isHead
+        s.addLayer(head)
         styled = true
         restyle()
         showRouteLine()
+        showArrow()
         if mode == "preview" { fitRoute(animated: false) } else { applyCamera(CACurrentMediaTime()) }
         UIView.animate(withDuration: 0.2) { self.map.alpha = 1 }
     }
@@ -243,6 +260,9 @@ final class ApexNativeCarMap: UIView {
         }
         (s.layer(withIdentifier: "car-route-casing") as? MLNLineStyleLayer)?.lineColor = k(P.casing)
         (s.layer(withIdentifier: "car-route") as? MLNLineStyleLayer)?.lineColor = k(P.route)
+        for id in ["car-arrow-casing", "car-arrow-headline"] { (s.layer(withIdentifier: id) as? MLNLineStyleLayer)?.lineColor = k(P.route) }
+        (s.layer(withIdentifier: "car-arrow") as? MLNLineStyleLayer)?.lineColor = k(P.bg)
+        (s.layer(withIdentifier: "car-arrow-head") as? MLNFillStyleLayer)?.fillColor = k(P.bg)
     }
 
     // MARK: The messages (ApexCarMapViewController)
@@ -276,6 +296,23 @@ final class ApexNativeCarMap: UIView {
         } else {
             src.shape = nil
         }
+    }
+
+    /// The next turn's arrow (web/carplay.js arrowMessage); empty lists: none.
+    func setTurnArrow(shaft: [CLLocationCoordinate2D], head: [CLLocationCoordinate2D]) {
+        arrowShaft = shaft; arrowHead = head
+        showArrow()
+    }
+
+    private func showArrow() {
+        guard styled, let src = style?.source(withIdentifier: "car-arrow-src") as? MLNShapeSource else { return }
+        guard arrowShaft.count >= 2, arrowHead.count == 3 else { src.shape = nil; return }
+        var line = arrowShaft, tri = arrowHead
+        let shaft = MLNPolylineFeature(coordinates: &line, count: UInt(line.count))
+        shaft.attributes = ["part": "shaft"]
+        let head = MLNPolygonFeature(coordinates: &tri, count: UInt(tri.count))
+        head.attributes = ["part": "head"]
+        src.shape = MLNShapeCollectionFeature(shapes: [shaft, head])
     }
 
     func setCorners(_ list: [ApexCarPlateData]) { corners = Array(list.prefix(600)); placePlates() }

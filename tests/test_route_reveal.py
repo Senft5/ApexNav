@@ -26,6 +26,7 @@ console.log(JSON.stringify({
     V.countText('--', 0.3), V.countText('Look further', 0.3), V.countText('22.8', 1)],
   ease: [V.ease(0), V.ease(0.5), V.ease(1), V.ease(2), V.ease(NaN)],
   grad: V.gradient('#111', 0.4), grad0: V.gradient('#111', 0),
+  behind: [V.behind('#1C1A17', 0.25), V.behind('#fa0', 0, 0.5), V.behind('#EDE4D3', 1), V.behind('red', 0.5), V.behind('#111', NaN), V.behind(null, 0.5)],
   strip: R.strip({ dist, events: ev }, 340, 80), noStrip: [R.strip(null), R.strip({ dist: [0] }), R.strip({ dist: [5, 5] })],
   at: [R.profileAt({ dist, elev, events: ev }, 5000, 340, 80), R.profileAt({ dist, elev }, 0, 340, 80), R.profileAt({ dist, elev }, 1e9, 340, 80),
     R.profileAt({ dist }, 2500, 340, 80), R.profileAt({ dist: [0] }, 0)],
@@ -59,6 +60,14 @@ def test_numbers_count_up_in_their_own_format_and_unknown_is_never_counted(out):
 def test_the_line_is_drawn_by_its_own_progress(out):
     assert out["grad"] == ["step", ["line-progress"], "#111", 0.4, "rgba(0,0,0,0)"]
     assert out["grad0"][3] > 0                                                   # a step needs a stop above 0
+
+
+def test_the_route_behind_you_fades(out):
+    b = out["behind"]
+    assert b[0] == ["step", ["line-progress"], "rgba(28,26,23,0.3)", 0.25, "#1C1A17"]   # driven: the route's own ink, faint
+    assert b[1][2] == "rgba(255,170,0,0.5)" and 0 < b[1][3] < 0.001                  # #rgb, and a stop above 0 at the start
+    assert b[2][3] < 1                                                                # at the end, still a valid step
+    assert b[3:] == [None, None, None]                                                # a named colour, no progress, no colour
 
 
 def test_before_the_heights_the_profile_is_the_road_and_its_corners_with_no_ground(out):
