@@ -316,6 +316,20 @@
       redo();
       return box;
     }
+    /** A friend's drives on their profile (author: their user id): their newest posts you can see, as cards. Hidden while
+     *  there is none, or with no signal (the profile says that itself). */
+    function drivesOf(author) {
+      const box = el('section', { className: 'stack-8 feed-sec profile-drives' }); box.hidden = true;
+      const list = el('div', { className: 'feed' });
+      box.append(el('b', { textContent: 'Drives' }), list);
+      const redo = () => apiCall('GET', `/api/feed?author=${encodeURIComponent(author)}`).then(jsonOf).then((rows) => {
+        if (!Array.isArray(rows)) return;
+        list.replaceChildren(...rows.slice(0, PREVIEW).map((p) => card(p, { after: redo })));
+        box.hidden = !rows.length;
+      }).catch(() => {});
+      redo();
+      return box;
+    }
     /** Every post, newest first, More for older ones. For a side sheet of its own. */
     function full() {
       const list = el('div', { className: 'feed' }), more = btn('More', () => load(), 'linkbtn');
@@ -433,7 +447,7 @@
       });
     }
 
-    return { section, full, open, compose, post, remove, card };
+    return { section, full, open, compose, post, remove, card, drivesOf };
   }
 
   const api = { trimLine, encode, decode, lineSvg, ago, facts, mount, CUT_M, MAX_POINTS };

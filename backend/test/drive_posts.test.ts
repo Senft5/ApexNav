@@ -31,6 +31,19 @@ describe("drive posts", () => {
     expect((await api(c, "GET", `/api/posts/${id}`)).status).toBe(404);
   });
 
+  it("a friend's profile lists only their posts you can see (?author=), never a crew post from a crew you're not in", async () => {
+    const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara")];
+    await befriend(a, b); await befriend(b, c);
+    const mine = (await post(a)).id;
+    await post(c);                                                               // a friend of bob's, not of alice's
+    const crew = (await json(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).id;
+    await post(a, { crew_id: crew });                                            // bob isn't in it
+    const of = async (who: TestUser, author: string) => (await json(api(who, "GET", `/api/feed?author=${author}`))).map((p: any) => p.id);
+    expect(await of(b, a.id)).toEqual([mine]);
+    expect(await of(a, c.id)).toEqual([]);                                       // not alice's friend: nothing
+    expect((await api(b, "GET", "/api/feed?author=bad%20id")).status).toBe(400);
+  });
+
   it("a post to a crew reaches that crew's members only; not to a crew you're not in", async () => {
     const [a, b, c, d] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara"), await makeUser("dan")];
     await befriend(a, d);

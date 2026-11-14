@@ -129,12 +129,14 @@ const shape = (r: Row, me: string) => ({
   line: r.line, media: (() => { const m = mediaOf(r.media); return m ? { kind: m.kind, label: m.label } : null; })(), created_at: r.created_at, kudos: r.kudos, my_kudos: !!r.my_kudos, comments: r.comments,
 });
 
-/** GET /api/feed?before=: the newest posts you can see (yours too), FEED_N at a time, older than `before` (a created_at). */
+/** GET /api/feed?before=&author=: the newest posts you can see (yours too), FEED_N at a time, older than `before` (a
+ *  created_at); with `author` (a user id: a friend's profile) only theirs, under the same rules as the Feed. */
 export async function feed(env: Env, v: Viewer, url: URL) {
-  const before = url.searchParams.get("before");
+  const before = url.searchParams.get("before"), author = url.searchParams.get("author");
   const cut = before && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(before) ? before : "9999-12-31 23:59:59";
-  const rows = (await env.DB.prepare(`${SELECT} WHERE p.created_at < ?2 AND ${POST_SEEN("p")} ORDER BY p.created_at DESC, p.rowid DESC LIMIT ${FEED_N}`)
-    .bind(v.id, cut).all<Row>()).results;
+  if (author !== null && !/^[A-Za-z0-9_-]{1,64}$/.test(author)) throw new HttpError(400, "bad_author");
+  const rows = (await env.DB.prepare(`${SELECT} WHERE p.created_at < ?2 AND ${POST_SEEN("p")}${author ? " AND p.author = ?3" : ""} ORDER BY p.created_at DESC, p.rowid DESC LIMIT ${FEED_N}`)
+    .bind(...(author ? [v.id, cut, author] : [v.id, cut])).all<Row>()).results;
   return rows.map((r) => shape(r, v.id));
 }
 
