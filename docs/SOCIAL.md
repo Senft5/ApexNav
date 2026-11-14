@@ -58,6 +58,12 @@ and in random batches so a trace cannot be re-assembled.
 - Which of your books' roads a new drive might cover is decided on the phone from each road's box, so the server is
   never asked "what is near where I just drove".
 - Reports and blocks as for public crews (kind `roadbook`).
+- **A crew's roadbook** (2026-11-14, migration 0063): its keeper puts a book with one crew they are in (Edit → Crew, or
+  + on the crew page's Roadbooks). Every member of that crew opens it and adds roads (planned routes, their stages, a
+  Feed post's line, the same cuts as above), each marked "added by @handle"; a member takes out only the roads they
+  added, the crew's owner any, the keeper everything (order, name, who else sees it). Leaving the crew closes a private
+  one to them; deleting the account takes out the roads they added. For you tells the crew and the keeper about a road
+  someone else added (`book_roads`, named when one member added them).
 ### 2.7 Duels (friends, Scores only)
 - Challenge a friend on one of your stages for 3, 7 or 14 days; the higher Vetta Score on it in that window wins.
   Accepting copies the stage to them. Won by the higher Score, or in a time duel (migration 0048) the quicker time;

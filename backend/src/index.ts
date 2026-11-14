@@ -15,7 +15,7 @@ import { cronHealth, runCron } from "./cron_runs";
 import { appleSignIn } from "./apple";
 import { crewHazardKinds, hazardsNear, reportHazard, voteHazard } from "./hazards";
 import { routeDelete, routeGet, routesSharedWithMe, shareRoute } from "./routes_shared";
-import { bookCreate, bookDelete, bookFollow, bookGet, bookUpdate, booksFriends, booksMine, booksNear, roadAdd, roadRemove, roadStamp, roadUpdate } from "./roadbooks";
+import { bookCreate, bookDelete, bookFollow, bookGet, bookUpdate, booksCrew, booksFriends, booksMine, booksNear, roadAdd, roadRemove, roadStamp, roadUpdate } from "./roadbooks";
 import { duelAccept, duelCreate, duelEnd, duelList } from "./duels";
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
@@ -273,6 +273,7 @@ on("PUT", "/api/crews/:id/decals", async (req, env, m) => { await decalsPlace(en
 on("GET", "/api/crews/:id/chat", async (req, env, m) => json(await chatList(env, await requireMember(req, env), m.groups!.id, new URL(req.url))));
 on("POST", "/api/crews/:id/chat", async (req, env, m) => json(await chatPost(env, await requireMember(req, env), m.groups!.id, req), 201));
 on("DELETE", "/api/crews/:id/chat/:msg", async (req, env, m) => { await chatDelete(env, await requireMember(req, env), m.groups!.id, m.groups!.msg); return noContent(); });
+on("GET", "/api/crews/:id/roadbooks", async (req, env, m) => json(await booksCrew(env, await requireMember(req, env), m.groups!.id)));   // roadbooks.ts: kept with this crew
 on("GET", "/api/crews/:id/members", async (req, env, m) => json(await crewMembers(env, await requireMember(req, env), m.groups!.id)));
 // fair meeting points (crew_meet.ts): your rough home area for this crew, opt-in; the crew's cells without names
 on("PUT", "/api/crews/:id/home", async (req, env, m) => json(await crewHomeSet(env, await requireMember(req, env), m.groups!.id, req)));

@@ -237,7 +237,7 @@
 
     // what the phone remembers between visits: your books' roads by box (to match a drive without asking), and stamp days
     let lists = null, liveFill = null;                                 // liveFill: People's open Roadbooks sheet, redrawn whenever the lists are read
-    const remember = (data) => { lists = data; if (liveFill) try { liveFill(data); } catch (_) {} writeJson(CACHE_KEY, { at: Date.now(), books: [...data.mine, ...data.following].map((b) => ({ id: b.id, name: b.name, road_list: b.road_list })) }); };
+    const remember = (data) => { lists = data; if (liveFill) try { liveFill(data); } catch (_) {} writeJson(CACHE_KEY, { at: Date.now(), books: [...data.mine, ...data.following, ...(data.crews || [])].map((b) => ({ id: b.id, name: b.name, road_list: b.road_list })) }); };
     async function loadLists() {
       const r = await call('GET', '/api/roadbooks');
       if (r.ok && r.data && Array.isArray(r.data.mine)) { remember(r.data); return r.data; }
@@ -333,7 +333,9 @@
     function paint(book, s, body) {
       s.head.textContent = book.name;
       const kids = [], c = colours(), p = progress(book.road_list);
-      kids.push(el('p', { className: 'rb-by', textContent: [book.mine ? `Yours · ${VIS[book.visibility]}` : `By @${book.by || '?'}`, bookLine(book, fmtLen)].join(' · ') }));
+      // kept with a crew (migration 0063): its members add roads too, so it says whose crew it is
+      const owner = book.mine ? (book.crew ? `Yours · with ${book.crew.name}` : `Yours · ${VIS[book.visibility]}`) : book.crew ? `${book.crew.name} · kept by @${book.by || '?'}` : `By @${book.by || '?'}`;
+      kids.push(el('p', { className: 'rb-by', textContent: [owner, bookLine(book, fmtLen)].join(' · ') }));
       if (book.about) kids.push(el('p', { className: 'people-lead', textContent: book.about }));
       const map = overview(book.road_list, { line: c.line, hi: c.hi, width: 3.5, label: `${book.name}: its roads on a map` });
       if (map) {
@@ -356,7 +358,7 @@
       if (book.mine) {
         keys.append(btn('Edit', () => edit(book, () => paint(book, s, body)), 'ink-btn'));
         if (book.visibility !== 'private') keys.append(btn('Share', () => page.copyText(link(page.origin(), book.id), 'Link copied. Anyone it is shown to can open it.', book.name), 'ink-btn'));
-      } else {
+      } else if (!book.can_add) {
         const f = btn(book.following ? 'Following' : 'Follow', async () => {
           if (!member()) { toast('Sign in to follow a roadbook and collect its stamps.'); return; }
           const want = !book.following, r = await call(want ? 'PUT' : 'DELETE', `/api/roadbooks/${encodeURIComponent(book.id)}/follow`);
@@ -369,12 +371,12 @@
         keys.append(f);
         if (book.visibility === 'public') keys.append(btn('Share', () => page.copyText(link(page.origin(), book.id), 'Link copied.', book.name), 'ink-btn'));
         if (page.report && member()) keys.append(btn('Report', () => page.report({ kind: 'roadbook', target: book.id, label: book.name, done: () => s.close() }), 'linkbtn'));
-      }
+      } else if (page.report && member()) keys.append(btn('Report', () => page.report({ kind: 'roadbook', target: book.id, label: book.name, done: () => s.close() }), 'linkbtn'));
       kids.push(keys);
       // the roads
       const list = el('div', {});
       const roads = book.road_list || [];
-      if (!roads.length) list.append(el('p', { className: 'note', textContent: book.mine ? 'No roads yet. Plan a route, press Share on its card, and add it to this roadbook.' : 'No roads in it yet.' }));
+      if (!roads.length) list.append(el('p', { className: 'note', textContent: book.can_add || book.mine ? 'No roads yet. Plan a route, press Share on its card, and add it to this roadbook.' : 'No roads in it yet.' }));
       roads.forEach((road, i) => {
         const T = page.thumb || root.ApexRouteThumb;
         const thumb = T ? T.svg(road.geom.map((q) => q[1]), road.geom.map((q) => q[0]), { w: 176, h: 120, pad: 12, line: road.stamped ? c.hi : c.line, hi: road.stamped ? c.hi : c.line, width: 4, label: `${road.name} on a map` }) : null;
@@ -388,11 +390,22 @@
         const title = el('div', { className: 'row', style: 'align-items:center;gap:8px;flex-wrap:wrap' }, el('b', { textContent: road.name }));
         if (road.stamped) title.append(el('span', { className: 'rb-stamp', textContent: 'Driven' }));
         const day = road.stamped ? stampDay(road.id) : null;
-        const facts = [fmtLen(road.length_m), road.stamps > 0 ? `${road.stamps} ${road.stamps === 1 ? 'member has' : 'members have'} driven it` : null,
+        const facts = [fmtLen(road.length_m), road.yours ? 'added by you' : road.added_by ? `added by @${road.added_by}` : null, road.stamps > 0 ? `${road.stamps} ${road.stamps === 1 ? 'member has' : 'members have'} driven it` : null,
           day && root.ApexFormat && root.ApexFormat.dayShort ? `you on ${root.ApexFormat.dayShort(day)}` : null].filter(Boolean).join(' · ');
         box.append(title, el('p', { className: 'note', textContent: facts }));
         if (road.note) box.append(el('p', { className: 'note', style: 'grid-column:2;color:var(--panel-ink)', textContent: road.note }));
         const acts = el('div', { className: 'rb-acts' }, btn('Drive it', () => { s.close(); page.driveRoad(road, book); }, 'ink-btn solid'));
+        const removeKey = () => {
+          const rm = btn('Remove', async () => {
+            const r = await call('DELETE', `/api/roadbooks/${encodeURIComponent(book.id)}/roads/${encodeURIComponent(road.id)}`);
+            if (!r.ok) { toast(why(r, 'Couldn’t remove it. Try again.')); return; }
+            roads.splice(i, 1); book.roads = roads.length; book.length_m = roads.reduce((a, x) => a + x.length_m, 0);
+            paint(book, s, body); loadLists().then(() => page.changed && page.changed()).catch(() => {});
+            toast(`${road.name} is out of ${book.name}.`);
+          }, 'linkbtn');
+          rm.setAttribute('aria-label', `Remove ${road.name}`);
+          return rm;
+        };
         if (book.mine) {
           const move = async (to) => {
             const order = roads.map((x) => x.id); order.splice(to, 0, order.splice(i, 1)[0]);
@@ -402,22 +415,14 @@
           };
           if (i > 0) { const up = btn('Up', () => move(i - 1), 'linkbtn'); up.setAttribute('aria-label', `Move ${road.name} up`); acts.append(up); }
           if (i < roads.length - 1) { const dn = btn('Down', () => move(i + 1), 'linkbtn'); dn.setAttribute('aria-label', `Move ${road.name} down`); acts.append(dn); }
-          const rm = btn('Remove', async () => {
-            const r = await call('DELETE', `/api/roadbooks/${encodeURIComponent(book.id)}/roads/${encodeURIComponent(road.id)}`);
-            if (!r.ok) { toast(why(r, 'Couldn’t remove it. Try again.')); return; }
-            roads.splice(i, 1); book.roads = roads.length; book.length_m = roads.reduce((a, x) => a + x.length_m, 0);
-            paint(book, s, body); loadLists().then(() => page.changed && page.changed()).catch(() => {});
-            toast(`${road.name} is out of ${book.name}.`);
-          }, 'linkbtn');
-          rm.setAttribute('aria-label', `Remove ${road.name}`);
-          acts.append(rm);
-        }
+          acts.append(removeKey());
+        } else if (road.yours) acts.append(removeKey());   // a crew-mate takes out the road they added
         box.append(acts);
         list.append(box);
       });
       kids.push(list);
       // your own stages (the Log's) go in with a tap: the road as you marked it, privacy zones left out
-      if (book.mine && page.stages) {
+      if ((book.mine || book.can_add) && page.stages) {
         const have = new Set(roads.map((x) => x.name)), left = (page.stages() || []).filter((st) => st && st.name && st.geom && !have.has(String(st.name).slice(0, 60)));
         if (left.length) {
           const chips = el('div', { className: 'row rb-stages', style: 'flex-wrap:wrap' }), pick = el('div', { className: 'stack-8' }, el('h4', { textContent: 'Your stages' }), chips);
@@ -448,24 +453,46 @@
       const s = sheet('Edit roadbook');
       const name = el('input', { className: 'field', value: book.name, maxLength: 60, autocomplete: 'off', 'aria-label': 'Roadbook name' });
       const about = el('textarea', { className: 'field', value: book.about || '', maxLength: 280, rows: 3, placeholder: 'What ties these roads together', 'aria-label': 'About this roadbook' });
-      let vis = book.visibility;
+      let vis = book.visibility, crew = book.crew ? book.crew.id : null;
       const sw = el('div', { className: 'switch', role: 'radiogroup', 'aria-label': 'Who sees it' }), says = el('p', { className: 'note' });
       const SAYS = { private: 'Only you see it.', friends: 'Your friends can open it, with your handle on it.', public: 'Anyone can open it by its link, and drivers near its roads can find it. Your handle is on it.' };
-      const mark = () => { sw.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.vis === vis))); says.textContent = SAYS[vis]; };
+      const mark = () => { sw.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.vis === vis))); says.textContent = vis === 'private' && crew ? 'Only you and the crew see it.' : SAYS[vis]; };
       for (const v of Object.keys(VIS)) { const b = el('button', { type: 'button', role: 'radio', textContent: VIS[v] }); b.dataset.vis = v; b.addEventListener('click', () => { vis = v; mark(); }); sw.append(b); }
       mark();
+      // kept with a crew you are in: its members open it and add roads (migration 0063); None takes it off again
+      const crewSw = el('div', { className: 'switch', role: 'radiogroup', 'aria-label': 'Kept with a crew' }), crewSays = el('p', { className: 'note' });
+      const crewPart = el('div', { className: 'stack-8' }, el('h4', { textContent: 'Crew' }), crewSw, crewSays);
+      crewPart.hidden = true;
+      let crewNames = {};
+      const markCrew = () => { crewSw.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String((b.dataset.crew || null) === crew)));
+        crewSays.textContent = crew ? `Everyone in ${crewNames[crew] || 'the crew'} can open it and add roads.` : 'Only you add roads.'; mark(); };
+      call('GET', '/api/crews').then((r) => {
+        const mine = r.ok && Array.isArray(r.data) ? r.data.filter((c) => c && c.id && c.name) : [];
+        if (!mine.length && !crew) return;
+        crewNames = Object.fromEntries(mine.map((c) => [c.id, c.name]));
+        if (crew && !crewNames[crew]) crewNames[crew] = book.crew.name;
+        for (const [id, label] of [[null, 'None'], ...Object.entries(crewNames)]) {
+          const b = el('button', { type: 'button', role: 'radio', textContent: label });
+          if (id) b.dataset.crew = id;
+          b.addEventListener('click', () => { crew = id; markCrew(); }); crewSw.append(b);
+        }
+        markCrew(); crewPart.hidden = false;
+      }).catch(() => {});
       const save = btn('Save', async () => {
         const change = {};
+        if (crew !== (book.crew ? book.crew.id : null)) change.crew = crew;
         if (name.value.trim() && name.value.trim() !== book.name) change.name = name.value.trim();
         if ((about.value.trim() || null) !== (book.about || null)) change.about = about.value.trim();
         if (vis !== book.visibility) change.visibility = vis;
         if (!Object.keys(change).length) { s.close(); return; }
         const r = await call('PUT', `/api/roadbooks/${encodeURIComponent(book.id)}`, change);
         if (!r.ok) { toast(why(r, 'Couldn’t save it. Try again.')); return; }
-        Object.assign(book, change, { about: about.value.trim() || null });
+        const { crew: _c, ...rest } = change;
+        Object.assign(book, rest, { about: about.value.trim() || null });
+        if ('crew' in change) { book.crew = crew ? { id: crew, name: crewNames[crew] } : null; book.can_add = true; }
         if (change.visibility === 'private') book.followers = 0;
         s.close(); done(); loadLists().then(() => page.changed && page.changed()).catch(() => {});
-        toast(change.visibility === 'public' ? `${book.name} is public. Share its link, or let drivers nearby find it.` : 'Saved.');
+        toast(change.visibility === 'public' ? `${book.name} is public. Share its link, or let drivers nearby find it.` : change.crew ? `${crewNames[crew]} can add roads to ${book.name} now.` : 'Saved.');
       }, 'ink-btn solid');
       let sure = false;
       const del = btn('Delete roadbook', async () => {
@@ -476,21 +503,21 @@
         loadLists().then(() => page.changed && page.changed()).catch(() => {});
         toast(`${book.name} is deleted.`);
       }, 'danger-btn');
-      s.pop.append(el('div', { className: 'stack-12' }, name, about, el('h4', { textContent: 'Who sees it' }), sw, says,
+      s.pop.append(el('div', { className: 'stack-12' }, name, about, el('h4', { textContent: 'Who sees it' }), sw, says, crewPart,
         el('p', { className: 'note', textContent: 'Roads only: no times, dates or speeds.' }), el('div', { className: 'row' }, save), del));
     }
 
     /** Makes a book. → its id, or null (the reason is toasted). */
-    async function create(name, visibility = 'private') {
+    async function create(name, visibility = 'private', crew = null) {
       const n = String(name || '').trim();
       if (!n) { toast('Give the roadbook a name.'); return null; }
-      const r = await call('POST', '/api/roadbooks', { name: n, visibility });
+      const r = await call('POST', '/api/roadbooks', crew ? { name: n, visibility, crew } : { name: n, visibility });
       if (!r.ok || !r.data) { toast(why(r, r.status === 401 || r.status === 403 ? 'Sign in to keep a roadbook.' : 'Couldn’t make the roadbook. Try again.')); return null; }
       return r.data.id;
     }
-    const newForm = (label, then) => {
+    const newForm = (label, then, crew = null) => {
       const name = el('input', { className: 'field', placeholder: 'Name, like Smokies classics', maxLength: 60, autocomplete: 'off', 'aria-label': 'New roadbook name' });
-      const go = btn(label, async () => { go.disabled = true; const id = await create(name.value); go.disabled = false; if (id) { name.value = ''; then(id, name); } }, 'ink-btn solid');
+      const go = btn(label, async () => { go.disabled = true; const id = await create(name.value, 'private', crew); go.disabled = false; if (id) { name.value = ''; then(id, name); } }, 'ink-btn solid');
       name.addEventListener('keydown', (e) => { if (e.key === 'Enter') go.click(); });
       return el('div', { className: 'row' }, name, go);
     };
@@ -498,24 +525,25 @@
     /** People's Roadbooks sheet: yours, the ones you follow, public ones near you. count(text) gets the row's small line. */
     function section(count) {
       const sec = el('div', { className: 'stack-12' }, el('h3', { textContent: 'Roadbooks' }));
-      const mineBox = el('div', {}), followBox = el('div', {}), friendsBox = el('div', {}), nearBox = el('div', { className: 'stack-8' });
+      const mineBox = el('div', {}), crewBox = el('div', {}), followBox = el('div', {}), friendsBox = el('div', {}), nearBox = el('div', { className: 'stack-8' });
       let friendBooks = [];
       const lead = el('p', { className: 'people-lead', textContent: 'Your lists of great roads, for you, friends or everyone.' });
       const fill = (data) => {
-        const mine = data ? data.mine : [], fol = data ? data.following : [];
-        lead.hidden = !!(mine.length || fol.length);   // what a roadbook is, said until you have one
-        if (count) count([mine.length ? `${mine.length} yours` : '', fol.length ? `${fol.length} followed` : ''].filter(Boolean).join(' · '));
-        const sub = (b) => [b.mine ? VIS[b.visibility] : `@${b.by || '?'}`, bookLine(b, fmtLen), progress(b.road_list).done ? progress(b.road_list).text : ''].filter(Boolean).join(' · ');
+        const mine = data ? data.mine : [], fol = data ? data.following : [], crews = (data && data.crews) || [];
+        lead.hidden = !!(mine.length || fol.length || crews.length);   // what a roadbook is, said until you have one
+        if (count) count(countLine(data));
+        const sub = (b) => [b.mine ? (b.crew ? b.crew.name : VIS[b.visibility]) : b.crew ? b.crew.name : `@${b.by || '?'}`, bookLine(b, fmtLen), progress(b.road_list).done ? progress(b.road_list).text : ''].filter(Boolean).join(' · ');
         mineBox.replaceChildren(...(mine.length ? mine.map((b) => row(b, sub(b), () => open(b.id))) : []));
         // your friends' books you don't follow yet (GET /api/roadbooks/friends): without it a friends book opened only by its link
         const fresh = friendBooks.filter((b) => !fol.some((x) => x.id === b.id));
         friendsBox.replaceChildren(...(fresh.length ? [el('h4', { className: 'rb-h', textContent: 'From friends', style: 'margin:12px 0 0;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:var(--panel-dim)' }), ...fresh.map((b) => row(b, sub(b), () => open(b.id)))] : []));
+        crewBox.replaceChildren(...(crews.length ? [el('h4', { className: 'rb-h', textContent: 'Your crews’', style: 'margin:12px 0 0;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:var(--panel-dim)' }), ...crews.map((b) => row(b, sub(b), () => open(b.id)))] : []));
         followBox.replaceChildren(...(fol.length ? [el('h4', { className: 'rb-h', textContent: 'Following', style: 'margin:12px 0 0;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:var(--panel-dim)' }), ...fol.map((b) => row(b, sub(b), () => open(b.id)))] : []));
       };
       liveFill = fill;
       const reload = () => loadLists().then((d) => { if (!d) fill(null); return d; });
       sec.append(lead,
-        newForm('New roadbook', (id) => { reload().then(() => page.changed && page.changed()); open(id); }), mineBox, followBox, friendsBox,
+        newForm('New roadbook', (id) => { reload().then(() => page.changed && page.changed()); open(id); }), mineBox, crewBox, followBox, friendsBox,
         el('h4', { textContent: 'Near you', style: 'margin:12px 0 0;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:var(--panel-dim)' }), nearBox);
       if (lists) fill(lists);
       reload().catch((e) => console.error('roadbooks', e));
@@ -556,7 +584,7 @@
         toast(`Added to ${bookName}.`, { label: 'Open', onClick: () => open(id) });
         if (done) done();
       };
-      const fillChips = (data) => chips.replaceChildren(...((data ? data.mine : []).map((b) => btn(b.name, () => addTo(b.id, b.name), 'ink-btn'))));
+      const fillChips = (data) => chips.replaceChildren(...((data ? [...data.mine, ...(data.crews || [])] : []).map((b) => btn(b.name, () => addTo(b.id, b.name), 'ink-btn'))));
       if (lists) fillChips(lists);
       loadLists().then(fillChips).catch(() => {});
       part.append(chips, newForm('New roadbook', (id, input) => addTo(id, (input && input.value) || 'your new roadbook')));
@@ -595,9 +623,33 @@
       return box;
     }
 
+    /**
+     * A crew page's Roadbooks (GET /api/crews/:id/roadbooks): the books members keep with the crew, each open to every member
+     * to add roads to, and a form to start one. c: { id, name }. Signed out → null.
+     */
+    function ofCrew(c) {
+      if (!member() || !c || !c.id) return null;
+      const box = el('div', { className: 'stack-8 rb-of-crew' }), rows = el('div', {});
+      const lead = el('p', { className: 'note', textContent: 'Great roads the crew keeps together. Tap + to start one; everyone adds roads.' });
+      const load = () => call('GET', `/api/crews/${encodeURIComponent(c.id)}/roadbooks`).then((r) => {
+        const l = r.ok && Array.isArray(r.data) ? r.data : [];
+        lead.hidden = l.length > 0;
+        rows.replaceChildren(...l.map((b) => row(b, [`@${b.by || '?'}`, bookLine(b, fmtLen)].join(' · '), () => open(b.id))));
+      }).catch(() => {});
+      // headed like the page's other sections, with a + in its corner (as Upcoming drives) that opens the name field
+      const form = newForm('Start one', (id) => { form.hidden = true; plus.hidden = false; load(); loadLists().then(() => page.changed && page.changed()).catch(() => {}); open(id); }, c.id);
+      form.hidden = true;
+      const plus = el('button', { type: 'button', className: 'icon-btn plan-plus', 'aria-label': `Start a roadbook for ${c.name || 'the crew'}`, innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>' });
+      plus.addEventListener('click', () => { plus.hidden = true; form.hidden = false; const i = form.querySelector('input'); if (i) i.focus(); });
+      box.append(el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Roadbooks' }), plus), lead, rows, form);
+      load();
+      return box;
+    }
+    const countLine = (l) => !l ? '' : [l.mine.length ? `${l.mine.length} yours` : '', (l.crews || []).length ? `${l.crews.length} crew` : '', l.following.length ? `${l.following.length} followed` : ''].filter(Boolean).join(' · ');
+
     /** Has this member any book of their own or followed (as last read, or as this phone kept it)? People shows the row then. */
-    const hasAny = () => { const l = lists || readJson(CACHE_KEY, null); return !!l && ((l.books && l.books.length > 0) || (l.mine && (l.mine.length + l.following.length) > 0)); };
-    return { section, nearSection, open, addPart, keep, ofFriend, afterDrive, scanLog, hasAny, lists: () => lists, reload: loadLists };
+    const hasAny = () => { const l = lists || readJson(CACHE_KEY, null); return !!l && ((l.books && l.books.length > 0) || (l.mine && (l.mine.length + l.following.length + (l.crews || []).length) > 0)); };
+    return { section, nearSection, open, addPart, keep, ofFriend, ofCrew, countLine, afterDrive, scanLog, hasAny, lists: () => lists, reload: loadLists };
   }
 
   const api = { fromTrack, fromStage, coverage, overlaps, boxOf, lengthM, progress, bookLine, overview, overviewFrame, tour, link, mount, TOUR_MAX, STAMP_AT, TRIM_M, MAX_POINTS, MIN_ROAD_M };
