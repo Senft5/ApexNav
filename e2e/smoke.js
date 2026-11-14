@@ -4414,6 +4414,47 @@ flow('a saved route keeps its reports: Save asks for the cells it runs through, 
   await page.context().setOffline(false);
 }, { viewport: { width: 1280, height: 900 } });
 
+flow('a saved route keeps its road feel: Save keeps what members measured along it, and opened again with no signal its card still has their corners and bumps, with when they were kept (router stubbed, IDEAS F-03)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(JSON.parse(route.request().postData() || '{}').locations)) }));
+  await page.route(base + '/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex && window.apex.live && window.ApexContributor && window.ApexSync && window.ApexRouteFeel, null, { timeout: 20000 });
+  await page.evaluate(() => {
+    ApexSync.member = async () => ({ signed_in: true, member: true });
+    window.__asked = 0;
+    // members drove a bend 100 m long (three passes) and felt two bumps
+    ApexContributor.measuredAlong = async (t) => { window.__asked++; const n = t.lat.length, k = new Array(n).fill(null), kn = new Array(n).fill(null);
+      for (let i = 300; i < 320; i++) { k[i] = 0.02; kn[i] = 3; }
+      return { coverage: 0.5, coveredKm: 30, km: 60, avgPasses: 2, roughness: 0.1, bankedKm: 0, roughKm: 0, repavedKm: 0, crowdK: k, crowdKn: kn, crowdBumps: [{ index: 100, p: 0.9 }, { index: 400, p: 0.85 }] }; };
+  });
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.52, lon: -83.92 }, { lat: 36.08, lon: -83.92 }], 'route_feel', 'Down the ridge', null,
+    { from: null, to: { lat: 36.08, lon: -83.92 }, via: [] }));
+  await page.waitForFunction(() => /2 bumps members felt/.test(document.getElementById('measuredNote').textContent), null, { timeout: 20000 });
+  const online = await page.textContent('#measuredNote');
+  check(/corners from members' drives/.test(online) && !/kept/.test(online), 'with signal: the members\' corners and bumps, asked now: ' + online);
+  await page.evaluate(() => document.getElementById('routeSaveBtn').click());
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.routeFeel') || '{}'));
+  const e = Object.values(kept)[0];
+  check(e && e.k.length === 1 && e.k[0][1].length === 20 && e.bumps.length === 2, 'Save keeps the bend and the bumps with the route: ' + JSON.stringify(kept).slice(0, 300));
+  // no signal: membership can't be asked and nothing is measured; the route opened again from the car's Places
+  await page.context().setOffline(true);
+  await page.evaluate(() => { ApexSync.member = async () => { throw new Error('offline'); }; window.__asked = 0; document.getElementById('measuredNote').textContent = '';
+    const p = JSON.parse(localStorage.getItem('apex.savedRoutes') || '[]')[0]; window.apex.onNative({ type: 'carplay', action: 'saved', id: p.id }); });
+  await page.waitForFunction(() => /kept/.test(document.getElementById('measuredNote').textContent), null, { timeout: 15000 });
+  const off = await page.textContent('#measuredNote');
+  const t = await page.evaluate(() => ({ corrected: apexDebug.track.crowdCorrected, bumps: apexDebug.track.events.filter((x) => x.type === 'bump' && x.crowd).length, asked: window.__asked }));
+  check(/Measured by members/.test(off) && /2 bumps members felt/.test(off) && /corners from members' drives/.test(off) && /\(kept \d/.test(off), 'with no signal the card still has them, with when they were kept: ' + off);
+  check(t.corrected === 100 && t.bumps === 2 && t.asked === 0, 'the route\'s own corners and bump calls come from the kept copy, nothing asked: ' + JSON.stringify(t));
+  // unsaved: the copy goes with it
+  await page.evaluate(() => document.getElementById('routeSaveBtn').click());
+  check(await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('apex.routeFeel') || '{}')).length === 0), 'removing the route removes its road feel');
+  await page.context().setOffline(false);
+}, { viewport: { width: 1280, height: 900 } });
+
 flow('reported hazards: a call ahead, "still there?" after passing, and a one-tap report (Worker stubbed, IDEAS Q-15/Q-16)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; const S = window.speechSynthesis;   // what the co-driver says, whatever voice is set

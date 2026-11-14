@@ -2449,10 +2449,18 @@
       const note = $('measuredNote'); note.hidden = true;
       // no signal (membership can't be asked): a saved route's card still names the reports kept with it
       if (navigator.onLine === false && t === plannedRoute && window.ApexRouteReports && t.id && ApexRouteReports.load(localStorage, String(t.id))) paintRouteReports(t);
-      if (!window.ApexSync || !window.ApexContributor || !t.lat || t.lat.length < 40 || !(await ApexSync.member())) return;
+      // no signal: a saved route's members' road feel kept on the phone (route_feel.js), so its corners and bumps still come
+      if (navigator.onLine === false && t.measured === undefined && window.ApexRouteFeel && t.id && Array.isArray(t.dist) && ApexSavedRoutes.has(localStorage, t.id)) {
+        const k = ApexRouteFeel.load(localStorage, String(t.id), t.dist);
+        if (k) t.measured = k;
+      }
+      const keptFeel = !!(t.measured && t.measured.keptAt != null);
+      if (!window.ApexContributor || !t.lat || t.lat.length < 40) return;
+      if (!keptFeel && (!window.ApexSync || !(await ApexSync.member()))) return;
       if (t.measured === undefined) {
         try { t.measured = await ApexContributor.measuredAlong(t, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }); }
         catch (_) { t.measured = null; }
+        keepFeelAlong(t);
       }
       if (t === plannedRoute) paintRouteReports(t);
       const m = t.measured;
@@ -2471,8 +2479,18 @@
           (m.repavedKm >= 0.05 && m.repavedOn ? ` · ${ApexUnits.long(m.repavedKm * 1000, 1)} repaved ${repavedMonth(m.repavedOn)}` : '') +
           (m.avgPasses != null ? ` · ${m.avgPasses.toFixed(1)} runs on average` : '') +
           (t.crowdCorrected >= 30 ? ` · corners from members' drives on ${ApexUnits.long(t.crowdCorrected, 1)}` : '') +
-          (t.crowdBumps > 0 ? ` · ${t.crowdBumps === 1 ? 'a bump' : `${t.crowdBumps} bumps`} members felt` : '');
+          (t.crowdBumps > 0 ? ` · ${t.crowdBumps === 1 ? 'a bump' : `${t.crowdBumps} bumps`} members felt` : '') +
+          (keptFeel ? ` (kept ${keptWhen(m.keptAt)})` : '');
     }
+    // A saved route keeps what members measured along it (route_feel.js), refreshed whenever its card asks with signal.
+    function keepFeelAlong(t) {
+      if (!t || !t.id || !window.ApexRouteFeel || !t.measured || t.measured.keptAt != null || !Array.isArray(t.dist)) return;
+      if (ApexSavedRoutes.has(localStorage, t.id)) ApexRouteFeel.save(localStorage, String(t.id), t.measured, t.dist);
+    }
+    const keptWhen = (ms) => {
+      const d = new Date(ms), now = new Date();
+      return d.toDateString() === now.toDateString() ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    };
     // Hand reports beside a planned route (road_page.js onThisRoad, within 30 m; cleared ones left out), one line on the
     // card: what members said is on the way. Members only; offline or none says nothing.
     async function paintRouteReports(t) {
@@ -3352,7 +3370,8 @@
         ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`); carPost(carPlaces()); itemsChanged();
         if (window.ApexOfflineTiles) ApexOfflineTiles.removeArea(routeAreaId(t)).catch(() => {});   // and the map kept along it
         if (window.ApexRouteReports) ApexRouteReports.remove(localStorage, String(t.id));            // and its reports
-      } else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') { toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`); keepMapAlong(t); keepReportsAlong(t); carPost(carPlaces()); itemsChanged(); }
+        if (window.ApexRouteFeel) ApexRouteFeel.remove(localStorage, String(t.id));                  // and its road feel
+      } else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') { toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`); keepMapAlong(t); keepReportsAlong(t); keepFeelAlong(t); carPost(carPlaces()); itemsChanged(); }
       else toast('The phone is out of room for saved routes. Remove one first.');
       paintSaveBtn();
     });
@@ -7570,7 +7589,10 @@
     // says when some went, and empties it when Road data is switched off, on sign-out and when the account is deleted, so
     // nothing measured under one account is sent under another (Erase everything clears its index with the apex.* keys).
     // Members' road data kept for plans (own_routing.js) is a member's: it leaves the phone on sign-out and account deletion.
-    const clearCrowd = () => { try { if (window.ApexOwnRouting && ApexOwnRouting.clearCrowd) ApexOwnRouting.clearCrowd(); } catch (_) {} };
+    const clearCrowd = () => {
+      try { if (window.ApexOwnRouting && ApexOwnRouting.clearCrowd) ApexOwnRouting.clearCrowd(); } catch (_) {}
+      try { if (window.ApexRouteFeel) localStorage.removeItem(ApexRouteFeel.KEY); } catch (_) {}   // and kept with saved routes
+    };
     const clearCarry = () => { try { localStorage.removeItem('apex.roadShare'); } catch (_) {} try { if (window.ApexRoadCarry && ApexRoadCarry.clear) ApexRoadCarry.clear(); } catch (_) {} };
     if (window.ApexRoadCarry && ApexRoadCarry.flush) {
       ApexRoadCarry.onPost = (r) => health.bump(r === true ? 'road_upload_ok' : 'road_upload_fail');
@@ -7684,7 +7706,7 @@
     }
     $('myOfflineDelBtn').addEventListener('click', async () => {
       if (!(await ApexConfirm.ask('Delete routes and map areas saved for offline, and downloaded voices? Your drives, spots and settings stay.', 'Delete'))) return;
-      try { localStorage.removeItem(ApexSavedRoutes.KEY); if (window.ApexRouteReports) localStorage.removeItem(ApexRouteReports.KEY); } catch (_) {}
+      try { localStorage.removeItem(ApexSavedRoutes.KEY); if (window.ApexRouteReports) localStorage.removeItem(ApexRouteReports.KEY); if (window.ApexRouteFeel) localStorage.removeItem(ApexRouteFeel.KEY); } catch (_) {}
       try { if (window.ApexOfflineTiles) await ApexOfflineTiles.clear(); } catch (_) {}
       try { if (window.ApexOwnRouting && ApexOwnRouting.clearCrowd) await ApexOwnRouting.clearCrowd(); } catch (_) {}   // members' road data kept for plans
       try { if (window.caches) { await caches.delete('kokoro-voices'); for (const k of await caches.keys()) if (k.startsWith('apexnav-shell-')) await caches.delete(k); } } catch (_) {}
