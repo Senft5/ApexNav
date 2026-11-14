@@ -7132,6 +7132,10 @@
       speak: (text, urgent) => { if (!state.toggles.voice) { toast(text); if (urgent && driveActive) carPost({ kind: 'hazard', title: text }); } else if (urgent) say(text, true, null, null, { kind: 'hazard', alert: true }); else sayNext(text, `convoy:${text}`); },
       onRegroup: (rg, convoyName) => regroupSay(rg, convoyName),
       drive: () => startDrive(),                                       // the convoy sheet's "Start the drive" (Convoy now, P-11)
+      // convoy voice (convoy_voice.js): the voices go down while the co-driver speaks; the iOS shell opens a call-style
+      // audio session (speaker, Bluetooth car audio, AirPods) while the channel is on
+      speaking: () => !!speech.busy,
+      nativeTalk: (on) => { if (NATIVE_SHELL) { try { window.webkit.messageHandlers.apex.postMessage({ cmd: 'talk', on: !!on }); } catch (_) {} } },
     }) : null; } catch (e) { console.error('convoy', e); convoy = null; } });   // the convoy never takes the page down
     // Garage (web/garage_ui.js): your cars, and the ones friends and crew-mates show.
     // Block and report (web/safety_ui.js) on every social surface below; the garage uses it for friends' cars.

@@ -174,19 +174,21 @@
    * `onExtended({ expiresAtMs })` when the leader kept the convoy going.
    */
   class ConvoyClient {
-    constructor({ apiFetch, wsUrl, WebSocketImpl, onChange = () => {}, onHazard = () => {}, onRetract = () => {}, onError = () => {}, onExtended = () => {}, now = () => Date.now(), setTimer = (f, ms) => setTimeout(f, ms), clearTimer = (t) => clearTimeout(t) }) {
-      Object.assign(this, { apiFetch, wsUrl, WS: WebSocketImpl || root.WebSocket, onChange, onHazard, onRetract, onError, onExtended, now, setTimer, clearTimer });
+    constructor({ apiFetch, wsUrl, WebSocketImpl, onChange = () => {}, onHazard = () => {}, onRetract = () => {}, onError = () => {}, onExtended = () => {}, onVoice = () => {}, now = () => Date.now(), setTimer = (f, ms) => setTimeout(f, ms), clearTimer = (t) => clearTimeout(t) }) {
+      Object.assign(this, { apiFetch, wsUrl, WS: WebSocketImpl || root.WebSocket, onChange, onHazard, onRetract, onError, onExtended, onVoice, now, setTimer, clearTimer });
       this.reset();
     }
     reset() {
       this.id = null; this.ctx = null; this.status = 'off'; this.ws = null; this.lastSeq = 0; this.epoch = null; this.invite = null; this.code = null;
       this.members = new Map(); this.positions = new Map(); this.events = new Map(); this.route = null; this.routeIdx = null; this.regroup = null;
       this.retry = 0; this.failedTries = 0; this.timer = null; this.lastPosAt = 0; this.pending = []; this.sent = new Map(); this.myProgress = null;
+      this.voice = new Map();  // member key -> { key, muted }: who is on the convoy's voice channel (convoy_voice.js)
       this.routeVersion = 0;   // highest version seen or sent: a new share never reuses one that old hazards are anchored to
     }
     snapshot() {
       return { id: this.id, status: this.status, ctx: this.ctx, members: [...this.members.values()], positions: new Map(this.positions),
                events: [...this.events.values()].filter((e) => e.action === 'hazard'), route: this.route, routeIdx: this.routeIdx, regroup: this.regroup,
+               voice: new Map(this.voice), voiceReady: !!(this.ctx && this.ctx.voiceReady),
                unreachable: this.failedTries >= 5 };
     }
     changed(what = 'structure') { try { this.onChange(this.snapshot(), what); } catch (_) { /* UI errors never break the link */ } }
@@ -338,6 +340,8 @@
           this.members = new Map(m.context.members.map((x) => [x.key, x]));
           this.positions = new Map((m.positions || []).map((p) => [p.key, p]));
           this.setRoute(m.route); this.regroup = m.regroup || null;
+          this.voice = new Map((m.context.voice || []).map((v) => [v.key, { key: v.key, muted: !!v.muted }]));
+          try { this.onVoice({ type: 'ready' }); } catch (_) { /* UI */ }
           for (const ev of m.events || []) this.takeEvent(ev);
           const t = this.now();
           for (const p of this.pending.splice(0)) if (t - p.at <= 30000) this.send(p.m);
@@ -347,8 +351,15 @@
         case 'presence': { const x = this.members.get(m.key); if (x) x.online = m.online; break; }
         case 'member':
           if (m.action === 'joined') this.members.set(m.member.key, { ...m.member, online: false });
-          else { this.members.delete(m.member.key); this.positions.delete(m.member.key); }
+          else { this.members.delete(m.member.key); this.positions.delete(m.member.key); this.voice.delete(m.member.key); }
           break;
+        case 'voice': {                                                     // on, off or muted on the voice channel
+          if (typeof m.key !== 'string') return;
+          if (m.on) this.voice.set(m.key, { key: m.key, muted: !!m.muted }); else this.voice.delete(m.key);
+          try { this.onVoice(m); } catch (_) { /* UI */ }
+          what = 'voice';
+          break;
+        }
         case 'event': this.takeEvent(m.event); break;
         case 'route': this.setRoute(m.route); break;
         case 'regroup': this.regroup = m.regroup; break;

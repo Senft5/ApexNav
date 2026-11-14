@@ -129,6 +129,8 @@ targets:
         # route context (web/route_ctx/ios_context.js, ApexContext): asked only when the driver taps My free time / This album
         NSCalendarsFullAccessUsageDescription: "When you tap My free time, Vetta reads when your next event starts to size a drive that gets you back in time. Only the start time is used, on this phone."
         NSCalendarsUsageDescription: "When you tap My free time, Vetta reads when your next event starts to size a drive that gets you back in time. Only the start time is used, on this phone."
+        # convoy voice (web/convoy_voice.js): asked the first time someone taps Talk in a convoy
+        NSMicrophoneUsageDescription: "Lets you talk to the people in your convoy while you drive, when you tap Talk. Nothing is recorded."
         NSAppleMusicUsageDescription: "When you tap This album, Vetta reads how long the album you're playing has left to size a drive as long as it. Nothing leaves this phone."
         UIBackgroundModes:
           - location

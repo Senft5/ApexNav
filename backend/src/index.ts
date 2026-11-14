@@ -4,6 +4,7 @@ import { routeHost } from "./hosts";
 import {
   APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, invitePreview, logout, redeemInvite, requireMember, requireUser, sessionCookie, sessionHash, viewer,
 } from "./auth";
+import { voiceAnswer, voicePull, voiceStart, voiceStop } from "./convoy_voice";
 import { convoyAccept, convoyCode, convoyCodeJoin, convoyCodePreview, convoyConnect, convoyCreate, convoyDismiss, convoyInvitePeople, convoyInvites, convoyJoin, convoyPreview, convoyRoom, unwrap } from "./convoy_routes";
 import { Env, HttpError, body, json, str } from "./util";
 import { rateCheck } from "./ratelimit";
@@ -472,6 +473,11 @@ on("POST", "/api/convoy/:id/remove", async (req, env, m) => {
   return noContent();
 });
 // No sign-in check here on purpose: the socket's first frame carries a single-use ticket minted by POST .../ticket.
+// Convoy voice (src/convoy_voice.ts): an open channel for the people in a convoy, carried by Cloudflare Realtime
+on("POST", "/api/convoy/:id/voice", async (req, env, m) => json(await voiceStart(env, await requireMember(req, env), m.groups!.id, req)));
+on("POST", "/api/convoy/:id/voice/pull", async (req, env, m) => json(await voicePull(env, await requireMember(req, env), m.groups!.id, req)));
+on("PUT", "/api/convoy/:id/voice/answer", async (req, env, m) => json(await voiceAnswer(env, await requireMember(req, env), m.groups!.id, req)));
+on("DELETE", "/api/convoy/:id/voice", async (req, env, m) => json(await voiceStop(env, await requireMember(req, env), m.groups!.id)));
 on("GET", "/api/convoy/:id/connect", async (req, env, m) => convoyConnect(req, env, m.groups!.id));
 
 // CORS for the iOS shell only (pages at apexnav://app call this Worker cross-origin with a bearer token).
