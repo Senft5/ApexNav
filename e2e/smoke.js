@@ -6657,6 +6657,11 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   await page.click('#accountBody .feed-card .feed-acts button[aria-label="1 comments"]');
   await page.waitForSelector('.feed-sheet .feed-comment');
   check(/Was that you at the overlook\?/.test(await page.textContent('.feed-sheet .feed-comments')), 'the comments, under the post');
+  // (2026-11-14) typing @ suggests who to mention: the post's people, then friends
+  await page.locator('.feed-sheet .feed-say .field').pressSequentially('@ca');
+  await page.waitForSelector('.feed-sheet .feed-tags:not([hidden]) button:has-text("@cara")');
+  await page.click('.feed-sheet .feed-tags button:has-text("@cara")');
+  check(await page.inputValue('.feed-sheet .feed-say .field') === '@cara ' && await page.isHidden('.feed-sheet .feed-tags'), 'a tap puts the handle in: ' + await page.inputValue('.feed-sheet .feed-say .field'));
   await page.fill('.feed-sheet .feed-say .field', 'Yes! Waved.');
   await page.click('.feed-sheet .feed-say button:has-text("Send")');
   await page.waitForFunction(() => document.querySelectorAll('.feed-sheet .feed-comment').length === 2);
