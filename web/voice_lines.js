@@ -139,7 +139,8 @@
     "gap:s3.3": "3.3 seconds", "gap:s3.4": "3.4 seconds", "gap:s3.5": "3.5 seconds", "gap:s3.6": "3.6 seconds", "gap:s3.7": "3.7 seconds",
     "gap:s3.8": "3.8 seconds", "gap:s3.9": "3.9 seconds", "gap:s4.0": "4.0 seconds", "gap:s4.1": "4.1 seconds", "gap:s4.2": "4.2 seconds",
     "gap:s4.3": "4.3 seconds", "gap:s4.4": "4.4 seconds", "gap:s4.5": "4.5 seconds", "gap:s4.6": "4.6 seconds", "gap:s4.7": "4.7 seconds",
-    "gap:s4.8": "4.8 seconds", "gap:s4.9": "4.9 seconds", "gap:s5.0": "5.0 seconds"
+    "gap:s4.8": "4.8 seconds", "gap:s4.9": "4.9 seconds", "gap:s5.0": "5.0 seconds",
+    "line:wet": "Wet roads. Notes come earlier.", "line:ice": "Ice risk. Notes come earlier. Go gently.", "line:cold_summer": "Cold out. Summer tyres grip less in the cold.", "line:cold_any": "Cold out. Tyres grip less until they warm.", "line:stage_level": "That stage: level with your best.", "frag:that_stage": "That stage:", "frag:pts_up": "points up on your best.", "frag:pts_down": "points down on your best."
   } /* END_VOICE_LINES_JSON */;
 
   // Valhalla maneuver type -> verb token (web/directions.js VERB says the same words with the street name).
@@ -225,6 +226,8 @@
     if ((m = /^(.+) down\.( Brake later\.)?$/.exec(t)) && !/^\d+$/.test(m[1]) && !/:/.test(m[1]) && gap(m[1])) return [...gap(m[1]), 'frag:down', ...(m[2] ? ['line:pass_brake_later'] : [])];
     if ((m = /^Best stretch yet\. (.+) up\.$/.exec(t)) && gap(m[1])) return ['line:pass_stretch_best', ...gap(m[1]), 'frag:up'];
     if ((m = /^That stretch: (.+) down on your best\.$/.exec(t)) && gap(m[1])) return ['frag:that_stretch', ...gap(m[1]), 'frag:down_best'];
+    // a saved stage's result (cockpit.js stage tracker), said without the stage's name (on the screen)
+    if ((m = /^That stage: (\d+) points (up|down) on your best\.$/.exec(t)) && nums(+m[1])) return ['frag:that_stage', ...nums(+m[1]), m[2] === 'up' ? 'frag:pts_up' : 'frag:pts_down'];
     // along the way (along_ahead.js): the last fuel or charger, a viewpoint or a waterfall (a named one: its plain line)
     const tail = (d, side, comma) => { if (!TEXT[`pl:in:${d}`]) return null; return side ? [`pl:in:${d}`, `frag:on_${side}`] : [`pl:in:${d}`]; };
     if ((m = /^Last (fuel|charger) for (\d+) (miles|kilometres), in (.+?)(?:, on the (left|right))?\.$/.exec(t))) {

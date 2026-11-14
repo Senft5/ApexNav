@@ -63,6 +63,11 @@ const A = require(R + '/web/along_ahead.js');
     const a = A.due(t, m, v, { spoken: units.spokenShort, metric, electric });
     if (a) add('along', a.bare || a.text, said(a.bare || a.text)); }
 }
+// wet, icy and cold roads (wet_roads.js), and a saved stage's result without its name
+const W = require(R + '/web/wet_roads.js');
+for (const st of ['wet', 'ice']) add('road', W.line(st), said(W.line(st)));
+for (const ty of [null, 'Michelin Pilot Sport 4S']) { const t = W.coldLine('dry', 2, ty); add('road', t, said(t)); }
+for (const t of ['That stage: level with your best.', 'That stage: 3 points up on your best.', 'That stage: 12 points down on your best.']) add('stage', t, said(t));
 // the DOTs' traffic events (hazard_reports.js: "<label> ahead"), every label backend/src/traffic.ts gives
 for (const l of JSON.parse(process.argv[2])) add('dot', `${l} ahead`, said(`${l} ahead`));
 // how far the quiet lasts, and the drive's opener, in each pack

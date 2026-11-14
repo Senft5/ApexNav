@@ -9083,8 +9083,8 @@
       sayQuietLine(r.say);
     }
     // The lowest of the quiet slots (flow lines, a stage's result): said when no call is due, gone after 20 s or in Quiet notes
-    function sayQuietLine(text) {
-      const line = { text, until: performance.now() + 20000 };
+    function sayQuietLine(text, bare = null) {
+      const line = { text, bare, until: performance.now() + 20000 };
       if (!flowSay) flowSay = line; else if (flowQueue.length < 2) flowQueue.push(line);   // "Eight…, your best" is not lost to "Ten"
     }
     // Road data whenever the app is open and the phone is mounted (calibration locked), not only during a drive
@@ -10199,7 +10199,8 @@
       if (r.state !== 'done') return;
       const line = r.delta == null ? `${r.name} done.` : r.delta === 0 ? `${r.name}: level with your best.` : `${r.name}: ${Math.abs(r.delta)} points ${r.delta > 0 ? 'up on' : 'down on'} your best.`;
       toast(line);
-      if (r.delta != null) sayQuietLine(line);   // the co-driver says how the stage went, once it's over (technique, never time)
+      const bare = r.delta == null ? null : r.delta === 0 ? 'That stage: level with your best.' : `That stage: ${Math.abs(r.delta)} points ${r.delta > 0 ? 'up on' : 'down on'} your best.`;
+      if (r.delta != null) sayQuietLine(line, bare);   // the co-driver says how the stage went, once it's over (technique, never time)
     }
     // ---- live coaching against your best pass, on any road driven before (web/pass_coach.js) ---------------------------
     // Each remembered corner you finish is set against its fastest pass (the time gap, owner 2026-11-14) and its best

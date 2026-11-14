@@ -8397,6 +8397,62 @@
    "text": "Nothing for",
    "heard": 1.0,
    "voice": "bm_fable"
+  },
+  "line:wet": {
+   "file": "line_wet.m4a",
+   "dur": 2.191,
+   "text": "Wet roads. Notes come earlier.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:ice": {
+   "file": "line_ice.m4a",
+   "dur": 2.806,
+   "text": "Ice risk. Notes come earlier. Go gently.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:cold_summer": {
+   "file": "line_cold_summer.m4a",
+   "dur": 2.849,
+   "text": "Cold out. Summer tyres grip less in the cold.",
+   "heard": 0.89,
+   "voice": "bm_fable"
+  },
+  "line:cold_any": {
+   "file": "line_cold_any.m4a",
+   "dur": 2.647,
+   "text": "Cold out. Tyres grip less until they warm.",
+   "heard": 0.88,
+   "voice": "bm_fable"
+  },
+  "line:stage_level": {
+   "file": "line_stage_level.m4a",
+   "dur": 2.196,
+   "text": "That stage: level with your best.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:that_stage": {
+   "file": "frag_that_stage.m4a",
+   "dur": 0.943,
+   "text": "That stage:",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:pts_up": {
+   "file": "frag_pts_up.m4a",
+   "dur": 1.414,
+   "text": "points up on your best.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:pts_down": {
+   "file": "frag_pts_down.m4a",
+   "dur": 1.571,
+   "text": "points down on your best.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   }
  }
 }
