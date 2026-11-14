@@ -3843,6 +3843,43 @@ flow('first run and the end card: the welcome draws its road with the keys live 
   check(!none.counted && /^No corners to score$/.test(none.text) && /Barlow/.test(none.font), 'no score: words set as a title, nothing counted: ' + JSON.stringify(none));
 });
 
+flow('end card best corner: a filmed drive loops its best corner over the keys and one tap makes the clip to share; no film, no tile (big bet 5, best_clip.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.route('**/__film.webm', (route) => route.fulfill({ status: 200, contentType: 'video/webm', body: '' }));   // the film itself is best_clip's flow's
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexCore && window.ApexDriveCard);
+  const show = (id, film) => page.evaluate(async ([id, film]) => {
+    document.getElementById('endDone').click();
+    ApexCore.driverScore = () => ({ score: 700, components: {} });
+    window.__made = 0; window.__shared = null;
+    window.ApexBestClip = { find: async (x) => (film && x === id ? { driveId: id, url: '/__film.webm', name: 'a.mov', start: 2, end: 9, k: 2, label: 'Corner 3 · Left 4', call: 'Left 4', score: 91 } : null),
+      make: async () => { window.__made++; await new Promise((r) => setTimeout(r, 200)); return { blob: new Blob(['clip'], { type: 'video/mp4' }), mime: 'video/mp4' }; } };
+    ApexDriveCard.shareFile = async (blob, name, mime) => { window.__shared = { name, mime, size: blob.size }; return 'saved'; };
+    const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + Math.sin(i / 40) * 0.0015); }
+    apexDebug.showEndCard({ id, name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15), lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }, Date.now() - 600e3, { quiet: true });
+    const s = document.getElementById('endScore');
+    for (let i = 0; i < 100 && s.hasAttribute('aria-busy'); i++) await new Promise((r) => setTimeout(r, 30));
+    await new Promise((r) => setTimeout(r, 300));
+    const k = document.getElementById('endClip'), v = document.getElementById('endClipVideo'), r = k.getBoundingClientRect(), acts = document.querySelector('.end-acts').getBoundingClientRect();
+    return { shown: !k.hidden && r.height > 0, label: document.getElementById('endClipLabel').textContent, src: v.getAttribute('src'), first: Math.abs(r.top - acts.top) < 1, wide: Math.round(r.width - acts.width) };
+  }, [id, film]);
+  const none = await show('nf1', false);
+  check(!none.shown, 'a drive with no film has no clip tile: ' + JSON.stringify(none));
+  const got = await show('bc1', true);
+  check(got.shown && got.label === 'Corner 3 · Left 4' && got.src === '/__film.webm#t=2,9' && got.first && got.wide === 0, 'a filmed drive: its best corner, the stretch of the film, first over the keys, full width: ' + JSON.stringify(got));
+  await page.click('#endClip');
+  const busy = await page.evaluate(() => [document.getElementById('endClip').getAttribute('aria-busy'), document.getElementById('endClipAct').textContent]);
+  await page.waitForFunction(() => window.__shared);
+  await page.click('#endClip');                                     // done: a second tap makes it again
+  const after = await page.evaluate(async () => { await new Promise((r) => setTimeout(r, 400)); return { made: window.__made, shared: window.__shared, act: document.getElementById('endClipAct').textContent, busy: document.getElementById('endClip').hasAttribute('aria-busy'),
+    toast: [...document.querySelectorAll('.toast')].map((t) => t.textContent).join(' | ') }; });
+  check(busy[0] === 'true' && /^Making the clip/.test(busy[1]) && after.shared.name === 'Cherohala Skyway best corner.mp4' && after.shared.mime === 'video/mp4' && after.made === 2 && after.act === 'Share clip' && !after.busy && /Clip saved/.test(after.toast),
+    'one tap makes the clip and shares it, named for the road: ' + JSON.stringify({ busy, after }));
+  const gone = await show('nf2', false);
+  check(!gone.shown && !gone.src, 'the next drive, unfilmed, shows no clip and plays nothing: ' + JSON.stringify(gone));
+});
+
 flow('drive ended: Open in the Log is the solid key with no score, Share card with one, fixed from the first frame; a drive on a route keeps its name (REVIEW4 U-75, REVIEW5 U-118)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
@@ -8568,7 +8605,7 @@ flow('best corner clip off the Log: on the map page a filmed drive gives its bes
   const found = await page.evaluate(() => ApexBestClip.find('bc1'));
   check(!before && found && found.url === `/__drivecam/${encodeURIComponent(found.name)}` && found.name.endsWith('.mov'), 'found, its helpers loaded only when asked: ' + JSON.stringify(found));
   check(/^Corner [12] · (Left 4|Right 3)$/.test(found.label) && found.end > found.start && found.start >= 0 && found.end <= 7.2, 'a corner the video holds, as seconds in it');
-  const made = await page.evaluate(async () => { const f = await ApexBestClip.find('bc1'), r = await ApexBestClip.make(f); return { size: r.blob.size, mime: r.mime, left: document.querySelectorAll('video').length }; });
+  const made = await page.evaluate(async () => { const f = await ApexBestClip.find('bc1'), r = await ApexBestClip.make(f); return { size: r.blob.size, mime: r.mime, left: document.querySelectorAll('video:not(#endClipVideo)').length }; });
   check(made.size > 500 && /^video\//.test(made.mime), 'the clip is made on the page: ' + JSON.stringify(made));
   check(made.left === 0, 'nothing left behind on the page');
   const none = await page.evaluate(async () => { await ApexRecording.store({ id: 'bc2', name: 'Not filmed', date: '2026-11-13T15:00:00Z', t0: 1700000000000, lat: [35.6, 35.61], lon: [-83.9, -83.9], dist: [0, 5], speed_mps: [15, 15], lon_g: [0, 0], lat_g: [0, 0], events: [] });
@@ -10201,6 +10238,33 @@ flow('the stage briefing: a drive on a planned route starts with how far, how ma
   for (let k = 0; k < 8; k++) { await page.evaluate(() => { const t = apexDebug.track;
     window.apex.live({ lat: t.lat[2], lon: t.lon[2], accuracy_m: 5, speed_mps: 3, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }); await page.waitForTimeout(100); }
   check((await brief()).length === 1, 'once: ' + JSON.stringify(await brief()));
+});
+
+flow('corners ahead: after a long straight on the planned route, the co-driver says when the twisty section starts, once (corners_ahead.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexCornersAhead);
+  // 4 km straight north, then 4 km winding: a bend every 200 m either way
+  const KY = 110540, kx = 111320 * Math.cos(35.5 * Math.PI / 180), gpx = [];
+  for (let m = 0; m <= 8000; m += 5) gpx.push(`<trkpt lat="${(35.5 + m / KY).toFixed(7)}" lon="${(-83.9 + (m < 4000 ? 0 : 60 * Math.sin((m - 4000) * Math.PI / 200)) / kx).toFixed(7)}"/>`);
+  await page.setInputFiles('#gpxFile', { name: 'straight.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Straight Then Winding</name><trkseg>${gpx.join('')}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Straight Then Winding', null, { timeout: 10000 });
+  const sec = await page.evaluate(() => ApexCornersAhead.sections(apexDebug.track.events));
+  check(sec.length === 1 && sec[0].startM > 3800 && sec[0].startM < 4300, 'one section after the straight: ' + JSON.stringify(sec));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const twisty = () => page.evaluate(() => window.__said.filter((s) => /^Twisty section/.test(s)));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 25, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  for (let i = 400; i <= 640; i += 5) { await at(i); await page.waitForTimeout(60); }      // 2 to 3.2 km: too far yet
+  check((await twisty()).length === 0, 'not yet: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  for (let i = 640; i <= 760 && !(await twisty()).length; i += 2) { await at(i); await page.waitForTimeout(80); }
+  const said = await twisty();
+  check(said.length === 1 && /^Twisty section in (half a mile|three quarters of a mile|\d+ feet)\. 2\.\d miles, \d+ corners\.$/.test(said[0]), 'the call: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  for (let i = 760; i <= 800; i += 2) { await at(i); await page.waitForTimeout(40); }
+  check((await twisty()).length === 1, 'once: ' + JSON.stringify(await twisty()));
 });
 
 for (const [when, iso, expect] of [['at dusk', '2026-06-21T00:30:00Z', 1], ['at noon', '2026-06-21T17:00:00Z', 0]]) {
