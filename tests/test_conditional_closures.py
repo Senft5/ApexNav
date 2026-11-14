@@ -54,3 +54,20 @@ def test_route_card(out):
     assert out["line"] == "Closed when you'd get there (map data): Clingmans Dome Road (Dec 1-Mar 31) · Has access rules: NC 28 (wet)"
     assert out["none"] == ""
     assert 'way["highway"]["motor_vehicle:conditional"](35.0000,-84.0000,36.0000,-83.0000);' in out["q"]
+
+
+def test_from_the_regions_built_list():
+    """Inside the built region the roads come from GET /api/ctx/closures.json (tools/osm_ctx/region.py), shaped like the
+    Overpass answer to query(); a box reaching a cell the list doesn't cover is null (Overpass then), and a covered box with
+    no such road is a known none."""
+    src = r"""
+const C = require(process.argv[1] + '/web/conditional_closures.js');
+const doc = { built: '2026-11-14', bundle: 0.25, cells: [[156, -339], [156, -338]],
+  ways: [[39.1, -84.6, { name: 'Gate Rd', 'access:conditional': 'no @ (19:00-07:00)' }], [39.9, -84.4, { name: 'Away' }]] };
+console.log(JSON.stringify({ in: C.inRegion(doc, 39.0, -84.7, 39.24, -84.3), part: C.inRegion(doc, 39.0, -84.7, 39.3, -84.3),
+  none: C.inRegion(null, 39, -84.7, 39.2, -84.3), empty: C.inRegion({ ...doc, ways: [] }, 39.0, -84.7, 39.24, -84.3) }));
+"""
+    r = json.loads(subprocess.run([NODE, "-e", src, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["in"] == {"elements": [{"type": "way", "center": {"lat": 39.1, "lon": -84.6}, "tags": {"name": "Gate Rd", "access:conditional": "no @ (19:00-07:00)"}}]}
+    assert r["part"] is None and r["none"] is None
+    assert r["empty"] == {"elements": []}

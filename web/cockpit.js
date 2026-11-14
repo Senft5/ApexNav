@@ -9614,6 +9614,17 @@
     // line on the route card. Map data: a mapped viewpoint, a fuel station that may be closed. Nothing found says nothing.
     const scenicPins = [];
     const SCENIC_LABEL = { view: 'VIEW', falls: 'FALLS', cafe: 'CAFÉ', fuel: 'FUEL', charge: 'CHARGE' };
+    // The region's lists built weekly with the OSM tiles (tools/osm_ctx/region.py): waterfalls and roads with conditional
+    // access, the whole region in one file each (the request says nothing about the route), asked once a session; none
+    // (not built yet, offline): asked again after 10 minutes, and Overpass meanwhile.
+    const regionLists = {};
+    function regionList(name) {
+      if (!regionLists[name]) {
+        regionLists[name] = apiCall('GET', `/api/ctx/${name}.json`).then((r) => (r && r.ok ? r.json() : null)).catch(() => null)
+          .then((d) => { if (!d) setTimeout(() => { delete regionLists[name]; }, 10 * 60000); return d; });
+      }
+      return regionLists[name];
+    }
     // Seasonal and time-of-day closures (conditional_closures.js, IDEAS R-22): OSM conditional access tags on the roads the
     // route uses, read for when you'd get there. A trip over 1° across, or the map offline: nothing said.
     async function attachClosures(t) {
@@ -9622,7 +9633,11 @@
       let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
       for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
       if (n - s > 1 || e - w > 1) return;
-      const json = await ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexConditional.query(s - 0.005, w - 0.005, n + 0.005, e + 0.005)));   // every server raced
+      // inside Ohio, Kentucky and Indiana from the list built weekly with the OSM tiles (GET /api/ctx/closures.json, asked
+      // once a session), elsewhere from Overpass, every server raced
+      const box = [s - 0.005, w - 0.005, n + 0.005, e + 0.005];
+      const json = (ApexConditional.inRegion && ApexConditional.inRegion(await regionList('closures'), ...box))
+        || await ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexConditional.query(...box)));
       if (!json || plannedRoute !== t) return;
       const total = t.dist[t.dist.length - 1], now = leaveAt();
       const secAt = (m) => (Number.isFinite(t.timeS) ? t.timeS - ApexEta.routerLeft(m, total, t.timeS, t.timeMarks) : m / (50 / 3.6));
@@ -10044,16 +10059,13 @@
     // IDEAS R-24: waterfalls near the route, from OpenStreetMap (the map's tiles have none): inside Ohio, Kentucky and
     // Indiana from the list built weekly with the OSM tiles (GET /api/ctx/falls.json, asked once a session), elsewhere
     // through Overpass. A trip over 1° across, the servers down or offline: none, and the Along line says what the tiles gave.
-    let fallsRegion = null;
     async function fallsNear(t) {
       if (!window.ApexCameras || !ApexScenic.fallsQuery) return [];
       let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
       for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
       if (n - s > 1 || e - w > 1) return [];
       if (ApexScenic.fallsInRegion) {
-        if (!fallsRegion) fallsRegion = apiCall('GET', '/api/ctx/falls.json').then((r) => (r && r.ok ? r.json() : null)).catch(() => null)
-          .then((d) => { if (!d) setTimeout(() => { fallsRegion = null; }, 10 * 60000); return d; });
-        const got = ApexScenic.fallsInRegion(await fallsRegion, s - 0.005, w - 0.005, n + 0.005, e + 0.005);
+        const got = ApexScenic.fallsInRegion(await regionList('falls'), s - 0.005, w - 0.005, n + 0.005, e + 0.005);
         if (got) return got;
       }
       try {

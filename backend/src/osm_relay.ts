@@ -202,14 +202,16 @@ export async function osmTile(url: URL, env: { OSM?: Kv; DATA?: R2Get }, waiter?
 }
 
 /**
- * GET /api/ctx/falls.json: the region's waterfalls (tools/osm_ctx/falls.py, R2 osm/v2/falls.json; web/scenic.js
- * fallsInRegion). 404 before the first build: the phone then asks Overpass as before. Public OSM data, no sign-in.
+ * GET /api/ctx/falls.json and /api/ctx/closures.json: the region's waterfalls and roads with conditional access
+ * (tools/osm_ctx/region.py, R2 osm/v2/<name>; web/scenic.js fallsInRegion, conditional_closures.js inRegion). 404 before
+ * the first build: the phone then asks Overpass as before. Public OSM data, no sign-in, the whole region (no box asked).
  */
-export async function fallsList(data: R2Get | undefined): Promise<Response> {
+export const REGION_LISTS = ["falls.json", "closures.json"] as const;
+export async function regionList(data: R2Get | undefined, name: (typeof REGION_LISTS)[number]): Promise<Response> {
   const none = () => new Response(JSON.stringify({ error: "not_built" }), { status: 404, headers: { "content-type": "application/json", "cache-control": "no-store" } });
   if (!data) return none();
   try {
-    const o = await data.get(`${BUILT}/falls.json`);
+    const o = await data.get(`${BUILT}/${name}`);
     if (!o) return none();
     return new Response(o.body, { headers: { "content-type": "application/json", "cache-control": "public, max-age=21600", "x-content-type-options": "nosniff", "x-cache": "built" } });
   } catch { return none(); }
