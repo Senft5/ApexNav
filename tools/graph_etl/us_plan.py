@@ -23,6 +23,7 @@ import sys
 from tools.graph_etl.region_blocks import BLOCK, MARGIN
 
 LOWER48 = (-125.0, 24.0, -66.0, 50.0)   # whole degrees round the lower 48 (west, south, east, north)
+LOWER48_SLACK = 3.0
 CHUNK_DEG = 15.0
 # east of DENSE_WEST the chunks are DENSE_CHUNK_DEG wide: the -95..-80 chunks took up to 4 h 17 min of the runner's 5 h 45 min
 # (Chicago, Detroit and Cleveland: bands 41 to 43, 2026-11-14), the West's under 2 h 15 min
@@ -57,7 +58,10 @@ def states(index):
         if not sid or not is_state(p) or not f.get("geometry"):
             continue
         b = _ring_box(f["geometry"]["coordinates"], [math.inf, math.inf, -math.inf, -math.inf])
-        if b[0] >= LOWER48[0] - 1 and b[2] <= LOWER48[2] + 1 and b[1] >= LOWER48[1] - 1 and b[3] <= LOWER48[3] + 1:
+        # 3 degrees of slack: Geofabrik's polygons run well out to sea (Washington's to -126.7, Oregon's past -126), and the
+        # first lower-48 build left both out at 1 (2026-11-14); Alaska, Hawaii and the territories are far past it
+        m = LOWER48_SLACK
+        if b[0] >= LOWER48[0] - m and b[2] <= LOWER48[2] + m and b[1] >= LOWER48[1] - m and b[3] <= LOWER48[3] + m:
             out[sid] = tuple(b)
     return dict(sorted(out.items()))
 

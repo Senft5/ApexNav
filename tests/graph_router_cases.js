@@ -41,6 +41,20 @@ const CASES = {
   },
 
   // turn restrictions (no and only), one-ways, U-turns only at dead ends
+  gates() {
+    // A to B by the Gated road (a gate halfway, 100 s) or the Detour (160 s): a gate on a through road is open, one on a
+    // residential street or with access private still blocks
+    const run = (cls, extra) => {
+      const nodes = [at(39.3, -84.6), at(39.305, -84.59), at(39.3, -84.58), at(39.3, -84.59, 8)];
+      const edges = [];
+      two(edges, 0, 3, { quality: 0.6, cls, name: 'Gated', t: 50, flags: 4096 | extra });
+      two(edges, 3, 2, { quality: 0.6, cls, name: 'Gated', t: 50, flags: 4096 | extra });
+      two(edges, 0, 1, { quality: 0.6, cls: 3, name: 'Detour', t: 80 }); two(edges, 1, 2, { quality: 0.6, cls: 3, name: 'Detour', t: 80 });
+      const v = R.view(H.tiles(nodes, edges).tiles);
+      return R.plan(v, { from: { lat: 39.3, lon: -84.5999 }, to: { lat: 39.3, lon: -84.5801 }, level: 'quick' }).quick.names.map((x) => x.name);
+    };
+    return { secondary: run(3, 0), tertiary: run(4, 0), residential: run(6, 0), privateSecondary: run(3, 512) };
+  },
   rules() {
     // a cross at C with arms N, E, S, W (400 m) and a block joining W and N round the north-west corner
     const C = [39.10, -84.50], d = 0.0036, e = 0.0046;
