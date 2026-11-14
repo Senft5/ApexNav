@@ -1572,7 +1572,9 @@ flow('valhalla down: planning inside our tiles is unaffected', async (page, base
     await page.waitForFunction(() => Array.isArray(window.apexDebug.lastLoop) && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 15000 });
     const loopMs = Date.now() - loopAt;
     const loop = await page.evaluate(() => ({ won: (window.apexDebug.lastLoop.find((d) => d.picked) || {}).kind, name: apexDebug.track && apexDebug.track.name, steps: ((apexDebug.track || {}).steps || []).length }));
-    check(loop.won === 'own' && /loop$/.test(loop.name || '') && loopMs <= 1500, `a loop from our tiles within 1.5 s with Valhalla hanging (${loopMs} ms): ` + JSON.stringify(loop));
+    // 2 s: the loop itself takes 1.2 to 1.5 s here (a busy CI runner hit 1511 ms, 2026-11-14), and the shortest wait on a
+    // hanging Valhalla is OWN_CHECK_MS, 2.5 s, so a loop that waited on it still fails
+    check(loop.won === 'own' && /loop$/.test(loop.name || '') && loopMs <= 2000, `a loop from our tiles within 2 s with Valhalla hanging (${loopMs} ms): ` + JSON.stringify(loop));
     for (const r of runs) {
       const lab = `${r.mode} ${r.warm ? 'warm' : 'cold'}`;
       check(r.own.covered && r.own.used && r.kinds[0] === 'own' && r.kind === 'route', `${lab}: our route, from our tiles: ` + JSON.stringify(r));
@@ -6177,13 +6179,16 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
 flow('People: Return on the keyboard sends a friend request and creates a crew, once each (walkthrough 2026-11-12)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const posted = [];
+  // each save is held until both Returns are in (a fixed 400 ms let a slow CI runner's second press land after the save,
+  // when the form had re-rendered and the pop closed: "element was detached")
+  let release = null, held = new Promise((ok) => { release = ok; });
   await page.route(base + '/api/**', async (route) => {
     const u = new URL(route.request().url()), m = route.request().method(), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/points') return json({ total: 0 });
     if (m === 'POST' && (u.pathname === '/api/friends/request' || u.pathname === '/api/crews')) {
       posted.push([u.pathname, route.request().postData()]);
-      await new Promise((ok) => setTimeout(ok, 400));   // slow enough for a second Return to land while it saves
+      await held;   // still saving when the second Return lands
       return json({ ok: true, id: 'K1' });
     }
     return json([]);
@@ -6195,6 +6200,7 @@ flow('People: Return on the keyboard sends a friend request and creates a crew, 
   check(await page.getAttribute(hand, 'enterkeyhint') === 'send', 'the handle field\'s keyboard key says Send');
   await page.fill(hand, '@Sam');
   await page.press(hand, 'Enter'); await page.press(hand, 'Enter');
+  release(); held = new Promise((ok) => { release = ok; });
   await page.waitForFunction(() => /Request sent\. @sam/.test(document.getElementById('toast').textContent), null, { timeout: 5000 }).catch(() => {});
   const reqs = posted.filter(([p]) => p === '/api/friends/request');
   check(reqs.length === 1 && JSON.parse(reqs[0][1]).handle === 'sam', 'Return sends one request for @sam: ' + JSON.stringify(posted));
@@ -6206,6 +6212,7 @@ flow('People: Return on the keyboard sends a friend request and creates a crew, 
   await page.waitForSelector(cname);
   await page.fill(cname, 'Ridge Runners');
   await page.press(cname, 'Enter'); await page.press(cname, 'Enter');
+  release();
   await page.waitForTimeout(900);
   const made = posted.filter(([p]) => p === '/api/crews');
   check(made.length === 1 && JSON.parse(made[0][1]).name === 'Ridge Runners', 'Return creates the crew, once: ' + JSON.stringify(made));
@@ -7866,6 +7873,10 @@ flow('dashcam overlay: a video from the drive gets its speed, g and calls drawn 
   });
   await page.goto(base + '/analysis.html?drive=dc1');
   await page.waitForSelector('#dvDashcam input[type=file]', { state: 'attached' });   // behind the Pick a video key
+  // before a video, a line and Pick a video only: no slider, nudges or Make the video to act on yet (walkthrough 2026-11-13)
+  const bare = await page.evaluate(() => ({ seen: [...document.querySelectorAll('#dvDashcam button, #dvDashcam input[type=range]')].filter((x) => x.offsetParent).map((x) => x.textContent || x.getAttribute('aria-label')),
+    note: document.querySelector('#dvDashcam .note').textContent }));
+  check(!bare.seen.length && bare.note.length <= 100, 'the dashcam section before a video is a line and its key: ' + JSON.stringify(bare));
   // a 2 s video made right here, put in the file box as if picked
   await page.evaluate(async () => {
     const c = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }), g = c.getContext('2d');
