@@ -11,7 +11,7 @@ export const REF = "refs/heads/main";
 export const REPO_ID = "1432495043", OWNER_ID = "55918175";
 /** Only the workflows that upload map data, as files on main (workflow_ref): any other workflow on main, or one that runs
  *  a pull request's code with main's token (pull_request_target), is refused. */
-export const WORKFLOWS = [".github/workflows/data-mirror.yml", ".github/workflows/graph-us.yml"];
+export const WORKFLOWS = [".github/workflows/data-mirror.yml", ".github/workflows/graph-us.yml", ".github/workflows/osm-ctx.yml"];
 const EVENTS = ["push", "schedule", "workflow_dispatch", "workflow_run"];
 const JWKS_URL = `${ISSUER}/.well-known/jwks`;
 const JWKS_MS = 3600_000, SKEW_S = 60;
