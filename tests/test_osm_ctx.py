@@ -298,3 +298,18 @@ def test_waterfalls_and_closures_in_each_cells_points_file():
     F.with_lists(by, [(39.123456, -84.6, "Falls"), (45.0, -84.6, "Far")], [(39.2, -84.4, {"access:conditional": "no @ (Nov-Mar)"})])
     assert by[(156, -339)]["falls"] == [[39.12346, -84.6, "Falls"]] and by[(156, -339)]["closures"] == []
     assert by[(156, -338)]["closures"] == [[39.2, -84.4, {"access:conditional": "no @ (Nov-Mar)"}]] and by[(156, -338)]["falls"] == []
+
+
+def test_cameras_in_each_cells_points_file(tmp_path):
+    """tools/osm_ctx/region.py read_cams: plate readers and speed cameras (nodes, as tools/graph_etl/cameras.py and
+    web/cameras.js classify), into each cell's points file as "cams" for Avoid cameras across the lower 48."""
+    from tools.osm_ctx import region as F
+    assert {"n/surveillance:type=ALPR", "n/highway=speed_camera"} <= set(open(os.path.join(ROOT, "tools", "osm_ctx", "region.filter")).read().split())
+    nodes = {1: (39.12, -84.6, {"surveillance:type": "ALPR", "surveillance": "public"}), 2: (39.13, -84.4, {"highway": "speed_camera"}),
+             3: (39.14, -84.6, {"man_made": "surveillance"})}
+    p = tmp_path / "c.osm.pbf"
+    write_osm(p, nodes, {})
+    got = F.read_cams([str(p)])
+    assert got == [(39.12, -84.6, "a"), (39.13, -84.4, "s")]
+    by = F.with_lists(F.points_by_cell([], [[156, -339], [156, -338]]), [], [], got)
+    assert by[(156, -339)]["cams"] == [[39.12, -84.6, "a"]] and by[(156, -338)]["cams"] == [[39.13, -84.4, "s"]]

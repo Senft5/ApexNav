@@ -11,7 +11,8 @@ by the weekly OSM build (.github/workflows/osm-ctx.yml): Overpass timed out or r
         named places with hours or contact tags (PKEYS), for a place card's open now, Call and Website (web/place_info.js,
         backend/src/osm_relay.ts placeTags): a cell at a time, so the server reads only the cells a lookup touches
     OUT/osm/v2/points/<bi>_<bj>.json = {"fuel": [[lat, lon], ...], "schools": [...], "worship": [...],
-                                        "falls": [[lat, lon, name]], "closures": [[lat, lon, {tags}]]}, one per covered cell
+                                        "falls": [[lat, lon, name]], "closures": [[lat, lon, {tags}]],
+                                        "cams": [[lat, lon, "a" | "s"]]}, one per covered cell
         fuel stations (web/route_ctx/car.js, the fuel-stop spacing) and schools and places of worship (route_ctx/events.js,
         school-run and church traffic), 5 decimal places, positions only (backend/src/osm_relay.ts pointCells)
     OUT/osm/v2/lines/<bi>_<bj>.json = {"t": {"<i>_<j>": {"lit": [[value, [lat, lon, ...]]], "tunnel": [[...]], "cycle": [[...]]}}}
@@ -138,13 +139,30 @@ def points_by_cell(points, cs) -> dict:
     return by
 
 
-def with_lists(by, falls, closures) -> dict:
+def read_cams(paths) -> list:
+    """[(lat, lon, "a" | "s")]: plate readers (surveillance:type=ALPR, mapped by DeFlock) and fixed speed cameras
+    (highway=speed_camera), nodes only, as tools/graph_etl/cameras.py and web/cameras.js classify() read them."""
+    out = {}
+    for path in paths:
+        for o in osmium.FileProcessor(path, osmium.osm.NODE):
+            kind = "a" if o.tags.get("surveillance:type") == "ALPR" else "s" if o.tags.get("highway") == "speed_camera" else None
+            if kind and o.location.valid():
+                out[o.id] = (round(o.location.lat, 6), round(o.location.lon, 6), kind)
+    return sorted(out.values())
+
+
+def with_lists(by, falls, closures, cams=()) -> dict:
     """The waterfalls and the roads with conditional access in each covered cell's points file too, as "falls"
     [[lat, lon, name]] and "closures" [[lat, lon, {tags}]] (empty lists included): the per-cell form of falls.json and
-    closures.json, which the lower-48 build (osm-ctx-us.yml) has no single file for. The phone asks the cells along a
+    closures.json, which the lower-48 build (osm-ctx-us.yml) has no single file for; and "cams" [[lat, lon, "a" | "s"]],
+    the per-cell form of the region's camera list (cameras.yml region.json) for Avoid cameras. The phone asks the cells along a
     route (/api/ctx/points), never the whole country's list."""
     for body in by.values():
-        body["falls"], body["closures"] = [], []
+        body["falls"], body["closures"], body["cams"] = [], [], []
+    for la, lo, kind in cams:
+        k = (math.floor(la / STEP), math.floor(lo / STEP))
+        if k in by:
+            by[k]["cams"].append([la, lo, kind])
     for la, lo, nm in falls:
         k = (math.floor(la / STEP), math.floor(lo / STEP))
         if k in by:
@@ -305,7 +323,7 @@ def main(argv=None):
             json.dump(rows, f, separators=(",", ":"), ensure_ascii=False)
     n = sum(len(v) for v in by.values())
     pts = points_by_cell(read_points(a.pbf), cs)
-    with_lists(pts, falls, closures)
+    with_lists(pts, falls, closures, read_cams(a.pbf))
     os.makedirs(os.path.join(a.out, "osm", "v2", "points"), exist_ok=True)
     for (bi, bj), body in pts.items():
         with open(os.path.join(a.out, "osm", "v2", "points", f"{bi}_{bj}.json"), "w") as f:
@@ -320,7 +338,7 @@ def main(argv=None):
     big = max((os.path.getsize(os.path.join(a.out, "osm", "v2", "lines", f"{bi}_{bj}.json")) for bi, bj in lb), default=0)
     print(f"lines: lit {nl['lit']}, tunnel {nl['tunnel']}, cycle {nl['cycle']} (per tile) in {len(lb)} bundles, largest {big} bytes")
     nf, nc = sum(len(v["falls"]) for v in pts.values()), sum(len(v["closures"]) for v in pts.values())
-    lists = f"falls: {nf}, roads with conditional access: {nc}, "
+    lists = f"falls: {nf}, roads with conditional access: {nc}, cameras: {sum(len(v['cams']) for v in pts.values())}, "
     print(f"{lists}places with hours or contact: {n}, "
           f"fuel {m['fuel']}, schools {m['schools']}, worship {m['worship']}, in {len(cs)} cells")
 
