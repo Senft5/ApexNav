@@ -10031,6 +10031,33 @@ flow('the stage briefing: a drive on a planned route starts with how far, how ma
   check((await brief()).length === 1, 'once: ' + JSON.stringify(await brief()));
 });
 
+flow('corners ahead: after a long straight on the planned route, the co-driver says when the twisty section starts, once (corners_ahead.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexCornersAhead);
+  // 4 km straight north, then 4 km winding: a bend every 200 m either way
+  const KY = 110540, kx = 111320 * Math.cos(35.5 * Math.PI / 180), gpx = [];
+  for (let m = 0; m <= 8000; m += 5) gpx.push(`<trkpt lat="${(35.5 + m / KY).toFixed(7)}" lon="${(-83.9 + (m < 4000 ? 0 : 60 * Math.sin((m - 4000) * Math.PI / 200)) / kx).toFixed(7)}"/>`);
+  await page.setInputFiles('#gpxFile', { name: 'straight.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Straight Then Winding</name><trkseg>${gpx.join('')}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Straight Then Winding', null, { timeout: 10000 });
+  const sec = await page.evaluate(() => ApexCornersAhead.sections(apexDebug.track.events));
+  check(sec.length === 1 && sec[0].startM > 3800 && sec[0].startM < 4300, 'one section after the straight: ' + JSON.stringify(sec));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const twisty = () => page.evaluate(() => window.__said.filter((s) => /^Twisty section/.test(s)));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 25, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  for (let i = 400; i <= 640; i += 5) { await at(i); await page.waitForTimeout(60); }      // 2 to 3.2 km: too far yet
+  check((await twisty()).length === 0, 'not yet: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  for (let i = 640; i <= 760 && !(await twisty()).length; i += 2) { await at(i); await page.waitForTimeout(80); }
+  const said = await twisty();
+  check(said.length === 1 && /^Twisty section in (half a mile|three quarters of a mile|\d+ feet)\. 2\.\d miles, \d+ corners\.$/.test(said[0]), 'the call: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  for (let i = 760; i <= 800; i += 2) { await at(i); await page.waitForTimeout(40); }
+  check((await twisty()).length === 1, 'once: ' + JSON.stringify(await twisty()));
+});
+
 for (const [when, iso, expect] of [['at dusk', '2026-06-21T00:30:00Z', 1], ['at noon', '2026-06-21T17:00:00Z', 0]]) {
   flow(`a mapped deer crossing ${when}: called in cruise from dusk to dawn, left to the notes by day (road_marks.js cruiseWorthy)`, async (page, base) => {
     await page.clock.setFixedTime(new Date(iso));
