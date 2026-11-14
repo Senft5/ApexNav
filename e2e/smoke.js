@@ -9569,6 +9569,37 @@ flow('the co-driver says a low sun once when the route turns into it, and not ag
   check((await calls()).length === 1, 'not again with the sun in view: ' + JSON.stringify(await calls()));
 });
 
+flow('the stage briefing: a drive on a planned route starts with how far, how many corners and the first marks, once (briefing.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexBriefing);
+  // a winding road north, 6 km: a bend every 200 m either way
+  const KY = 110540, kx = 111320 * Math.cos(35.5 * Math.PI / 180), gpx = [];
+  for (let m = 0; m <= 6000; m += 5) gpx.push(`<trkpt lat="${(35.5 + m / KY).toFixed(7)}" lon="${(-83.9 + 60 * Math.sin(m * Math.PI / 200) / kx).toFixed(7)}"/>`);
+  await page.setInputFiles('#gpxFile', { name: 'winding.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Winding Road</name><trkseg>${gpx.join('')}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Winding Road', null, { timeout: 10000 });
+  const corners = await page.evaluate(() => apexDebug.track.events.filter((e) => e.type === 'corner').length);
+  check(corners >= 5, 'the road has corners: ' + corners);
+  // the map's stop sign at 3 km (as road_marks.js puts it on the route)
+  await page.evaluate(() => { const t = apexDebug.track, i = t.dist.findIndex((d) => d >= 3000);
+    t.marks = [{ type: 'mark', kind: 'stop', code: 'STOP', call: 'Stop sign', index: i, dist_m: t.dist[i], lat: t.lat[i], lon: t.lon[i] }]; });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const brief = () => page.evaluate(() => window.__said.filter((s) => /corners/.test(s)));
+  for (let k = 0; k < 40 && !(await brief()).length; k++) {
+    await page.evaluate(() => { const t = apexDebug.track;
+      window.apex.live({ lat: t.lat[0], lon: t.lon[0], accuracy_m: 5, speed_mps: 3, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); });
+    await page.waitForTimeout(150);
+  }
+  const said = await brief();
+  check(said.length === 1 && new RegExp(`^\\d+(\\.\\d)? miles, ${corners} corners\\. Stop sign in 1\\.9 miles\\.$`).test(said[0]), 'the briefing: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  for (let k = 0; k < 8; k++) { await page.evaluate(() => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[2], lon: t.lon[2], accuracy_m: 5, speed_mps: 3, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }); await page.waitForTimeout(100); }
+  check((await brief()).length === 1, 'once: ' + JSON.stringify(await brief()));
+});
+
 flow('the co-driver says a speed limit that drops ahead once, before the sign, early enough to slow (limit_ahead.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
