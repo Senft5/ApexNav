@@ -13,7 +13,17 @@
   "vars": {
     "GOOGLE_CLIENT_ID": "299251127161-jj8nql86bqkr48pmidejbbrjaupns1om.apps.googleusercontent.com"
   },
-  "assets": { "directory": "./web", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
+  "assets": { "directory": "./web", "binding": "ASSETS", "run_worker_first": ["/api/*", "/", "/index.html", "/.well-known/*", "/apple-app-site-association"] },
+  // The owner's domains (2026-11-14, backend/src/hosts.ts): vettadrive.app is the app, the API and shared links; vettadrive.com
+  // the information page. workers.dev stays on: the iOS app and every link shared before now use apexnav.senftns.workers.dev.
+  "workers_dev": true,
+  "preview_urls": true,
+  "routes": [
+    { "pattern": "vettadrive.app", "custom_domain": true },
+    { "pattern": "www.vettadrive.app", "custom_domain": true },
+    { "pattern": "vettadrive.com", "custom_domain": true },
+    { "pattern": "www.vettadrive.com", "custom_domain": true }
+  ],
   // Convoys (backend/src/convoy.ts): one Durable Object per live group drive. Previews get their own namespace automatically,
   // but the env binding must be declared in the previews block too.
   "durable_objects": { "bindings": [{ "name": "CONVOY", "class_name": "ConvoyRoom" }, { "name": "CONVOY_INDEX", "class_name": "ConvoyIndex" }] },

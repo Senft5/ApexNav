@@ -154,7 +154,7 @@ Google setup (owner, free): Google Cloud console → OAuth consent screen (Exter
 | CI | `.github/workflows/core-tests.yml` job `backend`: type check, vitest, `wrangler deploy --dry-run` |
 | iOS | Every main run that builds the app uploads it to TestFlight (job `testflight`, App Store Connect API key, automatic signing): docs/TESTFLIGHT.md. The unsigned sideload IPA is still built too. CarPlay needs Apple's separate CarPlay entitlement |
 | Everyone else | The web app (installable PWA). iPhone Safari recording needs the screen on and a lower sensor rate |
-| Domain | `workers.dev` now; buy a `.com` (~$10/yr) when it is rolling |
+| Domain | Custom Domains on the same Worker (`wrangler.jsonc` routes, `backend/src/hosts.ts`): **vettadrive.app** is the web app, the API and the links people share; **vettadrive.com** is the information page (its `/` is `about.html`, with Privacy and Terms); `www.` of either redirects to the bare name. `apexnav.senftns.workers.dev` stays on: the iOS app calls it and old links point at it. `/.well-known/apple-app-site-association` lists which vettadrive.app links open the app |
 
 Going private (owner wants full control): the site is already served by Cloudflare, so make the GitHub repo private and turn off GitHub Pages.
 On the free plan a private repo gets 2,000 Actions minutes a month and macOS counts 10x; `build.yml` skips docs/tests/tools/voice-only changes.
