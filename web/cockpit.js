@@ -1510,7 +1510,15 @@
     // always awake. Quiet: never wake, so only cameras and severe bumps are called.
     const isSpirited = () => state.notesMode === 'full' || (state.notesMode === 'auto' && performance.now() - state.spiritedAt < 30000);
     // a bump several members felt (IDEAS Q-02) is called in cruise as well: verified, not one phone's guess
-    const noteworthyInCruise = (e) => e.type === 'alpr' || (e.type === 'bump' && (e.severity_g >= 0.45 || !!e.crowd));
+    // and a mapped deer crossing from dusk to dawn (road_marks.js cruiseWorthy): the sun's height where the car is, once a minute and for each new track
+    const sunAlt = { at: 0, v: null, t: null };
+    const sunAltNow = () => {
+      const now = Date.now(), t = track, i = Math.max(0, state.cursorIdx || 0);
+      if ((now - sunAlt.at > 60000 || sunAlt.t !== t) && window.ApexSun && t && t.lat && Number.isFinite(t.lat[i])) { sunAlt.at = now; sunAlt.t = t; sunAlt.v = ApexSun.sunPosition(new Date(), t.lat[i], t.lon[i]).altitude; }
+      return sunAlt.v;
+    };
+    const noteworthyInCruise = (e) => e.type === 'alpr' || (e.type === 'bump' && (e.severity_g >= 0.45 || !!e.crowd))
+      || (e.type === 'mark' && window.ApexRoadMarks && ApexRoadMarks.cruiseWorthy(e, sunAltNow()));
 
     // -------------------------------------------------------------------------
     // Voice: the most natural voice installed, read like a real co-driver.

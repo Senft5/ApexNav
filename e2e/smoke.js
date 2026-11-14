@@ -9889,6 +9889,34 @@ flow('the stage briefing: a drive on a planned route starts with how far, how ma
   check((await brief()).length === 1, 'once: ' + JSON.stringify(await brief()));
 });
 
+for (const [when, iso, expect] of [['at dusk', '2026-06-21T00:30:00Z', 1], ['at noon', '2026-06-21T17:00:00Z', 0]]) {
+  flow(`a mapped deer crossing ${when}: called in cruise from dusk to dawn, left to the notes by day (road_marks.js cruiseWorthy)`, async (page, base) => {
+    await page.clock.setFixedTime(new Date(iso));
+    await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+      window.__said = []; window.APEX_REVIEW = true;
+      window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
+    const lat = (m) => 35.5 + m / 110540, gpx = [];
+    for (let m = 0; m <= 2500; m += 5) gpx.push(`<trkpt lat="${lat(m).toFixed(7)}" lon="-83.9"/>`);
+    await page.setInputFiles('#gpxFile', { name: 'deer.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Deer Run</name><trkseg>${gpx.join('')}</trkseg></trk></gpx>`) });
+    await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Deer Run', null, { timeout: 10000 });
+    await page.evaluate(() => { const t = apexDebug.track, i = t.dist.findIndex((d) => d >= 1200);
+      t.marks = [{ type: 'mark', kind: 'animal_crossing', code: 'ANIMAL', call: 'Deer crossing', index: i, dist_m: t.dist[i], lat: t.lat[i], lon: t.lon[i] }]; });
+    await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+    await page.waitForFunction(() => window.apexDebug.driveActive);
+    check(await page.evaluate(() => apexDebug.state.notesMode) !== 'full', 'notes on Auto (cruise on a straight road)');
+    const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+    for (let i = await iAt(700), end = await iAt(1190); i <= end; i += 4) {
+      await page.evaluate(([i]) => { const t = apexDebug.track;
+        window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, [i]);
+      await page.waitForTimeout(40);
+    }
+    const said = await page.evaluate(() => window.__said.filter((s) => /Deer crossing/.test(s)));
+    check(said.length === expect, `${when}: ${JSON.stringify(await page.evaluate(() => window.__said))}`);
+  });
+}
+
 flow('the co-driver says a speed limit that drops ahead once, before the sign, early enough to slow (limit_ahead.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;

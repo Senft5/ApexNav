@@ -133,6 +133,14 @@
     return out.sort((x, y) => x.dist_m - y.dist_m);
   }
 
-  const api = { marksOf, events, unfelt, union, mapAnswered, placeAt, KINDS };
+  /**
+   * Whether a mark is called in cruise too, not only with the notes awake: a mapped animal crossing from dusk to dawn
+   * (the sun under 6° up, sunAltRad in radians), when deer are on the move and a driver at an easy pace is not braced
+   * for one. In daylight it waits for the notes like the other marks; unknown sun is daylight (no call it can't back).
+   */
+  const DUSK_RAD = 6 * Math.PI / 180;
+  const cruiseWorthy = (m, sunAltRad) => !!m && m.type === 'mark' && m.kind === 'animal_crossing' && finite(sunAltRad) && sunAltRad < DUSK_RAD;
+
+  const api = { marksOf, events, unfelt, union, mapAnswered, cruiseWorthy, placeAt, KINDS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadMarks = api;
 })(typeof window !== 'undefined' ? window : globalThis);
