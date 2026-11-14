@@ -2756,9 +2756,14 @@ flow('Siri: "Drive somewhere with Vetta" plans to the place said, your own first
   check(Math.abs(to.lat - 35.61) < 0.01 && Math.abs(to.lon + 84.11) < 0.01 && to.typed === 'Home', 'the place said is your pinned Home: ' + JSON.stringify(to));
   // a place with no match says so, and nothing else is planned
   const toasts = await page.evaluate(async (q) => { const before = window.apexDebug.track;
-    window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } };
+    const fix = () => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true });
+    fix(); window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } };
     window.apex.onNative({ type: 'link', params: { go: 'to', q } });
-    const seen = new Set(); for (let i = 0; i < 60; i++) { seen.add(document.getElementById('toast').textContent); await new Promise((r) => setTimeout(r, 100)); }
+    // The phone's GPS keeps reporting while it waits (the flow gave one fix at the start: 5 s on, the page rightly said "GPS
+    // lost" and went to the replay, and an ask still in flight then was dropped, failing this flow on a slow runner). Up to
+    // 15 s for the answer, then 1 s more of toasts.
+    const seen = new Set(), told = () => window.__car.some((m) => m.kind === 'notice');
+    for (let i = 0, after = 0; i < 150 && after < 10; i++) { if (i % 10 === 0) fix(); seen.add(document.getElementById('toast').textContent); if (told()) after++; await new Promise((r) => setTimeout(r, 100)); }
     return { same: window.apexDebug.track === before, toast: [...seen].join(' | '), notice: window.__car.filter((m) => m.kind === 'notice').map((m) => m.titles[0]) }; }, b64('Zzyzx Qqq Nowhere'));
   check(toasts.same && toasts.notice.some((t) => /No match/.test(t)), 'a place nobody knows: no route, and why, on the car too: ' + JSON.stringify(toasts));
   // junk in the link is ignored
