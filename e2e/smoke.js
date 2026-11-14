@@ -2303,6 +2303,93 @@ flow('avoid police reports, driving: a report that lands on the route ahead is o
   check(/Going round the police report/.test(await page.textContent('#dsNote')), 'the drive says it is going round: ' + await page.textContent('#dsNote'));
 }, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });
 
+// the DOTs' word on the route ahead (road_events.js onRouteAhead, 2026-11-14): a crash your way miles on is offered once with
+// Go round; one on the other carriageway is not
+flow('a DOT crash on the route ahead, your way, is offered miles out with Go round, which routes round it; the far side\'s is not (Worker and router stubbed)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  const asked = [];
+  let events = [];                                                      // none while planning; two once driving
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}'), locs = req.locations;
+    asked.push(req);
+    if (!events.length) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(locs)) });
+    const a = locs[0], b = locs[locs.length - 1], pts = [];             // the way round: east 4 km, north, back west
+    for (let i = 0; i <= 40; i++) pts.push([a.lat, a.lon + 0.045 * i / 40]);
+    for (let i = 1; i <= 100; i++) pts.push([a.lat + (b.lat - a.lat) * i / 100, a.lon + 0.045]);
+    for (let i = 1; i <= 40; i++) pts.push([b.lat, a.lon + 0.045 - (a.lon + 0.045 - b.lon) * i / 40]);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ trip: { legs: [{ shape: polyline6(pts), maneuvers: [
+      { type: 1, begin_shape_index: 0, length: 8, street_names: ['East Fork Road'] }, { type: 4, begin_shape_index: pts.length - 1, length: 0 }] }],
+      summary: { length: 16, time: 1100, has_highway: false, has_toll: false, has_ferry: false } } }) });
+  });
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/traffic/v1/events.json') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ sources: ['INDOT'], events }) });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex && window.apex.live, null, { timeout: 20000 });
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.96, lon: -83.92 }, { lat: 36.06, lon: -83.92 }], 'route_dest', 'To the ridge', null,
+    { from: null, to: { lat: 36.06, lon: -83.92 }, via: [] }));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'route' && apexDebug.track.request, null, { timeout: 20000 });
+  const plan = await page.evaluate(() => { const t = apexDebug.track, i = Math.floor(t.lat.length * 0.5), j = Math.floor(t.lat.length * 0.3); window.__plan = t;
+    return { lat: t.lat[i], lon: t.lon[i], farLat: t.lat[j], farLon: t.lon[j], startLat: t.lat[0], startLon: t.lon[0], lat2: t.lat[3], lon2: t.lon[3] }; });
+  const crs = (Math.atan2((plan.lon2 - plan.startLon) * Math.cos(plan.startLat * Math.PI / 180), plan.lat2 - plan.startLat) * 180 / Math.PI + 360) % 360;
+  const crash = { id: 'dot:IN:crash', kind: 'crash', label: 'Crash', lat: +plan.lat.toFixed(5), lon: +plan.lon.toFixed(5), road: 'US 129', until: null, src: 'INDOT', heading: Math.round(crs) };
+  events = [{ ...crash, id: 'dot:IN:far', lat: +plan.farLat.toFixed(5), lon: +plan.farLon.toFixed(5), heading: (Math.round(crs) + 180) % 360 }, crash];
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  await page.evaluate(() => apexDebug.loadRoadEvents());               // the events land (the drive asks every 5 min)
+  await page.evaluate(() => { window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } }; });
+  const fix = () => page.evaluate(([lat, lon, crs]) => window.apex.live({ lat, lon, accuracy_m: 5, speed_mps: 15, course_deg: crs, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }), [plan.startLat, plan.startLon, crs]);
+  let offered = null;
+  for (let k = 0; k < 40 && !offered; k++) {
+    await fix();
+    offered = await page.evaluate(() => { const t = document.getElementById('toast'); return t && t.classList.contains('show') && /Crash on your route/.test(t.textContent) ? t.textContent : null; });
+    if (!offered) await page.waitForTimeout(250);
+  }
+  const dbg = await page.evaluate(() => apexDebug.dotAhead);
+  check(!!offered && /Go round/.test(offered), 'the crash on the route ahead is offered with Go round: ' + offered + ' ' + JSON.stringify(dbg));
+  check(dbg && dbg.hit && dbg.hit.id === 'dot:IN:crash' && dbg.hit.aheadM > 3000, 'the one your way, miles out, not the far side\'s nearer one: ' + JSON.stringify(dbg && dbg.hit));
+  const offer = await page.evaluate(() => window.__car.filter((m) => m.kind === 'offer').pop());
+  check(offer && offer.key === 'Go round' && /^Crash on your route in /.test(offer.title) && /^Crash in /.test(offer.short), 'the offer on the car: ' + JSON.stringify(offer));
+  const before = asked.length;
+  await page.evaluate((id) => window.apex.onNative({ type: 'carplay', action: 'offer', id }), offer.id);
+  await page.waitForFunction(() => apexDebug.track !== window.__plan && apexDebug.track && apexDebug.track.kind === 'route', null, { timeout: 15000 });
+  const ex = asked.slice(before).map((r) => r.exclude_locations || []);
+  check(ex.length && ex.every((e) => e.some((x) => Math.abs(x.lat - crash.lat) < 1e-4 && Math.abs(x.lon - crash.lon) < 1e-4)), 'the way round was asked round the crash: ' + JSON.stringify(ex));
+  await page.waitForTimeout(300);
+  check(/Going round the crash/.test(await page.textContent('#dsNote')), 'the drive says it is going round: ' + await page.textContent('#dsNote'));
+}, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });
+
+flow('Road cameras: an opt-in layer of Ohio DOT\'s traffic cameras, loaded only when switched on; a tap shows the road now (Worker stubbed)', async (page, base) => {
+  let asked = 0;
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/traffic/v1/cameras.json') { asked++; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ src: 'ODOT', cams: [
+      { id: 'c1', lat: 39.96, lon: -83.0, name: 'I-70 at SR-256', views: [{ dir: '', url: 'https://itscameras.dot.state.oh.us/images/col/i70.jpg' }] }] }) }); }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.route('https://itscameras.dot.state.oh.us/**', (route) => route.fulfill({ contentType: 'image/png',
+    body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') }));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded(), null, { timeout: 20000 });
+  check(!(await page.evaluate(() => !!window.ApexRoadCams)) && asked === 0, 'nothing loaded or asked before the switch');
+  await page.evaluate(() => { document.getElementById('swTab').click(); document.querySelector('[data-toggle="roadcams"]').click(); });
+  await page.waitForFunction(() => window.apexDebug.map.getLayer('roadcams-dots'), null, { timeout: 10000 });
+  check(asked === 1, 'the cameras asked once: ' + asked);
+  await page.evaluate(() => apexDebug.roadCams().open('c1'));
+  await page.waitForFunction(() => { const i = document.querySelector('.rc-pic'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 10000 });
+  const got = await page.evaluate(() => ({ src: document.querySelector('.rc-pic').src, title: document.querySelector('.overlay.show h3').textContent, note: document.querySelector('.overlay.show .note').textContent }));
+  check(/^https:\/\/itscameras\.dot\.state\.oh\.us\/images\/col\/i70\.jpg\?t=\d+$/.test(got.src) && got.title === 'I-70 at SR-256' && /Ohio DOT/.test(got.note), 'the picture opens: ' + JSON.stringify(got));
+  await page.evaluate(() => [...document.querySelectorAll('.overlay.show button')].find((b) => b.textContent === 'Close').click());
+  await page.evaluate(() => document.querySelector('[data-toggle="roadcams"]').click());
+  check(await page.evaluate(() => apexDebug.map.getLayoutProperty('roadcams-dots', 'visibility') === 'none'), 'off hides them');
+});
+
 // a road closure that lands on the route ahead mid-drive: Go round, as for police, with no switch (2026-11-12)
 flow('a road closure, driving: a closure reported on the route ahead is offered once with Go round, which routes round it, with no switch on (Worker and router stubbed)', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
@@ -5899,6 +5986,22 @@ flow('Stages: Share older drives shows only when it holds something, so a signed
   check(!out && inn, 'Share older drives: hidden signed out, shown to a member: ' + JSON.stringify({ out, inn }));
 });
 
+flow('a drive\'s elevation lane gives its range in your units, and one height on a flat road (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  // the profile drive is level at 250 m (820 ft)
+  await page.evaluate(async (src) => { const gen = eval(src); await ApexRecording.store(ApexRecording.parse(ApexCore, gen('saw', 0), 'E0.csv', { id: 'E0', name: 'Dry Ridge Rd', date: '2026-07-01T09:00', source: 'web-gps' })); }, PROFILE_CSV);
+  const label = async (units) => {
+    await page.evaluate((u) => localStorage.setItem('apex.units', u), units);
+    await page.goto(base + '/analysis.html?drive=E0');
+    await page.waitForFunction(() => [...document.querySelectorAll('svg text')].some((t) => t.textContent === 'Elevation'), null, { timeout: 20000 });
+    return page.evaluate(() => { const t = [...document.querySelectorAll('svg text')], i = t.findIndex((x) => x.textContent === 'Elevation'); return t[i + 1].textContent; });
+  };
+  const ft = await label('imperial'), m = await label('metric');
+  check(ft === '820 ft' && m === '250 m', 'the flat lane: one height, in your units: ' + JSON.stringify({ ft, m }));
+});
+
 flow('the Log draws one rule between the drive list and Score over time, not two (free roamer B, 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/analysis.html');
@@ -8735,6 +8838,7 @@ flow('film the drive: the app\'s own video of a drive is offered on its page, li
   const one = await page.evaluate(() => ({ saved: window.__saved, key: document.querySelector('.dv-ovl .dv-clip').textContent }));
   await page.waitForFunction(() => /Clip made/.test(document.querySelector('.dv-ovl .dv-clip').textContent), null, { timeout: 5000 });
   check(one.saved.size > 500 && /^Filmed_road-corner-1-/.test(one.saved.name), 'one tap on the corner: its clip, shared: ' + JSON.stringify(one));
+  check(!(await page.$('.dv-ovl .dv-post, #dvDashcam .dc-post:not([hidden])')), 'no Post key on the Log on its own (no map page to post from)');
   // the reel: both corners the video holds, one after the other in one portrait clip
   await page.evaluate(() => { window.__saved = null; });
   await page.waitForFunction(() => { const b = [...document.querySelectorAll('#dvDashcam .dc-clips button')].find((x) => /in one clip/.test(x.textContent)); return b && !b.hidden && !b.disabled; }, null, { timeout: 10000 });
@@ -8744,6 +8848,68 @@ flow('film the drive: the app\'s own video of a drive is offered on its page, li
   await page.waitForFunction(() => window.__saved, null, { timeout: 40000 });
   const reelSaved = await page.evaluate(() => window.__saved);
   check(reelSaved.size > 500 && /^Filmed_road-best-corners-/.test(reelSaved.name), 'the reel, saved to share: ' + JSON.stringify(reelSaved));
+});
+
+flow('post a corner clip: on the Log a clip made from the drive\'s own film goes to your friends with one more tap, the clip after the post (drive_posts.js through the map page, big bet 5)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} window.APEX_DRIVECAM = '/__drivecam/'; });
+  const sent = [];
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (m !== 'GET') { sent.push({ m, p: u.pathname, q: u.search, type: route.request().headers()['content-type'], n: (route.request().postDataBuffer() || Buffer.alloc(0)).length, b: route.request().postData() && /json/.test(route.request().headers()['content-type'] || '') ? route.request().postData() : null });
+      if (u.pathname === '/api/posts') return json({ id: 'P3AAAAAAAAAAAAAA' }, 201);
+      if (u.pathname.endsWith('/media')) return json({ kind: 'clip', mime: 'video/webm', bytes: 1, label: null });
+      return route.fulfill({ status: 204 }); }
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    return json([]);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording && !document.getElementById('boot'), null, { timeout: 15000 });
+  const T0 = Date.now() - 3600e3;
+  const b64 = await page.evaluate(async (t0) => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 300; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9); }
+    await ApexRecording.store({ id: 'fp1', name: 'Filmed road', date: new Date(t0).toISOString(), t0, t_s: lat.map((_, i) => i / 3), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => -0.1), lat_g: lat.map((_, i) => Math.sin(i / 3) * 0.4), g_known: null, elev: null, hz: 1, source: 'web-gps',
+      events: [{ type: 'corner', code: 'L4', call: 'Left 4', index: 9, dist_m: 45, start_m: 30, end_m: 60, radius_m: 80, apex_mph: 30, dir: 'L', severity: 4 }] });
+    const c = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }), g = c.getContext('2d');
+    const rec = new MediaRecorder(c.captureStream(15), { mimeType: 'video/webm' }), parts = [];
+    rec.ondataavailable = (e) => parts.push(e.data);
+    const stop = new Promise((ok) => { rec.onstop = ok; });
+    rec.start(); let f = 0; const t = setInterval(() => { g.fillStyle = `hsl(${f++ * 12},60%,50%)`; g.fillRect(0, 0, 320, 180); }, 66);
+    await new Promise((r) => setTimeout(r, 7200)); clearInterval(t); rec.stop(); await stop;
+    const buf = new Uint8Array(await new Blob(parts).arrayBuffer());
+    let bin = ''; for (let k = 0; k < buf.length; k += 0x8000) bin += String.fromCharCode(...buf.subarray(k, k + 0x8000));
+    return btoa(bin);
+  }, T0);
+  const name = `${T0 + 1500}.mov`;
+  await page.route('**/__drivecam/index.json', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify([{ name, start_ms: T0 + 1500, dur_s: 7.2 }]) }));
+  await page.route(`**/__drivecam/${name}`, (r) => r.fulfill({ contentType: 'video/webm', body: Buffer.from(b64, 'base64') }));
+  await page.waitForFunction(() => window.ApexLogHost && ApexLogHost.canPost(new Date().toISOString()), null, { timeout: 10000 });
+  // the drive's page, in the Log over the map
+  await page.evaluate(() => { const a = Object.assign(document.createElement('a'), { href: 'analysis.html?drive=fp1', textContent: 'x' }); document.body.append(a); a.click(); a.remove(); });
+  await page.waitForSelector('#logFrame:not([hidden])', { timeout: 15000 });
+  const log = page.frameLocator('#logFrame');
+  await log.locator('#dvDashcam .dc-own button').click({ timeout: 20000 });
+  const fr = page.frame({ url: /analysis\.html/ });
+  await fr.evaluate(() => { window.__saved = null; ApexSaveFile.saveFile = async (blob, name) => { window.__saved = { size: blob.size, name }; return 'saved'; }; });
+  await fr.waitForFunction(() => { const b = document.querySelector('#dvDashcam .dc-clips button'); return b && !b.disabled && document.querySelector('#dvDashcam .dc-clip-pick option'); }, null, { timeout: 15000 });
+  await fr.click('#dvDashcam .dc-clips button');
+  await fr.waitForFunction(() => window.__saved, null, { timeout: 30000 });
+  await fr.waitForSelector('#dvDashcam .dc-post:not([hidden])', { timeout: 5000 });
+  await fr.click('#dvDashcam .dc-post');
+  // the Post sheet on the map page, the Log stepped aside; the clip waits on it with its corner
+  await page.waitForSelector('.post-sheet .post-media video', { timeout: 10000 });
+  check(await page.evaluate(() => document.getElementById('logFrame').hidden), 'the Log steps aside for the Post sheet');
+  check(/Clip: Corner 1 · Left 4/.test(await page.textContent('.post-sheet .post-media')), 'the clip and its corner on the sheet: ' + await page.textContent('.post-sheet .post-media'));
+  await page.click('.post-sheet button:text-is("Post")');
+  await fr.waitForFunction(() => document.querySelector('#dvDashcam .dc-post').textContent === 'Posted', null, { timeout: 15000 });
+  const posts = sent.filter((x) => x.p.startsWith('/api/posts')), order = posts.map((x) => `${x.m} ${x.p} ${x.type || ''}`);
+  const body = JSON.parse(posts[0].b || '{}');
+  check(order[0] === 'POST /api/posts application/json' && /^PUT \/api\/posts\/P3AAAAAAAAAAAAAA\/media video\/(mp4|webm)$/.test(order[1]) && posts[1].n > 500 && /label=Corner%201/.test(posts[1].q),
+    'the post, then its clip with the corner\'s label: ' + JSON.stringify(order) + ' ' + posts[1].q);
+  check(body.title === 'Filmed road' && /^\d{4}-\d\d-\d\d$/.test(body.driven_on) && body.length_m === 1495, 'the post is the drive\'s: ' + JSON.stringify({ ...body, line: !!body.line }));
+  check(!(await page.evaluate(() => document.getElementById('logFrame').hidden)), 'and the Log is back');
+  check(/Posted to your friends\./.test(await fr.textContent('#dvDashcam .dc-clip-note')), 'the Log says where it went');
 });
 
 flow('side by side: a corner filmed on this drive and on your best pass plays as one clip, both from the same point, the gap counting (big bet 5)', async (page, base) => {

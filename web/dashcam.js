@@ -143,10 +143,31 @@
     const clipNote = el('p', { className: 'note dc-clip-note' }); clipNote.setAttribute('role', 'status');
     // a reel: the drive's best corners the video holds (their own Driver Score), one after another in one portrait video
     const reelBtn = el('button', { className: 'btn', type: 'button', hidden: true });
-    const clips = el('div', { className: 'dc-clips', hidden: true }, el('h3', { textContent: 'Corner clips' }), el('div', { className: 'dc-row' }, clipPick, clipBtn), el('div', { className: 'dc-row' }, reelBtn), clipCanvas, clipNote);
+    // the clip just made, to your friends or a crew (drive_posts.js compose, through the map page: page.post), for a member
+    const postBtn = el('button', { className: 'btn solid dc-post', textContent: 'Post this clip', type: 'button', hidden: true });
+    const clips = el('div', { className: 'dc-clips', hidden: true }, el('h3', { textContent: 'Corner clips' }), el('div', { className: 'dc-row' }, clipPick, clipBtn), el('div', { className: 'dc-row' }, reelBtn), clipCanvas, el('div', { className: 'dc-row' }, postBtn), clipNote);
     let clipList = [], clipBusy = false, clipSaid = '', reel = [];   // clipSaid: how the last clip went, kept until the video moves
+    let made = null;                                                 // the last clip made: { blob, mime, label, call }
+    const canPost = () => typeof page.post === 'function' && (typeof page.canPost !== 'function' || !!page.canPost());
+    const keep = (blob, mime, label, call) => {
+      made = { blob, mime: String(mime || blob.type || 'video/mp4').split(';')[0], label: String(label || '').slice(0, 60), call: call || '' };
+      postBtn.textContent = 'Post this clip'; postBtn.disabled = false; postBtn.hidden = !canPost();
+    };
+    /** Posts the last clip made; { posted, said } (said: what the Post sheet said, for the key that asked). */
+    async function postMade() {
+      if (!made || clipBusy || !canPost()) return { posted: false, said: '' };
+      const it = made;
+      postBtn.disabled = true;
+      let r = null;
+      try { r = await page.post(it.blob, { driveId: d.id, cornerLabel: it.label, call: it.call, mime: it.mime }); } catch (_) { r = null; }
+      const posted = r === true || !!(r && r.posted), said = (r && r.said) || '';
+      if (said) { clipSaid = said; clipNote.textContent = clipSaid; }
+      if (made === it) { if (posted) postBtn.textContent = 'Posted'; else postBtn.disabled = false; }
+      return { posted, said };
+    }
+    postBtn.addEventListener('click', () => { postMade(); });
     const labelOf = (c) => { const all = CC.cornersOf(d), k = all.findIndex((x) => x.start === c.start && x.end === c.end);
-      return { k: Math.max(0, k), label: k >= 0 ? [`Corner ${k + 1}`, all[k].call].filter(Boolean).join(' \u00b7 ') : (c.call || '') }; };
+      return { k: Math.max(0, k), call: k >= 0 ? all[k].call || '' : c.call || '', label: k >= 0 ? [`Corner ${k + 1}`, all[k].call].filter(Boolean).join(' \u00b7 ') : (c.call || '') }; };
     function listReel() {
       const R = root.ApexRecording, scored = R && R.cornersOf ? (() => { try { return R.cornersOf(d); } catch (_) { return []; } })() : [];
       const best = CC.bestOf(Core, d, scored, (c) => !!CC.clipWindow(T, c, off(), duration()), 3);
@@ -340,6 +361,7 @@
       try {
         const { blob, mime } = await CC.record({ video, d, T, w: x.w, offsetS: off(), fmtSpeed: page.fmtSpeed, canvas: clipCanvas,
           meta: { title: d.name || '', label: x.label }, ...(parts ? { parts } : {}) });
+        keep(blob, mime, parts ? `Best ${parts.length} corners` : x.label, parts ? '' : x.call);   // kept before the share sheet: a Cancel there keeps it to post
         await page.save(blob, root.ApexFlyoverVideo.fileName(`${d.name || 'drive'}-${parts ? 'best-corners' : `corner-${x.k + 1}`}`, mime), mime.split(';')[0]);
         clipSaid = 'Done. The sound isn\u2019t kept.'; ok = true;
       } catch (_) { clipSaid = 'Couldn\u2019t make the clip on this phone.'; }
@@ -355,6 +377,8 @@
     // 5 m samples), opened lined up if it isn't yet, and the clip made from it
     const ownFor = (start, end) => (CC ? vids.find((v) => CC.clipWindow(T, { start, end }, v.offsetS, v.durS)) : null);
     box.canClip = (start, end) => !!ownFor(start, end);
+    box.canPost = () => !!made && canPost();                         // the clip just made can go to friends or a crew
+    box.post = postMade;
     // Side by side (ghost_clip.js): this pass and the best pass, when the app filmed both drives. other: { d (that drive),
     // bWin: [start, end] of the corner on it, trace (corner_trace.js), when }
     function ghostPlan(start, end, other) {
@@ -388,6 +412,7 @@
         const lab = labelOf({ start, end });
         const { blob, mime } = await root.ApexGhostClip.record({ va, vb, a: p.a, b: p.b, w: p.w, trace: other.trace, fmtSpeed: page.fmtSpeed, canvas: clipCanvas,
           meta: { title: d.name || '', label: lab.label, whenB: other.when || '' } });
+        keep(blob, mime, `${lab.label} · side by side`, '');
         await page.save(blob, root.ApexFlyoverVideo.fileName(`${d.name || 'drive'}-side-by-side-${lab.k + 1}`, mime), mime.split(';')[0]);
         clipSaid = 'Done. The sound isn\u2019t kept.'; ok = true;
       } catch (_) { clipSaid = 'Couldn\u2019t make the side-by-side clip on this phone.'; }

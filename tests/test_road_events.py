@@ -42,6 +42,23 @@ const w = H.createPassWatch(), seen = [];
 for (const m of [0, 290, 300, 310, 400, 410, 500]) seen.push(w.update(near, { lat: at.lat + N(m), lon: at.lon, heading: 0 }, new Set())?.id ?? null);
 out.asked = seen;
 out.routed = H.closuresFor(near, [at, { lat: at.lat + N(2000), lon: at.lon }]);
+// a route north 30 km: dist every 100 m
+const t = { lat: [], lon: [], dist: [] };
+for (let i = 0; i <= 300; i++) { t.lat.push(at.lat + N(i * 100)); t.lon.push(at.lon); t.dist.push(i * 100); }
+const on = (id, kind, m, extra = {}) => ({ id, kind, label: kind, lat: at.lat + N(m), lon: at.lon, official: true, ...extra });
+const ahead = [on('south', 'crash', 3000, { heading: 180 }), on('north', 'crash', 6000, { heading: 0 }), on('lane', 'lane', 2000),
+  on('soon', 'slow', 500), on('off', 'closed_way', 4000, { lon: at.lon + 0.01 }), on('far', 'slow', 26000), on('way', 'closed_way', 9000)];
+out.ahead = R.onRouteAhead(t, 0, ahead);
+out.aheadLater = R.onRouteAhead(t, 6500, ahead);
+out.aheadNone = R.onRouteAhead(t, 0, [on('lane', 'lane', 2000)]);
+out.aheadBad = R.onRouteAhead(null, 0, ahead);
+const sg = R.rows({ events: [{ id: 'dot:OH:sign:1', kind: 'sign', label: 'Sign', lat: at.lat + N(300), lon: at.lon, road: 'I-71 SB', src: 'ODOT', text: 'Main st closed 3 miles ahead', heading: 0 },
+  { id: 'dot:OH:wx:1', kind: 'ice', label: 'Road may be icy', lat: at.lat + N(5000), lon: at.lon, src: 'ODOT sensor' }] });
+out.sign = sg[0];
+const sgNear = R.near(sg, at.lat, at.lon, now);
+out.signVoice = H.nextAhead(sgNear, me, 600, new Set());
+out.signPlate = H.plate(H.nextAhead(sgNear, me, 600, null), (m) => `${m} m`, now);
+out.iceAhead = R.onRouteAhead(t, 0, sgNear);
 console.log(JSON.stringify(out));
 """
 
@@ -85,3 +102,17 @@ def test_never_asked_still_there(out):
 def test_refresh_and_remerge(out):
     assert out["due"] == [True, False, True]
     assert out["moved"] == [True, False, True]
+
+
+def test_early_word_on_the_route_ahead_your_way(out):
+    # the far side's crash (southbound) and one under 1 km are passed over; lane closures and anything off the route never
+    assert out["ahead"]["id"] == "north" and out["ahead"]["aheadM"] == 6000
+    assert out["aheadLater"]["id"] == "way" and out["aheadLater"]["aheadM"] == 2500
+    assert out["aheadNone"] is None and out["aheadBad"] is None
+
+
+def test_signs_on_the_plate_never_aloud_and_icy_roads_ahead(out):
+    assert out["sign"]["silent"] is True and out["sign"]["words"] == "Main st closed 3 miles ahead"
+    assert out["signVoice"] is None
+    assert out["signPlate"] == {"title": "Sign", "detail": "in 300 m · Main st closed 3 miles ahead"}
+    assert out["iceAhead"]["id"] == "dot:OH:wx:1" and out["iceAhead"]["aheadM"] == 5000

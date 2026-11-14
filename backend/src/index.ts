@@ -1,5 +1,6 @@
-// ApexNav API Worker. Static files are served by Cloudflare's asset layer; only /api/* reaches this code
-// (wrangler.jsonc: assets.run_worker_first). Phones never talk to the database directly.
+// ApexNav API Worker. Static files are served by Cloudflare's asset layer; only /api/* and the front pages reach this code
+// (wrangler.jsonc: assets.run_worker_first; the front pages and app links: src/hosts.ts). Phones never talk to the database directly.
+import { routeHost } from "./hosts";
 import {
   APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, invitePreview, logout, redeemInvite, requireMember, requireUser, sessionCookie, sessionHash, viewer,
 } from "./auth";
@@ -63,7 +64,7 @@ import { highlightCreate, highlightDelete, highlightList, highlightRate } from "
 export { ConvoyIndex, ConvoyRoom } from "./convoy";
 import { crewHomeSet, crewMeetCells } from "./crew_meet";
 import { chargers } from "./chargers";
-import { trafficResponse } from "./traffic";
+import { camerasResponse, trafficResponse } from "./traffic";
 import { dailyServerCheck, serverSide, serviceHistory, serviceReport } from "./service_check";
 import { QUERY_WARN, countedDb } from "./query_budget";
 import { SHED_ROUTES, countedKv, countedR2, flushUsage, usageState } from "./usage";
@@ -315,6 +316,8 @@ on("GET", "/api/graph/v1/index.json", (req, env) => graphIndex(req, fetch, env))
 on("GET", "/api/graph/v1/:name", (req, env, m) => graphTile(req, m.groups!.name, fetch, env));
 // Official traffic events from the state DOTs' free feeds (traffic.ts; web/road_events.js): public, the whole region, cached 5 min
 on("GET", "/api/traffic/v1/events.json", (_req, env) => trafficResponse(env));
+// Ohio's traffic cameras (still pictures of the road) for the map's opt-in Road cameras layer (traffic.ts; web/road_cams.js)
+on("GET", "/api/traffic/v1/cameras.json", (_req, env) => camerasResponse(env));
 // Avoid cameras' own camera list for the region (graph.ts cameraList; web/cameras.js), from the graph-data branch
 on("GET", "/api/cameras/v1/region.json", (_req, env) => cameraList(fetch, env));
 // CI's upload of the map data into R2 (src/data_store.ts): a GitHub OIDC token of this repository's main branch, no secret
@@ -456,6 +459,8 @@ function withAppCors(res: Response): Response {
 
 export default {
   async fetch(req: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
+    const site = await routeHost(req, env);   // www., the app-links file, and the front pages of vettadrive.app / .com (src/hosts.ts)
+    if (site) return site;
     const fromApp = req.headers.get("origin") === APP_ORIGIN;
     if (req.method === "OPTIONS") return fromApp ? new Response(null, { status: 204, headers: APP_CORS }) : new Response(null, { status: 405 });
     const t0 = Date.now(), seen = { route: "" };

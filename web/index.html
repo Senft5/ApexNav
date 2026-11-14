@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov https://itscameras.dot.state.oh.us; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
@@ -170,6 +170,8 @@
     .hz-plate svg { grid-row: span 2; width: 28px; height: 25px; }
     .hz-plate b { font: 800 20px/1.05 var(--font-num, var(--font-ui)); letter-spacing: 0.01em; }
     .hz-plate span { font-size: 12px; font-weight: 600; color: var(--hz-edge); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rc-pic { display: block; width: 100%; height: auto; min-height: 120px; background: var(--panel-dim, #888); }
+    .hz-plate span.wrap { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }   /* a message sign's words */
     .hz-tri { fill: var(--hz-edge); }
     .hz-tri + path { stroke: var(--hz-bg); }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -627,6 +629,7 @@
     .ly-key .k-cam { stroke: var(--signal); stroke-width: 1.5; stroke-linecap: butt; stroke-linejoin: miter; fill: var(--panel); }
     .ly-key .k-hill { stroke: var(--panel-dim); stroke-width: 1.5; fill: var(--hair, transparent); }
     .ly-key .k-meet { stroke: var(--panel-ink); stroke-width: 1.5; fill: var(--panel); }
+    .ly-key .k-roadcam { stroke: var(--panel); stroke-width: 1.5; fill: var(--panel-ink); }
     .ly-key .k-friend { stroke: var(--panel-ink); stroke-width: 1.5; fill: var(--panel); } .ly-key .k-friend-in { fill: var(--panel-ink); stroke: none; }
     .sw.ly:not(.on) .ly-key { opacity: 0.45; }
     /* Measured roads: the three colours, each beside its word (a colour is never the only way to read it) */
@@ -2199,6 +2202,8 @@
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><path class="k-smooth" d="M3 15 C6 15 7 9 10 8"/><path class="k-fair" d="M12 7 C14 6 15 12 18 12"/><path class="k-rough" d="M20 12 C22 12 23 7 25 5"/></svg></button>
         <button class="sw ly" data-toggle="lpr"><i></i><span>Cameras<small>Plate and speed</small></span>
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><rect class="k-cam" x="4" y="4.75" width="20" height="10.5"/><path class="k-cam" d="M8.5 10 H19.5"/></svg></button>
+        <button class="sw ly" data-toggle="roadcams"><i></i><span>Road cameras<small>Ohio's road now, tap one</small></span>
+          <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><circle class="k-roadcam" cx="14" cy="10" r="5"/></svg></button>
         <button class="sw ly" data-toggle="terrain"><i></i><span>3D terrain<small>Hills stand up as you tilt</small></span>
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><path class="k-hill" d="M2 17 L10 6 L15 12 L19 8 L26 17 Z"/></svg></button>
         <!-- developers only (cockpit.js applyDevFlags: /api/me's developer flag); hidden for everyone else -->

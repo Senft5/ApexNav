@@ -1,0 +1,47 @@
+{
+"totalPageCount": 2,
+"results": [
+{
+"id": "00000000000001",
+"latitude": 41.50557,
+"longitude": -82.84921,
+"location": "SR-2 at S Lightner Rd, 5060",
+"description": "SR-2 at S Lightner Rd, 5060",
+"cameraViews": [
+{
+"direction": "View",
+"smallUrl": "https://itscameras.dot.state.oh.us:443/images/toledo/SR2-EB-WestSign.jpg",
+"largeUrl": "https://itscameras.dot.state.oh.us:443/images/toledo/SR2-EB-WestSign.jpg",
+"mainRoute": "SR-2 at S Lightner Rd, 5060"
+}
+]
+},
+{
+"id": "00000000000008",
+"latitude": 39.94585,
+"longitude": -82.45284,
+"location": "I-70 EB Licking county rest area, 8",
+"description": "I-70 EB Licking county rest area, 8",
+"cameraViews": [
+{
+"direction": "View",
+"smallUrl": "https://itscameras.dot.state.oh.us/images/rest_area/I-70_Licking_EB-5.jpg",
+"largeUrl": "https://itscameras.dot.state.oh.us/images/rest_area/I-70_Licking_EB-5.jpg",
+"mainRoute": "I-70 EB Licking county rest area, 8"
+}
+]
+},
+{
+"id": "bad",
+"latitude": 40,
+"longitude": -83,
+"location": "Elsewhere",
+"cameraViews": [
+{
+"direction": "N",
+"largeUrl": "https://example.com/x.jpg"
+}
+]
+}
+]
+}
