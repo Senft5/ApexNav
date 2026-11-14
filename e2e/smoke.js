@@ -9161,6 +9161,33 @@ flow('your best yet: the drive page leads with the corners this drive beat every
   check(await page.evaluate(() => document.getElementById('dvRoadSince').hidden), 'and, the first drive here, no since line');
 });
 
+flow('like with like on the drive page: a wet pass is set against your wet passes, tagged in This road over time, with its best wet beside the best (road_surface.js alike)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording && window.ApexRoadSurface);
+  // one road four times: dry and quick, wet and slow, dry and quickest, then wet again, quicker than the first wet one
+  await page.evaluate(async (src) => {
+    const gen = eval(src);
+    const tweak = (csv, f) => csv.split('\n').map((l, i) => { if (!i || !l) return l; const c = l.split(','); c[5] = (+c[5] * f).toFixed(3); return c.join(','); }).join('\n');
+    const runs = [[0.97, null], [0.88, 'wet'], [1.0, null], [0.92, 'wet']];
+    for (let k = 0; k < runs.length; k++) {
+      const d = ApexRecording.parse(ApexCore, tweak(gen('clean', 0), runs[k][0]), 'w' + k + '.csv', { id: 'w' + k, name: 'Dry Ridge Rd', date: `2026-0${6 + k}-01T09:00`, source: 'web-gps' });
+      if (runs[k][1]) d.surface = runs[k][1];
+      await ApexRecording.store(d);
+    }
+  }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html?tab=drive&drive=w3');
+  await page.waitForSelector('#dvRoadSince:not([hidden])', { timeout: 20000 });
+  const r = await page.evaluate(() => ({ note: document.getElementById('dvNote').textContent, since: document.getElementById('dvRoadSince').textContent.trim(),
+    subs: [...document.querySelectorAll('#dvRoadTable tr td.l .sub')].map((x) => x.textContent), foot: document.querySelector('#dvRoadTable tr:last-child').textContent,
+    bests: !!document.querySelector('.dv-bests'), dashed: document.querySelectorAll('#dvRoadChart circle[stroke-dasharray]').length }));
+  check(/Wet road/.test(r.note), 'the drive is tagged wet: ' + r.note);
+  check(r.subs.filter((t) => /Wet road$/.test(t)).length === 2 && r.dashed === 2, 'the two wet passes are tagged in the history: ' + JSON.stringify(r.subs));
+  check(/^Since your first wet drive here \(.+\) (Score [+−]\d+ · )?\d+\.\d s quicker over \d+ corners$/.test(r.since), 'since the first wet drive, not the dry ones: ' + r.since);
+  check(/best \d+ · best wet \d+ · 4 scored drives here/.test(r.foot), 'the best wet pass beside the best: ' + r.foot);
+  check(r.bests, 'quicker than the other wet pass: a best yet, though a dry pass was quicker still');
+});
+
 flow('side by side: a corner filmed on this drive and on your best pass plays as one clip, both from the same point, the gap counting (big bet 5)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} window.APEX_DRIVECAM = '/__drivecam/'; });
   let index = [], video = null;

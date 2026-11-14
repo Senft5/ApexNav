@@ -135,8 +135,9 @@
   async function coachOf(Core, d, sums) {
     const me = sums.find((s) => s.id === d.id), nearS = sums.filter((s) => s.id !== d.id && overlaps(s.bbox, me && me.bbox));
     // like with like (road_surface.js alike): a wet pass only against your other wet ones, a dry one never against a wet
-    const S = root.ApexRoadSurface, near = (await fullAll(nearS)).filter((o) => !S || S.alike(d.surface, o.surface));
-    return { co: { ...Core.coach(d, near), others: near.map((o) => ({ name: o.name, date: label(o) })), near: near.map(lite) }, near };
+    // (all: every overlapping pass, wet or dry, for the road's history, which shows each with its surface)
+    const S = root.ApexRoadSurface, all = await fullAll(nearS), near = all.filter((o) => !S || S.alike(d.surface, o.surface));
+    return { co: { ...Core.coach(d, near), others: near.map((o) => ({ name: o.name, date: label(o) })), near: near.map(lite) }, near, all };
   }
   // U-111: the one coaching sentence a drive gets, the Log's (drive_view.js plainCoach over this drive's score and the coach's
   // corners against your other drives, as the drive job gives the Log), so the end card says the same words. null when the
@@ -304,7 +305,7 @@
       const Core = CoreOf(), sums = await Rec().summaries(Core), me = sums.find((s) => s.id === id);
       const d = me ? await full(id, me) : null;
       if (!d) return { missing: true };
-      const { co, near } = await coachOf(Core, d, sums);
+      const { co, near, all } = await coachOf(Core, d, sums);
       const len = d.dist[d.dist.length - 1], cmp = new Map();
       const compare = (o) => { if (!cmp.has(o.id)) cmp.set(o.id, Core.compareDrives(d, o)); return cmp.get(o.id); };
       let reference = null;
@@ -312,10 +313,10 @@
         const r = compare(o);
         if (r.overlap_m >= 0.3 * len && r.matched_corners >= 3) { reference = { id: o.id, name: o.name, score: o.ds.score, corners: r.corners }; break; }
       }
-      const road = [d, ...near.filter((o) => o.ds.score != null && compare(o).overlap_m >= 0.3 * len)].sort((p, q) => (p.date < q.date ? -1 : 1))
+      const road = [d, ...all.filter((o) => o.ds.score != null && compare(o).overlap_m >= 0.3 * len)].sort((p, q) => (p.date < q.date ? -1 : 1))
         .map((o) => { const r = o === d ? null : compare(o);
           return { id: o.id, name: o.name, date: o.date, dateLabel: label(o), score: o.ds.score, corners: Array.isArray(o.corners) ? o.corners.length : null, self: o === d,   // RA-3: every corner, as the Log row counts
-                   matched: r ? r.matched_corners : 0, delta_s: r ? r.corner_delta_s : null }; });
+                   matched: r ? r.matched_corners : 0, delta_s: r ? r.corner_delta_s : null, surface: o.surface === 'wet' || o.surface === 'ice' ? o.surface : null }; });
       let touch = null;
       try { touch = await touchOf(Core, d, id, sums); } catch (_) { touch = null; }
       if (touch) try { touch.road = roadOf(Core, d, near); } catch (_) { touch.road = null; }
