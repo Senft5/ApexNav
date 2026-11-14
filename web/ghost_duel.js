@@ -184,6 +184,26 @@
     };
   }
 
-  const api = { cutsOf, splitsOf, timeAt, gapAt, cornerSplits, standout, label, spoken, createTracker, countFor, MAX };
+  /**
+   * The drive page's one key under a ghost result (the Social thread): a 7-day time duel with that friend on this stage.
+   * gap > 0: they were quicker, so "Challenge @sam back"; otherwise "Dare @sam to beat it". null when you're already in
+   * an open duel with them there (inDuel), or with no gap or no handle.
+   */
+  function challengeKey(gap, who, inDuel) {
+    const w = String(who || '').replace(/^@/, '');
+    if (inDuel || !w || !finite(gap)) return null;
+    return gap > 0.05 ? `Challenge @${w} back` : `Dare @${w} to beat it`;
+  }
+  /** What the panel says once POST /api/duels answers (its status). */
+  function challengeSaid(status, who, stage) {
+    const w = `@${String(who || 'them').replace(/^@/, '')}`, s = stage || 'the stage';
+    if (status === 201 || status === 200) return `Sent. ${w} has 7 days on ${s} once they say yes.`;
+    if (status === 409) return `You and ${w} already have a duel on ${s}.`;
+    if (status === 429) return 'That\u2019s enough duels for now.';
+    if (status === 404) return `${w} isn\u2019t your friend any more, or the stage is gone.`;
+    return 'Couldn\u2019t send it. Try again.';
+  }
+
+  const api = { cutsOf, splitsOf, timeAt, gapAt, cornerSplits, standout, label, spoken, createTracker, countFor, MAX, challengeKey, challengeSaid };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexGhostDuel = api;
 })(typeof window !== 'undefined' ? window : globalThis);

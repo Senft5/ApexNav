@@ -461,6 +461,18 @@ const CASES = {
     return { n: res.routes.length, ms: res.ms, loops: res.routes.map((r) => ({ km: r.distM / 1000, retraced: r.retraced, d0: R.distM(start.lat, start.lon, r.coords[0][0], r.coords[0][1]), dN: R.distM(start.lat, start.lon, r.coords[r.coords.length - 1][0], r.coords[r.coords.length - 1][1]) })) };
   },
 
+  // unpaved road avoided: a loop's legs keep off it where they can, and a loop with more than LOOP_DIRT_KM of it goes
+  // when others don't need it (Sturgis loops drove 15 to 31 km of gravel)
+  loopsDirt() {
+    const g = H.grid({ seed: 9, nx: 28, ny: 28, holes: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    const rnd = H.rng(5);
+    for (let k = 0; k + 1 < g.edges.length; k += 2) if (rnd() < 0.3) { g.edges[k].flags = (g.edges[k].flags || 0) | 8; g.edges[k + 1].flags = (g.edges[k + 1].flags || 0) | 8; }
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles);
+    const start = { lat: 39.205, lon: -84.55 };
+    const dirt = (avoid) => R.loop(v, { start, km: 16, level: 'fun', avoid }).routes.map((r) => +(r.why.unpavedKm || 0).toFixed(2));
+    return { avoided: dirt({ unpaved: true }), allowed: dirt({ unpaved: false }) };
+  },
+
   // there and back by different roads (roundTrip): a 28 x 28 grid, a destination 4 km off; each level's round trips, the
   // share driven twice, both ends, the two legs, and the same trip's plan for the way out
   // Avoid police reports: a live report on the quickest's middle sends quickest and plan round it; with none, as before
