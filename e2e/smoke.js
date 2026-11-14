@@ -352,6 +352,11 @@ flow('startup budget: the map page is ready within its script bytes, script coun
       top: js.sort((a, b) => b.decodedBodySize - a.decodedBodySize).slice(0, 3).map((e) => `${e.name.split('/').pop()} ${Math.round(e.decodedBodySize / 1024)} KB`) }; }, base);
   const got = { ...r, cpuS: +m.ScriptDuration.toFixed(2), layoutS: +m.LayoutDuration.toFixed(2), styleS: +m.RecalcStyleDuration.toFixed(2) };
   console.log('     startup: ' + JSON.stringify(got));
+  // and the launch is timed for the anonymous app health counts (IDEAS P-06): page ready, then the map's first draw
+  await page.waitForFunction(() => window.apexDebug.boot, null, { timeout: 15000 });
+  const boot = await page.evaluate(() => ({ ...window.apexDebug.boot, counts: JSON.parse(localStorage.getItem('apex.health') || '{}') }));
+  const today = Object.values(boot.counts)[0] || {};
+  check(boot.readyMs > 0 && boot.mapMs >= 0 && today.boot_n === 1 && today.boot_map_cs >= 1 && today.boot_ready_cs >= 1, 'the launch is timed and counted: ' + JSON.stringify(boot));
   check(r.bytes > 1e6 && r.bytes <= BOOT.scriptBytes, `script bytes before ready ${r.bytes} (budget ${BOOT.scriptBytes}): ` + JSON.stringify(got));
   check(r.count <= BOOT.scriptCount, `scripts before ready ${r.count} (budget ${BOOT.scriptCount}): ` + JSON.stringify(got));
   check(got.cpuS <= BOOT.cpuS && r.long <= BOOT.longTaskMs, `CPU before ready ${got.cpuS} s (budget ${BOOT.cpuS}), longest task ${r.long} ms (budget ${BOOT.longTaskMs}): ` + JSON.stringify(got));
