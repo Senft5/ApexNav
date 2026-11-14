@@ -6108,6 +6108,12 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
       kudos: k.querySelector('.feed-acts button').getAttribute('aria-label'), wide: k.scrollWidth - k.clientWidth }; });
   check(/@bob/.test(c.text) && /Cherohala Skyway/.test(c.text) && /812/.test(c.text) && /Fog on top/.test(c.text) && /Cherohala Skyway, TN-165 \+1/.test(c.text) && c.path > 100 && c.wide <= 1,
     'a friend\'s post: who, the drive, its Score, its line, the roads and what they said: ' + JSON.stringify(c));
+  // the post reads like Strava's: its numbers in one row, the road wide below them, ringed start and red finish, no box around it
+  const look = await page.evaluate(() => { const k = document.querySelector('#accountBody .feed-card'), s = k.querySelector('.feed-stats'), l = k.querySelector('.feed-line'), r = (e) => e.getBoundingClientRect();
+    return { stats: [...s.children].map((d) => d.textContent), wide: Math.round(r(l).width - r(k).width), below: r(l).top >= r(s).bottom, go: !!l.querySelector('circle.go'), end: !!l.querySelector('circle.end'),
+      box: getComputedStyle(k).borderLeftWidth, titleRule: getComputedStyle(k.querySelector('.feed-title')).borderTopWidth }; });
+  check(look.stats.length === 2 && /^Vetta Score812$/.test(look.stats[0]) && /^Distance19\.9\s*mi$/.test(look.stats[1]) && look.wide === 0 && look.below && look.go && look.end && look.box === '0px' && look.titleRule === '0px',
+    'a post: Score and Distance in a row, the line full width under them with its start and finish: ' + JSON.stringify(look));
   // kudos: one tap, at once
   await page.click('#accountBody .feed-card .feed-acts button[aria-label^="Kudos"]');
   await page.waitForFunction(() => document.querySelector('#accountBody .feed-card .feed-acts button[aria-pressed="true"]'));
@@ -6179,9 +6185,17 @@ flow('a drive posted with no signal waits on the phone and goes up once there is
     await ApexRecording.store(d);
     apexDebug.showEndCard(d, Date.now() - 30 * 60000, { quiet: true });
   });
-  await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !b.hidden && !b.getAttribute('aria-disabled'); }, null, { timeout: 15000 });
+  await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !b.hidden && !b.getAttribute('aria-disabled') && window.ApexDrivePosts; }, null, { timeout: 15000 });
   down = true;
+  // the one-tap key: the post waits too
   await page.click('#endPost');
+  await page.waitForFunction(() => /goes up when you have one/.test(document.getElementById('toast').textContent), null, { timeout: 10000 });
+  const one = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.outbox') || '[]'));
+  check(one.length === 1 && one[0].path === '/api/posts' && one[0].body.caption === null && one[0].capped === true, 'one tap with no signal: the post waits on the phone: ' + JSON.stringify(one).slice(0, 300));
+  await page.evaluate(() => { localStorage.removeItem('apex.outbox'); document.getElementById('toast').textContent = '';
+    const k = document.getElementById('endPost'); k.disabled = false; k.textContent = 'Post to friends'; document.getElementById('endPostMore').hidden = false; });
+  // the sheet (a caption): the same
+  await page.click('#endPostMore');
   await page.waitForSelector('.post-sheet textarea');
   await page.fill('.post-sheet textarea', 'No bars up top.');
   await page.click('.post-sheet button:text-is("Post")');
