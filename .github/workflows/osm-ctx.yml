@@ -55,10 +55,18 @@ jobs:
         with:
           path: .graph_cache/osm
           key: graph-osm-${{ steps.week.outputs.w }}
-      - name: The states' outlines, once here (six bands asking Geofabrik at once had one refused)
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/osm_ctx/polys
+      - name: The states' outlines, once here (Geofabrik's, else the copy in tools/osm_ctx/polys)
         run: |
+          # six bands asking Geofabrik at once had one refused, and on 2026-11-14 it refused every connection for a while:
+          # a fresh outline when it answers, the kept one otherwise (state borders don't move)
           mkdir -p polys
-          for s in $STATES; do curl -fsSL --retry 6 --retry-delay 10 --retry-all-errors -o "polys/$s.poly" "https://download.geofabrik.de/north-america/us/$s.poly"; done
+          for s in $STATES; do
+            curl -fsSL --retry 3 --retry-delay 10 --retry-all-errors -o "polys/$s.poly" "https://download.geofabrik.de/north-america/us/$s.poly" \
+              || { echo "::warning::$s.poly from the repo copy"; cp "tools/osm_ctx/polys/$s.poly" "polys/$s.poly"; }
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: osm-polys
