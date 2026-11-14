@@ -7007,6 +7007,50 @@ flow('post media: a friend\'s photo shows on their post in the Feed, and Add a p
   check(order[0] === 'POST /api/posts application/json' && order[1] === 'PUT /api/posts/P2AAAAAAAAAAAAAA/media image/jpeg' && posts[1].n > 100, 'the post, then its photo as a JPEG: ' + JSON.stringify(order));
   check(/Posted to your friends\./.test(await page.textContent('#toast')), 'and it says where it went');
 });
+flow('the full Feed picks whose posts (All, Friends or one crew) and mutes a driver (Worker stubbed, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const asked = [];
+  const post = (n, crew) => ({ id: `P${n}AAAAAAAAAAAAAAA`.slice(0, 16), handle: 'bob', photo_id: null, mine: false, crew, title: `Drive ${n}`, caption: null, driven_on: '2026-11-12',
+    length_m: 12000, score: 700, roads: [], stages: [], line: null, created_at: `2026-11-1${n} 10:00:00`, kudos: 0, my_kudos: false, comments: 0 });
+  const rr = { id: 'k1', name: 'Ridge Runners' };
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/crews') return json([{ ...rr, role: 'member', visibility: 'private', members: 3 }]);
+    if (u.pathname === '/api/feed') {
+      asked.push(u.search);
+      const all = [post(5, rr), post(4, null), post(3, rr), post(2, null), post(1, null)];
+      return json(u.searchParams.get('friends') === '1' ? all.filter((p) => !p.crew) : u.searchParams.get('crew') === 'k1' ? all.filter((p) => p.crew) : all);
+    }
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card', { timeout: 15000 });
+  await page.click('#accountBody .feed-sec .cp-sec button:has-text("See all")');
+  await page.waitForSelector('.people-pop.open .feed-pick:not([hidden]) button');
+  const titles = () => page.$$eval('.people-pop.open .feed-card .feed-title', (l) => l.map((t) => t.textContent.trim()).join(','));
+  const pick = await page.$$eval('.people-pop.open .feed-pick button', (l) => l.map((b) => `${b.textContent}${b.getAttribute('aria-checked') === 'true' ? '*' : ''}`));
+  check(JSON.stringify(pick) === JSON.stringify(['All*', 'Friends', 'Ridge Runners']), 'the pick: All, Friends, each crew; All on: ' + JSON.stringify(pick));
+  check(/Drive 5.*Drive 1/.test(await titles()), 'All: every post: ' + await titles());
+  await page.click('.people-pop.open .feed-pick button:has-text("Friends")');
+  await page.waitForFunction(() => [...document.querySelectorAll('.people-pop.open .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 4,Drive 2,Drive 1');
+  await page.click('.people-pop.open .feed-pick button:has-text("Ridge Runners")');
+  await page.waitForFunction(() => [...document.querySelectorAll('.people-pop.open .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 5,Drive 3');
+  check(asked.includes('?friends=1') && asked.includes('?crew=k1'), 'each pick asks the Worker for its posts: ' + JSON.stringify(asked));
+  check(await page.getAttribute('.people-pop.open .feed-pick button:has-text("Ridge Runners")', 'aria-checked') === 'true', 'the crew is the one on');
+  // (2026-11-14) Mute: ··· on bob's post, Mute @bob; his drives leave the Feed, Muted lists him, Unmute brings them back
+  await page.click('.people-pop.open .feed-pick button:has-text("All")');
+  await page.waitForFunction(() => document.querySelectorAll('.people-pop.open .feed-card').length === 5);
+  await page.click('.people-pop.open .feed-card .feed-more');
+  await page.click('.feed-menu button:has-text("Mute @bob")');
+  await page.waitForFunction(() => !document.querySelector('.people-pop.open .feed-card') && !document.querySelector('#accountBody .feed-sec .feed-card'));
+  check(await page.textContent('.people-pop.open .feed-muted') === 'Muted@bobUnmute' && await page.evaluate(() => localStorage.getItem('apex.feedMuted')) === '["bob"]',
+    'muted, kept on the phone: ' + await page.textContent('.people-pop.open .feed-muted'));
+  await page.click('.people-pop.open .feed-muted button:has-text("Unmute")');
+  await page.waitForFunction(() => document.querySelectorAll('.people-pop.open .feed-card').length === 5 && document.querySelector('.people-pop.open .feed-muted').hidden);
+});
+
 flow('Garage → You shows your own drive posts, three and See all, with Delete on each (Worker stubbed, docs/SOCIAL.md 2.13)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const at = new Date(Date.now() - 3600e3).toISOString().slice(0, 19).replace('T', ' ');
@@ -7123,6 +7167,8 @@ flow('push notifications: Garage > Notifications asks iOS only at the switch, ha
   // a push's tap: kudos on your post opens that post with its comments
   await page.evaluate(() => window.apex.onNative({ type: 'link', params: { view: 'friends', post: 'P1AAAAAAAAAAAAAA' } }));
   await page.waitForSelector('.feed-sheet', { timeout: 8000 });
+  // the sheet opens at once with Loading…, then the post (on a loaded runner the read came before the post had arrived)
+  await page.waitForFunction(() => /That fog!/.test((document.querySelector('.feed-sheet') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
   const sheet = await page.textContent('.feed-sheet');
   check(/Cherohala Skyway/.test(sheet) && /That fog!/.test(sheet), 'the tap opens the post it is about: ' + sheet.slice(0, 160));
   await page.evaluate(() => document.querySelectorAll('.feed-sheet').forEach((n) => n.remove()));

@@ -152,8 +152,9 @@ export async function feed(env: Env, v: Viewer, url: URL) {
   const cut = before && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(before) ? before : "9999-12-31 23:59:59";
   if (author !== null && !/^[A-Za-z0-9_-]{1,64}$/.test(author)) throw new HttpError(400, "bad_author");
   if (crew !== null && !/^[A-Za-z0-9_-]{1,64}$/.test(crew)) throw new HttpError(400, "bad_crew");
-  // ?author= one driver's posts (their profile), ?crew= the posts to one crew (its page); either way only what you can see
-  const only = author ? " AND p.author = ?3" : crew ? " AND p.crew_id = ?3" : "";
+  // ?author= one driver's posts (their profile), ?crew= the posts to one crew (its page), ?friends=1 the posts to friends
+  // (the Feed's pick); either way only what you can see
+  const only = author ? " AND p.author = ?3" : crew ? " AND p.crew_id = ?3" : url.searchParams.get("friends") === "1" ? " AND p.crew_id IS NULL" : "";
   const rows = (await env.DB.prepare(`${SELECT} WHERE p.created_at < ?2 AND ${POST_SEEN("p")}${only} ORDER BY p.created_at DESC, p.rowid DESC LIMIT ${FEED_N}`)
     .bind(...(author || crew ? [v.id, cut, author || crew] : [v.id, cut])).all<Row>()).results;
   return rows.map((r) => shape(r, v.id));

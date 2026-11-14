@@ -32,6 +32,7 @@ console.log(JSON.stringify({
   sug: [D.suggest('c', ['cara', 'Cara', 'carl', 'me', 'cy', 'ce', 'cz'], 'me'), D.suggest('', ['bob', 'me', null], 'me')],
   wk: [D.weekLine({ drives: 2, length_m: 45000, best: 790 }, (m) => (m / 1000).toFixed(0) + ' km'), D.weekLine({ drives: 1, length_m: 0, best: null }, String),
     D.weekShown([{ you: true }]), D.weekShown([{ you: true }, { you: false }]), D.weekShown(null)],
+  um: [D.unmuted([{ handle: 'bob' }, { handle: 'cara' }, { handle: 'bob', mine: true }, { handle: 'bob', you: true }, null], new Set(['bob'])).length, D.unmuted(null, new Set())],
   kl: [D.kudosLine(['bob'], 1), D.kudosLine(['bob', 'cara'], 2), D.kudosLine(['bob', 'cara', 'dan'], 5), D.kudosLine(['bob', 'cara', 'dan'], 3), D.kudosLine([], 4)],
   rivals: (() => { const L = Array.from({ length: 100 }, (_, i) => [35 + i * 0.001, -84]), p = { line: D.encode(L), stages: [
       { name: 'A', score: 801, ends: [L[10][0], L[10][1], L[60][0], L[60][1]] }, { name: 'B', score: null, ends: [L[60][0], L[60][1], L[90][0], L[90][1]] },
@@ -109,3 +110,8 @@ def test_the_feed_keeps_friends_stages_for_the_end_card():
     # bob's stage, fresh from the Feed, replaces the older copy of it; your own post and one 22 days old are left out
     assert r["keep"]["keys"] == [["P1_0", "bob", 801]]
     assert r["keep"]["many"] == 40
+
+
+def test_unmuted():
+    """Mute keeps a driver's posts off your Feed; your own posts and your own week row always stay."""
+    assert run()["um"] == [3, None]

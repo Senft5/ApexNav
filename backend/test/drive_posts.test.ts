@@ -200,6 +200,16 @@ describe("a crew's posted drives", () => {
     expect(await json(api(c, "GET", `/api/feed?crew=${crew}`))).toEqual([]);      // not a member
     expect((await api(b, "GET", "/api/feed?crew=bad%20id")).status).toBe(400);
   });
+  it("?friends=1 (the Feed's pick) lists only the posts to friends, none to a crew", async () => {
+    const [a, b] = [await makeUser("alice"), await makeUser("bob")];
+    await befriend(a, b);
+    const crew = (await json(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).id;
+    await ok(api(b, "POST", "/api/crews/join", { token: (await json(api(a, "POST", `/api/crews/${crew}/invite`))).token }));
+    await post(a, { title: "To friends" });
+    await post(a, { title: "To the crew", crew_id: crew });
+    expect((await json(api(b, "GET", "/api/feed"))).map((p: any) => p.title)).toEqual(["To the crew", "To friends"]);
+    expect((await json(api(b, "GET", "/api/feed?friends=1"))).map((p: any) => p.title)).toEqual(["To friends"]);
+  });
 });
 
 describe("editing a post", () => {
