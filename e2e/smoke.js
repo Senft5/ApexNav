@@ -2750,7 +2750,9 @@ flow('Siri: "Drive somewhere with Vetta" plans to the place said, your own first
   });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function' && window.apexDebug);
-  await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }));
+  // the phone keeps sending fixes, as a phone does: with one fix only, a loaded CI runner lost GPS ("GPS lost. Back to the
+  // replay.") before the second ask, and its plan waited on a fix past the check's window (CI 2026-11-14)
+  await page.evaluate(() => { const fix = () => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }); fix(); window.__fixes = setInterval(fix, 500); });
   // the words come as base64url UTF-8 (ApexIntents.swift linkWords): "home" said to Siri is your pinned Home
   const b64 = (t) => Buffer.from(t, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   await page.evaluate((q) => window.apex.onNative({ type: 'link', params: { go: 'to', q } }), b64('home'));
