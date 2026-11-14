@@ -214,6 +214,8 @@
       const dLat = p.radiusKm / 110.54, dLon = p.radiusKm / (111.32 * Math.cos(lat * Math.PI / 180));
       graph = root.ApexGraphTiles.prefetchArea({ s: lat - dLat, w: lon - dLon, n: lat + dLat, e: lon + dLon }).catch(() => null);
     }
+    // a saved route: our network within 2 km of it, so a reroute with no signal on the way still has roads (IDEAS F-04)
+    if (root.ApexGraphTiles && root.ApexGraphTiles.prefetchAlong && along) graph = root.ApexGraphTiles.prefetchAlong(along.lat, along.lon).catch(() => null);
     let done = 0, bytes = 0, k = 0;
     await Promise.all(Array.from({ length: concurrency }, async () => {
       while (k < urls.length) {

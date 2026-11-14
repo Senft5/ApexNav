@@ -22,7 +22,8 @@ as rally pace notes, scores how cleanly you drove it, and keeps a shared road bo
    credit from 85 % of the corner's estimated grip limit, penalised past it), Smooth, Brakes and Rhythm
    (`core/drive_analysis.py`). It never uses absolute or top speed. Crew boards add up shared Scores; Stage times and gaps
    are shared only with the friends and crews you switch on (owner, 2026-11-10). Copy never claims "never how fast";
-   it says what the score rewards. No public speed or time leaderboards; lap times only on a mapped raceway.
+   it says what the score rewards. No public speed or time leaderboards; lap times only on a mapped raceway. On a road you have driven before, the live
+   coach may say the time gap to your own fastest pass and "brake later" (owner, 2026-11-14; web/pass_coach.js).
 2. **Unknown stays unknown.** A value that was not measured is `--` or `null`, never 0 and never a guess. A route from map
    shape alone says "From the map only". This rule covers our own certainty too: a measurement shown without saying how
    sure it is (banking from one phone, one pass) is a partial lie. See §4.

@@ -103,9 +103,10 @@ def test_wrong_way_or_another_road_says_nothing(out):
     assert out["elsewhere"]["corners"] == 0
 
 
-def test_never_time_or_speed(out):
-    words = " ".join(out["spoken"] + out["smoother"]["lines"] + out["rough"]["lines"]).lower()
-    assert not re.search(r"faster|speed|later|sooner|carry|push|second|mph|km", words), words
+def test_technique_lines_never_urge_speed(out):
+    """Where no clock is known the lines are technique: never "faster", never a grip-use push."""
+    words = " ".join(out["smoother"]["lines"] + out["rough"]["lines"]).lower()
+    assert not re.search(r"faster|speed|carry|push|mph|km", words), words
 
 
 def test_lines_and_labels(out):
@@ -122,3 +123,81 @@ def test_the_fixed_lines_are_in_the_voice_table():
     block = src[src.index("const SPOKEN"):src.index("};", src.index("const SPOKEN"))]
     for text in re.findall(r": '([^']+)'", block):
         assert text in lines, text
+
+
+TIMED = r"""
+const R = process.argv[1];
+const Core = require(R + '/web/apex_core.js'), Rec = require(R + '/web/recording.js'), P = require(R + '/web/pass_coach.js');
+const MPH = 2.2369362921, lat = [], lon = [];
+let la = 35.6, lo = -83.9, h = 0;
+for (let i = 0; i < 1000; i++) { if (i > 100 && i < 700) h += 0.05 * Math.sin((i - 100) / 25);
+  la += 5 * Math.cos(h) / 110540; lo += 5 * Math.sin(h) / (111320 * Math.cos(35.6 * Math.PI / 180)); lat.push(la); lon.push(lo); }
+const { kappa } = Core.computeCurvature(lat, lon);
+const base = kappa.map((k) => Math.max(9, 22 - 300 * Math.abs(k)));
+const prof0 = Core.profileRecording({ lat, lon, distance_m: lat.map((_, i) => i * 5), speed_mph: base.map((x) => x * MPH), lon_g: base.map(() => 0), lat_g: base.map((x, i) => x * x * kappa[i] / 9.80665) });
+const shape = Rec.cornersOf({ lat, lon, speed_mps: base, lon_g: base.map(() => 0), lat_g: base.map(() => 0), events: prof0.events, g_known: null });
+// a pass at k times the speed, braking `lead` samples before each corner's start (at -0.3 g) up to just before the apex
+function pass(k, lead) {
+  const v = base.map((x) => x * k), latG = v.map((x, i) => x * x * kappa[i] / 9.80665), lonG = v.map(() => 0);
+  for (const c of shape) for (let q = Math.max(0, c.start - lead); q < c.apex - 1; q++) lonG[q] = -0.3;
+  const t_s = [0]; for (let i = 1; i < v.length; i++) t_s.push(t_s[i - 1] + 5 / v[i]);
+  return { v, latG, lonG, t_s };
+}
+function drive(id, date, p) {
+  const prof = Core.profileRecording({ lat, lon, distance_m: lat.map((_, i) => i * 5), speed_mph: p.v.map((x) => x * MPH), lon_g: p.lonG, lat_g: p.latG });
+  return { id, date, lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: p.v, lon_g: p.lonG, lat_g: p.latG, t_s: p.t_s, events: prof.events, g_known: null };
+}
+const cornersOf = (d) => Rec.scorableCorners(d, Rec.cornersOf(d));
+const fast = drive('fast', '2026-11-01', pass(1, 3)), slow = drive('slow', '2026-11-05', pass(0.9, 10));
+const refs = P.build(Core, [slow, fast], cornersOf, { timesOf: (d) => d.t_s });
+const rowsOf = (p) => lat.map((_, i) => ({ lat: lat[i], lon: lon[i], speed_mps: p.v[i], lat_g: p.latG[i], lon_g: p.lonG[i], t_s: p.t_s[i] }));
+function live(p) {
+  const c = P.createCoach(Core, refs), evs = [], views = [];
+  for (let i = 0; i < 1000; i += 4) { const r = c.update(rowsOf(p).slice(0, i + 1)); evs.push(...r.events); if (r.view) views.push(r.view); }
+  return { lines: evs.map((e) => e.say).filter(Boolean), gaps: evs.filter((e) => e.kind === 'corner').map((e) => e.gap),
+           stretch: evs.filter((e) => e.kind === 'stretch').map((e) => e.gap), bar: views.length ? P.label(views[views.length - 1].delta, views[views.length - 1].gap) : null };
+}
+console.log(JSON.stringify({
+  refs: refs.length, fastIds: [...new Set(refs.map((r) => r.fastId))], timed: refs.filter((r) => r.tBest > 0).length,
+  notes: P.notes(refs).map((n) => n.text), noteN: P.notes(refs).length,
+  same: live(pass(1, 3)), slow: live(pass(0.9, 10)), quick: live(pass(1.06, 3)),
+  spoken: [P.spoken(0.3), P.spoken(-0.1), P.spoken(1.44), P.spoken(-0.86)],
+}));
+"""
+
+
+@pytest.fixture(scope="module")
+def timed():
+    return json.loads(subprocess.run([NODE, "-e", TIMED, ROOT], capture_output=True, text=True, check=True).stdout)
+
+
+def test_each_corner_keeps_its_fastest_pass(timed):
+    assert timed["refs"] >= 6 and timed["timed"] == timed["refs"]
+    assert timed["fastIds"] == ["fast"], "the quicker pass is the time to beat, though the slow one is newer"
+
+
+def test_brake_later_here_where_the_latest_pass_braked_early_and_lost_time(timed):
+    assert timed["noteN"] >= timed["refs"] // 2 and set(timed["notes"]) == {"Brake later here."}
+
+
+def test_the_same_pass_is_level(timed):
+    s = timed["same"]
+    assert all(abs(g) < 0.05 for g in s["gaps"]) and s["lines"] == ["Level with your best."]
+
+
+def test_slower_says_how_much_and_to_brake_later(timed):
+    s = timed["slow"]
+    assert s["stretch"][0] > 0.3 and s["lines"][-1].startswith("That stretch: ") and s["lines"][-1].endswith(" down on your best.")
+    assert any(l.endswith("down. Brake later.") for l in s["lines"]), s["lines"]
+    assert s["bar"].startswith("+") and s["bar"].endswith(" s vs best")
+
+
+def test_quicker_says_best_yet(timed):
+    q = timed["quick"]
+    assert q["stretch"][0] < 0 and q["lines"][-1].startswith("Best stretch yet. ") and q["lines"][-1].endswith(" up.")
+    assert any(l.startswith("Best yet. ") for l in q["lines"])
+    assert q["bar"].startswith("−")
+
+
+def test_gaps_are_said_in_tenths(timed):
+    assert timed["spoken"] == ["Three tenths", "One tenth", "1.4 seconds", "Nine tenths"]

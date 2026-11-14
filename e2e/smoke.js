@@ -3782,6 +3782,43 @@ flow('first run and the end card: the welcome draws its road with the keys live 
   check(!none.counted && /^No corners to score$/.test(none.text) && /Barlow/.test(none.font), 'no score: words set as a title, nothing counted: ' + JSON.stringify(none));
 });
 
+flow('end card best corner: a filmed drive loops its best corner over the keys and one tap makes the clip to share; no film, no tile (big bet 5, best_clip.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.route('**/__film.webm', (route) => route.fulfill({ status: 200, contentType: 'video/webm', body: '' }));   // the film itself is best_clip's flow's
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexCore && window.ApexDriveCard);
+  const show = (id, film) => page.evaluate(async ([id, film]) => {
+    document.getElementById('endDone').click();
+    ApexCore.driverScore = () => ({ score: 700, components: {} });
+    window.__made = 0; window.__shared = null;
+    window.ApexBestClip = { find: async (x) => (film && x === id ? { driveId: id, url: '/__film.webm', name: 'a.mov', start: 2, end: 9, k: 2, label: 'Corner 3 · Left 4', call: 'Left 4', score: 91 } : null),
+      make: async () => { window.__made++; await new Promise((r) => setTimeout(r, 200)); return { blob: new Blob(['clip'], { type: 'video/mp4' }), mime: 'video/mp4' }; } };
+    ApexDriveCard.shareFile = async (blob, name, mime) => { window.__shared = { name, mime, size: blob.size }; return 'saved'; };
+    const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + Math.sin(i / 40) * 0.0015); }
+    apexDebug.showEndCard({ id, name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15), lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }, Date.now() - 600e3, { quiet: true });
+    const s = document.getElementById('endScore');
+    for (let i = 0; i < 100 && s.hasAttribute('aria-busy'); i++) await new Promise((r) => setTimeout(r, 30));
+    await new Promise((r) => setTimeout(r, 300));
+    const k = document.getElementById('endClip'), v = document.getElementById('endClipVideo'), r = k.getBoundingClientRect(), acts = document.querySelector('.end-acts').getBoundingClientRect();
+    return { shown: !k.hidden && r.height > 0, label: document.getElementById('endClipLabel').textContent, src: v.getAttribute('src'), first: Math.abs(r.top - acts.top) < 1, wide: Math.round(r.width - acts.width) };
+  }, [id, film]);
+  const none = await show('nf1', false);
+  check(!none.shown, 'a drive with no film has no clip tile: ' + JSON.stringify(none));
+  const got = await show('bc1', true);
+  check(got.shown && got.label === 'Corner 3 · Left 4' && got.src === '/__film.webm#t=2,9' && got.first && got.wide === 0, 'a filmed drive: its best corner, the stretch of the film, first over the keys, full width: ' + JSON.stringify(got));
+  await page.click('#endClip');
+  const busy = await page.evaluate(() => [document.getElementById('endClip').getAttribute('aria-busy'), document.getElementById('endClipAct').textContent]);
+  await page.waitForFunction(() => window.__shared);
+  await page.click('#endClip');                                     // done: a second tap makes it again
+  const after = await page.evaluate(async () => { await new Promise((r) => setTimeout(r, 400)); return { made: window.__made, shared: window.__shared, act: document.getElementById('endClipAct').textContent, busy: document.getElementById('endClip').hasAttribute('aria-busy'),
+    toast: [...document.querySelectorAll('.toast')].map((t) => t.textContent).join(' | ') }; });
+  check(busy[0] === 'true' && /^Making the clip/.test(busy[1]) && after.shared.name === 'Cherohala Skyway best corner.mp4' && after.shared.mime === 'video/mp4' && after.made === 2 && after.act === 'Share clip' && !after.busy && /Clip saved/.test(after.toast),
+    'one tap makes the clip and shares it, named for the road: ' + JSON.stringify({ busy, after }));
+  const gone = await show('nf2', false);
+  check(!gone.shown && !gone.src, 'the next drive, unfilmed, shows no clip and plays nothing: ' + JSON.stringify(gone));
+});
+
 flow('drive ended: Open in the Log is the solid key with no score, Share card with one, fixed from the first frame; a drive on a route keeps its name (REVIEW4 U-75, REVIEW5 U-118)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
@@ -5183,7 +5220,7 @@ flow('a saved stage: the live delta shows while you drive it and the result at t
   check(said.length === 1, `the result is said once (${JSON.stringify(said)})`);
 });
 
-flow('your best pass: on a road driven before (no stage saved) the bar shows the delta and the co-driver sums the stretch up (pass_coach.js)', async (page, base) => {
+flow('your best pass: on a road driven before (no stage saved) the bar shows the time gap and the co-driver sums the stretch up (pass_coach.js, owner 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
     window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
@@ -5204,41 +5241,42 @@ flow('your best pass: on a road driven before (no stage saved) the bar shows the
     const prof = Core.profileRecording({ lat, lon, distance_m: lat.map((_, i) => i * 5), speed_mph: v.map((x) => x * MPH), lon_g: lonG, lat_g: roughG });
     await ApexRecording.store({ id: 'e2e_before', name: 'Esses run', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: v, lon_g: lonG, lat_g: roughG,
       g_known: null, events: prof.events, elev: null, hz: 1 });
-    window.__road = { lat, lon, v, latG, lonG };
+    window.__road = { lat, lon, v, latG, lonG }; window.__clock = Date.now();
     await window.apexDebug.refreshSavedDrives();
   });
   check(await page.evaluate(() => window.apexDebug.passRefs) >= 6, 'the earlier drive\'s corners are remembered');
   await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
   await page.waitForTimeout(300);
   if (await page.isVisible('#permSheet.show')) await page.click('#permGo');
-  // drive it again, smoother, as the app's frames (half a bin apart), in bursts a second apart
+  // drive it again, smoother and 5 % quicker, as the app's frames (half a bin apart, each with its own clock), in bursts a second apart
   let barText = '';
   for (let burst = 0; burst < 10; burst++) {
     await page.evaluate((burst) => {
       const r = window.__road;
       for (let j = burst * 160; j < Math.min(1600, (burst + 1) * 160); j++) {
         const i = Math.min(799, Math.floor(j / 2)), f = (j % 2) / 2, k = Math.min(799, i + 1);
-        window.apex.live({ lat: r.lat[i] + (r.lat[k] - r.lat[i]) * f, lon: r.lon[i] + (r.lon[k] - r.lon[i]) * f, accuracy_m: 4, speed_mps: r.v[i], course_deg: 0,
-          lat_g: r.latG[i], lon_g: r.lonG[i], has_fix: true, calibration: 'locked' });
+        window.__clock += 2500 / (r.v[i] * 1.05);
+        window.apex.live({ lat: r.lat[i] + (r.lat[k] - r.lat[i]) * f, lon: r.lon[i] + (r.lon[k] - r.lon[i]) * f, accuracy_m: 4, speed_mps: r.v[i] * 1.05, course_deg: 0,
+          lat_g: r.latG[i] * 1.1025, lon_g: r.lonG[i], has_fix: true, calibration: 'locked', at: window.__clock });
       }
     }, burst);
     await page.waitForTimeout(1050);
     if (!barText && await page.isVisible('#coachBar')) barText = await page.textContent('#coachBar');
   }
-  check(/This stretch\s*\+\d+ vs best/.test(barText), `the bar showed the stretch ahead of your best (${JSON.stringify(barText)})`);
+  check(/This stretch\s*−\d+\.\d s vs best/.test(barText), `the bar showed the time gap, ahead of your best (${JSON.stringify(barText)})`);
   // then a straight: 600 m on with no remembered corner ends the stretch, and the co-driver says how it went, once
   for (let burst = 0; burst < 10 && !(await page.evaluate(() => window.__said.some((t) => /^Best stretch yet/.test(t)))); burst++) {
     await page.evaluate((burst) => {
       const r = window.__road, n = r.lat.length, dLa = r.lat[n - 1] - r.lat[n - 2], dLo = r.lon[n - 1] - r.lon[n - 2];
       for (let j = 1; j <= 80; j++) { const k = burst * 80 + j;
+        window.__clock += 125;
         window.apex.live({ lat: r.lat[n - 1] + dLa * k / 2, lon: r.lon[n - 1] + dLo * k / 2, accuracy_m: 4, speed_mps: 20, course_deg: 0,
-          lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); }
+          lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked', at: window.__clock }); }
     }, burst);
     await page.waitForTimeout(1000);
   }
   const said = await page.evaluate(() => window.__said.filter((t) => /stretch|your best|through there/i.test(t)));
-  check(said.filter((t) => /^Best stretch yet\. \d+ up\.$/.test(t)).length === 1, `the stretch is summed up once (${JSON.stringify(said)})`);
-  check(!said.some((t) => /faster|speed|later|sooner|second/i.test(t)), 'never time or speed');
+  check(said.filter((t) => /^Best stretch yet\. (\w+ tenths?|\d+\.\d seconds) up\.$/.test(t)).length === 1, `the stretch is summed up once, in time (${JSON.stringify(said)})`);
   check(!(await page.isVisible('#coachBar')), 'the bar goes when the stretch ends');
 });
 
@@ -6514,6 +6552,10 @@ flow('For you: the People badge counts what is new and what waits; People lists 
   check(rows.length === 3, 'the request is a card above, not a row: ' + JSON.stringify(rows));
   check(rows[0][0] && rows[0][1] === 'Topped · 20 min ago' && rows[0][2] === '@bob scored 850 on Dry Ridge climb, over your best of 800.', 'topped, new, in a sentence: ' + JSON.stringify(rows[0]));
   check(/^Kudos · 2 h ago$/.test(rows[1][1]) && /^Ridge Runners: Cherohala Saturday, .+\. Are you going\?$/.test(rows[2][2]), 'kudos and the crew drive: ' + JSON.stringify(rows));
+  // (free roamer B, 2026-11-14) a rule closes For you before your friends, so they don't read as its fourth and fifth rows
+  const closed = await page.evaluate(() => { const y = document.querySelector('#accountBody > .you-row'), last = [...document.querySelectorAll('#accountBody .inbox-row')].pop();
+    return { rule: parseFloat(getComputedStyle(y).borderTopWidth), below: y.getBoundingClientRect().top >= last.getBoundingClientRect().bottom - 1 }; });
+  check(closed.rule === 1 && closed.below, 'one rule between For you and your friends: ' + JSON.stringify(closed));
   check(await page.isVisible('#accountBody .request-card:has-text("@dan")'), 'the request stays a card with its keys');
   // a row with no key (kudos): its sentence sits under the kicker, the full width, not squeezed beside it
   const kudos = await page.$eval('#accountBody .inbox-row:has-text("Kudos")', (r) => { const k = r.querySelector('.inbox-kick').getBoundingClientRect(), t = r.querySelector('.inbox-text').getBoundingClientRect();
@@ -8551,7 +8593,7 @@ flow('best corner clip off the Log: on the map page a filmed drive gives its bes
   const found = await page.evaluate(() => ApexBestClip.find('bc1'));
   check(!before && found && found.url === `/__drivecam/${encodeURIComponent(found.name)}` && found.name.endsWith('.mov'), 'found, its helpers loaded only when asked: ' + JSON.stringify(found));
   check(/^Corner [12] · (Left 4|Right 3)$/.test(found.label) && found.end > found.start && found.start >= 0 && found.end <= 7.2, 'a corner the video holds, as seconds in it');
-  const made = await page.evaluate(async () => { const f = await ApexBestClip.find('bc1'), r = await ApexBestClip.make(f); return { size: r.blob.size, mime: r.mime, left: document.querySelectorAll('video').length }; });
+  const made = await page.evaluate(async () => { const f = await ApexBestClip.find('bc1'), r = await ApexBestClip.make(f); return { size: r.blob.size, mime: r.mime, left: document.querySelectorAll('video:not(#endClipVideo)').length }; });
   check(made.size > 500 && /^video\//.test(made.mime), 'the clip is made on the page: ' + JSON.stringify(made));
   check(made.left === 0, 'nothing left behind on the page');
   const none = await page.evaluate(async () => { await ApexRecording.store({ id: 'bc2', name: 'Not filmed', date: '2026-11-13T15:00:00Z', t0: 1700000000000, lat: [35.6, 35.61], lon: [-83.9, -83.9], dist: [0, 5], speed_mps: [15, 15], lon_g: [0, 0], lat_g: [0, 0], events: [] });
@@ -9754,11 +9796,14 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
     if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(style) });
     if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
     return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) }); });
-  // off until the owner says yes (his decision card of 2026-11-13): the flag apex.mapPlaces switches it on
+  // on by default since the owner said yes (2026-11-14); apex.mapPlaces = '0' turns it off
   await planPage(page, base);
   await page.waitForFunction(() => apexDebug.map.getLayer('apex-places'), null, { timeout: 10000 });
-  check(await page.evaluate(() => apexDebug.map.getLayoutProperty('apex-places', 'visibility')) === 'none', 'places are off by default, until the owner says yes');
-  await page.evaluate(() => localStorage.setItem('apex.mapPlaces', '1'));
+  await page.evaluate(() => localStorage.setItem('apex.mapPlaces', '0'));
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && apexDebug.map && apexDebug.map.getLayer('apex-places'), null, { timeout: 20000 });
+  check(await page.evaluate(() => apexDebug.map.getLayoutProperty('apex-places', 'visibility')) === 'none', 'the flag set to 0 still turns places off');
+  await page.evaluate(() => localStorage.removeItem('apex.mapPlaces'));
   await page.reload();
   await page.waitForFunction(() => window.apexDebug && apexDebug.map && apexDebug.map.getLayer('apex-places') && apexDebug.state.lastPosition, null, { timeout: 20000 });
   await page.evaluate(() => apexDebug.map.jumpTo({ center: [-84.615, 39.155] }));   // the map opens on what it last showed: back over you
@@ -10184,6 +10229,33 @@ flow('the stage briefing: a drive on a planned route starts with how far, how ma
   for (let k = 0; k < 8; k++) { await page.evaluate(() => { const t = apexDebug.track;
     window.apex.live({ lat: t.lat[2], lon: t.lon[2], accuracy_m: 5, speed_mps: 3, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }); await page.waitForTimeout(100); }
   check((await brief()).length === 1, 'once: ' + JSON.stringify(await brief()));
+});
+
+flow('corners ahead: after a long straight on the planned route, the co-driver says when the twisty section starts, once (corners_ahead.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexCornersAhead);
+  // 4 km straight north, then 4 km winding: a bend every 200 m either way
+  const KY = 110540, kx = 111320 * Math.cos(35.5 * Math.PI / 180), gpx = [];
+  for (let m = 0; m <= 8000; m += 5) gpx.push(`<trkpt lat="${(35.5 + m / KY).toFixed(7)}" lon="${(-83.9 + (m < 4000 ? 0 : 60 * Math.sin((m - 4000) * Math.PI / 200)) / kx).toFixed(7)}"/>`);
+  await page.setInputFiles('#gpxFile', { name: 'straight.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Straight Then Winding</name><trkseg>${gpx.join('')}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Straight Then Winding', null, { timeout: 10000 });
+  const sec = await page.evaluate(() => ApexCornersAhead.sections(apexDebug.track.events));
+  check(sec.length === 1 && sec[0].startM > 3800 && sec[0].startM < 4300, 'one section after the straight: ' + JSON.stringify(sec));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const twisty = () => page.evaluate(() => window.__said.filter((s) => /^Twisty section/.test(s)));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 25, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  for (let i = 400; i <= 640; i += 5) { await at(i); await page.waitForTimeout(60); }      // 2 to 3.2 km: too far yet
+  check((await twisty()).length === 0, 'not yet: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  for (let i = 640; i <= 760 && !(await twisty()).length; i += 2) { await at(i); await page.waitForTimeout(80); }
+  const said = await twisty();
+  check(said.length === 1 && /^Twisty section in (half a mile|three quarters of a mile|\d+ feet)\. 2\.\d miles, \d+ corners\.$/.test(said[0]), 'the call: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  for (let i = 760; i <= 800; i += 2) { await at(i); await page.waitForTimeout(40); }
+  check((await twisty()).length === 1, 'once: ' + JSON.stringify(await twisty()));
 });
 
 for (const [when, iso, expect] of [['at dusk', '2026-06-21T00:30:00Z', 1], ['at noon', '2026-06-21T17:00:00Z', 0]]) {

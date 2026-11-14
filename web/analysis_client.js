@@ -455,7 +455,9 @@
       const out = { ids: sums.map((s) => s.id), hazards: root.ApexRoadMemory ? root.ApexRoadMemory.hazards(mine) : [], roadMemory: [], passRefs: [] };
       try { out.roadMemory = root.ApexRoadMemory ? root.ApexRoadMemory.build(Core, mine, Rec().cornersOf) : []; } catch (_) { out.roadMemory = []; }
       // each corner's best pass, for live coaching on any road driven before (ApexPassCoach)
-      try { out.passRefs = root.ApexPassCoach ? root.ApexPassCoach.build(Core, mine, (d) => Rec().scorableCorners(d, Rec().cornersOf(d))) : []; } catch (_) { out.passRefs = []; }
+      try { out.passRefs = root.ApexPassCoach ? root.ApexPassCoach.build(Core, mine, (d) => Rec().scorableCorners(d, Rec().cornersOf(d)), { timesOf: (d) => Rec().timesOf(Core, d) }) : []; } catch (_) { out.passRefs = []; }
+      // "Brake later here." ahead of the corners your latest pass braked early into and lost time (spoken as the coach's notes)
+      try { out.roadMemory = out.roadMemory.concat(root.ApexPassCoach ? root.ApexPassCoach.notes(out.passRefs) : []); } catch (_) {}
       memo.key = key; memo.out = out;
       const t = want ? mine.find((d) => d.id === want) : null;
       // its Vetta Score as the Log has it (the summary's), for the finished replay's plate (U-110); null when unscored

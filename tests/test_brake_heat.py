@@ -342,5 +342,5 @@ def test_the_cockpit_says_the_descent_through_the_quiet_slot_on_the_planned_rout
     src = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
     assert "if (live && !offRoute && !brakeSay && track === plannedRoute && Array.isArray(track.descents)" in src
     assert "ApexBrakeHeat.descentCall(d, ApexUnits.spokenShort)" in src
-    i = src.index("ApexBrakeHeat.descentAhead(track.descents"); j = src.index("const quiet = limitSay || briefSay || brakeSay || sunSay || breakSay || flowSay;")
+    i = src.index("ApexBrakeHeat.descentAhead(track.descents"); j = src.index("const quiet = limitSay || briefSay || cornersSay || brakeSay || sunSay || breakSay || flowSay;")
     assert i < j                                                               # queued before the gate reads the slot
