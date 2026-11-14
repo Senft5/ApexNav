@@ -50,5 +50,9 @@ describe("route feeds relay (/api/ctx/workzones)", () => {
     expect(await (await api(null, "GET", "/api/ctx/keys")).json()).toEqual({ keys: { seatgeekClientId: "abc" } });
     (env as { CTX_KEYS?: string }).CTX_KEYS = "{ broken";
     expect(await (await api(null, "GET", "/api/ctx/keys")).json()).toEqual({ keys: {} });
+    // Ohio's key as a secret of its own (OHGO_API_KEY, shared with the traffic feed) when CTX_KEYS has none
+    (env as { OHGO_API_KEY?: string }).OHGO_API_KEY = "oh1";
+    expect(await (await api(null, "GET", "/api/ctx/keys")).json()).toEqual({ keys: { ohgoApiKey: "oh1" } });
+    delete (env as { OHGO_API_KEY?: string }).OHGO_API_KEY;
   });
 });

@@ -2,8 +2,8 @@
 // public feeds, for the phone's and the car's maps and for routing round full closures (web/road_events.js; cockpit.js):
 //   Indiana: INDOT's CARS events API (in.carsprogram.org, PUBLIC_DOMAIN), about 14 MB of JSON statewide.
 //   Kentucky: KYTC's WZDx 4.1 work zones (a public Google Cloud Storage file, no CORS, so relayed here).
-//   Ohio: ODOT's OHGO public API needs a free key the owner registers (docs/OWNER_TODO.md, the `ohgoApiKey` the route
-//   context already uses, in the CTX_KEYS secret); with it, its incidents and construction are added; without it Ohio is
+//   Ohio: ODOT's OHGO public API needs a free key the owner registers (docs/OWNER_TODO.md): `ohgoApiKey` in the CTX_KEYS
+//   secret the route context reads, or the secret OHGO_API_KEY; with it, its incidents, construction, travel delays and sudden slowdowns are added; without it Ohio is
 //   simply not in the list.
 // Each feed is compacted to a short row per event, the truck-only restrictions (width, weight, height, oversize) and the
 // shoulder and rest-area closures left out. The phone asks for the whole region, never sending where it is; the answer
@@ -25,6 +25,7 @@ const SEC = { "x-content-type-options": "nosniff", "content-security-policy": "d
 export interface TrafficEvent { id: string; kind: string; label: string; lat: number; lon: number; road: string | null; until: number | null; src: string; heading?: number }
 // one way only ("I-65 southbound"): the way it applies as a compass heading, so the phone never calls the far side's
 const HEADING: Record<string, number> = { northbound: 0, eastbound: 90, southbound: 180, westbound: 270 };
+const OH_DIR: Record<string, string> = { n: "northbound", s: "southbound", e: "eastbound", w: "westbound" };
 
 const r5 = (v: number) => Math.round(v * 1e5) / 1e5;
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -107,21 +108,54 @@ export function parseOhgo(json: unknown, kind: "incident" | "construction", nowM
   for (const r of rows as Record<string, any>[]) {
     try {
       if (!r || !finite(r.latitude) || !finite(r.longitude) || !inRange(r.latitude, r.longitude)) continue;
-      const cat = String(r.category ?? r.type ?? "").toLowerCase(), roadStatus = String(r.roadStatus ?? r.status ?? "").toLowerCase();
+      // checked against OHGO's live answer 2026-11-14: roadStatus (incidents) or status (construction) is Open, Restricted or
+      // Closed; direction is "N" / "S" / "E" / "W" (incidents) or "westbound" / "both directions" (construction)
+      const cat = String(r.category ?? "").toLowerCase(), st = String(r.roadStatus ?? r.status ?? "").toLowerCase();
       const end = Date.parse(r.endDate ?? "");
       if (Number.isFinite(end) && end <= nowMs) continue;
       const start = Date.parse(r.startDate ?? "");
       if (Number.isFinite(start) && start > nowMs) continue;
-      const dir = dirOf(String(r.direction ?? "") + "bound") ?? dirOf(String(r.description ?? ""));
+      const rawDir = String(r.direction ?? "").trim().toLowerCase(), both = /both/.test(rawDir);
+      const dir = both ? null : (OH_DIR[rawDir] ?? dirOf(rawDir) ?? dirOf(String(r.description ?? "")));
+      const ramp = /\bramp\b/i.test(`${r.routeName ?? ""} ${r.location ?? ""}`);
       let k: string, label: string;
-      if (/closed/.test(roadStatus) && !/lane|ramp|shoulder/.test(roadStatus)) { if (/both/i.test(String(r.direction ?? "")) || !dir) { k = "closure"; label = "Road closed"; } else { k = "closed_way"; label = `Closed ${dir}`; } }
-      else if (/ramp/.test(roadStatus)) { k = "lane"; label = "Ramp closed"; }
-      else if (/lane/.test(roadStatus)) { k = "lane"; label = "Lane closed"; }
-      else if (kind === "construction") { k = "roadwork"; label = "Roadwork"; }
-      else if (/crash|accident|collision/.test(cat)) { k = "crash"; label = "Crash"; }
+      if (/crash|accident|collision/.test(cat)) { k = "crash"; label = "Crash"; }
+      else if (st === "closed" && ramp) { k = "lane"; label = "Ramp closed"; }
+      else if (st === "closed") { if (both || !dir) { k = "closure"; label = "Road closed"; } else { k = "closed_way"; label = `Closed ${dir}`; } }
+      else if (st === "restricted") { k = "lane"; label = "Lane closed"; }
+      else if (kind === "construction" || /repair|maint|road ?work/.test(cat)) { k = "roadwork"; label = "Roadwork"; }
       else { k = "traffic"; label = "Traffic alert"; }
       out.push({ id: `dot:OH:${String(r.id ?? "").slice(0, 40)}`, kind: k, label, lat: r5(r.latitude), lon: r5(r.longitude),
-        road: cut(r.routeName ?? r.location, 40), until: Number.isFinite(end) ? end : null, src: "ODOT", ...(dir && !/both/i.test(String(r.direction ?? "")) ? { heading: HEADING[dir] } : {}) });
+        road: cut(r.routeName ?? r.location, 40), until: Number.isFinite(end) ? end : null, src: "ODOT", ...(dir ? { heading: HEADING[dir] } : {}) });
+    } catch { /* as above */ }
+  }
+  return out;
+}
+
+/**
+ * OHGO's slowdowns (its docs, 2026-11-14; both lists were empty at night when checked): travel-delays (a stretch's
+ * currentAvgSpeed against normalAvgSpeed, mph, and delayTime, minutes) and dangerous-slowdowns (currentMPH against normalMPH
+ * where traffic drops suddenly, as at the back of a queue). A delay under 2 minutes with speed above 60 % of normal is left
+ * out; anything under 15 mph is "Traffic stopped".
+ */
+export function parseOhgoSlow(json: unknown, kind: "delay" | "slowdown"): TrafficEvent[] {
+  const rows = (json as { results?: unknown })?.results;
+  if (!Array.isArray(rows)) return [];
+  const out: TrafficEvent[] = [];
+  const num = (r: Record<string, any>, ...k: string[]) => { for (const x of k) if (finite(r[x])) return r[x] as number; return NaN; };
+  for (const r of rows as Record<string, any>[]) {
+    try {
+      const lat = num(r, "latitude", "Latitude"), lon = num(r, "longitude", "Longitude");
+      if (!inRange(lat, lon)) continue;
+      const now = kind === "delay" ? num(r, "currentAvgSpeed", "CurrentAvgSpeed") : num(r, "currentMPH", "CurrentMPH");
+      const normal = kind === "delay" ? num(r, "normalAvgSpeed", "NormalAvgSpeed") : num(r, "normalMPH", "NormalMPH");
+      const delay = num(r, "delayTime", "DelayTime");
+      if (kind === "delay" && !(delay >= 2 || (now > 0 && normal > 0 && now < 0.6 * normal))) continue;
+      const rawDir = String(r.direction ?? r.Direction ?? "").trim().toLowerCase();
+      const dir = /both/.test(rawDir) ? null : (OH_DIR[rawDir] ?? dirOf(rawDir) ?? dirOf(String(r.description ?? r.Description ?? "")));
+      const label = finite(now) && now < 15 ? "Traffic stopped" : kind === "slowdown" ? "Sudden slowdown" : "Slow traffic";
+      out.push({ id: `dot:OH:${kind}:${String(r.id ?? r.Id ?? "").slice(0, 40)}`, kind: "slow", label, lat: r5(lat), lon: r5(lon),
+        road: cut(r.routeName ?? r.RouteName ?? r.location ?? r.Location, 40), until: null, src: "ODOT", ...(dir ? { heading: HEADING[dir] } : {}) });
     } catch { /* as above */ }
   }
   return out;
@@ -141,10 +175,12 @@ export async function trafficEvents(env: Env, fetcher: typeof fetch = fetch, now
   ];
   let key: unknown = null;
   try { key = env.CTX_KEYS ? (JSON.parse(env.CTX_KEYS) as Record<string, unknown>).ohgoApiKey : null; } catch { key = null; }
+  if (!(typeof key === "string" && key)) key = env.OHGO_API_KEY ?? null;   // or a secret of its own (one paste for the owner)
   if (typeof key === "string" && key) jobs.push(["ODOT", async () => {
     const q = `?api-key=${encodeURIComponent(key as string)}`;
-    const [inc, con] = await Promise.all([get(fetcher, `${OHGO}/incidents${q}`), get(fetcher, `${OHGO}/construction${q}`)]);
-    return [...parseOhgo(inc, "incident", nowMs), ...parseOhgo(con, "construction", nowMs)];
+    const [inc, con, delays, slow] = await Promise.all([get(fetcher, `${OHGO}/incidents${q}`), get(fetcher, `${OHGO}/construction${q}`),
+      get(fetcher, `${OHGO}/travel-delays${q}`).catch(() => null), get(fetcher, `${OHGO}/dangerous-slowdowns${q}`).catch(() => null)]);   // (slowdowns: a bonus, never the reason Ohio is missing)
+    return [...parseOhgo(inc, "incident", nowMs), ...parseOhgo(con, "construction", nowMs), ...parseOhgoSlow(delays, "delay"), ...parseOhgoSlow(slow, "slowdown")];
   }]);
   const ok: string[] = [], failed: string[] = [], events: TrafficEvent[] = [];
   await Promise.all(jobs.map(async ([name, run]) => { try { events.push(...(await run())); ok.push(name); } catch { failed.push(name); } }));

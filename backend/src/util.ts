@@ -23,6 +23,7 @@ export interface Env {
   APNS_KEY_P8?: string;      // used, which works when the owner ticks APNs on that same key
   NREL_API_KEY?: string;    // secret: NLR (ex-NREL) Alternative Fuel Stations key (src/chargers.ts); none = 503 no_key
   CTX_KEYS?: string;        // secret: free client keys for the route-context sources, JSON (src/route_feeds.ts)
+  OHGO_API_KEY?: string;    // secret: ODOT OHGO public API key (src/traffic.ts, and ohgoApiKey in /api/ctx/keys when CTX_KEYS has none)
   OSM?: KVNamespace;        // optional: the OSM relay's tiles (src/osm_relay.ts), a week each; the Cache API does without it
   CTX?: KVNamespace;        // context-grid bundles, key v1/... (src/context_grid.ts); bound once the owner creates it
   FLAGS?: string;           // feature flags JSON (src/flags.ts), set in the dashboard to change a rollout without a release
