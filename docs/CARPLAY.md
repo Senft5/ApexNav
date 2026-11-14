@@ -89,6 +89,9 @@ yellow tags we do).
   at launch (`cmd: "offlinePacks"`, offline_tiles.js `packOf` / `tellShell`); packs are added, resumed when unfinished,
   replaced when an area is updated and removed when it is deleted. Only on a phone that has been connected to a car (the
   tiles are fetched a second time); the first connection catches up every area saved before.
+  The list also holds the last planned route driven (offline_tiles.js `setCarAhead`, from the drive's start, when the route
+  wasn't saved): its corridor 0.3 km either side, as z13 squares, kept until the next drive's replaces it, so a dead zone
+  on an unsaved route still has the car's map (2026-11-14).
 - **Our map in the base view (native since 2026-10-30, REVIEW_FEEL.md F-07):** MapLibre Native for iOS (Metal, its own render
   thread; the Swift package `MapLibre`, project.yml) in `CarPlay/ApexCarMap.swift`, one map engine in the app's process for the
   main screen, the Dashboard and the cluster, sharing one tile cache on disk, instead of a WKWebView (a WebContent process
