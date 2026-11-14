@@ -7,17 +7,12 @@ name: OSM route context (OH+KY+IN, R2)
 # /api/ctx/osm (backend/src/osm_relay.ts) answers a built tile before it asks Overpass. Only tiles wholly inside the three
 # states' .poly are built; the border's go to Overpass as before.
 #
-# Triggers: weekly (Wednesday, after the graph build's extracts are cached), a manual run, or a push to this branch that
-# changes tools/osm_ctx/ (a dry run: the Cincinnati block only, the bundles as an artifact, nothing uploaded).
+# Triggers: weekly (Wednesday, after the graph build's extracts are cached) or a manual run. A run off main is a dry run
+# (the Cincinnati block only, the bundles as an artifact, nothing uploaded).
 on:
   workflow_dispatch:
   schedule:
     - cron: "41 6 * * 3"
-  push:
-    branches: [claude/roam-c-osm-ctx]
-    paths:
-      - "tools/osm_ctx/**"
-      - ".github/workflows/osm-ctx.yml"
 
 permissions:
   contents: read
@@ -80,7 +75,7 @@ jobs:
         band: ["36.5", "37.5", "38.5", "39.5", "40.5", "41.5"]
     env:
       WORK: /home/runner/osm_work
-      DRY: ${{ github.event_name == 'push' && '1' || '' }}
+      DRY: ${{ github.ref != 'refs/heads/main' && '1' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
