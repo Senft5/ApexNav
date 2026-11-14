@@ -833,7 +833,7 @@ flow('a deliberate detour: one quiet "Rerouting", the new route goes the way the
   });
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); if (m && m.cmd === 'car') window.__car.push(m); } } } }; });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex && window.apex.live, null, { timeout: 20000 });
   await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.96, lon: -83.92 }, { lat: 36.06, lon: -83.92 }], 'route_dest', 'To the ridge', null,
@@ -903,6 +903,11 @@ flow('a deliberate detour: one quiet "Rerouting", the new route goes the way the
   check(!strips.some((s) => /Checking route|Off route|Wrong way/.test(s)), 'no flip-flop words: ' + [...new Set(strips)].join(' | '));
   const runs = strips.map((s) => /Rerouting/.test(s)).reduce((n, on, q, a) => n + (on && !a[q - 1] ? 1 : 0), 0);
   check(runs === 1, `"Rerouting…" on the status line once, in one run (${runs}): ` + [...new Set(strips)].join(' | '));
+  // the car: its card says "Rerouting…" once (CarPlay's paused trip) in place of the old turn frozen, then guides the new route
+  const carSeq = await page.evaluate(() => window.__car.filter((m) => m.kind === 'paused' || m.kind === 'guide').map((m) => m.kind === 'paused' ? `paused:${m.reason}:${m.text}` : 'guide'));
+  const pauses = carSeq.filter((k) => k.startsWith('paused'));
+  check(pauses.length === 1 && pauses[0] === 'paused:rerouting:Rerouting…' && carSeq.lastIndexOf('guide') > carSeq.indexOf(pauses[0]),
+    'the car: Rerouting once, then guidance again: ' + JSON.stringify([...new Set(carSeq)]));
   // the map: the old line until the new one, swapped in one redraw, never cleared; no camera fit while driving, no jump
   const during = out.lines.slice(linesBefore);
   check(during.length === 1 && during[0] > 0 && !out.lines.includes(0), 'the route line replaced once, never cleared: ' + JSON.stringify(out.lines));
@@ -2631,6 +2636,16 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.id === 'saved_e2e', null, { timeout: 10000 })
     .catch(async () => { throw new Error('the saved route from the car never opened: ' + JSON.stringify(await page.evaluate(() => window.apexDebug.track && window.apexDebug.track.id))); });
   await page.evaluate(() => { ApexSavedRoutes.remove(localStorage, 'saved_e2e'); localStorage.removeItem('apex.pinnedPlaces'); });
+  // Nearby on the car (Apple Maps' Gas, Coffee, Food): the kinds head Places, and one kind comes back nearest first by name
+  check(placesCar.nearby && placesCar.nearby.map((k) => k.name).join('|') === 'Gas|Coffee|Food', 'Nearby heads the car\'s Places: ' + JSON.stringify(placesCar.nearby));
+  await page.evaluate(() => { window.__pois = ApexStages.poisAll; window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true });
+    ApexStages.poisAll = async () => [{ cls: 'fuel', sub: '', name: 'Shell', lat: 35.6, lon: -84.09 }, { cls: 'fuel', sub: '', name: 'Pilot', lat: 35.601, lon: -84.1 },
+      { cls: 'cafe', name: 'Bean There', lat: 35.6, lon: -84.1 }];
+    window.__car = []; window.apex.onNative({ type: 'carplay', action: 'nearby', cat: 'gas' }); });
+  await page.waitForFunction(() => window.__car.some((m) => m.kind === 'nearby'), null, { timeout: 5000 });
+  const nearCar = await page.evaluate(() => { ApexStages.poisAll = window.__pois; return window.__car.find((m) => m.kind === 'nearby'); });
+  check(nearCar.cat === 'gas' && nearCar.title === 'Gas' && nearCar.list.map((r) => r.name).join('|') === 'Pilot|Shell' && nearCar.list.every((r) => /mi$|ft$/.test(r.detail) && Array.isArray(r.at)),
+    'the car\'s Gas nearby, nearest first, by name and distance: ' + JSON.stringify(nearCar));
   // the car's Loops list is the phone's loop dial: distances in your units, and its times once the dial is set to time
   const loopsCar = await page.evaluate(() => { window.apex.onNative({ type: 'carplay', action: 'hello' }); return window.__car.filter((m) => m.kind === 'loops').pop(); });
   check(loopsCar && loopsCar.list.map((r) => r.name).join('|') === '15 mi|30 mi|45 mi|60 mi|90 mi', 'the car gets the dial\'s distances: ' + JSON.stringify(loopsCar));
@@ -2661,6 +2676,16 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   // a car screen that connects later asks again and gets the route and the look again
   await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'hello' }); });
   await page.waitForFunction(() => ['route', 'corners', 'look', 'places', 'along'].every((k) => window.__car.some((m) => m.kind === k)));
+  // the route's speed cameras as plates on the car's map (Waze shows them), and none with the phone's camera switch off
+  const camPlates = await page.evaluate(() => { const t = apexDebug.track, i = Math.floor(t.lat.length / 2);
+    t.alpr = [{ type: 'alpr', kind: 'speed', lat: t.lat[i], lon: t.lon[i], dist_m: t.dist[i] }];
+    window.__car = []; window.apex.onNative({ type: 'carplay', action: 'hello' });
+    const on = window.__car.filter((m) => m.kind === 'hazards').pop();
+    apexDebug.state.toggles.lpr = false; window.__car = []; window.apex.onNative({ type: 'carplay', action: 'hello' });
+    const off = window.__car.filter((m) => m.kind === 'hazards').pop();
+    apexDebug.state.toggles.lpr = true; t.alpr = null;
+    return { on: on && on.list.map((h) => h.title), off: off && off.list.map((h) => h.title) }; });
+  check(camPlates.on && camPlates.on.includes('Speed camera') && camPlates.off && !camPlates.off.includes('Speed camera'), 'speed cameras on the car\'s map: ' + JSON.stringify(camPlates));
   // the mute map button
   await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'voice' }); });
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'look' && m.voice === false));
@@ -2709,6 +2734,9 @@ flow('CarPlay: the car is in every drive: a free drive from its Drive key, a con
   check(await page.evaluate(() => window.__car.some((m) => m.kind === 'end')), 'End from the car, End again: it ends now');
   // a route: planned from the car, driven, a continue step while its first turn is 6 miles off; after End the car goes idle
   await fix();
+  // the map's places along the route (for Stops below): a café 1 km in, a Shell at the far end
+  await page.evaluate(() => { ApexStages.pois = async (pts) => { const a = pts[Math.min(1, pts.length - 1)];
+    return [{ kind: 'cafe', name: 'Bean There Coffee', lat: a.lat, lon: a.lon + 0.0003 }, { kind: 'fuel', name: 'Shell', lat: pts[pts.length - 1].lat, lon: pts[pts.length - 1].lon }]; }; });
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'go', lat: 35.7565, lon: -83.97, name: 'Maryville' }));
   await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && window.__car.some((m) => m.kind === 'route'); }, null, { timeout: 20000 });
   await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'start' }); });
@@ -2719,6 +2747,16 @@ flow('CarPlay: the car is in every drive: a free drive from its Drive key, a con
   check(kinds.indexOf('start') >= 0 && kinds.indexOf('start') < kinds.indexOf('guide'), 'start before the first maneuver: ' + kinds.join());
   const g = await page.evaluate(() => window.__car.find((m) => m.kind === 'guide'));
   check(g.follow === true && g.type === 8 && /^Follow /.test(g.instruction) && g.distM > 2000 && !g.corner, 'a continue step to the far turn: ' + JSON.stringify({ ...g, symbol: !!g.symbol }));
+  // Add a stop from the car: Stops lists what's ahead on the route by name, and the one tapped joins the route
+  await page.waitForFunction(() => Array.isArray(window.apexDebug.track.scenic) && window.apexDebug.track.scenic.length, null, { timeout: 10000 });
+  const stops = await page.evaluate(() => { window.apex.onNative({ type: 'carplay', action: 'stops' }); return window.__car.filter((m) => m.kind === 'stops').pop(); });
+  check(stops && stops.list.length === 2 && stops.list[0].name === 'Bean There Coffee' && /^Café · .* ahead$/.test(stops.list[0].detail) && stops.list[1].name === 'Shell',
+    'the stops ahead, nearest first, by name: ' + JSON.stringify(stops));
+  const via = await page.evaluate(async (s) => { const before = window.apexDebug.track; window.apex.onNative({ type: 'carplay', action: 'stop', lat: s.at[0], lon: s.at[1], name: s.name });
+    for (let i = 0; i < 100 && window.apexDebug.track === before; i++) await new Promise((r) => setTimeout(r, 100));
+    const t = window.apexDebug.track; return { changed: t !== before, via: t.request && t.request.via, active: window.apexDebug.driveActive }; }, stops.list[0]);
+  check(via.changed && via.active && via.via.some((v) => v.label === 'Bean There Coffee'), 'the stop joins the route, the drive goes on: ' + JSON.stringify(via));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'stop', lat: 1, lon: 1, name: 'Nowhere' }));   // not on the list: nothing
   await page.evaluate(() => { window.__car = []; for (let i = 0; i < 2; i++) window.apex.onNative({ type: 'carplay', action: 'end' }); });
   await page.waitForFunction(() => !window.apexDebug.driveActive);
   const after = await page.evaluate(() => window.__car.map((m) => m.kind));
@@ -2911,6 +2949,18 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   check(card.some((p) => p.text === 'GRAVEL') && card.some((p) => p.text === 'R6'), 'the reported hazard shows beside the car, and a corner in the clear: ' + JSON.stringify(card));
   // U-89: the credit on its own strip of ground, so no map label shows under it
   check(await page.evaluate(() => { const s = getComputedStyle(document.getElementById('credit')); return s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.opacity === '1'; }), 'the credit sits on a solid strip');
+  // Overview while guiding (Apple Maps'): the whole route north up and flat, the arrow no longer followed; Recentre follows again
+  const ov = await page.evaluate(async () => {
+    const wait = () => new Promise((r) => { car.map.once('moveend', r); setTimeout(r, 1500); });
+    car.route([[35.40, -84.10], [35.45, -84.02], [35.50, -84.10]]); car.mode('guide'); car.position(35.40, -84.10, 45); await wait();
+    const z0 = car.map.getZoom();
+    car.overview(); await wait();
+    const b = car.map.getBounds(), inView = [[35.40, -84.10], [35.45, -84.02], [35.50, -84.10]].every(([la, lo]) => b.contains([lo, la]));
+    const o = { z0, z: car.map.getZoom(), pitch: car.map.getPitch(), bearing: car.map.getBearing(), follow: car.state.follow, inView };
+    car.recentre(); await wait(); o.after = { follow: car.state.follow, pitch: car.map.getPitch() };
+    return o; });
+  check(ov.inView && ov.z < ov.z0 && ov.pitch === 0 && ov.bearing === 0 && ov.follow === false && ov.after.follow && ov.after.pitch > 0,
+    'Overview: the whole route, flat, then Recentre follows the car again: ' + JSON.stringify(ov));
 });
 
 // Panel round 2, build A (IN-3, PR-2, GR-1, HE-1, PR-1): one red that means act now. In the demo replay the Sight cell is
@@ -3305,6 +3355,10 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.click('.cp-tabs [data-cp-tab="drives"]');
   const mem = await page.$$eval('.cp-member', (b) => b.map((x) => [x.querySelector('small').textContent, !!x.querySelector('em'), x.classList.contains('live')]));
   check(JSON.stringify(mem) === JSON.stringify([['You', true, false], ['@cara', false, true], ['@sam', false, false]]) && /3 members · 1 out now/.test(await page.textContent('.crew-page')), 'members: ' + JSON.stringify(mem));
+  // the lit ring (a 4 px shadow outside the face) is whole: the scrolling strip clips anything past its padding box
+  const ring = await page.evaluate(() => { const s = document.querySelector('.cp-members').getBoundingClientRect(), f = document.querySelector('.cp-member.live .avatar').getBoundingClientRect();
+    return { top: Math.round(f.top - 4 - s.top), left: Math.round(f.left - 4 - s.left) }; });
+  check(ring.top >= 0 && ring.left >= 0, 'the on-the-road ring is not cut by the members strip: ' + JSON.stringify(ring));
   await page.click('.cp-member:has-text("@sam")');
   await page.waitForSelector('.cp-member-sheet');
   check(await page.isVisible('.cp-member-sheet button:has-text("Report")') && await page.isVisible('.cp-member-sheet button:has-text("Block")'), 'Report and Block are on the member, one tap in');
@@ -9544,12 +9598,12 @@ flow('the route reveal: a route found is drawn onto the map like a pen stroke (a
     const name = document.getElementById('routeBarName'), cs = getComputedStyle(name), dot = document.getElementById('routeCardHere'), box = document.getElementById('routeCardProfile').getBoundingClientRect(), dr = dot.getBoundingClientRect();
     const cells = [...document.querySelectorAll('#routeCardStats > div')].sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left).map((d) => d.querySelector('span').textContent);
     const probe = document.createElement('i'); probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(); document.body.append(probe); const red = getComputedStyle(probe).color; probe.remove();
-    return { name: { px: parseFloat(cs.fontSize), face: cs.fontFamily, y: y('#routeBarName') }, cells, ys: ['#routeCardStats', '#routeCardProfile', '#routeCardFun', '.rc-drive, .rc-group', '.rc-with', '.rc-links'].map(y),
+    return { name: { px: parseFloat(cs.fontSize), face: cs.fontFamily, y: y('#routeBarName') }, cells, ys: ['#routeCardStats', '#routeCardFun', '#routeCardProfile', '.rc-drive, .rc-group', '.rc-with', '.rc-links'].map(y),
       strip: !!document.querySelector('#routeCardProfile svg.rc-profile'), dot: { w: Math.round(dr.width), red: getComputedStyle(dot).backgroundColor === red, atStart: Math.abs(dr.left + dr.width / 2 - box.left) <= 1.5, inBox: dr.top >= box.top - 6 && dr.bottom <= box.bottom + 6 },
       groups: [...document.querySelectorAll('#routeCard .rc-h')].map((h) => h.textContent), barMetaShown: document.getElementById('routeBarMeta').getClientRects().length > 0 }; });
   check(pg.name.px >= 26 && /Barlow Condensed/.test(pg.name.face) && pg.cells.join() === 'time,distance,corners' && !pg.barMetaShown, 'the headline: the name large in the number face, then time, distance, corners: ' + JSON.stringify(pg));
   const ys = pg.ys.filter((v) => v != null);
-  check(pg.ys[0] != null && pg.ys[1] != null && pg.ys[2] != null && ys.every((v, i) => i === 0 || v >= ys[i - 1]) && pg.name.y < pg.ys[0], 'top to bottom: headline, stat line, profile, the choice, the groups, the links: ' + JSON.stringify(pg.ys));
+  check(pg.ys[0] != null && pg.ys[1] != null && pg.ys[2] != null && ys.every((v, i) => i === 0 || v >= ys[i - 1]) && pg.name.y < pg.ys[0], 'top to bottom: headline, stat line, the choice, profile, the groups, the links (the choice over the fold, 2026-11-14): ' + JSON.stringify(pg.ys));
   check(pg.strip && pg.dot.w === 10 && pg.dot.red && pg.dot.atStart && pg.dot.inBox, 'the profile is drawn even before its heights are known, with the 10 px apex dot at the start: ' + JSON.stringify(pg.dot));
   check(pg.groups.join() === 'This drive,The road,Planned with', 'the rest is in named groups: ' + pg.groups);
   // folded: the same headline a size smaller, its three numbers under it in the card's order, Start beside it
@@ -9786,6 +9840,37 @@ flow('the co-driver says a low sun once when the route turns into it, and not ag
   // into the sun: the driver sees it, not said again
   for (let i = await iAt(1000), end = await iAt(1600); i <= end; i += 3) { await at(i, 20); await page.waitForTimeout(30); }
   check((await calls()).length === 1, 'not again with the sun in view: ' + JSON.stringify(await calls()));
+});
+
+flow('the stage briefing: a drive on a planned route starts with how far, how many corners and the first marks, once (briefing.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexBriefing);
+  // a winding road north, 6 km: a bend every 200 m either way
+  const KY = 110540, kx = 111320 * Math.cos(35.5 * Math.PI / 180), gpx = [];
+  for (let m = 0; m <= 6000; m += 5) gpx.push(`<trkpt lat="${(35.5 + m / KY).toFixed(7)}" lon="${(-83.9 + 60 * Math.sin(m * Math.PI / 200) / kx).toFixed(7)}"/>`);
+  await page.setInputFiles('#gpxFile', { name: 'winding.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Winding Road</name><trkseg>${gpx.join('')}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Winding Road', null, { timeout: 10000 });
+  const corners = await page.evaluate(() => apexDebug.track.events.filter((e) => e.type === 'corner').length);
+  check(corners >= 5, 'the road has corners: ' + corners);
+  // the map's stop sign at 3 km (as road_marks.js puts it on the route)
+  await page.evaluate(() => { const t = apexDebug.track, i = t.dist.findIndex((d) => d >= 3000);
+    t.marks = [{ type: 'mark', kind: 'stop', code: 'STOP', call: 'Stop sign', index: i, dist_m: t.dist[i], lat: t.lat[i], lon: t.lon[i] }]; });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const brief = () => page.evaluate(() => window.__said.filter((s) => /corners/.test(s)));
+  for (let k = 0; k < 40 && !(await brief()).length; k++) {
+    await page.evaluate(() => { const t = apexDebug.track;
+      window.apex.live({ lat: t.lat[0], lon: t.lon[0], accuracy_m: 5, speed_mps: 3, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); });
+    await page.waitForTimeout(150);
+  }
+  const said = await brief();
+  check(said.length === 1 && new RegExp(`^\\d+(\\.\\d)? miles, ${corners} corners\\. Stop sign in 1\\.9 miles\\.$`).test(said[0]), 'the briefing: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  for (let k = 0; k < 8; k++) { await page.evaluate(() => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[2], lon: t.lon[2], accuracy_m: 5, speed_mps: 3, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }); await page.waitForTimeout(100); }
+  check((await brief()).length === 1, 'once: ' + JSON.stringify(await brief()));
 });
 
 flow('the co-driver says a speed limit that drops ahead once, before the sign, early enough to slow (limit_ahead.js)', async (page, base) => {

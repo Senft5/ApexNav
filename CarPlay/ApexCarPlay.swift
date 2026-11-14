@@ -72,6 +72,8 @@ final class ApexCar {
     /// `attack`: this week's time attack loop (its id), which the phone drives as the route itself.
     typealias Place = (name: String, detail: String, coord: CLLocationCoordinate2D?, saved: String?, attack: String?)
     private(set) var places: [Place] = []
+    /// Nearby's kinds for the top of Places (web/carplay.js nearbyKeys): Gas (an electric car's Chargers), Coffee, Food.
+    private(set) var nearbyKinds: [(cat: String, name: String)] = []
     /// The car's Loops list as the phone's loop dial (web/carplay.js loopsMessage): five times or five distances, each sent
     /// back as it came (`minutes` or `miles`). Empty until the page says, and then the dial's five times stand in.
     private(set) var loops: [(name: String, minutes: Int?, miles: Double?)] = []
@@ -221,6 +223,11 @@ final class ApexCar {
                           lanes: (dict["lanes"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { UIImage(data: $0, scale: 3) })
             if !driving { driving = true; eachMap { $0.setMode() }; scene?.driveStarted() }
             scene?.guideChanged()
+        case "paused":
+            // off the route (web/carplay.js pausedMessage): CarPlay's own paused trip says "Rerouting…" (or Off route) in place of
+            // the last turn, whose distance froze while the car drove away from it; the next `guide` resumes the trip
+            guard driving, let text = dict["text"] as? String, !text.isEmpty else { return }
+            scene?.pauseGuide(rerouting: (dict["reason"] as? String) == "rerouting", text: String(text.prefix(ApexCar.glanceMax)))
         case "start":
             // U-59: the page entered a drive, with a route or none (a free drive sends no maneuver until it has driven a little, and
             // used to never reach the car at all): the navigation session, End and the drive's map buttons, and the record card
@@ -232,6 +239,21 @@ final class ApexCar {
                 scene?.driveStarted()
                 scene?.guideChanged()
             }
+        case "nearby":
+            // one kind's nearest places by name (web/carplay.js nearbyMessage), into the list the Places row opened
+            guard let cat = dict["cat"] as? String else { return }
+            let list: [(name: String, detail: String, coord: CLLocationCoordinate2D)] = ((dict["list"] as? [[String: Any]]) ?? []).prefix(12).compactMap { p in
+                guard let name = p["name"] as? String, !name.isEmpty, let c = Self.coord(p["at"]) else { return nil }
+                return (name: String(name.prefix(60)), detail: String(((p["detail"] as? String) ?? "").prefix(40)), coord: c)
+            }
+            scene?.showNearby(cat: cat, list: list, empty: String(((dict["empty"] as? String) ?? "").prefix(80)))
+        case "stops":
+            // what's ahead to stop at, asked by the Stops key (web/carplay.js stopsMessage); shown as it comes back
+            let list: [(name: String, detail: String, lat: Double, lon: Double)] = ((dict["list"] as? [[String: Any]]) ?? []).prefix(8).compactMap { p in
+                guard let name = p["name"] as? String, !name.isEmpty, let c = Self.coord(p["at"]) else { return nil }
+                return (name: String(name.prefix(40)), detail: String(((p["detail"] as? String) ?? "").prefix(60)), lat: c.latitude, lon: c.longitude)
+            }
+            scene?.showStops(list)
         case "limit":
             let v = Self.num(dict["value"]).map { Int($0.rounded()) }
             limit = v.flatMap { $0 > 0 && $0 <= 200 ? ApexCarLimit(value: $0, round: (dict["round"] as? Bool) ?? false) : nil }
@@ -281,6 +303,10 @@ final class ApexCar {
                 let c = Self.coord(p["at"])
                 guard c != nil || saved != nil || attack != nil else { return nil }
                 return (name: String(name.prefix(60)), detail: String(((p["detail"] as? String) ?? "").prefix(60)), coord: c, saved: saved, attack: attack)
+            }
+            nearbyKinds = ((dict["nearby"] as? [[String: Any]]) ?? []).prefix(3).compactMap { k in
+                guard let cat = k["cat"] as? String, let name = k["name"] as? String, !cat.isEmpty, !name.isEmpty else { return nil }
+                return (cat: String(cat.prefix(16)), name: String(name.prefix(24)))
             }
         case "loops":
             loops = ((dict["list"] as? [[String: Any]]) ?? []).prefix(5).compactMap { r in
@@ -512,8 +538,38 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             return item
         }
         let empty = CPListItem(text: "No places yet", detailText: "Where to? finds one")
-        let t = CPListTemplate(title: "Places", sections: [CPListSection(items: items.isEmpty ? [empty] : items)])
+        // Nearby first, as Apple Maps' Gas, Coffee and Food: a kind opens its nearest places by name
+        let kinds: [CPListItem] = ApexCar.shared.nearbyKinds.map { k in
+            let item = CPListItem(text: k.name, detailText: nil)
+            item.accessoryType = .disclosureIndicator
+            item.handler = { [weak self] _, done in self?.openNearby(cat: k.cat, title: k.name); done() }
+            return item
+        }
+        var sections: [CPListSection] = []
+        if !kinds.isEmpty { sections.append(CPListSection(items: kinds, header: "Nearby", sectionIndexTitle: nil)) }
+        sections.append(CPListSection(items: items.isEmpty ? [empty] : items, header: kinds.isEmpty ? nil : "Your places", sectionIndexTitle: nil))
+        let t = CPListTemplate(title: "Places", sections: sections)
         interfaceController?.pushTemplate(t, animated: true, completion: nil)
+    }
+
+    /// One kind nearby: "Looking nearby…" until the phone's list comes back (ApexCar `case "nearby"`), then its places by
+    /// name and distance; a tap plans the way there, as a place in Where to? does.
+    private var nearbyList: (cat: String, template: CPListTemplate)?
+    @MainActor private func openNearby(cat: String, title: String) {
+        let t = CPListTemplate(title: title, sections: [CPListSection(items: [CPListItem(text: "Looking nearby…", detailText: nil)])])
+        nearbyList = (cat, t)
+        interfaceController?.pushTemplate(t, animated: true, completion: nil)
+        ApexCar.shared.send("nearby", ["cat": cat])
+    }
+    @MainActor fileprivate func showNearby(cat: String, list: [(name: String, detail: String, coord: CLLocationCoordinate2D)], empty: String) {
+        guard let n = nearbyList, n.cat == cat else { return }
+        let items: [CPListItem] = list.map { p in
+            let item = CPListItem(text: p.name, detailText: p.detail.isEmpty ? nil : p.detail)
+            item.handler = { [weak self] _, done in self?.go(to: p.coord, name: p.name); done() }
+            return item
+        }
+        let none = CPListItem(text: empty.isEmpty ? "None nearby" : empty, detailText: nil)
+        n.template.updateSections([CPListSection(items: items.isEmpty ? [none] : items)])
     }
 
     @MainActor private func open(place p: ApexCar.Place) {
@@ -524,6 +580,25 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             interfaceController?.popToRootTemplate(animated: true, completion: nil)
             ApexCar.shared.send("attack", ["id": id])                              // the phone drives the loop itself
         } else if let c = p.coord { go(to: c, name: p.name) }
+    }
+
+    /// The stops ahead (ApexCar `case "stops"`), asked by the Stops key while guiding: a tap adds one to the route and goes
+    /// back to the map; the page reroutes through it. None ahead: one row that says so.
+    @MainActor fileprivate func showStops(_ list: [(name: String, detail: String, lat: Double, lon: Double)]) {
+        guard ApexCar.shared.driving, let ic = interfaceController else { return }
+        let items: [CPListItem] = list.map { s in
+            let item = CPListItem(text: s.name, detailText: s.detail.isEmpty ? nil : s.detail)
+            item.handler = { [weak self] _, done in
+                self?.interfaceController?.popToRootTemplate(animated: true, completion: nil)
+                ApexCar.shared.send("stop", ["lat": s.lat, "lon": s.lon, "name": s.name])
+                done()
+            }
+            return item
+        }
+        let none = CPListItem(text: "No stops ahead", detailText: "Fuel, chargers and cafés on this route")
+        let t = CPListTemplate(title: "Add a stop", sections: [CPListSection(items: items.isEmpty ? [none] : items)])
+        if ic.topTemplate is CPListTemplate, ic.templates.count > 1 { ic.popToRootTemplate(animated: false, completion: nil) }
+        ic.pushTemplate(t, animated: true, completion: nil)
     }
 
     /// Report a hazard (the phone's report sheet's kinds): one tap on a grid, then back to the map.
@@ -649,13 +724,22 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         trip = t
         session = map.startNavigationSession(for: t)
         maneuverKey = ""
-        map.leadingNavigationBarButtons = []
+        // Stops (a route only): the fuel, chargers and cafés still ahead on it, one tap to add one, as Apple Maps and Waze do
+        // and Overview: the whole route, north up, until Recentre (the same key) or a pan, as Apple Maps' Overview does
+        let overview = CPBarButton(title: "Overview") { [weak self] b in self?.toggleOverview(b) }
+        overviewButton = overview
+        map.leadingNavigationBarButtons = ApexCar.shared.route == nil ? [] : [CPBarButton(title: "Stops") { _ in ApexCar.shared.send("stops") }, overview]
         map.trailingNavigationBarButtons = [CPBarButton(title: "End") { _ in ApexCar.shared.send("end") }]
         // Owner, 2026-10-30: the guidance card floated mid-left. A bar that never hides holds the card below it;
         // in guidance the bar hides after a moment (a tap on the map brings End back), so the card sits at the top.
         map.automaticallyHidesNavigationBar = true
         map.hidesButtonsWithNavigationBar = false
         mapButtons()
+    }
+
+    private var overviewButton: CPBarButton?
+    @MainActor private func toggleOverview(_ b: CPBarButton) {
+        if b.title == "Overview" { mapController?.overview(); b.title = "Recentre" } else { mapController?.recentre(); b.title = "Overview" }
     }
 
     @MainActor func guideChanged() {
@@ -711,6 +795,14 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             let driven = g.drivenM.map { ApexCar.shared.distance($0) } ?? Measurement(value: -1, unit: unit)
             mapTemplate?.updateEstimates(CPTravelEstimates(distanceRemaining: driven, timeRemaining: -1), for: t)
         }
+    }
+
+    /// Off the route: the session's paused trip (CPTripPauseReason) with the phone's words, Apple Maps' "Rerouting" card. The
+    /// maneuver is forgotten, so the next `guide` (on the new route, or back on this one) sets one again, which resumes the trip.
+    @MainActor func pauseGuide(rerouting: Bool, text: String) {
+        guard let session else { return }
+        session.pauseTrip(for: rerouting ? .rerouting : .proceedToRoute, description: text)
+        maneuver = nil; maneuverKey = ""
     }
 
     /// U-62: after End the car goes idle (Where to?, Loops, Places, Drive), never a trip preview of the route just finished: the
@@ -796,7 +888,7 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     }
 
     @MainActor fileprivate func pan(_ d: CPMapTemplate.PanDirection) { mapController?.pan(d) }
-    @MainActor fileprivate func panEnded() { mapController?.recentre() }
+    @MainActor fileprivate func panEnded() { mapController?.recentre(); overviewButton?.title = "Overview" }
 
     // Template delegates are separate small objects so the scene delegate stays a plain UIResponder.
     private final class MapDelegate: NSObject, CPMapTemplateDelegate {
@@ -1106,6 +1198,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
     }
     @MainActor func zoom(_ dir: Int) { if let native { native.zoom(dir) } else { js("car.zoom(\(dir))") } }
     @MainActor func recentre() { if let native { native.recentre() } else { js("car.recentre()") } }
+    @MainActor func overview() { if let native { native.overview() } else { js("car.overview()") } }
     @MainActor func pan(_ d: CPMapTemplate.PanDirection) {
         let dx = d.contains(.left) ? -1 : d.contains(.right) ? 1 : 0
         let dy = d.contains(.up) ? -1 : d.contains(.down) ? 1 : 0

@@ -181,7 +181,8 @@
     .cp-board[aria-busy="true"] { opacity: 0.5; }
     .cp-periods { width: 100%; } .cp-periods button { flex: 1; min-width: 0; }
     /* P-06: the members as faces, the owner marked, the ones on the road lit */
-    .cp-members { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 4px; }
+    /* the lit ring is a 4 px shadow outside the face: the strip scrolls (so it clips), and keeps 4 px round it */
+    .cp-members { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; padding: 4px 4px 4px; margin: 0 -4px; }
     .cp-members::-webkit-scrollbar { display: none; }
     .cp-member { position: relative; flex: none; width: 56px; display: grid; justify-items: center; align-content: start; gap: 8px; padding: 0; border: 0; background: none; color: var(--panel-ink); font: inherit; }
     .cp-member .avatar { position: relative; }
