@@ -105,7 +105,8 @@ and in random batches so a trace cannot be re-assembled.
 - One list on People → Friends of what happened to you, newest first, each a sentence with at most one key: a friend or
   crew-mate topped your best Score on one of your stages this week (Drive it), someone went quicker than you in this
   week's time attack (See the board), kudos on your runs, a duel accepted or decided, new followers of your roadbooks
-  (counted, never named: a public book's followers may be strangers), a crew drive you haven't answered (Answer), and
+  (counted, never named: a public book's followers may be strangers), new roads in a roadbook you follow, added after
+  you followed it, while you may still open it (Open; 2026-11-14), a crew drive you haven't answered (Answer), and
   kudos and comments on your drive posts, or a new comment after yours on someone else's post, one row per post with the
   newest name and how many others (Open: the post and its comments; 2026-11-14). A comment that @mentions you on a post
   you can see shows as a Mention instead. Typing @ in a comment suggests the post's driver, who commented, then your
