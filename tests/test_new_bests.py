@@ -32,3 +32,20 @@ def test_new_bests():
     assert [(x["k"], x["from"]) for x in out["all"]] == [(0, 0), (5, 1)]
     assert out["all"][0]["by_s"] == pytest.approx(0.6) and out["all"][1]["by_s"] == pytest.approx(0.3)
     assert [x["k"] for x in out["one"]] == [0] and out["none"] == []
+
+
+RUNNER2 = r"""
+const V = require(process.argv[1] + '/web/drive_view.js');
+const rows = [{ dateLabel: 'Jun 1', score: 610, matched: 2, delta_s: 3 }, { dateLabel: 'Jul 1', score: 640, matched: 8, delta_s: 1.4 },
+  { dateLabel: 'Aug 1', score: 700, matched: 9, delta_s: 0.2 }, { self: true, dateLabel: 'Sep 1', score: 760 }, { dateLabel: 'Oct 1', score: 800, matched: 9, delta_s: -0.5 }];
+console.log(JSON.stringify({ p: V.roadProgress(rows), first: V.roadProgress([{ self: true, score: 700 }, rows[1]]), none: V.roadProgress([rows[0], { self: true, score: 1 }]),
+  noScore: V.roadProgress([{ ...rows[1], score: null }, { self: true, score: 700 }]) }));
+"""
+
+
+def test_road_progress_is_against_your_first_drive_here():
+    out = json.loads(subprocess.run([NODE, "-e", RUNNER2, ROOT], capture_output=True, text=True, check=True).stdout)
+    # the oldest drive sharing 3 corners (Jun 1 shares 2): Jul 1
+    assert out["p"] == {"since": "Jul 1", "score_d": 120, "gain_s": 1.4, "matched": 8}
+    assert out["first"] is None and out["none"] is None
+    assert out["noScore"]["score_d"] is None and out["noScore"]["gain_s"] == 1.4
