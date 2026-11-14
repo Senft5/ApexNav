@@ -9731,6 +9731,23 @@
         });
         return b;
       }));
+      alongHours(t, rows);
+    }
+    // each named place's hours when you'd get there (place_info.js, one request for the list): the route's time spread
+    // over its length; "On arrival" once that is a quarter hour or more away. Unknown says nothing.
+    function alongHours(t, rows) {
+      if (!window.ApexPlaceInfo || !rows.some((r) => r.named)) return;
+      ApexPlaceInfo.lookupMany(rows.map((r) => (r.named ? { name: r.title, lat: r.lat, lon: r.lon } : null))).then((tags) => {
+        if (plannedRoute !== t || !tags) return;
+        const total = t.dist[t.dist.length - 1], subs = $('routeAlongPanel').querySelectorAll('.place small');
+        tags.forEach((tg, i) => {
+          const r = rows[i], el = subs[i];
+          if (!tg || !el || !r) return;
+          const s = Number.isFinite(t.timeS) && total > 0 && Number.isFinite(r.m) ? t.timeS * r.m / total : 0;
+          const h = ApexPlaceInfo.contact(tg, new Date(Date.now() + s * 1000)).hours;
+          if (h) el.textContent = ApexRouteCard.factText([el.textContent, `${s >= 900 ? 'On arrival: ' : ''}${h.text}`].filter(Boolean).join(' · '));
+        });
+      }).catch(() => {});
     }
     $('routeAlongLine').addEventListener('click', () => {
       const open = $('routeAlongPanel').hidden && $('routeAlongPanel').childElementCount > 0;
