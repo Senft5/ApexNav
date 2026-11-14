@@ -1316,11 +1316,26 @@
       $('pinOverlay').classList.add('show');
       suppressMapClickUntil = Date.now() + 700;
       placeInfo(null);
+      placePhoto(null);
+      if (window.ApexPlacePhoto) {                                       // a picture of it, once one facing it is found (place_photo.js)
+        const asked = droppedPin;
+        ApexPlacePhoto.lookup(point.lat, point.lon).then((p) => { if (droppedPin === asked && p) placePhoto(p); }).catch(() => {});
+      }
       if (!place) reversePin(point);
       else if (window.ApexPlaceInfo) {                                  // hours, phone and site, once known (place_info.js)
         const asked = droppedPin;
         ApexPlaceInfo.lookup(place.name, point.lat, point.lon).then((tags) => { if (droppedPin === asked && tags) placeInfo(ApexPlaceInfo.contact(tags, new Date())); }).catch(() => {});
       }
+    }
+    // the card's photo, shown once it has loaded (a broken one never shows); null clears it
+    function placePhoto(p) {
+      const fig = $('pinPhoto'), img = fig.querySelector('img'), a = fig.querySelector('a');
+      fig.hidden = true; img.onload = img.onerror = null;
+      if (!p) { img.removeAttribute('src'); return; }
+      a.textContent = ApexPlacePhoto.credit(p); a.href = ApexPlacePhoto.page(p);
+      img.alt = `Street photo of ${$('pinPlace').textContent === '--' ? 'this place' : $('pinPlace').textContent}`;
+      img.onload = () => { if (droppedPin) fig.hidden = false; };
+      img.src = p.src;
     }
     // the card's open-now line and Call / Website keys; null clears them (a dropped pin, or nothing known)
     function placeInfo(c) {
