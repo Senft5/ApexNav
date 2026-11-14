@@ -4514,7 +4514,7 @@ flow('a saved route keeps its reports: Save asks for the cells it runs through, 
     : route.abort()));
   await page.route('https://valhalla1.openstreetmap.de/route', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(JSON.parse(route.request().postData() || '{}').locations)) }));
   const soon = new Date(Date.now() + 40 * 60000).toISOString(), later = new Date(Date.now() + 2 * 60000).toISOString();
-  let offline = false;
+  let offline = false, fresh = false;
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url());
     if (offline) return route.abort('internetdisconnected');
@@ -4523,7 +4523,8 @@ flow('a saved route keeps its reports: Save asks for the cells it runs through, 
       const lat = Number(u.searchParams.get('lat'));
       return route.fulfill({ contentType: 'application/json', body: JSON.stringify(lat > 35.75 && lat < 35.85 ? [
         { id: 'gravel', kind: 'gravel', lat: 35.80, lon: -83.92, heading: null, confirms: 2, clears: 0, expires_at: soon, m: 0 },
-        { id: 'brief', kind: 'debris', lat: 35.81, lon: -83.92, heading: null, confirms: 0, clears: 0, expires_at: later, m: 0 }] : []) });
+        { id: 'brief', kind: 'debris', lat: 35.81, lon: -83.92, heading: null, confirms: 0, clears: 0, expires_at: later, m: 0 },
+        ...(fresh ? [{ id: 'fresh', kind: 'animal', lat: 35.82, lon: -83.92, heading: null, confirms: 1, clears: 0, expires_at: soon, m: 0 }] : [])] : []) });
     }
     return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
   });
@@ -4538,6 +4539,12 @@ flow('a saved route keeps its reports: Save asks for the cells it runs through, 
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.routeReports') || '{}'));
   const id = Object.keys(kept)[0], rows = id ? Object.values(kept[id].cells).flat().map((h) => h.id) : [];
   check(rows.includes('gravel') && rows.includes('brief'), 'the reports along it are kept with the route: ' + JSON.stringify(kept));
+  // opened again with signal before setting off: the kept reports are asked again (a report made since is kept too)
+  fresh = true;
+  await page.evaluate(() => { window.apexDebug.keptReports = 0; const p = JSON.parse(localStorage.getItem('apex.savedRoutes') || '[]')[0]; window.apex.onNative({ type: 'carplay', action: 'saved', id: p.id }); });
+  await page.waitForFunction(() => window.apexDebug.keptReports > 0, null, { timeout: 20000 });
+  const again = await page.evaluate((id) => Object.values(JSON.parse(localStorage.getItem('apex.routeReports'))[id].cells).flat().map((h) => h.id), id);
+  check(again.includes('fresh') && again.includes('gravel'), 'opened with signal, the kept reports are today\'s: ' + JSON.stringify(again));
   // the Log's frame warms a few seconds after launch (cockpit.js prewarmLog); let it finish first, as on a phone, so going
   // offline mid-load doesn't leave it half loaded (CI 2026-11-14: analysis_page.js without themes.js)
   await page.waitForFunction(() => { const f = document.getElementById('logFrame'); return f && f.contentWindow && f.contentWindow.ApexLogFrame; }, null, { timeout: 30000 });
