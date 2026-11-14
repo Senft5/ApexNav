@@ -503,6 +503,14 @@
           layout: { 'symbol-placement': 'line', 'text-size': 9, 'text-field': ['concat', ['number-format', ['get', 'ele'], {}], "'"], 'text-font': ['Noto Sans Regular'] },
           paint: { 'text-halo-width': 1.2 } });
       }
+      // A town's buildings stand up from zoom 15 (the map is tilted at 45 degrees from launch), as Apple and Google Maps draw
+      // them: OSM's own heights from the base map's tiles (render_height; nothing more is fetched), rising from flat as you
+      // zoom in, in the theme's land (basemap.js buildingColour). Under the labels and every line of ours; the low-power map
+      // drops them (HEAVY_LAYERS), and so does satellite.
+      if (map.getSource('openmaptiles')) map.addLayer({ id: 'apex-buildings', type: 'fill-extrusion', source: 'openmaptiles', 'source-layer': 'building', minzoom: 15,
+        paint: { 'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15, 0, 16, ['coalesce', ['get', 'render_height'], 6]],
+          'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 15, 0, 16, ['coalesce', ['get', 'render_min_height'], 0]],
+          'fill-extrusion-opacity': 0.88, 'fill-extrusion-vertical-gradient': true } }, firstSymbol);
       map.addSource('apex-route-src', { type: 'geojson', data: emptyFC(), lineMetrics: true });   // lineMetrics: the reveal draws the line by its progress (penDraw)
       const width = (a, b) => ['interpolate', ['linear'], ['zoom'], 10, a, 16, b];
       // Twisty roads (map shape, not measured): under every route line. t = 2 very twisty, 1 twisty.
@@ -585,6 +593,8 @@
           attribution: 'Imagery: <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map">USGS The National Map</a> (USDA NAIP), public domain' });
         map.addLayer({ id: 'apex-satellite', type: 'raster', source: 'apex-satellite-src', paint: { 'raster-fade-duration': 150 } }, map.getLayer('apex-twisty') ? 'apex-twisty' : undefined);
       } else if (!on && map.getLayer('apex-satellite')) { map.removeLayer('apex-satellite'); map.removeSource('apex-satellite-src'); }
+      // the photo shows the roofs: no paper blocks over it
+      if (map.getLayer('apex-buildings')) map.setPaintProperty('apex-buildings', 'fill-extrusion-opacity', on ? 0 : 0.88);
     }
     // /api/me's word on developer tools: only a fresh answer counts (none at start, offline keeps none)
     function applyDevFlags(me) {
@@ -1017,7 +1027,7 @@
     // Low-power cockpit (web/power.js, IDEAS P-02): a hot phone, Low Power Mode or a low battery drops this loop to 30 fps
     // without shake, the map to 2x pixels, and hides hillshade and contours. Everything else (notes, recording) is unchanged.
     const power = new ApexPower.PowerSaver();
-    const HEAVY_LAYERS = ['apex-hillshade', 'apex-contours', 'apex-contour-labels'];
+    const HEAVY_LAYERS = ['apex-hillshade', 'apex-contours', 'apex-contour-labels', 'apex-buildings'];
     // F-05 (REVIEW_FEEL.md, the owner's call 2026-10-30): a drive draws less. Its cost is the map's drawing, not script, so
     // in a drive the canvas is capped at 2x pixels (the car already is: no sharper a glance at road speed), and at speed
     // the contour lines and their labels go (hillshade stays: the relief still reads) with the labels no one reads at a
