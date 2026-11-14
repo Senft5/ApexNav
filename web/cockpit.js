@@ -481,7 +481,7 @@
       if (has('apex-alt')) map.setPaintProperty('apex-alt', 'line-color', C.route);
       if (has('apex-explore')) map.setPaintProperty('apex-explore', 'line-color', C.route);
       if (has('apex-twisty')) map.setPaintProperty('apex-twisty', 'line-color', C.amber);
-      if (has('apex-places')) { map.setPaintProperty('apex-places', 'text-color', P.label); map.setPaintProperty('apex-places', 'text-halo-color', P.halo); }
+      if (has('apex-places')) { map.setPaintProperty('apex-places', 'text-color', P.label); map.setPaintProperty('apex-places', 'text-halo-color', P.halo); placeGlyphs(P.label, P.halo); }
       // Measured roads by the pavement measured there (coverage.js surface): smooth, fair, rough; ink where roughness is unknown
       if (has('apex-coverage')) map.setPaintProperty('apex-coverage', 'line-color', ['match', ['get', 's'], 1, C.gain, 2, C.amber, 3, C.signal, C.dim]);
     }
@@ -524,9 +524,13 @@
       // Places on the map (2026-11-13, as Apple and Google Maps show them): the eateries, cafés, fuel and shops with a name,
       // in the map's own label ink set in italic (a place, not a street), only close in (street zoom) and never in a drive;
       // a tap is the place's card (showPin)
+      // (2026-11-14, behind apex.mapPlaces) each with its kind's glyph before its name, as Apple Maps marks a café or fuel
+      if (map.getSource('openmaptiles')) placeGlyphs((look.map || {}).label || '#555', (look.map || {}).halo || '#fff');
       if (map.getSource('openmaptiles')) map.addLayer({ id: 'apex-places', type: 'symbol', source: 'openmaptiles', 'source-layer': 'poi', minzoom: 15,
         filter: ['all', ['has', 'name'], ['match', ['get', 'class'], PLACE_CLASSES, true, false]],
         layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Italic'], 'text-size': 11, 'text-max-width': 8, 'text-padding': 10,
+          'icon-image': ['match', ['get', 'class'], ...Object.entries(PLACE_GLYPH_OF).flat(), 'pl-sight'], 'icon-anchor': 'right', 'icon-offset': [-2, 0],
+          'text-anchor': 'left', 'text-justify': 'left', 'text-offset': [0.15, 0], 'icon-optional': true,
           'symbol-sort-key': ['get', 'rank'], visibility: placesShown() ? 'visible' : 'none' },
         paint: { 'text-halo-width': 1.4 } }, firstSymbol);                // under the street and town names: they win a clash
       map.addSource('apex-ribbon-src', { type: 'geojson', data: emptyFC() }); ribbonKey = null;
@@ -542,6 +546,26 @@
     // answers). Switched on by apex.mapPlaces = '1'; to ship it, make the default true here
     const placesFlag = () => { try { return localStorage.getItem('apex.mapPlaces') === '1'; } catch (_) { return false; } };
     const placesShown = () => placesFlag() && state.mode !== 'live';
+    // the kinds' glyphs (24 px grid, 1.75 px strokes, BRAND.md Icons), drawn in the look's label ink on a halo square, 2x
+    const PLACE_GLYPH = { food: 'M7 3v7M5 3v5a2 2 0 0 0 4 0V3M7 10v11M17 21V3c-2 1.5-3 4.5-3 9h3',
+      cafe: 'M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 11h1.5a2.5 2.5 0 0 1 0 5H16M9 3.5v2.5M12.5 3.5v2.5',
+      fuel: 'M5 21V5.5A1.5 1.5 0 0 1 6.5 4h6A1.5 1.5 0 0 1 14 5.5V21M3.5 21h12M7.5 9h4M14 10h1.5a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 0 3 0V8.5L17.5 6',
+      bar: 'M5 4h14l-7 8zM12 12v8M8 20h8', shop: 'M4 9h16l-2 10H6zM9 9l3-5 3 5', bed: 'M3 19V6M3 14h18v5M21 14v-2a3 3 0 0 0-3-3h-7v5M7 10.5h.01',
+      car: 'M5 16l2-6h10l2 6v3H5zM5 16h14M8 19v2M16 19v2', sight: 'M6 21V4M6 4h11l-2 4 2 4H6' };
+    const PLACE_GLYPH_OF = { restaurant: 'pl-food', fast_food: 'pl-food', cafe: 'pl-cafe', bakery: 'pl-cafe', ice_cream: 'pl-cafe', fuel: 'pl-fuel',
+      bar: 'pl-bar', beer: 'pl-bar', grocery: 'pl-shop', lodging: 'pl-bed', car: 'pl-car' };
+    function placeGlyphs(ink, halo) {
+      if (!map || typeof Path2D === 'undefined') return;
+      for (const [k, d] of Object.entries(PLACE_GLYPH)) {
+        try {
+          const c = document.createElement('canvas'); c.width = c.height = 40; const g = c.getContext('2d');   // 20 pt, its glyph 16 pt
+          g.fillStyle = halo; g.globalAlpha = 0.85; g.fillRect(0, 0, 40, 40); g.globalAlpha = 1;
+          g.strokeStyle = ink; g.lineCap = g.lineJoin = 'round'; g.translate(4, 4); g.scale(4 / 3, 4 / 3); g.lineWidth = 1.75; g.stroke(new Path2D(d));
+          const img = g.getImageData(0, 0, 40, 40), id = 'pl-' + k;
+          if (map.hasImage(id)) map.updateImage(id, img); else map.addImage(id, img, { pixelRatio: 2 });
+        } catch (_) { /* no canvas: the names alone */ }
+      }
+    }
     function applyPlaces() { if (mapReady && map.getLayer('apex-places')) map.setLayoutProperty('apex-places', 'visibility', placesShown() ? 'visible' : 'none'); }
     // Satellite, for developers only (the owner, 2026-11-04: to troubleshoot picks like a neighbourhood ranked a best road):
     // USGS The National Map's orthoimagery (USDA NAIP and USGS, public domain; the US only; tiles to zoom 16, stretched past
