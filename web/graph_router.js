@@ -96,7 +96,7 @@
     // is dropped
     LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 12, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_MAX_RETRACED: 0.4,
     LOOP_CONN_FACTOR: 1.7, LOOP_CONN_A: 3, LOOP_MAX_OFF: 0.6, LOOP_NEAR_OFF: 0.15, LOOP_RING_OFF: 0.3, LOOP_RETRIES: 4, LOOP_REFITS: 2, LOOP_CONN_A_SHORT: 1, LOOP_CONN_A_LONG: 6, LOOP_FIT_OFF: 0.12,   // a connector's road length over its crow line, the router's detours to good road in it (Cincinnati, 2026-11-04)
-    SNAP_M: 1500, GRID_DEG: 0.01,
+    SNAP_M: 1500, GRID_DEG: 0.01, LIVE_NODES: 200, LIVE_TRIES: 4,   // a snap's road reaches LIVE_NODES or it's an island (snapLive)
     OUT_BACK_KM: 2,          // Best roads nearby: a dead-end run of good road this long stays (driven there and back); the stage minimum
   };
 
@@ -391,6 +391,37 @@
     const tw = twin(v, best.edge);
     if (tw >= 0 && (!filter || filter(tw))) out.push({ edge: tw, frac: 1 - best.frac, d: best.d, lat: best.lat, lon: best.lon });
     return out;
+  }
+
+  /**
+   * The nearest road that goes somewhere: snap, unless that road is an island (a bridge or a stub cut off from the rest,
+   * reaching fewer than LIVE_NODES nodes the way it's driven: forward from a start, backward into an end), then the nearest
+   * road off it, LIVE_TRIES times. From La Cañada Flintridge the start landed on a 50 m piece of Explorer Road joined to
+   * nothing, and every loop and route from there failed (2026-11-14).
+   */
+  function snapLive(v, la, lo, back = false, filter = null, maxM = K.SNAP_M) {
+    const off = new Set(), first = snap(v, la, lo, filter, maxM);
+    let x = first;
+    for (let k = 0; k < K.LIVE_TRIES && x.length; k++) {
+      const seen = island(v, x, back);
+      if (!seen) return x;
+      for (const e of seen) off.add(e);
+      x = snap(v, la, lo, (e) => !off.has(e) && (!filter || filter(e)), maxM);
+    }
+    return first;   // islands all round (a small network): the nearest, as before
+  }
+  /** The edges reached from a snap (forward, or backward with back) when fewer than LIVE_NODES nodes are; else null. */
+  function island(v, x, back) {
+    const nodes = new Set(), edges = new Set(), todo = [];
+    for (const y of x) { edges.add(y.edge); const n = back ? v.tail[y.edge] : v.to[y.edge]; if (n >= 0 && !nodes.has(n)) { nodes.add(n); todo.push(n); } }
+    while (todo.length) {
+      const n = todo.pop();
+      const visit = (e, m) => { edges.add(e); if (m >= 0 && !nodes.has(m)) { nodes.add(m); todo.push(m); } };
+      if (back) for (let r = v.rfirst[n]; r < v.rfirst[n + 1]; r++) visit(v.redge[r], v.tail[v.redge[r]]);
+      else for (let e = v.first[n]; e < v.first[n + 1]; e++) visit(e, v.to[e]);
+      if (nodes.size >= K.LIVE_NODES) return null;
+    }
+    return edges;
   }
 
   /**
@@ -905,7 +936,12 @@
       if (++settled > maxSettle) break;
       for (let e = v.first[node]; e < v.first[node + 1]; e++) {
         const head = v.to[e];
-        if (head < 0 || (ban && ban[e]) || !allowed(v, p, e, back) || (bound && !bound(head))) continue;
+        if (head < 0 || (ban && ban[e]) || !allowed(v, p, e, back)) continue;
+        // the ellipse bounds where the search goes on from, not the goal: a target edge whose far end is outside it (a 6 km
+        // mountain edge with no junction, the goal 60 m along it) is still reached (2026-11-14: every Robbinsville loop
+        // failed on such a leg)
+        const out = bound && !bound(head);
+        if (out && !dstMap.has(e)) continue;
         let tc = turnCost(v, p, e, obj);
         if (tc === Infinity) continue;
         if (stopX !== 0 && obj.nodeCosts) tc += stopX * stopCost(v, node);
@@ -916,6 +952,7 @@
           const cand = gp + tc + dstMap.get(e) * be;
           if (cand < bestGoal) { bestGoal = cand; bestEdge = e; bestPred = p; direct = null; }
         }
+        if (out) continue;
         if (stamp[e] !== qid || x < g[e] - 1e-9) {
           stamp[e] = qid; g[e] = x; pred[e] = p;
           push(x + H(head), e);
@@ -1215,7 +1252,7 @@
 
   // ---- plans -----------------------------------------------------------------------------------------------------------
   function snapBoth(v, from, to) {
-    const src = snap(v, from.lat, from.lon), dst = snap(v, to.lat, to.lon);
+    const src = snapLive(v, from.lat, from.lon), dst = snapLive(v, to.lat, to.lon, true);
     if (!src.length) throw new Error('no road near the start');
     if (!dst.length) throw new Error('no road near the end');
     return { src, dst };
@@ -1435,7 +1472,7 @@
     // never a neighbourhood street, so the loop's start line isn't in a subdivision; else the nearest road, as before
     let s0 = req.through ? snap(v, req.start.lat, req.start.lon, (e) => throughEdge(v, e), 3000) : [];
     if (!s0.length) {
-      s0 = snap(v, req.start.lat, req.start.lon);
+      s0 = snapLive(v, req.start.lat, req.start.lon);
       if (!s0.length) throw new Error('no road near the start');
       if (noHighway(level)) s0 = snapOff(v, req.start, s0, req.start.heading);
     }
@@ -1465,14 +1502,14 @@
       }
     };
     const tries = req.max || K.LOOP_TRIES;
-    drive(loopCombos(v, req.start, km, tries, req.prefs), tries);
+    drive(loopCombos(v, req.start, km, tries, req.prefs, req.avoid), tries);
     // The length is a guess until routed (connectors as crow lines x LOOP_CONN_FACTOR): routed loops came out 0.6 to 1.7
     // times it (Cincinnati, 2026-11-13: 112 to 127 km for 80 asked). None within LOOP_NEAR_OFF: once more, the stages
     // picked for the length the routed ones say this ground needs (their median ratio); still none within LOOP_RING_OFF,
     // the rings, which aim at the length itself. The ranking (fun_route.js loopRank) weighs length against the roads.
     if (!out.some((r) => offOf(r) <= K.LOOP_NEAR_OFF) && ratios.length) {
       const q = ratios.slice().sort((x, y) => x - y)[Math.floor(ratios.length / 2)], rho = Math.max(0.6, Math.min(1.7, q));
-      if (Math.abs(rho - 1) >= 0.05) drive(loopCombos(v, req.start, km / rho, tries + 2 * K.LOOP_RETRIES, req.prefs), K.LOOP_RETRIES);
+      if (Math.abs(rho - 1) >= 0.05) drive(loopCombos(v, req.start, km / rho, tries + 2 * K.LOOP_RETRIES, req.prefs, req.avoid), K.LOOP_RETRIES);
     }
     if (!out.some((r) => offOf(r) <= K.LOOP_NEAR_OFF)) refit();
     if (!out.length || !out.some((r) => offOf(r) <= K.LOOP_RING_OFF)) {
@@ -1519,10 +1556,10 @@
    * its value is the stages' scores (quality x corners) times how near that guess is to the length. The best `n` with
    * different sets of stages; each as the points to drive through (each stage every LOOP_ALONG_M, with its heading).
    */
-  function loopCombos(v, start, km, n, prefs = null) {
+  function loopCombos(v, start, km, n, prefs = null, avoid = null) {
     const reachS = Math.max(600, km * 1000 / 2 / K.LOOP_REACH_MS);
     let stages;
-    try { stages = explore(v, { start, maxS: reachS, max: 3 * K.LOOP_STAGES, prefs }).stages; } catch (_) { return []; }
+    try { stages = explore(v, { start, maxS: reachS, max: 3 * K.LOOP_STAGES, prefs, avoid }).stages; } catch (_) { return []; }
     const crow = (a, b) => distM(a.lat, a.lon, b.lat, b.lon) / 1000;
     const near = (s) => Math.min(crow(start, { lat: s.lat[0], lon: s.lon[0] }), crow(start, { lat: s.lat[s.lat.length - 1], lon: s.lon[s.lon.length - 1] }));
     // explore's out-and-back roads (deadEnd: a long good road that ends) are a Best road nearby, not a loop's link: a loop
@@ -1594,6 +1631,21 @@
     return m > 1 ? bearing(g[2 * best], g[2 * best + 1], g[2 * best + 2], g[2 * best + 3]) : 0;
   }
   /**
+   * A snap that lands on a junction (a stage's point is often its node, where the stage turns onto another road): every
+   * edge into and out of that node going the stage's way, as targets, so the search arrives on whichever the stage drives.
+   * The nearest alone was often the other road arriving there from the far side (Old Field Gap Road into Meadow Branch
+   * Road: a 25 km way round to reach the node from behind, and every Robbinsville loop dropped, 2026-11-14).
+   */
+  function atNode(v, x, ok) {
+    const b = x[0], f = b.frac, node = f >= 0.999 ? v.to[b.edge] : f <= 0.001 ? v.tail[b.edge] : -1;
+    if (node < 0 || b.d > 15) return x;
+    const out = x.slice(), have = new Set(x.map((y) => `${y.edge}:${y.frac}`));
+    const add = (e, frac) => { const k = `${e}:${frac}`; if (!have.has(k) && v.to[e] >= 0 && ok(e)) { have.add(k); out.push({ edge: e, frac, d: b.d, lat: b.lat, lon: b.lon }); } };
+    for (let r = v.rfirst[node]; r < v.rfirst[node + 1]; r++) add(v.redge[r], 1);
+    for (let e = v.first[node]; e < v.first[node + 1]; e++) add(e, 0);
+    return out;
+  }
+  /**
    * A loop from s0 through `pts` ({ lat, lon, h }: snapped to the road there heading that way) and back: each leg the level's
    * search on the loop's costs, earlier legs' edges (both ways) x LOOP_RETRACE_X. The route with `retraced` (share of its
    * length on road driven twice) and `hwyShare` (on motorway or trunk), or null.
@@ -1603,8 +1655,10 @@
     const snaps = [];
     for (const p of pts) {
       // the stage's own road, the way it is driven (never a motorway beside it)
-      let x = Number.isFinite(p.h) ? snap(v, p.lat, p.lon, (e) => !is[e] && Math.abs(turnAngle(p.h, headingNear(v, e, p.lat, p.lon))) < 0.87, 60) : [];
+      const along = (e) => !is[e] && Math.abs(turnAngle(p.h, headingNear(v, e, p.lat, p.lon))) < 0.87;
+      let x = Number.isFinite(p.h) ? snap(v, p.lat, p.lon, along, 60) : [];
       if (!x.length) x = snap(v, p.lat, p.lon, noHighway(level) ? (e) => !is[e] : null, 200);
+      else x = atNode(v, x, along);
       if (x.length) snaps.push({ s: x, lat: p.lat, lon: p.lon, conn: !!p.conn });
     }
     if (!snaps.length) return null;
@@ -1697,7 +1751,7 @@
    * timed this way where our tiles cover you, not by a router across the network.
    */
   function times(v, req) {
-    const s0 = snap(v, req.start.lat, req.start.lon);
+    const s0 = snapLive(v, req.start.lat, req.start.lon);
     if (!s0.length) throw new Error('no road near you');
     const maxS = req.maxS || 1800, T = reach(v, s0, maxS);
     return { times: (req.targets || []).map((p) => {
@@ -1756,17 +1810,20 @@
    */
   function explore(v, req) {
     const t0 = Date.now(), B = v.bits, maxS = req.maxS || 1800, max = req.max || 12;
-    const s0 = snap(v, req.start.lat, req.start.lon);
+    const s0 = snapLive(v, req.start.lat, req.start.lon);
     if (!s0.length) throw new Error('no road near you');
     const T = reach(v, s0, maxS);
     // (the corner prefs weigh which roads are best here too, as they weigh the search: likeOf)
-    const score = new Float32Array(v.E), likeAt = likeOf(v, req.prefs);
+    const score = new Float32Array(v.E), likeAt = likeOf(v, req.prefs), noDirt = !!(req.avoid && req.avoid.unpaved);
     const seeds = [];
     for (let e = 0; e < v.E; e++) {
       if (v.to[e] < 0 || v.quality[e] === UNKNOWN_U8 || !Number.isFinite(v.fun[e]) || v.fun[e] <= 0) continue;
       const q = v.quality[e] / 254;
       if (q < K.POOR_HI || (v.flags[e] & (B.private | B.barrier | B.ramp | B.destination | B.expressway)) || v.cls[e] === CLS.motorway || v.cls[e] >= CLS.service) continue;
       if (streetEdge(v, e) === true) continue;
+      // unpaved road avoided (the app's default): never a stage, so a loop isn't built round a forest gravel road its own
+      // legs then won't drive (Little Snowbird Road, the best "road" from Robbinsville, 2026-11-14)
+      if (noDirt && (v.flags[e] & B.unpaved)) continue;
       score[e] = q * v.fun[e] * (likeAt ? likeAt(e) : 1) / Math.max(0.05, v.len[e] / 1000);
       if (Number.isFinite(T[v.tail[e]]) || Number.isFinite(T[v.to[e]])) seeds.push(e);
     }

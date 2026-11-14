@@ -65,6 +65,45 @@ const CASES = {
     };
     return { bends: run(12, 0), straight: run(0, 0), divided: run(12, 1) };
   },
+  ellipseGoal() {
+    // a goal 60 m along a 20 km edge with no junction (a mountain road): the edge's far end is outside the leg's corridor,
+    // the goal isn't
+    const nodes = [at(35.3, -83.8), at(35.303, -83.8), at(35.483, -83.8)];
+    const edges = [];
+    two(edges, 0, 1, { quality: 0.7, cls: 3, name: 'Near', t: 20 }); two(edges, 1, 2, { quality: 0.7, cls: 3, name: 'Mountain Road', t: 900 });
+    const v = R.view(H.tiles(nodes, edges).tiles), obj = R.objective(v, {});
+    const src = R.snap(v, 35.3015, -83.8), dst = R.snap(v, 35.3036, -83.8);
+    const ell = { a: { lat: 35.3015, lon: -83.8 }, b: { lat: 35.3036, lon: -83.8 }, major: 3000 };
+    const r = R.search(v, obj, src, dst, 0, null, { ellipse: ell });
+    return { found: !!r, n: r ? r.edges.length : 0 };
+  },
+  islandStart() {
+    // the nearest road is a 50 m bridge joined to nothing (Explorer Road, La Cañada Flintridge); the start goes on the
+    // nearest road that leads somewhere
+    const nodes = [at(39.3, -84.6), at(39.3, -84.5994), at(39.302, -84.602), at(39.302, -84.59), at(39.302, -84.58), at(39.302, -84.57)];
+    const edges = [];
+    two(edges, 0, 1, { quality: 0.6, cls: 5, name: 'Bridge', t: 5 });
+    two(edges, 2, 3, { quality: 0.6, cls: 3, name: 'Main Road', t: 60 }); two(edges, 3, 4, { quality: 0.6, cls: 3, name: 'Main Road', t: 60 }); two(edges, 4, 5, { quality: 0.6, cls: 3, name: 'Main Road', t: 60 });
+    const v = R.view(H.tiles(nodes, edges).tiles), keep = R.K.LIVE_NODES;
+    R.K.LIVE_NODES = 3;
+    try {
+      let r = null;
+      try { r = R.plan(v, { from: { lat: 39.3001, lon: -84.5997 }, to: { lat: 39.302, lon: -84.571 }, level: 'fun' }); } catch (_) { r = null; }
+      return { routed: !!(r && r.routes.length), names: r && r.routes.length ? r.routes[0].names.map((x) => x.name) : [] };
+    } finally { R.K.LIVE_NODES = keep; }
+  },
+  dirtStage() {
+    // two good roads with corners, one of them gravel: with unpaved roads avoided (the app's default) the gravel road is
+    // never a stage a loop is built round
+    const nodes = [at(39.3, -84.6), at(39.3, -84.57), at(39.3, -84.54), at(39.27, -84.6), at(39.27, -84.57), at(39.27, -84.54)];
+    const edges = [];
+    two(edges, 0, 1, { quality: 0.8, cls: 4, name: 'Paved Road', t: 150, fun: 20 }); two(edges, 1, 2, { quality: 0.8, cls: 4, name: 'Paved Road', t: 150, fun: 20 });
+    two(edges, 3, 4, { quality: 0.85, cls: 4, name: 'Gravel Road', t: 150, fun: 30, flags: 8 }); two(edges, 4, 5, { quality: 0.85, cls: 4, name: 'Gravel Road', t: 150, fun: 30, flags: 8 });
+    two(edges, 0, 3, { quality: 0.6, cls: 4, name: 'Link', t: 200 });
+    const v = R.view(H.tiles(nodes, edges).tiles);
+    const names = (avoid) => R.explore(v, { start: { lat: 39.3, lon: -84.6 }, maxS: 3600, avoid }).stages.map((x) => x.name);
+    return { avoided: names({ unpaved: true }), allowed: names(null) };
+  },
   gates() {
     // A to B by the Gated road (a gate halfway, 100 s) or the Detour (160 s): a gate on a through road is open, one on a
     // residential street or with access private still blocks
