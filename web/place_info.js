@@ -133,6 +133,36 @@
     return kept.get(key);
   }
 
-  const api = { read, status, contact, query, lookup, clock };
+  /** One Overpass query for several places ([{ name, lat, lon }]): each by its name within 60 m. */
+  function queryMany(places) {
+    const one = (p) => `nwr(around:60,${(+p.lat).toFixed(6)},${(+p.lon).toFixed(6)})["name"="${String(p.name).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"];`;
+    return `[out:json][timeout:10];(${places.map(one).join('')});out tags center;`;
+  }
+  /** Each place's tags in one request (the Find nearby list): an array in the places' order, null where none was found
+   *  (or the place was null); null for the whole when no server answered. A name shared by two elements goes to the
+   *  nearer one, and only within about 150 m. */
+  function lookupMany(places, fetchFn = root.fetch && root.fetch.bind(root)) {
+    const list = (places || []).filter((p) => p && p.name && Number.isFinite(p.lat) && Number.isFinite(p.lon)).slice(0, 10);
+    if (!list.length || !fetchFn || !root.ApexCameras) return Promise.resolve(null);
+    return root.ApexCameras.fetchFirst(fetchFn, 'data=' + encodeURIComponent(queryMany(list)), root.ApexCameras.SERVERS, 8000)
+      .then((j) => (j && Array.isArray(j.elements) ? match(places, j.elements) : null)).catch(() => null);
+  }
+  /** Overpass elements back to the places asked (pure): each place's nearest element of its name, within ~150 m. */
+  function match(places, elements) {
+    const at = (e) => (Number.isFinite(e.lat) ? [e.lat, e.lon] : e.center ? [e.center.lat, e.center.lon] : null);
+    return (places || []).map((p) => {
+      if (!p || !p.name) return null;
+      let best = null, bd = Infinity;
+      for (const e of elements || []) {
+        const q = e && e.tags && e.tags.name === p.name ? at(e) : null;
+        if (!q) continue;
+        const d = Math.hypot(q[0] - p.lat, (q[1] - p.lon) * Math.cos(p.lat * Math.PI / 180));
+        if (d < bd && d < 0.0015) { bd = d; best = e.tags; }
+      }
+      return best;
+    });
+  }
+
+  const api = { read, status, contact, query, queryMany, lookup, lookupMany, match, clock };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexPlaceInfo = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -10360,8 +10360,17 @@ flow('find nearby: Where to? has Gas, Coffee and Food; a key, or "gas near me" t
   await tap('#destInput', 'Where to?');
   const keys = await page.evaluate(() => [...document.querySelectorAll('#nearbyKeys .chip')].map((b) => ({ t: b.textContent, h: Math.round(b.getBoundingClientRect().height), l: b.getAttribute('aria-label') })));
   check(keys.map((k) => k.t).join() === 'Gas,Coffee,Food' && keys.every((k) => k.h >= 44 && / nearby$/.test(k.l)), 'three keys under Where to?: ' + JSON.stringify(keys));
+  // each named place's own hours, in one Overpass request for the list (place_info.js lookupMany): the café open all day
+  const overpass = [];
+  await page.route(/^https:\/\/overpass/, (route) => { const q = decodeURIComponent((route.request().postData() || '').replace(/^data=/, '')); overpass.push(q);
+    const els = [...q.matchAll(/around:60,(-?[\d.]+),(-?[\d.]+)\)\["name"="([^"]+)"\]/g)].filter((m) => m[3] === 'Bean There Coffee')
+      .map((m, i) => ({ type: 'node', id: i + 1, lat: +m[1], lon: +m[2], tags: { name: m[3], opening_hours: '24/7' } }));
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: els }) }); });
   await tap('#nearbyKeys .chip:nth-child(2)', 'Coffee');
   await page.waitForFunction(() => document.querySelectorAll('#placeList .place').length >= 2, null, { timeout: 5000 });
+  await page.waitForFunction(() => { const s = document.querySelector('#placeList .place small'); return s && s.textContent === 'Open 24 hours'; }, null, { timeout: 5000 })
+    .catch(async () => { throw new Error('the café says it is open: ' + JSON.stringify({ overpass, list: await page.textContent('#placeList') })); });
+  check(new Set(overpass).size === 1 && !/no name/.test(overpass[0]), 'one query for the list (raced over the servers, as cameras.js), named places only: ' + JSON.stringify(overpass));
   const rows = await page.evaluate(() => ({ q: document.getElementById('destInput').value, keys: document.getElementById('nearbyKeys').hidden,
     rows: [...document.querySelectorAll('#placeList .place')].map((b) => [b.querySelector('b').textContent, b.querySelector('span').textContent]) }));
   check(rows.q === 'Coffee' && rows.keys && rows.rows.length === 2 && rows.rows[0][0] === 'Bean There Coffee' && /^0\.\d mi$/.test(rows.rows[0][1])
