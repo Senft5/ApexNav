@@ -15,3 +15,6 @@ actions/download-artifact with run-id lists only the first 100 of that run's art
 
 ## 2026-11-14 (graph US publish): Washington and Oregon are states of the lower 48 (claude/project-thread-39xbx9)
 All 141 bands went live (12,865 tiles), but Seattle, Portland and the Oregon coast were off the map: us_plan.states kept a state only when its Geofabrik polygon lay within 1 degree of the lower 48's box, and Washington's runs out to sea to -126.7, Oregon's past -126. The slack is now 3 degrees (LOWER48_SLACK; Alaska and Hawaii are still far outside); blocks stay on the -125 grid. A whole rebuild follows. Undo: LOWER48_SLACK = 1.0.
+
+## 2026-11-14 (graph US publish): the lower 48 rebuilds on the 1st of each month (claude/project-thread-39xbx9)
+graph-us.yml runs on a schedule (cron 23 3 1 * *): the whole country, live when every band builds. Monthly, not weekly: about 13 h of public-repo runners and all 49 Geofabrik extracts a build, for roads that change slowly. The region build (graph-region.yml) stays manual; its mirror never shrinks a live lower 48 (upload_r2.sh). Undo: drop the schedule block.
