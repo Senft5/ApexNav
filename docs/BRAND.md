@@ -5,6 +5,20 @@ Status: the brand direction, decided 2026-10 and brought in line with what ships
 2026-10 critique and work list, kept as history: most of section 7 has shipped or been overtaken, so do not rebuild from
 it. Where a section below and the shipped app disagree, the box at the top of that section says which wins.
 
+### The main look, redesigned (2026-11-14): this wins over §5's colours, radius and "rules, not boxes"
+The owner (2026-11-14): Roadbook was "flat, boring, uninspired and low contrast", tuned screen by screen. The main theme
+(id `roadbook` in code, shown as **Vetta**) is now one system, right by construction:
+- **Colour** (`web/themes.js`): graphite and white with one red. Night: background `#0A0A0B`, panel `#111214`, raised
+  `#1B1C20`, hair `#2B2D33`, ink `#F5F5F7`, secondary `#A0A3AB`, red `#FF3341`. Day: stage `#F4F5F7`, panel `#FFFFFF`,
+  raised `#F1F2F4`, hair `#E1E3E8`, ink `#0B0B0C`, secondary `#5B5F68`, red `#E0102A`. The route stays in ink; red is
+  the record key, the apex, warnings and selected marks. The map: cool greys, white roads with soft grey casings, blue water.
+- **Shape and depth** (`web/index.html`, THE VETTA DESIGN SYSTEM block): `--r-key` 12 px (keys, fields, switches),
+  `--r-card` 16 px (cards on the `--raised` fill, no outline), `--r-sheet` 22 px (sheets' top corners), `--elev-1`
+  (things floating on the map), `--elev-2` (sheets). Lines between rows are the hair, never ink. Components get these by
+  kind, so a new screen inherits them.
+- **Type**: unchanged families (Barlow Condensed for numerals and calls, Inter Tight for the rest).
+- The marketing site shares the night tokens and the red.
+
 ### Shipped state (2026-11-10): read this before the sections below
 - **Tabs:** Map, Log, People, Garage (`web/index.html` `#tabbar`). Plan lives on Map (Where to? and the plan sheet);
   Stages live in the Log; Settings live in Garage. The five-tab table in §4 is superseded.

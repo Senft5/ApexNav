@@ -10444,7 +10444,7 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   await openSetting(page, 'data');
   const g = await page.evaluate(() => { const s = document.getElementById('sheet'), e = getComputedStyle(document.getElementById('myEraseBtn'));
     return { title: s.querySelector('h2').textContent, themes: document.querySelectorAll('#themeCards > *').length, how: document.querySelectorAll('[data-panel~="garage"] details.how').length, bare: [...document.querySelectorAll('[data-panel~="garage"] > p.note')].filter((p) => !p.id && p.textContent.trim().length >= 140).length, octane: /Octane/.test(document.body.innerText), erase: e.color + '/' + e.textDecorationLine + '/' + e.borderTopStyle }; });
-  check(g.title === 'Garage' && g.themes === 3 && g.how >= 1 && g.bare === 0 && !g.octane && g.erase === 'rgb(200, 16, 46)/none/none', 'Garage: ' + JSON.stringify(g));
+  check(g.title === 'Garage' && g.themes === 3 && g.how >= 1 && g.bare === 0 && !g.octane && g.erase === 'rgb(224, 16, 42)/none/none', 'Garage: ' + JSON.stringify(g));
   // 2026-11-10: Your data is the Settings list's rows in three groups (it was eight keys of eight widths): one left edge, one width
   const rowsOf = await page.evaluate(() => { const box = document.querySelector('.data-rows'); return { groups: [...box.querySelectorAll('.nav-group')].map((h) => h.textContent),
     rows: [...box.querySelectorAll('.nav-row')].filter((r) => !r.hidden).map((r) => {   // signed out: no Delete account row
@@ -10455,7 +10455,7 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   await page.evaluate(() => document.getElementById('myEraseBtn').click());
   await page.waitForSelector('.confirm-sheet [role="alertdialog"], .confirm-sheet .cs-box[role="alertdialog"]');
   const cs = await page.evaluate(() => ({ yes: document.querySelector('.confirm-sheet .cs-yes').textContent, color: getComputedStyle(document.querySelector('.confirm-sheet .cs-yes')).color, focus: document.activeElement.className }));
-  check(!alerted && cs.yes === 'Erase everything' && cs.color === 'rgb(200, 16, 46)' && cs.focus === 'cs-no', 'the confirm sheet: ' + JSON.stringify(cs));
+  check(!alerted && cs.yes === 'Erase everything' && cs.color === 'rgb(224, 16, 42)' && cs.focus === 'cs-no', 'the confirm sheet: ' + JSON.stringify(cs));
   await page.keyboard.press('Escape');
   check(!(await page.$('.confirm-sheet')) && (await page.evaluate(() => ApexRecording.all())).length === 1, 'Cancel (Escape) keeps everything');
   await page.mouse.click(200, 30); await page.waitForTimeout(300);   // a tap outside slides the settings sheets away
@@ -10467,9 +10467,9 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   await page.evaluate(() => document.querySelectorAll('#themeCards .theme-card')[1].querySelector('.theme-preview').scrollIntoView());
   await page.click('#themeCards .theme-card:nth-child(2) .theme-preview');
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'tapedeck');
-  const used = await page.evaluate(() => ({ inUse: document.querySelector('#themeCards .theme-card.in-use .tc-head b').textContent, back: !!document.querySelector('#themeCards [aria-label="Use Roadbook"]') }));
+  const used = await page.evaluate(() => ({ inUse: document.querySelector('#themeCards .theme-card.in-use .tc-head b').textContent, back: !!document.querySelector('#themeCards [aria-label="Use Vetta"]') }));
   check(used.inUse === 'Tapedeck' && used.back, 'the Tapedeck preview, touched, is in use: ' + JSON.stringify(used));
-  await page.click('#themeCards [aria-label="Use Roadbook"]');
+  await page.click('#themeCards [aria-label="Use Vetta"]');
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'roadbook');
 });
 
