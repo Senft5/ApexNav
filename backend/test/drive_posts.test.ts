@@ -31,6 +31,19 @@ describe("drive posts", () => {
     expect((await api(c, "GET", `/api/posts/${id}`)).status).toBe(404);
   });
 
+  it("a stage keeps its ends only where both lie on the line as kept: never in the cut ends, never off the line", async () => {
+    const [a, b] = [await makeUser("alice"), await makeUser("bob")];
+    await befriend(a, b);
+    await post(a, { stages: [
+      { name: "Middle", score: 800, ends: [35.02, -84, 35.05, -84.0003] },          // on the line, 30 m off at the end: kept
+      { name: "From home", score: 790, ends: [35.0005, -84, 35.03, -84] },          // starts inside the first 500 m: dropped
+      { name: "Elsewhere", score: null, ends: [35.02, -84.01, 35.05, -84.01] }] });   // 900 m off the line: dropped
+    const [p] = await feedOf(b);
+    expect(p.stages).toEqual([{ name: "Middle", score: 800, ends: [35.02, -84, 35.05, -84.0003] }, { name: "From home", score: 790 },
+      { name: "Elsewhere", score: null }]);
+    expect((await api(a, "POST", "/api/posts", { ...POST, stages: [{ name: "x", score: 1, ends: "35,-84" }] })).status).toBe(201);   // odd ends: no ends, still posted
+  });
+
   it("a friend's profile lists only their posts you can see (?author=), never a crew post from a crew you're not in", async () => {
     const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara")];
     await befriend(a, b); await befriend(b, c);
