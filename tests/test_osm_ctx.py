@@ -109,7 +109,7 @@ def test_kept_in_step_with_the_relay():
     drivable = re.search(r'export const DRIVABLE = "(.+?)";', src).group(1)
     assert drivable == B.DRIVABLE.pattern
     assert "export const BUNDLE = 5," in src and B.BUNDLE == 5 and B.TILE == 0.05
-    assert 'osm\\/v2\\/(index\\.json|falls\\.json|closures\\.json|-?\\d{1,4}_-?\\d{1,4}\\.bin)' in open(os.path.join(ROOT, "backend", "src", "data_store.ts")).read()
+    assert 'osm\\/v2\\/(index\\.json|falls\\.json|closures\\.json|-?\\d{1,4}_-?\\d{1,4}\\.bin|places\\/-?\\d{1,4}_-?\\d{1,4}\\.json)' in open(os.path.join(ROOT, "backend", "src", "data_store.ts")).read()
     assert f"HEAD = {B.HEAD}," in src and 'BUILT = "osm/v2"' in src
 
 
@@ -170,3 +170,23 @@ def test_the_regions_roads_with_conditional_access(tmp_path):
     poly.write_text("x\n1\n  -84.80 38.95\n  -84.20 38.95\n  -84.20 39.30\n  -84.80 39.30\nEND\nEND\n")
     d = F.closures_doc(got, B.read_poly(str(poly)), built="2026-11-14")
     assert d["ways"] == [[39.12, -84.53, {"access:conditional": "no @ (19:00-07:00)", "name": "Gate Rd"}]] and len(d["cells"]) == 2
+
+
+def test_the_regions_places_with_hours(tmp_path):
+    """tools/osm_ctx/region.py places: a named node or way with hours or contact tags (PKEYS), only those tags, one file
+    per covered cell, an empty cell as an empty list so the server knows it was built."""
+    from tools.osm_ctx import region as F
+    js = open(os.path.join(ROOT, "web", "place_info.js")).read()
+    assert all(f"t.{k}" in js or f"t['{k}']" in js for k in F.PKEYS)
+    la = 39.12
+    nodes = {1: (la, -84.54, {"amenity": "cafe", "name": "Bean", "opening_hours": "Mo-Fr 07:00-15:00", "phone": "+1 513 555 0100", "cuisine": "coffee"}),
+             2: (la, -84.53, {"amenity": "cafe", "opening_hours": "24/7"}),                 # no name: never asked by name
+             3: (la, -84.52, {"shop": "car", "name": "Lot"}),                               # no hours or contact
+             4: (la + 0.01, -84.54, {}), 5: (la + 0.01, -84.53, {}), 6: (la + 0.02, -84.53, {})}
+    ways = {30: ([4, 5, 6], {"building": "yes", "name": "Garage Diner", "website": "diner.example"})}
+    p = tmp_path / "p.osm.pbf"
+    write_osm(p, nodes, ways)
+    got = F.read_places([str(p)])
+    assert [(n, t) for _, _, n, t in got] == [("Bean", {"opening_hours": "Mo-Fr 07:00-15:00", "phone": "+1 513 555 0100"}), ("Garage Diner", {"website": "diner.example"})]
+    by = F.places_by_cell(got, [[156, -339], [156, -338]])
+    assert [len(by[(156, -339)]), len(by[(156, -338)])] == [2, 0]

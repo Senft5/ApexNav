@@ -43,7 +43,7 @@ import { pointsFor } from "./points";
 import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
 import { ctxKeys, workzones } from "./route_feeds";
-import { osmTile, regionList } from "./osm_relay";
+import { osmTile, placeTags, regionList } from "./osm_relay";
 import { traceTile } from "./trace_relay";
 import { grantedThemes } from "./themes";
 import { isDeveloper } from "./developers";
@@ -187,6 +187,8 @@ on("GET", "/api/ctx/osm", async (req, env, _m, ctx) => {
 // The region's waterfalls and roads with conditional access, built weekly with the OSM tiles (osm_relay.ts regionList)
 on("GET", "/api/ctx/falls.json", async (_req, env) => regionList(env.DATA, "falls.json"));
 on("GET", "/api/ctx/closures.json", async (_req, env) => regionList(env.DATA, "closures.json"));
+// A place card's hours, phone and website from the same build (osm_relay.ts placeTags; web/place_info.js)
+on("GET", "/api/ctx/places", async (req, env) => placeTags(new URL(req.url), env.DATA));
 // The router's edges for a stage cut from the map tiles (trace_relay.ts; route_ctx/router_edges.js), kept 3 days per shape
 on("GET", "/api/ctx/trace", async (req) => traceTile(new URL(req.url)));
 on("GET", "/api/shop", async (req, env) => json(await shop(env, await requireMember(req, env))));

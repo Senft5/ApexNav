@@ -55,10 +55,18 @@ jobs:
         with:
           path: .graph_cache/osm
           key: graph-osm-${{ steps.week.outputs.w }}
-      - name: The states' outlines, once here (six bands asking Geofabrik at once had one refused)
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/osm_ctx/polys
+      - name: The states' outlines, once here (Geofabrik's, else the copy in tools/osm_ctx/polys)
         run: |
+          # six bands asking Geofabrik at once had one refused, and on 2026-11-14 it refused every connection for a while:
+          # a fresh outline when it answers, the kept one otherwise (state borders don't move)
           mkdir -p polys
-          for s in $STATES; do curl -fsSL --retry 6 --retry-delay 10 --retry-all-errors -o "polys/$s.poly" "https://download.geofabrik.de/north-america/us/$s.poly"; done
+          for s in $STATES; do
+            curl -fsSL --retry 3 --retry-delay 10 --retry-all-errors -o "polys/$s.poly" "https://download.geofabrik.de/north-america/us/$s.poly" \
+              || { echo "::warning::$s.poly from the repo copy"; cp "tools/osm_ctx/polys/$s.poly" "polys/$s.poly"; }
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: osm-polys
@@ -144,12 +152,13 @@ jobs:
         with:
           name: osm-polys
           path: polys
-      - name: The region's waterfalls and roads with conditional access (web/scenic.js R-24, conditional_closures.js R-22)
+      - name: The region's waterfalls, roads with conditional access and places' hours (scenic.js R-24, conditional_closures.js R-22, place_info.js)
         run: |
           args=""
           for s in $STATES; do
             osmium tags-filter --overwrite -o "falls-$s.osm.pbf" ".graph_cache/osm/$s.osm.pbf" nwr/natural=waterfall nwr/waterway=waterfall \
-              w/motor_vehicle:conditional w/motorcar:conditional w/vehicle:conditional w/access:conditional
+              w/motor_vehicle:conditional w/motorcar:conditional w/vehicle:conditional w/access:conditional \
+              nw/opening_hours nw/phone nw/contact:phone nw/website nw/contact:website
             args="$args --pbf falls-$s.osm.pbf --poly polys/$s.poly"
           done
           python -m tools.osm_ctx.region $args --out out | tee -a "$GITHUB_STEP_SUMMARY"
