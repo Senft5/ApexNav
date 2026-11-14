@@ -196,7 +196,7 @@ def test_the_regions_fuel_schools_and_worship_points(tmp_path):
     """tools/osm_ctx/region.py points: fuel stations (route_ctx/car.js), schools and places of worship (route_ctx/events.js)
     as positions only, a node or a way's centre, one file per covered cell with every list, empty ones too."""
     from tools.osm_ctx import region as F
-    assert "amenity=fuel,school,place_of_worship" in open(os.path.join(ROOT, ".github", "workflows", "osm-ctx.yml")).read()
+    assert "nw/amenity=fuel,school,place_of_worship" in open(os.path.join(ROOT, "tools", "osm_ctx", "region.filter")).read().split()
     la = 39.12
     nodes = {1: (la, -84.54, {"amenity": "fuel", "name": "Gas"}), 2: (la, -84.53, {"amenity": "place_of_worship"}),
              3: (la, -84.52, {"amenity": "cafe"}),                                   # not a point we keep
@@ -220,7 +220,7 @@ def test_the_regions_lit_roads_tunnels_and_cycle_routes(tmp_path):
     lit = re.search(r"const LIT = \{(.+?)\};", js).group(1)
     assert set(re.findall(r"'?([a-z0-9/-]+)'?:", lit)) == set(F.LIT)
     assert "motorway|trunk|primary|secondary|tertiary|unclassified|residential" in js and "|".join(F.LINE_ROAD) in js
-    assert "w/lit w/tunnel=yes r/route=bicycle" in open(os.path.join(ROOT, ".github", "workflows", "osm-ctx.yml")).read()
+    assert {"w/lit", "w/tunnel=yes", "r/route=bicycle"} <= set(open(os.path.join(ROOT, "tools", "osm_ctx", "region.filter")).read().split())
     la = 39.15
     nodes = {1: (la, -84.55, {}), 2: (la, -84.5, {}), 3: (la, -84.45, {}),          # Main St crosses the tile edge at -84.5
              4: (la + 0.01, -84.55, {}), 5: (la + 0.01, -84.54, {}),
@@ -242,3 +242,47 @@ def test_the_regions_lit_roads_tunnels_and_cycle_routes(tmp_path):
     assert t["391_-846"]["lit"] == [["yes", [la, -84.55, la, -84.45]]] and t["391_-845"]["lit"] == t["391_-846"]["lit"]
     assert len(t["391_-846"]["tunnel"]) == 1 and len(t["391_-846"]["cycle"]) == 1
     assert t["392_-846"] == {"lit": [], "tunnel": [], "cycle": []}
+
+
+def test_the_lower_48_outlines_from_geofabriks_index(tmp_path):
+    """tools/osm_ctx/us_outlines.py: each lower-48 state's outline in Geofabrik's index (GeoJSON) as a .poly that
+    build.py and region.py read back as the same shape, holes included; Alaska and the non-state extracts left out."""
+    from tools.osm_ctx import us_outlines as U
+    sq = lambda w, s, e, n: [[w, s], [e, s], [e, n], [w, n], [w, s]]
+    index = {"features": [
+        {"properties": {"id": "us/ohio", "parent": "us"}, "geometry": {"type": "MultiPolygon", "coordinates": [
+            [sq(-84.8, 38.4, -80.5, 42.0), sq(-83.0, 39.0, -82.0, 40.0)],      # a hole
+            [sq(-80.4, 41.6, -80.1, 41.7)]]}},                               # an island
+        {"properties": {"id": "us/west-virginia", "parent": "us"}, "geometry": {"type": "Polygon", "coordinates": [sq(-82.7, 37.2, -77.7, 40.7)]}},
+        {"properties": {"id": "us/alaska", "parent": "us"}, "geometry": {"type": "Polygon", "coordinates": [sq(-170, 52, -130, 71)]}},
+        {"properties": {"id": "canada", "parent": "north-america"}, "geometry": {"type": "Polygon", "coordinates": [sq(-140, 42, -52, 83)]}}]}
+    assert U.write(index, str(tmp_path)) == ["ohio", "west-virginia"]
+    oh = B.read_poly(str(tmp_path / "ohio.poly"))
+    assert abs(oh.area - (4.3 * 3.6 - 1.0 + 0.03)) < 1e-6
+    assert not oh.contains(__import__("shapely.geometry", fromlist=["Point"]).Point(-82.5, 39.5)), "the hole stays a hole"
+    assert abs(B.read_poly(str(tmp_path / "west-virginia.poly")).area - 5.0 * 3.5) < 1e-6
+    wf = open(os.path.join(ROOT, ".github", "workflows", "osm-ctx-us.yml")).read()
+    assert "tools.osm_ctx.us_outlines" in wf and "tools.graph_etl.us_plan" in wf and "-e tools/osm_ctx/region.filter" in wf
+    assert ".github/workflows/osm-ctx-us.yml" in open(os.path.join(ROOT, "backend", "src", "github_oidc.ts")).read(), "its upload is let in"
+
+
+def test_a_lower_48_job_writes_only_its_own_cells(tmp_path):
+    """tools/osm_ctx/region.py --box --no-lists (osm-ctx-us.yml): one job's chunk, so the jobs side by side never write
+    the same file; the per-cell files only (falls.json and closures.json stay osm-ctx.yml's)."""
+    from tools.osm_ctx import region as F
+    la = 39.12
+    nodes = {1: (la, -84.60, {"amenity": "fuel"}), 2: (la, -83.60, {"amenity": "fuel"}), 3: (la, -84.55, {"natural": "waterfall"})}
+    p = tmp_path / "j.osm.pbf"
+    write_osm(p, nodes, {})
+    poly = tmp_path / "x.poly"
+    poly.write_text("x\n1\n  -85.00 39.00\n  -83.00 39.00\n  -83.00 40.00\n  -85.00 40.00\nEND\nEND\n")
+    out = tmp_path / "out"
+    F.main(["--pbf", str(p), "--poly", str(poly), "--box=-85,39,-84,40", "--no-lists", "--out", str(out)])
+    v2 = out / "osm" / "v2"
+    assert not (v2 / "falls.json").exists() and not (v2 / "closures.json").exists()
+    cells = sorted(f.name for f in (v2 / "points").iterdir())
+    assert len(cells) == 16 and all(-340 <= int(c.split("_")[1].split(".")[0]) <= -337 for c in cells), "only the box's 4 x 4 cells"
+    assert json.load(open(v2 / "points" / "156_-339.json"))["fuel"] == [[39.12, -84.6]]
+    assert sorted(f.name for f in (v2 / "lines").iterdir()) == sorted(["78_-170.json", "78_-169.json", "79_-170.json", "79_-169.json"])
+    F.main(["--pbf", str(p), "--poly", str(poly), "--box=-90,30,-89,31", "--no-lists", "--out", str(tmp_path / "none")])
+    assert not (tmp_path / "none").exists(), "a box outside the outlines writes nothing"

@@ -1,0 +1,232 @@
+name: OSM route context (lower 48, R2)
+
+# The plan's OpenStreetMap road details (osm-ctx.yml's bundles: limits, surface, signals, signs, guard rails, viewpoints,
+# fuel) and the per-cell lists (place hours and contact, fuel/schools/worship points, lit roads, tunnels and cycle
+# routes: tools/osm_ctx/region.py) for the lower 48, so a plan outside Ohio, Kentucky and Indiana stops hanging on the
+# public Overpass servers once our own routing covers the country (graph-us.yml). Same tools as osm-ctx.yml, laid out as
+# graph-us.yml: its plan (tools/graph_etl/us_plan.py, one job per 1 degree band x chunk, the states under each), one
+# extract per state fetched once, the outlines from Geofabrik's index (tools/osm_ctx/us_outlines.py).
+#
+# osm-ctx.yml stays the region's weekly build and the only one writing falls.json, closures.json and index.json (single
+# region-wide files); this one adds and refreshes the per-cell files everywhere, inside the region too.
+#
+# Triggers: a manual run (`only`: Geofabrik state ids for a pilot, empty for the lower 48), or a push to
+# claude/roam-c-osm-ctx-us changing tools/osm_ctx/US_BUILD (its `only=` line), to try it before it is on main. Only a run
+# off main uploads (the Worker takes main's OIDC token only); elsewhere it is a dry run with the files as artifacts.
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Pilot: Geofabrik state ids, comma separated (empty: the lower 48)"
+        required: false
+        default: ""
+  push:
+    branches: [claude/roam-c-osm-ctx-us]
+    paths:
+      - "tools/osm_ctx/US_BUILD"
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: osm-ctx-us
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      states: ${{ steps.plan.outputs.states }}
+      only: ${{ steps.plan.outputs.only }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tools
+        run: pip install "shapely>=2.0"
+      - name: Plan
+        id: plan
+        env:
+          IN_ONLY: ${{ inputs.only }}
+        run: |
+          only="$IN_ONLY"
+          if [ "${{ github.event_name }}" = "push" ]; then only=$(sed -n 's/^only=//p' tools/osm_ctx/US_BUILD | head -1); fi
+          curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o index-v1.json https://download.geofabrik.de/index-v1.json
+          python -m tools.graph_etl.us_plan matrix --index index-v1.json --only "$only" > matrix.json
+          python -m tools.osm_ctx.us_outlines --index index-v1.json --out polys
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          m = json.load(open("matrix.json"))
+          from tools.graph_etl.us_plan import urls
+          ix = urls(json.load(open("index-v1.json")))
+          states = sorted({s for j in m["include"] for s in j["states"].split()})
+          print("matrix=" + json.dumps(m, separators=(",", ":")))
+          print("states=" + json.dumps({"include": [{"state": s, "url": ix[s]} for s in states]}, separators=(",", ":")))
+          PY
+          echo "only=$only" >> "$GITHUB_OUTPUT"
+          python3 -c "import json; m=json.load(open('matrix.json')); print(len(m['include']), 'jobs; pilot:', '$only' or 'no')" | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 -c "import json,sys; sys.exit(0 if json.load(open('matrix.json'))['include'] else 'no jobs: the plan found no state')"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: osm-us-polys
+          path: polys
+          retention-days: 2
+
+  osm:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 4           # gentle on Geofabrik (graph-us.yml: 6 at once had connections refused)
+      matrix: ${{ fromJSON(needs.plan.outputs.states) }}
+    steps:
+      - name: The extract
+        id: get
+        continue-on-error: true   # a state refused here is fetched again by osm-again, on another runner
+        run: |
+          mkdir -p osm
+          for round in 1 2 3; do
+            curl -fSL --retry 8 --retry-delay 30 --retry-all-errors -o "osm/${{ matrix.state }}.osm.pbf" "${{ matrix.url }}" && break
+            [ "$round" = 3 ] && exit 1
+            echo "round $round refused; waiting 5 min"; sleep 300
+          done
+          ls -la osm
+      - uses: actions/upload-artifact@v4
+        if: steps.get.outcome == 'success'
+        with:
+          name: osm-${{ matrix.state }}
+          path: osm
+          retention-days: 2
+          overwrite: true
+          compression-level: 0
+
+  osm-again:
+    needs: [plan, osm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: The extracts still missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATES: ${{ needs.plan.outputs.states }}
+        run: |
+          mkdir -p again
+          have=$(gh api --paginate "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?per_page=100" --jq '.artifacts[].name')
+          echo "$STATES" | python3 -c "import json,sys; [print(j['state'], j['url']) for j in json.load(sys.stdin)['include']]" > states.txt
+          : > missing.txt
+          while read -r st url; do grep -qx "osm-$st" <<<"$have" || echo "$st $url" >> missing.txt; done < states.txt
+          echo "missing: $(wc -l < missing.txt)"; cat missing.txt
+          while read -r st url; do
+            mkdir -p "again/$st"
+            for round in 1 2 3; do
+              curl -fSL --retry 8 --retry-delay 30 --retry-all-errors -o "again/$st/$st.osm.pbf" "$url" && break
+              [ "$round" = 3 ] && exit 1
+              echo "round $round refused; waiting 5 min"; sleep 300
+            done
+          done < missing.txt
+      - uses: actions/upload-artifact@v4
+        if: hashFiles('again/**/*.pbf') != ''
+        with:
+          name: osm-again
+          path: again
+          retention-days: 2
+          compression-level: 0
+
+  band:
+    needs: [plan, osm, osm-again]
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      WORK: /home/runner/osm_work
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
+          pip install "osmium>=4.0" "shapely>=2.0"
+      - name: The states under this job's blocks, and their outlines
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$WORK/osm" "$WORK/polys"
+          gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n osm-us-polys -D "$WORK/polys"
+          for s in ${{ matrix.states }}; do
+            for k in 1 2 3; do gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n "osm-$s" -D "$WORK/osm" && break; sleep 15; done
+            if [ ! -s "$WORK/osm/$s.osm.pbf" ]; then
+              [ -d "$WORK/again" ] || gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n osm-again -D "$WORK/again" || true
+              cp "$WORK/again/$s/$s.osm.pbf" "$WORK/osm/" || { echo "::error::no extract for $s"; exit 1; }
+            fi
+          done
+          ls -la "$WORK/osm"
+      - name: Build the blocks and the job's per-cell lists
+        env:
+          JOB: ${{ matrix.job }}
+        run: |
+          osmium merge --overwrite -o "$WORK/region.osm.pbf" "$WORK"/osm/*.osm.pbf
+          rm -rf "$WORK/osm"
+          polys=""; for s in ${{ matrix.states }}; do polys="$polys --poly $WORK/polys/$s.poly"; done
+          python -m tools.graph_etl.us_plan blocks --job "$JOB" > "$WORK/blocks.txt"
+          : > "$WORK/failed.txt"
+          while read -r name box clip; do
+            echo "::group::$name $box"
+            # the bundles need only the signs and rails 40 m round a tile: 0.05 degrees, as osm-ctx.yml
+            small=$(python3 -c "w,s,e,n=map(float,'$box'.split(',')); m=0.05; print(f'{w-m},{s-m},{e+m},{n+m}')")
+            osmium extract --overwrite -s smart -b "$small" -o "$WORK/block.osm.pbf" "$WORK/region.osm.pbf"
+            python -m tools.osm_ctx.build --pbf "$WORK/block.osm.pbf" --box="$box" $polys --out out || { echo "::error::block $name failed"; echo "$name" >> "$WORK/failed.txt"; }
+            rm -f "$WORK/block.osm.pbf"
+            echo "::endgroup::"
+          done < "$WORK/blocks.txt"
+          jbox=$(python3 -c "import json,os; j=json.loads(os.environ['JOB']); print(f\"{j['west']},{j['band']},{j['east']},{j['band'] + 1}\")")
+          osmium tags-filter --overwrite -o "$WORK/lists.osm.pbf" -e tools/osm_ctx/region.filter "$WORK/region.osm.pbf"
+          rm -f "$WORK/region.osm.pbf"
+          python -m tools.osm_ctx.region --pbf "$WORK/lists.osm.pbf" $polys --box="$jbox" --no-lists --out out || echo lists >> "$WORK/failed.txt"
+          mkdir -p out/osm/v2
+          echo "${{ matrix.name }}: $(ls out/osm/v2/*.bin 2>/dev/null | wc -l) bundles, $(du -sh out/osm/v2 | cut -f1)" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ -s "$WORK/failed.txt" ]; then echo "failed: $(tr '\n' ' ' < "$WORK/failed.txt")" >> "$GITHUB_STEP_SUMMARY"; exit 1; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: osmctx-${{ matrix.name }}
+          path: out
+          retention-days: 3
+          overwrite: true
+          if-no-files-found: ignore
+
+  publish:
+    needs: [plan, band]
+    # a pilot uploads too: it only adds or refreshes cells, it never takes any away
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: osmctx-*
+          path: built
+          merge-multiple: true
+      - name: Count
+        run: |
+          n=$(ls built/osm/v2/*.bin | wc -l)
+          [ "$n" -gt 20 ] || { echo "::error::only $n bundles built"; exit 1; }
+          rm -f built/osm/v2/index.json built/osm/v2/falls.json built/osm/v2/closures.json   # osm-ctx.yml's alone
+          echo "$n bundles, $(ls built/osm/v2/places | wc -l) place cells, $(ls built/osm/v2/lines | wc -l) line bundles, $(du -sh built/osm/v2 | cut -f1); pilot: ${{ needs.plan.outputs.only || 'no' }}" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Upload to R2
+        shell: bash   # -o pipefail: a refused upload fails the run, not only the script behind the tee
+        run: tools/graph_etl/upload_r2.sh built | tee -a "$GITHUB_STEP_SUMMARY"
