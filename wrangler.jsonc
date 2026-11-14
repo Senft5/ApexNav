@@ -1,6 +1,6 @@
 {
   // Cloudflare Worker "apexnav": static site from web/, plus the API (backend/src) on /api/*.
-  // run_worker_first sends only /api/* to the Worker; every other path is served straight from web/.
+  // run_worker_first sends /api/* and the front pages (/, /index.html, the app-links file) to the Worker (backend/src/hosts.ts); every other path is served straight from web/.
   // Secrets (set in the Cloudflare dashboard, never in this file): GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OWNER_EMAIL, PEPPER.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "apexnav",
