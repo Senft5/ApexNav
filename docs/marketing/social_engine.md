@@ -16,6 +16,10 @@ its licensed library, never baked into the file. Rules: MARKETING.md sections 2 
 | Fri | Weekend loop | Where to? → loop; screen-record the route being drawn (route_reveal.js) | 10–15 s |
 | Sat | The score | End card → Share card (drive_card.js), as a photo or carousel | photo |
 
+Bio link: vettadrive.com during the beta; from launch day, straight to `https://apps.apple.com/app/id<APP_ID>?pt=<PT>&ct=social`
+(the same App Store id and provider token the Social thread's `APP_STORE_ID` / `APP_STORE_PT` in web/cockpit.js use), so
+App Store Connect counts social downloads with no page in between.
+
 Bank 10 before the first goes up. After 30 days, double the type with the most views; "proven" means downloads
 from the `ct=social` App Store link in App Store Connect.
 
