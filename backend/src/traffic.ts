@@ -269,8 +269,11 @@ export async function trafficResponse(env: Env, fetcher: typeof fetch = fetch): 
 // cameras layer (web/road_cams.js): snow, ice or a wet road before a drive. Traffic cameras, not speed or plate cameras
 // (those are Avoid cameras, web/cameras.js). The list changes rarely: asked of OHGO at most once a day per edge. The phone
 // loads each picture straight from ODOT's image server (itscameras.dot.state.oh.us, in the page's img-src).
-export const CAMS_S = 86400, CAM_IMG_HOST = "itscameras.dot.state.oh.us";
-export interface RoadCam { id: string; lat: number; lon: number; name: string; views: { dir: string; url: string }[] }
+// Kentucky's (2026-11-14): KYTC's public camera layer (the one goky.ky.gov draws, about 250, keyless), pictures on TRIMARC's
+// https image server; its few http-only pictures (INDOT's trafficwise) are left out.
+export const CAMS_S = 86400, CAM_IMG_HOST = "itscameras.dot.state.oh.us", KY_IMG_HOST = "www.trimarc.org";
+export const KY_CAMS = "https://services2.arcgis.com/CcI36Pduqd0OR4W9/arcgis/rest/services/trafficCamerasCur_Prd/FeatureServer/0/query?where=1%3D1&outFields=description,snapshot,status,latitude,longitude&f=json&resultRecordCount=2000";
+export interface RoadCam { id: string; lat: number; lon: number; name: string; src: string; views: { dir: string; url: string }[] }
 
 /** One page of OHGO's /cameras as rows: a camera with a point and at least one picture on ODOT's own image host. */
 export function parseOhgoCams(json: unknown): RoadCam[] {
@@ -289,39 +292,66 @@ export function parseOhgoCams(json: unknown): RoadCam[] {
         return [{ dir: dir && dir !== "View" ? dir : "", url: u.toString() }];
       }).slice(0, 4);
       if (!views.length) continue;
-      out.push({ id: String(r.id ?? "").slice(0, 30), lat: r5(r.latitude), lon: r5(r.longitude), name: cut(r.location ?? r.description, 60) ?? "Road camera", views });
+      out.push({ id: String(r.id ?? "").slice(0, 30), lat: r5(r.latitude), lon: r5(r.longitude), name: cut(r.location ?? r.description, 60) ?? "Road camera", src: "ODOT", views });
     } catch { /* as above */ }
   }
   return out;
 }
 
-/** GET /api/traffic/v1/cameras.json: every page of OHGO's cameras, cached a day; 503 no_key without the owner's key. */
+/** KYTC's camera layer (ArcGIS JSON) as rows: online cameras with an https picture on TRIMARC's image host. */
+export function parseKyCams(json: unknown): RoadCam[] {
+  const rows = (json as { features?: unknown })?.features;
+  if (!Array.isArray(rows)) return [];
+  const out: RoadCam[] = [], seen = new Set<string>();
+  for (const f of rows as Record<string, any>[]) {
+    try {
+      const a = f?.attributes;
+      const lat = finite(a?.latitude) ? a.latitude : f?.geometry?.y, lon = finite(a?.longitude) ? a.longitude : f?.geometry?.x;
+      if (!a || a.status === "Offline" || !finite(lat) || !finite(lon) || !inRange(lat, lon)) continue;
+      let u: URL;
+      try { u = new URL(String(a.snapshot ?? "")); } catch { continue; }
+      if (u.protocol !== "https:" || u.hostname !== KY_IMG_HOST) continue;
+      u.port = "";
+      const file = u.pathname.split("/").pop() ?? "";
+      const id = `ky-${file.replace(/\.[a-z]+$/i, "").replace(/[^A-Za-z0-9_-]/g, "")}`.slice(0, 40);   // OBJECTID changes each refresh
+      if (id === "ky-" || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, lat: r5(lat), lon: r5(lon), name: cut(a.description, 60) ?? "Road camera", src: "KYTC", views: [{ dir: "", url: u.toString() }] });
+    } catch { /* one bad row never drops the rest */ }
+  }
+  return out;
+}
+
+/** GET /api/traffic/v1/cameras.json: Ohio's (every OHGO page, with the owner's key) and Kentucky's cameras, cached a day. */
 export async function camerasResponse(env: Env, fetcher: typeof fetch = fetch): Promise<Response> {
   const head = { "content-type": "application/json", ...SEC };
   let key: unknown = null;
   try { key = env.CTX_KEYS ? (JSON.parse(env.CTX_KEYS) as Record<string, unknown>).ohgoApiKey : null; } catch { key = null; }
   if (!(typeof key === "string" && key)) key = env.OHGO_API_KEY ?? null;
-  if (!(typeof key === "string" && key)) return new Response(JSON.stringify({ error: "no_key" }), { status: 503, headers: { ...head, "cache-control": "no-store" } });
   const cache = typeof caches !== "undefined" ? (caches as unknown as { default: Cache }).default : null;
-  const ck = new Request("https://apexnav.cache/traffic/v1/cameras.json");
+  const ck = new Request("https://apexnav.cache/traffic/v1/cameras.json?v=2");
   const hit = cache ? await cache.match(ck) : undefined;
   if (hit) return new Response(hit.body, { headers: hit.headers });
-  const q = (page: number) => `${OHGO}/cameras?${page > 1 ? `page=${page}&` : ""}api-key=${encodeURIComponent(key as string)}`;
-  const getCams = async (url: string) => {
+  const getJson = async (url: string) => {
     const r = await fetcher(url, { headers: { "user-agent": "Vetta-traffic/1.0", accept: "application/json" }, cf: { cacheTtl: CAMS_S, cacheEverything: true } } as RequestInit);
     if (!r.ok) throw new Error(`upstream ${r.status}`);
     return r.json() as Promise<{ totalPageCount?: unknown }>;
   };
-  let cams: RoadCam[] = [];
-  try {
-    const first = await getCams(q(1));
+  const ohio = async (): Promise<RoadCam[]> => {
+    if (!(typeof key === "string" && key)) return [];
+    const q = (page: number) => `${OHGO}/cameras?${page > 1 ? `page=${page}&` : ""}api-key=${encodeURIComponent(key as string)}`;
+    const first = await getJson(q(1));
     const pages = Math.min(10, finite(first.totalPageCount) ? Math.max(1, Math.floor(first.totalPageCount)) : 1);
-    const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => getCams(q(i + 2))));
-    cams = [first, ...rest].flatMap(parseOhgoCams);
-  } catch {
-    return new Response(JSON.stringify({ error: "cameras_unavailable" }), { status: 502, headers: { ...head, "cache-control": "no-store" } });
-  }
-  const res = new Response(JSON.stringify({ src: "ODOT", cams }), { headers: { ...head, "cache-control": `public, max-age=${CAMS_S}` } });
+    const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => getJson(q(i + 2))));
+    return [first, ...rest].flatMap(parseOhgoCams);
+  };
+  const [oh, ky] = await Promise.allSettled([ohio(), getJson(KY_CAMS).then(parseKyCams)]);
+  const cams = [...(oh.status === "fulfilled" ? oh.value : []), ...(ky.status === "fulfilled" ? ky.value : [])];
+  const failed = oh.status === "rejected" || ky.status === "rejected";
+  if (!cams.length) return new Response(JSON.stringify({ error: "cameras_unavailable" }), { status: 502, headers: { ...head, "cache-control": "no-store" } });
+  const sources = [...new Set(cams.map((c) => c.src))];
+  // a half answer (one state failed) is kept 10 minutes, not a day
+  const res = new Response(JSON.stringify({ sources, cams }), { headers: { ...head, "cache-control": `public, max-age=${failed ? 600 : CAMS_S}` } });
   if (cache) await cache.put(ck, res.clone());
   return res;
 }

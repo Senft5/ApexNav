@@ -20,6 +20,8 @@ out.none = C.geojson(null);
 out.pic = C.pictureUrl(H, 120000);
 out.picQ = C.pictureUrl(H + '?a=1', 120000);
 out.picBad = C.pictureUrl('https://example.com/b.jpg', 0);
+out.ky = C.geojson({ cams: [{ id: 'ky-CCTV_05_71_0103', lat: 38.32, lon: -85.56, name: 'I-71 at Old Brownsboro Rd', views: [{ dir: '', url: 'https://www.trimarc.org/images/milestone/CCTV_05_71_0103.jpg' }] }] });
+out.who = [C.ownerOf(H), C.ownerOf('https://www.trimarc.org/images/milestone/x.jpg'), C.ownerOf('http://www.trimarc.org/x.jpg')];
 console.log(JSON.stringify(out));
 """
 
@@ -33,6 +35,11 @@ def test_points_with_odot_pictures_only(out):
     assert [f["id"] for f in out["geo"]["features"]] == ["1"]
     assert out["geo"]["features"][0]["geometry"]["coordinates"] == [-83, 40]
     assert out["none"]["features"] == []
+    assert [f["id"] for f in out["ky"]["features"]] == ["ky-CCTV_05_71_0103"]                 # Kentucky's, on TRIMARC's host
+
+
+def test_each_picture_says_whose_camera_it_is(out):
+    assert out["who"] == ["Ohio DOT", "Kentucky TRIMARC", None]                               # never an http picture
 
 
 def test_a_fresh_picture_each_minute_and_never_another_host(out):
@@ -49,5 +56,5 @@ def test_wired_as_an_opt_in_lazy_layer_kept_apart_from_speed_cameras():
     assert "roadcams: ['road_cams.js']" in lazy and '<script src="road_cams.js"' not in html   # never on the launch path
     assert 'data-toggle="roadcams"' in html and "roadcams: false," in js                       # off until switched on
     assert "if (k === 'roadcams') roadCamsLayer(state.toggles.roadcams);" in js
-    assert "https://itscameras.dot.state.oh.us" in html                                         # the pictures' host in img-src
+    assert "https://itscameras.dot.state.oh.us https://www.trimarc.org" in html                                         # the pictures' host in img-src
     assert "driving: () => driveActive && state.mode === 'live'" in js                          # the picture waits for a stop
