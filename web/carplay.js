@@ -270,6 +270,14 @@
    * and Waze show "Rerouting" there). `words` null: on route, no message. { kind:'paused', key, reason, text }, `reason`
    * 'rerouting' while a new route is coming, else 'proceed' (Off route, Wrong way, no signal): CPTripPauseReason.
    */
+  /**
+   * At the end of the route: CarPlay's own "Arrived" (CPTripPauseReason.arrived) with the destination's name when it
+   * fits a glance, as Apple Maps ends a trip; the card no longer sits on "Arriving" at 0 ft for the rest of the drive.
+   */
+  function arrivedMessage(name) {
+    const n = String(name || '').trim(), text = n && `Arrived · ${n}`.length <= GLANCE_MAX ? `Arrived · ${n}` : 'Arrived';
+    return { kind: 'paused', key: 'arrived', reason: 'arrived', text };
+  }
   function pausedMessage(words) {
     const w = String(words || '').trim();
     if (!w) return null;
@@ -625,7 +633,7 @@
     return { step, reset };
   }
 
-  const api = { sightMessage, limitMessage, stopsMessage, pausedMessage, nearbyMessage, nearbyKeys, line, routeMessage, loopsMessage, laneGlyphs, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
+  const api = { sightMessage, limitMessage, stopsMessage, pausedMessage, arrivedMessage, nearbyMessage, nearbyKeys, line, routeMessage, loopsMessage, laneGlyphs, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
                 recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
   api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
   api.sightTag = sightTag;                                             // panel round 2, TH-2

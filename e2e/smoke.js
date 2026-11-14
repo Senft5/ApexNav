@@ -2723,6 +2723,11 @@ flow('CarPlay: the car is in every drive: a free drive from its Drive key, a con
     const t = window.apexDebug.track; return { changed: t !== before, via: t.request && t.request.via, active: window.apexDebug.driveActive }; }, stops.list[0]);
   check(via.changed && via.active && via.via.some((v) => v.label === 'Bean There Coffee'), 'the stop joins the route, the drive goes on: ' + JSON.stringify(via));
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'stop', lat: 1, lon: 1, name: 'Nowhere' }));   // not on the list: nothing
+  // at the end of the route the car says Arrived (CarPlay's own paused trip), not "Arriving" at 0 ft for the rest of the drive
+  const arrived = await page.evaluate(async () => { const t = window.apexDebug.track, n = t.lat.length; window.__car = [];
+    for (let k = 6; k >= 0; k--) { const i = n - 1 - k * 2; window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 8, course_deg: 45, has_fix: true }); await new Promise((r) => setTimeout(r, 300)); }
+    return window.__car.filter((m) => m.kind === 'paused'); });
+  check(arrived.length === 1 && arrived[0].reason === 'arrived' && /^Arrived/.test(arrived[0].text), 'Arrived at the end, once: ' + JSON.stringify(arrived));
   await page.evaluate(() => { window.__car = []; for (let i = 0; i < 2; i++) window.apex.onNative({ type: 'carplay', action: 'end' }); });
   await page.waitForFunction(() => !window.apexDebug.driveActive);
   const after = await page.evaluate(() => window.__car.map((m) => m.kind));
