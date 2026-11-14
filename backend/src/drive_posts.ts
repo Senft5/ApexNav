@@ -148,11 +148,14 @@ const shape = (r: Row, me: string) => ({
 /** GET /api/feed?before=&author=: the newest posts you can see (yours too), FEED_N at a time, older than `before` (a
  *  created_at); with `author` (a user id: a friend's profile) only theirs, under the same rules as the Feed. */
 export async function feed(env: Env, v: Viewer, url: URL) {
-  const before = url.searchParams.get("before"), author = url.searchParams.get("author");
+  const before = url.searchParams.get("before"), author = url.searchParams.get("author"), crew = url.searchParams.get("crew");
   const cut = before && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(before) ? before : "9999-12-31 23:59:59";
   if (author !== null && !/^[A-Za-z0-9_-]{1,64}$/.test(author)) throw new HttpError(400, "bad_author");
-  const rows = (await env.DB.prepare(`${SELECT} WHERE p.created_at < ?2 AND ${POST_SEEN("p")}${author ? " AND p.author = ?3" : ""} ORDER BY p.created_at DESC, p.rowid DESC LIMIT ${FEED_N}`)
-    .bind(...(author ? [v.id, cut, author] : [v.id, cut])).all<Row>()).results;
+  if (crew !== null && !/^[A-Za-z0-9_-]{1,64}$/.test(crew)) throw new HttpError(400, "bad_crew");
+  // ?author= one driver's posts (their profile), ?crew= the posts to one crew (its page); either way only what you can see
+  const only = author ? " AND p.author = ?3" : crew ? " AND p.crew_id = ?3" : "";
+  const rows = (await env.DB.prepare(`${SELECT} WHERE p.created_at < ?2 AND ${POST_SEEN("p")}${only} ORDER BY p.created_at DESC, p.rowid DESC LIMIT ${FEED_N}`)
+    .bind(...(author || crew ? [v.id, cut, author || crew] : [v.id, cut])).all<Row>()).results;
   return rows.map((r) => shape(r, v.id));
 }
 
