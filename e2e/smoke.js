@@ -9074,10 +9074,15 @@ flow('your best yet: the drive page leads with the corners this drive beat every
     rows: [...document.querySelectorAll('.dv-bests li button')].map((b) => b.textContent) }));
   check(/^Your best yet (here|in \d corners)$/.test(r.h) && r.rows.length >= 1 && r.rows.every((t) => /−\d\.\d s/.test(t) && /vs your next best/.test(t)),
     'the corners it beat your next best through, by how much: ' + JSON.stringify(r));
+  // and This road over time leads with how far it has come since the first drive here
+  await page.waitForSelector('#dvRoadSince:not([hidden])', { timeout: 10000 });
+  const since = await page.textContent('#dvRoadSince');
+  check(/^Since your first drive here \(.+\) (Score [+−]\d+ · )?\d+\.\d s quicker over \d+ corners$/.test(since.trim()), 'since the first drive here: ' + since);
   // a slower drive of the same road has none
   await page.goto(base + '/analysis.html?tab=drive&drive=b0');
   await page.waitForSelector('.dv-corners .dv-corner', { timeout: 20000 });
   check(!(await page.$('.dv-bests')), 'the slowest pass has no best yet');
+  check(await page.evaluate(() => document.getElementById('dvRoadSince').hidden), 'and, the first drive here, no since line');
 });
 
 flow('side by side: a corner filmed on this drive and on your best pass plays as one clip, both from the same point, the gap counting (big bet 5)', async (page, base) => {

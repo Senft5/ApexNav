@@ -814,6 +814,21 @@
     return out.sort((a, b) => b.by_s - a.by_s || a.k - b.k).slice(0, n);
   }
 
-  const api = { mount, newBests, overlaySvg, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };
+  /**
+   * How this drive compares with your first drive of the road (the drive job's road rows, oldest first: { self, date,
+   * dateLabel, score, matched, delta_s }, delta_s the other drive's time less this one's over the corners both drove).
+   * { since, score_d, gain_s, matched } or null: this is the first, or no older drive shares 3 corners with it.
+   */
+  function roadProgress(rows) {
+    if (!Array.isArray(rows)) return null;
+    const me = rows.findIndex((r) => r && r.self);
+    if (me <= 0) return null;
+    const first = rows.slice(0, me).find((r) => r && r.matched >= 3 && Number.isFinite(r.delta_s));
+    if (!first) return null;
+    const a = rows[me].score, b = first.score;
+    return { since: first.dateLabel || '', score_d: Number.isFinite(a) && Number.isFinite(b) ? a - b : null, gain_s: first.delta_s, matched: first.matched };
+  }
+
+  const api = { mount, newBests, roadProgress, overlaySvg, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveView = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1113,6 +1113,14 @@
       const line = sc.map((x, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(x.score).toFixed(1)}`).join('');
       const dots = sc.map((x, i) => `<circle cx="${X(i)}" cy="${Y(x.score)}" r="${x.self ? 7 : 4.5}" fill="${x.self ? C.accent : C.panel}" stroke="${C.accent}" stroke-width="2"/><text x="${X(i)}" y="${H - 7}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${ApexFormat.dayShort(String(x.date || ''))}</text>`).join('');
       $('dvRoadChart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Score on this road over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
+      // since your first drive here: the Score and the time over the corners both drove (drive_view.js roadProgress)
+      const pr = window.ApexDriveView && ApexDriveView.roadProgress ? ApexDriveView.roadProgress(same) : null;
+      $('dvRoadSince').hidden = !pr;
+      if (pr) {
+        const sd = pr.score_d == null ? '' : `Score ${pr.score_d >= 0 ? '+' : '\u2212'}${Math.abs(pr.score_d)}`;
+        const ts = `${slower(-pr.gain_s)} over ${pr.matched} corners`;
+        $('dvRoadSince').innerHTML = `<span class="note">Since your first drive here${pr.since ? ` (${escH(pr.since)})` : ''}</span> <b class="${cls(-pr.gain_s)}">${[sd, ts].filter(Boolean).join(' \u00b7 ')}</b>`;
+      }
       const last = sc[sc.length - 1];   // the latest and the best, never a "trend" from the first drive to the last (two drives)
       $('dvRoadTable').innerHTML = '<tr><th class="l">Drive</th><th>Score</th><th>Corners</th><th class="l">vs this drive</th></tr>' + same.map(o =>
         `<tr class="${o.self ? 'best' : ''}"><td class="l"><b></b><span class="sub">${o.dateLabel}</span></td><td><span class="score">${o.score ?? UNK}</span></td><td>${o.corners ?? UNK}</td><td class="l">${o.self ? 'this drive' : o.matched ? `${o.delta_s == null ? '--' : slower(o.delta_s)} on ${o.matched} corner${o.matched === 1 ? '' : 's'}` : '--'}</td></tr>`
