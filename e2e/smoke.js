@@ -155,7 +155,7 @@ async function leftovers(page) {
   for (const p of page.context().pages()) {
     if (p.isClosed()) continue;
     const found = await p.evaluate(() => {
-      const BAD = /\[object [A-Za-z]+\]|\bundefined\b|\bNaN\b/;
+      const BAD = /\[object [A-Za-z]+\]|\bundefined\b|\bNaN\b|\bnull\b|Infinity/;
       const shown = (el) => { for (let n = el; n && n.nodeType === 1; n = n.parentElement) { if (n.hidden || n.getAttribute('aria-hidden') === 'true') return false; }
         const cs = getComputedStyle(el); return cs.visibility !== 'hidden' && cs.display !== 'none' && el.getClientRects().length > 0; };
       const hits = [], where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).join('.') : '');
@@ -173,6 +173,36 @@ async function leftovers(page) {
     out.push(...found);
   }
   return out;
+}
+
+// Text a driver can't read whole, on every flow's last screen (2026-11-14): text past a box that hides the rest with no
+// ellipsis to say so (a y's tail cut flat under a tight line), or running off the screen's edge outside anything that
+// scrolls (Fly-through at the largest text). Read-aloud-only boxes (sr-only, .vh) and the map's own markers are left out.
+// CLIP_LOG=1 lists them instead of failing.
+async function clippedText(page) {
+  return page.evaluate(() => {
+    const hits = [], where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).slice(0, 3).join('.') : '');
+    const W = innerWidth, H = innerHeight;
+    for (const el of document.querySelectorAll('body *')) {
+      if (/^(SCRIPT|STYLE|SVG|svg|CANVAS|VIDEO|IMG|INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.closest('svg, .maplibregl-marker')) continue;
+      const own = [...el.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim());
+      if (!own) continue;
+      const r = el.getBoundingClientRect(); if (!r.width || !r.height || r.bottom < 0 || r.top > H || r.right < 0 || r.left > W) continue;
+      let hidden = false; for (let n = el; n && n.nodeType === 1; n = n.parentElement) { if (n.hidden || n.getAttribute('aria-hidden') === 'true' || n.inert) { hidden = true; break; } }
+      if (hidden) continue;
+      const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || +cs.opacity === 0) continue;
+      let sr = false; for (let n = el; n && n.nodeType === 1; n = n.parentElement) { const c = n === el ? cs : getComputedStyle(n); if (/rect\(0(px)?,? 0(px)?/.test(c.clip) || (n.offsetWidth <= 1 && n.offsetHeight <= 1)) { sr = true; break; } }
+      if (sr) continue;                                          // read aloud only (sr-only, .vh): a 1 px box on purpose
+      const text = el.textContent.trim().slice(0, 50);
+      if (el.scrollWidth > el.clientWidth + 1 && /hidden|clip/.test(cs.overflowX) && cs.textOverflow !== 'ellipsis') hits.push(`${where(el)} "${text}" cut ${el.scrollWidth - el.clientWidth} px wide`);
+      else if (el.scrollHeight > el.clientHeight + 2 && /hidden|clip/.test(cs.overflowY) && !(+cs.webkitLineClamp > 0)) hits.push(`${where(el)}${el.parentElement ? " in " + where(el.parentElement) : ""} "${text}" cut ${el.scrollHeight - el.clientHeight} px tall`);
+      else if (r.right > W + 1 && cs.position !== 'fixed') {
+        let scroller = false; for (let n = el.parentElement; n; n = n.parentElement) { const c = getComputedStyle(n); if (/auto|scroll/.test(c.overflowX)) { scroller = true; break; } }
+        if (!scroller) hits.push(`${where(el)} "${text}" runs ${Math.round(r.right - W)} px off the screen`);
+      }
+    }
+    return hits.slice(0, 12);
+  }).catch(() => []);
 }
 
 // A control in view that a screen reader can't name (VoiceOver says only "button"): an icon key with no aria-label, an
@@ -11522,6 +11552,9 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
       const nameless = await unnamed(page);
       if (process.env.A11Y_LOG) for (const h of nameless) console.log(`A11Y ${name} | ${h}`);
       else check(!nameless.length, `a control in view a screen reader can't name:\n  ${nameless.join('\n  ')}`);
+      const cut = await clippedText(page);
+      if (process.env.CLIP_LOG) for (const h of cut) console.log(`CLIP ${name} | ${h}`);
+      else check(!cut.length, `text in view cut off by its box or the screen's edge:\n  ${cut.join('\n  ')}`);
       const faint = await lowContrast(page);
       if (process.env.CONTRAST_LOG) for (const h of faint) console.log(`CONTRAST ${name} | ${h}`);
       else check(!faint.length, `text in view under the contrast floor:\n  ${faint.join('\n  ')}`);
