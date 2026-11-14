@@ -162,3 +162,26 @@ describe("drive posts", () => {
     expect(left!.n).toBe(0);
   });
 });
+
+describe("this week on the Feed", () => {
+  it("each driver's drives, distance and best Score since Monday, most distance first; a drive posted twice counts once; never a stranger or someone blocked", async () => {
+    const [a, b, c, d] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara"), await makeUser("dan")];
+    await befriend(a, b); await befriend(a, c);
+    const crew = (await json(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).id;
+    const t = (await json(api(a, "POST", `/api/crews/${crew}/invite`))).token;
+    await ok(api(b, "POST", "/api/crews/join", { token: t }));
+    await post(a, { length_m: 20000, score: 700 });
+    await post(b, { length_m: 30000, score: 650 });
+    await post(b, { length_m: 30000, score: 650, crew_id: crew });          // the same drive to the crew: once
+    await post(b, { title: "Tail of the Dragon", length_m: 15000, score: 790 });
+    await post(c, { length_m: 5000, score: null });
+    await post(d, { length_m: 99000 });                                      // a stranger
+    const old = new Date(Date.now() - 10 * 86400_000).toISOString().slice(0, 10);
+    await post(c, { title: "Old one", driven_on: old, length_m: 90000 });  // before this week
+    const week = await json(api(a, "GET", "/api/feed/week"));
+    expect(week.map((r: any) => [r.handle, r.you, r.drives, r.length_m, r.best])).toEqual([
+      ["bob", false, 2, 45000, 790], ["alice", true, 1, 20000, 700], ["cara", false, 1, 5000, null]]);
+    await ok(api(a, "POST", "/api/blocks", { handle: "bob" }));
+    expect((await json(api(a, "GET", "/api/feed/week"))).map((r: any) => r.handle)).toEqual(["alice", "cara"]);
+  });
+});

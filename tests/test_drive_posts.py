@@ -30,6 +30,8 @@ console.log(JSON.stringify({
   mentions: [D.mentionParts('@sam nice, and you@bob? @cara!'), D.mentionParts('no one here'), D.mentionParts('@ab @toolonghandle_toolong x')],
   at: [D.mentionAt('hey @Sa', 7), D.mentionAt('hey @', 5), D.mentionAt('mail x@y', 8), D.mentionAt('@sam done', 9), D.mentionAt('@bo and', 3)],
   sug: [D.suggest('c', ['cara', 'Cara', 'carl', 'me', 'cy', 'ce', 'cz'], 'me'), D.suggest('', ['bob', 'me', null], 'me')],
+  wk: [D.weekLine({ drives: 2, length_m: 45000, best: 790 }, (m) => (m / 1000).toFixed(0) + ' km'), D.weekLine({ drives: 1, length_m: 0, best: null }, String),
+    D.weekShown([{ you: true }]), D.weekShown([{ you: true }, { you: false }]), D.weekShown(null)],
   kl: [D.kudosLine(['bob'], 1), D.kudosLine(['bob', 'cara'], 2), D.kudosLine(['bob', 'cara', 'dan'], 5), D.kudosLine(['bob', 'cara', 'dan'], 3), D.kudosLine([], 4)],
   ago: [D.ago('2026-11-13 12:00:00', Date.parse('2026-11-13T12:01:00Z')), D.ago('2026-11-13 12:00:00', Date.parse('2026-11-13T15:00:00Z'))],
 }));
@@ -68,6 +70,11 @@ def test_mention_suggestions():
     r = run()
     assert r["at"] == [{"start": 4, "q": "sa"}, {"start": 4, "q": ""}, None, None, {"start": 0, "q": "bo"}]
     assert r["sug"] == [["cara", "carl", "cy", "ce"], ["bob"]]
+
+
+def test_week_line():
+    """This week on the Feed: how far, how many drives, the best Score when known; shown once a friend posted."""
+    assert run()["wk"] == ["45 km · 2 drives · best 790", "1 drive", False, True, False]
 
 
 def test_kudos_line():
