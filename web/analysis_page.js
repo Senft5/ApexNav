@@ -1193,7 +1193,7 @@
       const name = window.ApexYourRoads && ApexYourRoads.isRoadName(d.name) ? d.name : '';
       const token = ApexRoadLink.encode(pts, name);
       if (!token) { say('Couldn’t send'); return; }
-      const url = ApexRoadLink.url(ApexSync.inApp ? ApexSync.apiBase : location.origin, token);
+      const url = ApexRoadLink.url(ApexSync.siteBase, token);
       const text = name ? name + ' · a road to drive' : 'A road to drive';
       const how = await ApexSaveFile.shareLink({ title: name || 'A road on Vetta', text, url });
       if (how === 'copied' || how === 'failed') say(how === 'copied' ? 'Link copied' : 'Couldn’t share');

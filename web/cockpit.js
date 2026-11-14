@@ -5441,7 +5441,7 @@
     }
     // Views: ROUTE / DRIVES / SETUP open the side panel; tapping the open tab again, the map
     // behind it, or swiping it right closes it. ANALYSIS is its own page.
-    const LEGAL_SITE = 'https://apexnav.senftns.workers.dev';   // the published privacy and terms pages (web/privacy.html, web/terms.html)
+    const LEGAL_SITE = 'https://vettadrive.com';   // the published privacy and terms pages (web/privacy.html, web/terms.html)
     const VIEW_TITLES = { people: 'People', garage: 'Garage' };
     // People (the owner, 2026-10-30): one tab, two sides; 'crew' (old links, a convoy invite) opens its Crews side.
     const PEOPLE_SIDES = { friends: 'friends', crew: 'crews', crews: 'crews' };
@@ -6740,7 +6740,7 @@
       map, maplibregl, el, btn, toast, copyText, showView, apiFetch: ApexSync.apiFetch, overlayParent: $('toast').parentElement,
       reportSheet: $('hzOverlay'),                                     // the Report key's sheet: the leader's convoy calls go on top
       driving: () => driveActive,
-      siteOrigin: () => (ApexSync.inApp ? ApexSync.apiBase : location.origin),
+      siteOrigin: () => ApexSync.siteBase,
       wsUrl: (id) => `${ApexSync.inApp ? ApexSync.apiBase.replace(/^http/, 'ws') : location.origin.replace(/^http/, 'ws')}/api/convoy/${encodeURIComponent(id)}/connect`,
       getFix: () => {
         const p = state.lastPosition;
@@ -7037,7 +7037,7 @@
     let openCrewId = null, openFriendId = null, crewOpen = null;   // crewOpen: the crew open over the crews dashboard (this visit)   // the crew tile and the friend row left open across a redraw
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
     // Links people share open the website (in the app the page's own origin is apexnav://app, which no one else can open).
-    const shareOrigin = () => (ApexSync.inApp ? ApexSync.apiBase : location.origin);
+    const shareOrigin = () => ApexSync.siteBase;   // vettadrive.app (sync.js SITE_BASE)
     const crewPreview = { token: null, data: null };   // what the crew link is for, fetched once per link
     let renderGen = 0;   // two renders at once (a link while one runs): only the newest one draws
     // The no-connection page (renderAccount) follows the phone: it asks again by itself when the connection is back, and
