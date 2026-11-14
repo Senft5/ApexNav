@@ -27,7 +27,7 @@ import { deleteAccount, exportMyData } from "./account";
 import { itemsDelete, itemsGet, itemsPut } from "./member_items";
 import * as drivePosts from "./drive_posts";
 import { mediaGet, mediaPut } from "./post_media";
-import { afterCrewDrive, afterDuel, afterFriend, afterKudos, afterPostComment, afterPostKudos, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
+import { afterCrewDrive, afterDuel, afterFriend, afterKudos, afterPassed, afterTopped, bestBefore, afterPostComment, afterPostKudos, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewBadge, crewFeed, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
 import { decalsPlace } from "./livery";
@@ -234,7 +234,12 @@ on("GET", "/api/ta", async (req, env) => json(await fixedArea(env, await require
 on("GET", "/api/ta/entered", async (req, env) => json(await fixedEntered(env, await requireMember(req, env))));
 on("POST", "/api/ta/circuit", async (req, env) => json(await fixedMake(env, await requireMember(req, env), req)));
 on("POST", "/api/ta/enter", async (req, env) => json(await fixedEnter(env, await requireMember(req, env), req)));
-on("POST", "/api/ta/runs", async (req, env) => json(await fixedRuns(env, await requireMember(req, env), req)));
+on("POST", "/api/ta/runs", async (req, env, _m, ctx) => {
+  const v = await requireMember(req, env), beat: { id: string; name: string; was: number | null }[] = [];
+  const out = await fixedRuns(env, v, req, beat);
+  await later(ctx, afterPassed(env, v, beat));
+  return json(out);
+});
 on("DELETE", "/api/ta/entry", async (req, env) => { await fixedLeave(env, await requireMember(req, env), new URL(req.url)); return noContent(); });
 on("GET", "/api/events/near", async (req, env) => json(await eventsNear(env, await requireMember(req, env), new URL(req.url))));
 on("GET", "/api/events", async (req, env) => json(await eventsList(env, await requireMember(req, env), null)));
@@ -382,7 +387,14 @@ on("POST", "/api/duels/:id/accept", async (req, env, m, ctx) => {
   return json(d);
 });
 on("DELETE", "/api/duels/:id", async (req, env, m) => json(await duelEnd(env, await requireMember(req, env), m.groups!.id)));
-on("POST", "/api/board", async (req, env) => json(await publish(env, await requireMember(req, env), req)));
+on("POST", "/api/board", async (req, env, _m, ctx) => {
+  const v = await requireMember(req, env);
+  const peek = (await req.clone().json().catch(() => ({}))) as { segment_id?: unknown };
+  const before = await bestBefore(env, v, peek && peek.segment_id);   // null unless pushes can send
+  const out = await publish(env, v, req);
+  if (out.published) await later(ctx, afterTopped(env, v, before));
+  return json(out);
+});
 // Kudos (IDEAS S-07): a tap of thanks on a friend's run you can see; no text.
 // drive posts and the friends feed (src/drive_posts.ts)
 on("GET", "/api/feed", async (req, env) => json(await drivePosts.feed(env, await requireMember(req, env), new URL(req.url))));

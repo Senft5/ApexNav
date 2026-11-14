@@ -8520,7 +8520,7 @@
       paintPushKinds();
     }
     // each kind its own switch, under the main one while it is on (the server keeps which are off: GET/PUT /api/push/kinds)
-    const PUSH_KINDS = [['friends', 'Friend requests'], ['kudos', 'Kudos'], ['comments', 'Comments and mentions'], ['duels', 'Duels'], ['crews', 'Crew drives']];
+    const PUSH_KINDS = [['friends', 'Friend requests'], ['kudos', 'Kudos'], ['comments', 'Comments and mentions'], ['duels', 'Duels'], ['beaten', 'Someone beat you'], ['crews', 'Crew drives']];
     let pushOff = null;
     function paintPushKinds() {
       const box = $('pushKinds'); if (!box) return;
