@@ -10536,6 +10536,16 @@ async function swipe(cdp, x0, y0, dx, dy) {
   for (let i = 1; i <= 10; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + dx * i / 10, y: y0 + dy * i / 10 }] });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 }
+// A drag that comes to rest before the finger lifts: a frame between moves and a hold at the end, so the scroller sees no
+// speed at the lift and settles on the snap point nearest where the finger stopped. swipe()'s moves go out back to back,
+// which Chromium can read as a fling of any speed: on a loaded CI runner one flung the looks' shelf past the next card to
+// the last (scrollLeft 612; #811, #817, 2026-11-14).
+async function drag(cdp, page, x0, y0, dx, dy) {
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y: y0 }] });
+  for (let i = 1; i <= 12; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + dx * i / 12, y: y0 + dy * i / 12 }] }); await page.waitForTimeout(16); }
+  for (let i = 0; i < 6; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + dx, y: y0 + dy }] }); await page.waitForTimeout(25); }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+}
 
 flow('Where to? while typing is the field and its list: no shortcuts, no Find a loop, every place; Go on nothing puts the keyboard away (TestFlight 2026-11-12 "evil cluttered gap")', async (page, base) => {
   const recent = JSON.stringify(['Maryville', 'Townsend', 'Tellico Plains', 'Robbinsville', 'Bryson City', 'Deals Gap'].map((label, i) => ({ label, lat: 35.5 + i / 100, lon: -84 + i / 100 })));
@@ -11722,10 +11732,10 @@ flow('the Garage on a phone: the looks are a shelf turned sideways (one in view,
   const cdp = await page.context().newCDPSession(page);
   const y = await page.evaluate(() => { const r = document.querySelector('#themeCards .tc-head').getBoundingClientRect(); return r.top + r.height / 2; });
   await page.waitForFunction((y) => { const e = document.elementFromPoint(300, y); return !!(e && e.closest('#themeCards')); }, y, { timeout: 8000 });   // the splash has lifted
-  await swipe(cdp, 300, y, -260, 4);
+  await drag(cdp, page, 300, y, -260, 4);
   await page.waitForFunction(() => { const c = document.getElementById('themeCards'); return c.scrollLeft > 100 && Math.abs(c.children[1].getBoundingClientRect().left - 16) <= 2; }, null, { timeout: 5000 })
     .catch(async () => { throw new Error('a turn of the thumb brings the next look: ' + JSON.stringify(await shelf())); });
-  await swipe(cdp, 80, y, 260, 4);
+  await drag(cdp, page, 80, y, 260, 4);
   await page.waitForFunction(() => document.getElementById('themeCards').scrollLeft < 4, null, { timeout: 5000 });
   check((await shelf()).open, 'turning the shelf back to the right does not close the Garage');
   // Use on the second look: it is in use, and the shelf stays where the thumb left it
