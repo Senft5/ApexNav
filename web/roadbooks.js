@@ -144,12 +144,27 @@
    * A book's roads on one small map (an SVG string, north up): each road a line, the ones you have driven in `o.hi`.
    * roads: [{ geom, stamped }]. null with nothing to draw.
    */
-  function overview(roads, o = {}) {
-    const w = o.w || 320, h = o.h || 150, pad = o.pad != null ? o.pad : 12;
-    const lines = (roads || []).filter((r) => r && Array.isArray(r.geom) && r.geom.length > 1);
-    if (!lines.length) return null;
+  const drawn = (roads) => (roads || []).filter((r) => r && Array.isArray(r.geom) && r.geom.length > 1);
+  function bounds(lines) {
     let s = Infinity, n = -Infinity, we = Infinity, e = -Infinity;
     for (const r of lines) for (const [lo, la] of r.geom) { if (la < s) s = la; if (la > n) n = la; if (lo < we) we = lo; if (lo > e) e = lo; }
+    return [s, n, we, e];
+  }
+  /**
+   * The two corners ([[lat, lon], [lat, lon]], south-west and north-east) whose fit is overview's: handed to post_map.js
+   * viewFor (with the same w, h and pad), the real map lies exactly under the book's lines. null with nothing to draw.
+   */
+  function overviewFrame(roads) {
+    const lines = drawn(roads);
+    if (!lines.length) return null;
+    const [s, n, we, e] = bounds(lines);
+    return [[s, we], [n, e]];
+  }
+  function overview(roads, o = {}) {
+    const w = o.w || 320, h = o.h || 150, pad = o.pad != null ? o.pad : 12;
+    const lines = drawn(roads);
+    if (!lines.length) return null;
+    const [s, n, we, e] = bounds(lines);
     const kx = Math.cos(((s + n) / 2) * Math.PI / 180), spanX = Math.max((e - we) * kx, 1e-5), spanY = Math.max(n - s, 1e-5);
     const k = Math.min((w - 2 * pad) / spanX, (h - 2 * pad) / spanY), ox = (w - spanX * k) / 2, oy = (h - spanY * k) / 2;
     const path = (g) => { const step = Math.max(1, Math.floor(g.length / 160)); return g.filter((_, i) => i % step === 0 || i === g.length - 1)
@@ -157,8 +172,10 @@
     const line = o.line || '#888', hi = o.hi || '#f60', sw = o.width || 2.5;
     const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));   // the label is a member's words
     // the driven ones last, so they sit on top where two roads share a stretch
+    // each line on a casing, shown only once the real map is under it (.on-map), so a road reads over the streets
     const body = [...lines.filter((r) => !r.stamped), ...lines.filter((r) => r.stamped)]
-      .map((r) => `<path d="${path(r.geom)}" fill="none" stroke="${r.stamped ? hi : line}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
+      .map((r) => { const d = path(r.geom); return `<path class="rb-casing" d="${d}" fill="none" stroke-width="${sw + 3}" stroke-linecap="round" stroke-linejoin="round"/>`
+        + `<path d="${d}" fill="none" stroke="${r.stamped ? hi : line}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/>`; }).join('');
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${esc(o.label || 'The roads on a map')}">${body}</svg>`;
   }
 
@@ -168,6 +185,7 @@
     .rb-row b { font-size: 16px; font-weight: 700; } .rb-row span { grid-column: 1; font-size: 13px; color: var(--panel-dim); }
     .rb-row i { grid-row: 1 / span 2; grid-column: 2; width: 9px; height: 9px; margin-right: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); }
     .rb-map { border: 1px solid var(--rule); line-height: 0; } .rb-map svg { width: 100%; height: auto; display: block; }
+    .rb-map .rb-casing { display: none; } .rb-map.on-map svg { background-size: 100% 100%; background-position: center; } .rb-map.on-map .rb-casing { display: inline; stroke: var(--panel, #fff); }
     .rb-meter { height: 6px; background: color-mix(in srgb, var(--panel-ink) 14%, transparent); } .rb-meter > i { display: block; height: 100%; background: var(--accent); }
     .rb-road { display: grid; grid-template-columns: 88px 1fr; gap: 4px 12px; padding: 12px 0; border-top: 1px solid var(--hair, var(--panel-dim)); align-items: start; }
     .rb-road .rb-thumb { grid-row: 1 / span 3; border: 1px solid var(--rule); line-height: 0; } .rb-road .rb-thumb svg { width: 100%; height: auto; display: block; }
@@ -182,7 +200,8 @@
    * page: el, btn, toast, apiCall, jsonOf, copyText, me() → /api/me or null, here() → {lat, lon}|null, mayLookUp(p),
    * fmtLen(m), origin(), zones() → privacy zones, planned() → the planned route's track or null,
    * driveRoad(road, book), driveBook(book) (Drive them all), report({kind, target, label, done}), recordings (ApexRecording), cellQuery(lat, lon),
-   * thumb (ApexRouteThumb), colours() → { line, hi }, changed() → the lists were changed (People redraws its count).
+   * thumb (ApexRouteThumb), colours() → { line, hi }, changed() → the lists were changed (People redraws its count),
+   * mapUnder(key, pts, w, h, pad) → a picture of the real map under pts' fit, or null (post_map.js, cockpit.js).
    */
   function mount(page) {
     const { el, btn, toast, apiCall, jsonOf } = page;
@@ -294,7 +313,15 @@
       kids.push(el('p', { className: 'rb-by', textContent: [book.mine ? `Yours · ${VIS[book.visibility]}` : `By @${book.by || '?'}`, bookLine(book, fmtLen)].join(' · ') }));
       if (book.about) kids.push(el('p', { className: 'people-lead', textContent: book.about }));
       const map = overview(book.road_list, { line: c.line, hi: c.hi, label: `${book.name}: its roads on a map` });
-      if (map) kids.push(svgBox('rb-map', map));
+      if (map) {
+        const box = svgBox('rb-map', map), frame = overviewFrame(book.road_list), svg = box.firstElementChild;
+        kids.push(box);
+        // the streets round the roads (post_map.js, as a Feed post's line): one still picture laid exactly under the lines
+        if (page.mapUnder && frame && svg) Promise.resolve(page.mapUnder(`rb_${book.id}_${book.road_list.map((x) => x.id).join('.')}`, frame, 320, 150, 12)).then((url) => {
+          if (!url || !box.isConnected) return;
+          svg.style.backgroundImage = `url("${url}")`; box.classList.add('on-map');
+        }).catch(() => {});
+      }
       if (p.of && member()) {
         const meter = el('div', { className: 'rb-meter', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(p.of), 'aria-valuenow': String(p.done), 'aria-label': p.text }, el('i', { style: `width:${(100 * p.done / p.of).toFixed(0)}%` }));
         kids.push(el('div', { className: 'stack-8' }, el('b', { textContent: p.text }), meter));   // the meter says it; the how-to line under it ("Nothing to tap") is gone
@@ -484,6 +511,6 @@
     return { section, nearSection, open, addPart, afterDrive, scanLog, hasAny, lists: () => lists, reload: loadLists };
   }
 
-  const api = { fromTrack, coverage, overlaps, boxOf, lengthM, progress, bookLine, overview, tour, link, mount, TOUR_MAX, STAMP_AT, TRIM_M, MAX_POINTS, MIN_ROAD_M };
+  const api = { fromTrack, coverage, overlaps, boxOf, lengthM, progress, bookLine, overview, overviewFrame, tour, link, mount, TOUR_MAX, STAMP_AT, TRIM_M, MAX_POINTS, MIN_ROAD_M };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadbooks = api;
 })(typeof window !== 'undefined' ? window : globalThis);
