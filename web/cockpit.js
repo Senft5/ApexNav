@@ -7331,13 +7331,14 @@
         return snap.snap(`${look.map.bg}|${look.map.road}|${id}`, pts, w, h, pad); }; })();
     // Roadbooks (web/roadbooks.js, docs/SOCIAL.md 2.6): collections of great roads, yours, followed and public ones near you;
     // a road you drive is stamped from your own Log. In People (Friends), in Where to?, on a route card's Share, and by link.
-    let roadbooks = null;
+    let roadbooks = null, booksEdited = 0;
     onSocial(() => { try { roadbooks = window.ApexRoadbooks ? ApexRoadbooks.mount({ el, btn, toast, apiCall, jsonOf, copyText,
       me: () => accountMe, here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), mayLookUp: nearLookupOk,
       cellQuery: (lat, lon) => ApexPrivacyZones.cellQuery(lat, lon), fmtLen: (m) => ApexUnits.long(m, 1, true), origin: () => shareOrigin(),
       zones: () => privacyZones, planned: () => (plannedRoute && Array.isArray(plannedRoute.lat) && plannedRoute.lat.length > 1 ? plannedRoute : null),
       report: (o) => safety && safety.report(o), changed: () => { if (booksRowCount) booksRowCount(); }, mapUnder,
       stages: () => { try { const l = JSON.parse(localStorage.getItem('apex.segments') || '[]'); return Array.isArray(l) ? l : []; } catch (_) { return []; } },
+      edited: () => { clearTimeout(booksEdited); booksEdited = setTimeout(() => { if (roadbookMap) roadbookMap.forget(); }, 600); },   // a burst of stamps reads the map's books once
       // a crew roadbook's road as a crew drive: People's Crews side, the crew's plan form named after the road, the road as
       // its route (shared with the crew as Plan it does with a planned route)
       planCrewDrive: (road, crew) => {

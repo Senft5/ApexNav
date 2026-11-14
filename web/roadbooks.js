@@ -216,7 +216,7 @@
    * page: el, btn, toast, apiCall, jsonOf, copyText, me() → /api/me or null, here() → {lat, lon}|null, mayLookUp(p),
    * fmtLen(m), origin(), zones() → privacy zones, planned() → the planned route's track or null,
    * driveRoad(road, book), driveBook(book) (Drive them all), report({kind, target, label, done}), recordings (ApexRecording), cellQuery(lat, lon),
-   * thumb (ApexRouteThumb), colours() → { line, hi }, changed() → the lists were changed (People redraws its count),
+   * thumb (ApexRouteThumb), colours() → { line, hi }, changed() → the lists were changed (People redraws its count), edited() → a write went through,
    * mapUnder(key, pts, w, h, pad) → a picture of the real map under pts' fit, or null (post_map.js, cockpit.js),
    * stages() → your saved stages (the Log's apex.segments).
    */
@@ -231,7 +231,8 @@
     const readJson = (k, d) => { try { return JSON.parse(store.getItem(k)) || d; } catch (_) { return d; } };
     const writeJson = (k, v) => { try { store.setItem(k, JSON.stringify(v)); } catch (_) {} };
     const today = () => new Date().toISOString().slice(0, 10);
-    const call = async (method, path, body) => { try { const r = await apiCall(method, path, body); return { ok: r.ok, status: r.status, data: r.status === 204 ? null : await jsonOf(r) }; } catch (_) { return { ok: false, status: 0, data: null }; } };
+    // edited() → a book's roads may have changed (a road added or removed, a stamp, a follow): the map's Roadbooks layer reads them again
+    const call = async (method, path, body) => { try { const r = await apiCall(method, path, body); if (r.ok && method !== 'GET' && page.edited) try { page.edited(); } catch (_) {} return { ok: r.ok, status: r.status, data: r.status === 204 ? null : await jsonOf(r) }; } catch (_) { return { ok: false, status: 0, data: null }; } };
     const WHY = { 429: 'That’s the limit for now.', 409: 'Pick a handle first in People: a shared roadbook carries it.', 403: 'This roadbook was taken down and can’t be public again.', 0: 'No connection. Try again.' };
     const why = (r, otherwise) => WHY[r.status] || otherwise;
 
