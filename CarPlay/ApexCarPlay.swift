@@ -229,7 +229,7 @@ final class ApexCar {
             guard driving, let text = dict["text"] as? String, !text.isEmpty else { return }
             // "Arrived" at the end of the route too (web/carplay.js arrivedMessage), as Apple Maps ends a trip
             let why = (dict["reason"] as? String) ?? ""
-            let reason: CPTripPauseReason = why == "rerouting" ? .rerouting : why == "arrived" ? .arrived : .proceedToRoute
+            let reason: CPNavigationSession.PauseReason = why == "rerouting" ? .rerouting : why == "arrived" ? .arrived : .proceedToRoute
             scene?.pauseGuide(reason, text: String(text.prefix(ApexCar.glanceMax)))
         case "start":
             // U-59: the page entered a drive, with a route or none (a free drive sends no maneuver until it has driven a little, and
@@ -800,9 +800,9 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         }
     }
 
-    /// Off the route: the session's paused trip (CPTripPauseReason) with the phone's words, Apple Maps' "Rerouting" card. The
+    /// Off the route: the session's paused trip (CPNavigationSession.PauseReason) with the phone's words, Apple Maps' "Rerouting" card. The
     /// maneuver is forgotten, so the next `guide` (on the new route, or back on this one) sets one again, which resumes the trip.
-    @MainActor func pauseGuide(_ reason: CPTripPauseReason, text: String) {
+    @MainActor func pauseGuide(_ reason: CPNavigationSession.PauseReason, text: String) {
         guard let session else { return }
         session.pauseTrip(for: reason, description: text)
         maneuver = nil; maneuverKey = ""
