@@ -7595,6 +7595,24 @@
         el('p', { className: 'people-lead', textContent: 'They sign in with your link, and you’re friends the moment they do.' })));
 
       // One Invite key (the owner, 2026-10-30): someone new gets an invite link, a member your handle or a request; requests here too.
+      async function showFriendQr(box) {
+        const r = await apiCall('POST', '/api/invites').catch(() => null), j = r && r.ok ? await jsonOf(r) : null;
+        if (!j || !j.url) { toast(r && r.status === 429 ? 'You have 10 open friend links. Wait for some to be used.' : 'Couldn\'t make a code. Try again.'); return; }
+        let qrcode = window.qrcode;
+        if (!qrcode) {
+          try { qrcode = await new Promise((ok, fail) => { const sc = document.createElement('script'); sc.src = 'vendor/qrcode.js'; sc.onload = () => (window.qrcode ? ok(window.qrcode) : fail(new Error('qr'))); sc.onerror = fail; document.head.append(sc); }); }
+          catch (_) { copyText(j.url, 'Couldn\'t draw the code, so the link is copied instead.'); return; }
+        }
+        const qr = qrcode(0, 'M'); qr.addData(j.url); qr.make();
+        const n = qr.getModuleCount(), cell = Math.max(4, Math.floor(232 / (n + 8))), size = (n + 8) * cell;
+        const cv = el('canvas', { width: size, height: size, className: 'friend-qr-code', 'aria-label': 'Your friend code' });
+        cv.setAttribute('role', 'img'); cv.style.cssText = 'width:232px;height:232px;image-rendering:pixelated;border-radius:8px;justify-self:center';
+        const g = cv.getContext('2d');
+        g.fillStyle = '#fff'; g.fillRect(0, 0, size, size); g.fillStyle = '#000';
+        for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (qr.isDark(y, x)) g.fillRect((x + 4) * cell, (y + 4) * cell, cell, cell);
+        box.replaceChildren(cv, el('p', { className: 'note', textContent: 'They point their camera at it and tap Accept. One person per code.' }),
+          el('div', { className: 'row' }, btn('New code', () => showFriendQr(box), 'linkbtn'), btn('Hide', () => box.replaceChildren(), 'linkbtn')));
+      }
       const ipop = popSheet('Invite'); pops.push(ipop);
       ipop.querySelector('.side-pop-head button').addEventListener('click', () => { inviteOpen = false; unstash('apex.add'); });
       const add = el('input', { className: 'field', placeholder: 'Their handle', autocomplete: 'off', autocapitalize: 'none', 'aria-label': 'Friend handle', value: stash('apex.add'), enterKeyHint: 'send' });
@@ -7613,6 +7631,9 @@
       };
       // P-05: a request in is a card on the list, not a drawer here; the sheet keeps the requests you sent
       const reqSec = el('div', { className: 'stack-8' }, ...(waiting.length ? [el('h3', { textContent: 'Requests you sent' })] : []));
+      // Show my code (2026-11-14): at a meet, a friend link as a QR code. Their camera opens it, they tap Accept, and you're
+      // friends; one person per code, so New code makes the next one (the link is the same one-use invite Send a friend link makes)
+      const qrBox = el('div', { className: 'stack-8 friend-qr' });
       for (const h of waiting) reqSec.append(el('div', { className: 'friend-sent' }, el('span', { textContent: `@${h} · request sent` }),
         btn('Cancel', async () => { await apiCall('POST', '/api/friends/request/cancel', { handle: h }); setSent(sentList().filter(x => x !== h)); redo(); }, 'linkbtn')));
       ipop.append(
@@ -7620,7 +7641,8 @@
         el('div', { className: 'stack-8' },
           btn('Send a friend link', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Link copied. You\'re friends once they open it, and you both get 5 points when they first share road data.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
           el('div', { className: 'row' }, add, btn('Send request', sendRequest)),
-          btn('A link anyone can use', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'), 'linkbtn')),
+          btn('A link anyone can use', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'), 'linkbtn'),
+          btn('Show my code', () => showFriendQr(qrBox), 'linkbtn'), qrBox),
         reqSec);
       const openInvite = () => { inviteOpen = true; ipop.classList.add('open'); };
       if (stash('apex.add') && peopleSide === 'friends') inviteOpen = true;   // a friend link opens its sheet, never over the Crews side
