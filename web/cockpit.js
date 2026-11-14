@@ -364,7 +364,7 @@
     });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p) };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), horizonFrom: async (coords) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; useHorizon(t); return t.id; } };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -2490,11 +2490,31 @@
     function useHorizon(t) {
       const old = track && track.kind === 'horizon' ? track : null, cos = Math.cos(t.lat[0] * Math.PI / 180);
       const said = old ? old.events.filter(e => state.spoken.has(`${old.id}:${e.type}:${e.index}`)) : [];
+      if (old && Array.isArray(old.marks)) free.marksSaid = [...(free.marksSaid || []), ...old.marks.filter(e => state.spoken.has(`${old.id}:${e.type}:${e.index}`))].slice(-30);
       track = t; state.cursorM = 0; state.spoken.clear();
       for (const e of t.events) if (said.some(k => k.type === e.type && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 25)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
       if (mapReady) map.getSource('apex-route-src').setData({ type: 'FeatureCollection', features: [] });   // not a route: not drawn
       rebuildPins();
       render(false);
+      attachHorizonMarks(t);
+    }
+    // Road marks on the road ahead too (free driving, no route): stop signs, rail crossings, one-lane bridges, fords, deer
+    // crossings, gravel, from the map's answer for the horizon's own corridor (osm_overpass.js keeps its 5 km tiles a week,
+    // so a road you follow asks once a tile). Off the drive's path; nothing without an answer. A mark called on the last
+    // horizon is not called again on the next one, which overlaps it.
+    function attachHorizonMarks(t, tries = 0) {
+      if (!window.ApexRoadMarks || !t || t.kind !== 'horizon' || !Array.isArray(t.lat) || t.lat.length < 2) return;
+      setTimeout(async () => {
+        if (track !== t) return;
+        const c = { t, route: { coords: Array.from(t.lat, (la, i) => [t.lon[i], la]), times: null }, timeS: null, match: 'map_snap' };
+        await contextOn([c], CTX_BUDGET_MS, 'ahead', ['osm_overpass']);
+        if (track !== t || !c.ctx || !c.corridor) return;
+        t.marks = ApexRoadMarks.union(t.marks, ApexRoadMarks.events(c.ctx, c.corridor, t, (la, lo, lats, lons) => Core.nearestIndex(la, lo, lats, lons, -1)));
+        const cos = Math.cos(t.lat[0] * Math.PI / 180);
+        for (const e of t.marks) if ((free.marksSaid || []).some(k => k.code === e.code && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 40)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
+        if (t.marks.length) { rebuildPins(); render(false); }
+        if (!ApexRoadMarks.mapAnswered(c.ctx) && tries < 2) attachHorizonMarks(t, tries + 1);   // the map's late answer is kept: ask again
+      }, tries ? 4000 * tries : 300);
     }
     // seamless (a new route while driving: a reroute, a traffic detour, the way home): the new line replaces the old in one
     // frame, and the follow camera carries on from where it is, never snapped or re-fitted mid-drive.
@@ -10283,7 +10303,7 @@
       startStageWatch(); startCoach();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
