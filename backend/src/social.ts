@@ -66,6 +66,27 @@ export async function friendList(env: Env, v: Viewer) {
       WHERE (f.user_a = ?1 OR f.user_b = ?1) AND NOT (f.status = 'pending' AND f.requested_by = ?1) ORDER BY u.handle`, v.id);
 }
 
+/** GET /api/friends/suggested: people you may know (docs/SOCIAL.md), at most 8. A member who shares a crew with you (named:
+ *  you see its members already) or who is friends with two or more of your friends (counted, never named). Never someone
+ *  you're friends with or have a request with either way, someone blocked either way, or someone three reports hid. */
+export async function friendSuggestions(env: Env, v: Viewer) {
+  const rows = await all<{ id: string; handle: string; photo_id: string | null; crew: string | null; mutual: number }>(env,
+    `WITH my AS (SELECT CASE WHEN user_a = ?1 THEN user_b ELSE user_a END AS id FROM friendships WHERE status = 'accepted' AND (user_a = ?1 OR user_b = ?1)),
+          fof AS (SELECT CASE WHEN f.user_a = my.id THEN f.user_b ELSE f.user_a END AS id, COUNT(*) AS n
+                    FROM friendships f JOIN my ON f.user_a = my.id OR f.user_b = my.id WHERE f.status = 'accepted' GROUP BY 1),
+          cm AS (SELECT o.user_id AS id, MIN(c.name) AS crew FROM crew_members me JOIN crew_members o ON o.crew_id = me.crew_id AND o.user_id != ?1
+                   JOIN crews c ON c.id = me.crew_id WHERE me.user_id = ?1 GROUP BY o.user_id),
+          cand AS (SELECT id FROM cm UNION SELECT id FROM fof WHERE n >= 2)
+     SELECT u.id, u.handle, u.photo_id, cm.crew, COALESCE(fof.n, 0) AS mutual
+       FROM cand JOIN users u ON u.id = cand.id JOIN members mb ON mb.user_id = u.id LEFT JOIN cm ON cm.id = u.id LEFT JOIN fof ON fof.id = u.id
+      WHERE u.id != ?1 AND u.handle IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM friendships x WHERE x.user_a = MIN(u.id, ?1) AND x.user_b = MAX(u.id, ?1))
+        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = u.id) OR (b.blocker = u.id AND b.blocked = ?1))
+        AND NOT ${reportedSql("user", "u.id")}
+      ORDER BY COALESCE(fof.n, 0) + (cm.id IS NOT NULL) * 2 DESC, u.handle LIMIT 8`, v.id);
+  return rows.map((r) => ({ handle: r.handle, photo_id: r.photo_id, crew: r.crew, mutual: r.mutual }));
+}
+
 /** Cancel a request you sent, by handle. Answers the same whether or not there was one (or such a member). */
 export async function friendRequestCancel(env: Env, v: Viewer, req: Request): Promise<void> {
   const { handle } = await body<{ handle?: string }>(req);

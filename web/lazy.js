@@ -6,7 +6,7 @@
 (function (root) {
   'use strict';
   const GROUPS = {
-    social: ['photos.js', 'safety_ui.js', 'crew_standings.js', 'crew_events.js', 'meets_map.js', 'crew_page.js', 'crew_voice.js', 'spots_feed.js', 'roadbooks.js', 'duels.js', 'inbox.js', 'drive_posts.js', 'post_map.js', 'time_attack.js',
+    social: ['photos.js', 'safety_ui.js', 'crew_standings.js', 'crew_events.js', 'meets_map.js', 'crew_page.js', 'crew_voice.js', 'spots_feed.js', 'roadbooks.js', 'duels.js', 'inbox.js', 'people_suggest.js', 'drive_posts.js', 'post_map.js', 'time_attack.js',
       'feedback.js', 'profile_view.js', 'people_samples.js', 'friends_map.js', 'who_sees.js', 'car_lookup.js', 'builds.js', 'garage_ui.js',
       'convoy.js', 'convoy_ui.js'],
     g2p: ['g2p.js'],                 // the neural voice's phonemizer (voice.js), only when a neural voice first speaks
