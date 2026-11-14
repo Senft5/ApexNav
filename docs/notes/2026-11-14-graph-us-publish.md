@@ -9,3 +9,6 @@ The spot roads (Colerain, Blue Rock, I-275 ...) are all Cincinnati's, and graph-
 
 ## 2026-11-14 (graph US publish): a bands_from plan skips Geofabrik; a whole plan tries its index for 25 min (claude/project-thread-39xbx9)
 The first bands_from run failed in plan: Geofabrik refused that runner's index request six times in a minute, though the reuse needs no index. Now the plan outputs placeholders and stops before Geofabrik when bands_from is set, and a whole build's plan retries the index for up to 25 min (the refusals have lasted that long). Undo: drop the `if [ -n "$IN_BANDS" ]` block and put the curl back to --retry 5 --retry-delay 10.
+
+## 2026-11-14 (graph US publish): another run's bands are fetched by id, and all of them or none (claude/project-thread-39xbx9)
+actions/download-artifact with run-id lists only the first 100 of that run's artifacts: the bands_from publish put 100 of 141 bands live (10,522 of 12,865 tiles; Texas, Florida, the Northeast and the Pacific Northwest left out, nothing lost against the old OH/KY/IN map). The publish now lists the run's artifacts paginated, downloads each by id, and fails unless there is one per band job. Undo: put download-artifact back with run-id (only safe under 100 bands).
