@@ -90,3 +90,23 @@ def test_corner_splits_and_words(out):
 def test_what_decided_it(out):
     st = out["standout"]
     assert [r["k"] for r in st["lost"]] == [4, 1] and [r["k"] for r in st["gained"]] == [2]
+
+
+KEY_RUNNER = r"""
+const G = require(process.argv[1] + '/web/ghost_duel.js');
+console.log(JSON.stringify({
+  key: [[1.4, 'sam', false], [-2, '@sam', false], [0, 'sam', false], [1, 'sam', true], [null, 'sam', false], [1, '', false]].map((a) => G.challengeKey(...a)),
+  said: [201, 409, 429, 404, 0].map((s) => G.challengeSaid(s, 'sam', 'Dry Ridge')),
+}));
+"""
+
+
+def test_challenge_back_key():
+    """The drive page's key under a ghost result: Challenge back when they were quicker, a dare when you were; none in a duel."""
+    r = json.loads(subprocess.run([NODE, "-e", KEY_RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["key"] == ["Challenge @sam back", "Dare @sam to beat it", "Dare @sam to beat it", None, None, None]
+    assert r["said"][0] == "Sent. @sam has 7 days on Dry Ridge once they say yes."
+    assert r["said"][1] == "You and @sam already have a duel on Dry Ridge."
+    assert r["said"][2] == "That’s enough duels for now."
+    assert r["said"][3].startswith("@sam isn’t your friend")
+    assert r["said"][4] == "Couldn’t send it. Try again."
