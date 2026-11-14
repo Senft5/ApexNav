@@ -129,7 +129,8 @@ and in random batches so a trace cannot be re-assembled.
   other apps, beside it): Friends or one of their crews on a slide switch, an optional line, Post. The card carries the
   drive's name, the day, length, Score, roads and a line of its shape with both ends cut (privacy zones and 500 m on the
   phone, 500 m again on the server, 600 points at most). Never a time along it or a speed.
-- **Feed** on People → Friends: the newest three posts from friends and your crews (See all for the rest), each with
+- **Feed** on People → Friends: the newest three posts from friends and your crews (a friend's only while they share with
+  you; a crew's only while its author is still in it) (See all for the rest), each with
   kudos (one tap, counted at once) and comments (one tap opens the post with them and a line to add one). Report and
   Block are behind ··· on a post or comment, never on its face; the author deletes a post, and a comment's author or
   the post's author deletes a comment. Blocks hide both ways; three established reports hide; the owner's queue removes.

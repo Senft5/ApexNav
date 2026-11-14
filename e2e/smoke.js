@@ -4883,6 +4883,65 @@ flow('a saved stage: the live delta shows while you drive it and the result at t
   check(said.length === 1, `the result is said once (${JSON.stringify(said)})`);
 });
 
+flow('your best pass: on a road driven before (no stage saved) the bar shows the delta and the co-driver sums the stretch up (pass_coach.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html?notes=full');
+  await page.waitForFunction(() => window.apex && window.ApexPassCoach && window.ApexRecording && window.apexDebug);
+  // a winding road and one earlier pass over it, a little rough; nothing marked in the Log
+  await page.evaluate(async () => {
+    const Core = window.ApexCore, MPH = 2.2369362921, lat = [], lon = [];
+    let la = 35.6, lo = -83.9, h = 0;
+    for (let i = 0; i < 800; i++) { if (i > 100 && i < 700) h += 0.05 * Math.sin((i - 100) / 25);
+      la += 5 * Math.cos(h) / 110540; lo += 5 * Math.sin(h) / (111320 * Math.cos(35.6 * Math.PI / 180)); lat.push(la); lon.push(lo); }
+    const { kappa } = Core.computeCurvature(lat, lon);
+    const v = kappa.map((k) => Math.max(9, 22 - 300 * Math.abs(k))), latG = v.map((x, i) => x * x * kappa[i] / 9.80665);
+    let s = 3; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647 - 0.5; };
+    const roughG = latG.map((x) => x + 0.25 * rnd());
+    const lonG = v.map((x, i) => (i ? (x * x - v[i - 1] ** 2) / 10 / 9.80665 : 0));
+    const prof = Core.profileRecording({ lat, lon, distance_m: lat.map((_, i) => i * 5), speed_mph: v.map((x) => x * MPH), lon_g: lonG, lat_g: roughG });
+    await ApexRecording.store({ id: 'e2e_before', name: 'Esses run', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: v, lon_g: lonG, lat_g: roughG,
+      g_known: null, events: prof.events, elev: null, hz: 1 });
+    window.__road = { lat, lon, v, latG, lonG };
+    await window.apexDebug.refreshSavedDrives();
+  });
+  check(await page.evaluate(() => window.apexDebug.passRefs) >= 6, 'the earlier drive\'s corners are remembered');
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForTimeout(300);
+  if (await page.isVisible('#permSheet.show')) await page.click('#permGo');
+  // drive it again, smoother, as the app's frames (half a bin apart), in bursts a second apart
+  let barText = '';
+  for (let burst = 0; burst < 10; burst++) {
+    await page.evaluate((burst) => {
+      const r = window.__road;
+      for (let j = burst * 160; j < Math.min(1600, (burst + 1) * 160); j++) {
+        const i = Math.min(799, Math.floor(j / 2)), f = (j % 2) / 2, k = Math.min(799, i + 1);
+        window.apex.live({ lat: r.lat[i] + (r.lat[k] - r.lat[i]) * f, lon: r.lon[i] + (r.lon[k] - r.lon[i]) * f, accuracy_m: 4, speed_mps: r.v[i], course_deg: 0,
+          lat_g: r.latG[i], lon_g: r.lonG[i], has_fix: true, calibration: 'locked' });
+      }
+    }, burst);
+    await page.waitForTimeout(1050);
+    if (!barText && await page.isVisible('#coachBar')) barText = await page.textContent('#coachBar');
+  }
+  check(/This stretch\s*\+\d+ vs best/.test(barText), `the bar showed the stretch ahead of your best (${JSON.stringify(barText)})`);
+  // then a straight: 600 m on with no remembered corner ends the stretch, and the co-driver says how it went, once
+  for (let burst = 0; burst < 10 && !(await page.evaluate(() => window.__said.some((t) => /^Best stretch yet/.test(t)))); burst++) {
+    await page.evaluate((burst) => {
+      const r = window.__road, n = r.lat.length, dLa = r.lat[n - 1] - r.lat[n - 2], dLo = r.lon[n - 1] - r.lon[n - 2];
+      for (let j = 1; j <= 80; j++) { const k = burst * 80 + j;
+        window.apex.live({ lat: r.lat[n - 1] + dLa * k / 2, lon: r.lon[n - 1] + dLo * k / 2, accuracy_m: 4, speed_mps: 20, course_deg: 0,
+          lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); }
+    }, burst);
+    await page.waitForTimeout(1000);
+  }
+  const said = await page.evaluate(() => window.__said.filter((t) => /stretch|your best|through there/i.test(t)));
+  check(said.filter((t) => /^Best stretch yet\. \d+ up\.$/.test(t)).length === 1, `the stretch is summed up once (${JSON.stringify(said)})`);
+  check(!said.some((t) => /faster|speed|later|sooner|second/i.test(t)), 'never time or speed');
+  check(!(await page.isVisible('#coachBar')), 'the bar goes when the stretch ends');
+});
+
 flow('wet roads: rain where you are (the place plate\'s weather) brings the notes earlier and is said once (wet_roads.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;

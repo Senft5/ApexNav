@@ -19,9 +19,6 @@
   roughness stays its own thing (SURF), untouched.
 - Undo: drop `out.push(...surfaceRuns(ctx, corridor))` in `road_marks.js marksOf`.
 
-## Main's red e2e: "Clip this corner" was unreadable (2026-11-13)
-- `web/signature.css` gave every `.dv-time button` the paper face, and at equal specificity, loaded later, it beat the
-  solid ink key (`button.btn.solid`) inside a corner's overlay: "Clip this corner" read 1.11:1 and the side-by-side flow
-  failed the contrast floor on main. A solid key there keeps its ink (`.log-page .dv-time button.btn.solid`).
-- The flow "road marks on a route set during a drive" failed one run in six: the down map was an error, which backs
-  Overpass off for a minute unless the plan's own deadline came first. The down map is now a hang the plan gives up on.
+## The road-marks-during-a-drive flow no longer races the map's backoff (2026-11-13)
+- It failed one run in six: the down map was an error, which backs Overpass off for a minute unless the plan's own
+  deadline came first. The down map is now a hang the plan gives up on.
