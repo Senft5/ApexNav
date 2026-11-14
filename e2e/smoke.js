@@ -6078,6 +6078,12 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
       kudos: k.querySelector('.feed-acts button').getAttribute('aria-label'), wide: k.scrollWidth - k.clientWidth }; });
   check(/@bob/.test(c.text) && /Cherohala Skyway/.test(c.text) && /812/.test(c.text) && /Fog on top/.test(c.text) && /Cherohala Skyway, TN-165 \+1/.test(c.text) && c.path > 100 && c.wide <= 1,
     'a friend\'s post: who, the drive, its Score, its line, the roads and what they said: ' + JSON.stringify(c));
+  // the post reads like Strava's: its numbers in one row, the road wide below them, ringed start and red finish, no box around it
+  const look = await page.evaluate(() => { const k = document.querySelector('#accountBody .feed-card'), s = k.querySelector('.feed-stats'), l = k.querySelector('.feed-line'), r = (e) => e.getBoundingClientRect();
+    return { stats: [...s.children].map((d) => d.textContent), wide: Math.round(r(l).width - r(k).width), below: r(l).top >= r(s).bottom, go: !!l.querySelector('circle.go'), end: !!l.querySelector('circle.end'),
+      box: getComputedStyle(k).borderLeftWidth, titleRule: getComputedStyle(k.querySelector('.feed-title')).borderTopWidth }; });
+  check(look.stats.length === 2 && /^Vetta Score812$/.test(look.stats[0]) && /^Distance19\.9\s*mi$/.test(look.stats[1]) && look.wide === 0 && look.below && look.go && look.end && look.box === '0px' && look.titleRule === '0px',
+    'a post: Score and Distance in a row, the line full width under them with its start and finish: ' + JSON.stringify(look));
   // kudos: one tap, at once
   await page.click('#accountBody .feed-card .feed-acts button[aria-label^="Kudos"]');
   await page.waitForFunction(() => document.querySelector('#accountBody .feed-card .feed-acts button[aria-pressed="true"]'));
