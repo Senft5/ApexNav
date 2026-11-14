@@ -22,6 +22,7 @@
     let best = null;
     for (const h of list || []) {
       if (said && said.has(h.id)) continue;
+      if (said && h.silent) continue;                                  // a message sign's words: on the plate, never aloud
       const r = local(me, h);
       if (r.m > lead || r.m < 15 || angle(r.bearing, me.heading) > AHEAD_DEG) continue;
       if (finite(h.heading) && angle(h.heading, me.heading) > SAME_WAY_DEG) continue;   // the other side of the road
@@ -81,7 +82,8 @@
     const parts = [];
     if (finite(h.m) && dist) parts.push(`in ${dist(h.m)}`);
     if (h.official) {                                                   // a DOT's event: its road and the agency, never an age
-      for (const w of [h.road, h.src]) if (typeof w === 'string' && w.trim()) parts.push(w.trim());
+      // a sign's own words ("Main st closed 3 miles ahead"); else the road and the agency
+      for (const w of (typeof h.words === 'string' && h.words.trim() ? [h.words] : [h.road, h.src])) if (typeof w === 'string' && w.trim()) parts.push(w.trim());
       return { title: h.label || LABEL[h.kind] || 'Hazard', detail: parts.join(' · ') };
     }
     const at = typeof h.created_at === 'string' ? Date.parse(h.created_at.replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(h.created_at) ? '' : 'Z')) : NaN;

@@ -184,7 +184,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, nudge: false, push: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, nudge: false, push: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -364,7 +364,7 @@
     });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p) };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), horizonFrom: async (coords) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; useHorizon(t); return t.id; } };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -839,6 +839,7 @@
       map.on('moveend', () => { clearTimeout(twisty.timer); twisty.timer = setTimeout(updateTwisty, 600); });
       updateCoverage();
       map.on('moveend', () => { clearTimeout(coverage.timer); coverage.timer = setTimeout(updateCoverage, 700); });
+      if (state.toggles.roadcams) map.once('idle', () => roadCamsLayer(true));   // left on last time: after the launch, never in its way
       if (track) loadTrackOnMap();
       // Tap a faint option on the map to take it.
       map.on('click', 'apex-alt', (e) => {
@@ -2489,11 +2490,31 @@
     function useHorizon(t) {
       const old = track && track.kind === 'horizon' ? track : null, cos = Math.cos(t.lat[0] * Math.PI / 180);
       const said = old ? old.events.filter(e => state.spoken.has(`${old.id}:${e.type}:${e.index}`)) : [];
+      if (old && Array.isArray(old.marks)) free.marksSaid = [...(free.marksSaid || []), ...old.marks.filter(e => state.spoken.has(`${old.id}:${e.type}:${e.index}`))].slice(-30);
       track = t; state.cursorM = 0; state.spoken.clear();
       for (const e of t.events) if (said.some(k => k.type === e.type && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 25)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
       if (mapReady) map.getSource('apex-route-src').setData({ type: 'FeatureCollection', features: [] });   // not a route: not drawn
       rebuildPins();
       render(false);
+      attachHorizonMarks(t);
+    }
+    // Road marks on the road ahead too (free driving, no route): stop signs, rail crossings, one-lane bridges, fords, deer
+    // crossings, gravel, from the map's answer for the horizon's own corridor (osm_overpass.js keeps its 5 km tiles a week,
+    // so a road you follow asks once a tile). Off the drive's path; nothing without an answer. A mark called on the last
+    // horizon is not called again on the next one, which overlaps it.
+    function attachHorizonMarks(t, tries = 0) {
+      if (!window.ApexRoadMarks || !t || t.kind !== 'horizon' || !Array.isArray(t.lat) || t.lat.length < 2) return;
+      setTimeout(async () => {
+        if (track !== t) return;
+        const c = { t, route: { coords: Array.from(t.lat, (la, i) => [t.lon[i], la]), times: null }, timeS: null, match: 'map_snap' };
+        await contextOn([c], CTX_BUDGET_MS, 'ahead', ['osm_overpass']);
+        if (track !== t || !c.ctx || !c.corridor) return;
+        t.marks = ApexRoadMarks.union(t.marks, ApexRoadMarks.events(c.ctx, c.corridor, t, (la, lo, lats, lons) => Core.nearestIndex(la, lo, lats, lons, -1)));
+        const cos = Math.cos(t.lat[0] * Math.PI / 180);
+        for (const e of t.marks) if ((free.marksSaid || []).some(k => k.code === e.code && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 40)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
+        if (t.marks.length) { rebuildPins(); render(false); }
+        if (!ApexRoadMarks.mapAnswered(c.ctx) && tries < 2) attachHorizonMarks(t, tries + 1);   // the map's late answer is kept: ask again
+      }, tries ? 4000 * tries : 300);
     }
     // seamless (a new route while driving: a reroute, a traffic detour, the way home): the new line replaces the old in one
     // frame, and the follow camera carries on from where it is, never snapped or re-fitted mid-drive.
@@ -2614,7 +2635,12 @@
       for (let i = 0; i < t.lat.length; i += 20) pts.push([t.lat[i], t.lon[i]]);
       pts.push([t.lat[t.lat.length - 1], t.lon[t.lon.length - 1]]);
       const nodes = await ApexCameras.load(ApexCameras.tilesNear(pts));
-      if (track === t) $('camOfflineNote').hidden = !!nodes;
+      if (track === t) {
+        // no signal: a kept list past its week still pins the cameras (cameras.js keptAt), and the note says how old it is
+        const note = $('camOfflineNote'), aged = nodes && Number.isFinite(nodes.keptAt);
+        note.textContent = aged ? `Camera map from ${new Date(nodes.keptAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}, no signal to check for newer ones.` : "Camera map offline. No pins doesn't mean no cameras.";
+        note.hidden = !!nodes && !aged;
+      }
       if (nodes) { attachAlpr(t, nodes); return; }
       // U-102: no toast over the replay's map: the Layers sheet, under Cameras, says the camera map is offline
     }
@@ -3918,7 +3944,26 @@
       const far = ApexUnits.long(hit.aheadM, 1);
       offerKey(`Road closed on your route in ${far}.`, `Road closed in ${far}`, { label: 'Go round', ms: 15000, onClick: () => goRoundClosed(t, hit, pts) });
     }
-    async function goRoundClosed(t, hit, pts) {
+    // The DOTs' word on the route ahead (road_events.js onRouteAhead, 2026-11-14): a crash or a one-way closure your way 1 to
+    // 20 km on is offered once with Go round, as a reported closure is; slow traffic is said once. Every 5 s at most.
+    const dotAhead = { at: 0, offered: new Set() };
+    function dotAheadTick(me) {
+      const t = track, now = Date.now();
+      if (!window.ApexRoadEvents || !t || !t.request || t.kind !== 'route' || state.mode !== 'live' || !driveActive || rerouter.off || now - dotAhead.at < 5000) return;
+      dotAhead.at = now;
+      const near = ApexRoadEvents.near(roadEvents.list, me.lat, me.lon, now);
+      const hit = near.length ? ApexRoadEvents.onRouteAhead(t, routeWatch.bestM, near, { maxM: 20000 }) : null;
+      if (window.apexDebug) window.apexDebug.dotAhead = { n: near.length, hit };
+      if (!hit || dotAhead.offered.has(hit.id)) return;
+      dotAhead.offered.add(hit.id);                                     // (the call 600 m out still comes: "Crash ahead")
+      const far = ApexUnits.long(hit.aheadM, 1), what = hit.kind === 'crash' ? 'Crash' : hit.kind === 'slow' ? (hit.label || 'Slow traffic') : hit.kind === 'ice' ? (hit.label || 'Icy road') : 'Road closed';
+      if (hit.kind === 'slow' || hit.kind === 'ice') { say(`${what} on your route in ${far}.`, false, null, null, { kind: 'hazard', key: `dot:${hit.id}`, alert: true, tokens: ['line:rep_hazard'], named: true }); return; }
+      const pts = [{ lat: hit.lat, lon: hit.lon }];
+      offerKey(`${what} on your route in ${far}.`, `${what} in ${far}`, { label: 'Go round', ms: 15000,
+        // (the public router hears of it with this session's own avoids, R-22: a crash is no closure in anyone's list)
+        onClick: () => { avoidPoints.push(pts[0]); goRoundClosed(t, pts[0], pts, hit.kind === 'crash' ? 'that crash' : 'that closure', hit.kind === 'crash' ? 'Going round the crash.' : 'Going round the road closure.'); } });
+    }
+    async function goRoundClosed(t, hit, pts, that = 'that closure', going = 'Going round the road closure.') {
       const L = state.live;
       if (track !== t || !L || !t.request) return;
       const ahead = waysAhead(t);
@@ -3926,11 +3971,11 @@
       try { [r] = await routePoints([{ lat: L.lat, lon: L.lon, heading: headingOf(L) }, ...ahead, t.request.to], { osrm: true, level: t.funLevel || (isLoop(t) ? LOOP_STYLE : 'quick'), avoid: { ...avoid, closed: pts } }); }
       catch (_) { toast('Couldn\'t plan a way round. Check signal.'); return; }
       if (track !== t || state.mode !== 'live') return;
-      if (!r || ApexHazardReports.passesNear(r.coords, [hit], 40)) { toast('No way round that closure. Staying on this route.'); return; }
+      if (!r || ApexHazardReports.passesNear(r.coords, [hit], 40)) { toast(`No way round ${that}. Staying on this route.`); return; }
       const nt = await trackAhead(t, r, ahead);
       if (track !== t || state.mode !== 'live') return;
       await buildRoute(null, t.id, t.name, nt);
-      toast('Going round the road closure.');
+      toast(going);
     }
     // Traffic ahead (iOS app only; docs/ARCHITECTURE.md section 8). Every 2 min while on a planned route, Apple times the next
     // 20 km in chunks, now and at 3 am. A jam (or a slowdown) costs the route fun even with no delay; on a jam, a detour that
@@ -5536,6 +5581,7 @@
       logFrameEl('analysis.html?tab=log');
     }
     window.addEventListener('resize', () => { if (logFrame.el && !logFrame.el.hidden) logInsets(); });
+    const postable = (date) => { const t = Date.parse(date); return Number.isFinite(t) && t <= Date.now() + 86400e3 && t >= Date.now() - 29 * 86400e3; };
     window.ApexLogHost = {
       close(v) {
         refreshSavedDrives().catch(() => {});                          // a drive renamed or deleted in the Log
@@ -5559,6 +5605,32 @@
       },
       stale() { ['drives', 'theme', 'units'].forEach((w) => ApexLogHost.changed(w)); },
       insets: () => safeInsets(),                                      // asked for by the frame as its first script runs
+      // a corner clip made on the Log, to your friends or a crew (drive_posts.js compose, its sheet on this page): for a
+      // member. The Log steps aside while the sheet shows; what the sheet said (posted, or the clip didn't go up) is handed
+      // back for the Log to say, since this page's toast is under it. { posted, said }
+      // date: the drive's (a post is of a drive from the last 30 days, backend drive_posts.ts)
+      canPost: (date) => !!(accountMe && accountMe.member) && (date === undefined || postable(date)),
+      async post(blob, meta = {}) {
+        if (!blob || !(accountMe && accountMe.member)) return { posted: false, said: 'Sign in to post.' };
+        try { await needSocial(); } catch (_) {}
+        const rec = meta.driveId && window.ApexRecording ? await ApexRecording.get(meta.driveId).catch(() => null) : null;
+        if (!drivePosts || !rec) return { posted: false, said: 'Couldn’t post it here.' };
+        let score = null;
+        try { const sum = ApexRecording.summarize(ApexCore, rec); score = sum && sum.ds ? sum.ds.score : null; } catch (_) { score = null; }
+        if (rec.date_known === false || !postable(rec.date)) return { posted: false, said: 'Only drives from the last 30 days can be posted.' };
+        const dt = new Date(rec.date), day = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+        const len = Array.isArray(rec.dist) && rec.dist.length ? rec.dist[rec.dist.length - 1] : null;
+        const d = { name: rec.name, driven_on: day, len_m: len, score, lat: rec.lat, lon: rec.lon, roads: Array.isArray(rec.roads) ? rec.roads : [],
+          media: { blob, mime: String(meta.mime || blob.type || 'video/mp4').split(';')[0], label: String(meta.cornerLabel || '').slice(0, 60) || null } };
+        const f = logFrame.el, shown = !!(f && !f.hidden), t = $('toast');
+        if (shown) f.hidden = true;
+        const before = t.textContent;
+        let posted = false;
+        try { posted = !!(await drivePosts.compose(d)); } finally { if (shown) f.hidden = false; }
+        const said = posted && t.classList.contains('show') && t.textContent !== before ? t.textContent : (posted ? 'Posted.' : '');
+        if (posted) { t.classList.remove('show'); pushOffer(); }
+        return { posted, said };
+      },
     };
     // links into the Log anywhere on the map page (the drive-ended card, a toast's Open) open the frame too
     document.addEventListener('click', (e) => {
@@ -8725,6 +8797,7 @@
           if (state.toggles.meets) toast(`Meets within ${ApexUnits.long(80000, 0)} of the map. Tap a pin.`);   // the Worker's 80 km, in the driver's units
         });
       }
+      if (k === 'roadcams') roadCamsLayer(state.toggles.roadcams);   // Ohio's traffic cameras (road_cams.js), loaded on first use
       if (k === 'coverage') {
         updateCoverage();
         if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Tap a road for what was measured. A road with no line earns its first drivers extra points.');
@@ -9055,6 +9128,22 @@
     const reported = { list: [], at: -Infinity, cellKey: '', busy: false, said: new Set(), mine: new Set(), pins: new Map(), watch: ApexHazardReports.createPassWatch(), asking: null, local: [],
                        cells: ApexPrivacyZones.cellCache(120e3), ahead: ApexPrivacyZones.cellCache(6 * 3600e3, 16), aheadFor: null };
     if (window.apexDebug) { window.apexDebug.loadReported = (force) => loadReported(force); window.apexDebug.reportedIds = () => reported.list.map((h) => h.id); }   // e2e: a report that lands mid-drive
+    // ---- Road cameras (road_cams.js, 2026-11-14): Ohio DOT's traffic cameras, an opt-in layer; a tap shows the road now ----
+    let roadCams = null;
+    async function roadCamsLayer(on) {
+      try {
+        if (!roadCams) {
+          if (!on) return;
+          await ApexLazy.load('roadcams');
+          const css = getComputedStyle(document.documentElement);
+          roadCams = ApexRoadCams.mount({ map, el, btn, toast, apiFetch: (path) => ApexSync.apiFetch(path, { method: 'GET' }),
+            driving: () => driveActive && state.mode === 'live',
+            ink: () => ({ dot: css.getPropertyValue('--panel-ink').trim() || '#1a1a1a', edge: css.getPropertyValue('--panel').trim() || '#ffffff' }) });
+        }
+        await roadCams.setLayer(on);
+      } catch (_) { if (on) toast('Road cameras didn\'t load. Check signal.'); }
+    }
+    if (window.apexDebug) window.apexDebug.roadCams = () => roadCams;
     // ---- the DOTs' own traffic events (road_events.js; backend/src/traffic.ts) ------------------------------------------
     // Closures, lane closures, roadwork, slow traffic and crashes from INDOT, KYTC (and ODOT with the owner's key): the whole
     // region asked every 5 min while planning or driving, never where you are; signed in or not. What is near you joins the
@@ -9695,6 +9784,7 @@
         tokens: [!next.label && ApexVoiceLines.TEXT[`line:rep_${next.kind}`] ? `line:rep_${next.kind}` : 'line:rep_hazard'], named: !!next.label }); }
       try { policeAheadTick(me); } catch (_) { /* never in the way of the drive */ }
       try { closedAheadTick(me); } catch (_) { /* never in the way of the drive */ }
+      try { dotAheadTick(me); } catch (_) { /* never in the way of the drive */ }
       const passed = reported.watch.update(reported.list, me, reported.mine);
       if (passed && !reported.asking) askStill(passed);
     }
@@ -9708,6 +9798,8 @@
       if (!p) return;
       if ($('hzPlateTitle').textContent !== p.title) $('hzPlateTitle').textContent = p.title;
       if ($('hzPlateDetail').textContent !== p.detail) $('hzPlateDetail').textContent = p.detail;
+      const wrap = !!(h && h.words);                                     // a sign's own words wrap, up to three lines
+      if ($('hzPlateDetail').classList.contains('wrap') !== wrap) $('hzPlateDetail').classList.toggle('wrap', wrap);
     }
     function askStill(h) {
       reported.asking = h;
@@ -10231,7 +10323,7 @@
       startStageWatch(); startCoach();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
@@ -10336,6 +10428,24 @@
         n.hidden = shown >= 2; if (!n.hidden) shown++;
       }
     }
+    // The App Store rating (StoreKit requestReview in the shell; docs/APP_REVIEW.md 5.6.1): after a good drive, parked, from
+    // the third drive on, once per app version (end_line.js askReview). A few seconds after the score lands, if the card is
+    // still up, so it never covers the number as it counts.
+    async function endReviewAsk(c, best) {
+      const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
+      const version = (/ApexNav\/([^\s(]+)/.exec(navigator.userAgent) || [])[1] || null;
+      let askedFor = null; try { askedFor = localStorage.getItem('vetta.reviewAsked'); } catch (_) {}
+      let drives = null; try { drives = (await ApexRecording.summaries(null)).length; } catch (_) { drives = null; }
+      // the phone's speed now: the shell's last fix (live or idle), and only a fresh one (10 s) counts as known
+      const speedNow = () => (state.lastMotion && Number.isFinite(state.lastMotion.speedMps) && performance.now() - (state.lastPositionAt || -1e9) < 10000 ? state.lastMotion.speedMps : null);
+      const v = speedNow();
+      if (!window.ApexEndLine || !ApexEndLine.askReview || !ApexEndLine.askReview({ app: !!native, score: c.ds.score, best, drives, speedMps: v, version, askedFor })) return;
+      setTimeout(() => {
+        const v2 = speedNow(), still = v2 != null && v2 < 1.5;   // still parked, 3 s on
+        if (!still || !endDrive || endDrive.id !== c.id || !$('endCard').classList.contains('show')) return;
+        try { localStorage.setItem('vetta.reviewAsked', version); native.postMessage({ cmd: 'askReview' }); } catch (_) {}
+      }, 3000);
+    }
     function endCardScored(c, others, opts = {}) {
       if (!endDrive || endDrive.id !== c.id) return;                   // another card since
       endDrive = { ...endDrive, ...c };
@@ -10377,6 +10487,7 @@
       let best = false;
       if (c.ds.score != null && window.ApexEndLine) { try { best = ApexEndLine.bestOnRoad({ id: c.id, name: c.name, score: c.ds.score }, others || []); } catch (_) { best = false; } }
       $('endLine').textContent = best ? ['Your best on this road.', tipLine].filter(Boolean).join(' ') : tipLine;
+      endReviewAsk(c, best);                                           // a good drive, parked: the App Store rating, once a version
       // IDEAS D-27: the skill Your driving is practicing, read on this drive alone (analysis_client.js practiceOf)
       const prLine = c.practice && typeof c.practice.line === 'string' ? c.practice.line : '';
       $('endPractice').textContent = prLine; $('endPractice').hidden = !prLine;
@@ -10428,7 +10539,10 @@
         if (plan && window.ApexAnalysis) try { practice = (await ApexAnalysis.job('practiceLine', { id: d.id, plan })).practice || null; } catch (_) { practice = null; }
         let coach = null, road = null;                                 // U-111: the Log's sentence, when the drive is stored; with it the road's line, which skips the practised skill
         if (d.ds.score != null && window.ApexAnalysis) try { const r = await ApexAnalysis.job('coachLine', { id: d.id, skip: practice && plan ? plan.skill : null }); coach = r.coach || null; road = r.road || null; } catch (_) { coach = null; road = null; }
-        endCardScored({ ...c, corners: d.corners.length, ds: d.ds, coach, practice, road }, others, opts);
+        let stages = [];                                               // your saved stages it went over, for its post
+        const segs = savedStages();
+        if (segs.length && window.ApexAnalysis) try { stages = (await ApexAnalysis.job('stagesOf', { id: d.id, segs })).stages || []; } catch (_) { stages = []; }
+        endCardScored({ ...c, corners: d.corners.length, ds: d.ds, coach, practice, road, stages }, others, opts);
       })();
     }
     // U-88: behind the card, the map is the drive: fitted to its trail above the card, the trail drawn at the route's width in
@@ -10526,8 +10640,10 @@
     const endPostOf = () => {
       const roads = Object.entries(drive.roads || {}).filter(([, m]) => m >= 500).sort((a, b) => b[1] - a[1]).map(([n]) => n);
       const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      return { name: endDrive.name, driven_on: day, len_m: endDrive.len_m, score: endDrive.ds && endDrive.ds.score, lat: endDrive.lat, lon: endDrive.lon, roads };
+      return { name: endDrive.name, driven_on: day, len_m: endDrive.len_m, score: endDrive.ds && endDrive.ds.score, lat: endDrive.lat, lon: endDrive.lon, roads, stages: endDrive.stages || [] };
     };
+    // your saved stages (the Log's, apex.segments), for the stages a drive's post shows with their Scores
+    function savedStages() { try { const l = JSON.parse(localStorage.getItem('apex.segments') || '[]'); return Array.isArray(l) ? l : []; } catch (_) { return []; } }
     const endPosted = (said) => { $('endPost').textContent = said; $('endPost').disabled = true; $('endPostMore').hidden = true; };
     const endPostReady = () => !!endDrive && !!drivePosts && !$('endPost').disabled && $('endPost').getAttribute('aria-disabled') !== 'true';   // not while scoring
     $('endPost').addEventListener('click', async () => {
@@ -10647,11 +10763,11 @@
         endCardOpen(card);
         try {
           const { rows: _, ...recState } = rec.snapshot(rec.samples);
-          const res = await ApexAnalysis.job('save', { state: recState, rows: rec.rows, fileName: job.fileName, meta: job.meta, extra, plan: practicePlan() });
+          const res = await ApexAnalysis.job('save', { state: recState, rows: rec.rows, fileName: job.fileName, meta: job.meta, extra, plan: practicePlan(), segs: savedStages() });
           keepDone(kept);
           const s = res.summary || {};
           endCardScored({ ...card, id: res.driveId, len_m: s.len_m ?? card.len_m, secs: s.secs ?? card.secs, corners: Array.isArray(s.corners) ? s.corners.length : null,
-                          ds: s.ds || { score: null, components: null }, card: res.card || null, coach: res.coach || null, practice: res.practice || null }, res.others || [], { quiet: !!ended });
+                          ds: s.ds || { score: null, components: null }, card: res.card || null, coach: res.coach || null, practice: res.practice || null, stages: res.stages || [] }, res.others || [], { quiet: !!ended });
           idle(() => refreshSavedDrives().catch(() => {}));            // the road memory learns this drive, off the card's moment
           if (live) {
             live.finish().then(async (shared) => {
