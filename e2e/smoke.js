@@ -2364,16 +2364,19 @@ flow('a DOT crash on the route ahead, your way, is offered miles out with Go rou
   check(/Going round the crash/.test(await page.textContent('#dsNote')), 'the drive says it is going round: ' + await page.textContent('#dsNote'));
 }, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });
 
-flow('Road cameras: an opt-in layer of Ohio DOT\'s traffic cameras, loaded only when switched on; a tap shows the road now (Worker stubbed)', async (page, base) => {
+flow('Road cameras: an opt-in layer of Ohio DOT\'s and Kentucky\'s traffic cameras, loaded only when switched on; a tap shows the road now (Worker stubbed)', async (page, base) => {
   let asked = 0;
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url());
-    if (u.pathname === '/api/traffic/v1/cameras.json') { asked++; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ src: 'ODOT', cams: [
-      { id: 'c1', lat: 39.96, lon: -83.0, name: 'I-70 at SR-256', views: [{ dir: '', url: 'https://itscameras.dot.state.oh.us/images/col/i70.jpg' }] }] }) }); }
+    if (u.pathname === '/api/traffic/v1/cameras.json') { asked++; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ sources: ['ODOT', 'KYTC'], cams: [
+      { id: 'c1', lat: 39.96, lon: -83.0, name: 'I-70 at SR-256', src: 'ODOT', views: [{ dir: '', url: 'https://itscameras.dot.state.oh.us/images/col/i70.jpg' }] },
+      { id: 'ky-CCTV_05_71_0103', lat: 38.32, lon: -85.56, name: 'I-71 at Old Brownsboro Rd', src: 'KYTC', views: [{ dir: '', url: 'https://www.trimarc.org/images/milestone/CCTV_05_71_0103.jpg' }] }] }) }); }
     return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
   });
-  await page.route('https://itscameras.dot.state.oh.us/**', (route) => route.fulfill({ contentType: 'image/png',
-    body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') }));
+  const png = (route) => route.fulfill({ contentType: 'image/png',
+    body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') });
+  await page.route('https://itscameras.dot.state.oh.us/**', png);
+  await page.route('https://www.trimarc.org/**', png);
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded(), null, { timeout: 20000 });
@@ -2385,6 +2388,11 @@ flow('Road cameras: an opt-in layer of Ohio DOT\'s traffic cameras, loaded only 
   await page.waitForFunction(() => { const i = document.querySelector('.rc-pic'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 10000 });
   const got = await page.evaluate(() => ({ src: document.querySelector('.rc-pic').src, title: document.querySelector('.overlay.show h3').textContent, note: document.querySelector('.overlay.show .note').textContent }));
   check(/^https:\/\/itscameras\.dot\.state\.oh\.us\/images\/col\/i70\.jpg\?t=\d+$/.test(got.src) && got.title === 'I-70 at SR-256' && /Ohio DOT/.test(got.note), 'the picture opens: ' + JSON.stringify(got));
+  await page.evaluate(() => [...document.querySelectorAll('.overlay.show button')].find((b) => b.textContent === 'Close').click());
+  await page.evaluate(() => apexDebug.roadCams().open('ky-CCTV_05_71_0103'));
+  await page.waitForFunction(() => { const i = document.querySelector('.rc-pic'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 10000 });
+  const ky = await page.evaluate(() => ({ src: document.querySelector('.rc-pic').src, note: document.querySelector('.overlay.show .note').textContent }));
+  check(/^https:\/\/www\.trimarc\.org\/images\/milestone\/CCTV_05_71_0103\.jpg\?t=\d+$/.test(ky.src) && /^Kentucky TRIMARC's camera/.test(ky.note), 'a Kentucky camera says whose it is: ' + JSON.stringify(ky));
   await page.evaluate(() => [...document.querySelectorAll('.overlay.show button')].find((b) => b.textContent === 'Close').click());
   await page.evaluate(() => document.querySelector('[data-toggle="roadcams"]').click());
   check(await page.evaluate(() => apexDebug.map.getLayoutProperty('roadcams-dots', 'visibility') === 'none'), 'off hides them');
