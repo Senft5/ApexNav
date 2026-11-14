@@ -39,7 +39,7 @@ const CASES = {
   beartooth: { name: 'Beartooth Highway (US 212)', from: { lat: 45.1850, lon: -109.2470 }, to: { lat: 45.0200, lon: -109.9330 }, road: /Beartooth|212/i },
   sun: { name: 'Going-to-the-Sun Road', from: { lat: 48.4950, lon: -113.9820 }, to: { lat: 48.7460, lon: -113.4370 }, road: /Going-to-the-Sun/i },
   million: { name: 'Million Dollar Highway (US 550)', from: { lat: 38.0220, lon: -107.6710 }, to: { lat: 37.8120, lon: -107.6640 }, road: /550|Million Dollar|San Juan Skyway/i },
-  sisters: { name: 'Three Sisters (RR 337, Leakey to Camp Wood)', from: { lat: 29.7290, lon: -99.7610 }, to: { lat: 29.6680, lon: -100.0120 }, road: /337/i },
+  sisters: { name: 'Three Sisters (RR 337, Leakey to Camp Wood)', from: { lat: 29.7290, lon: -99.7610 }, to: { lat: 29.6680, lon: -100.0120 }, road: /\b33[567]\b/i },
   crest: { name: 'Angeles Crest Highway (CA 2)', from: { lat: 34.2120, lon: -118.1880 }, to: { lat: 34.3610, lon: -117.6330 }, road: /Angeles Crest|^CA 2$|^SR 2$|State Route 2\b/i },
   maricopa: { name: 'Maricopa Highway (CA 33)', from: { lat: 34.4480, lon: -119.2470 }, to: { lat: 34.8600, lon: -119.4800 }, road: /Maricopa|\b33\b/i },
   bigsur: { name: 'Big Sur (CA 1, Carmel to Cambria)', from: { lat: 36.5550, lon: -121.9230 }, to: { lat: 35.5640, lon: -121.0810 }, road: /Cabrillo|Shoreline|^CA 1$|^SR 1$|Highway 1\b/i },
