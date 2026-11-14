@@ -150,6 +150,13 @@
     if (h < 48) return 'yesterday';
     return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   }
+  /** This week's line under a driver (GET /api/feed/week): how far, how many drives, and the best Score when there is one. */
+  function weekLine(r, fmtLen) {
+    const n = r && r.drives | 0, len = r && Number.isFinite(r.length_m) && r.length_m > 0 ? fmtLen(r.length_m) : '';
+    return [len, n === 1 ? '1 drive' : `${n} drives`, r && Number.isFinite(r.best) ? `best ${r.best}` : ''].filter(Boolean).join(' · ');
+  }
+  /** The board is worth showing once someone besides you posted this week. */
+  const weekShown = (rows) => Array.isArray(rows) && rows.some((r) => r && !r.you);
   /** The card's facts, in the order a driver reads them: length, then the roads (two named, the rest counted). */
   function facts(p, fmtLen) {
     const roads = Array.isArray(p.roads) ? p.roads : [];
@@ -158,6 +165,13 @@
   }
 
   const STYLE = `
+    .week-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+    .week-card { flex: 0 0 auto; display: grid; grid-template-columns: auto auto; align-items: center; gap: 2px 8px; min-height: 48px; padding: 6px 12px 6px 6px;
+      background: none; border: 1px solid var(--rule); color: inherit; font: inherit; text-align: left; }
+    button.week-card { cursor: pointer; }
+    .week-card > :first-child { grid-row: span 2; }
+    .week-card .week-who { font-size: 14px; white-space: nowrap; }
+    .week-card small { font-size: 12px; color: var(--panel-dim); white-space: nowrap; }
     .feed-media { position: relative; background: #000; min-height: 120px; }
     .feed-media video, .feed-media img { display: block; width: 100%; max-height: 440px; object-fit: contain; }
     .feed-media-label { position: absolute; left: 8px; top: 8px; background: var(--panel); color: var(--panel-ink); padding: 2px 8px; font-weight: 700; font-size: 13px; }
@@ -466,12 +480,28 @@
       const box = el('section', { className: 'stack-8 feed-sec' }); box.hidden = true;
       const list = el('div', { className: 'feed' });
       const all = btn('See all', () => onAll && onAll(), 'linkbtn');
-      box.append(el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Feed' }), all), list);
+      // this week, a weekly board in a row: who posted, how far, best Score; a friend's card opens their profile
+      const week = el('div', { className: 'stack-8 feed-week' }); week.hidden = true;
+      const wrow = el('div', { className: 'week-row', role: 'group', 'aria-label': 'This week' });
+      week.append(el('b', { textContent: 'This week' }), wrow);
+      const fmtLen = page.fmtLen || ((m) => `${(m / 1000).toFixed(1)} km`);
+      apiCall('GET', '/api/feed/week').then(jsonOf).then((rows) => {
+        if (!weekShown(rows)) return;
+        wrow.replaceChildren(...rows.map((r, i) => {
+          const tap = !r.you && page.openFriend;   // your own card is a plain card, a friend's opens their profile
+          const c = el(tap ? 'button' : 'div', { ...(tap ? { type: 'button' } : {}), className: 'week-card', 'aria-label': `${i + 1}. ${r.you ? 'You' : '@' + r.handle}, ${weekLine(r, fmtLen)}` },
+            face(r, 32), el('b', { className: 'week-who', textContent: `${i + 1}  ${r.you ? 'You' : '@' + r.handle}` }), el('small', { textContent: weekLine(r, fmtLen) }));
+          if (tap) c.addEventListener('click', () => page.openFriend(r.handle));
+          return c;
+        }));
+        week.hidden = false; box.hidden = false;
+      }).catch(() => {});
+      box.append(el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Feed' }), all), week, list);
       const redo = () => apiCall('GET', '/api/feed').then(jsonOf).then((rows) => {
         if (!Array.isArray(rows)) return;
         list.replaceChildren(...rows.slice(0, PREVIEW).map((p) => card(p, { after: redo })));
         all.hidden = rows.length <= PREVIEW;
-        box.hidden = !rows.length;
+        box.hidden = !rows.length && week.hidden;
       }).catch(() => {});
       redo();
       return box;
@@ -614,6 +644,6 @@
     return { section, full, open, compose, post, remove, card, drivesOf };
   }
 
-  const api = { trimLine, encode, decode, throughPoints, stretch, rivalsOf, rivalLine, lineSvg, ago, facts, mentionParts, mentionAt, suggest, kudosLine, mount, CUT_M, MAX_POINTS };
+  const api = { trimLine, encode, decode, throughPoints, stretch, rivalsOf, rivalLine, lineSvg, ago, facts, weekLine, weekShown, mentionParts, mentionAt, suggest, kudosLine, mount, CUT_M, MAX_POINTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDrivePosts = api;
 })(typeof window !== 'undefined' ? window : globalThis);

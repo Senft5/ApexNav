@@ -6750,6 +6750,7 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
     if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
     if (u.pathname === '/api/crews') return json([{ id: 'k1', name: 'Ridge Runners', role: 'member', visibility: 'private', members: 3 }]);
     if (u.pathname === '/api/feed') return json([bobPost]);
+    if (u.pathname === '/api/feed/week') return json([{ handle: 'bob', photo_id: null, you: false, drives: 2, length_m: 48280, best: 812 }, { handle: 'me', photo_id: null, you: true, drives: 1, length_m: 16093, best: null }]);
     if (u.pathname === '/api/posts/P1AAAAAAAAAAAAAA') return json({ ...bobPost, comment_list: [{ id: 'C1AAAAAAAAAAAAAA', body: 'Was that you at the overlook?', created_at: bobPost.created_at, handle: 'cara', photo_id: null, mine: false, can_delete: false }],
       kudos_from: [{ handle: 'cara', photo_id: null }, { handle: 'dan', photo_id: null }] });
     return json([]);
@@ -6761,6 +6762,13 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
       kudos: k.querySelector('.feed-acts button').getAttribute('aria-label'), wide: k.scrollWidth - k.clientWidth }; });
   check(/@bob/.test(c.text) && /Cherohala Skyway/.test(c.text) && /812/.test(c.text) && /Fog on top/.test(c.text) && /Cherohala Skyway, TN-165 \+1/.test(c.text) && c.path > 100 && c.wide <= 1,
     'a friend\'s post: who, the drive, its Score, its line, the roads and what they said: ' + JSON.stringify(c));
+  // (2026-11-14) This week above the Feed: who posted, how far, how many, the best Score; a friend's card opens their profile
+  await page.waitForSelector('#accountBody .feed-week:not([hidden]) .week-card');
+  const wk = await page.$$eval('#accountBody .feed-week .week-card', (l) => l.map((b) => [b.tagName, b.querySelector('.week-who').textContent, b.querySelector('small').textContent]));
+  check(JSON.stringify(wk) === JSON.stringify([['BUTTON', '1  @bob', '30.0 mi · 2 drives · best 812'], ['DIV', '2  You', '10.0 mi · 1 drive']]), 'this week, most distance first: ' + JSON.stringify(wk));
+  await page.click('#accountBody .feed-week button.week-card');
+  await page.waitForSelector('.profile-view .profile-drives:not([hidden]) .feed-card', { timeout: 10000 });
+  await page.click('.profile-view .side-pop-head button');
   // the post reads like Strava's: its numbers in one row, the road wide below them, ringed start and red finish, no box around it
   const look = await page.evaluate(() => { const k = document.querySelector('#accountBody .feed-card'), s = k.querySelector('.feed-stats'), l = k.querySelector('.feed-line'), r = (e) => e.getBoundingClientRect();
     return { stats: [...s.children].map((d) => d.textContent), wide: Math.round(r(l).width - r(k).width), below: r(l).top >= r(s).bottom, go: !!l.querySelector('circle.go'), end: !!l.querySelector('circle.end'),
@@ -10692,6 +10700,31 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
   await page.waitForFunction(() => window.apexDebug.state.mode === 'live', null, { timeout: 5000 });
   check(await page.evaluate(() => apexDebug.map.getLayoutProperty('apex-places', 'visibility')) === 'none', 'no places on the map in a drive');
 }, { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
+flow('a place someone sent: Share on the place card makes a vettadrive.app link with the spot and its name, and that link opens the same card on the map (place_link.js, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.whatsNew', '99'); } catch (_) {}
+    window.__shared = []; Object.defineProperty(navigator, 'share', { configurable: true, value: async (d) => { window.__shared.push(d); } }); });
+  await page.route(/^https:\/\/overpass/, (route) => route.fulfill({ contentType: 'application/json', body: '{"elements":[]}' }));
+  await page.route('**/api/ctx/keys', (route) => route.fulfill({ contentType: 'application/json', body: '{"keys":{}}' }));
+  // the link as Share builds it: the place in the fragment, so the website's server never sees it
+  await page.goto(base + '/index.html#place=39.15500_-84.61500_' + Buffer.from('Bean There Coffee', 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''));
+  await page.waitForSelector('#pinOverlay.show', { timeout: 20000 }).catch(async () => { throw new Error('the link opened no card: ' + await page.evaluate(() => location.href)); });
+  const card = await page.evaluate(() => { const c = apexDebug.map.getCenter(); return { name: document.getElementById('pinPlace').textContent, kind: document.getElementById('pinKind').textContent,
+    at: [+c.lat.toFixed(4), +c.lng.toFixed(4)], hash: location.hash, share: !!document.getElementById('pinShareBtn').offsetParent }; });
+  check(card.name === 'Bean There Coffee' && /^Sent to you/.test(card.kind) && card.at[0] === 39.155 && card.at[1] === -84.615 && card.hash === '' && card.share,
+    'the link opens its card, by name, on the map, and leaves the address: ' + JSON.stringify(card));
+  // Share: the share sheet with the link that opens it
+  await page.click('#pinShareBtn');
+  await page.waitForFunction(() => window.__shared.length === 1, null, { timeout: 3000 });
+  const sent = await page.evaluate(() => window.__shared[0]);
+  const m = /\/#place=([A-Za-z0-9._-]+)$/.exec(sent.url || '');
+  check(m && sent.title === 'Bean There Coffee' && m[1].startsWith('39.15500_-84.61500_'), 'Share sends the place link: ' + JSON.stringify(sent));
+  // a broken link says so and opens nothing
+  await page.click('#pinCancelBtn');
+  await page.evaluate(() => { location.hash = 'place=junk'; });
+  await page.waitForFunction(() => /place link is incomplete/.test(document.getElementById('toast').textContent), null, { timeout: 3000 });
+  check(!(await page.evaluate(() => document.getElementById('pinOverlay').classList.contains('show'))), 'a broken place link opens no card');
+}, { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 35.5, longitude: -83.9 }, permissions: ['geolocation'] });
 
 flow('along the route by name: the Along line opens a list of the cafés and fuel stops by their names on the map, and a tap on one (or its pin) says its name and offers it as a stop; in a drive the next fuel stamp names its station (the owner, 2026-11-11)', async (page, base) => {
   await planRouter(page);
