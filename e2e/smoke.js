@@ -5638,6 +5638,23 @@ flow('Stages: a stage with no runs says so under its name, with no "-- best" bes
   check(r.shown.length === 1 && /^\d+\.\d (mi|km) · no runs yet$/.test(r.shown[0]) && r.under, 'a stage with no runs: one line under its name: ' + JSON.stringify(r));
 });
 
+flow('Stages: Share older drives shows only when it holds something, so a signed-out driver never opens an empty fold (free roamer B, 2026-11-14)', async (page, base) => {
+  let member = false;
+  await page.route(base + '/api/**', (route) => { const u = new URL(route.request().url());
+    if (u.pathname === '/api/me') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(member ? { signed_in: true, member: true, handle: 'me', contribute: true } : { signed_in: false }) });
+    return route.fulfill({ contentType: 'application/json', body: '[]' }); });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async (src) => { const gen = eval(src); await ApexRecording.store(ApexRecording.parse(ApexCore, gen('saw', 0), 'S0.csv', { id: 'S0', name: 'Dry Ridge Rd', date: '2026-07-01T09:00', source: 'web-gps' })); }, PROFILE_CSV);
+  const shown = async () => { await page.goto(base + '/analysis.html'); await page.click('[data-seg="segments"]'); await page.waitForSelector('#segDrive option', { state: 'attached', timeout: 20000 }); await page.waitForTimeout(800);
+    return page.evaluate(() => document.getElementById('shareOlder').getClientRects().length > 0); };
+  const out = await shown();
+  member = true;
+  const inn = await shown();
+  check(!out && inn, 'Share older drives: hidden signed out, shown to a member: ' + JSON.stringify({ out, inn }));
+});
+
 flow('the Log draws one rule between the drive list and Score over time, not two (free roamer B, 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/analysis.html');
