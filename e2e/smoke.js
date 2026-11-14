@@ -6790,6 +6790,7 @@ flow('Your driving before 30 clean corners: one first-picture panel with a progr
   });
   check(/^\d+ of 30 clean corners\. /.test(r.say) && r.w > 0 && r.w < 100, 'the panel counts toward 30: ' + JSON.stringify(r));
   check(r.rows === 0 && r.dashes === 0 && r.fits, 'no skill rows or dashes, and it fits a phone: ' + JSON.stringify(r));
+  check(await page.evaluate(() => document.getElementById('drivingShare').hidden), 'no DNA card before every skill is measured');
 });
 
 flow('Your driving: the profile over every drive opens from the Log, names the weak side, and is kept between visits (driver_profile.js)', async (page, base) => {
@@ -6844,6 +6845,11 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   const pace = await page.evaluate(() => { const p = document.querySelector('#drivingRoot .dp-pace'); return p ? p.innerText : null; });
   check(pace && /Your pace/.test(pace) && /\b\d{1,3}\b/.test(pace) && /sane limit/.test(pace) && !/Work on/.test(pace), 'the pace panel: ' + pace);
   check(!/Work on: Pace/.test(text), 'pace is never the thing to work on');
+  // Share my DNA (dna_card.js): all six measured, so the picture is offered; it draws 9:16 and goes out as a file
+  const dna = await page.evaluate(() => { const b = document.getElementById('drivingShare'); return { shown: !b.hidden, text: b.textContent }; });
+  check(dna.shown && dna.text === 'Share my DNA', 'the DNA card is offered once all six skills are known: ' + JSON.stringify(dna));
+  const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.click('#drivingShare')]);
+  check(dl.suggestedFilename() === 'driving-dna.png', 'the DNA card saves as a picture: ' + dl.suggestedFilename());
   check(!/mph|km\/h|\d s\b/.test(text), 'never a speed or a time');
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
   // touch: these drives' g runs straight between fixes (as recordings before ten readings a second did), so there is none
