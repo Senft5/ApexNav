@@ -184,7 +184,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, nudge: false, push: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, roadbooks: false, nudge: false, push: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -517,6 +517,7 @@
       sightTag.setOffset([0, carSvg ? 19 : 15]);                         // the tag stays clear of the car's tail
     }
 
+    let roadbookMap = null;                                               // web/roadbook_map.js, mounted with the social scripts (below)
     function restyleBasemap() {
       drawPuck();
       $('map').style.background = look.map.bg;                             // U-68: the paper the map fades in on
@@ -535,6 +536,7 @@
       if (has('apex-places')) { map.setPaintProperty('apex-places', 'text-color', P.label); map.setPaintProperty('apex-places', 'text-halo-color', P.halo); placeGlyphs(P.label, P.halo); }
       // Measured roads by the pavement measured there (coverage.js surface): smooth, fair, rough; ink where roughness is unknown
       if (has('apex-coverage')) map.setPaintProperty('apex-coverage', 'line-color', ['match', ['get', 's'], 1, C.gain, 2, C.amber, 3, C.signal, C.dim]);
+      if (roadbookMap) roadbookMap.restyle();
     }
 
     function addApexLayers() {
@@ -7488,6 +7490,15 @@
     onSocial(() => { try { meetsMap = window.ApexMeetsMap && crewEvents && crewEvents.meetCard ? ApexMeetsMap.mount({ el, btn, apiCall, jsonOf, map,
       mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; }, mayLookUp: nearLookupOk,
       card: (e, redo) => crewEvents.meetCard(e, redo) }) : null; } catch (e) { console.error('meets map', e); } });
+    // Roadbooks on the map (web/roadbook_map.js): the roads of your books, your crews' and the ones you follow; a tap opens
+    // the book. Only books with a road in view are opened, from the boxes the phone already holds.
+    onSocial(() => { try { roadbookMap = window.ApexRoadbookMap && roadbooks ? ApexRoadbookMap.mount({ map,
+      call: async (m, p) => { const r = await apiCall(m, p); return { ok: r.ok, data: r.ok ? await jsonOf(r) : null }; },
+      // your lists as last read, read once if this page hasn't yet; with no signal, what this phone kept of them
+      books: async () => { const l = roadbooks.lists() || await roadbooks.reload().catch(() => null); if (l) return [...l.mine, ...(l.crews || []), ...l.following];
+        try { const c = JSON.parse(localStorage.getItem('apex.roadbooks') || 'null'); return c && Array.isArray(c.books) ? c.books : []; } catch (_) { return []; } },
+      colours: () => ({ ink: look.colors.ink, gain: look.colors.gain, casing: look.colors.routeCasing }),
+      open: (id) => { if (roadbooks) roadbooks.open(id); }, blocked: () => state.tapToRoute || state.mode === 'live' || Date.now() < suppressMapClickUntil }) : null; } catch (e) { console.error('roadbook map', e); } });
     // Friends on the map (web/friends_map.js, REVIEW.md 5.4): the Friends layer and who sees you, sent only while you drive
     let friendsMap = null;
     onSocial(() => { try { friendsMap = window.ApexFriendsMap ? ApexFriendsMap.mount({ el, btn, toast, askSignIn, apiCall, map, zones: () => privacyZones, inZone: inPrivacyZone,
@@ -7541,6 +7552,8 @@
       if (friendsMap && accountMe && accountMe.member) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
       else if (state.toggles.friends) { state.toggles.friends = false; paintSwitches(); }
       if (meetsMap && accountMe && accountMe.member) { if (state.toggles.meets) meetsMap.setLayer(true); }
+      if (roadbookMap && accountMe && accountMe.member) { if (state.toggles.roadbooks) roadbookMap.setLayer(true); }
+      else if (state.toggles.roadbooks && socialIn) { state.toggles.roadbooks = false; paintSwitches(); }
       else if (state.toggles.meets && socialIn) { state.toggles.meets = false; paintSwitches(); }
       if (feedbackUi) feedbackUi.refresh();
       if (me && !me.signed_in) setRoutingCars(null);
@@ -9306,6 +9319,13 @@
         needSocial().then(() => {
           if (meetsMap) meetsMap.setLayer(state.toggles.meets);
           if (state.toggles.meets) toast(`Meets within ${ApexUnits.long(80000, 0)} of the map. Tap a pin.`);   // the Worker's 80 km, in the driver's units
+        });
+      }
+      if (k === 'roadbooks') {   // your roadbooks' roads on the map (roadbook_map.js)
+        if (!accountMe || !accountMe.member) { state.toggles.roadbooks = false; paintSwitches(); askSignIn('see your roadbooks on the map'); return; }
+        needSocial().then(() => {
+          if (roadbookMap) roadbookMap.setLayer(state.toggles.roadbooks);
+          if (state.toggles.roadbooks) toast(roadbooks && roadbooks.hasAny() ? 'Your roadbooks\u2019 roads: solid ones you\u2019ve driven. Tap one to open its book.' : 'No roadbooks yet. Keep one in People \u2192 Roadbooks and its roads show here.');
         });
       }
       if (k === 'roadcams') roadCamsLayer(state.toggles.roadcams);   // Ohio's traffic cameras (road_cams.js), loaded on first use

@@ -63,7 +63,11 @@ and in random batches so a trace cannot be re-assembled.
   Feed post's line, the same cuts as above), each marked "added by @handle"; a member takes out only the roads they
   added, the crew's owner any, the keeper everything (order, name, who else sees it). Leaving the crew closes a private
   one to them; deleting the account takes out the roads they added. For you tells the crew and the keeper about a road
-  someone else added (`book_roads`, named when one member added them).
+  someone else added (`book_roads`, named when one member added them). A crew book's road has Crew drive: the crew's
+  plan form with the road as the drive's route.
+- **On the map** (2026-11-14, web/roadbook_map.js): Map layers → Roadbooks (off by default, members only) draws the roads
+  of your books, your crews' and the ones you follow, driven ones solid, the rest dashed; a tap opens the book. Only books
+  with a road in the map's view are opened, chosen on the phone from the road boxes it already holds.
 ### 2.7 Duels (friends, Scores only)
 - Challenge a friend on one of your stages for 3, 7 or 14 days; the higher Vetta Score on it in that window wins.
   Accepting copies the stage to them. Won by the higher Score, or in a time duel (migration 0048) the quicker time;
