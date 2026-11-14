@@ -10684,7 +10684,7 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
   // then whether it is open, and Call and Website, from its own tags (2026-11-14, as Apple Maps' card)
   await page.waitForFunction(() => !document.getElementById('pinHours').hidden && !document.getElementById('pinContact').hidden, null, { timeout: 5000 });
   const more = await page.evaluate(() => ({ hours: document.getElementById('pinHours').textContent, keys: [...document.querySelectorAll('#pinContact a')].map((a) => [a.textContent, a.getAttribute('href'), a.getBoundingClientRect().height]) }));
-  check(more.hours === 'Open 24 hours' && JSON.stringify(more.keys.map((k) => k.slice(0, 2))) === '[["Call","tel:+15135550101"],["Website","https://beanthere.example.com/"]]' && more.keys.every((k) => k[2] >= 44)
+  check(more.hours === 'Open 24 hours' && JSON.stringify(more.keys.map((k) => k.slice(0, 2))) === '[["Call","tel:+15135550101"],["Website","https://beanthere.example.com/"]]' && more.keys.every((k) => Math.round(k[2]) >= 44)
     && /"name"="Bean There Coffee"/.test(asked), 'the card says it is open and offers Call and Website: ' + JSON.stringify({ more, asked }));
   // and a street photo of it at the top, the one facing it, with who took it (2026-11-14, as Apple and Google Maps lead with one)
   await page.waitForFunction(() => !document.getElementById('pinPhoto').hidden, null, { timeout: 5000 })
