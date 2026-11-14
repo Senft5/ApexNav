@@ -903,6 +903,8 @@
     // turn to landscape and back), which lands it over a replay or a drive like a toast. It stays behind its ⓘ key and opens
     // only when that key is tapped.
     let attribAsked = 0;
+    // Apple's audit (app tour): the key's drawn "i" stood in for its name and its 4 pt frame for its 44 pt one; it is named
+    document.querySelectorAll('.maplibregl-ctrl-attrib-button').forEach(b => { b.setAttribute('aria-label', 'Map credits'); b.title = 'Map credits'; });
     document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('.maplibregl-ctrl-attrib-button')) attribAsked = performance.now(); }, true);
     // feedback 03: a written field (textarea.field) starts at its rows and grows with what's written, up to 40% of the screen
     document.addEventListener('input', (e) => {
