@@ -6475,6 +6475,41 @@ flow('landscape mount: the map takes the left, the instruments a column on the r
   check(db.h > 0 && db.x >= ds.x + ds.w - 1 && db.y < dn.y + dn.h && dn.x + dn.w <= ds.x + ds.w + 1 && ds.y + ds.h >= 389, 'driving on its side: ' + JSON.stringify({ dn, db, ds }));
 }, { viewport: { width: 844, height: 390 } });
 
+flow('drive posts: Drive it on a friend\'s post lays a route along their line, through stops on their roads, and names it for them (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const enc = (pts) => { let o = '', a0 = 0, b0 = 0; const e = (v) => { v = v < 0 ? ~(v << 1) : v << 1; while (v >= 32) { o += String.fromCharCode((32 | (v & 31)) + 63); v >>= 5; } o += String.fromCharCode(v + 63); };
+    for (const [a, b] of pts) { const x = Math.round(a * 1e5), y = Math.round(b * 1e5); e(x - a0); e(y - b0); a0 = x; b0 = y; } return o; };
+  // bob's line: 200 points north over about 22 km, weaving
+  const pts = Array.from({ length: 200 }, (_, i) => [35.3 + i * 0.001, -84.1 + Math.sin(i / 6) * 0.004]);
+  const bobPost = { id: 'P1AAAAAAAAAAAAAA', handle: 'bob', photo_id: null, mine: false, crew: null, title: 'Cherohala Skyway', caption: '', driven_on: '2026-11-12',
+    length_m: 22000, score: 812, roads: [], stages: [], line: enc(pts), created_at: new Date(Date.now() - 2 * 3600e3).toISOString().slice(0, 19).replace('T', ' '), kudos: 0, my_kudos: false, comments: 0 };
+  const noLine = { ...bobPost, id: 'P2AAAAAAAAAAAAAA', title: 'Short hop', line: null };
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/feed') return json([bobPost, noLine]);
+    return json([]);
+  });
+  const asked = [];
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => { const req = JSON.parse(route.request().postData() || '{}'); asked.push(req.locations);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) }); });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card', { timeout: 15000 });
+  const keys = await page.evaluate(() => [...document.querySelectorAll('#accountBody .feed-card')].map((k) => { const b = k.querySelector('.feed-drive');
+    return b ? { label: b.getAttribute('aria-label'), text: b.textContent, h: Math.round(b.getBoundingClientRect().height) } : null; }));
+  check(keys.length === 2 && keys[0] && keys[0].label === 'Drive @bob\'s Cherohala Skyway' && keys[0].text === 'Drive it' && keys[0].h >= 40 && keys[1] === null,
+    'Drive it on a post with a line, none on one without: ' + JSON.stringify(keys));
+  await page.click('#accountBody .feed-card .feed-drive');
+  await page.waitForFunction(() => window.apexDebug && apexDebug.track && apexDebug.track.id === 'post_P1AAAAAAAAAAAAAA', null, { timeout: 20000 });
+  const locs = asked.find((l) => Array.isArray(l) && l.length > 2) || [];
+  const near = (a, b) => Math.abs(a.lat - b[0]) < 1e-4 && Math.abs(a.lon - b[1]) < 1e-4;
+  check(locs.length >= 8 && locs.length <= 12 && near(locs[0], pts[0]) && near(locs[locs.length - 1], pts[pts.length - 1])
+    && locs.every((l) => pts.some((p) => near(l, p))), 'the route goes through stops on bob\'s line, end to end: ' + JSON.stringify(locs.map((l) => [l.lat, l.lon])));
+  const after = await page.evaluate(() => ({ name: apexDebug.track.name, toast: document.getElementById('toast').textContent, feed: !!document.querySelector('.feed-sheet'), view: document.body.dataset.view || '' }));
+  check(after.name === 'Cherohala Skyway' && /Cherohala Skyway, @bob's line: [\d.]+ (mi|km)/.test(after.toast) && !after.feed, 'the route is named for the drive and says whose line: ' + JSON.stringify(after));
+});
+
 flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew with its ends cut; the Feed on People shows friends\' posts with kudos and comments one tap in (Worker stubbed, docs/SOCIAL.md 2.13)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1');
     // a stage saved in the Log, on the drive posted below

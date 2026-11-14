@@ -7050,7 +7050,15 @@
         snap = snap || ApexPostMap.snapper({ gl: maplibregl, style: MAP_STYLE, palette: () => look.map, restyle: ApexBasemap.restyle,
           transform: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
         return snap.snap(`${look.map.bg}|${look.map.road}|${id}`, pts, w, h, pad); }; })(),
-      openFriend: (h) => { document.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); if (window.apexOpenFriend) window.apexOpenFriend(String(h).toLowerCase()); } }) : null; } catch (e) { console.error('drive posts', e); } });
+      openFriend: (h) => { document.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); if (window.apexOpenFriend) window.apexOpenFriend(String(h).toLowerCase()); },
+      // Drive it on a post: a route through stops along its line, on real roads (the line is thinned, so it is not driven as drawn)
+      driveLine: async (stops, p) => {
+        if (!Array.isArray(stops) || stops.length < 2) return;
+        closeSheet(); showView(null);
+        const name = String(p.title || 'A friend\u2019s drive').slice(0, 60);
+        await buildRoute(stops, `post_${p.id}`, name);
+        if (plannedRoute && plannedRoute.id === `post_${p.id}`) toast(`${name}${p.mine ? '' : `, @${p.handle}'s line`}: ${ApexUnits.long(totalM(), 1)}.`);
+      } }) : null; } catch (e) { console.error('drive posts', e); } });
     const inboxTick = () => { if (inbox && !driveActive && document.visibilityState === 'visible') inbox.refresh(); };
     document.addEventListener('visibilitychange', inboxTick);
     setInterval(inboxTick, 5 * 60 * 1000);
