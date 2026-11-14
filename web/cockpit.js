@@ -5396,6 +5396,9 @@
       // frame loaded 1.5 s into a plan): again once the plan is over
       const planAt = window.apexDebug && window.apexDebug.planStartAt, busy = $('planPanel').classList.contains('busy');
       if (busy || (planAt != null && performance.now() - planAt < 4000)) { setTimeout(() => idle(prewarmLog), 3000); return; }
+      // the website with no signal: its scripts can't be fetched, and a Log loaded half (no ApexCore) would be the one kept;
+      // again once back online (the app's own files are on the phone: it warms either way)
+      if (/^https?:$/.test(location.protocol) && navigator.onLine === false) { window.addEventListener('online', () => idle(prewarmLog), { once: true }); return; }
       logFrameEl('analysis.html?tab=log');
     }
     window.addEventListener('resize', () => { if (logFrame.el && !logFrame.el.hidden) logInsets(); });

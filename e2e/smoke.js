@@ -8778,6 +8778,44 @@ flow('REVIEW5 §2: the Garage leads with you, your cars, Look and voice and the 
   check((await page.textContent('#crewsBody .people-sample figcaption')) === 'Example: what a crew looks like here', 'Crews sample');
 });
 
+// The tab bar is one bar: its keys sit at the same place on Map, People, Garage and the Log (the Log is its own page in
+// a frame; its keys sat 8 pt lower, so the bar jumped each time you opened it, 2026-11-14)
+flow('the tab bar stays put: Map, People, Garage and the Log put their keys at the same place', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && !document.getElementById('boot'), null, { timeout: 20000 });
+  const keys = (root) => [...root.querySelectorAll('.tabbar a, .tabbar .tab')].filter((k) => k.offsetParent).map((k) => { const r = k.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)].join(','); }).join(' ');
+  const at = {};
+  for (const v of ['map', 'people', 'garage']) {
+    await page.click(`#tabbar .tab[data-view="${v}"]`); await page.waitForTimeout(400);
+    at[v] = await page.evaluate(`(${keys})(document)`);
+  }
+  await page.click('#tabbar .tab[data-view="log"]');
+  await page.waitForFunction(() => document.documentElement.classList.contains('log-open'));
+  const log = page.frameLocator('#logFrame');
+  await log.locator('nav.tabbar a:has-text("Garage")').waitFor();
+  await page.waitForTimeout(400);
+  const fr = await page.evaluate(() => { const r = document.getElementById('logFrame').getBoundingClientRect(); return [r.left, r.top]; });
+  at.log = await page.frames().find((f) => f.url().includes('analysis.html')).evaluate(`(${keys})(document)`);
+  check(fr[0] === 0 && fr[1] === 0, 'the Log fills the screen from its corner: ' + fr);
+  check(at.map && at.map === at.people && at.people === at.garage && at.garage === at.log, 'one place for the keys: ' + JSON.stringify(at));
+}, { viewport: { width: 393, height: 852 }, hasTouch: true });
+
+// The website with no signal: the Log isn't warmed while it can't be fetched (a half-loaded Log, no ApexCore, was the one
+// kept: CI 2026-11-14, "Cannot read properties of undefined (reading 'MPS_TO_MPH')"); it warms once back online
+flow('the Log warms only when it can be fetched: no signal, no frame; back online, the frame', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && !document.getElementById('boot'), null, { timeout: 20000 });
+  check(!(await page.$('#logFrame')), 'not warmed yet at the first frame');
+  await page.context().setOffline(true);
+  await page.waitForTimeout(8000);
+  check(!(await page.$('#logFrame')), 'no signal: the Log is not loaded half');
+  await page.context().setOffline(false);
+  await page.waitForSelector('#logFrame', { state: 'attached', timeout: 15000 });
+  await page.waitForFunction(() => { try { return !!document.getElementById('logFrame').contentWindow.ApexCore; } catch (_) { return false; } }, null, { timeout: 15000 });
+}, { viewport: { width: 393, height: 852 } });
+
 // Safe areas (iPhone 15 Pro): nothing you read or tap sits under the Dynamic Island, the home indicator or the rounded
 // display corners, upright or on its side. The map and panel backgrounds run edge to edge; text and controls don't.
 // Content inside a scroller may pass under the home indicator while it scrolls, as on iOS.

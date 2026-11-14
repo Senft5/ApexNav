@@ -17,3 +17,13 @@
 - What: `.plan-keys` (Best roads nearby + the nearby keys, four across, 52 pt squares, radius 0, 1.75 px strokes per BRAND.md), `.plan-list` wrapping the loop row, Spots, Time attack, Roadbooks and `.plan-opt` (Options · n on).
 - Why: two rows of boxed chips with different weights (Best roads nearby, Options · 1 on, then Gas / Coffee / Food) read as clutter; Apple Maps puts its category keys in one glyph row and settings out of the way. Options is a setting, not a destination, so it's a row.
 - Undo: put `#planOptionsChip` back in `#planChips`, drop the `.rkey` class and glyphs, and unwrap `.plan-list`.
+
+## 2026-11-14 the Log warms only when it can be fetched
+- What: cockpit.js prewarmLog waits for `online` when the website (http/https) has no signal; the app's own files warm either way.
+- Why: warmed with no signal, the Log frame was kept half-loaded (no ApexCore: CI e2e 4/4 on #700, "Cannot read properties of undefined (reading 'MPS_TO_MPH')"), so the first open of the Log was broken. e2e "the Log warms only when it can be fetched" fails without it.
+- Undo: drop the navigator.onLine line in prewarmLog.
+
+## 2026-11-14 the tab bar stays put on the Log
+- What: analysis.html `.tabbar` gets the 8 pt under its keys that the map page's bar has (the deck's padding).
+- Why: the Log's keys sat 8 pt lower, so the bar jumped each time the Log opened. e2e "the tab bar stays put" measures all four tabs.
+- Undo: drop the `8px +` in the Log's tab bar padding.
