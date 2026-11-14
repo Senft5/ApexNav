@@ -186,6 +186,9 @@ and in random batches so a trace cannot be re-assembled.
 - This week (2026-11-14): above the Feed, a row of who posted since Monday (you and whoever's posts you can see), most
   distance first: "1 @bob · 30.0 mi · 2 drives · best 812". A friend's card opens their profile. It shows only once someone
   besides you posted. A drive posted to friends and to a crew counts once. `GET /api/feed/week` (`feedWeek`). No table.
+- Who came (2026-11-14): a post to a crew says "With you and @cara" under its name when the author was marked at one of
+  that crew's drives that day (crew_event_attendance: "I was there" or the drive's convoy, which the crew already sees);
+  the others marked there, five at most, never across a block, never on a post to friends. `with` on the Feed's posts. No table.
 - Next: "Post to crew" from a corner clip on the drive's page (analysis thread adds the key, `page.post(blob, meta)`).
   Kudos and comments push (2.12).
 
