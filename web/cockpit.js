@@ -1535,6 +1535,7 @@
     const MEMO_S = 5;   // a remembered coaching tip takes up to this long to say
     let brakeSay = null;  // the brake heat call waiting for a quiet moment (noteBrakes), said before a break cue
     let briefSay = null;  // the stage briefing as a planned drive starts (briefing.js), after a limit call
+    let alongSay = null;     // the last fuel before a long stretch with none, a viewpoint (along_ahead.js), after corners ahead
     let cornersSay = null;   // a twisty section after a long quiet stretch of the planned route (corners_ahead.js), after the briefing
     let limitSay = null;  // "Limit 35 ahead." waiting for a quiet moment (limit_ahead.js, the notes loop), before all the others
     let sunSay = null;    // "Sun in your eyes ahead." waiting for a quiet moment (sun_ahead.js, the notes loop), after brake heat
@@ -2102,19 +2103,28 @@
         if (sec && ApexCornersAhead.due(sec, state.cursorM, vMps)) { said.add(sec.startM); cornersSay = { text: ApexCornersAhead.text(sec, state.cursorM, ApexUnits.spokenShort), until: performance.now() + 15000 }; }
       }
       if (cornersSay && (performance.now() > cornersSay.until || state.notesMode === 'quiet')) cornersSay = null;
+      // The places along the planned route (along_ahead.js, from the route card's t.scenic): the last fuel before a long
+      // stretch with none, in any notes mode; a viewpoint or waterfall at most every 5 minutes, not in Quiet notes.
+      if (live && !offRoute && !alongSay && track && track === plannedRoute && Array.isArray(track.scenic) && window.ApexAlongAhead && vMps != null) {
+        const said = drive.alongSaid || (drive.alongSaid = new Set()), nowS = performance.now() / 1000;
+        const a = ApexAlongAhead.due(track, state.cursorM, vMps, { said, lastViewS: state.notesMode === 'quiet' ? nowS : drive.viewAt, nowS,
+          electric: !!(routingCar() && routingCar().fuel === 'electric'), metric: ApexUnits.metric(), spoken: ApexUnits.spokenShort });
+        if (a) { said.add(a.key); if (a.view) drive.viewAt = nowS; alongSay = { text: a.text, until: performance.now() + (a.view ? 10000 : 20000) }; }
+      }
+      if (alongSay && performance.now() > alongSay.until) alongSay = null;
       if (briefSay && performance.now() > briefSay.until) briefSay = null;
       if (limitSay && performance.now() > limitSay.until) limitSay = null;
       if (sunSay && performance.now() > sunSay.until) sunSay = null;
       if (brakeSay && performance.now() > brakeSay.until) brakeSay = null;
       if (breakSay && performance.now() > breakSay.until) breakSay = null;
       if (flowSay && (performance.now() > flowSay.until || state.notesMode === 'quiet')) { flowSay = null; flowQueue = []; }
-      const quiet = limitSay || briefSay || cornersSay || brakeSay || sunSay || breakSay || flowSay;
+      const quiet = limitSay || briefSay || cornersSay || alongSay || brakeSay || sunSay || breakSay || flowSay;
       if (quiet && live && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size && performance.now() > speech.talkingUntil) {
         const quietReach = lead + vMps * (0.6 + 0.07 * quiet.text.length + 2);
         const callDue = ev.some(e => noteM(e) - state.cursorM < quietReach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`)
           && (e.type === 'corner' ? spirited : (spirited || noteworthyInCruise(e))));
         const bumpDue = ApexRoadMemory.upcoming(hazardMemory, state.live, 0, quietReach, { has: () => false });
-        if (!callDue && !bumpDue) { say(quiet.text); if (quiet === limitSay) limitSay = null; else if (quiet === briefSay) briefSay = null; else if (quiet === cornersSay) cornersSay = null; else if (quiet === brakeSay) brakeSay = null; else if (quiet === sunSay) sunSay = null; else if (quiet === breakSay) breakSay = null; else { flowSay = flowQueue.shift() || null; if (flowSay) flowSay.until = performance.now() + 20000; } }
+        if (!callDue && !bumpDue) { say(quiet.text); if (quiet === limitSay) limitSay = null; else if (quiet === briefSay) briefSay = null; else if (quiet === cornersSay) cornersSay = null; else if (quiet === alongSay) alongSay = null; else if (quiet === brakeSay) brakeSay = null; else if (quiet === sunSay) sunSay = null; else if (quiet === breakSay) breakSay = null; else { flowSay = flowQueue.shift() || null; if (flowSay) flowSay.until = performance.now() + 20000; } }
       }
     }
 
@@ -2592,7 +2602,12 @@
       for (let i = 0; i < t.lat.length; i += 20) pts.push([t.lat[i], t.lon[i]]);
       pts.push([t.lat[t.lat.length - 1], t.lon[t.lon.length - 1]]);
       const nodes = await ApexCameras.load(ApexCameras.tilesNear(pts));
-      if (track === t) $('camOfflineNote').hidden = !!nodes;
+      if (track === t) {
+        // no signal: a kept list past its week still pins the cameras (cameras.js keptAt), and the note says how old it is
+        const note = $('camOfflineNote'), aged = nodes && Number.isFinite(nodes.keptAt);
+        note.textContent = aged ? `Camera map from ${new Date(nodes.keptAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}, no signal to check for newer ones.` : "Camera map offline. No pins doesn't mean no cameras.";
+        note.hidden = !!nodes && !aged;
+      }
       if (nodes) { attachAlpr(t, nodes); return; }
       // U-102: no toast over the replay's map: the Layers sheet, under Cameras, says the camera map is offline
     }
@@ -3454,13 +3469,20 @@
     // it), so it draws with no signal on the way. Quietly, with signal; it shows in Your data as a map area and goes when the
     // route is unsaved. Nothing kept (no signal, a route too long) leaves the saved route as it was.
     const routeAreaId = (t) => `route_${String(t.id).replace(/[^\w-]/g, '').slice(0, 60)}`;
+    // a map only partly kept (the phone ran out of room, or the signal went mid-save) says so, and why, rather than pass as whole
+    const partKept = (a) => {
+      const share = window.ApexOfflineTiles && ApexOfflineTiles.keptShare ? ApexOfflineTiles.keptShare(a) : 1;
+      return share < 1 ? `${Math.min(99, Math.floor(share * 100))}% kept, ${a.full ? 'the phone is out of room' : 'the signal dropped'}` : null;
+    };
     async function keepMapAlong(t, quiet = false) {
       if (!window.ApexOfflineTiles || navigator.onLine === false || !t || !Array.isArray(t.lat)) return;
       try {
         const mid = Math.floor(t.lat.length / 2);
         const a = await ApexOfflineTiles.download({ lat: t.lat[mid], lon: t.lon[mid], along: { lat: t.lat, lon: t.lon }, id: routeAreaId(t), styleUrl: MAP_STYLE, name: `Along ${t.name}` });
         if (!ApexSavedRoutes.has(localStorage, t.id)) { await ApexOfflineTiles.removeArea(a.id); return; }   // unsaved meanwhile
-        if (!quiet) toast(`The map along ${t.name} is kept for no signal too, ${Math.max(1, Math.round(a.bytes / 1048576))} MB.`);
+        const part = partKept(a);
+        if (part && !quiet) toast(`The map along ${t.name}: only ${part}. Update it in Settings, Your data.`);
+        else if (!quiet) toast(`The map along ${t.name} is kept for no signal too, ${Math.max(1, Math.round(a.bytes / 1048576))} MB.`);
         if (window.apexDebug) window.apexDebug.mapAlong = a;
       } catch (_) { /* the saved route stands without its map */ }
     }
@@ -7793,7 +7815,9 @@
           roads = await ApexOwnRouting.holdArea(routeCtxOpts().lookupCells, ApexOwnRouting.cellsNear(lat, lon, a.radiusKm), a.id).catch(() => null);
           if (roads) ApexOfflineTiles.setArea(a.id, { roadCells: roads.held, roadOf: roads.cells, roadWays: roads.ways });
         }
-        toast(`${id ? 'Updated' : 'Saved'} ${ApexUnits.long(a.radiusKm * 1000, 0)} round ${id ? a.name.replace(/^Around /, '') : 'here'} for offline, ${(a.bytes / 1048576).toFixed(0)} MB${roads && roads.ways ? `, with ${roads.ways} measured roads` : ''}.`);
+        const part = partKept(a);
+        if (part) toast(`The map ${id ? a.name.replace(/^Around /, 'round ') : 'here'}: only ${part}. Press Update to finish it.`);
+        else toast(`${id ? 'Updated' : 'Saved'} ${ApexUnits.long(a.radiusKm * 1000, 0)} round ${id ? a.name.replace(/^Around /, '') : 'here'} for offline, ${(a.bytes / 1048576).toFixed(0)} MB${roads && roads.ways ? `, with ${roads.ways} measured roads` : ''}.`);
       } catch (_) { toast('Couldn\'t save the map. Check signal and try again.'); }
       finally { areaBusy = false; btn.disabled = false; btn.textContent = idle; renderMyData(); }
     }
@@ -7811,24 +7835,27 @@
         // how old the map is (roads, names and closures change): an area saved half a year ago offers to update in place
         const age = ApexOfflineTiles.ageOf(a, Date.now());
         if (age.month) t.textContent += ` · saved ${age.month}`;
+        const part = partKept(a);
+        if (part) t.textContent += ` · only ${part}`;
+        const redo = age.stale || !!part;
         const acts = document.createElement('span'); acts.className = 'row';
-        if (age.stale && Number.isFinite(a.radiusKm) && Number.isFinite(a.lat) && Number.isFinite(a.lon)) {
+        if (redo && Number.isFinite(a.radiusKm) && Number.isFinite(a.lat) && Number.isFinite(a.lon)) {
           const up = document.createElement('button'); up.className = 'linkbtn'; up.textContent = 'Update';
-          up.setAttribute('aria-label', `Update the map ${a.name}, saved ${age.month}`);
+          up.setAttribute('aria-label', `Update the map ${a.name}, ${part ? `only ${part}` : `saved ${age.month}`}`);
           up.addEventListener('click', () => saveAreaAt(a.lat, a.lon, up, { id: a.id, name: a.name, radiusKm: a.radiusKm, idle: 'Update' }));
           acts.append(up);
         }
         // a saved route's map: fetched again along the route as it is saved now (keepMapAlong, same id)
-        const route = age.stale && !Number.isFinite(a.radiusKm) ? ApexSavedRoutes.list(localStorage).find((p) => routeAreaId(p) === a.id) : null;
+        const route = redo && !Number.isFinite(a.radiusKm) ? ApexSavedRoutes.list(localStorage).find((p) => routeAreaId(p) === a.id) : null;
         if (route) {
           const up = document.createElement('button'); up.className = 'linkbtn'; up.textContent = 'Update';
-          up.setAttribute('aria-label', `Update the map along ${route.name}, saved ${age.month}`);
+          up.setAttribute('aria-label', `Update the map along ${route.name}, ${part ? `only ${part}` : `saved ${age.month}`}`);
           up.addEventListener('click', async () => {
             if (up.disabled) return;
             up.disabled = true; up.textContent = 'Saving the map…';
             await keepMapAlong({ id: route.id, name: route.name, lat: route.coords.map((c) => c[1]), lon: route.coords.map((c) => c[0]) });
             const now = ApexOfflineTiles.areas().find((x) => x.id === a.id);
-            if (!now || ApexOfflineTiles.ageOf(now, Date.now()).stale) toast('Couldn\'t update the map. Check signal and try again.');
+            if (!now || now.at === a.at) toast('Couldn\'t update the map. Check signal and try again.');
             renderMyData();
           });
           acts.append(up);
@@ -10189,7 +10216,7 @@
       startStageWatch(); startCoach();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;

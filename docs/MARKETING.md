@@ -1,5 +1,12 @@
 # Marketing plan
 
+> **2026-11-14 update (launch marketing thread):** Nate wants social media only until it's proven: no clubs, meets,
+> DMs or community posts. The plan he follows is the short one ("Vetta launch marketing plan (zero cost)", a Claude Doc in
+> the project): a faceless account on TikTok, Reels and Shorts, 5 posts a week, all footage made by the app (corner
+> clips, flyovers, ghost runs, loops, drive cards). The calendar and captions: `docs/marketing/social_engine.md`. Sections
+> 3 to 6 below (communities, clubs, press, automated posting) are on hold, kept as reference for after it's proven; the
+> launch region moved to the Cincinnati tri-state (section 4).
+
 How Vetta finds its first 10,000 drivers with almost no budget, run by Claude as far as the platforms allow.
 Drafted 2026-10-28. Draft materials are in `docs/marketing/`; nothing is posted or sent until the owner has made the
 accounts in section 7 and approved the first batch. The money side is in docs/MONETIZATION.md.
@@ -44,12 +51,10 @@ the brand legal-speed fun. `tests/test_listing.py` already enforces this for the
 
 ## 4. The launch region
 
-Crowd data makes the app better where people drive, so launch is concentrated before it is spread. Suggestion:
-**the Southern Appalachians** (Tail of the Dragon US-129, the Cherohala Skyway, the Blue Ridge Parkway, the
-Moonshiner 28): the densest cluster of famous driving roads in the US, a calendar of club drives, and the region the
-router suggestion already covers. The goal before launch: 25 founding drivers there, every famous road measured by
-2+ members, so the first road pages and videos show real measured feel, not just map shape. Owner to confirm or
-pick another region (OWNER_TODO).
+**The Cincinnati tri-state** (decided 2026-11-14): Vetta's own routing graph, traffic, camera list and context data are
+deepest there and across OH/KY/IN, and Nate drives there, so the roads in the posts are ones the app knows best.
+Then Columbus, Dayton, Louisville, Lexington.
+The Southern Appalachians (the October pick) come later, as a road-trip destination.
 
 ## 5. Timeline
 

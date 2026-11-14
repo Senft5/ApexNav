@@ -205,6 +205,27 @@ async function clippedText(page) {
   }).catch(() => []);
 }
 
+// A key too small to hit, on every flow's last screen (2026-11-14): a button, link, switch, tab or field in view, on top,
+// under 24 x 24 px (WCAG 2.5.8; Apple asks 44 pt, and the drive's keys are bigger still). A link inside a sentence, the
+// map's own markers and a flow's own test fields (#e2e*) are left out. TAP_LOG=1 lists them instead of failing.
+async function smallTargets(page) {
+  return page.evaluate(() => {
+    const hits = [], where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).slice(0, 3).join('.') : '');
+    const W = innerWidth, H = innerHeight;
+    for (const el of document.querySelectorAll('button, a[href], [role="button"], [role="tab"], [role="switch"], [role="radio"], [role="checkbox"], input:not([type="hidden"]), select, summary')) {
+      const r = el.getBoundingClientRect(); if (!r.width || !r.height || r.bottom < 0 || r.top > H || r.right < 0 || r.left > W) continue;
+      let hidden = false; for (let n = el; n && n.nodeType === 1; n = n.parentElement) { if (n.hidden || n.getAttribute('aria-hidden') === 'true' || n.inert) { hidden = true; break; } }
+      if (hidden || el.disabled || el.closest('.maplibregl-marker') || /^e2e/.test(el.id)) continue;
+      const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || +cs.opacity === 0 || cs.pointerEvents === 'none') continue;
+      const x = Math.min(Math.max(r.left + r.width / 2, 0), W - 1), y = Math.min(Math.max(r.top + r.height / 2, 0), H - 1), top = document.elementFromPoint(x, y);
+      if (!top || !(el === top || el.contains(top))) continue;
+      if (el.tagName === 'A' && cs.display === 'inline') continue;    // a link in a sentence (WCAG 2.5.8 inline exception)
+      if (r.width < 24 || r.height < 24) hits.push(`${where(el)} "${(el.getAttribute('aria-label') || el.textContent).trim().slice(0, 30)}" ${Math.round(r.width)}x${Math.round(r.height)}`);
+    }
+    return hits.slice(0, 12);
+  }).catch(() => []);
+}
+
 // A control in view that a screen reader can't name (VoiceOver says only "button"): an icon key with no aria-label, an
 // empty link, a field with no label (LAUNCH.md section 3, IDEAS U-15). In every open page, like leftovers above.
 async function unnamed(page) {
@@ -3819,6 +3840,37 @@ flow('end card best corner: a filmed drive loops its best corner over the keys a
   check(!gone.shown && !gone.src, 'the next drive, unfilmed, shows no clip and plays nothing: ' + JSON.stringify(gone));
 });
 
+flow('the Log list: each drive has its road\'s shape beside its name; a summary from before shapes gets one without being scored again (2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexRecording && window.ApexCore);
+  await page.evaluate(async () => { for (const [id, f] of [['sh1', 12], ['sh2', 30]]) { const lat = [], lon = []; for (let i = 0; i < 500; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + Math.sin(i / f) * 0.0012); }
+    await ApexRecording.store({ id, name: 'Road ' + id, date: new Date(Date.now() - (id === 'sh1' ? 2 : 1) * 86400e3).toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map((_, i) => Math.sin(i / f) * 3), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }); } });
+  // no Score yet: the hero is the distance driven, not a big "--"
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#historyTable tr.row-link', { timeout: 15000 });
+  const hero = await page.evaluate(() => document.getElementById('historyCards').innerText.replace(/\s+/g, ' ').trim());
+  check(/^[\d.]+ ?(mi|km) In 2 drives · no Score yet A Score needs a few clean corners\.$/.test(hero), 'no Score yet: the miles driven, big: ' + hero);
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexRecording && window.ApexCore);
+  await page.evaluate(async () => {
+    // sh2's summary as the app before this kept it: version 2, no shape, a score of its own that must survive
+    const db = await new Promise((ok, no) => { const r = indexedDB.open('apexnav'); r.onsuccess = () => ok(r.result); r.onerror = no; });
+    await new Promise((ok) => { const t = db.transaction('summaries', 'readwrite'), st = t.objectStore('summaries');
+      st.get('sh2').onsuccess = (e) => { const x = e.target.result; delete x.shape; x.sv = 2; x.ds = { ...x.ds, score: 777 }; st.put(x); }; t.oncomplete = ok; });
+    db.close(); });
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#historyTable tr.row-link', { timeout: 15000 });
+  const rows = await page.evaluate(() => [...document.querySelectorAll('#historyTable tr.row-link')].map((r) => { const sv = r.querySelector('.ix-shape svg'), b = sv && sv.getBoundingClientRect();
+    return { id: r.dataset.drive, svg: !!sv, hidden: sv && sv.getAttribute('aria-hidden'), d: sv ? sv.querySelector('path').getAttribute('d').length : 0, w: b && Math.round(b.width), score: (r.querySelector('.ix-score') || {}).textContent }; }));
+  const sum = await page.evaluate(async () => (await ApexRecording.summaries(null)).map((x) => ({ id: x.id, sv: x.sv, n: (x.shape || []).length, score: x.ds.score })));
+  check(rows.length === 2 && rows.every((r) => r.svg && r.hidden === 'true' && r.d > 100 && r.w === 48), 'each row draws its road, 48 pt, quiet to VoiceOver: ' + JSON.stringify(rows));
+  const old = sum.find((x) => x.id === 'sh2');
+  check(old && old.sv === 3 && old.n === 32 && old.score === 777 && rows.find((r) => r.id === 'sh2').score.trim() === '777', 'the old summary got its shape and kept its score (not scored again): ' + JSON.stringify(sum));
+});
+
 flow('drive ended: Open in the Log is the solid key with no score, Share card with one, fixed from the first frame; a drive on a route keeps its name (REVIEW4 U-75, REVIEW5 U-118)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
@@ -6086,7 +6138,7 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   });
   check(dt.has && dt.lines.length === 0, 'a drive with g kept once a second has no touch of its own: ' + JSON.stringify(dt.lines));
   // and its corners against your records by kind (the record of each kind is held by the first drive to reach it)
-  check(dt.best.length >= 2 && /^Cleanest tight corner: \d{1,3}( · your best of \d+| · level with your best(, .+)?| · your best \d{1,3}(, .+)?)?$/.test(dt.best[0]), 'a drive against your records: ' + JSON.stringify(dt.best));
+  check(dt.best.length >= 2 && /^Cleanest tight corner: \d{1,3}( · your best of \d+ tight corners| · level with your best(, .+)?| · your best \d{1,3}(, .+)?)?$/.test(dt.best[0]), 'a drive against your records: ' + JSON.stringify(dt.best));
   // corner by corner on its road: these three drives are on three roads, so no corner has been driven three times
   check(dt.road && dt.road.corners === 0 && dt.road.best === 0, 'no corner of this road driven three times yet: ' + JSON.stringify(dt.road));
   check(dt.say.join(' | ') === 'Brakes on: 1.1 g a second · usually 0.8 | Turn-in: one quick movement · usually 0.9', 'a drive\'s touch in words: ' + dt.say);
@@ -7693,7 +7745,7 @@ flow('import: a drive from a file is named after the road that carried it (IDEAS
   const note = await page.textContent('#dvNote');
   check(/^Date unknown · Imported/.test(note.trim()), 'its page says the date is unknown, not the time it was imported: ' + note);
   await page.goto(`${base}/analysis.html`);
-  await page.waitForFunction(() => /Latest Vetta Score/.test((document.querySelector('.hero-what') || {}).textContent || '') && document.querySelector('tr.row-link'), null, { timeout: 15000 });
+  await page.waitForFunction(() => /Latest Vetta Score|no Score yet/.test((document.querySelector('.hero-what') || {}).textContent || '') && document.querySelector('tr.row-link'), null, { timeout: 15000 });   // none of these straight drives scores
   const hero = await page.evaluate(() => ({ what: document.querySelector('.hero-what').textContent, stamp: document.querySelector('tr.row-link[data-drive="rec_demo_csv"] .stamp-d').textContent }));
   check(hero.stamp === '--' && !(/Dry Ridge Road/.test(hero.what) && /Today|AM|PM/.test(hero.what)), 'the index stamps it "--" and the hero names no time for it: ' + JSON.stringify(hero));
 });
@@ -8297,6 +8349,32 @@ flow('offline area grown old: its row says the month it was saved, Update fetche
   check(o.name === 'Around 35.63, -83.47' && o.lat === 35.63 && o.radiusKm === 3, 'same place, size and name: ' + JSON.stringify(o));
   await page.waitForFunction(() => ![...document.querySelectorAll('#myAreas button')].some((b) => b.textContent === 'Update'), null, { timeout: 5000 });
 });
+
+flow('offline area saved while the signal drops: it says only part was kept and offers Update, which finishes it (IDEAS F-02)', async (page, base) => {
+  let drop = true;
+  await page.route('https://tiles.openfreemap.org/**', (route) => {
+    const u = route.request().url();
+    if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } }, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) });
+    if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
+    if (drop && /\/t\/14\/\d+\/\d*[02468]\.pbf$/.test(u)) return route.abort();   // the signal goes for some of the detail tiles
+    return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(16) });
+  });
+  await page.route('https://s3.amazonaws.com/**', (route) => route.fulfill({ contentType: 'image/png', body: Buffer.alloc(8) }));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded(), null, { timeout: 15000 });
+  await page.evaluate(() => { window.apexDebug.map.jumpTo({ center: [-83.47, 35.63], zoom: 11 }); document.getElementById('myAreaBtn').click(); });
+  await saidOn(page, /only \d+% kept, the signal dropped\. Press Update to finish it\./, { timeout: 60000 });
+  const a = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.offlineAreas'))[0]);
+  check(a.missing > 0 && a.missing < a.tiles && !a.full, 'the area counts what it couldn’t keep: ' + JSON.stringify({ missing: a.missing, tiles: a.tiles, full: a.full }));
+  await page.waitForFunction(() => /only \d+% kept/.test(document.getElementById('myAreas').textContent), null, { timeout: 5000 });
+  check(await page.evaluate(() => [...document.querySelectorAll('#myAreas button')].some((b) => b.textContent === 'Update')), 'a partial area offers Update though it is fresh');
+  drop = false;
+  await page.evaluate(() => [...document.querySelectorAll('#myAreas button')].find((b) => b.textContent === 'Update').click());
+  await page.waitForFunction(() => { const o = JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]'); return o.length === 1 && !o[0].missing; }, null, { timeout: 60000 });
+  await page.waitForFunction(() => !/only \d+% kept/.test(document.getElementById('myAreas').textContent) && ![...document.querySelectorAll('#myAreas button')].some((b) => b.textContent === 'Update'), null, { timeout: 5000 });
+  await saidOn(page, /^Updated .* for offline/, { timeout: 5000 });
+}, { viewport: { width: 1280, height: 900 } });
 
 flow('offline area, as a member: Save the map here keeps the measured roads round it; with no signal a plan still has them, and clearing them (what Sign out calls) leaves nothing (IDEAS F-02)', async (page, base) => {
   let online = true;
@@ -9317,7 +9395,7 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
     panels: [...document.querySelectorAll('#tab-history .panel, main > section:not([hidden]) .panel')].filter((p) => !p.hidden && p.offsetParent).map((p) => p.id),
     quiet: [...document.querySelectorAll('details.quiet')].filter((d) => !d.hidden).map((d) => d.querySelector('summary').textContent.split(':')[0]),
     old: /Driver Score|Import \.csv/.test(document.body.innerText) }));
-  check(/Latest Vetta Score/.test(log.hero) && log.seg.slice(0, 2).join() === 'Drives,Stages' && !log.old, 'Log: ' + JSON.stringify(log));
+  check(/Latest Vetta Score|^[\d.]+ ?(mi|km)\s+In 1 drive · no Score yet/.test(log.hero) && log.seg.slice(0, 2).join() === 'Drives,Stages' && !log.old, 'Log: ' + JSON.stringify(log));
   check(JSON.stringify(log.panels) === '["historyPanel"]' && log.quiet.includes('Your week'), 'one bordered list, the rest quiet lines: ' + JSON.stringify(log));
   // Drive detail: the Score first, Replay the primary, tags as stamps; nothing wider than the phone
   await page.click('.road-index tbody tr');
@@ -10261,6 +10339,33 @@ flow('corners ahead: after a long straight on the planned route, the co-driver s
   check(said.length === 1 && /^Twisty section in (half a mile|three quarters of a mile|\d+ feet)\. 2\.\d miles, \d+ corners\.$/.test(said[0]), 'the call: ' + JSON.stringify(await page.evaluate(() => window.__said)));
   for (let i = 760; i <= 800; i += 2) { await at(i); await page.waitForTimeout(40); }
   check((await twisty()).length === 1, 'once: ' + JSON.stringify(await twisty()));
+});
+
+flow('along the way: a viewpoint on the planned route is said by name and side as it comes up, once (along_ahead.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexAlongAhead);
+  const KY = 110540, kx = 111320 * Math.cos(35.5 * Math.PI / 180), gpx = [];
+  for (let m = 0; m <= 5000; m += 5) gpx.push(`<trkpt lat="${(35.5 + m / KY).toFixed(7)}" lon="-83.9000000"/>`);
+  await page.setInputFiles('#gpxFile', { name: 'parkway.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Parkway</name><trkseg>${gpx.join('')}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Parkway', null, { timeout: 10000 });
+  await page.waitForTimeout(1500);                                                        // the map's own places, if any, have landed
+  // the map's viewpoint 150 m west of the road at 2 km (as scenic.js along puts it on the route)
+  await page.evaluate(({ KY, kx }) => { apexDebug.track.scenic = [{ kind: 'view', name: 'Craggy Pinnacle', lat: 35.5 + 2000 / KY, lon: -83.9 - 150 / kx, m: 2000, offM: 150 }]; }, { KY, kx });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const views = () => page.evaluate(() => window.__said.filter((s) => /Craggy/.test(s)));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  for (let i = 100; i <= 280; i += 5) { await at(i); await page.waitForTimeout(50); }       // 0.5 to 1.4 km: not yet
+  check((await views()).length === 0, 'not yet: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  for (let i = 280; i <= 380 && !(await views()).length; i += 2) { await at(i); await page.waitForTimeout(80); }
+  const said = await views();
+  check(said.length === 1 && /^Craggy Pinnacle on the left, in (\d+ feet|a quarter mile)\.$/.test(said[0]), 'the call: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  for (let i = 380; i <= 420; i += 2) { await at(i); await page.waitForTimeout(40); }
+  check((await views()).length === 1, 'once: ' + JSON.stringify(await views()));
 });
 
 for (const [when, iso, expect] of [['at dusk', '2026-06-21T00:30:00Z', 1], ['at noon', '2026-06-21T17:00:00Z', 0]]) {
@@ -11673,6 +11778,9 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
       const nameless = await unnamed(page);
       if (process.env.A11Y_LOG) for (const h of nameless) console.log(`A11Y ${name} | ${h}`);
       else check(!nameless.length, `a control in view a screen reader can't name:\n  ${nameless.join('\n  ')}`);
+      const small = await smallTargets(page);
+      if (process.env.TAP_LOG) for (const h of small) console.log(`TAP ${name} | ${h}`);
+      else check(!small.length, `a key in view too small to hit (under 24 px):\n  ${small.join('\n  ')}`);
       const cut = await clippedText(page);
       if (process.env.CLIP_LOG) for (const h of cut) console.log(`CLIP ${name} | ${h}`);
       else check(!cut.length, `text in view cut off by its box or the screen's edge:\n  ${cut.join('\n  ')}`);
