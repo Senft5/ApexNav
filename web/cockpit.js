@@ -542,9 +542,8 @@
     const PLACE_CLASSES = ['restaurant', 'fast_food', 'cafe', 'bar', 'beer', 'ice_cream', 'bakery', 'fuel', 'grocery', 'lodging', 'car', 'attraction', 'museum'];
     const PLACE_WORD = { restaurant: 'Restaurant', fast_food: 'Fast food', cafe: 'Café', bar: 'Bar', beer: 'Bar', ice_cream: 'Ice cream', bakery: 'Bakery',
       fuel: 'Fuel station', grocery: 'Grocery', lodging: 'Lodging', car: 'Car shop', attraction: 'Attraction', museum: 'Museum' };
-    // OFF until the owner says yes (the decision card of 2026-11-13; the coordinator 2026-11-14: not on by default before he
-    // answers). Switched on by apex.mapPlaces = '1'; to ship it, make the default true here
-    const placesFlag = () => { try { return localStorage.getItem('apex.mapPlaces') === '1'; } catch (_) { return false; } };
+    // ON: the owner said yes (his decision card of 2026-11-13, answered 2026-11-14). apex.mapPlaces = '0' still turns it off
+    const placesFlag = () => { try { return localStorage.getItem('apex.mapPlaces') !== '0'; } catch (_) { return true; } };
     const placesShown = () => placesFlag() && state.mode !== 'live';
     // the kinds' glyphs (24 px grid, 1.75 px strokes, BRAND.md Icons), drawn in the look's label ink on a halo square, 2x
     const PLACE_GLYPH = { food: 'M7 3v7M5 3v5a2 2 0 0 0 4 0V3M7 10v11M17 21V3c-2 1.5-3 4.5-3 9h3',
