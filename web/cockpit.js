@@ -6929,6 +6929,7 @@
       crews: () => apiCall('GET', '/api/crews').then(jsonOf).then((l) => (Array.isArray(l) ? l.map((c) => ({ id: c.id, name: c.name })) : [])),
       inZone: (lat, lon) => { try { return !!(window.ApexPrivacyZones && ApexPrivacyZones.zoneAt(ApexPrivacyZones.load(localStorage), lat, lon)); } catch (_) { return false; } },
       myHandle: () => (accountMe && accountMe.handle) || null,
+      upload: (path, blob, type) => ApexSync.apiFetch(path, { method: 'PUT', headers: { 'content-type': type }, body: blob }),
       openFriend: (h) => { document.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); if (window.apexOpenFriend) window.apexOpenFriend(String(h).toLowerCase()); } }) : null; } catch (e) { console.error('drive posts', e); } });
     const inboxTick = () => { if (inbox && !driveActive && document.visibilityState === 'visible') inbox.refresh(); };
     document.addEventListener('visibilitychange', inboxTick);

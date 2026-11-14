@@ -15,6 +15,7 @@ export interface Env {
   BACKUPS?: KVNamespace;
   ARCHIVE?: R2Bucket;       // R2 (Workers Paid): weekly database copies (backup.ts); graph tiles later
   DATA?: R2Bucket;          // the map data (graph tiles, context grid, cameras) mirrored by CI (src/data_store.ts)
+  MEDIA?: R2Bucket;         // clips and photos on drive posts, key post/<post id> (src/post_media.ts); none = posts carry none
   PHOTOS?: KVNamespace;     // photo bytes, key p/<id> (src/photos.ts); also siwa/<user id>, a Sign in with Apple refresh token (src/apple_revoke.ts)
   APPLE_TEAM_ID?: string;   // Sign in with Apple token revocation (src/apple_revoke.ts): the team id and the key's id and .p8 text
   APPLE_SIWA_KEY_ID?: string;
