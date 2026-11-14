@@ -4587,6 +4587,17 @@
       } catch (_) { /* no position or no worker: the first plan loads its tiles */ }
     }
     const OWN_KEEP_KM = 15;
+    // a drive on a planned route (IDEAS F-04): our road network within 2 km of all of it kept on the phone as it starts, with
+    // signal, so a reroute in a dead zone 40 km on still has roads (the 15 km round you above doesn't reach that far yet).
+    // A few seconds in, after the drive's own start; bytes only, one tile at a time; tiles kept already are skipped.
+    function keepNetworkAlong(t) {
+      if (!t || t.kind !== 'route' || !Array.isArray(t.lat) || t.lat.length < 2 || navigator.onLine === false || window.APEX_REVIEW) return;
+      if (!window.ApexGraphTiles || !ApexGraphTiles.keepAlong || !ownOn() || localStorage.getItem('apex.ownWarm') === '0') return;
+      setTimeout(() => {
+        if (track !== t) return;                                        // another route (or none) by then
+        ApexGraphTiles.keepAlong(t.lat, t.lon).then((k) => { if (window.apexDebug) window.apexDebug.keptAlong = k; }).catch(() => {});
+      }, 5000);
+    }
     // at launch, before any position: the tiles' index (the region's is asked once a day, kept for offline) and the
     // routing worker with its scripts, so a first plan never waits for either (2026-11-08: on the website the worker was
     // started by the first plan when the map had no fix yet, its four scripts fetched after Enter: 0.8 s)
@@ -10387,6 +10398,7 @@
       openPlan(false);                                                 // the plan sheet too, and the keyboard with it
       if (track && track.kind === 'route') persistActive(track);       // kept if the app is closed mid-drive
       askAhead(track);                                                 // a planned route: the reports along it, ahead of a dead zone
+      keepNetworkAlong(track);                                         // and our road network along it, for a reroute there
       clearCarOffer();
       // U-59: the car enters every drive, a route or none (it went into a drive only on a guide message, so a free drive never
       // reached it: no End, no card). A route driven again goes back on the car's map first.
