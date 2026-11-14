@@ -1984,11 +1984,12 @@
                  dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [], recce: !!e.recce, apexMps: apexMpsOf(e) };
       });
       // The route's junctions in the same strip, in road order with the notes (IDEAS V-04).
+      markArrival(track);
       (steps || []).forEach((st, i) => {
         const ahead = st.m - state.cursorM, n = ahead >= -5 && ahead <= 3000 ? ApexDirections.stripNote(st) : null;
         if (!n) return;
         const d = distLabel(Math.max(0, ahead));
-        notes.push({ key: `turn:${i}`, type: 'turn', code: n.code, call: n.call, sub: '', dist: d.n, unit: d.u, distM: Math.max(0, ahead), dir: n.dir, angle: n.angle, mods: [],
+        notes.push({ key: `turn:${i}`, type: 'turn', code: n.code, call: n.call, sub: '', dist: d.n, unit: d.u, distM: Math.max(0, ahead), dir: n.dir, angle: n.angle, side: n.side || null, mods: [],
                      lanes: n.lanes && ahead <= 1600 ? ApexLanes.lanes(n.lanes) : null });   // the lanes from a mile out
       });
       notes.sort((a, b) => a.distM - b.distM);
@@ -2099,6 +2100,7 @@
       }
       // Directions at junctions (IDEAS V-04), in any notes mode: the call at the turn goes ahead of corner notes.
       if (track && track.kind === 'route' && !offRoute) {
+        markArrival(track);
         for (const line of ApexDirections.due(track.steps, state.cursorM, vMps, state.spoken, track.id, pend)) {   // the next turn only
           state.spoken.add(line.key); health.bump('directions_said');
           say(line.text, false, null, null, { kind: line.now ? 'hazard' : 'ordinary', key: line.key, atM: line.atM, duck: true, tokens: line.tokens || undefined, named: true });
@@ -2813,6 +2815,14 @@
       return { coords, turns, names, has, times, steps, timeS: Number.isFinite(sum.time) ? sum.time : null };
     }
     // The router's maneuvers placed on a track for spoken directions (IDEAS V-04; web/directions.js); [] without a router's steps.
+    // The destination's side of the road on its arrival step, once per set of steps (directions.js arrivalSide): the place
+    // asked for (request.to) against the route's last metres. A loop, or a route back to where it began, has none.
+    function markArrival(t) {
+      const steps = t && t.steps, last = steps && steps[steps.length - 1];
+      if (!last || 'side' in last || ![4, 5, 6].includes(last.type)) return;
+      const to = t.request && t.request.to;
+      last.side = to && !(t.id && /^loop/.test(t.id)) ? ApexDirections.arrivalSide(t.lat, t.lon, to) : null;
+    }
     function stepsOf(t, r) {
       if (!r || !Array.isArray(r.steps) || !t || !Array.isArray(t.lat) || !t.lat.length) return [];
       // in route order: the first stretch after the last one placed that comes within 25 m, then its closest point (a loop or an
