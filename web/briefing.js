@@ -1,12 +1,12 @@
 // The stage briefing: as a drive on a planned route starts, the co-driver says what the road holds, once, the way a
 // rally co-driver reads the stage before the start: "12 miles, 48 corners, 3 hairpins. Stop sign in 4.2 miles, unpaved
 // road in 9 miles." The corners are the route's pace notes; the marks are the ones the map gave (road_marks.js), the
-// two first that change how you drive (a stop, a rail crossing, a one-lane bridge, gravel, rough road). Nothing for a
+// two first that change how you drive (a stop, a rail crossing, a one-lane bridge, a ford, gravel, rough road). Nothing for a
 // short or straight route: a briefing for three corners is chatter. Pure (tests/test_briefing.py).
 (function (root) {
   'use strict';
   const MIN_M = 3000, MIN_CORNERS = 5, MARKS = 2;
-  const WORTH = new Set(['stop', 'level_crossing', 'one_lane_bridge', 'unpaved', 'rough']);
+  const WORTH = new Set(['stop', 'level_crossing', 'one_lane_bridge', 'ford', 'unpaved', 'rough']);
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
   const lower = (s) => s.charAt(0).toLowerCase() + s.slice(1);
 
