@@ -77,27 +77,33 @@
   }
 
   const STYLE = `
-    .feed-media { position: relative; border: 1.5px solid var(--panel-ink); background: #000; min-height: 120px; }
+    .feed-media { position: relative; background: #000; min-height: 120px; }
     .feed-media video, .feed-media img { display: block; width: 100%; max-height: 440px; object-fit: contain; }
-    .feed-media-label { position: absolute; left: 8px; top: 8px; background: var(--panel); color: var(--panel-ink); border: 1.5px solid var(--panel-ink); padding: 2px 8px; font-weight: 700; font-size: 13px; }
+    .feed-media-label { position: absolute; left: 8px; top: 8px; background: var(--panel); color: var(--panel-ink); padding: 2px 8px; font-weight: 700; font-size: 13px; }
     .post-media { display: flex; align-items: center; gap: 10px; }
-    .post-media img, .post-media video { width: 64px; height: 64px; object-fit: cover; border: 1.5px solid var(--panel-ink); background: #000; }
-    .feed { display: grid; gap: 12px; }
-    .feed-card { border: 1.5px solid var(--panel-ink); background: var(--panel); color: var(--panel-ink); display: grid; gap: 8px; padding: 12px; }
+    .post-media img, .post-media video { width: 64px; height: 64px; object-fit: cover; background: #000; }
+    .feed { display: grid; }
+    .feed-card { border-top: 1px solid var(--rule); color: var(--panel-ink); display: grid; gap: 10px; padding: 14px 0 4px; }
+    .feed-sheet .feed-card { border-top: 0; padding-top: 0; }
     .feed-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .feed-head .who { display: grid; min-width: 0; } .feed-head .who b { overflow-wrap: anywhere; }
     .feed-head .who small { color: var(--panel-dim); font-size: 13px; }
-    .feed-head .feed-more { margin-left: auto; }
-    .feed-title { font-size: 18px; font-weight: 700; margin: 0; overflow-wrap: anywhere; }
-    .feed-body { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; }
-    .feed-score { display: grid; justify-items: start; }
-    .feed-score b { font-family: var(--font-num); font-size: 34px; line-height: 1; font-variant-numeric: tabular-nums; }
-    .feed-score small { color: var(--panel-dim); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
-    .feed-line { width: 100%; height: 96px; display: block; }
-    .feed-line path { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .feed-head .feed-more { margin-left: auto; width: 44px; height: 44px; display: grid; place-items: center; text-decoration: none; font-size: 20px; letter-spacing: 1px; color: var(--panel-ink); }
+    .feed-card .feed-title { font-size: 20px; font-weight: 700; margin: 0; padding: 0; border: 0; overflow-wrap: anywhere; }
+    .feed-sec > .cp-sec h3 { border: 0; padding: 0; margin: 0; }
+    .feed-stats { display: flex; gap: 0; }
+    .feed-stats > div { display: grid; align-content: start; padding-right: 18px; margin-right: 18px; border-right: 1px solid var(--rule); }
+    .feed-stats > div:last-child { border-right: 0; margin-right: 0; padding-right: 0; }
+    .feed-stats small { color: var(--panel-dim); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+    .feed-stats b { font-family: var(--font-num); font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .feed-stats b span { font-family: inherit; font-size: 15px; font-weight: 600; color: var(--panel-dim); margin-left: 3px; }
+    .feed-line { width: 100%; height: auto; aspect-ratio: 2 / 1; display: block; background: var(--well, rgba(0,0,0,0.05)); }
+    .feed-line path { fill: none; stroke: var(--accent); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
+    .feed-line .go { fill: var(--panel, #fff); stroke: var(--panel-ink); stroke-width: 2.5; }
+    .feed-line .end { fill: var(--accent); stroke: none; }
     .feed-facts { color: var(--panel-dim); font-size: 14px; margin: 0; overflow-wrap: anywhere; }
-    .feed-caption { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-    .feed-acts { display: flex; gap: 18px; border-top: 1px solid var(--rule); padding-top: 6px; }
+    .feed-caption { margin: 0; font-size: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .feed-acts { display: flex; gap: 22px; }
     .feed-acts button { border: 0; background: none; color: var(--panel-ink); font: inherit; font-weight: 600; min-height: 40px; padding: 0; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
     .feed-acts button[aria-pressed="true"] { color: var(--accent); }
     .feed-acts svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
@@ -189,19 +195,28 @@
       }
       head.append(moreKey(p, o));
       box.append(head, el('h3', { className: 'feed-title', textContent: p.title }));
-      const pts = p.line ? decode(p.line) : [];
-      const score = el('div', { className: 'feed-score' }, el('b', { textContent: p.score == null ? '--' : String(p.score) }), el('small', { textContent: 'Vetta Score' }));
-      const body = el('div', { className: 'feed-body' }, score);
-      if (pts.length > 1) {
-        const NS = 'http://www.w3.org/2000/svg', svg = doc.createElementNS(NS, 'svg'), path = doc.createElementNS(NS, 'path');
-        svg.setAttribute('viewBox', '0 0 200 96'); svg.setAttribute('class', 'feed-line'); svg.setAttribute('aria-hidden', 'true');
-        path.setAttribute('d', lineSvg(pts, 200, 96)); svg.append(path); body.append(svg);
-      }
-      box.append(body);
-      if (p.media) box.append(mediaBox(p));
-      const f = facts(p, page.fmtLen || ((m) => `${(m / 1000).toFixed(1)} km`));
-      if (f) box.append(el('p', { className: 'feed-facts', textContent: f }));
       if (p.caption) box.append(el('p', { className: 'feed-caption', textContent: p.caption }));
+      // the numbers a driver reads first, Strava's row: Score, then the length (unknown stays --)
+      const stat = (label, v, unit) => { const b = el('b', { textContent: v }); if (unit) b.append(el('span', { textContent: unit }));
+        return el('div', {}, el('small', { textContent: label }), b); };
+      const fmtLen = page.fmtLen || ((m) => `${(m / 1000).toFixed(1)} km`);
+      const stats = el('div', { className: 'feed-stats' }, stat('Vetta Score', p.score == null ? '--' : String(p.score)));
+      if (Number.isFinite(p.length_m) && p.length_m > 0) { const m = /^([\d.,]+)\s*(.*)$/.exec(fmtLen(p.length_m)) || [];
+        stats.append(m[1] ? stat('Distance', m[1], m[2]) : stat('Distance', fmtLen(p.length_m))); }
+      box.append(stats);
+      const pts = p.line ? decode(p.line) : [];
+      if (pts.length > 1) {                                             // the road it drew, wide, from the start ring to the red finish dot
+        const W = 340, H = 170, NS = 'http://www.w3.org/2000/svg', svg = doc.createElementNS(NS, 'svg'), path = doc.createElementNS(NS, 'path');
+        svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('class', 'feed-line'); svg.setAttribute('aria-hidden', 'true');
+        const d = lineSvg(pts, W, H, 18); path.setAttribute('d', d); svg.append(path);
+        const xy = d.match(/-?[\d.]+ -?[\d.]+/g) || [];
+        [[xy[0], 'go', 5.5], [xy[xy.length - 1], 'end', 6]].forEach(([q, cls, r]) => { if (!q) return; const [x, y] = q.split(' ');
+          const c = doc.createElementNS(NS, 'circle'); c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', r); c.setAttribute('class', cls); svg.append(c); });
+        box.append(svg);
+      }
+      if (p.media) box.append(mediaBox(p));
+      const f = facts({ roads: p.roads }, fmtLen);
+      if (f) box.append(el('p', { className: 'feed-facts', textContent: f }));
       const acts = el('div', { className: 'feed-acts' }, kudosKey(p));
       if (!o.full) {
         const c = el('button', { type: 'button' }); c.innerHTML = ICON.comment;
@@ -307,6 +322,27 @@
       return el('div', { className: 'stack-12' }, list, more);
     }
 
+    // a post's body: the drive's card, its line without its ends (trimLine), to a crew (to) or your friends (null)
+    function bodyOf(d, to, caption) {
+      const line = trimLine(d.lat, d.lon, page.inZone || (() => false));
+      return { title: String(d.name || 'Drive').slice(0, 60), caption: caption || null, driven_on: d.driven_on, length_m: Number.isFinite(d.len_m) ? Math.round(d.len_m) : null,
+        score: Number.isFinite(d.score) ? Math.round(d.score) : null, roads: (d.roads || []).slice(0, 8), line: line ? encode(line) : null, crew_id: to || null };
+    }
+    /** One tap (2026-11-14, the drive's card): the drive to your friends, no sheet. Resolves its id, or null (said in a toast). */
+    async function post(d) {
+      const body = bodyOf(d, null, null), r = await apiCall('POST', '/api/posts', body).catch(() => null);
+      // no signal (IDEAS F-05): it waits on the phone and goes when there is one (outbox.js), as from the sheet
+      if ((!r || r.status >= 500) && page.later) { page.later('/api/posts', body); toast('No signal. Your post goes up when you have one.'); return true; }
+      if (!r || !r.ok) { toast(r && r.status === 429 ? 'That’s ten posts today.' : 'Couldn’t post it. Check signal.'); return null; }
+      const j = await Promise.resolve().then(() => jsonOf(r)).catch(() => null);
+      return (j && j.id) || true;
+    }
+    /** Takes a post back (yours only): true once gone. */
+    async function remove(id) {
+      const r = await apiCall('DELETE', `/api/posts/${encodeURIComponent(id)}`).catch(() => null);
+      return !!(r && r.ok);
+    }
+
     /** Sends the clip or photo of a post just made; false when it didn't go up. */
     async function putMedia(id, m) {
       const path = `/api/posts/${encodeURIComponent(id)}/media${m.label ? `?label=${encodeURIComponent(String(m.label).slice(0, 60))}` : ''}`;
@@ -362,9 +398,11 @@
         const line = trimLine(d.lat, d.lon, page.inZone || (() => false));
         const post = btn('Post', async () => {
           post.disabled = true;
-          const body = { title: String(d.name || 'Drive').slice(0, 60), caption: say.value.trim() || null, driven_on: d.driven_on, length_m: Number.isFinite(d.len_m) ? Math.round(d.len_m) : null,
-            score: Number.isFinite(d.score) ? Math.round(d.score) : null, roads: (d.roads || []).slice(0, 8), line: line ? encode(line) : null, crew_id: to };
+          const body = bodyOf(d, to, say.value.trim());
           const r = await apiCall('POST', '/api/posts', body).catch(() => null);
+          // no signal (IDEAS F-05): the post waits on the phone and goes when there is one (outbox.js), as a hazard report does
+          // (a post with a clip or photo can't wait: the outbox keeps text only, so the sheet stays open for another try)
+          if ((!r || r.status >= 500) && page.later && !media) { page.later('/api/posts', body); s.close(); done(true); toast('No signal. Your post goes up when you have one.'); return; }
           if (!r || !r.ok) { post.disabled = false; toast(r && r.status === 429 ? 'That’s ten posts today.' : 'Couldn’t post it. Check signal.'); return; }
           const where = to ? `Posted to ${(crews.find((c) => c.id === to) || {}).name || 'your crew'}.` : 'Posted to your friends.';
           if (media) {
@@ -385,7 +423,7 @@
       });
     }
 
-    return { section, full, open, compose, card };
+    return { section, full, open, compose, post, remove, card };
   }
 
   const api = { trimLine, encode, decode, lineSvg, ago, facts, mount, CUT_M, MAX_POINTS };

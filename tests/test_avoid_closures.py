@@ -56,9 +56,10 @@ def test_the_loop_box_stays_inside_the_camera_maps_limit():
 def test_the_card_says_when_a_route_still_passes_a_reported_closure():
     i = SRC.index("function closedOnCard(")
     b = SRC[i:SRC.index("\n    }\n", i)]
-    assert "ApexHazardReports.closuresFor(list, ends)" in b and "passesNear(" in b and ", pts, 40)" in b
+    assert "ApexHazardReports.closuresFor(dot.length ? [...list, ...dot] : list, ends)" in b and "passesNear(" in b and ", pts, 40)" in b
+    assert "dot = roadEvents.closures" in b                     # the DOTs' full closures too (web/road_events.js), signed in or not
     assert "t.id === 'route_dest' || /^loop_/.test(t.id || '')" in b
-    assert "const closed = closedOnCard(t) ? 'Passes a reported road closure · ' : '';" in SRC
+    assert "const closed = closedOnCard(t) ? 'Passes a road closure · ' : '';" in SRC
     assert "${closed}${missed}" in SRC
     # a slow hazards answer paints the card again for everyone, not only with Avoid police on
     assert "if (plannedRoute && !driveActive && typeof renderRouteCard === 'function')" in SRC
@@ -74,4 +75,4 @@ def test_a_closure_that_lands_mid_drive_is_offered_with_go_round():
     assert "try { closedAheadTick(me); }" in SRC
     # the router's exclusions take the drive's own closures too (one that landed after the trip's were fetched)
     c = SRC[SRC.index("async function closuresAround("):SRC.index("async function closuresAround(") + 700]
-    assert "reported.list.filter((h) => h && h.kind === 'closure')" in c
+    assert "reported.list.filter((h) => h && h.kind === 'closure' && !h.official).concat(roadEvents.closures)" in c

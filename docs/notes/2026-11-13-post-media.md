@@ -18,3 +18,8 @@ asked for. A post deleted by a crew's cascade leaves its bytes, which are never 
 What: one clip or photo per post. The bytes go in R2, and `drive_posts.media` holds JSON {kind, mime, bytes, label}.
 Why: the feed knows a post has media without one R2 call per post. KV is near its write cap and too small for clips.
 Undo: drop the column (SQLite 3.35+ `ALTER TABLE … DROP COLUMN`), and delete `post/` from the bucket.
+
+## A post with media doesn't wait for signal (2026-11-14)
+What: with no signal, a post carrying a photo or clip keeps its sheet open ("Couldn't post it. Check signal.") instead of going to the outbox.
+Why: the outbox (outbox.js) keeps JSON bodies in localStorage, which can't hold the clip's or photo's bytes.
+Undo: drop `&& !media` from the outbox test in `compose` (the post would then go up later without its media).

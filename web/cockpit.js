@@ -481,7 +481,7 @@
       if (has('apex-alt')) map.setPaintProperty('apex-alt', 'line-color', C.route);
       if (has('apex-explore')) map.setPaintProperty('apex-explore', 'line-color', C.route);
       if (has('apex-twisty')) map.setPaintProperty('apex-twisty', 'line-color', C.amber);
-      if (has('apex-places')) { map.setPaintProperty('apex-places', 'text-color', P.label); map.setPaintProperty('apex-places', 'text-halo-color', P.halo); }
+      if (has('apex-places')) { map.setPaintProperty('apex-places', 'text-color', P.label); map.setPaintProperty('apex-places', 'text-halo-color', P.halo); placeGlyphs(P.label, P.halo); }
       // Measured roads by the pavement measured there (coverage.js surface): smooth, fair, rough; ink where roughness is unknown
       if (has('apex-coverage')) map.setPaintProperty('apex-coverage', 'line-color', ['match', ['get', 's'], 1, C.gain, 2, C.amber, 3, C.signal, C.dim]);
     }
@@ -524,9 +524,13 @@
       // Places on the map (2026-11-13, as Apple and Google Maps show them): the eateries, cafés, fuel and shops with a name,
       // in the map's own label ink set in italic (a place, not a street), only close in (street zoom) and never in a drive;
       // a tap is the place's card (showPin)
+      // (2026-11-14, behind apex.mapPlaces) each with its kind's glyph before its name, as Apple Maps marks a café or fuel
+      if (map.getSource('openmaptiles')) placeGlyphs((look.map || {}).label || '#555', (look.map || {}).halo || '#fff');
       if (map.getSource('openmaptiles')) map.addLayer({ id: 'apex-places', type: 'symbol', source: 'openmaptiles', 'source-layer': 'poi', minzoom: 15,
         filter: ['all', ['has', 'name'], ['match', ['get', 'class'], PLACE_CLASSES, true, false]],
         layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Italic'], 'text-size': 11, 'text-max-width': 8, 'text-padding': 10,
+          'icon-image': ['match', ['get', 'class'], ...Object.entries(PLACE_GLYPH_OF).flat(), 'pl-sight'], 'icon-anchor': 'right', 'icon-offset': [-2, 0],
+          'text-anchor': 'left', 'text-justify': 'left', 'text-offset': [0.15, 0], 'icon-optional': true,
           'symbol-sort-key': ['get', 'rank'], visibility: placesShown() ? 'visible' : 'none' },
         paint: { 'text-halo-width': 1.4 } }, firstSymbol);                // under the street and town names: they win a clash
       map.addSource('apex-ribbon-src', { type: 'geojson', data: emptyFC() }); ribbonKey = null;
@@ -542,6 +546,26 @@
     // answers). Switched on by apex.mapPlaces = '1'; to ship it, make the default true here
     const placesFlag = () => { try { return localStorage.getItem('apex.mapPlaces') === '1'; } catch (_) { return false; } };
     const placesShown = () => placesFlag() && state.mode !== 'live';
+    // the kinds' glyphs (24 px grid, 1.75 px strokes, BRAND.md Icons), drawn in the look's label ink on a halo square, 2x
+    const PLACE_GLYPH = { food: 'M7 3v7M5 3v5a2 2 0 0 0 4 0V3M7 10v11M17 21V3c-2 1.5-3 4.5-3 9h3',
+      cafe: 'M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 11h1.5a2.5 2.5 0 0 1 0 5H16M9 3.5v2.5M12.5 3.5v2.5',
+      fuel: 'M5 21V5.5A1.5 1.5 0 0 1 6.5 4h6A1.5 1.5 0 0 1 14 5.5V21M3.5 21h12M7.5 9h4M14 10h1.5a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 0 3 0V8.5L17.5 6',
+      bar: 'M5 4h14l-7 8zM12 12v8M8 20h8', shop: 'M4 9h16l-2 10H6zM9 9l3-5 3 5', bed: 'M3 19V6M3 14h18v5M21 14v-2a3 3 0 0 0-3-3h-7v5M7 10.5h.01',
+      car: 'M5 16l2-6h10l2 6v3H5zM5 16h14M8 19v2M16 19v2', sight: 'M6 21V4M6 4h11l-2 4 2 4H6' };
+    const PLACE_GLYPH_OF = { restaurant: 'pl-food', fast_food: 'pl-food', cafe: 'pl-cafe', bakery: 'pl-cafe', ice_cream: 'pl-cafe', fuel: 'pl-fuel',
+      bar: 'pl-bar', beer: 'pl-bar', grocery: 'pl-shop', lodging: 'pl-bed', car: 'pl-car' };
+    function placeGlyphs(ink, halo) {
+      if (!map || typeof Path2D === 'undefined') return;
+      for (const [k, d] of Object.entries(PLACE_GLYPH)) {
+        try {
+          const c = document.createElement('canvas'); c.width = c.height = 40; const g = c.getContext('2d');   // 20 pt, its glyph 16 pt
+          g.fillStyle = halo; g.globalAlpha = 0.85; g.fillRect(0, 0, 40, 40); g.globalAlpha = 1;
+          g.strokeStyle = ink; g.lineCap = g.lineJoin = 'round'; g.translate(4, 4); g.scale(4 / 3, 4 / 3); g.lineWidth = 1.75; g.stroke(new Path2D(d));
+          const img = g.getImageData(0, 0, 40, 40), id = 'pl-' + k;
+          if (map.hasImage(id)) map.updateImage(id, img); else map.addImage(id, img, { pixelRatio: 2 });
+        } catch (_) { /* no canvas: the names alone */ }
+      }
+    }
     function applyPlaces() { if (mapReady && map.getLayer('apex-places')) map.setLayoutProperty('apex-places', 'visibility', placesShown() ? 'visible' : 'none'); }
     // Satellite, for developers only (the owner, 2026-11-04: to troubleshoot picks like a neighbourhood ranked a best road):
     // USGS The National Map's orthoimagery (USDA NAIP and USGS, public domain; the US only; tiles to zoom 16, stretched past
@@ -1486,7 +1510,15 @@
     // always awake. Quiet: never wake, so only cameras and severe bumps are called.
     const isSpirited = () => state.notesMode === 'full' || (state.notesMode === 'auto' && performance.now() - state.spiritedAt < 30000);
     // a bump several members felt (IDEAS Q-02) is called in cruise as well: verified, not one phone's guess
-    const noteworthyInCruise = (e) => e.type === 'alpr' || (e.type === 'bump' && (e.severity_g >= 0.45 || !!e.crowd));
+    // and a mapped deer crossing from dusk to dawn (road_marks.js cruiseWorthy): the sun's height where the car is, once a minute and for each new track
+    const sunAlt = { at: 0, v: null, t: null };
+    const sunAltNow = () => {
+      const now = Date.now(), t = track, i = Math.max(0, state.cursorIdx || 0);
+      if ((now - sunAlt.at > 60000 || sunAlt.t !== t) && window.ApexSun && t && t.lat && Number.isFinite(t.lat[i])) { sunAlt.at = now; sunAlt.t = t; sunAlt.v = ApexSun.sunPosition(new Date(), t.lat[i], t.lon[i]).altitude; }
+      return sunAlt.v;
+    };
+    const noteworthyInCruise = (e) => e.type === 'alpr' || (e.type === 'bump' && (e.severity_g >= 0.45 || !!e.crowd))
+      || (e.type === 'mark' && window.ApexRoadMarks && ApexRoadMarks.cruiseWorthy(e, sunAltNow()));
 
     // -------------------------------------------------------------------------
     // Voice: the most natural voice installed, read like a real co-driver.
@@ -1503,6 +1535,7 @@
     const speech = { busy: false, queue: ApexSpeechQueue.createSpeechQueue(), current: null, talkingUntil: 0, nativeTimer: 0, via: null, chime: null };
     const MEMO_S = 5;   // a remembered coaching tip takes up to this long to say
     let brakeSay = null;  // the brake heat call waiting for a quiet moment (noteBrakes), said before a break cue
+    let briefSay = null;  // the stage briefing as a planned drive starts (briefing.js), after a limit call
     let limitSay = null;  // "Limit 35 ahead." waiting for a quiet moment (limit_ahead.js, the notes loop), before all the others
     let sunSay = null;    // "Sun in your eyes ahead." waiting for a quiet moment (sun_ahead.js, the notes loop), after brake heat
     let breakSay = null;  // a break suggestion waiting for a quiet moment (noteRest sets it, the notes loop says it)
@@ -2054,18 +2087,26 @@
           if (text) limitSay = { text, until: performance.now() + 8000 };
         }
       }
+      // The stage briefing (briefing.js): once, as a drive on a planned route gets going, what the road holds; not in Quiet
+      // notes. 30 s to find a quiet moment, then the start is behind you and it is dropped.
+      if (live && !offRoute && driveActive && !drive.briefed && track && track === plannedRoute && window.ApexBriefing && state.notesMode !== 'quiet') {
+        drive.briefed = true;
+        const text = ApexBriefing.line(track, state.cursorM, ApexUnits.spokenShort);
+        if (text) briefSay = { text, until: performance.now() + 30000 };
+      }
+      if (briefSay && performance.now() > briefSay.until) briefSay = null;
       if (limitSay && performance.now() > limitSay.until) limitSay = null;
       if (sunSay && performance.now() > sunSay.until) sunSay = null;
       if (brakeSay && performance.now() > brakeSay.until) brakeSay = null;
       if (breakSay && performance.now() > breakSay.until) breakSay = null;
       if (flowSay && (performance.now() > flowSay.until || state.notesMode === 'quiet')) { flowSay = null; flowQueue = []; }
-      const quiet = limitSay || brakeSay || sunSay || breakSay || flowSay;
+      const quiet = limitSay || briefSay || brakeSay || sunSay || breakSay || flowSay;
       if (quiet && live && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size && performance.now() > speech.talkingUntil) {
         const quietReach = lead + vMps * (0.6 + 0.07 * quiet.text.length + 2);
         const callDue = ev.some(e => noteM(e) - state.cursorM < quietReach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`)
           && (e.type === 'corner' ? spirited : (spirited || noteworthyInCruise(e))));
         const bumpDue = ApexRoadMemory.upcoming(hazardMemory, state.live, 0, quietReach, { has: () => false });
-        if (!callDue && !bumpDue) { say(quiet.text); if (quiet === limitSay) limitSay = null; else if (quiet === brakeSay) brakeSay = null; else if (quiet === sunSay) sunSay = null; else if (quiet === breakSay) breakSay = null; else { flowSay = flowQueue.shift() || null; if (flowSay) flowSay.until = performance.now() + 20000; } }
+        if (!callDue && !bumpDue) { say(quiet.text); if (quiet === limitSay) limitSay = null; else if (quiet === briefSay) briefSay = null; else if (quiet === brakeSay) brakeSay = null; else if (quiet === sunSay) sunSay = null; else if (quiet === breakSay) breakSay = null; else { flowSay = flowQueue.shift() || null; if (flowSay) flowSay.until = performance.now() + 20000; } }
       }
     }
 
@@ -2563,6 +2604,7 @@
       if (track === t) {
         loadTrackOnMap(); render(false);
         const lpr = t.alpr.filter((c) => c.kind !== 'speed').length, spd = t.alpr.length - lpr;
+        carHazards();
         toast([`${lpr} plate-reading camera${lpr === 1 ? '' : 's'}`, spd ? `${spd} speed camera${spd === 1 ? '' : 's'}` : null].filter(Boolean).join(' and ') + ' on this route');
       }
     }
@@ -2679,7 +2721,7 @@
       const list = await hazardsAround(points);
       // with the closures the drive has fetched round you (newer than this trip's for one that landed mid-drive: Go round)
       let mine = [];
-      try { mine = reported.list.filter((h) => h && h.kind === 'closure'); } catch (_) { mine = []; }   // (not yet set up at boot)
+      try { mine = reported.list.filter((h) => h && h.kind === 'closure' && !h.official).concat(roadEvents.closures); } catch (_) { mine = []; }   // (not yet set up at boot)
       const ids = new Set(mine.map((h) => h.id));
       return ApexHazardReports.closuresFor(mine.length ? [...mine, ...list.filter((h) => !h || !ids.has(h.id))] : list, points);
     }
@@ -2727,12 +2769,14 @@
     function closedOnCard(t) {
       if (!t || !(t.id === 'route_dest' || /^loop_/.test(t.id || '')) || !Array.isArray(t.lat) || t.lat.length < 2 || !window.ApexHazardReports) return null;
       const ends = [{ lat: t.lat[0], lon: t.lon[0] }, { lat: t.lat[t.lat.length - 1], lon: t.lon[t.lon.length - 1] }];
-      if (!hazardsCover(ends)) return null;
-      const list = closureCache.list, kept = closedSeen.get(t);
-      if (kept && kept.list === list) return kept.r;
-      const pts = ApexHazardReports.closuresFor(list, ends);
+      let dot = [];
+      try { dot = roadEvents.closures; } catch (_) { dot = []; }       // the DOTs' full closures (road_events.js), signed in or not
+      if (!hazardsCover(ends) && !dot.length) return null;
+      const list = hazardsCover(ends) ? closureCache.list : [], kept = closedSeen.get(t);
+      if (kept && kept.list === list && kept.dot === dot) return kept.r;
+      const pts = ApexHazardReports.closuresFor(dot.length ? [...list, ...dot] : list, ends);
       const r = pts.length > 0 && ApexHazardReports.passesNear(t.lat.map((la, i) => [t.lon[i], la]), pts, 40);
-      closedSeen.set(t, { list, r });
+      closedSeen.set(t, { list, dot, r });
       return r;
     }
     let camWarmAt = -1e9;
@@ -2740,6 +2784,7 @@
       const p = state.lastPosition;
       // (the reports round you: police for Avoid police, and the closures every plan keeps off, closedForTrip)
       if (p && window.ApexSync && ApexSync.signedIn() && !policeCached([p])) hazardsAround([p]).catch(() => {});
+      loadRoadEvents().catch(() => {});                                  // the DOTs' closures and roadwork (road_events.js)
       // the camera tiles round where you are, so a plan that avoids cameras finds them kept (camsForTrip)
       if (avoid.cameras && p && window.ApexCameras && performance.now() - camWarmAt > 60000 && (camWarmAt = performance.now())) alprNodesIn(p.lat - 0.15, p.lon - 0.15, p.lat + 0.15, p.lon + 0.15).catch(() => {});
     }
@@ -2760,7 +2805,10 @@
       } catch (_) { return []; }
     }
     async function closedForTrip(points) {
-      if (!window.ApexHazardReports || !memberNow()) return [];
+      if (!window.ApexHazardReports) return [];
+      try { loadRoadEvents().catch(() => {}); } catch (_) { /* (not yet set up at boot) */ }
+      // signed out: the DOTs' full closures alone (road_events.js), which need no sign-in; the members' reports need one
+      if (!memberNow()) { try { return ApexHazardReports.closuresFor(roadEvents.closures, points); } catch (_) { return []; } }
       if (hazardsCover(points)) return closuresAround(points);   // (with the drive's own, newer: closuresAround)
       const list = await RouteLoading.optional(closuresAround(points), POLICE_WAIT_MS).catch(() => null);
       return Array.isArray(list) ? list : [];
@@ -2872,7 +2920,7 @@
       try { return await valhallaRoutesExcluding(points, throughRoadsOnly, alternates, extra, excl); }
       catch (e) {
         if (!excl.length) throw e;
-        toast('A reported road closure is in the way and there\'s no road around it. Check it before you go.');
+        toast('A road closure is in the way and there\'s no road around it. Check it before you go.');
         return valhallaRoutesExcluding(points, throughRoadsOnly, alternates, extra, []);
       }
     }
@@ -3287,7 +3335,7 @@
       // Avoid police reports: the live reports near this route, from the reports as they are now (they can land after the
       // plan: the card is painted again then, policeLanded); none known: nothing said
       const pol = policeOnCard(t);
-      const closed = closedOnCard(t) ? 'Passes a reported road closure · ' : '';
+      const closed = closedOnCard(t) ? 'Passes a road closure · ' : '';
       const around = pol && pol.n && !pol.passes ? `Around ${pol.n === 1 ? 'a police report' : `${pol.n} police reports`} · ` : '';
       const missedPolice = pol && pol.passes && !(t.unavoided || []).includes('police') ? 'Couldn\'t avoid police reports · ' : '';
       // Planned routes only: a driven track's own time has passed.
@@ -3362,6 +3410,8 @@
       $('destInput').value = p.name;
       await buildRoute(null, p.id, p.name, await trackFromPacked(p));
       toast(`${p.name}. Notes, directions and limits work with no signal; the map needs signal.`);
+      // opened with signal (before setting off): the reports kept with it are asked again, so the dead zone gets today's
+      if (plannedRoute && plannedRoute.id === p.id) keepReportsAlong(plannedRoute);
     }
     function paintSaveBtn() {
       const t = plannedRoute, b = $('routeSaveBtn');
@@ -3551,7 +3601,12 @@
       if (m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]), label: `Pin ${parseFloat(m[1]).toFixed(3)}, ${parseFloat(m[2]).toFixed(3)}` };
       let items;
       try { items = await RouteLoading.json(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`, {}, 10000); }
-      catch (_) { throw new Error('Search is offline. Tap the map instead.'); }
+      catch (_) {
+        // no signal: the nearest match on the map kept on the phone (mapSuggest), else the map is the way
+        const kept = await mapSuggest(q).catch(() => []);
+        if (kept.length) return { lat: kept[0].lat, lon: kept[0].lon, label: kept[0].label };
+        throw new Error('Search is offline. Tap the map instead.');
+      }
       if (!items.length) throw new Error(`No match for "${q}"`);
       return { lat: parseFloat(items[0].lat), lon: parseFloat(items[0].lon), label: items[0].display_name.split(',')[0] };
     }
@@ -5627,6 +5682,27 @@
     // Nominatim forbids it, and stays for the final geocode). Offline: no list; typing and Go still work.
     // Near first: Photon's lat/lon is only a soft bias (it happily returns Malaysia), so ask inside a box about 150 km
     // around you (the phone's position, else the map's centre); only when nothing is there, ask everywhere. Nearest first.
+    // No signal (IDEAS F-02): towns within about 25 km and places within about 4 km, from the map tiles kept on the phone
+    // (a saved area or route, or tiles the map showed lately; stages.js reads them offline). A tile that isn't kept is
+    // simply not searched; nothing leaves the phone.
+    const KEPT_KIND = { city: 'City', town: 'Town', village: 'Village' };
+    async function mapSuggest(q) {
+      if (!window.ApexStages || !ApexStages.places || !ApexStages.poisAll) return [];
+      const c0 = map.getCenter(), near = state.lastPosition || { lat: c0.lat, lon: c0.lng };
+      const grid = (radiusKm, stepKm) => {
+        const out = [], dLat = stepKm / 110.54, dLon = stepKm / (111.32 * Math.cos(near.lat * Math.PI / 180)), n = Math.round(radiusKm / stepKm);
+        for (let i = -n; i <= n; i++) for (let j = -n; j <= n; j++) if (Math.hypot(i, j) * stepKm <= radiusKm + stepKm / 2) out.push({ lat: near.lat + i * dLat, lon: near.lon + j * dLon });
+        return out;
+      };
+      const settled = async (pts, f) => (await Promise.allSettled(pts.map((p) => f([p])))).flatMap((r) => (r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : []));
+      // a weak signal (a tile not kept, asked of the network) gets 6 s; kept tiles answer at once
+      const got = await Promise.race([Promise.all([settled(grid(24, 8), ApexStages.places), settled(grid(4, 1.5), ApexStages.poisAll)]), new Promise((r) => setTimeout(() => r(null), 6000))]);
+      if (!got) return [];
+      const [towns, spots] = got;
+      const word = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ') : '');
+      return ApexPlaceSearch.mapMatches(q, [...towns.map((t) => ({ name: t.name, lat: t.lat, lon: t.lon, kind: KEPT_KIND[t.cls] || 'Place' })),
+        ...spots.map((p) => ({ name: p.name, lat: p.lat, lon: p.lon, kind: word(p.sub || p.cls) || 'Place' }))], near, 5);
+    }
     async function photonSuggest(q) {
       const c0 = map.getCenter(), near = state.lastPosition || { lat: c0.lat, lon: c0.lng };
       const ask = async (extra) => (await RouteLoading.json(`https://photon.komoot.io/api/?limit=10&lang=en&q=${encodeURIComponent(q)}`
@@ -5822,7 +5898,11 @@
         let done;
         placesAsk = { q, p: new Promise((r) => { done = r; }) };
         try {
-          try { rows = (IN_APP_SHELL && await appleSuggest(q)) || await photonSuggest(q); } catch (_) { rows = []; if (!mine.length) empty = (navigator.onLine === false ? 'No suggestions offline.' : 'Suggestions didn\'t load.') + ' Press Search to try.'; }
+          try { rows = (IN_APP_SHELL && await appleSuggest(q)) || await photonSuggest(q); } catch (_) {
+            // no signal: the map kept on the phone has the towns and places round you (mapSuggest)
+            rows = navigator.onLine === false ? await mapSuggest(q).catch(() => []) : [];
+            if (!mine.length && !rows.length) empty = navigator.onLine === false ? 'No signal, and no match on the map kept on this phone.' : 'Suggestions didn\'t load. Press Search to try.';
+          }
           if (seq !== suggestSeq) return;                                // a newer keystroke won
           rows = [...mine, ...rows.filter((r) => !mine.some((m) => ApexPlaceSearch.norm(m.label) === ApexPlaceSearch.norm(r.label)))];
           if (!rows.length && !empty) empty = 'No matches nearby. Press Search to look everywhere.';
@@ -6834,6 +6914,7 @@
     // Drive posts and the Feed (web/drive_posts.js, docs/SOCIAL.md 2.13): Post on the drive's card; the Feed on People → Friends
     let drivePosts = null;
     onSocial(() => { try { drivePosts = window.ApexDrivePosts ? ApexDrivePosts.mount({ el, btn, toast, apiCall, jsonOf,
+      later: (path, body) => outbox.add(path, body, false, { capped: true }),   // posted with no signal: sent when there is one
       avatar: (id, h, px) => (window.ApexPhotos ? ApexPhotos.avatar(id, h, px) : el('span')),
       fmtLen: (m) => ApexUnits.long(m, 1),
       report: safety && safety.report, block: safety ? (handle) => safety.block(handle, () => renderAccount()) : null,
@@ -8928,10 +9009,41 @@
     const reported = { list: [], at: -Infinity, cellKey: '', busy: false, said: new Set(), mine: new Set(), pins: new Map(), watch: ApexHazardReports.createPassWatch(), asking: null, local: [],
                        cells: ApexPrivacyZones.cellCache(120e3), ahead: ApexPrivacyZones.cellCache(6 * 3600e3, 16), aheadFor: null };
     if (window.apexDebug) { window.apexDebug.loadReported = (force) => loadReported(force); window.apexDebug.reportedIds = () => reported.list.map((h) => h.id); }   // e2e: a report that lands mid-drive
+    // ---- the DOTs' own traffic events (road_events.js; backend/src/traffic.ts) ------------------------------------------
+    // Closures, lane closures, roadwork, slow traffic and crashes from INDOT, KYTC (and ODOT with the owner's key): the whole
+    // region asked every 5 min while planning or driving, never where you are; signed in or not. What is near you joins the
+    // drivers' reports in reported.list (`official`), so it gets the same pins, plate, voice and car plates; the full
+    // closures (both ways) are routed round like a reported closure.
+    const roadEvents = { list: [], closures: [], at: NaN, busy: false, mergedAt: null };
+    if (window.apexDebug) window.apexDebug.loadRoadEvents = () => loadRoadEvents(true);
+    function roadEventsNear(p) { return p && window.ApexRoadEvents ? ApexRoadEvents.near(roadEvents.list, p.lat, p.lon, Date.now()) : []; }
+    async function loadRoadEvents(force = false) {
+      if (!window.ApexRoadEvents || !window.ApexSync || roadEvents.busy || window.APEX_REVIEW) return;
+      if (!force && !ApexRoadEvents.due(roadEvents.at, Date.now())) return;
+      roadEvents.busy = true; roadEvents.at = Date.now();
+      try {
+        const r = await ApexSync.apiFetch('/api/traffic/v1/events.json', { method: 'GET' });
+        if (!r.ok) return;                                                 // a feed down: what we had stays, asked again in 5 min
+        roadEvents.list = ApexRoadEvents.rows(await r.json());
+        roadEvents.closures = ApexRoadEvents.closures(roadEvents.list);
+        mergeRoadEvents(true);
+        // they landed after the route card went up: its word again (a closure the route passes)
+        if (plannedRoute && !driveActive && typeof renderRouteCard === 'function') setTimeout(() => { try { if (plannedRoute) renderRouteCard(plannedRoute); } catch (_) {} }, 0);
+      } catch (_) { /* offline: what we had */ }
+      finally { roadEvents.busy = false; }
+    }
+    // the events round where you are now, into reported.list: on new ones, or once you're 1 km from the last merge
+    function mergeRoadEvents(force = false) {
+      const p = state.lastPosition;
+      if (!p || !window.ApexRoadEvents || (!force && !ApexRoadEvents.moved(roadEvents.mergedAt, p))) return;
+      roadEvents.mergedAt = { lat: p.lat, lon: p.lon };
+      reported.list = reported.list.filter((h) => h && !h.official).concat(roadEventsNear(p));
+      paintReported(); carHazards();
+    }
     async function loadReported(force = false) {
       const p = state.lastPosition, c = p && ApexPrivacyZones.cell(p.lat, p.lon);
       if (!c || reported.busy || !window.ApexSync || !nearLookupOk(p)) return;
-      const keep = (rows) => { reported.list = ApexPrivacyZones.nearFirst(rows, p.lat, p.lon, 20).concat(reported.local); paintReported(); carHazards(); };
+      const keep = (rows) => { roadEvents.mergedAt = { lat: p.lat, lon: p.lon }; reported.list = ApexPrivacyZones.nearFirst(rows, p.lat, p.lon, 20).concat(reported.local, roadEventsNear(p)); paintReported(); carHazards(); };
       const kept = force ? undefined : reported.cells.get(c.key);
       if (kept) { if (c.key !== reported.cellKey) { reported.cellKey = c.key; keep(kept); } return; }   // a cell asked for under 2 min ago
       if (!force && c.key === reported.cellKey && performance.now() - reported.at < 120e3) return;
@@ -9469,7 +9581,8 @@
       for (const [id, mk] of reported.pins) if (!keep.has(id)) { mk.remove(); reported.pins.delete(id); }
       for (const h of reported.list) {
         if (reported.pins.has(h.id)) continue;
-        const el = document.createElement('div'); el.className = 'hz-pin'; el.textContent = (ApexHazardReports.LABEL[h.kind] || 'Hazard').toUpperCase();
+        const el = document.createElement('div'); el.className = h.official ? 'hz-pin hz-dot' : 'hz-pin';   // a DOT's event: its own word
+        el.textContent = ((h.official && h.label) || ApexHazardReports.LABEL[h.kind] || 'Hazard').toUpperCase();
         reported.pins.set(h.id, new maplibregl.Marker({ element: el }).setLngLat([h.lon, h.lat]).addTo(map));
       }
     }
@@ -9512,7 +9625,7 @@
       return r.status;
     });
     let outboxAt = 0;
-    const flushOutbox = () => { outboxAt = performance.now(); if (navigator.onLine === false || window.APEX_REVIEW) return; outbox.flush().then((n) => { if (!n) return; health.bump('hazard_sent_late', n); toast(n === 1 ? 'Sent what you reported with no signal.' : `Sent ${n} things you reported with no signal.`); loadReported(true); }).catch(() => {}); };
+    const flushOutbox = () => { outboxAt = performance.now(); if (navigator.onLine === false || window.APEX_REVIEW) return; outbox.flush().then((n) => { if (!n) return; health.bump('hazard_sent_late', n); toast(n === 1 ? 'Sent what waited for signal.' : `Sent ${n} things that waited for signal.`); loadReported(true); }).catch(() => {}); };
     window.addEventListener('online', flushOutbox);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') flushOutbox(); });
     if (outbox.size()) setTimeout(flushOutbox, 3000);
@@ -9523,6 +9636,7 @@
       if (lookupEdge.last) lookupEdge.m += ApexPrivacyZones.metres(lookupEdge.last.lat, lookupEdge.last.lon, frame.lat, frame.lon);
       lookupEdge.last = { lat: frame.lat, lon: frame.lon };
       loadReported();
+      loadRoadEvents().catch(() => {}); mergeRoadEvents();
       const me = { lat: frame.lat, lon: frame.lon, heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null };
       const v = Number.isFinite(frame.speed_mps) ? frame.speed_mps : 0;
       const next = ApexHazardReports.nextAhead(reported.list, me, Math.max(150, Math.min(600, v * 8)), reported.said);
@@ -9706,7 +9820,9 @@
         attacks = car.attacks.map((c) => ({ id: c.segment_id, name: c.name,
           detail: [c.featured ? 'Featured' : '', Number.isFinite(c.length_m) ? ApexUnits.long(c.length_m, 1) : ''].filter(Boolean).join(' · ') }));
       } catch (_) {}
-      return ApexCarPlay.placesMessage(recentPlaces(), pinned, saved, (m) => ApexUnits.long(m), attacks);
+      // Nearby first (Apple Maps' Gas, Coffee and Food on the car): the phone's Find nearby kinds, an electric car's Chargers
+      const nearby = window.ApexNearby ? ApexCarPlay.nearbyKeys(ApexNearby.keys(isElectric()), ApexNearby.CATS) : [];
+      return { ...ApexCarPlay.placesMessage(recentPlaces(), pinned, saved, (m) => ApexUnits.long(m), attacks), nearby };
     }
     // Time attack's Drive it (time_attack.js, the phone's or the car's): the loop itself is the route, as a roadbook road is
     async function driveAttack(c, g) {
@@ -9732,6 +9848,7 @@
         o ? o.picked : 0, (m) => ApexUnits.long(m, 1)));
       carPost(ApexCarPlay.cornersMessage(t, (m) => sample(t, m), state.noteWords));        // the road book on the car's map (web/carmap.js)
       car.along = ''; carAlong(t);                                       // the car forgets the last route's places with it
+      carHazards();                                                      // and its cameras
     }
     // The cafés and fuel along the route by name on the car's route preview (the owner, 2026-11-11). t.scenic comes later
     // than the route (attachScenic): it is sent then, and again with every route the car is sent.
@@ -9751,8 +9868,11 @@
       car.look = key;
       carPost(msg);
     }
+    // with the planned route's speed cameras (and plate readers) as plates, as Waze shows them on the car: the same switch as
+    // the phone's camera notes (toggles.lpr), from map data (web/cameras.js), never a camera we weren't told of
     function carHazards() {
-      const msg = ApexCarPlay.hazardsMessage(reported.list, ApexHazardReports.LABEL), key = msg.list.map((h) => h.id).join(',');
+      const t = plannedRoute && car.route && Array.isArray(plannedRoute.alpr) && state.toggles.lpr ? plannedRoute : null;
+      const msg = ApexCarPlay.hazardsMessage(reported.list, ApexHazardReports.LABEL, t ? t.alpr : null), key = msg.list.map((h) => h.id).join(',');
       if (key === car.hazards) return;
       car.hazards = key;
       carPost(msg);
@@ -9831,6 +9951,17 @@
     }
     function carGuide() {
       if (!driveActive) return;
+      // off the route: the status line's words as the car's paused trip ("Rerouting…"), never the old turn frozen; back on it
+      // (or on the new route) the key differs, so the next maneuver goes out at once
+      // arrived: the last 40 m of a route to somewhere reached (a loop ends where it began, so it says nothing at its start);
+      // it stays Arrived when the car drives on or off the route, never Rerouting to a place already reached
+      const end = track && track.kind === 'route' && state.mode === 'live' ? totalM() : 0;
+      if (end > 500 && Math.max(state.cursorM, routeWatch.bestM) > end - 40 && !String(track.id || '').startsWith('loop_')) {
+        if (car.guideKey !== 'arrived') { car.guideKey = 'arrived'; car.guideAt = performance.now(); carPost(ApexCarPlay.arrivedMessage(track.name)); }
+        return;
+      }
+      const off = track && track.kind === 'route' && state.mode === 'live' && state.cursorIdx < 0 ? ApexCarPlay.pausedMessage(offRouteText()) : null;
+      if (off) { if (off.key !== car.guideKey) { car.guideKey = off.key; car.guideAt = performance.now(); carPost(off); } return; }
       // U-59: a drive with no route (or on the road ahead) is still a drive on the car: the record card and the distance driven
       const now = performance.now(), g = !track || track.kind !== 'route'
         ? ApexCarPlay.recordingMessage(drive.rec ? drive.rec.km * 1000 : null, (m) => ApexUnits.long(m, 1))
@@ -10049,7 +10180,7 @@
       startStageWatch(); startCoach();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
@@ -10130,7 +10261,8 @@
       $('endAgain').hidden = true;                                     // panel D-1: once the drive is stored (endCardScored)
       // Post (drive_posts.js), for a member: there from the first frame like Share card (U-118), waiting for the score
       const member = !!drivePosts && !!(accountMe && accountMe.member);
-      $('endPost').hidden = !member; $('endPost').disabled = false; $('endPost').textContent = 'Post'; $('endPost').setAttribute('aria-disabled', 'true');
+      $('endPostRow').hidden = !member; $('endPost').disabled = false; $('endPost').textContent = 'Post to friends'; $('endPost').setAttribute('aria-disabled', 'true');
+      $('endPostMore').hidden = false; $('endPostMore').setAttribute('aria-disabled', 'true');
       $('endShare').classList.toggle('solid', !member);
       $('endCard').classList.add('show');
       showEndTrail(c);
@@ -10213,7 +10345,7 @@
       // Post (drive_posts.js) is the solid key for a member with a score: the drive goes to friends first; Share card, the
       // picture for other apps, stays beside it
       const posting = scored && !!drivePosts && !!(accountMe && accountMe.member);
-      $('endPost').hidden = !posting; $('endPost').removeAttribute('aria-disabled');
+      $('endPostRow').hidden = !posting; $('endPost').removeAttribute('aria-disabled'); $('endPostMore').removeAttribute('aria-disabled');
       $('endShare').classList.toggle('solid', !posting);
       $('endShare').hidden = !scored; $('endShareLink').hidden = scored;
       $('endLogKey').hidden = scored; $('endLog').hidden = !scored;
@@ -10336,13 +10468,29 @@
     $('endAgain').addEventListener('click', () => { const d = endDrive; if (!d) return; $('endCard').classList.remove('show'); driveAgain(d.id, d.name); });
     $('endShareLink').addEventListener('click', () => $('endShare').click());
     // Post (drive_posts.js): the drive's card to your friends or a crew, for a member with a scored drive; once posted it says so
-    $('endPost').addEventListener('click', async () => {
-      if (!endDrive || !drivePosts || $('endPost').disabled || $('endPost').getAttribute('aria-disabled') === 'true') return;   // still scoring
+    // (2026-11-14) one tap: Post to friends sends it at once, with Undo in the toast; ··· beside it is the sheet (a caption,
+    // or a crew instead)
+    const endPostOf = () => {
       const roads = Object.entries(drive.roads || {}).filter(([, m]) => m >= 500).sort((a, b) => b[1] - a[1]).map(([n]) => n);
       const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      const ok = await drivePosts.compose({ name: endDrive.name, driven_on: day, len_m: endDrive.len_m, score: endDrive.ds && endDrive.ds.score,
-        lat: endDrive.lat, lon: endDrive.lon, roads });
-      if (ok) { $('endPost').textContent = 'Posted'; $('endPost').disabled = true; pushOffer(); }
+      return { name: endDrive.name, driven_on: day, len_m: endDrive.len_m, score: endDrive.ds && endDrive.ds.score, lat: endDrive.lat, lon: endDrive.lon, roads };
+    };
+    const endPosted = (said) => { $('endPost').textContent = said; $('endPost').disabled = true; $('endPostMore').hidden = true; };
+    const endPostReady = () => !!endDrive && !!drivePosts && !$('endPost').disabled && $('endPost').getAttribute('aria-disabled') !== 'true';   // not while scoring
+    $('endPost').addEventListener('click', async () => {
+      if (!endDrive || !drivePosts || !drivePosts.post || !endPostReady()) return;
+      $('endPost').disabled = true;
+      const id = await drivePosts.post(endPostOf());
+      if (!id) { $('endPost').disabled = false; return; }
+      endPosted('Posted to friends'); pushOffer();
+      if (typeof id === 'string') toast('Posted to your friends.', { label: 'Undo', ms: 8000, onClick: async () => {
+        if (await drivePosts.remove(id)) { $('endPost').textContent = 'Post to friends'; $('endPost').disabled = false; $('endPostMore').hidden = false; toast('Taken back.'); }
+        else toast('Couldn’t take it back. Check signal.');
+      } });
+    });
+    $('endPostMore').addEventListener('click', async () => {
+      if (!endPostReady() || $('endPostMore').getAttribute('aria-disabled') === 'true') return;
+      if (await drivePosts.compose(endPostOf())) { endPosted('Posted'); pushOffer(); }
     });
     $('endStage').addEventListener('click', () => { if (endDrive) openLog(`analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`); });
     $('endShare').addEventListener('click', async () => {
@@ -10516,6 +10664,11 @@
       else if (m.action === 'offer' && car.offer && m.id === car.offer.id && performance.now() < car.offer.until) car.offer.run();
       else if (m.action === 'disconnect') keepCar(false, m.t);      // Round 3: the car switched off; the drive ends once it stays put
       else if (m.action === 'places') carPost(carPlaces());
+      else if (m.action === 'nearby' && window.ApexNearby && ApexNearby.CATS[m.cat]) {     // a kind from the car's Places: the phone's Find nearby list
+        const cat = m.cat;
+        nearbyFor(cat).then(({ rows, failed }) => carPost(ApexCarPlay.nearbyMessage(cat, ApexNearby.CATS[cat].label, rows, (d) => ApexUnits.long(d),
+          ApexNearby.emptyLine(cat, failed, 8, (d) => ApexUnits.long(d))))).catch(() => carPost(ApexCarPlay.nearbyMessage(cat, ApexNearby.CATS[cat].label, [], null, ApexNearby.emptyLine(cat, true))));
+      }
       else if (m.action === 'attack' && !driveActive) {                  // a time attack you've entered, from the car's Places
         const c = car.attacks.find((x) => String(x.segment_id) === String(m.id));
         let g = [];
@@ -10526,6 +10679,13 @@
         const p = ApexSavedRoutes.list(localStorage).find((q) => q.id === m.id);
         if (p) openSaved(p).catch(() => {});
       }
+      // Add a stop from the car: the list of what's ahead, then the one picked, only one that list had (the route's own places)
+      else if (m.action === 'stops') carPost(ApexCarPlay.stopsMessage(track && track === plannedRoute && track.kind === 'route' ? track.scenic : null,
+        state.mode === 'live' ? routeWatch.bestM : state.cursorM, (d) => ApexUnits.long(d, 1, true)));
+      else if (m.action === 'stop' && Number.isFinite(m.lat) && Number.isFinite(m.lon) && track && track === plannedRoute) {
+        const p = (track.scenic || []).find((x) => Math.abs(x.lat - m.lat) < 1e-6 && Math.abs(x.lon - m.lon) < 1e-6);
+        if (p) carAsked(() => addViaAt({ lat: p.lat, lon: p.lon, label: (p.name || '').trim() || String(m.name || 'Stop').slice(0, 40) }, p.m));
+      }
       else if (m.action === 'loop' && LOOP_MINUTES.includes(m.minutes) && !driveActive) carAsked(() => loop({ minutes: m.minutes }));
       // a distance from the car's Loops list: only one the dial has (miles, or kilometres kept as miles)
       else if (m.action === 'loop' && Number.isFinite(m.miles) && !driveActive
@@ -10533,7 +10693,7 @@
       else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) carAsked(() => reportHazard(m.kind, null, true));
       else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
-      else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = ''; car.limitKey = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
+      else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = null; car.limitKey = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
         carPost(carPlaces());                   // a car screen that just connected gets everything again
         carPost(ApexCarPlay.loopsMessage(loopBy, ApexUnits.metric()));   // and the loop dial's lengths for its Loops
         peekTimeAttack();                                                // and this week's loop for its Places, if you've entered it

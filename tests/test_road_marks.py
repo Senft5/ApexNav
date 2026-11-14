@@ -24,13 +24,14 @@ const node = (id, [la, lo], tags) => ({ type: 'node', id, lat: la, lon: lo, tags
 const els = { elements: [
   way(1, { highway: 'tertiary', name: 'Ridge' }, [at(-1), at(10), at(20), at(30), at(31), at(32), at(33), at(50)], [100, 110, 120, 130, 131, 132, 133, 150]),
   way(9, { highway: 'tertiary', name: 'Ridge', bridge: 'yes', lanes: '1' }, [at(50), at(53)], [150, 153]),
-  way(10, { highway: 'tertiary', name: 'Ridge' }, [at(53), at(81)], [153, 181]),
+  way(10, { highway: 'tertiary', name: 'Ridge' }, [at(53), at(60), at(81)], [153, 160, 181]),
   way(2, { highway: 'primary', name: 'Pike' }, [at(10, -200), at(10), at(10, 200)], [210, 110, 211]),      // the route is the minor road: its stop applies
   way(3, { highway: 'residential', name: 'Lane' }, [at(20), at(20, 200)], [120, 220]),                      // a stop for Lane, not for the route
   node(110, at(10), { highway: 'stop' }), node(120, at(20), { highway: 'stop' }),
   node(130, at(30), { traffic_calming: 'hump' }), node(131, at(31), { traffic_calming: 'hump' }), node(132, at(32), { traffic_calming: 'table' }),
   node(133, at(33), { railway: 'level_crossing' }),
   node(170, at(70, 12), { hazard: 'animal_crossing', animal: 'deer' }),                                  // a sign at the roadside
+  node(160, at(60), { ford: 'yes' }),                                                                     // the road through a creek
 ] };
 const ctx = O.aggregate(c, O.parse(els), new Uint8Array(n).fill(1));
 const t = { lat: Array.from(c.lat), lon: Array.from(c.lon), dist: Array.from(c.distM) };
@@ -70,7 +71,7 @@ def out():
 
 def test_the_marks_a_driver_needs_from_the_map(out):
     got = [(e["code"], e["call"], round(e["dist_m"])) for e in out["ev"]]
-    assert got == [("STOP", "Stop sign", 250), ("HUMP", "Speed bumps", 750), ("RAIL", "Railway crossing", 825), ("BRIDGE", "One-lane bridge", 1275), ("ANIMAL", "Deer crossing", 1750)]   # the span starts at its first sample matched to the bridge
+    assert got == [("STOP", "Stop sign", 250), ("HUMP", "Speed bumps", 750), ("RAIL", "Railway crossing", 825), ("BRIDGE", "One-lane bridge", 1275), ("FORD", "Water crossing", 1500), ("ANIMAL", "Deer crossing", 1750)]   # the span starts at its first sample matched to the bridge
     assert all(e["type"] == "mark" for e in out["ev"])
 
 
@@ -82,10 +83,10 @@ def test_nothing_invented_or_off_the_road(out):
 
 
 def test_each_mark_has_its_own_glyph_on_the_strip():
-    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'ANIMAL', 'BUGGY', 'COVERED', 'GRAVEL', 'ROUGH', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
+    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'ANIMAL', 'BUGGY', 'COVERED', 'GRAVEL', 'ROUGH', 'FORD', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
     svgs = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
     assert "<polygon" in svgs[0] and "M58 32 L80 54" in svgs[1] and "M36 30" in svgs[2] and "Q50 34" in svgs[3]
-    assert len(set(svgs[:9])) == 9 and all(s.count("#f70") == 0 for s in svgs[9:])   # an unknown code: the bare hazard straight
+    assert len(set(svgs[:10])) == 10 and all(s.count("#f70") == 0 for s in svgs[10:])   # an unknown code: the bare hazard straight
 
 
 def test_rural_signs_deer_buggies_and_a_covered_bridge(out):
@@ -103,11 +104,20 @@ def test_where_the_road_turns_unpaved_or_rough(out):
 
 def test_a_mapped_hump_the_track_already_calls_is_one_call(out):
     # a bump felt inside the 750-800 m run (a member's or the crowd's) is the call; one 100 m past it is a different thing
-    assert out["felt"] == ["STOP", "RAIL", "BRIDGE", "ANIMAL"]
-    assert out["feltFar"] == ["STOP", "HUMP", "RAIL", "BRIDGE", "ANIMAL"]
+    assert out["felt"] == ["STOP", "RAIL", "BRIDGE", "FORD", "ANIMAL"]
+    assert out["feltFar"] == ["STOP", "HUMP", "RAIL", "BRIDGE", "FORD", "ANIMAL"]
     assert out["feltStop"] == 1 and out["feltSaved"] == 0     # only bumps go; a saved mark (no end) uses its start
 
 
 def test_a_later_answer_only_adds_and_the_map_answer_is_known(out):
     assert out["union"] == ["STOP100", "GRAVEL250"]          # the tiles' gravel stays; the map's same gravel is not twice
     assert out["answered"] == [True, False, False]          # an unavailable answer (all unknown) asks again
+
+
+def test_a_deer_crossing_is_called_in_cruise_from_dusk_to_dawn():
+    js = ("const M = require(process.argv[1] + '/web/road_marks.js'), r = Math.PI / 180, deer = { type: 'mark', kind: 'animal_crossing' };"
+          "console.log(JSON.stringify([M.cruiseWorthy(deer, 3 * r), M.cruiseWorthy(deer, -20 * r), M.cruiseWorthy(deer, 30 * r), M.cruiseWorthy(deer, null),"
+          "M.cruiseWorthy({ type: 'mark', kind: 'stop' }, -20 * r), M.cruiseWorthy(null, 0)]))")
+    got = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert got == [True, True, False, False, False, False]
+    assert "ApexRoadMarks.cruiseWorthy(e, sunAltNow())" in open(os.path.join(ROOT, "web", "cockpit.js")).read()

@@ -91,7 +91,7 @@ def test_packs_hold_every_tile_at_its_offset(tmp_path):
 def test_the_workflow_moves_the_pointer_last_and_only_for_a_whole_build():
     # Plain text checks: CI's Python has no PyYAML.
     wf = open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "graph-us.yml")).read()
-    assert "needs: [plan, osm]" in wf and "needs: [plan, band]" in wf
+    assert "needs: [plan, osm, osm-again]" in wf and "needs: [plan, band]" in wf
     pub = wf[wf.index("\n  publish:"):]
     rel, ptr = pub.index("name: The release"), pub.index("name: Point the Worker at it")
     assert rel < ptr and "- name:" not in pub[ptr + 10:], "the pointer is the last step"
@@ -137,3 +137,17 @@ def test_the_region_mirror_never_shrinks_a_live_lower_48(tmp_path):
     srv.shutdown()
     assert out.returncode == 0, out.stderr
     assert "is not mirrored over it" in out.stdout and seen == []
+
+
+def test_a_state_geofabrik_refused_is_fetched_again_on_another_runner():
+    """2026-11-14: Geofabrik refused one runner every try for 25 min (district-of-columbia) while the others downloaded; the
+    whole build waited on it and failed. The state's own job goes on without it; osm-again (a fresh runner) fetches the ones
+    with no artifact, and a band takes the state from there."""
+    wf = open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "graph-us.yml")).read()
+    osm = wf[wf.index("\n  osm:"):wf.index("\n  osm-again:")]
+    assert "continue-on-error: true" in osm and "if: steps.get.outcome == 'success'" in osm, "a refused state fails no job, uploads nothing"
+    again = wf[wf.index("\n  osm-again:"):wf.index("\n  band:")]
+    assert "needs: [plan, osm]" in again and "actions: read" in again
+    assert 'grep -qx "osm-$st"' in again and "name: osm-again" in again
+    band = wf[wf.index("\n  band:"):wf.index("\n  publish:")]
+    assert "-n osm-again" in band and 'echo "::error::no extract for $s"; exit 1' in band, "no extract either way: the band fails, never builds without the state"

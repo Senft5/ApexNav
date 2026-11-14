@@ -834,7 +834,9 @@
         b.className = 'seg' + (s.id === activeSeg ? ' on' : '');
         b.innerHTML = `<b></b><span class="score" style="font-size:20px">${best ?? UNK}</span><span></span><span>best</span>`;
         b.querySelector('b').textContent = s.name;
-        b.querySelectorAll('span')[1].textContent = `${ApexUnits.long(s.length_m, 1)} · ${passes.length} run${passes.length === 1 ? '' : 's'}`;   // a tenth, as everywhere else (it said 21.34 mi)
+        const sp = b.querySelectorAll('span');
+        sp[1].textContent = `${ApexUnits.long(s.length_m, 1)} · ${passes.length ? `${passes.length} run${passes.length === 1 ? '' : 's'}` : 'no runs yet'}`;   // a tenth, as everywhere else (it said 21.34 mi)
+        if (!passes.length) { sp[0].hidden = true; sp[2].hidden = true; sp[1].style.gridColumn = "1 / -1"; }   // no runs: no "-- best" beside it; the line under the name says so
         b.onclick = () => { activeSeg = activeSeg === s.id ? null : s.id; renderSegments().then(syncSegments); };
         list.appendChild(b);
       }
@@ -869,13 +871,26 @@
     // ---------------------------------------------------------------------
     // COMPARE (corner by corner between two passes)
     // ---------------------------------------------------------------------
+    // Compare with lists only the drives that could share road with this one (their boxes overlap; a drive with no box stays
+    // in, unknown is not "elsewhere"), newest first: picking blind among drives of other roads only ever drew "share no road".
+    // (free roamer B, 2026-11-14)
+    const boxesMeet = (a, b) => !a || !b || (a[0] <= b[1] && a[1] >= b[0] && a[2] <= b[3] && a[3] >= b[2]);
+    const sameRoad = (id) => { const A = summaryOf(id); return A ? drives.filter((d) => d.id !== id && boxesMeet(A.bbox, d.bbox)).reverse() : []; };
     function renderCompareSelectors() {
-      for (const s of [$('selA'), $('selB')]) { const keep = s.value; s.innerHTML = ''; drives.forEach(d => s.add(new Option(driveLabel(d), d.id))); if (keep) s.value = keep; }
-      if (!$('selA').value && drives[0]) $('selA').value = drives[0].id;
-      if ((!$('selB').value || $('selB').value === $('selA').value) && drives[1]) $('selB').value = drives.find(d => d.id !== $('selA').value).id;
+      const a = $('selA'), keepA = a.value; a.innerHTML = ''; drives.forEach(d => a.add(new Option(driveLabel(d), d.id)));
+      if (keepA) a.value = keepA;
+      if (!a.value && drives[0]) a.value = drives[0].id;
+      fillCompareWith();
     }
-    $('selA').onchange = $('selB').onchange = () => renderCompare();
-    $('swapBtn').onclick = () => { const a = $('selA').value; $('selA').value = $('selB').value; $('selB').value = a; renderCompare(); };
+    function fillCompareWith(want) {
+      const b = $('selB'), keep = want || b.value, list = sameRoad($('selA').value);
+      b.innerHTML = ''; list.forEach(d => b.add(new Option(driveLabel(d), d.id)));
+      b.value = list.some((d) => d.id === keep) ? keep : list[0] ? list[0].id : '';
+      b.closest('label').hidden = $('swapBtn').hidden = !list.length;
+    }
+    $('selA').onchange = () => { fillCompareWith(); renderCompare(); };
+    $('selB').onchange = () => renderCompare();
+    $('swapBtn').onclick = () => { const a = $('selA').value, b = $('selB').value; $('selA').value = b; fillCompareWith(a); renderCompare(); };
 
     // corner by corner in the analysis worker (F-06); drawn on drive A's own rows
     let compareRun = 0;
@@ -884,8 +899,9 @@
       const B = summaryOf(b);
       // 2026-11-12 (free roamer B): with nothing to compare, one line says why, and the empty Road, Gap and Corner panels
       // (and, with a single drive, the two pickers) are not drawn
-      const none = () => {
-        $('cards').innerHTML = `<p class="note" style="grid-column:1/-1">${drives.length < 2 ? 'Compare needs two drives. Drive this road again and it lands here.' : 'Pick two different drives.'}</p>`;
+      const none = (apart) => {
+        const alone = drives.length >= 2 && !$('selB').options.length;
+        $('cards').innerHTML = `<p class="note" style="grid-column:1/-1">${drives.length < 2 ? 'Compare needs two drives. Drive this road again and it lands here.' : alone ? 'No other drive on this road yet. Drive it again and it lands here.' : apart ? 'These two drives share no road. Pick a drive of the same road.' : 'Pick two different drives.'}</p>`;
         $('cmpRoad').hidden = $('cmpCorners').hidden = true; document.querySelector('.compare-pick').hidden = drives.length < 2;
       };
       if (!summaryOf(a) || !B || a === b) { none(); return; }
@@ -893,6 +909,7 @@
       if (run !== compareRun) return;                                    // another pair picked meanwhile
       const r = res && res.r;
       if (!A || !r) { none(); return; }
+      if (!(r.overlap_m > 0)) { none(true); return; }                  // different roads: no gap, no corner pairs, only A's speed line (free roamer B, 2026-11-14)
       $('cmpRoad').hidden = $('cmpCorners').hidden = document.querySelector('.compare-pick').hidden = false;
       const c = (v, label, extra, k = '') => `<div class="card"><b class="${k}">${v}</b><span>${label}</span>${extra ? `<em>${extra}</em>` : ''}</div>`;
       $('cards').innerHTML =
@@ -1188,7 +1205,7 @@
       renderCompareSelectors(); dirty.delete('compare');
       $('selA').value = id;
       const o = bestOther(d);
-      if (o) $('selB').value = o.id;
+      fillCompareWith(o && o.id);
       renderCompare(); showTab('compare'); toTop();
     });
     /** The new-stage marker open on this drive (from the drive-ended card, a drive's page or the empty Stages page). */

@@ -1,7 +1,7 @@
 // Road marks the co-driver calls on a planned route (the route context's OpenStreetMap points and spans, route_ctx/
 // osm_overpass.js): a stop sign that applies to the route, a railway level crossing, a one-lane bridge on a two-way road,
 // speed bumps (one call for a run of them), a mapped deer (or other animal) crossing, horse-drawn buggies, a
-// covered bridge, and where the road turns unpaved or rough. On a back road picked for its corners these are what catch a driver out:
+// covered bridge, a ford (the road through water), and where the road turns unpaved or rough. On a back road picked for its corners these are what catch a driver out:
 // a stop sign over a crest, a hump at the end of a fast straight. Each becomes a note event on the track (type 'mark'),
 // read with the pace notes when they are on and drawn on the strip and the map; a stop sign's call distance includes
 // braking to a stop (cockpit.js apexMpsOf). Only what the map has: a mark the map lacks is not invented, and with no route
@@ -17,6 +17,7 @@
     animal_crossing: { code: 'ANIMAL', call: 'Deer crossing' },
     buggy: { code: 'BUGGY', call: 'Horse-drawn buggies' },
     covered_bridge: { code: 'COVERED', call: 'Covered bridge' },
+    ford: { code: 'FORD', call: 'Water crossing' },
     unpaved: { code: 'GRAVEL', call: 'Unpaved road' },
     rough: { code: 'ROUGH', call: 'Rough road' },
   };
@@ -46,11 +47,11 @@
     const raw = [];
     for (const p of Array.isArray(ctx.points) ? ctx.points : []) {
       if (!p || !finite(p.atM)) continue;
-      if (p.kind === 'stop' || p.kind === 'level_crossing' || p.kind === 'buggy') raw.push({ kind: p.kind, atM: p.atM });
+      if (p.kind === 'stop' || p.kind === 'level_crossing' || p.kind === 'buggy' || p.kind === 'ford') raw.push({ kind: p.kind, atM: p.atM });
       else if (p.kind === 'animal_crossing') raw.push({ kind: p.kind, atM: p.atM, call: animalCall(p.label) });
       else if (p.kind === 'calming' && BUMPS.has(String(p.label || 'yes'))) raw.push({ kind: 'calming', atM: p.atM });
     }
-    for (const s of Array.isArray(ctx.spans) ? ctx.spans : []) if (s && (s.kind === 'one_lane_bridge' || s.kind === 'covered_bridge') && finite(s.fromM)) raw.push({ kind: s.kind, atM: s.fromM });
+    for (const s of Array.isArray(ctx.spans) ? ctx.spans : []) if (s && (s.kind === 'one_lane_bridge' || s.kind === 'covered_bridge' || s.kind === 'ford') && finite(s.fromM)) raw.push({ kind: s.kind, atM: s.fromM });
     raw.sort((a, b) => a.atM - b.atM);
     const out = [], last = {};
     for (const r of raw) {
@@ -133,6 +134,14 @@
     return out.sort((x, y) => x.dist_m - y.dist_m);
   }
 
-  const api = { marksOf, events, unfelt, union, mapAnswered, placeAt, KINDS };
+  /**
+   * Whether a mark is called in cruise too, not only with the notes awake: a mapped animal crossing from dusk to dawn
+   * (the sun under 6° up, sunAltRad in radians), when deer are on the move and a driver at an easy pace is not braced
+   * for one. In daylight it waits for the notes like the other marks; unknown sun is daylight (no call it can't back).
+   */
+  const DUSK_RAD = 6 * Math.PI / 180;
+  const cruiseWorthy = (m, sunAltRad) => !!m && m.type === 'mark' && m.kind === 'animal_crossing' && finite(sunAltRad) && sunAltRad < DUSK_RAD;
+
+  const api = { marksOf, events, unfelt, union, mapAnswered, cruiseWorthy, placeAt, KINDS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadMarks = api;
 })(typeof window !== 'undefined' ? window : globalThis);

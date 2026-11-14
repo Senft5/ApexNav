@@ -11,6 +11,7 @@
       'convoy.js', 'convoy_ui.js'],
     g2p: ['g2p.js'],                 // the neural voice's phonemizer (voice.js), only when a neural voice first speaks
     dev: ['dev_panel.js'],
+    clips: ['corner_clip.js', 'dashcam.js'],   // a drive's best corner clip off the Log (best_clip.js), e.g. the end card's post
     // the route-context providers that only answer a plan (cockpit.js needCtx: once the map is idle after the launch, or
     // by the first plan, whichever is first); each registers itself with route_ctx/registry.js, which stays at launch
     ctx: ['route_ctx/graph.js', 'route_ctx/router_edges.js', 'route_ctx/dem.js', 'route_ctx/conditions.js', 'route_ctx/wildlife.js',

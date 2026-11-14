@@ -264,15 +264,16 @@
 
   // The camera for a change of mode, route or card: the whole route for a trip preview, else following the car (where
   // it is drawn now), or where the driver panned until Recentre. `inset` is the width Apple's card covers on the left.
+  // the whole route, north up and flat, clear of Apple's card (a trip preview, and Overview while guiding)
+  function fitRoute(pad, animate) {
+    const b = new root.maplibregl.LngLatBounds();
+    for (const [lat, lon] of state.route) b.extend([lon, lat]);
+    map.fitBounds(b, { padding: pad, pitch: 0, bearing: 0, duration: animate ? 600 : 0, maxZoom: 15 });
+  }
   function camera(animate = true) {
     if (!ready) return;
     const pad = { top: 40, bottom: 40, left: 40 + state.inset, right: 80 };
-    if (state.mode === 'preview' && state.route.length >= 2) {
-      const b = new root.maplibregl.LngLatBounds();
-      for (const [lat, lon] of state.route) b.extend([lon, lat]);
-      map.fitBounds(b, { padding: pad, pitch: 0, bearing: 0, duration: animate ? 600 : 0, maxZoom: 15 });
-      return;
-    }
+    if (state.mode === 'preview' && state.route.length >= 2) { fitRoute(pad, animate); return; }
     if (!state.follow || !glider.fix) return;
     // to where the car will be drawn when the ease ends, so the glide takes over without a step
     const t = nowS() + (animate ? 0.45 : 0), view = followView(glider.pose(t));
@@ -286,7 +287,8 @@
       if (ready && theme === state.theme && night === state.night) return;    // the shell says it again on every trait change
       state.theme = theme; state.night = night; paint();
     },
-    route(coords) { state.route = Array.isArray(coords) ? coords.filter((p) => Array.isArray(p) && finite(p[0]) && finite(p[1])) : []; glider.setRoute(state.route, nowS()); kick(); setData(); camera(); },
+    route(coords) { state.route = Array.isArray(coords) ? coords.filter((p) => Array.isArray(p) && finite(p[0]) && finite(p[1])) : []; glider.setRoute(state.route, nowS()); kick(); setData(); camera();
+      if (state.overview && state.route.length >= 2) car.overview(); },   // a reroute during Overview shows the new route whole
     corners(list) { state.corners = (Array.isArray(list) ? list : []).filter((c) => c && Array.isArray(c.at)).slice(0, 600); setData(); },
     hazards(list) { state.hazards = (Array.isArray(list) ? list : []).filter((h) => h && Array.isArray(h.at)).slice(0, 40); setData(); },
     // the cafés and fuel along the route by name (web/carplay.js alongMessage places)
@@ -324,12 +326,18 @@
     mode(m) {
       const next = m === 'guide' || m === 'preview' ? m : 'idle';
       if (next === state.mode) return;
-      state.mode = next; state.follow = true; placePlates(); camera();
+      state.mode = next; state.follow = true; state.overview = false; placePlates(); camera();
       if (ready) map.once('moveend', placePlates);
     },
     zoom(dir) { if (ready) map.easeTo({ zoom: map.getZoom() + (dir > 0 ? 1 : -1), duration: 300 }); },
-    pan(dx, dy) { if (!ready) return; state.follow = false; map.panBy([dx * map.getContainer().clientWidth / 3, dy * map.getContainer().clientHeight / 3], { duration: 300 }); },
-    recentre() { state.follow = true; if (state.mode === 'preview') state.mode = 'idle'; camera(); },
+    pan(dx, dy) { if (!ready) return; state.follow = false; state.overview = false; map.panBy([dx * map.getContainer().clientWidth / 3, dy * map.getContainer().clientHeight / 3], { duration: 300 }); },
+    recentre() { state.follow = true; state.overview = false; if (state.mode === 'preview') state.mode = 'idle'; camera(); },
+    // Overview while guiding (Apple Maps' and Waze's): the whole route until Recentre, a pan or a new mode
+    overview() {
+      if (!ready || state.route.length < 2) return;
+      state.follow = false; state.overview = true; fitRoute({ top: 40, bottom: 40, left: 40 + state.inset, right: 80 }, true);
+      map.once('moveend', placePlates);
+    },
     inset(px) {
       const next = finite(px) ? Math.max(0, px) : 0;
       if (next === state.inset) return;

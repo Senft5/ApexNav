@@ -1,0 +1,166 @@
+// Official traffic events (closures, lane closures, roadwork, slow traffic, crashes) from the state DOTs' own free, keyless
+// public feeds, for the phone's and the car's maps and for routing round full closures (web/road_events.js; cockpit.js):
+//   Indiana: INDOT's CARS events API (in.carsprogram.org, PUBLIC_DOMAIN), about 14 MB of JSON statewide.
+//   Kentucky: KYTC's WZDx 4.1 work zones (a public Google Cloud Storage file, no CORS, so relayed here).
+//   Ohio: ODOT's OHGO public API needs a free key the owner registers (docs/OWNER_TODO.md, the `ohgoApiKey` the route
+//   context already uses, in the CTX_KEYS secret); with it, its incidents and construction are added; without it Ohio is
+//   simply not in the list.
+// Each feed is compacted to a short row per event, the truck-only restrictions (width, weight, height, oversize) and the
+// shoulder and rest-area closures left out. The phone asks for the whole region, never sending where it is; the answer
+// is cached TRAFFIC_S at Cloudflare's edge, so the DOTs are asked once per edge per TRAFFIC_S whatever the use.
+import { Env } from "./util";
+
+export const TRAFFIC_S = 300;
+export const IN_EVENTS = "https://in.carsprogram.org/carsapi_v1/api/events";
+export const KY_WZDX = "https://storage.googleapis.com/kytc-its-2020-openrecords/public/feeds/WZDx/kytc_wzdx_v4.1.geojson";
+export const OHGO = "https://publicapi.ohgo.com/api/v1";
+const SEC = { "x-content-type-options": "nosniff", "content-security-policy": "default-src 'none'" };
+
+/**
+ * One event. kind: "closure" (the road is closed both ways: routed round), "closed_way" (closed one way: shown, not routed
+ * round, since a point can't say which way), "lane" (lanes or a ramp closed), "roadwork", "slow" (slow or stop-and-go
+ * traffic), "crash", "traffic" (anything else that slows a drive). label: what the pin and the voice say. until: epoch ms
+ * the agency expects it to end, or null when it gave none.
+ */
+export interface TrafficEvent { id: string; kind: string; label: string; lat: number; lon: number; road: string | null; until: number | null; src: string; heading?: number }
+// one way only ("I-65 southbound"): the way it applies as a compass heading, so the phone never calls the far side's
+const HEADING: Record<string, number> = { northbound: 0, eastbound: 90, southbound: 180, westbound: 270 };
+
+const r5 = (v: number) => Math.round(v * 1e5) / 1e5;
+const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const inRange = (lat: number, lon: number) => lat > 24 && lat < 50 && lon > -125 && lon < -66;   // the lower 48: a bad fix is dropped
+const dirOf = (s: string) => { const m = /\b(north|south|east|west)bound\b/i.exec(s); return m ? `${m[1].toLowerCase()}bound` : null; };
+const cut = (s: unknown, n: number) => (typeof s === "string" && s.trim() ? s.trim().slice(0, n) : null);
+
+// INDOT CARS codes (headline.code, lower case) by what a driver needs to know
+const FULL = new Set(["closed", "road closure", "bridge is closed", "all lanes blocked", "closed to traffic", "closed for repairs"]);
+const SKIP = /shoulder|rest area|turn bay|parking/;
+const LANE = (code: string) => /ramp/.test(code) ? "Ramp closed" : /reduced to|lane|lanes blocked|intermittent|closed intermittently/.test(code) ? "Lane closed" : null;
+const SLOW = new Set(["slow traffic", "stop and go traffic", "queuing traffic", "heavy traffic", "congestion", "delays", "long delays"]);
+const TRAFFIC_WORDS: Record<string, string> = { "look out for flagger": "Flagger", "mobile maintenance operations": "Road crew", parade: "Parade", festival: "Event", "local event": "Event" };
+
+/** INDOT's events as rows: current ones only (started, not ended), restrictions left out. */
+export function parseIndiana(json: unknown, nowMs: number): TrafficEvent[] {
+  if (!Array.isArray(json)) return [];
+  const out: TrafficEvent[] = [];
+  for (const e of json as Record<string, any>[]) {
+    try {
+      if (!e || e.status !== "CURRENT") continue;
+      const cat = String(e.headline?.category ?? "").toLowerCase(), code = String(e.headline?.code ?? "").toLowerCase();
+      const d = Array.isArray(e.details) ? e.details[0] : null, loc = d && Array.isArray(d.locations) ? d.locations[0] : null;
+      const g = loc?.["primary-location"]?.["geo-location"];
+      if (!d || !g || !finite(g.latitude) || !finite(g.longitude) || !inRange(g.latitude, g.longitude)) continue;
+      if (d.access && d.access !== "PUBLIC_DOMAIN" && d.access !== "PUBLIC") continue;
+      const start = d["start-time"]?.time, end = d["end-time"]?.time;
+      if (finite(start) && start > nowMs) continue;                     // planned, not yet begun
+      if (finite(end) && end <= nowMs) continue;
+      const desc = String(e.description ?? ""), head = desc.split(":")[0], dir = dirOf(head);
+      const both = loc["link-direction"] === "BOTH_DIRECTIONS" || loc["link-direction"] === "NOT_DIRECTIONAL" || /both directions/i.test(head);
+      let kind: string, label: string;
+      if (cat === "restriction" || SKIP.test(code)) continue;
+      if (cat === "closure" && FULL.has(code)) { if (both || !dir) { kind = "closure"; label = "Road closed"; } else { kind = "closed_way"; label = `Closed ${dir}`; } }
+      else if (cat === "closure") { const w = LANE(code); if (!w) continue; kind = "lane"; label = w; }
+      else if (cat === "roadwork") { kind = "roadwork"; label = "Roadwork"; }
+      else if (cat === "traffic-condition" || cat === "delay" || SLOW.has(code)) { kind = "slow"; label = /stop and go/.test(code) ? "Stop and go" : "Slow traffic"; }
+      else if (cat === "accident" || cat === "incident" || /crash|accident|collision/.test(code)) { kind = "crash"; label = "Crash"; }
+      else if (cat === "obstruction" || cat === "warning" || cat === "mobile-situation" || cat === "special-event" || cat === "weather") { kind = "traffic"; label = TRAFFIC_WORDS[code] ?? (cat === "weather" ? "Weather" : cat === "obstruction" ? "Obstruction" : "Traffic alert"); }
+      else continue;
+      out.push({ id: `dot:IN:${String(e["event-id"] ?? "").slice(0, 40)}`, kind, label, lat: r5(g.latitude), lon: r5(g.longitude),
+        road: cut(loc["route-designator"], 40), until: finite(end) ? end : null, src: "INDOT", ...(dir && !both ? { heading: HEADING[dir] } : {}) });
+    } catch { /* one malformed event never drops the rest */ }
+  }
+  return out;
+}
+
+/** KYTC's WZDx work zones as rows: current ones, at the zone's start; one with a general lane closed is "Lane closed". */
+export function parseWzdx(json: unknown, nowMs: number, state: string, src: string): TrafficEvent[] {
+  const feats = (json as { features?: unknown })?.features;
+  if (!Array.isArray(feats)) return [];
+  const out: TrafficEvent[] = [];
+  for (const f of feats as Record<string, any>[]) {
+    try {
+      const p = f?.properties, c = p?.core_details;
+      if (!p || !c || (c.event_type && c.event_type !== "work-zone")) continue;
+      const g = f.geometry, first = g?.type === "LineString" ? g.coordinates?.[0] : g?.type === "Point" ? g.coordinates : g?.type === "MultiPoint" ? g.coordinates?.[0] : null;
+      if (!Array.isArray(first) || !finite(first[0]) || !finite(first[1]) || !inRange(first[1], first[0])) continue;
+      const start = Date.parse(p.start_date), end = Date.parse(p.end_date);
+      if (Number.isFinite(start) && start > nowMs) continue;
+      if (Number.isFinite(end) && end <= nowMs) continue;
+      const lanes = Array.isArray(p.lanes) ? p.lanes : [];
+      const general = lanes.filter((l: any) => l && l.type === "general");
+      const closedAll = p.vehicle_impact === "all-lanes-closed";
+      const someClosed = general.some((l: any) => l.status === "closed") || /lanes-closed/.test(String(p.vehicle_impact ?? ""));
+      const dir = dirOf(`${c.direction ?? ""}`.replace(/bound$/, "") + "bound");
+      const [kind, label] = closedAll ? ["closed_way", dir ? `Closed ${dir}` : "Road closed"] : someClosed ? ["lane", "Lane closed"] : ["roadwork", "Roadwork"];
+      out.push({ id: `dot:${state}:${String(f.id ?? c.name ?? "").slice(0, 40)}`, kind, label, lat: r5(first[1]), lon: r5(first[0]),
+        road: cut(Array.isArray(c.road_names) ? c.road_names[0] : null, 40), until: Number.isFinite(end) ? end : null, src, ...(dir ? { heading: HEADING[dir] } : {}) });
+    } catch { /* as above */ }
+  }
+  return out;
+}
+
+/** OHGO's incidents and construction (with the owner's free key): { results: [{ id, latitude, longitude, ... }] }. */
+export function parseOhgo(json: unknown, kind: "incident" | "construction", nowMs: number): TrafficEvent[] {
+  const rows = (json as { results?: unknown })?.results;
+  if (!Array.isArray(rows)) return [];
+  const out: TrafficEvent[] = [];
+  for (const r of rows as Record<string, any>[]) {
+    try {
+      if (!r || !finite(r.latitude) || !finite(r.longitude) || !inRange(r.latitude, r.longitude)) continue;
+      const cat = String(r.category ?? r.type ?? "").toLowerCase(), roadStatus = String(r.roadStatus ?? r.status ?? "").toLowerCase();
+      const end = Date.parse(r.endDate ?? "");
+      if (Number.isFinite(end) && end <= nowMs) continue;
+      const start = Date.parse(r.startDate ?? "");
+      if (Number.isFinite(start) && start > nowMs) continue;
+      const dir = dirOf(String(r.direction ?? "") + "bound") ?? dirOf(String(r.description ?? ""));
+      let k: string, label: string;
+      if (/closed/.test(roadStatus) && !/lane|ramp|shoulder/.test(roadStatus)) { if (/both/i.test(String(r.direction ?? "")) || !dir) { k = "closure"; label = "Road closed"; } else { k = "closed_way"; label = `Closed ${dir}`; } }
+      else if (/ramp/.test(roadStatus)) { k = "lane"; label = "Ramp closed"; }
+      else if (/lane/.test(roadStatus)) { k = "lane"; label = "Lane closed"; }
+      else if (kind === "construction") { k = "roadwork"; label = "Roadwork"; }
+      else if (/crash|accident|collision/.test(cat)) { k = "crash"; label = "Crash"; }
+      else { k = "traffic"; label = "Traffic alert"; }
+      out.push({ id: `dot:OH:${String(r.id ?? "").slice(0, 40)}`, kind: k, label, lat: r5(r.latitude), lon: r5(r.longitude),
+        road: cut(r.routeName ?? r.location, 40), until: Number.isFinite(end) ? end : null, src: "ODOT", ...(dir && !/both/i.test(String(r.direction ?? "")) ? { heading: HEADING[dir] } : {}) });
+    } catch { /* as above */ }
+  }
+  return out;
+}
+
+async function get(fetcher: typeof fetch, url: string): Promise<unknown> {
+  const r = await fetcher(url, { headers: { "user-agent": "Vetta-traffic/1.0", accept: "application/json" }, cf: { cacheTtl: TRAFFIC_S, cacheEverything: true } } as RequestInit);
+  if (!r.ok) throw new Error(`upstream ${r.status}`);
+  return r.json();
+}
+
+/** Every feed's current events, with the agencies that answered and those that didn't. */
+export async function trafficEvents(env: Env, fetcher: typeof fetch = fetch, nowMs = Date.now()) {
+  const jobs: [string, () => Promise<TrafficEvent[]>][] = [
+    ["INDOT", async () => parseIndiana(await get(fetcher, IN_EVENTS), nowMs)],
+    ["KYTC", async () => parseWzdx(await get(fetcher, KY_WZDX), nowMs, "KY", "KYTC")],
+  ];
+  let key: unknown = null;
+  try { key = env.CTX_KEYS ? (JSON.parse(env.CTX_KEYS) as Record<string, unknown>).ohgoApiKey : null; } catch { key = null; }
+  if (typeof key === "string" && key) jobs.push(["ODOT", async () => {
+    const q = `?api-key=${encodeURIComponent(key as string)}`;
+    const [inc, con] = await Promise.all([get(fetcher, `${OHGO}/incidents${q}`), get(fetcher, `${OHGO}/construction${q}`)]);
+    return [...parseOhgo(inc, "incident", nowMs), ...parseOhgo(con, "construction", nowMs)];
+  }]);
+  const ok: string[] = [], failed: string[] = [], events: TrafficEvent[] = [];
+  await Promise.all(jobs.map(async ([name, run]) => { try { events.push(...(await run())); ok.push(name); } catch { failed.push(name); } }));
+  ok.sort(); failed.sort();
+  return { at: nowMs, sources: ok, failed, events };
+}
+
+/** GET /api/traffic/v1/events.json: the compact list, cached TRAFFIC_S at the edge; 502 when no feed answered. */
+export async function trafficResponse(env: Env, fetcher: typeof fetch = fetch): Promise<Response> {
+  const cache = typeof caches !== "undefined" ? (caches as unknown as { default: Cache }).default : null;
+  const key = new Request("https://apexnav.cache/traffic/v1/events.json");
+  const hit = cache ? await cache.match(key) : undefined;
+  if (hit) return new Response(hit.body, { headers: hit.headers });
+  const out = await trafficEvents(env, fetcher);
+  if (!out.sources.length) return new Response(JSON.stringify({ error: "traffic_unavailable" }), { status: 502, headers: { "content-type": "application/json", "cache-control": "no-store", ...SEC } });
+  const res = new Response(JSON.stringify(out), { headers: { "content-type": "application/json", "cache-control": `public, max-age=${TRAFFIC_S}`, ...SEC } });
+  if (cache) await cache.put(key, res.clone());
+  return res;
+}
