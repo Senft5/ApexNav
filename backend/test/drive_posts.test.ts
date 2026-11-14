@@ -185,3 +185,19 @@ describe("this week on the Feed", () => {
     expect((await json(api(a, "GET", "/api/feed/week"))).map((r: any) => r.handle)).toEqual(["alice", "cara"]);
   });
 });
+
+describe("a crew's posted drives", () => {
+  it("?crew= lists only the posts to that crew, and only for its members", async () => {
+    const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara")];
+    await befriend(a, b); await befriend(a, c);
+    const crew = (await json(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).id;
+    const t = (await json(api(a, "POST", `/api/crews/${crew}/invite`))).token;
+    await ok(api(b, "POST", "/api/crews/join", { token: t }));
+    await post(a, { title: "To friends" });
+    await post(a, { title: "To the crew", crew_id: crew });
+    await post(b, { title: "Bob to the crew", crew_id: crew });
+    expect((await json(api(b, "GET", `/api/feed?crew=${crew}`))).map((p: any) => p.title)).toEqual(["Bob to the crew", "To the crew"]);
+    expect(await json(api(c, "GET", `/api/feed?crew=${crew}`))).toEqual([]);      // not a member
+    expect((await api(b, "GET", "/api/feed?crew=bad%20id")).status).toBe(400);
+  });
+});

@@ -3189,7 +3189,10 @@
     }
     // Keys a provider may need (docs/OWNER_TODO.md lists them); none of them is required, a missing one is 'no-key'.
     function routeCtxSettings() {
-      try { return JSON.parse(localStorage.getItem('apex.routeKeys') || '{}') || {}; } catch (_) { return {}; }
+      // the keys the providers read themselves (ctx_util keyFor: 'apex.keys', the Worker's merged in by loadKeys). Nothing
+      // ever wrote 'apex.routeKeys', so until 2026-11-14 every keyed provider was gated 'no-key' even with a key on the phone
+      const read = (k) => { try { const v = JSON.parse(localStorage.getItem(k) || '{}'); return v && typeof v === 'object' ? v : {}; } catch (_) { return {}; } };
+      return { ...read('apex.keys'), ...read('apex.routeKeys') };
     }
     // What the crowd and car providers need from the app (route_ctx/crowd.js, car.js): members' road data (/api/roads?cells=,
     // signed out: null and they say so), the Worker for chargers, the crews' shared lines when Prefer has them, your taste
@@ -3213,7 +3216,7 @@
       } : undefined;
       return { lookupCells, apiGet: get, graphScore,
         crewLines: (typeof preferCache !== 'undefined' && preferCache.crewLines) || null, myTracks: null, taste, peer: {},
-        osmRelay: !!(window.ApexFlags && ApexFlags.on('osm_relay', false)) };   // the OSM relay: off unless the server says on
+        osmRelay: !!(window.ApexFlags && ApexFlags.on('osm_relay', false)) };   // the OSM relay: as the server's flags say (on since 2026-11-14); off until they load
     }
     // After a route is chosen (route_ctx/car.js): a car with no range meeting a long stretch without fuel is asked for it once;
     // stretches without signal offer to save their maps, then to share the ETA before the signal goes.
@@ -3301,6 +3304,8 @@
     }
     const NO_FIX = 'Couldn\'t get your location. Type a start or tap the map.';
     let plannedRoute = null;
+    // Drive it on a friend's post (drive_posts.js rivalsOf): their stages with Scores, to set yours against when the drive ends
+    let postRival = null;
     // Avoid towns (R-15): km of each candidate near a city, town or village (FunRoute.townKm), which ranking then costs.
     // Only when the driver asked; unknown (no tiles) stays unknown and costs nothing.
     // (ms: the card waits that long for the map's place tiles, 0.4 s; the refine after it, longer)
@@ -7034,7 +7039,8 @@
     const toDrives = () => { const pop = crewDrivesEl && crewDrivesEl.closest('.side-pop'); if (pop) pop.classList.add('open'); else if (crewDrivesEl) crewDrivesEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     onSocial(() => { try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, askPublicSharing,
       invite: (c) => crewInviteLink(c),
-      openRoute: (id) => openSharedRoute(id), builds: () => builds, onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); },
+      openRoute: (id) => openSharedRoute(id), builds: () => builds, onAllDrives: toDrives,
+      posts: (c) => (drivePosts && drivePosts.crewDrives ? drivePosts.crewDrives(c.id) : null),   // the drives members posted to this crew onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); },
       // the owner's TestFlight note 05: the crew page's Upcoming drives is the crew's drives list, a + plans one (no Crew drives row)
       drives: (c, o) => (crewEvents ? crewEvents.section([{ id: c.id, name: c.name, visibility: c.visibility, role: c.is_owner ? 'owner' : 'member' }], { crewId: c.id, ...o }) : null),
       // P-18: the crew page's drive is the Crew drives sheet's card; a change on one redraws the other
@@ -7084,6 +7090,9 @@
     if (Themes.accent && Themes.accent()) { Themes.setAccent(null); applyTheme(); }
     // feature flags (flags.js, IDEAS Y-06): fetched once a start, used from then on
     if (window.ApexFlags && window.ApexSync) ApexFlags.load((p) => ApexSync.apiFetch(p)).catch(() => {});
+    // route context's free client keys (Mapillary signs, SeatGeek events, OHGO work zones, NASS crops; the Worker's
+    // CTX_KEYS): once a day, a key typed in on this phone wins. Before this they only worked where typed in by hand
+    if (window.ApexRouteCtxUtil && window.ApexSync) ApexRouteCtxUtil.loadKeys().catch(() => {});
     // Send feedback (web/feedback.js, IDEAS L-05): Settings → Feedback; the owner reads it in People.
     let accountMe = null, feedbackUi = null;
     onSocial(() => { try {
@@ -7236,6 +7245,7 @@
         await buildRoute(pts, id, name, null, { from: null, to: { lat: last.lat, lon: last.lon }, via: stops.slice(0, -1).map((q) => ({ lat: q.lat, lon: q.lon, shaping: true })) });
         const t = plannedRoute;
         if (!t || t.id !== id) return;
+        postRival = Array.isArray(p.rivals) && p.rivals.length ? { rivals: p.rivals, handle: p.handle, mine: !!p.mine, at: Date.now() } : null;
         const whose = p.mine ? '' : `, @${p.handle}'s line`;
         if (!lead) { toast(`${name}${whose}: ${ApexUnits.long(totalM(), 1)}.`); return; }
         const toStart = t.dist[Core.nearestIndex(first.lat, first.lon, t.lat, t.lon, -1).index] || 0;
@@ -10691,6 +10701,7 @@
       $('endFeel').textContent = feel; $('endFeel').hidden = !feel;
       $('endPractice').textContent = ''; $('endPractice').hidden = true;   // IDEAS D-27: with the score (endCardScored)
       $('endRoad').textContent = ''; $('endRoad').hidden = true;           // the road's line, with the score too
+      $('endRival').textContent = ''; $('endRival').hidden = true;         // Drive it on a friend's post: with the score (endCardScored)
       $('endRun').textContent = ''; $('endRun').hidden = true;             // IDEAS D-30: a month's best run, with the score too
       // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
       $('endScore').textContent = '…'; $('endScore').classList.add('unk'); $('endScore').setAttribute('aria-busy', 'true');
@@ -10720,7 +10731,7 @@
     // asked for or earned first (the practice, a month's best run), then the road's and what the phone felt
     function endLinesCap() {
       let shown = 0;
-      for (const id of ['endPractice', 'endRun', 'endRoad', 'endFeel']) {
+      for (const id of ['endRival', 'endPractice', 'endRun', 'endRoad', 'endFeel']) {
         const n = $(id);
         if (!n.textContent) { n.hidden = true; continue; }
         n.hidden = shown >= 2; if (!n.hidden) shown++;
@@ -10795,6 +10806,23 @@
       const roadLine = typeof c.road === 'string' ? c.road : '';
       $('endRoad').textContent = roadLine; $('endRoad').hidden = !roadLine;
       endLinesCap();
+      // Drive it on a friend's post: your Score on their stages against theirs, from this drive's own passes of those stretches
+      // (segmentPass, the same that scored theirs). Said once; kept for 12 h until a drive goes over one of them.
+      const rv = postRival;
+      if (rv && Date.now() - rv.at > 12 * 3600e3) postRival = null;
+      else if (rv && window.ApexAnalysis && window.ApexDrivePosts) (async () => {
+        const segs = rv.rivals.map((r) => ({ name: r.name, lat0: r.ends[0], lon0: r.ends[1], lat1: r.ends[2], lon1: r.ends[3], length_m: r.length_m }));
+        let got = [];
+        try { got = (await ApexAnalysis.job('stagesOf', { id: c.id, segs })).stages || []; } catch (_) { got = []; }
+        if (!got.length || !endDrive || endDrive.id !== c.id) return;
+        if (postRival === rv) postRival = null;
+        const rows = got.map((g) => { const r = rv.rivals.find((x) => x.name === g.name); return { name: g.name, you: g.score, them: r ? r.score : null }; });
+        const line = ApexDrivePosts.rivalLine(rows, rv);
+        if (!line) return;
+        $('endRival').textContent = line; endLinesCap();
+        const sheet = $('endCard').querySelector('.card-sheet');      // a taller card: the drive is fitted again above it
+        if (endTrailOn && sheet && Math.abs(sheet.getBoundingClientRect().top - endTrailTop) > 4) showEndTrail(endDrive);
+      })();
       if (window.ApexEndLine && !opts.quiet) {                       // Round 3: never aloud to a parked car or a pocket
         const pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
         // one of the pack's sign-offs, the same for this drive every time, from a clip the loaded bank holds (U-113)
