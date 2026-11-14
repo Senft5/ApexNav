@@ -396,7 +396,7 @@ on("POST", "/api/posts/:id/kudos", async (req, env, m, ctx) => {
 on("DELETE", "/api/posts/:id/kudos", async (req, env, m) => { await drivePosts.postKudos(env, await requireMember(req, env), m.groups!.id, false); return noContent(); });
 on("POST", "/api/posts/:id/comments", async (req, env, m, ctx) => {
   const v = await requireMember(req, env), c = await drivePosts.commentCreate(env, v, m.groups!.id, req);
-  await later(ctx, afterPostComment(env, v, m.groups!.id, c.author, c.title));
+  await later(ctx, afterPostComment(env, v, m.groups!.id, c.author, c.title, c.mentions));
   return json({ id: c.id }, 201);
 });
 on("PUT", "/api/posts/:id/media", async (req, env, m) => json(await mediaPut(env, await requireMember(req, env), m.groups!.id, req)));
