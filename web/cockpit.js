@@ -1105,6 +1105,30 @@
     map.on('rotate', paintCompass);
     map.on('moveend', paintCompass);
     $('compassBtn').addEventListener('click', () => { pauseFollow(); map.easeTo({ bearing: 0, duration: 450 }); });
+    // Route overview in a drive (as Apple and Google Maps have it): the rest of the route from where you are to the end, north
+    // up and flat, for OVERVIEW_S; then the drive's camera glides back by itself, as after a drag (Recenter counts it down,
+    // and a tap on it comes back at once). The key shows only while a route is driven and the camera follows.
+    const OVERVIEW_S = 10;
+    function routeOverview() {
+      const t = track;
+      if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
+      let w = 180, e = -180, so = 90, n = -90;
+      const add = (la, lo) => { if (!Number.isFinite(la) || !Number.isFinite(lo)) return; w = Math.min(w, lo); e = Math.max(e, lo); so = Math.min(so, la); n = Math.max(n, la); };
+      const from = Math.max(0, state.cursorIdx), step = Math.max(1, Math.floor((t.lat.length - from) / 400));
+      for (let i = from; i < t.lat.length; i += step) add(t.lat[i], t.lon[i]);
+      add(t.lat[t.lat.length - 1], t.lon[t.lon.length - 1]);
+      if (state.live) add(state.live.lat, state.live.lon);
+      if (!(e >= w && n >= so)) return;
+      pauseFollow();
+      fitInView([[w, so], [e, n]], viewInsets().b + 40);
+      scheduleResume(OVERVIEW_S);
+      paintOverviewKey();
+    }
+    function paintOverviewKey() {
+      const on = !!(driveActive && state.mode === 'live' && track && track.kind === 'route' && state.cursorIdx >= 0);
+      if ($('overviewBtn').hidden === on) $('overviewBtn').hidden = !on;
+    }
+    $('overviewBtn').addEventListener('click', routeOverview);
     $('recenterBtn').addEventListener('click', () => { if (locDenied && !track && $('app').classList.contains('idle')) { showPerms(); return; } resumeFollow(); render(false); });   // the idle map with Location off has nowhere to come back to: say so
 
     // =======================================================================
@@ -1332,18 +1356,18 @@
     }
     // the app's own camera move (a route fit): follow pauses with no recenter key; a drag of the map brings it (U-122)
     function holdFollow() { state.follow = false; clearTimeout(resumeTimer); clearInterval(resumeTick); recenterLeft(0); }
-    function scheduleResume() {
+    function scheduleResume(total = FOLLOW_RESUME_S) {
       clearTimeout(resumeTimer); clearInterval(resumeTick);
-      let left = FOLLOW_RESUME_S;
-      recenterLeft(left);
-      resumeTick = setInterval(() => { left -= 1; if (left > 0) recenterLeft(left); }, 1000);
-      resumeTimer = setTimeout(resumeFollow, FOLLOW_RESUME_S * 1000);
+      let left = total;
+      recenterLeft(left, total);
+      resumeTick = setInterval(() => { left -= 1; if (left > 0) recenterLeft(left, total); }, 1000);
+      resumeTimer = setTimeout(resumeFollow, total * 1000);
     }
     // U-71: the key's face is always the glyph; a countdown drains a bar along its foot (restarted for each new one), and
     // the seconds go only to its label
-    function recenterLeft(s) {
+    function recenterLeft(s, total = FOLLOW_RESUME_S) {
       const b = $('recenterBtn'), bar = b.querySelector('.rc-left');
-      if (s === FOLLOW_RESUME_S) { b.classList.remove('counting'); void bar.offsetWidth; b.style.setProperty('--rc-s', `${s}s`); }
+      if (s === total) { b.classList.remove('counting'); void bar.offsetWidth; b.style.setProperty('--rc-s', `${s}s`); }
       b.classList.toggle('counting', s > 0);
       b.setAttribute('aria-label', s > 0 ? `Recenter (on its own in ${s} s)` : 'Recenter');
     }
@@ -2038,6 +2062,7 @@
         if (ApexDirections.phrase(steps[j]) && !state.spoken.has(`${track.id}:dir:${j}:now`)) { turnHold.m = steps[j].m; break; }
       }
       paintTurnArrow(steps, pend);
+      paintOverviewKey();
       const moving = !!(state.playing || live) && vMps != null, now = performance.now();
       const reactS = reaction.reactionS;
       // U-58: Auto reads the road ahead. A corner within two leads (at least 800 m) that is tight or needs braking keeps

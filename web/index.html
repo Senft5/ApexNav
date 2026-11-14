@@ -407,6 +407,10 @@
     #compassBtn { position: absolute; right: 0; top: calc(38% + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; display: flex; align-items: center; justify-content: center; }
     #compassBtn[hidden], #app.sheet-open #compassBtn, #app.live #compassBtn { display: none; }
     #recenterBtn.show ~ #compassBtn { top: calc(38% + 124px); }
+    /* route overview in a drive: where Recenter sits; following, it shows, and once you've looked, Recenter takes its place */
+    #overviewBtn { position: absolute; right: 0; top: calc(38% + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; display: flex; align-items: center; justify-content: center; }
+    #overviewBtn[hidden], #recenterBtn.show ~ #overviewBtn, #app.sheet-open #overviewBtn { display: none; }
+    #overviewBtn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     #compassBtn svg { width: 28px; height: 28px; }
     #compassBtn .cp-n { fill: var(--panel-ink); stroke: var(--panel-ink); stroke-width: 1.2; }
     #compassBtn .cp-s { fill: none; stroke: var(--panel-ink); stroke-width: 1.2; }
@@ -2079,6 +2083,7 @@
       </div>
       <button class="map-key recenter-key" id="recenterBtn" aria-label="Recenter"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="1.5"/></svg><span class="rc-left"></span></button>
       <button class="map-key compass-key" id="compassBtn" aria-label="Face north" title="Face north" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path class="cp-n" d="M12 3 L15.5 12 H8.5 Z"/><path class="cp-s" d="M12 21 L8.5 12 H15.5 Z"/></svg></button>
+      <button class="map-key overview-key" id="overviewBtn" aria-label="Route overview" title="Route overview" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2"/><path d="M8 18h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5"/><path d="M16 3l3 3-3 3"/></svg></button>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
       <div class="sr-only" id="announcer" role="status" aria-live="polite"></div>
 

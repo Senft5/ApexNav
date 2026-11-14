@@ -3053,7 +3053,7 @@ flow('turn by turn in road order: exit 19, then the sharp right a mile on, on th
     + JSON.stringify(guides.map((g) => [g.instruction, Math.round(g.at)])));
 });
 
-flow('the turn arrow: the next turn of a route being driven has an arrow on the map, drawn on the route; once taken it goes', async (page, base) => {
+flow('the turn arrow and route overview: the next turn of a route being driven has an arrow on the map, gone once taken; one key shows the rest of the route', async (page, base) => {
   // a road north 1.2 km, then right onto Main St for 600 m to the destination (turn_arrow.js)
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.APEX_REVIEW = true; window.webkit = { messageHandlers: { apex: { postMessage() {} } } }; });
@@ -3090,6 +3090,17 @@ flow('the turn arrow: the next turn of a route being driven has an arrow on the 
   const drawn = await page.evaluate(() => { const m = window.apexDebug.map;
     return { shaft: m.queryRenderedFeatures({ layers: ['apex-turnarrow'] }).length, head: m.queryRenderedFeatures({ layers: ['apex-turnarrow-head'] }).length }; });
   check(drawn.shaft > 0 && drawn.head > 0, 'the arrow is drawn on the map, shaft and head: ' + JSON.stringify(drawn));
+  // the route overview key: the rest of the route in view, north up and flat; Recenter takes its place and comes back at once
+  check(await page.isVisible('#overviewBtn'), 'a route being driven has the overview key');
+  await page.click('#overviewBtn');
+  await page.waitForTimeout(1200);
+  const ov = await page.evaluate(([lat, lon]) => { const m = window.apexDebug.map, b = m.getBounds();
+    return { end: b.contains([lon, lat]), pitch: m.getPitch(), bearing: m.getBearing(), follow: window.apexDebug.state.follow,
+      recenter: document.getElementById('recenterBtn').classList.contains('show'), key: getComputedStyle(document.getElementById('overviewBtn')).display }; }, end);
+  check(ov.end && ov.pitch < 1 && Math.abs(ov.bearing) < 1 && !ov.follow && ov.recenter && ov.key === 'none', 'the overview shows the rest of the route, Recenter in its key\'s place: ' + JSON.stringify(ov));
+  await page.click('#recenterBtn');
+  await page.waitForFunction(() => window.apexDebug.state.follow && getComputedStyle(document.getElementById('overviewBtn')).display !== 'none', null, { timeout: 3000 })
+    .catch(() => check(false, 'Recenter brings the drive camera and the overview key back'));
   for (let m = turnM + 20; m <= turnM + 200; m += 40) { await driveTo(m); await page.waitForTimeout(80); }
   await page.waitForFunction(() => !window.apexDebug.turnArrow, null, { timeout: 5000 })
     .catch(() => check(false, 'past the turn the arrow goes (the next step is the arrival): ' + JSON.stringify(turnM)));
