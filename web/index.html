@@ -430,6 +430,9 @@
     /* the fix's accuracy round the idle arrow (gps_halo.js): the ink, faint (red is kept for act now), a hairline edge; never a tap target */
     .gps-halo { border-radius: 50%; background: color-mix(in srgb, var(--panel-ink) 12%, transparent); border: 1px solid color-mix(in srgb, var(--panel-ink) 40%, transparent); pointer-events: none; }
     .gps-halo[hidden] { display: none; }
+    /* the heading beam (gps_halo.js beam): a cone in the ink, fading out, under the arrow; never a tap target */
+    .heading-beam { width: 120px; height: 120px; color: var(--panel-ink); pointer-events: none; }
+    .heading-beam[hidden] { display: none; }
     .reshape-pin { cursor: grabbing; }
     .stop-row { align-items: center; gap: 6px; } .stop-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .poi-pin { cursor: pointer; }

@@ -11133,6 +11133,25 @@ flow('the compass: shows while the map is turned off north, its needle on north;
   check(Math.abs(after.bearing) < 0.5 && !after.follow && after.recenter, 'north up stays, with Recenter to go back: ' + JSON.stringify(after));
 }, IPHONE);
 
+flow('the heading beam: in the app, a cone from the idle arrow toward where the phone points, from its compass; none moving or without one (gps_halo.js beam)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.webkit = { messageHandlers: { apex: { postMessage() {} } } }; });   // the app's shell: its frames are the idle fixes
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function' && window.apexDebug && window.apexDebug.map.loaded());
+  const frame = (o) => page.evaluate((o) => window.apex.live({ lat: 39.1035, lon: -84.512, accuracy_m: 5, speed_mps: 0, course_deg: null, has_fix: true, recording: false, location_off: false, ...o }), o);
+  const beam = () => page.evaluate(() => { const b = document.querySelector('.heading-beam'); return { shown: !!b && !b.hidden && b.offsetWidth > 0, t: b && b.style.transform, aria: b && b.getAttribute('aria-hidden'), hit: b && getComputedStyle(b).pointerEvents }; });
+  await frame({ heading_deg: 120 });
+  await page.waitForFunction(() => { const b = document.querySelector('.heading-beam'); return b && !b.hidden; }, null, { timeout: 8000 });
+  const on = await beam();
+  check(on.shown && /rotateZ\(120deg\)|rotate\(120deg\)/.test(on.t) && on.aria === 'true' && on.hit === 'none', 'the beam points where the phone does: ' + JSON.stringify(on));
+  await frame({ heading_deg: 120, speed_mps: 12 });
+  await page.waitForFunction(() => document.querySelector('.heading-beam').hidden, null, { timeout: 3000 });
+  await frame({ heading_deg: 200 });
+  await page.waitForFunction(() => !document.querySelector('.heading-beam').hidden, null, { timeout: 3000 });
+  await frame({ heading_deg: null });
+  await page.waitForFunction(() => document.querySelector('.heading-beam').hidden, null, { timeout: 3000 });
+}, IPHONE);
+
 flow('GPS accuracy: a faint disc round the idle arrow as wide as the fix is unsure, gone when the fix is sharp (gps_halo.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   await page.context().grantPermissions(['geolocation']);

@@ -15,6 +15,7 @@ const H = require(process.argv[1] + '/web/gps_halo.js');
 console.log(JSON.stringify({
   mpp: [H.metresPerPx(0, 0), H.metresPerPx(60, 0), H.metresPerPx(39.1, 16)],
   r: [H.radiusPx(65, 39.1, 16), H.radiusPx(65, 39.1, 17), H.radiusPx(5, 39.1, 16), H.radiusPx(1e6, 39.1, 20)],
+  beam: [H.beam(90, 0), H.beam(370, 0), H.beam(360, 1), H.beam(45, 10), H.beam(null, 0), H.beam(-1, 0), H.beam(200, null)],
   none: [H.radiusPx(null, 39.1, 16), H.radiusPx(NaN, 39.1, 16), H.radiusPx(-3, 39.1, 16), H.radiusPx(50, 90, 16), H.radiusPx(50, 39.1, undefined)],
 }));
 """
@@ -43,3 +44,7 @@ def test_radius_follows_accuracy_and_zoom(out):
 
 def test_unknown_draws_nothing(out):
     assert out["none"] == [0, 0, 0, 0, 0]
+
+
+def test_heading_beam_only_from_a_compass_reading_and_standing_or_walking(out):
+    assert out["beam"] == [90, None, 0, None, None, None, 200]
