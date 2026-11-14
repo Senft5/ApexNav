@@ -1034,7 +1034,7 @@ flow('Where to? with no signal: the towns and places on the map kept on the phon
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.ownRouting', '0'); } catch (_) {} });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexStages && window.ApexPlaceSearch);
-  // what the kept tiles hold round here (stages.js reads them from the phone with no signal); asked only with no signal
+  // what the kept tiles hold round here (stages.js reads them from the phone with no signal); asked when the map search fails
   await page.evaluate(() => {
     window.__keptAsked = 0;
     ApexStages.places = async ([p]) => { window.__keptAsked++; return [{ name: 'Tellico Plains', cls: 'town', lat: 35.366, lon: -84.296 }, { name: 'Tellico Plains', cls: 'village', lat: 35.9, lon: -84.29 }]; };
@@ -1053,6 +1053,9 @@ flow('Where to? with no signal: the towns and places on the map kept on the phon
   await page.context().setOffline(false);
   await page.route('https://nominatim.openstreetmap.org/**', (route) => route.abort());
   await page.route('https://photon.komoot.io/**', (route) => route.abort());
+  // one bar that carries nothing (the phone says it's online, the map search never answers): the kept map's places too
+  await page.fill('#destInput', 'tellic');
+  await page.waitForFunction(() => [...document.querySelectorAll('#placeList button.place')].some((b) => /Tellico Plains/.test(b.textContent)), null, { timeout: 15000 });
   const asked = [];
   await page.route('https://valhalla1.openstreetmap.de/route', (route) => { const req = JSON.parse(route.request().postData() || '{}'); asked.push(req.locations);
     route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) }); });
@@ -6491,6 +6494,11 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
     'a post: Score and Distance in a row, the line full width under them with its start and finish: ' + JSON.stringify(look));
   const st = await page.evaluate(() => [...document.querySelectorAll('#accountBody .feed-card .feed-stages > div')].map((d) => d.textContent));
   check(JSON.stringify(st) === JSON.stringify(['Skyway summit801', 'Tellico descent--']), 'the stages it went over, each with its Score (unknown stays --): ' + JSON.stringify(st));
+  // a tap on bob's name opens his profile, with his drives on it (?author=, his id)
+  await page.click('#accountBody .feed-card .feed-head .who');
+  await page.waitForSelector('.profile-view .profile-drives:not([hidden]) .feed-card', { timeout: 10000 });
+  check(/Cherohala Skyway/.test(await page.textContent('.profile-view .profile-drives')), 'a friend\'s profile shows their drives');
+  await page.click('.profile-view .side-pop-head button');
   // kudos: one tap, at once
   await page.click('#accountBody .feed-card .feed-acts button[aria-label^="Kudos"]');
   await page.waitForFunction(() => document.querySelector('#accountBody .feed-card .feed-acts button[aria-pressed="true"]'));
@@ -9079,10 +9087,15 @@ flow('your best yet: the drive page leads with the corners this drive beat every
     rows: [...document.querySelectorAll('.dv-bests li button')].map((b) => b.textContent) }));
   check(/^Your best yet (here|in \d corners)$/.test(r.h) && r.rows.length >= 1 && r.rows.every((t) => /−\d\.\d s/.test(t) && /vs your next best/.test(t)),
     'the corners it beat your next best through, by how much: ' + JSON.stringify(r));
+  // and This road over time leads with how far it has come since the first drive here
+  await page.waitForSelector('#dvRoadSince:not([hidden])', { timeout: 10000 });
+  const since = await page.textContent('#dvRoadSince');
+  check(/^Since your first drive here \(.+\) (Score [+−]\d+ · )?\d+\.\d s quicker over \d+ corners$/.test(since.trim()), 'since the first drive here: ' + since);
   // a slower drive of the same road has none
   await page.goto(base + '/analysis.html?tab=drive&drive=b0');
   await page.waitForSelector('.dv-corners .dv-corner', { timeout: 20000 });
   check(!(await page.$('.dv-bests')), 'the slowest pass has no best yet');
+  check(await page.evaluate(() => document.getElementById('dvRoadSince').hidden), 'and, the first drive here, no since line');
 });
 
 flow('side by side: a corner filmed on this drive and on your best pass plays as one clip, both from the same point, the gap counting (big bet 5)', async (page, base) => {

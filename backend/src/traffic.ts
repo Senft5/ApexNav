@@ -229,14 +229,23 @@ async function get(fetcher: typeof fetch, url: string): Promise<unknown> {
 }
 
 /** Every feed's current events, with the agencies that answered and those that didn't. */
+/** The owner's OHGO key: `ohgoApiKey` in CTX_KEYS, or the secret OHGO_API_KEY (one paste for the owner); null without one. */
+export function ohgoKey(env: Env): string | null {
+  let key: unknown = null;
+  try { key = env.CTX_KEYS ? (JSON.parse(env.CTX_KEYS) as Record<string, unknown>).ohgoApiKey : null; } catch { key = null; }
+  if (!(typeof key === "string" && key)) key = env.OHGO_API_KEY ?? null;
+  return typeof key === "string" && key ? key : null;
+}
+// The edge cache is shared by every deployment of the Worker, previews too, and a preview has no secrets: an answer made
+// without the key must never be read where the key is set (2026-11-14: production served a preview's list with no Ohio).
+const keyed = (env: Env) => (ohgoKey(env) ? "oh=1" : "oh=0");
+
 export async function trafficEvents(env: Env, fetcher: typeof fetch = fetch, nowMs = Date.now()) {
   const jobs: [string, () => Promise<TrafficEvent[]>][] = [
     ["INDOT", async () => parseIndiana(await get(fetcher, IN_EVENTS), nowMs)],
     ["KYTC", async () => parseWzdx(await get(fetcher, KY_WZDX), nowMs, "KY", "KYTC")],
   ];
-  let key: unknown = null;
-  try { key = env.CTX_KEYS ? (JSON.parse(env.CTX_KEYS) as Record<string, unknown>).ohgoApiKey : null; } catch { key = null; }
-  if (!(typeof key === "string" && key)) key = env.OHGO_API_KEY ?? null;   // or a secret of its own (one paste for the owner)
+  const key = ohgoKey(env);
   if (typeof key === "string" && key) jobs.push(["ODOT", async () => {
     const q = `?api-key=${encodeURIComponent(key as string)}`;
     const [inc, con, delays, slow, wx, signs] = await Promise.all([get(fetcher, `${OHGO}/incidents${q}`), get(fetcher, `${OHGO}/construction${q}`),
@@ -254,7 +263,7 @@ export async function trafficEvents(env: Env, fetcher: typeof fetch = fetch, now
 /** GET /api/traffic/v1/events.json: the compact list, cached TRAFFIC_S at the edge; 502 when no feed answered. */
 export async function trafficResponse(env: Env, fetcher: typeof fetch = fetch): Promise<Response> {
   const cache = typeof caches !== "undefined" ? (caches as unknown as { default: Cache }).default : null;
-  const key = new Request("https://apexnav.cache/traffic/v1/events.json");
+  const key = new Request(`https://apexnav.cache/traffic/v1/events.json?${keyed(env)}`);
   const hit = cache ? await cache.match(key) : undefined;
   if (hit) return new Response(hit.body, { headers: hit.headers });
   const out = await trafficEvents(env, fetcher);
@@ -325,15 +334,15 @@ export function parseKyCams(json: unknown): RoadCam[] {
 /** GET /api/traffic/v1/cameras.json: Ohio's (every OHGO page, with the owner's key) and Kentucky's cameras, cached a day. */
 export async function camerasResponse(env: Env, fetcher: typeof fetch = fetch): Promise<Response> {
   const head = { "content-type": "application/json", ...SEC };
-  let key: unknown = null;
-  try { key = env.CTX_KEYS ? (JSON.parse(env.CTX_KEYS) as Record<string, unknown>).ohgoApiKey : null; } catch { key = null; }
-  if (!(typeof key === "string" && key)) key = env.OHGO_API_KEY ?? null;
+  const key = ohgoKey(env);
   const cache = typeof caches !== "undefined" ? (caches as unknown as { default: Cache }).default : null;
-  const ck = new Request("https://apexnav.cache/traffic/v1/cameras.json?v=2");
+  const ck = new Request(`https://apexnav.cache/traffic/v1/cameras.json?v=4&${keyed(env)}`);
   const hit = cache ? await cache.match(ck) : undefined;
   if (hit) return new Response(hit.body, { headers: hit.headers });
   const getJson = async (url: string) => {
-    const r = await fetcher(url, { headers: { "user-agent": "Vetta-traffic/1.0", accept: "application/json" }, cf: { cacheTtl: CAMS_S, cacheEverything: true } } as RequestInit);
+    // no edge cache on the upstream pages: an odd answer (an empty page, an error as JSON) would be kept a day; the compacted
+    // list below is what is cached, and only a whole one for a day
+    const r = await fetcher(url, { headers: { "user-agent": "Vetta-traffic/1.0", accept: "application/json" } });
     if (!r.ok) throw new Error(`upstream ${r.status}`);
     return r.json() as Promise<{ totalPageCount?: unknown }>;
   };
@@ -343,15 +352,19 @@ export async function camerasResponse(env: Env, fetcher: typeof fetch = fetch): 
     const first = await getJson(q(1));
     const pages = Math.min(10, finite(first.totalPageCount) ? Math.max(1, Math.floor(first.totalPageCount)) : 1);
     const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => getJson(q(i + 2))));
-    return [first, ...rest].flatMap(parseOhgoCams);
+    const got = [first, ...rest].flatMap(parseOhgoCams);
+    if (!got.length) throw new Error("no cameras");                        // a keyed answer with none is a failure, not "Ohio has none"
+    return got;
   };
-  const [oh, ky] = await Promise.allSettled([ohio(), getJson(KY_CAMS).then(parseKyCams)]);
+  const kentucky = async () => { const got = parseKyCams(await getJson(KY_CAMS)); if (!got.length) throw new Error("no cameras"); return got; };
+  const [oh, ky] = await Promise.allSettled([ohio(), kentucky()]);
   const cams = [...(oh.status === "fulfilled" ? oh.value : []), ...(ky.status === "fulfilled" ? ky.value : [])];
-  const failed = oh.status === "rejected" || ky.status === "rejected";
+  const failedSrc = [...(oh.status === "rejected" ? ["ODOT"] : []), ...(ky.status === "rejected" ? ["KYTC"] : [])];
+  const failed = failedSrc.length > 0;
   if (!cams.length) return new Response(JSON.stringify({ error: "cameras_unavailable" }), { status: 502, headers: { ...head, "cache-control": "no-store" } });
   const sources = [...new Set(cams.map((c) => c.src))];
   // a half answer (one state failed) is kept 10 minutes, not a day
-  const res = new Response(JSON.stringify({ sources, cams }), { headers: { ...head, "cache-control": `public, max-age=${failed ? 600 : CAMS_S}` } });
+  const res = new Response(JSON.stringify({ sources, failed: failedSrc, cams }), { headers: { ...head, "cache-control": `public, max-age=${failed ? 600 : CAMS_S}` } });
   if (cache) await cache.put(ck, res.clone());
   return res;
 }
