@@ -1290,7 +1290,22 @@
       $('pinViaBtn').hidden = !plannedRoute?.request;
       $('pinOverlay').classList.add('show');
       suppressMapClickUntil = Date.now() + 700;
+      placeInfo(null);
       if (!place) reversePin(point);
+      else if (window.ApexPlaceInfo) {                                  // hours, phone and site, once known (place_info.js)
+        const asked = droppedPin;
+        ApexPlaceInfo.lookup(place.name, point.lat, point.lon).then((tags) => { if (droppedPin === asked && tags) placeInfo(ApexPlaceInfo.contact(tags, new Date())); }).catch(() => {});
+      }
+    }
+    // the card's open-now line and Call / Website keys; null clears them (a dropped pin, or nothing known)
+    function placeInfo(c) {
+      const h = $('pinHours'), box = $('pinContact');
+      h.hidden = !(c && c.hours); h.className = 'pin-hours' + (c && c.hours ? (c.hours.open ? ' open' : ' closed') : '');
+      h.textContent = c && c.hours ? c.hours.text : '';
+      const keys = c ? [c.phone && ['Call', c.phone, `Call ${c.phone.text}`], c.web && ['Website', c.web, `Website, ${c.web.text}`]].filter(Boolean) : [];
+      box.replaceChildren(...keys.map(([label, x, aria]) => { const a = document.createElement('a'); a.className = 'ink-btn'; a.href = x.href; a.textContent = label;
+        a.setAttribute('aria-label', aria); if (/^https?:/.test(x.href)) { a.target = '_blank'; a.rel = 'noopener'; } return a; }));
+      box.hidden = !keys.length;
     }
     mapEl.addEventListener('pointerdown', (e) => {
       activeMapPointers.add(e.pointerId);
