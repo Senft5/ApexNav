@@ -151,8 +151,9 @@ const cornersOf = (d) => Rec.scorableCorners(d, Rec.cornersOf(d));
 const fast = drive('fast', '2026-11-01', pass(1, 3)), slow = drive('slow', '2026-11-05', pass(0.9, 10));
 const refs = P.build(Core, [slow, fast], cornersOf, { timesOf: (d) => d.t_s });
 const rowsOf = (p) => lat.map((_, i) => ({ lat: lat[i], lon: lon[i], speed_mps: p.v[i], lat_g: p.latG[i], lon_g: p.lonG[i], t_s: p.t_s[i] }));
-function live(p) {
+function live(p, surface) {
   const c = P.createCoach(Core, refs), evs = [], views = [];
+  if (surface) c.setSurface(surface);
   for (let i = 0; i < 1000; i += 4) { const r = c.update(rowsOf(p).slice(0, i + 1)); evs.push(...r.events); if (r.view) views.push(r.view); }
   return { lines: evs.map((e) => e.say).filter(Boolean), gaps: evs.filter((e) => e.kind === 'corner').map((e) => e.gap),
            stretch: evs.filter((e) => e.kind === 'stretch').map((e) => e.gap), bar: views.length ? P.label(views[views.length - 1].delta, views[views.length - 1].gap) : null };
@@ -161,6 +162,8 @@ console.log(JSON.stringify({
   refs: refs.length, fastIds: [...new Set(refs.map((r) => r.fastId))], timed: refs.filter((r) => r.tBest > 0).length,
   notes: P.notes(refs).map((n) => n.text), noteN: P.notes(refs).length,
   same: live(pass(1, 3)), slow: live(pass(0.9, 10)), quick: live(pass(1.06, 3)),
+  wet: live(pass(0.9, 10), 'wet'), icy: live(pass(0.9, 10), 'ice'), dryAgain: live(pass(0.9, 10), 'dry'),
+  wetBest: [...new Set(P.build(Core, [slow, { ...fast, surface: 'wet' }], cornersOf, { timesOf: (d) => d.t_s }).map((r) => r.fastId))],
   spoken: [P.spoken(0.3), P.spoken(-0.1), P.spoken(1.44), P.spoken(-0.86)],
 }));
 """
@@ -201,3 +204,18 @@ def test_quicker_says_best_yet(timed):
 
 def test_gaps_are_said_in_tenths(timed):
     assert timed["spoken"] == ["Three tenths", "One tenth", "1.4 seconds", "Nine tenths"]
+
+
+def test_a_wet_road_is_said_once_and_never_chases_your_dry_best(timed):
+    """Conditions-aware: on a wet or icy road your best here (a dry pass) is no time to chase: said once, no gap, no
+    "brake later"; technique lines still come."""
+    for k, first in (("wet", "Wet today. Your best here was dry."), ("icy", "Icy today. Your best here was dry. Go gently.")):
+        w = timed[k]
+        assert w["lines"][0] == first and w["lines"].count(first) == 1, w["lines"]
+        assert all(g is None for g in w["gaps"]) and not any("Brake later" in l or "tenth" in l or "second" in l for l in w["lines"]), w["lines"]
+        assert w["bar"] is None or not w["bar"].endswith(" s vs best")
+    assert timed["dryAgain"] == timed["slow"], "a dry road coaches as before"
+
+
+def test_a_wet_pass_is_never_the_time_to_beat(timed):
+    assert timed["wetBest"] == ["slow"], "the quicker pass was wet: the dry one is the best here"
