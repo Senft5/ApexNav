@@ -7225,6 +7225,60 @@ flow('post media: a friend\'s photo shows on their post in the Feed, and Add a p
   check(order[0] === 'POST /api/posts application/json' && order[1] === 'PUT /api/posts/P2AAAAAAAAAAAAAA/media image/jpeg' && posts[1].n > 100, 'the post, then its photo as a JPEG: ' + JSON.stringify(order));
   check(/Posted to your friends\./.test(await page.textContent('#toast')), 'and it says where it went');
 });
+flow('messages: People has Messages with what is unread; a conversation is bubbles and a field, Return sends; Report theirs, Unsend yours; a profile has Message; a push opens it (Worker stubbed, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const sent = [];
+  let thread = [{ id: 'M1', body: 'Skyway Saturday?', at: '2026-11-14 11:00:00', mine: false }], unread = 1;
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/me/messages/unread') return json({ unread });
+    if (u.pathname === '/api/messages') return json(thread.length ? [{ handle: 'bob', photo_id: null, at: thread[thread.length - 1].at, unread, last: thread[thread.length - 1].body, mine: thread[thread.length - 1].mine, friend: true }] : []);
+    if (u.pathname === '/api/messages/bob' && m === 'GET') { unread = 0; return json({ with: { handle: 'bob', photo_id: null, friend: true }, messages: thread }); }
+    if (u.pathname === '/api/messages/bob' && m === 'POST') { const b = JSON.parse(route.request().postData()); sent.push(b); thread = [...thread, { id: 'M2', body: b.body, at: '2026-11-14 11:01:00', mine: true, seen: false }]; return json({ id: 'M2' }, 201); }
+    if (u.pathname === '/api/messages/m/M2' && m === 'DELETE') { sent.push({ unsent: 'M2' }); thread = thread.filter((x) => x.id !== 'M2'); return route.fulfill({ status: 204 }); }
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .dm-nav', { timeout: 15000 });
+  await page.waitForFunction(() => (document.querySelector('#accountBody .dm-nav small') || {}).textContent === '1');
+  await page.waitForFunction(() => /1 unread message/.test((document.querySelector('#crewTab .badge') || { getAttribute: () => '' }).getAttribute('aria-label') || ''));
+  await page.click('#accountBody .dm-nav');
+  await page.waitForSelector('.people-pop.open .dm-row');
+  const row = await page.textContent('.people-pop.open .dm-row .dm-who');
+  check(/@bob/.test(row) && /Skyway Saturday\?/.test(row) && !!(await page.$('.people-pop.open .dm-row.unread .dm-dot')), 'the list: who, their last line, unread marked: ' + row);
+  await page.click('.people-pop.open .dm-row');
+  await page.waitForSelector('.dm-pop.open .dm-msg');
+  check(await page.$$eval('.dm-pop.open .dm-msg', (l) => l.map((b) => [b.textContent, b.classList.contains('mine')]).join('|')) === 'Skyway Saturday?,false', 'their message, on the left');
+  await page.fill('.dm-pop.open textarea', 'Yes, 8 at the overlook');
+  await page.press('.dm-pop.open textarea', 'Enter');
+  await page.waitForFunction(() => document.querySelectorAll('.dm-pop.open .dm-msg').length === 2);
+  check(JSON.stringify(sent[0]) === '{"body":"Yes, 8 at the overlook"}' && await page.inputValue('.dm-pop.open textarea') === '' && await page.$eval('.dm-pop.open .dm-msg:last-of-type', (b) => b.classList.contains('mine')),
+    'Return sends it; yours on the right; the field clears: ' + JSON.stringify(sent));
+  // theirs: Report; yours: Unsend
+  await page.click('.dm-pop.open .dm-msg:not(.mine) .dm-more');
+  check(await page.$$eval('.dm-menu button', (l) => l.map((b) => b.textContent).join()) === 'Report,Cancel', 'a tap on theirs: Report');
+  await page.click('.dm-menu button:has-text("Cancel")');
+  await page.click('.dm-pop.open .dm-msg.mine .dm-more');
+  await page.click('.dm-menu button:has-text("Unsend")');
+  await page.waitForFunction(() => document.querySelectorAll('.dm-pop.open .dm-msg').length === 1);
+  check(sent.some((x) => x.unsent === 'M2'), 'Unsend takes yours back');
+  await page.click('.dm-pop.open .side-pop-head button:has-text("Done")');
+  check(!(await page.$('.dm-pop')), 'Done closes the conversation');
+  // a friend's profile: Message first
+  await page.click('.people-pop.open .side-pop-head button:has-text("Done")');
+  await page.click('#accountBody .friend-head:has-text("@bob")');
+  await page.waitForSelector('.people-pop.open .profile-keys button');
+  check(await page.textContent('.people-pop.open .profile-keys button:first-child') === 'Message', 'Message is the first key on a friend');
+  await page.click('.people-pop.open .profile-keys button:has-text("Message")');
+  await page.waitForSelector('.dm-pop.open .dm-msg');
+  await page.click('.dm-pop.open .side-pop-head button:has-text("Done")');
+  // a push's tap (backend/src/push.ts PUSH.message): the conversation
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { view: 'friends', chat: 'bob' } }));
+  await page.waitForSelector('.dm-pop.open[aria-label="Messages with @bob"] .dm-msg', { timeout: 8000 });
+});
+
 flow('the full Feed picks whose posts (All, Friends or one crew) and mutes a driver (Worker stubbed, 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   const asked = [];
@@ -7378,7 +7432,7 @@ flow('push notifications: Garage > Notifications asks iOS only at the switch, ha
   // (2026-11-14) each kind has its own switch under it, as the server keeps them (duels off here)
   await page.waitForSelector('.garage-pop.open #pushKinds:not([hidden]) .sw');
   const sw = await page.$$eval('.garage-pop.open #pushKinds .sw', (l) => l.map((b) => [b.textContent, b.getAttribute('aria-checked')]));
-  check(JSON.stringify(sw) === JSON.stringify([['Friend requests', 'true'], ['Kudos', 'true'], ['Comments and mentions', 'true'], ['Duels', 'false'], ['Someone beat you', 'true'], ['Crew drives', 'true']]), 'one switch per kind: ' + JSON.stringify(sw));
+  check(JSON.stringify(sw) === JSON.stringify([['Friend requests', 'true'], ['Kudos', 'true'], ['Comments and mentions', 'true'], ['Duels', 'false'], ['Someone beat you', 'true'], ['Crew drives', 'true'], ['Messages', 'true']]), 'one switch per kind: ' + JSON.stringify(sw));
   await page.click('.garage-pop.open #pushKinds .sw:has-text("Kudos")');
   for (let i = 0; i < 40 && !kinds.length; i++) await page.waitForTimeout(50);
   check(JSON.stringify(kinds) === '[["duels","kudos"]]' && await page.getAttribute('.garage-pop.open #pushKinds .sw:has-text("Kudos")', 'aria-checked') === 'false', 'Kudos off is kept on the server: ' + JSON.stringify(kinds));
@@ -7436,7 +7490,7 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   check(who && who.photo && who.live && who.first && /friends since September/.test(who.text) && /On the road · Dry Ridge Rd/.test(who.text), 'the profile opens on the person, photo and status: ' + JSON.stringify(who));
   const pk = await page.evaluate(() => ({ keys: [...document.querySelectorAll('.profile-view .profile-keys button')].map((b) => b.textContent), foot: [...document.querySelectorAll('.profile-view .profile-foot button')].map((b) => b.textContent),
     last: document.querySelector('.profile-view > :last-child').className }));
-  check(JSON.stringify(pk.keys) === '["On the map","Share a route","Invite to a drive","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
+  check(JSON.stringify(pk.keys) === '["Message","On the map","Share a route","Invite to a drive","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
   await page.click('.profile-view button:has-text("Friends")');   // one back glyph and where it goes (REVIEW2.md)
   await page.waitForSelector('.side-pop.open .profile-view', { state: 'detached', timeout: 3000 }).catch(() => {});
   check(await page.evaluate(() => !document.querySelector('.side-pop.open') && !!document.querySelector('#accountBody .friend-head:not(.you-row)')), 'Back returns to the friends list');
@@ -7656,7 +7710,8 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   // P-05: the request is a card on top; P-23: you next; then the friends, live first, a friend who shares nothing under their name (P-15)
   // (what is on screen: an empty, hidden place for duel cards (SOCIAL 2.7) isn't a part of the order)
   const order = await page.$$eval('#accountBody > *', (k) => k.filter((x) => !x.hidden).map((x) => x.className));
-  check(/request-card/.test(order[0]) && /you-row/.test(order[1]) && /friend-list/.test(order[2]), 'request card, You, friends: ' + JSON.stringify(order));
+  // (2026-11-14) Messages, the inbox, sits under the requests, as on any social app
+  check(/request-card/.test(order[0]) && /nav-rows/.test(order[1]) && /you-row/.test(order[2]) && /friend-list/.test(order[3]), 'request card, Messages, You, friends: ' + JSON.stringify(order));
   check(/@dan wants to be your friend/.test(await page.textContent('#accountBody .request-card')), 'the request card names who asks');
   await page.waitForFunction(() => /You · @me/.test(document.querySelector('.you-row').textContent) && /Friends see where you are/.test(document.querySelector('.you-row small').textContent));
   const rows = await page.$$eval('#accountBody .friend-list .friend-head', (r) => r.map((x) => [x.querySelector('.friend-who b').textContent, x.querySelector('.friend-who small').textContent, x.querySelector('.friend-who small').classList.contains('live')]));
@@ -7667,7 +7722,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   check(JSON.stringify(keys) === '["Invite or add a friend"]', 'one Invite key on Friends: ' + JSON.stringify(keys));
   const navs = await page.$$eval('#accountBody > .nav-rows .nav-row > span', (s) => s.map((x) => x.textContent));
   // Roadbooks (SOCIAL 2.6, 2026-11-10) join From friends in the one list under the friends; nothing else does
-  check(JSON.stringify(navs) === '["From friends","Roadbooks"]', 'then what friends shared and the roadbooks, nothing else: ' + JSON.stringify(navs));
+  check(JSON.stringify(navs) === '["Messages","From friends","Roadbooks"]', 'Messages on top; then what friends shared and the roadbooks, nothing else: ' + JSON.stringify(navs));
   // Nate 2026-11-12 (as easy as a big social app): the row is the friend; a tap opens their profile, which holds what you
   // can do with them, their last share and what they see of you (the row used to open five keys and a grants drawer)
   check(!(await page.$('#accountBody .friend .crew-detail, #accountBody .friend button.ink-btn')), 'a friend row is one line, no keys in the list');
@@ -7675,14 +7730,15 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
     const k = await page.$$eval('.people-pop.open .profile-keys button', (b) => b.map((x) => x.textContent)); return k; };
   const back = () => page.click('.people-pop.open .profile-view button:has-text("Friends")');
   const acts = await profileOf('@cara');
-  check(JSON.stringify(acts) === '["On the map","Share a route","Invite to a drive","Challenge on a stage"]', 'her profile opens on what you can do with her: ' + JSON.stringify(acts));
+  check(JSON.stringify(acts) === '["Message","On the map","Share a route","Invite to a drive","Challenge on a stage"]' && await page.evaluate(() => getComputedStyle(document.querySelector('.people-pop.open .profile-keys > :last-child')).gridColumnEnd) === '-1',
+    'her profile opens on what you can do with her, Message first; an odd last key spans the row: ' + JSON.stringify(acts));
   const cara = await page.textContent('.people-pop.open .profile-view');
   check(/Shared Cherohala loop · /.test(cara) && /What @cara sees of you\s*Scores/.test(cara) && /Couldn’t load the rest/.test(cara) && !/No scores shared/.test(cara), 'her last share and what she sees of you; offline, nothing guessed: ' + cara);
   await back();
   check((await profileOf('@bob')).includes('On the map'), 'bob shares a delayed position: On the map too');
   await back();
   const eve = await profileOf('@eve');
-  check(!eve.includes('On the map') && eve.length === 3 && await page.evaluate(() => getComputedStyle(document.querySelector('.people-pop.open .profile-keys > :last-child')).gridColumnEnd) === '-1', 'no On the map for a friend who shares nothing; an odd last key spans the row: ' + JSON.stringify(eve));
+  check(!eve.includes('On the map') && eve.length === 4, 'no On the map for a friend who shares nothing: ' + JSON.stringify(eve));
   await back();
   // P-09: Who sees what, from her profile, her line marked
   await profileOf('@cara');
