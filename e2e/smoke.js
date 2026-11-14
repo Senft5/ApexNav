@@ -3499,6 +3499,8 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
       : [{ handle: 'sam', photo_id: null, total: 1622, drives: 2, car: 'Mazda MX-5', mine: false }, { handle: 'me', photo_id: null, total: null, drives: 0, mine: true }] }); }
     if (u.pathname === '/api/crews/k1/chat') return json([{ id: 'm1', handle: 'sam', body: '<b>Fog</b> by 7?', created_at: '2026-10-29 10:00:00', mine: false, photo_id: null }]);
     if (u.pathname === '/api/crews/k1/members') return json([{ handle: 'me', role: 'owner', mine: true }, { handle: 'sam', role: 'member', mine: false }, { handle: 'cara', role: 'member', mine: false }]);
+    if (u.pathname === '/api/feed' && u.searchParams.get('crew') === 'k1') return json([{ id: 'P9AAAAAAAAAAAAAA', handle: 'sam', photo_id: null, mine: false, crew: { id: 'k1', name: 'Ridge Runners' }, title: 'Dawn run on the Skyway', caption: null,
+      driven_on: '2026-11-13', length_m: 30000, score: 780, roads: [], stages: [], line: null, media: null, created_at: '2026-11-13 08:00:00', kudos: 0, my_kudos: false, comments: 0 }]);
     if (u.pathname === '/api/presence') return json([{ handle: 'cara', photo_id: null, delay_s: 0, fuzz: false, road: 'Cherohala Skyway', lat: 35.3, lon: -84.1, at: new Date(Date.now() - 30e3).toISOString() }]);
     if (u.pathname === '/api/friends') return json([{ id: 'U2', handle: 'cara', name: null, status: 'accepted', incoming: 0 }]);
     return json([]);
@@ -3532,6 +3534,9 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   // the owner's note 05: no Crew drives row; the crew's Upcoming drives has a + in its corner that plans one
   check(!/Crew drives/.test(await page.$$eval('#crewsBody .nav-rows', (n) => n.map((x) => x.textContent).join('|'))), 'no Crew drives row on Crews');
   await page.click('.cp-tabs [data-cp-tab="drives"]');
+  // (2026-11-14) what members posted to the crew, on the Drives tab after Members
+  await page.waitForSelector('.crew-page .crew-drives:not([hidden]) .feed-card');
+  check(/Dawn run on the Skyway/.test(await page.textContent('.crew-page .crew-drives')) && /Posted to the crew/.test(await page.textContent('.crew-page .crew-drives h3')), 'the crew\'s posted drives on its page, after the members');
   check(/Upcoming drives/.test(await page.textContent('.cp-week .cp-sec h3')) && await page.isVisible('.cp-week .cp-sec .plan-plus'), 'Upcoming drives with a + in its corner');
   await page.click('.cp-week .plan-plus');
   await page.waitForSelector('.cp-week .plan-drive');

@@ -170,6 +170,8 @@ and in random batches so a trace cannot be re-assembled.
 - Who gave kudos (2026-11-14): under a post, "Kudos from @bob, @cara and 3 others" with their faces; a tap lists them
   all (newest first, 50 at most, never someone blocked either way) and a name opens their profile. `kudos_from` on
   `GET /api/posts/:id`.
+- A crew's posted drives (2026-11-14): on the crew page's Drives tab, after Members, "Posted to the crew" lists what
+  members posted to that crew (`GET /api/feed?crew=`, the Feed's own rules, so members only). Three show, then See all.
 - This week (2026-11-14): above the Feed, a row of who posted since Monday (you and whoever's posts you can see), most
   distance first: "1 @bob · 30.0 mi · 2 drives · best 812". A friend's card opens their profile. It shows only once someone
   besides you posted. A drive posted to friends and to a crew counts once. `GET /api/feed/week` (`feedWeek`). No table.

@@ -508,12 +508,15 @@
     }
     /** A friend's drives on their profile (author: their user id): their newest posts you can see, as cards. Hidden while
      *  there is none, or with no signal (the profile says that itself). */
-    function drivesOf(author) {
-      const box = el('section', { className: 'stack-8 feed-sec profile-drives' }); box.hidden = true;
+    function drivesOf(author) { return listOf(`author=${encodeURIComponent(author)}`, 'profile-drives', el('b', { textContent: 'Drives' })); }
+    /** A crew's page: the drives its members posted to the crew, newest first (Drives tab). Hidden while there is none. */
+    function crewDrives(crewId) { return listOf(`crew=${encodeURIComponent(crewId)}`, 'crew-drives', el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Posted to the crew' }))); }
+    function listOf(query, cls, head) {
+      const box = el('section', { className: `stack-8 feed-sec ${cls}` }); box.hidden = true;
       const list = el('div', { className: 'feed' });
-      box.append(el('b', { textContent: 'Drives' }), list);
+      box.append(head, list);
       let all = false;   // See all: every post the Feed gives (its latest page), in place
-      const redo = () => apiCall('GET', `/api/feed?author=${encodeURIComponent(author)}`).then(jsonOf).then((rows) => {
+      const redo = () => apiCall('GET', `/api/feed?${query}`).then(jsonOf).then((rows) => {
         if (!Array.isArray(rows)) return;
         const more = !all && rows.length > PREVIEW;
         list.replaceChildren(...(all ? rows : rows.slice(0, PREVIEW)).map((p) => card(p, { after: redo })),
@@ -641,7 +644,7 @@
       });
     }
 
-    return { section, full, open, compose, post, remove, card, drivesOf };
+    return { section, full, open, compose, post, remove, card, drivesOf, crewDrives };
   }
 
   const api = { trimLine, encode, decode, throughPoints, stretch, rivalsOf, rivalLine, lineSvg, ago, facts, weekLine, weekShown, mentionParts, mentionAt, suggest, kudosLine, mount, CUT_M, MAX_POINTS };
