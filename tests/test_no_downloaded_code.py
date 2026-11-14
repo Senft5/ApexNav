@@ -51,5 +51,5 @@ def test_landing_page_links_and_shots_exist():
     for href in re.findall(r'(?:href|src)="(?![a-z]+:)([^"#?:]+)', page):
         assert os.path.exists(os.path.join(WEB, href)), href                     # every local link and image is there
     assert 'href="https://vettadrive.app/"' in page                             # on vettadrive.com it is the front page: the app is on .app
-    for claim in ("never your top speed", "Free to drive", "not a racing app"):
+    for claim in ("Live gaps to your best", "Free to drive", "drive within the law and the conditions"):
         assert claim in page

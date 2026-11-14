@@ -128,13 +128,13 @@ def test_the_card_quotes_a_line_the_voice_says():
 def test_the_page_says_the_pack_lines_and_fills_kits_box():
     html = cockpit_source()
     # the call carries its aside; Kit's box is the aside, never the call
-    assert "const aside = voiced && !startCall ? packAside(call, e, ev, d, vMps, apexMps, reactS) : null;" in html and "kitFor: call.keys,\n          aside: aside ? { ...aside, bare: call.bare } : null" in html
+    assert "const aside = voiced && !startCall ? packAside(call, e, ev, d, vMps, apexMps, reactS) : null;" in html and "kitFor: call.keys,\n          aside: aside ? { ...aside, bare: call.bare, bareTokens: call.bareTokens } : null" in html
     assert "if (text && 'aside' in opts) { state.kitLine = opts.aside ? opts.aside.text" in html
     assert "state.kitLine = String(text)" not in html
     # the aside follows its call only when nothing else waits, and never after it would be late
     assert "if (follow && !speech.queue.size && state.toggles.voice)" in html and "dueByM: follow.dueByM" in html
     # the pack's own system lines and sign-offs; the card's quote and Hear from the pack
-    assert "ApexVoiceLines.quietLine(state.voiceId, quietSaid())" in html and "ApexVoiceLines.openerLine(state.voiceId," in html
+    assert "ApexVoiceLines.quietLine(state.voiceId, span)" in html and "ApexVoiceLines.openerLine(state.voiceId," in html
     assert "ApexEndLine.pickSignOff(pack, c.id, has)" in html
     # HE-3 (panel round 2): the card's quote is the call grammar's sample and a sign-off of the pack's (test_vocabulary.py)
     assert "ApexVocabulary.sampleQuote(t.voice.id, state.noteWords, vocabDeps())" in html and "t.voice.sample" not in html

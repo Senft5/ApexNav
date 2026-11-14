@@ -1,0 +1,3 @@
+# The lower-48 OSM route context build (.github/workflows/osm-ctx-us.yml): a push changing this file on
+# claude/roam-c-osm-ctx-us runs it there as a dry run. only= Geofabrik state ids, comma separated (empty: the lower 48).
+only=west-virginia

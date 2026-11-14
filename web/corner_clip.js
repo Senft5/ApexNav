@@ -3,6 +3,7 @@
 // is lined up by the Dashcam panel (dashcam.js); this cuts and draws. Pure parts tested (tests/test_corner_clip.py).
 (function (root) {
   'use strict';
+  const SITE = 'vettadrive.com';                                    // the info page (owner's domain, 2026-11-14)
   const LEAD_S = 4, TAIL_S = 2.5, W = 720, H = 1280;                  // seconds before the corner's start and after its end
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -86,16 +87,40 @@
       g.font = `600 ${Math.round(fs * 0.4)}px system-ui, sans-serif`; g.fillStyle = 'rgba(255,204,51,0.95)'; g.fillText('CORNERING G', tx0, ty - th / 2 - 12);
       g.fillStyle = 'rgba(255,90,60,0.95)'; g.textAlign = 'right'; g.fillText('BRAKE / THROTTLE G', tx1, ty - th / 2 - 12); g.textAlign = 'left';
     }
-    g.fillStyle = '#fff'; g.font = `800 ${Math.round(fs * 1.5)}px system-ui, sans-serif`;
-    g.fillText(f.speed || '--', pad, h - pad);
+    if (!meta.hideSpeed) { g.fillStyle = '#fff'; g.font = `800 ${Math.round(fs * 1.5)}px system-ui, sans-serif`; g.fillText(f.speed || '--', pad, h - pad); }
     if (f.latG != null && f.lonG != null) {                          // the friction circle: 1 g at the edge
       const r = fs * 1.1, cx = w - pad - r, cy = h - pad - r;
       g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, r, 0, 2 * Math.PI); g.stroke();
       g.fillStyle = '#ffcc33'; g.beginPath(); g.arc(cx - Math.max(-1, Math.min(1, f.latG)) * r, cy - Math.max(-1, Math.min(1, f.lonG)) * r, fs * 0.25, 0, 2 * Math.PI); g.fill();
     }
     g.textAlign = 'right'; g.fillStyle = '#fff'; g.font = `800 ${Math.round(fs * 0.55)}px system-ui, sans-serif`;
-    g.fillText('VETTA', w - pad, pad + fs * 0.6); g.textAlign = 'left';
+    g.fillText('VETTA', w - pad, pad + fs * 0.6); mark(g, w, fs, pad); g.textAlign = 'left';
   }
+  /** Where to find the app, small under the VETTA mark (right-aligned at w - pad), so a clip seen on a Reel leads back. */
+  function mark(g, w, fs, pad) {
+    g.textAlign = 'right'; g.fillStyle = 'rgba(255,255,255,0.85)'; g.font = `600 ${Math.round(fs * 0.36)}px system-ui, sans-serif`;
+    g.fillText(SITE, w - pad, pad + fs * 1.02); g.fillStyle = '#fff';
+  }
+  /**
+   * The words for a clip's post, copied as it is shared (launch marketing, 2026-11-14): the road and the call, the line
+   * that says where the app is, and the tags (the car's make from its Garage label). What isn't known is left out.
+   * d: the drive ({ name, car: { label } }); call: the corner's call ('' for a reel).
+   */
+  function caption(d, call) {
+    const road = d && d.name && !/^Drive \d/.test(String(d.name).trim()) ? String(d.name).trim() : '';   // not the dated stand-in name
+    const head = [road, call ? String(call).trim() : ''].filter(Boolean).join(' \u00b7 ');
+    const label = d && d.car && typeof d.car.label === 'string' ? d.car.label : '';
+    const make = label.split(/\s+/).find((w) => w && !/^(19|20)\d\d$/.test(w) && /[A-Za-z]/.test(w));
+    const tag = make ? make.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+    const tags = ['#drivingroads', '#backroads', ...(tag && tag !== 'drivingroads' && tag !== 'backroads' ? [`#${tag}`] : [])].join(' ');
+    return [head, 'Called by Vetta. Free on iPhone, link in bio.', tags].filter(Boolean).join('\n');
+  }
+  // Show speed on clips (the share step's switch, kept on this phone): off, the readout is left off every clip made here.
+  // Platforms pull public-road posts that show speed (launch marketing, 2026-11-14). The g trace and the call stay. The
+  // replay's video reads the same key (flyover_video.js speedShown).
+  const SPEED_KEY = 'apex.clipSpeed';
+  function speedShown() { try { return root.localStorage.getItem(SPEED_KEY) !== 'off'; } catch (_) { return true; } }
+  function setSpeedShown(on) { try { root.localStorage.setItem(SPEED_KEY, on ? 'on' : 'off'); } catch (_) {} }
 
   /**
    * The drive's best corners for a reel: up to n of `corners` (ApexRecording.cornersOf: start, end, apex, apex_mps) that
@@ -131,7 +156,7 @@
     let rec = null, raf = 0, stopped = null;
     const chunks = [];
     for (const part of parts) {
-      const w = part.w, m = { ...meta, label: part.label, trace: traceOf(d, T, w) };
+      const w = part.w, m = { ...meta, label: part.label, trace: traceOf(d, T, w), hideSpeed: opts.hideSpeed != null ? !!opts.hideSpeed : !speedShown() };
       const paint = () => drawClip(g, W, H, video, frameAt(d, T, w, video.currentTime, offsetS, fmtSpeed), m);
       await seekTo(w.vt0);
       paint();
@@ -156,6 +181,6 @@
     return { blob, mime };
   }
 
-  const api = { clipWindow, cornersOf, clippable, bestOf, traceOf, frameAt, drawClip, record, LEAD_S, TAIL_S, W, H };
+  const api = { clipWindow, cornersOf, clippable, bestOf, traceOf, frameAt, drawClip, mark, record, caption, speedShown, setSpeedShown, SITE, LEAD_S, TAIL_S, W, H };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCornerClip = api;
 })(typeof window !== 'undefined' ? window : globalThis);

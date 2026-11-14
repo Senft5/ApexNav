@@ -6,7 +6,8 @@
   'use strict';
   const KEY = 'apex.health', MAX_DAYS = 7;
   const METRICS = ['drives', 'route_ok', 'route_fail', 'route_fallback', 'road_upload_ok', 'road_upload_fail',
-    'hazard_queued', 'hazard_sent_late', 'calib_locked', 'calib_lock_s', 'directions_said', 'crash_asked'];
+    'hazard_queued', 'hazard_sent_late', 'calib_locked', 'calib_lock_s', 'directions_said', 'crash_asked',
+    'boot_n', 'boot_ready_cs', 'boot_map_cs', 'boot_slow'];
   const localDay = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
   /** storage: localStorage-like; send(body) resolves an HTTP status (or throws offline); enabled() says whether to send. */

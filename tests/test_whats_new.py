@@ -52,12 +52,13 @@ def test_it_never_interrupts(out):
 
 
 def test_it_names_what_is_really_there(out):
-    """The news of 2026-11-10 (the first since 2026-10-28): each thing it names is on a screen under that name."""
+    """The news of 2026-11-14: each thing it names is in the app under that name."""
     text = " ".join(t + " " + x for t, x in out["items"])
-    page = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
-    fun = open(os.path.join(ROOT, "web", "fun_route.js"), encoding="utf-8").read()
-    for level in ("Quick", "Fun", "Long way"):
-        assert level in text and f"label: '{level}'" in fun, level
-    assert "Route tuning" in text and 'data-title="Route tuning"' in page
-    assert 'id="loopDialVal"' in page and 'aria-label="Which way the loop heads"' in page
+    cockpit = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    posts = open(os.path.join(ROOT, "web", "drive_posts.js"), encoding="utf-8").read()
+    assert "Feed" in text and "Kudos" in text and "textContent: 'Feed'" in posts                # People → Feed, kudos on posts
+    assert "photo, hours" in text and "ApexPlaceInfo.contact" in cockpit                  # the place card
+    assert "arrow at each turn" in text and os.path.exists(os.path.join(ROOT, "web", "turn_arrow.js"))
+    assert "CarPlay" in text and "arrowMessage" in open(os.path.join(ROOT, "web", "carplay.js"), encoding="utf-8").read()
+    assert "DOT" in text and os.path.exists(os.path.join(ROOT, "web", "traffic.js"))
     assert "→" not in text          # a place in the app is named in words, as everywhere else

@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov https://itscameras.dot.state.oh.us; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov https://itscameras.dot.state.oh.us https://www.trimarc.org https://*.fbcdn.net; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
        first paint is the launch screen: its ink and its lockup at 184 x 50, centred. The cover (#boot) then draws the same in
        the theme's colours once the body exists. -->
-  <style>html { min-height: 100%; background: #151310 url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 372 100'><defs><clipPath id='c'><rect x='0' y='26' width='372' height='48'/></clipPath></defs><circle cx='34' cy='84' r='8' fill='%23EDE4D3'/><path d='M34 84 V52 Q34 26 62 21.5' fill='none' stroke='%23EDE4D3' stroke-width='9'/><path d='M60 9 L88 18 L63 34 Z' fill='%23EDE4D3'/><circle cx='51' cy='43' r='6.5' fill='%23C8102E'/><g clip-path='url%28%23c%29' fill='none' stroke='%23EDE4D3' stroke-linejoin='miter' stroke-miterlimit='10' stroke-width='8.5'><path d='M118 22 L135 78 L152 22'/><path d='M196 30 H170.25 V70 H196 M170.25 50 H190'/><path d='M208 30 H244 M226 30 V80'/><path d='M254 30 H290 M272 30 V80'/><path d='M300 78 L317 22 L334 78 M306 59 H328'/></g></svg>") no-repeat center / 184px 50px fixed; }</style>
+  <style>html { min-height: 100%; background: #111214 url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 372 100'><defs><clipPath id='c'><rect x='0' y='26' width='372' height='48'/></clipPath></defs><circle cx='34' cy='84' r='8' fill='%23EDE4D3'/><path d='M34 84 V52 Q34 26 62 21.5' fill='none' stroke='%23EDE4D3' stroke-width='9'/><path d='M60 9 L88 18 L63 34 Z' fill='%23EDE4D3'/><circle cx='51' cy='43' r='6.5' fill='%23C8102E'/><g clip-path='url%28%23c%29' fill='none' stroke='%23EDE4D3' stroke-linejoin='miter' stroke-miterlimit='10' stroke-width='8.5'><path d='M118 22 L135 78 L152 22'/><path d='M196 30 H170.25 V70 H196 M170.25 50 H190'/><path d='M208 30 H244 M226 30 V80'/><path d='M254 30 H290 M272 30 V80'/><path d='M300 78 L317 22 L334 78 M306 59 H328'/></g></svg>") no-repeat center / 184px 50px fixed; }</style>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#1b1914" />
@@ -80,6 +80,9 @@
   <script src="route_reports.js" defer></script>
   <script src="route_feel.js" defer></script>
   <script src="route_card.js" defer></script>
+  <script src="route_callouts.js" defer></script>
+  <script src="gps_halo.js" defer></script>
+  <script src="turn_arrow.js" defer></script>
   <script src="route_reveal.js" defer></script>
   <script src="route_story.js" defer></script>
   <script src="plan_presets.js" defer></script>
@@ -113,6 +116,9 @@
   <script src="directions.js" defer></script>
   <script src="carplay.js" defer></script>
   <script src="cameras.js" defer></script>
+  <script src="place_info.js" defer></script>
+  <script src="place_photo.js" defer></script>
+  <script src="place_link.js" defer></script>
   <script src="route_ctx/osm_common.js" defer></script>
   <script src="whats_new.js" defer></script>
   <script src="saved_routes.js" defer></script>
@@ -140,6 +146,7 @@
   <script src="coverage.js" defer></script>
   <script src="flow.js" defer></script>         <!-- a drive's best run of clean corners, kept in its summary (IDEAS D-30) -->
   <script src="wet_roads.js" defer></script>    <!-- a wet or icy road brings the notes earlier, said once -->
+  <script src="road_surface.js" defer></script>   <!-- the drive's road: dry, wet or icy, kept on its record -->
   <script src="flow_live.js" defer></script>    <!-- the run of clean corners counted live, said in the quiet slot (IDEAS D-30) -->
   <script src="recording.js" defer></script>
   <script src="end_line.js" defer></script>
@@ -358,6 +365,12 @@
     .place b { grid-column: 1; font-size: 15px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .place span { grid-column: 2; grid-row: 1; font-size: 12px; color: var(--panel-dim); white-space: nowrap; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; }
     .place span:empty { display: none; }
+    /* a row with its street photo (Find nearby): the picture on the left across both lines */
+    .place.has-thumb { grid-template-columns: 48px minmax(0, 1fr) auto; }
+    .place.has-thumb .place-thumb { grid-column: 1; grid-row: 1 / span 2; width: 48px; height: 48px; object-fit: cover; align-self: center; background: var(--hair); }
+    .place.has-thumb b { grid-column: 2; }
+    .place.has-thumb small { grid-column: 2 / -1; }
+    .place.has-thumb span { grid-column: 3; }
     .place small { grid-column: 1 / -1; font-size: 13px; color: var(--panel-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .place-list .note { margin: 8px 2px 0; }
     /* Watching a recorded drive or previewing a route (feedback 01): the gauges and scrubber own the bottom; Done or the plate's ×
@@ -366,8 +379,15 @@
     #app:not(.live) .plates { bottom: 72px; }
     #app.plan-open .plates, #app.plan-open .edge { display: none; }
     /* ---------------- while-you-drive switches: an edge tab that slides a small panel over the map ---------------- */
-    .edge { --edge-w: min(288px, calc(100vw - 64px)); position: absolute; right: 0; top: 38%; z-index: 4; display: flex; align-items: flex-start;
+    /* the map's right-hand keys (Layers, then Recenter or Overview under it) start 38% down the map, or higher on a short
+       map (a small phone in a drive: the map between the strip and the gauges is about 230 px) so they stay clear of the
+       map's credit key at the bottom right: 184 px is the Layers tab, a key under it at drive size, and the credit */
+    #app { --keys-top: min(38%, calc(100% - 184px)); }
+    .edge { --edge-w: min(288px, calc(100vw - 64px)); position: absolute; right: 0; top: var(--keys-top); z-index: 4; display: flex; align-items: flex-start;
       transform: translateX(var(--edge-w)); transition: transform 0.12s cubic-bezier(0.2, 0.8, 0.2, 1); }   /* F-16: a small panel, 120 ms */
+    /* the edge's box runs as tall as its panel, so closed, the empty strip under the tab lay over the keys below it (Recenter
+       took no tap; 2026-11-14): only the tab, and the panel when open, take a touch */
+    .edge { pointer-events: none; } .edge-tab, .edge.open .edge-panel { pointer-events: auto; }
     .edge.open { transform: none; top: calc(12px + var(--safe-top)); }   /* opened: from the top down, clear of the deck (REVIEW2.md 1.9) */
     #app.live .edge.open { top: 12px; }
     .edge-tab { flex: none; width: 40px; height: 52px; background: var(--panel); color: var(--panel-ink);
@@ -384,8 +404,20 @@
     #app.sheet-open .edge { display: none; }
     /* Recenter: the second map key, under Layers (REVIEW.md 1.2 Map idle). U-71: the glyph is always its face; the time
        left before it recenters on its own is a bar along its foot that drains, and the seconds are in its label only */
-    #recenterBtn { display: none; position: absolute; right: 0; top: calc(38% + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; }
+    #recenterBtn { display: none; position: absolute; right: 0; top: calc(var(--keys-top) + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; }
     #recenterBtn.show { display: flex; align-items: center; justify-content: center; }
+    /* the compass (as Apple Maps shows one): only when the map is turned off north and you aren't driving; its needle points
+       north, under Recenter when that shows; a tap turns the map to face north and leaves it there */
+    #compassBtn { position: absolute; right: 0; top: calc(var(--keys-top) + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; display: flex; align-items: center; justify-content: center; }
+    #compassBtn[hidden], #app.sheet-open #compassBtn, #app.live #compassBtn { display: none; }
+    #recenterBtn.show ~ #compassBtn { top: calc(var(--keys-top) + 124px); }
+    /* route overview in a drive: where Recenter sits; following, it shows, and once you've looked, Recenter takes its place */
+    #overviewBtn { position: absolute; right: 0; top: calc(var(--keys-top) + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; display: flex; align-items: center; justify-content: center; }
+    #overviewBtn[hidden], #recenterBtn.show ~ #overviewBtn, #app.sheet-open #overviewBtn { display: none; }
+    #overviewBtn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    #compassBtn svg { width: 28px; height: 28px; }
+    #compassBtn .cp-n { fill: var(--panel-ink); stroke: var(--panel-ink); stroke-width: 1.2; }
+    #compassBtn .cp-s { fill: none; stroke: var(--panel-ink); stroke-width: 1.2; }
     #recenterBtn svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
     #recenterBtn { overflow: hidden; }
     @media (prefers-reduced-motion: reduce) { #recenterBtn.counting .rc-left { transform: scaleX(1); } }
@@ -404,13 +436,31 @@
     .pin { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; padding: 2px 5px; border: 1.5px solid; background: var(--panel); white-space: nowrap; cursor: pointer; font-family: var(--font-ui); }
     .pin.alpr { color: var(--signal); border-color: var(--signal); }
         .puck { width: 26px; height: 26px; }
+    /* the fix's accuracy round the idle arrow (gps_halo.js): the ink, faint (red is kept for act now), a hairline edge; never a tap target */
+    .gps-halo { border-radius: 50%; background: color-mix(in srgb, var(--panel-ink) 12%, transparent); border: 1px solid color-mix(in srgb, var(--panel-ink) 40%, transparent); pointer-events: none; }
+    .gps-halo[hidden] { display: none; }
+    /* the heading beam (gps_halo.js beam): a cone in the ink, fading out, under the arrow; never a tap target */
+    .heading-beam { width: 120px; height: 120px; color: var(--panel-ink); pointer-events: none; }
+    .heading-beam[hidden] { display: none; }
     .reshape-pin { cursor: grabbing; }
     .stop-row { align-items: center; gap: 6px; } .stop-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .poi-pin { cursor: pointer; }
     .pinned-row { flex-wrap: nowrap; align-items: stretch; } .pinned-row .place { flex: 1; min-width: 0; }
     .dropped-pin { width: 24px; height: 24px; border: 3px solid var(--panel); background: var(--accent); border-radius: 50%; box-shadow: 0 0 0 2px var(--panel-ink); }
-    .pin-actions { display: grid; gap: 8px; }
-    .pin-actions .ink-btn { width: 100%; text-align: left; }
+    .pin-photo { margin: -24px calc(-24px - var(--safe-right)) 0 calc(-24px - var(--safe-left)); position: relative; aspect-ratio: 16 / 9; max-height: 34vh; overflow: hidden; background: var(--hair); }
+    .pin-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .pin-photo figcaption { position: absolute; right: 0; bottom: 0; max-width: 100%; padding: 3px 8px; font-size: 11px; line-height: 1.3; background: rgba(0, 0, 0, 0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pin-photo figcaption a { color: #fff; text-decoration: none; }
+    .pin-hours { margin: 2px 0 0; font-weight: 700; color: var(--panel-ink); }
+    .pin-hours.closed { color: var(--panel-dim); }   /* closed is not a warning: the signal colour stays for hazards */
+    .pin-contact { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 2px; }
+    .pin-contact a { flex: 1 1 0; min-width: 0; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Go across the card, the rest one row of short keys under it, as Apple Maps' place card sets them (not a wall of
+       full-width rows); a larger text size wraps them two to a row */
+    .pin-actions { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
+    .pin-actions .ink-btn { width: 100%; min-height: 48px; padding: 8px 6px; text-align: center; line-height: 1.2; white-space: normal; }
+    .pin-actions #pinGoBtn, .pin-actions .linkbtn { grid-column: 1 / -1; }
+    .pin-actions #pinGoBtn { text-align: left; padding: 14px 18px; }
     .spot-chips, .spot-stars { display: flex; flex-wrap: wrap; gap: 6px; }
     .spot-chips button { min-height: 44px; padding: 0 12px; border: 1.5px solid var(--panel-ink); font-size: 15px; font-weight: 600; }
     .spot-chips button.on { background: var(--panel-ink); color: var(--panel); }
@@ -843,11 +893,11 @@
     .nearby-chip::before { content: ""; display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: -1px; background: currentColor;
       -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 10' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M1 8 C4 8 4 2 7 2 S10 8 13 8'/%3E%3C/svg%3E") center / contain no-repeat;
       mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 10' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M1 8 C4 8 4 2 7 2 S10 8 13 8'/%3E%3C/svg%3E") center / contain no-repeat; }
-    /* the row of keys under Where to? (2026-11-13 IA pass): a square glyph over its word, four across, as Apple Maps' Find
-       Nearby; Best roads nearby, the app's own, inked solid. Radius 0 and 1.75 px strokes (BRAND.md) */
-    .plan-keys { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 8px 0 6px; }
+    /* the row of keys under Where to? (2026-11-13 IA pass): a square glyph over its word, as Apple Maps' Find
+       Nearby, five across with Parking (2026-11-14); Best roads nearby, the app's own, inked solid. Radius 0 and 1.75 px strokes (BRAND.md) */
+    .plan-keys { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin: 8px 0 6px; }
     .plan-keys > #planChips { display: flex; justify-content: center; align-items: flex-start; margin: 0; }
-    .plan-keys > .nearby-keys { grid-column: span 3; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; align-items: start; margin: 0; }
+    .plan-keys > .nearby-keys { grid-column: span 4; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; align-items: start; margin: 0; }
     .plan-keys > .plan-chips[hidden] { display: none; }
     .plan-chips .chip.rkey, .nearby-keys .chip.rkey { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 6px; min-width: 0; min-height: 44px; padding: 0; border: 0; background: none; color: var(--panel-ink); font: 500 13px/1.2 var(--font-ui); text-align: center; }
     .rkey::before { display: none !important; }
@@ -1761,6 +1811,12 @@
     .poi-pin.poi-falls { border-color: #2a6f9b; color: color-mix(in srgb, #2a6f9b 60%, var(--panel-ink, #222)); }   /* IDEAS R-24: water */
     .poi-pin.poi-charge { border-color: #2e6b8a; color: color-mix(in srgb, #2e6b8a 60%, var(--panel-ink, #222)); }  /* an electric car's chargers (scenic.js forCar) */
     /* Find nearby's places: the name on the stamp, a size up from the route's along stamps (they are what you asked for) */
+    /* the routes' tags on the map (route_callouts.js): time over corners, a tail to the line; the picked route's filled */
+    .route-callout { display: grid; justify-items: center; gap: 1px; padding: 4px 9px 5px; border: 1.5px solid var(--panel-ink, #222); border-radius: 8px; background: var(--panel, #fff); color: var(--panel-ink, #222); font: inherit; line-height: 1.1; white-space: nowrap; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
+    .route-callout b { font: 700 14px var(--font-ui, sans-serif); }
+    .route-callout small { font: 600 10px var(--font-ui, sans-serif); opacity: 0.75; }
+    .route-callout::after { content: ''; position: absolute; left: 50%; bottom: -6px; width: 9px; height: 9px; transform: translateX(-50%) rotate(45deg); background: inherit; border: inherit; border-width: 0 1.5px 1.5px 0; border-radius: 0 0 2px 0; }
+    .route-callout.on { background: var(--panel-ink, #222); color: var(--panel, #fff); z-index: 1; }
     .poi-pin.nearby-pin { font-size: 12px; padding: 3px 6px; opacity: 1; max-width: 160px; }
     /* A desk (IDEAS A-05): on a big screen the sheets (Where to?, Log list, Crew, Settings) open as a 480 px panel on the
        right and the map stays in view beside them, for planning with a mouse: drag the route, add stops, GPX in and out. */
@@ -1910,6 +1966,19 @@
       background: linear-gradient(var(--panel-ink), var(--panel-ink)) 0 0 / 30% 100% no-repeat var(--hair); animation: hud-seek 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
     @keyframes hud-seek { from { background-position: 0 0; } to { background-position: 100% 0; } }
     #driveBar[data-state="off"] .ds-main, #driveBar[data-state="zone"] .ds-main { color: var(--panel-ink); }
+    /* on a route, the trip figures as Apple and Google Maps set them: arrival, time left, distance left, big figures with
+       their units small under them; the recording and sharing a small line below */
+    #dsMain.has-trip { display: flex; flex-direction: column; gap: 3px; padding-bottom: 0; color: var(--panel-ink); }
+    #dsMain.has-trip::before, #dsMain.has-trip::after { display: none; }
+    #dsMain .trip { display: flex; flex-wrap: wrap; gap: 4px clamp(10px, 4vw, 18px); align-items: flex-end; white-space: nowrap; }   /* a figure too many for the width goes under, never past End */
+    #dsMain .tf { display: flex; flex-direction: column; line-height: 1; }
+    #dsMain .tf b { font-size: clamp(21px, 6.6vw, 26px); font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+    #dsMain .tf small { margin-top: 3px; font-size: 13px; font-weight: 600; color: var(--panel-dim); }
+    html[data-theme="tapedeck"] #dsMain .tf b { font-size: clamp(18px, 5.6vw, 24px); }   /* the dot font is wide (U-100) */
+    html[data-theme="tapedeck"] #dsMain .trip { column-gap: clamp(8px, 3.4vw, 16px); }
+    @media (max-width: 340px) { #app #hzReportBtn { padding: 0 6px; } }   /* the figures' room on a 320 px phone */
+    #dsMain .ds-sub { font-size: 13px; font-weight: 600; color: var(--panel-dim); }
+    #dsMain .ds-sub b { font-size: 13px; color: var(--panel-ink); }
     #app .transport { padding: 0 6px 10px; border-bottom: 1px solid var(--hair); }
     /* the replay's transport in the same hand: the trace bare on the paper, the speeds as numerals with the chosen one
        underlined in ink, Video a word; Done is the one key. The replay's name is a paper tag on the map. */
@@ -1995,7 +2064,7 @@
     @keyframes hud-head { from, 70% { opacity: 0; } }
 
     /* The opening cover (web/boot.js): the theme's panel and the mark until the page has drawn. */
-    #boot { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; background: var(--panel, #151310); transition: opacity 0.2s ease-out; }
+    #boot { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; background: var(--panel, #111214); transition: opacity 0.2s ease-out; }
     #boot { color: var(--panel-ink, #EDE4D3); }
     #boot svg { display: block; width: 184px; height: 50px; }
     #boot.gone { opacity: 0; pointer-events: none; }
@@ -2003,6 +2072,7 @@
 </style>
   <link rel="stylesheet" href="controls.css" />
   <link rel="stylesheet" href="signature.css" />
+  <link rel="stylesheet" href="system.css" />   <!-- the main look's shape and depth (web/system.css), last: it outranks the per-screen rules -->
 </head>
 <body>
   <!-- U-80: the launch screen's lockup (Assets.xcassets/LaunchLogo, 184 x 50 pt, centred) drawn again at the same size and
@@ -2030,6 +2100,8 @@
         <div class="plate trial-plate" id="trialPlate" role="status" hidden><span id="trialText"></span><span id="trialWatchSep"> · </span><button class="linkbtn" id="trialWatch">Watch a replay</button> · <button class="linkbtn" id="trialStop">Stop</button></div>
       </div>
       <button class="map-key recenter-key" id="recenterBtn" aria-label="Recenter"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="1.5"/></svg><span class="rc-left"></span></button>
+      <button class="map-key compass-key" id="compassBtn" aria-label="Face north" title="Face north" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path class="cp-n" d="M12 3 L15.5 12 H8.5 Z"/><path class="cp-s" d="M12 21 L8.5 12 H15.5 Z"/></svg></button>
+      <button class="map-key overview-key" id="overviewBtn" aria-label="Route overview" title="Route overview" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2"/><path d="M8 18h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5"/><path d="M16 3l3 3-3 3"/></svg></button>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
       <div class="sr-only" id="announcer" role="status" aria-live="polite"></div>
 
@@ -2202,7 +2274,7 @@
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><path class="k-smooth" d="M3 15 C6 15 7 9 10 8"/><path class="k-fair" d="M12 7 C14 6 15 12 18 12"/><path class="k-rough" d="M20 12 C22 12 23 7 25 5"/></svg></button>
         <button class="sw ly" data-toggle="lpr"><i></i><span>Cameras<small>Plate and speed</small></span>
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><rect class="k-cam" x="4" y="4.75" width="20" height="10.5"/><path class="k-cam" d="M8.5 10 H19.5"/></svg></button>
-        <button class="sw ly" data-toggle="roadcams"><i></i><span>Road cameras<small>Ohio's road now, tap one</small></span>
+        <button class="sw ly" data-toggle="roadcams"><i></i><span>Road cameras<small>The road now in Ohio and Kentucky</small></span>
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><circle class="k-roadcam" cx="14" cy="10" r="5"/></svg></button>
         <button class="sw ly" data-toggle="terrain"><i></i><span>3D terrain<small>Hills stand up as you tilt</small></span>
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><path class="k-hill" d="M2 17 L10 6 L15 12 L19 8 L26 17 Z"/></svg></button>
@@ -2304,6 +2376,7 @@
               <button class="sw" data-toggle="push"><i></i><span>Tell me when friends do something</span></button>
             </div>
             <p class="note" id="pushState" role="status" aria-live="polite"></p>
+            <div class="row" id="pushKinds" style="flex-wrap:wrap" hidden></div>
           </section>
           <section data-panel="garage" data-setting="units" data-title="Units" data-summary="#unitsRow">
             <h3>Units</h3>
@@ -2420,15 +2493,15 @@
             <h3>About Vetta</h3>
             <div class="row"><span>Version</span><b id="aboutVersion">--</b></div>
             <ul class="promises">
-              <li><b>No top speeds.</b> Nothing records or shows how fast anyone went flat out; a board has only the drivers who ran its road.</li>
-              <li><b>Shared with your people.</b> Friends and private crews see your Scores and times until you switch them off; your drives stay on this phone, and privacy zones keep home and work out of everything.</li>
+              <li><b>Shared with your people.</b> Friends and private crews see your Scores and times from the start. Switch any of them off in Who sees what.</li>
+              <li><b>Home stays home.</b> Privacy zones keep home and work out of everything you share.</li>
               <li><b>Unknown stays unknown.</b> When the app doesn't know, it shows --, never a guess.</li>
               <li><b>Free to drive.</b> No ads, no personal data sold, and nothing you made ever behind a paywall.</li>
             </ul>
           </section>
           <section class="sources" data-panel="garage" data-setting="about">
             <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Search suggestions: Photon (Komoot). Plate-reading and speed cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock; <code>highway=speed_camera</code>) via Overpass. Route ranking: land use, buildings, businesses, signals, stops, limits, lanes, signs, guard rails, cycle routes, byways and fuel from OpenStreetMap (ODbL) via OpenFreeMap tiles and Overpass, including the VK Maps Overpass server. Voices: Kokoro-82M (Apache-2.0). Route context (public domain unless noted): night lights, NASA Black Marble (VNP46A4 yearly radiance from NASA LAADS DAAC, or the 2016 image via NASA GIBS where not yet rebuilt); impervious surface and tree canopy, NLCD 2021 (USGS/MRLC, USDA Forest Service); road noise, BTS National Transportation Noise Map; homes and people, 2020 Census and ACS (US Census Bureau); address points, OpenAddresses contributors and their county and state sources; traffic, roughness, limits and lanes, HPMS (FHWA and the state DOTs); fatal crashes, FARS (NHTSA); flood zones, FEMA NFHL; crops, USDA NASS Cropland Data Layer; parks and visits, National Park Service.</p></details>
-            <p class="note mt-8"><a href="https://apexnav.senftns.workers.dev/privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="https://apexnav.senftns.workers.dev/terms.html" target="_blank" rel="noopener">Terms of use</a> · <a href="licenses.html">Licences</a></p>
+            <p class="note mt-8"><a href="https://vettadrive.com/privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="https://vettadrive.com/terms.html" target="_blank" rel="noopener">Terms of use</a> · <a href="licenses.html">Licences</a></p>
           </section>
         </div>
       </aside>
@@ -2448,6 +2521,7 @@
           <div class="end-score"><b id="endScore">--</b><small>/1000</small><span>Vetta Score</span><em id="endUsual" hidden></em><i class="end-glyph" id="endGlyph" aria-hidden="true"></i></div>
           <p class="end-meta" id="endMeta"></p>
           <p class="end-feel" id="endFeel" hidden></p>   <!-- panel round 2, HE-1: what this phone felt, only when measured -->
+          <p class="end-feel" id="endRival" hidden></p>   <!-- Drive it on a friend's post: your Score on their stages against theirs -->
           <p class="end-feel" id="endPractice" hidden></p>   <!-- IDEAS D-27: the skill you are practicing, on this drive -->
           <p class="end-feel" id="endRoad" hidden></p>   <!-- on a road driven before: your passes there, corner by corner -->
           <p class="end-feel" id="endRun" hidden></p>   <!-- IDEAS D-30: a run of clean corners that is this month's best -->
@@ -2476,12 +2550,18 @@
       </div>
       <div class="overlay dim" id="pinOverlay" role="dialog" aria-modal="true" aria-label="Dropped pin">
         <div class="card-sheet">
+          <!-- the street-level photo taken nearest the place and facing it (place_photo.js, Mapillary); nothing until loaded -->
+          <figure class="pin-photo" id="pinPhoto" hidden><img alt="" decoding="async" /><figcaption><a target="_blank" rel="noopener"></a></figcaption></figure>
           <h2 id="pinPlace">--</h2>
           <p class="note" id="pinKind" hidden></p>
+          <!-- a named place's hours, phone and site, from its OSM tags (place_info.js); nothing until known -->
+          <p class="pin-hours" id="pinHours" hidden></p>
+          <div class="pin-contact" id="pinContact" hidden></div>
           <div class="pin-actions">
             <button class="ink-btn solid" id="pinGoBtn">Go here</button>
             <button class="ink-btn" id="pinFromBtn">Start from here</button>
             <button class="ink-btn" id="pinViaBtn" hidden>Add via</button>
+            <button class="ink-btn" id="pinShareBtn">Share</button>
             <button class="ink-btn" id="pinSaveBtn">Save as a spot</button>
             <button class="linkbtn" id="pinCancelBtn">Cancel</button>
           </div>
@@ -2624,7 +2704,7 @@
           <div class="opt-mix"><span>Fast bends</span><div class="switch" role="radiogroup" aria-label="Fast bends"><button data-pref-fast="-1" role="radio" aria-checked="false">Fewer</button><button data-pref-fast="0" role="radio" aria-checked="true">Any</button><button data-pref-fast="1" role="radio" aria-checked="false">More</button></div></div></div>
         <div class="ctl"><div class="ctl-label">Start from</div>
           <div class="from-row">
-            <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="From: current location" aria-label="From" autocomplete="off" />
+            <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="Current location" aria-label="From" autocomplete="off" />
             <button class="icon-btn" id="swapBtn" aria-label="Swap From and To"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4"/></svg></button>
           </div></div>
         <!-- a loop sized by what the phone knows (app only: the page shows this group when the app can answer). An hour or two

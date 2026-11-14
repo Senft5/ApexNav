@@ -9,6 +9,7 @@ something blocks on you, delete it once it's done. Everything else is in docs/ID
 
 | what | why | how long |
 |---|---|---|
+| **Once Vetta is on the App Store** (launch marketing, 2026-11-14): in `web/cockpit.js` (search `APP_STORE_ID`), set `APP_STORE_ID` to the app's Apple ID (App Store Connect → App Information, digits) and `APP_STORE_PT` to your provider token (the `pt=` in any campaign link App Store Connect makes), or tell Claude both | An invite, crew, convoy or roadbook link opened on an iPhone without the app then offers Get the app, tagged `ct=invite`, `crew`, `convoy` or `route-share`, so App Store Connect counts which links bring people. Hidden until then | 5 min |
 | **Only if @fish5spd has no Satellite switch** (2026-11-04): he is known by a fingerprint of his TestFlight address. If he signs in to Vetta with a different address, run `python3 -c "import hashlib; print(hashlib.sha256(input().strip().lower().encode()).hexdigest()[:16])"`, type his sign-in address, and in Cloudflare (Workers → apexnav → Settings → Variables and Secrets) add the variable `DEV_FINGERPRINTS` with the 16 characters it prints (comma-separated for more) | The developer Satellite layer (Layers → Satellite) shows only to accounts `/api/me` calls developers: you (OWNER_EMAIL) and his fingerprint (backend/src/developers.ts) | 2 min |
 | **Route context for the whole launch region** (2026-11-04): in Cloudflare create a KV namespace **apexnav-ctx** (Workers & Pages → KV → Create) and tell Claude its id (Claude adds the `CTX` binding to wrangler.jsonc); in GitHub → Settings → Secrets and variables → Actions add secrets **CLOUDFLARE_API_TOKEN** (a token with "Workers KV Storage: Edit") and **CLOUDFLARE_ACCOUNT_ID**, and a variable **CTX_KV_ID** (the namespace id). Then run Actions → "Context grid (route data ETL)" with preset launch and upload ticked | Routes use national traffic, land-cover, noise, crash and flood data (web/route_ctx/context_grid.js). Cincinnati's ships in the app; the seven launch states (about 70 MB, measured on the first 970 of 12,379 tiles) are too big to commit, so the Worker serves them from KV. Until then routes outside Cincinnati simply don't use that data | 10 min |
 | **Own routing beyond Cincinnati** (2026-11-04): with R2 on (next row), create a bucket **apexnav-graph** (R2 → Create bucket); in GitHub → Settings → Secrets and variables → Actions add the secrets **CLOUDFLARE_API_TOKEN** (with "R2: Edit") and **CLOUDFLARE_ACCOUNT_ID** if not there yet, and a variable **GRAPH_R2_BUCKET** = `apexnav-graph`. Then run Actions → "Graph tiles (own routing ETL)" with **region** ticked | Vetta's own scored road network (docs/OWN_ROUTING.md) for all of Ohio, Kentucky and Indiana, fetched by tile on the phone. Cincinnati's ships in the app; without this the rest of the region routes as today (Valhalla) | 10 min |
@@ -16,12 +17,23 @@ something blocks on you, delete it once it's done. Everything else is in docs/ID
 | **Google's sign-in screen says "to continue to senftns.workers.dev"**: in Google Cloud → APIs & Services → OAuth consent screen, set the app name to **Vetta** (and the logo); with the domain (row below), Claude moves the sign-in to it | REVIEW4 U-66: it's the moment a new member decides whether to trust the app | 10 min |
 
 | **Create a free key for EV chargers** (fuel-stop spacing, route_ctx/car.js): the lab once called NREL is now NLR (National Laboratory of the Rockies) and its old site is gone; sign up at **developer.nlr.gov/signup** (any api.data.gov key works too: api.data.gov/signup; free, 1,000 calls an hour), then in Cloudflare (Workers → apexnav → Settings → Variables and Secrets) add the secret `NREL_API_KEY` | Electric cars get planned charging stops on long back-road stretches. Without it the route card says chargers couldn't be checked; petrol cars use OpenStreetMap and need nothing | 5 min |
+## Convoy voice (new, 2026-11-14)
+
+Free up to 1,000 GB a month (a 16-car convoy talking for an hour is about 3 GB). Cloudflare dashboard → **Realtime** →
+**Serverless SFU** → **Create** (name it Vetta) → copy the **App ID** and the **App Token**. Then Workers → apexnav →
+Settings → Variables and Secrets → Add → type Secret: **`REALTIME_APP_ID`** (the App ID), Deploy; again for
+**`REALTIME_APP_TOKEN`** (the token), Deploy. Until both are there the app simply shows no Talk key in a convoy.
+
 ## Free keys for route intelligence (new, 2026-11-03)
 
 All free. Make each account, then put the keys in **one** Worker secret: Cloudflare → Workers → apexnav → Settings →
 Variables and Secrets → add secret **`CTX_KEYS`** with JSON like `{"seatgeekClientId": "…", "mapillaryToken": "MLY|…",
 "ohgoApiKey": "…", "nassApiKey": "…"}` (leave out any you skip). Phones fetch them within a day; nothing is
 in the code. Until then each source is simply unknown on the route card, never guessed.
+
+**Fix (2026-11-14):** the `seatgeekClientId` in CTX_KEYS is refused by SeatGeek ("Invalid client credentials", 403). Copy the
+**Client ID** (not the secret) from seatgeek.com/account/develop and put it back in CTX_KEYS; event traffic stays unknown
+until then. The `nassApiKey` is no longer handed to phones (USDA's API can't be read from an app), so it can stay or go.
 
 | what | why | how long |
 |---|---|---|

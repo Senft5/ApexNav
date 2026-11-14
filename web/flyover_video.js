@@ -32,7 +32,9 @@
   function start(opts) {
     const MR = root.MediaRecorder, mime = mimeFor(MR), src = opts.map && opts.map.getCanvas && opts.map.getCanvas();
     if (!mime || !src) return null;
-    const { w, h } = sizeFor(src.width, src.height), out = root.document.createElement('canvas');
+    // portrait: 9:16 at 720 x 1280 (Reels, Shorts, TikTok), the middle of the map's picture; else the map's own aspect
+    const { w, h } = opts.portrait ? { w: 720, h: 1280 } : sizeFor(src.width, src.height), out = root.document.createElement('canvas');
+    const crop = cropFor(src.width, src.height, w, h);
     out.width = w; out.height = h;
     const g = out.getContext('2d');
     if (!g || typeof out.captureStream !== 'function') return null;
@@ -41,8 +43,8 @@
     out.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;z-index:-1';
     root.document.body.append(out);
     const draw = () => {
-      try { g.drawImage(src, 0, 0, w, h); } catch (_) { return; }
-      const o = (opts.overlay && opts.overlay()) || {}, pad = Math.round(w * 0.025), fs = Math.round(h * 0.05);
+      try { g.drawImage(src, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, w, h); } catch (_) { return; }
+      const o = (opts.overlay && opts.overlay()) || {}, pad = Math.round(w * (opts.portrait ? 0.05 : 0.025)), fs = Math.round(Math.min(h * 0.05, w * 0.06));
       g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(0, h - fs * 2.6, w, fs * 2.6);
       g.fillStyle = '#fff'; g.textBaseline = 'middle';
       g.font = `700 ${fs}px system-ui, sans-serif`; g.fillText(o.note || '', pad, h - fs * 1.6);
@@ -62,6 +64,13 @@
     return { stop() { if (rec.state !== 'inactive') rec.stop(); }, mime };
   }
 
-  const api = { mimeFor, canRecord, extFor, fileName, sizeFor, start, TYPES };
+  /** The part of a sw x sh source drawn into w x h: all of it at the same aspect, else its middle (cover). */
+  function cropFor(sw, sh, w, h) {
+    const k = Math.min(sw / w, sh / h), cw = Math.min(sw, Math.round(w * k)), ch = Math.min(sh, Math.round(h * k));
+    return { sx: Math.round((sw - cw) / 2), sy: Math.round((sh - ch) / 2), sw: cw, sh: ch };
+  }
+  // Show speed on clips and replays, on this phone (the Log's clip switch, corner_clip.js setSpeedShown: the same key)
+  function speedShown() { try { return root.localStorage.getItem('apex.clipSpeed') !== 'off'; } catch (_) { return true; } }
+  const api = { mimeFor, canRecord, extFor, fileName, sizeFor, cropFor, speedShown, start, TYPES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFlyoverVideo = api;
 })(typeof window !== 'undefined' ? window : globalThis);

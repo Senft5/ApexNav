@@ -46,7 +46,7 @@ describe("route feeds relay (/api/ctx/workzones)", () => {
 
   it("hands the app only the known client keys, and nothing when none is set", async () => {
     expect(await (await api(null, "GET", "/api/ctx/keys")).json()).toEqual({ keys: {} });
-    (env as { CTX_KEYS?: string }).CTX_KEYS = JSON.stringify({ seatgeekClientId: "abc", other: "x", ohgoApiKey: "" });
+    (env as { CTX_KEYS?: string }).CTX_KEYS = JSON.stringify({ seatgeekClientId: "abc", other: "x", ohgoApiKey: "", nassApiKey: "n1" });   // NASS: no CORS, never handed out
     expect(await (await api(null, "GET", "/api/ctx/keys")).json()).toEqual({ keys: { seatgeekClientId: "abc" } });
     (env as { CTX_KEYS?: string }).CTX_KEYS = "{ broken";
     expect(await (await api(null, "GET", "/api/ctx/keys")).json()).toEqual({ keys: {} });

@@ -44,4 +44,4 @@ def test_the_cockpit_keeps_and_reads_them():
     assert "keepMapAlong(t); keepReportsAlong(t);" in src, "saving a route keeps its reports"
     assert "ApexRouteReports.remove(localStorage, String(t.id))" in src, "unsaving drops them"
     assert "localStorage.removeItem(ApexRouteReports.KEY)" in src, "Delete offline data clears them"
-    assert "if (kept) list = kept.rows;\n      else try { list = await hazardsAround(pts); }" in src and "(as of ${" in src, "the card with no signal: the kept ones, with their age"
+    assert "if (!list || list.unknown) { kept = keptCopy(); if (!kept) return; }" in src and "if (kept) list = kept.rows;" in src and "(as of ${" in src, "the card with no signal (or one bar that carries nothing): the kept ones, with their age"

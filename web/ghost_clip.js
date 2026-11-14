@@ -77,12 +77,13 @@
     g.font = `600 ${Math.round(fs * 0.55)}px system-ui, sans-serif`; g.fillText((meta.title || '').toUpperCase(), pad, pad + fs * 0.6);
     g.font = `800 ${fs}px system-ui, sans-serif`; g.fillText(meta.label || '', pad, pad + fs * 1.7);
     g.textAlign = 'right'; g.font = `800 ${Math.round(fs * 0.55)}px system-ui, sans-serif`; g.fillText('VETTA', w - pad, pad + fs * 0.6);
+    if (root.ApexCornerClip && root.ApexCornerClip.mark) root.ApexCornerClip.mark(g, w, fs, pad);   // vettadrive.com under it
     // each half: who it is and its speed
     g.textAlign = 'left'; g.font = `700 ${Math.round(fs * 0.5)}px system-ui, sans-serif`;
     g.fillText('THIS DRIVE', pad, half - fs * 1.4);
     g.fillText(`BEST PASS${meta.whenB ? ` · ${String(meta.whenB).toUpperCase()}` : ''}`, pad, h - pad - fs * 1.6);
     g.font = `800 ${Math.round(fs * 1.1)}px system-ui, sans-serif`;
-    g.textAlign = 'right'; g.fillText(f.speedA || '--', w - pad, half - fs * 1.3); g.fillText(f.speedB || '--', w - pad, h - pad);
+    if (!meta.hideSpeed) { g.textAlign = 'right'; g.fillText(f.speedA || '--', w - pad, half - fs * 1.3); g.fillText(f.speedB || '--', w - pad, h - pad); }
     // the gap on the seam: amber while behind, green while ahead
     g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `800 ${Math.round(fs * 1.2)}px system-ui, sans-serif`;
     g.fillStyle = !finite(f.gap) || Math.abs(f.gap) < 0.05 ? '#fff' : f.gap > 0 ? '#ffb020' : '#4cd964';
@@ -102,7 +103,8 @@
    * Resolves { blob, mime }. The sound is not kept.
    */
   async function record(opts) {
-    const { va, vb, a, b, w, trace, fmtSpeed, meta, canvas } = opts;
+    const { va, vb, a, b, w, trace, fmtSpeed, canvas } = opts, CC = root.ApexCornerClip;
+    const meta = { ...opts.meta, hideSpeed: opts.hideSpeed != null ? !!opts.hideSpeed : !!(CC && CC.speedShown && !CC.speedShown()) };
     const MR = root.MediaRecorder, mime = root.ApexFlyoverVideo && root.ApexFlyoverVideo.mimeFor(MR);
     if (!mime || !canvas.captureStream) throw new Error('no recorder');
     canvas.width = W; canvas.height = H;

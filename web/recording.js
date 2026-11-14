@@ -75,6 +75,7 @@
       shape: shapeOf(d),
       ds: { score: ds.score, corners: ds.corners || 0, components: ds.components || null }, corners, run,
       tags: d.tags, note: d.note, ended: d.ended, contributed: d.contributed, car: d.car ? { label: d.car.label } : undefined,
+      surface: d.surface || undefined,                                // dry, wet or icy (road_surface.js), when it was known
       battery: d.battery, laps: Array.isArray(d.laps) ? d.laps.length : undefined,
       feel: !!(d.rough && d.kappa),                                  // ApexContributor.eligible asks for both
     };

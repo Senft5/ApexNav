@@ -26,5 +26,6 @@ jobs:
           ref: graph-data
           path: graph-data
       - name: Upload
+        shell: bash   # -o pipefail: a refused upload fails the run, not only the script behind the tee
         run: |
           tools/graph_etl/upload_r2.sh graph-data | tee -a "$GITHUB_STEP_SUMMARY"

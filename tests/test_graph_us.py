@@ -25,6 +25,19 @@ def test_states_are_the_lower_48_only():
     assert list(U.states(INDEX)) == ["ohio", "west-virginia"]
 
 
+def test_the_pacific_northwest_is_in_though_its_polygons_run_out_to_sea():
+    """2026-11-14: Geofabrik's Washington reaches -126.7 and Oregon past -126; at 1 degree of slack the first build left both
+    out (Seattle, Portland, the Oregon coast off the map)."""
+    ix = {"features": [{"properties": {"id": "us/washington", "parent": "us"}, "geometry": box(-126.74, 45.54, -116.91, 49.05)},
+                       {"properties": {"id": "us/oregon", "parent": "us"}, "geometry": box(-126.11, 41.99, -116.46, 46.30)},
+                       {"properties": {"id": "us/hawaii", "parent": "us"}, "geometry": box(-178.5, 18.8, -154.7, 28.5)},
+                       {"properties": {"id": "us/alaska", "parent": "us"}, "geometry": box(-179.2, 51.2, -129.9, 71.4)}]}
+    assert list(U.states(ix)) == ["oregon", "washington"]
+    boxes = {tuple(b[1]) for j in U.jobs(U.states(ix)) for b in j["blocks"]}
+    assert (-123.0, 47.0, -122.0, 48.0) in boxes and (-124.0, 45.0, -123.0, 46.0) in boxes, "Seattle and the Oregon coast"
+    assert all(b[0] >= -125.0 for b in boxes), "blocks stay on the lower 48's grid"
+
+
 def test_geofabriks_us_prefixed_ids_are_states_by_their_short_names():
     ix = {"features": [{"properties": {"id": "us/ohio", "parent": "us", "urls": {"pbf": "https://x/ohio.pbf"}}, "geometry": box(-84.82, 38.4, -80.52, 42.33)},
                        {"properties": {"id": "us/alaska", "parent": "us"}, "geometry": box(-179.2, 51.2, -129.9, 71.4)}]}
@@ -40,7 +53,8 @@ def test_jobs_cover_each_block_once_with_the_states_under_its_margin():
     assert (-85.0, 38.0, -84.0, 39.0) in boxes and (-78.0, 37.0, -77.0, 38.0) in boxes
     assert (-90.0, 38.0, -89.0, 39.0) not in boxes, "no state there: no block"
     for j in js:
-        assert j["east"] - j["west"] <= U.CHUNK_DEG
+        assert j["east"] - j["west"] <= U.chunk_deg(j["band"], j["west"])
+        assert not j["west"] < U.DENSE_WEST < j["east"], "no chunk across the dense line"
         for _, b, clip in j["blocks"]:
             assert clip == [b[0] - 0.4, b[1] - 0.4, b[2] + 0.4, b[3] + 0.4] or tuple(clip) == (b[0] - 0.4, b[1] - 0.4, b[2] + 0.4, b[3] + 0.4)
     # a job fetches the states under its blocks' margins: by the river both, on Lake Erie only Ohio
@@ -151,3 +165,46 @@ def test_a_state_geofabrik_refused_is_fetched_again_on_another_runner():
     assert 'grep -qx "osm-$st"' in again and "name: osm-again" in again
     band = wf[wf.index("\n  band:"):wf.index("\n  publish:")]
     assert "-n osm-again" in band and 'echo "::error::no extract for $s"; exit 1' in band, "no extract either way: the band fails, never builds without the state"
+
+
+def test_the_dense_east_is_cut_finer_and_the_matrix_fits():
+    """2026-11-14: the -95..-80 chunks (Chicago, Detroit, Cleveland) took up to 4 h 17 min of the 5 h 45 min limit. East of
+    -100 the chunks are 8 degrees (whole ones: the blocks stay on the grid); the lower 48 whole is still under GitHub's 256 jobs a matrix."""
+    full = {f"s{i}": (-125.0 + i, 24.0, -124.0 + i, 50.0) for i in range(59)}
+    js = U.jobs(full)
+    assert len(js) <= 256
+    assert all(float(b[1][0]).is_integer() for j in js for b in j["blocks"]), "every block on whole degrees"
+    assert {(j["west"], j["east"]) for j in js if j["west"] >= -100 and j["band"] == 35} == {(-100.0, -92.0), (-92.0, -84.0), (-84.0, -76.0), (-76.0, -68.0), (-68.0, -66.0)}
+    # the Great Lakes belt in 4 degree chunks (42_-92 at 8 degrees: past 3 h 45 min)
+    assert {(j["west"], j["east"]) for j in js if j["band"] == 42 and -92 <= j["west"] < -76} == {(-92.0, -88.0), (-88.0, -84.0), (-84.0, -80.0), (-80.0, -76.0)}
+    assert {(j["west"], j["east"]) for j in js if j["band"] == 39 and -92 <= j["west"] < -76} == {(-92.0, -84.0), (-84.0, -76.0)}
+
+
+def test_a_publish_can_take_an_earlier_runs_bands():
+    """2026-11-14: all 141 bands of the lower 48 built (13 h) and the publish runner died in the spot check, which decoded
+    every tile at once. bands_from publishes an earlier run's band artifacts with no download and no band."""
+    wf = open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "graph-us.yml")).read()
+    for job in ("osm", "osm-again", "band"):
+        part = wf[wf.index(f"\n  {job}:"):]
+        assert part.index("if: needs.plan.outputs.reuse == ''") < part.index("steps:"), job
+    pub = wf[wf.index("\n  publish:"):]
+    assert "needs.plan.outputs.reuse != '' && needs.band.result == 'skipped'" in pub
+    # download-artifact sees only 100 of another run's artifacts (100 of 141 bands went live, 2026-11-14): by id, paginated
+    assert "run-id:" not in pub
+    assert 'gh api --paginate "repos/${{ github.repository }}/actions/runs/$RUN/artifacts?per_page=100"' in pub
+    assert "not every band of run $RUN has its artifact" in pub
+    assert "python -m tools.graph_etl.check" not in pub, "the spot roads are Cincinnati's: graph-region.yml checks them"
+
+
+def test_a_reused_publish_never_asks_geofabrik():
+    """2026-11-14: Geofabrik refused the plan runner of the first bands_from run, which needs nothing from it."""
+    wf = open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "graph-us.yml")).read()
+    plan = wf[wf.index("\n  plan:"):wf.index("\n  osm:")]
+    assert plan.index('if [ -n "$IN_BANDS" ]; then') < plan.index("download.geofabrik.de/index-v1.json")
+    assert "--retry-max-time 1500" in plan
+
+
+def test_the_lower_48_is_rebuilt_monthly_and_goes_live():
+    wf = open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "graph-us.yml")).read()
+    assert 'cron: "23 3 1 * *"' in wf, "the 1st of each month (day of month and day of week together would be either)"
+    assert '[ -z "$only" ] && live=true' in wf, "a scheduled run has no inputs: the whole country, live"

@@ -17,6 +17,7 @@ BUNDLE = "com.senft.ApexNav"
 WANT = {
     "PUSH_NOTIFICATIONS": None,
     "SIRIKIT": None,
+    "ASSOCIATED_DOMAINS": None,
     "DATA_PROTECTION": [{"key": "DATA_PROTECTION_PERMISSION_LEVEL", "options": [{"key": "PROTECTED_UNTIL_FIRST_USER_AUTH"}]}],
 }
 

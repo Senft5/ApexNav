@@ -323,9 +323,18 @@
    */
   async function keepArea(bbox, o = {}) {
     const [s, w, n, e] = Array.isArray(bbox) ? bbox : [bbox.s, bbox.w, bbox.n, bbox.e];
+    return keepTiles(tilesIn(s, w, n, e), o);
+  }
+  /**
+   * The same for a line (lat[], lon[]): the tiles within padKm of it (tilesAlong). A drive on a planned route keeps the
+   * network along all of it as it starts (cockpit.js startDrive), so a reroute in a dead zone further on still has roads,
+   * where the 15 km kept round you (warmOwnTiles) doesn't reach yet. Bytes only, never decoded.
+   */
+  function keepAlong(lat, lon, o = {}) { return keepTiles(tilesAlong(lat, lon, o.padKm), o); }
+  async function keepTiles(list, o = {}) {
     const fetchFn = fetchOf(o), src = await sources(o);
     let tiles = 0, fetched = 0;
-    for (const { i, j } of tilesIn(s, w, n, e)) {
+    for (const { i, j } of list) {
       const name = `${i}_${j}`, first = order(src, name)[0];
       if (!first || first[0] === src.bundled) continue;
       tiles++;
@@ -342,7 +351,7 @@
     return out;
   }
 
-  const api = { VERSION, READS, CHANNELS, BASE, TILE_DEG, FLAGS, NODE_FLAGS, CLASS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, tileOf, keyOf, unkey, origin, unq8, funPts, decode, index, load, prefetchArea, prefetchAlong, tilesAlong, keepArea, tilesIn, _mem: mem, _indexes: indexes };
+  const api = { VERSION, READS, CHANNELS, BASE, TILE_DEG, FLAGS, NODE_FLAGS, CLASS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, tileOf, keyOf, unkey, origin, unq8, funPts, decode, index, load, prefetchArea, prefetchAlong, tilesAlong, keepArea, keepAlong, tilesIn, _mem: mem, _indexes: indexes };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -7,6 +7,11 @@
   // script never holds it. On the web it is same-origin with the session cookie (HttpOnly).
   const IN_APP = typeof location !== 'undefined' && location.protocol === 'apexnav:';
   const API_BASE = IN_APP ? 'https://apexnav.senftns.workers.dev' : '';
+  // Links people share (a road, a roadbook, a convoy, an ETA, a friend) are on vettadrive.app (backend/src/hosts.ts), which opens
+  // the app where it is installed (apple-app-site-association) and the web app where it isn't. A preview keeps its own host.
+  const SITE = 'https://vettadrive.app';
+  const SITE_BASE = IN_APP || (typeof location !== 'undefined' && location.hostname === 'apexnav.senftns.workers.dev') ? SITE
+    : (typeof location !== 'undefined' ? location.origin : SITE);
   const TOKEN_KEY = 'apex.session', SIGNED_KEY = 'apex.signedIn';   // the token (older builds only) / a plain "signed in" flag
   // The shell only listens to the map page itself (the main frame); the Log in its frame over the map (web/page_return.js)
   // posts through the map page's handlers, which the shell takes as the map page's.
@@ -244,6 +249,6 @@
     return { on, known: false, member: on };
   }
 
-  const api = { handlers, inApp: IN_APP, apiBase: API_BASE, apiFetch, serverDownUntil, nextMidnightUtc, signIn, signInApple, setSession, signedIn, contribute, newSegmentId, contributionEnabled, roadShare, publishScore, standings, points, board, activity, kudos, kudosReceived, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
+  const api = { handlers, inApp: IN_APP, apiBase: API_BASE, siteBase: SITE_BASE, apiFetch, serverDownUntil, nextMidnightUtc, signIn, signInApple, setSession, signedIn, contribute, newSegmentId, contributionEnabled, roadShare, publishScore, standings, points, board, activity, kudos, kudosReceived, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSync = api;
 })(typeof window !== 'undefined' ? window : globalThis);

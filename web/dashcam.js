@@ -145,7 +145,13 @@
     const reelBtn = el('button', { className: 'btn', type: 'button', hidden: true });
     // the clip just made, to your friends or a crew (drive_posts.js compose, through the map page: page.post), for a member
     const postBtn = el('button', { className: 'btn solid dc-post', textContent: 'Post this clip', type: 'button', hidden: true });
-    const clips = el('div', { className: 'dc-clips', hidden: true }, el('h3', { textContent: 'Corner clips' }), el('div', { className: 'dc-row' }, clipPick, clipBtn), el('div', { className: 'dc-row' }, reelBtn), clipCanvas, el('div', { className: 'dc-row' }, postBtn), clipNote);
+    // Show speed: on this phone, for every clip made here (corner_clip.js speedShown); off for a Reel of a public road
+    const speedBox = el('input', { type: 'checkbox', className: 'dc-speed' });
+    speedBox.style.cssText = 'width:24px;height:24px;margin:0 10px 0 0;flex:none';   // a target big enough to hit
+    speedBox.checked = !CC || !CC.speedShown || CC.speedShown();
+    speedBox.addEventListener('change', () => { if (CC && CC.setSpeedShown) CC.setSpeedShown(speedBox.checked); if (!clipSaid) listClips(); });
+    const speedRow = el('label', { className: 'dc-row dc-speed-row', style: 'display:flex;align-items:center;min-height:44px' }, speedBox, el('span', { textContent: 'Show speed on clips' }));
+    const clips = el('div', { className: 'dc-clips', hidden: true }, el('h3', { textContent: 'Corner clips' }), el('div', { className: 'dc-row' }, clipPick, clipBtn), el('div', { className: 'dc-row' }, reelBtn), speedRow, clipCanvas, el('div', { className: 'dc-row' }, postBtn), clipNote);
     let clipList = [], clipBusy = false, clipSaid = '', reel = [];   // clipSaid: how the last clip went, kept until the video moves
     let made = null;                                                 // the last clip made: { blob, mime, label, call }
     const canPost = () => typeof page.post === 'function' && (typeof page.canPost !== 'function' || !!page.canPost());
@@ -185,7 +191,7 @@
       clips.hidden = !opened;
       clipBtn.disabled = !clipList.length || frameOk !== true;
       listReel();
-      clipNote.textContent = clipList.length ? clipSaid || 'A portrait clip of the corner, with its call, speed and g, ready for Reels or a message.'
+      clipNote.textContent = clipList.length ? clipSaid || `A portrait clip of the corner, with its call${speedBox.checked ? ', speed' : ''} and g, ready for Reels or a message.`
         : 'No corner falls inside the video at this setting.';
     }
 
@@ -362,8 +368,10 @@
         const { blob, mime } = await CC.record({ video, d, T, w: x.w, offsetS: off(), fmtSpeed: page.fmtSpeed, canvas: clipCanvas,
           meta: { title: d.name || '', label: x.label }, ...(parts ? { parts } : {}) });
         keep(blob, mime, parts ? `Best ${parts.length} corners` : x.label, parts ? '' : x.call);   // kept before the share sheet: a Cancel there keeps it to post
-        await page.save(blob, root.ApexFlyoverVideo.fileName(`${d.name || 'drive'}-${parts ? 'best-corners' : `corner-${x.k + 1}`}`, mime), mime.split(';')[0]);
-        clipSaid = 'Done. The sound isn\u2019t kept.'; ok = true;
+        let copied = false;
+        await page.save(blob, root.ApexFlyoverVideo.fileName(`${d.name || 'drive'}-${parts ? 'best-corners' : `corner-${x.k + 1}`}`, mime), mime.split(';')[0],
+          { caption: CC.caption ? CC.caption(d, parts ? '' : x.call) : '', copied: () => { copied = true; } });
+        clipSaid = copied ? 'Done. Its caption is copied, ready to paste. The sound isn\u2019t kept.' : 'Done. The sound isn\u2019t kept.'; ok = true;
       } catch (_) { clipSaid = 'Couldn\u2019t make the clip on this phone.'; }
       clipNote.textContent = clipSaid;
       clipCanvas.style.display = 'none'; clipBusy = false; clipBtn.disabled = !clipList.length || frameOk !== true; reelBtn.disabled = frameOk !== true;
@@ -413,8 +421,10 @@
         const { blob, mime } = await root.ApexGhostClip.record({ va, vb, a: p.a, b: p.b, w: p.w, trace: other.trace, fmtSpeed: page.fmtSpeed, canvas: clipCanvas,
           meta: { title: d.name || '', label: lab.label, whenB: other.when || '' } });
         keep(blob, mime, `${lab.label} · side by side`, '');
-        await page.save(blob, root.ApexFlyoverVideo.fileName(`${d.name || 'drive'}-side-by-side-${lab.k + 1}`, mime), mime.split(';')[0]);
-        clipSaid = 'Done. The sound isn\u2019t kept.'; ok = true;
+        let copied = false;
+        await page.save(blob, root.ApexFlyoverVideo.fileName(`${d.name || 'drive'}-side-by-side-${lab.k + 1}`, mime), mime.split(';')[0],
+          { caption: CC && CC.caption ? CC.caption(d, lab.call) : '', copied: () => { copied = true; } });
+        clipSaid = copied ? 'Done. Its caption is copied, ready to paste. The sound isn\u2019t kept.' : 'Done. The sound isn\u2019t kept.'; ok = true;
       } catch (_) { clipSaid = 'Couldn\u2019t make the side-by-side clip on this phone.'; }
       for (const v of [va, vb]) { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (_) {} }
       row.remove(); clipCanvas.style.display = 'none'; clipNote.textContent = clipSaid;

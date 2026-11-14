@@ -53,12 +53,12 @@
     TURN_RIGHT_S: 2, TURN_RIGHT_K: 4, TURN_LEFT_S: 5, TURN_LEFT_K: 8, STRAIGHT_RAD: 0.35, UTURN_S: 30,
     // passing a node with a signal, a stop sign, give way, a level crossing, calming or a crossing (the tiles' node flags;
     // the same seconds the ETL adds for those inside an edge, tools/graph_etl/build.py DELAY_S; end nodes are ours)
-    SIGNAL_S: 15, STOP_S: 7, GIVE_WAY_S: 2, LEVEL_CROSSING_S: 4, CALMING_S: 3, CROSSING_S: 1, BARRIER_S: 120,
+    SIGNAL_S: 15, STOP_S: 7, GIVE_WAY_S: 2, LEVEL_CROSSING_S: 4, CALMING_S: 3, CROSSING_S: 1, BARRIER_S: 120, OPEN_GATE_CLS: 4,
     // the search's weight on a signal's, stop's and give way's seconds (Route tuning's "Traffic lights and stops",
     // web/route_tuning.js): 1 counts their wait as it is; above it the search keeps off them, while the route's time (the
     // card's, the ETA's) still counts only the real wait
     STOP_AVOID_X: 1,
-    PRIVATE_X: 10, PRIVATE_S: 600, DESTINATION_X: 2, DESTINATION_S: 60, FERRY_X: 2, UNPAVED_X: 1.5,
+    PRIVATE_X: 10, PRIVATE_S: 600, DESTINATION_X: 2, DESTINATION_S: 60, FERRY_X: 2, UNPAVED_X: 1.5, UNPAVED_FREE_KM: 0.5,
     AVOID_HWY_X: 4, AVOID_TOLL_X: 3, AVOID_FERRY_X: 5, AVOID_UNPAVED_X: 5,
     AVOID_POINT_X: 8, AVOID_POINT_M: 150, AVOID_POINT_MAX: 20,   // Avoid police reports: edges within 150 m of a live report
     AVOID_CAM_X: 8, AVOID_CAM_M: 35, AVOID_CAM_MAX: 60,          // Avoid cameras: edges within 35 m of a plate reader or speed camera
@@ -88,7 +88,7 @@
     // highway-free way over HWY_ABSURD x the quickest's time is still the level's way (the card says Quick is the way); the
     // budget never shuts out the highway-free quickest (+ HWY_FREE_SLACK_S). A point snapped onto a highway moves to the
     // nearest other road within HWY_SNAP_M (a car on the highway, heading given and within HWY_ON_M of it, stays on it)
-    NO_HWY: { fun: true, max: true }, HWY_LINK_X: 25, HWY_ABSURD: 2, HWY_FREE_SLACK_S: 60, HWY_SNAP_M: 150, HWY_ON_M: 25,
+    NO_HWY: { fun: true, max: true }, TRUNK_FUN_KM: 1.5, HWY_LINK_X: 25, HWY_ABSURD: 2, HWY_FREE_SLACK_S: 60, HWY_SNAP_M: 150, HWY_ON_M: 25,
     // loops (loop()): at Quick motorway and trunk cost x LOOP_HWY_X on every leg (a short link to good roads, never the
     // bulk), at Fun and Long way they are never driven (NO_HWY, the same exception); the
     // stages within reach of half the length at LOOP_REACH_MS; at most LOOP_STAGES of them chained, LOOP_TRIES loops
@@ -138,6 +138,17 @@
    * tile key so the same tiles always make the same ids), cross-tile edges stitched to the loaded neighbour (an edge into
    * a tile that isn't loaded can't be used), the reverse adjacency, dead ends, and a node grid for snapping.
    */
+  function openGates(N, E, first, rfirst, redge, flags, cls, nflags) {
+    const B = flagBits(), NB = nodeBits(), through = (e) => cls[e] <= K.OPEN_GATE_CLS && !(flags[e] & B.private);
+    for (let e = 0; e < E; e++) if ((flags[e] & B.barrier) && through(e)) flags[e] &= ~B.barrier;
+    for (let a = 0; a < N; a++) {
+      if (!(nflags[a] & NB.barrier)) continue;
+      let ok = first[a + 1] > first[a] || rfirst[a + 1] > rfirst[a];
+      for (let e = first[a]; e < first[a + 1] && ok; e++) ok = through(e);
+      for (let r = rfirst[a]; r < rfirst[a + 1] && ok; r++) ok = through(redge[r]);
+      if (ok) nflags[a] &= ~NB.barrier;
+    }
+  }
   function view(tiles) {
     const list = (tiles || []).filter((t) => t && t.nodes && t.edges).slice().sort((a, b) => (keyOf(a.tile.i, a.tile.j) < keyOf(b.tile.i, b.tile.j) ? -1 : 1));
     const T = list.length, index = new Map();
@@ -196,6 +207,11 @@
     for (let a = 0; a < N; a++) rfirst[a + 1] += rfirst[a];
     const fill = rfirst.slice(0, N);
     for (let e = 0; e < E; e++) if (to[e] >= 0) redge[fill[to[e]]++] = e;
+    // a gate on a through road (tertiary and up, no access tag) is open: park roads and parkways are gated for winter
+    // closures every few km (the Blue Ridge Parkway, 2026-11-14: 16 gates from Blowing Rock to Linville Falls, each
+    // costing the private-road toll, so Fun never took it). Closures come from the road feeds; a gate on a smaller road,
+    // or with access=no/private, still blocks.
+    openGates(N, E, first, rfirst, redge, flags, cls, nflags);
     // dead ends: one neighbour, in or out (the only place a U-turn is allowed)
     const deadEnd = new Uint8Array(N);
     for (let a = 0; a < N; a++) {
@@ -959,7 +975,7 @@
     const B = flagBits(), coords = [], names = [], steps = [], turns = [], times = [];
     let lineM = 0;
     const gEnd = [], gEdge = [];
-    let timeS = 0, distM_ = 0, q = 0, s = 0, sw = 0, f = 0, cf = 0, wsum = 0, junctions = 0, signals = 0, hwyM = 0, gm = 0, poorM = 0, goodM = 0;
+    let timeS = 0, distM_ = 0, q = 0, s = 0, sw = 0, f = 0, cf = 0, wsum = 0, junctions = 0, signals = 0, hwyM = 0, gm = 0, poorM = 0, goodM = 0, unpavedM = 0;
     const hwyBy = new Map();                                            // metres per highway name (the card's "Uses 0.4 mi of I-275")
     const has = { highways: false, tolls: false, ferries: false, unpaved: false };
     let roundabout = null;
@@ -1020,7 +1036,7 @@
       if (isHwyEdge(v, e)) { hwyM += m; const hn = nm || 'the highway'; hwyBy.set(hn, (hwyBy.get(hn) || 0) + (fl & B.ramp ? m / 1000 : m)); }
       if (fl & B.toll) has.tolls = true;
       if (fl & B.ferry) has.ferries = true;
-      if (fl & B.unpaved) has.unpaved = true;
+      if (fl & B.unpaved) { has.unpaved = true; unpavedM += m; }
     }
     const end = coords[coords.length - 1];
     if (coords.length) {
@@ -1031,7 +1047,7 @@
     const nameKm = new Map();
     for (const n of names) if (n.name) nameKm.set(n.name, (nameKm.get(n.name) || 0) + (n.toM - n.fromM) / 1000);   // km, as routeOf has them (Valhalla lengths)
     const why = { source: 'own', level: meta.level || null, role: meta.role || null, a: meta.a != null ? meta.a : 0,
-      quality: cf > 0 ? q / cf : null, scenery: sw > 0 ? s / sw : null, fun: f, conf: wsum > 0 ? cf / wsum : 0, goodness: wsum > 0 ? gm / wsum : null, poorKm: poorM / 1000, goodKm: goodM / 1000, junctions, signals,
+      quality: cf > 0 ? q / cf : null, scenery: sw > 0 ? s / sw : null, fun: f, conf: wsum > 0 ? cf / wsum : 0, goodness: wsum > 0 ? gm / wsum : null, poorKm: poorM / 1000, goodKm: goodM / 1000, unpavedKm: unpavedM / 1000, junctions, signals,
       objective: meta.a ? 't*(1+a*(1-goodness))' : 'time', hwyKm: hwyM / 1000 };
     // motorway, trunk and their links driven (km) and the one most of it is on, by name (NO_HWY levels report it)
     const hwyName = hwyM > 0 ? [...hwyBy].sort((x, y) => y[1] - x[1])[0][0] : null;
@@ -1128,13 +1144,36 @@
 
   // ---- highways (NO_HWY levels) ---------------------------------------------------------------------------------------
   /** A motorway, trunk or one of their links (the tiles give a link its road's class; the ETL's motorway flag too), or an
-   *  expressway of a lower class (`motorroad=yes` / `expressway=yes`: the tiles' expressway flag, in builds from 2026-11-09). */
-  function isHwyEdge(v, e) { const B = v.bits || flagBits(); return v.cls[e] <= CLS.trunk || !!(v.flags[e] & (B.motorway | B.expressway)); }
-  /** Per edge, 1 on a highway (kept per view). */
+   *  expressway of a lower class (`motorroad=yes` / `expressway=yes`: the tiles' expressway flag, in builds from 2026-11-09).
+   *  Not a two-way trunk whose road bends (hwyOf: The Snake, US 421, 2026-11-14: OSM tags many mountain US routes trunk). */
+  function isHwyEdge(v, e) { return hwyOf(v)[e] === 1; }
+  function hwyClassEdge(v, e) { const B = v.bits || flagBits(); return v.cls[e] <= CLS.trunk || !!(v.flags[e] & (B.motorway | B.expressway)); }
+  /**
+   * Per edge, 1 on a highway (kept per view). A two-way trunk (no one-way carriageways, not a link) is a two-lane road: by
+   * its name across the view, one with TRUNK_FUN_KM corner points a km or more is a rider's road, not a highway (The Snake
+   * 4.4, US 421 by Shady Valley 2.5; Cincinnati's US 127, US 27 and the AA Highway 0 to 0.25).
+   */
   function hwyOf(v) {
     if (v.isHwy) return v.isHwy;
-    const h = new Uint8Array(v.E);
-    for (let e = 0; e < v.E; e++) if (isHwyEdge(v, e)) h[e] = 1;
+    const B = v.bits || flagBits(), h = new Uint8Array(v.E), byName = new Map();
+    const nameOf = (e) => { const ix = v.name[e], t = v.tiles[v.eTile[e]]; return ix >= 0 && t.names ? t.names[ix] : null; };
+    const twoWayTrunk = (e) => v.cls[e] === CLS.trunk && !(v.flags[e] & (B.oneway | B.ramp | B.motorway | B.expressway));
+    for (let e = 0; e < v.E; e++) {
+      if (!hwyClassEdge(v, e)) continue;
+      h[e] = 1;
+      if (!twoWayTrunk(e)) continue;
+      const n = nameOf(e);
+      if (!n) continue;
+      let a = byName.get(n);
+      if (!a) byName.set(n, (a = { len: 0, fun: 0 }));
+      a.len += v.len[e];
+      if (Number.isFinite(v.fun[e])) a.fun += v.fun[e];
+    }
+    for (let e = 0; e < v.E; e++) {
+      if (!h[e] || !twoWayTrunk(e)) continue;
+      const a = byName.get(nameOf(e));
+      if (a && a.len > 0 && a.fun / (a.len / 1000) >= K.TRUNK_FUN_KM) h[e] = 0;
+    }
     v.isHwy = h;
     return h;
   }
@@ -1274,7 +1313,7 @@
     // the pick at Fun and Long way: the goodness the extra time buys (pick()), not the largest weight inside the budget
     if (free2 && K.BUY[level] != null) {
       const was = best;
-      best = pick(base, [...found, ...alts], limitS, K.BUY[level]);
+      best = pick(base, [...found, ...alts], limitS, K.BUY[level], unpavedOk(req.avoid, base));
       if (best !== was) {
         if (was.why.role === 'best') was.why.role = 'step';
         // an alternate is a route that differs from the pick (ALT_MIN_DIFF); one that doesn't any more is a step
@@ -1299,14 +1338,22 @@
    * that's near (price 0.12: 10 % more time must buy 0.012 of goodness), Long way also the good road further off (0.03),
    * and neither lengthens a trip for road no better than the quickest's (2026-11-08, the levels audit).
    */
-  function pick(base, routes, limitS, price) {
+  /** With unpaved roads avoided (the app's default: fun_route.js AVOID_DEFAULT), a route the pick may take drives no more
+   *  of them than the level's quickest does, UNPAVED_FREE_KM aside: the search's AVOID_UNPAVED_X is a cost, and at Fun's
+   *  weights a forest road's corners outweigh it (Back of the Dragon, 2026-11-14: 18 km of Nat'l Forest Road 614 picked off VA 16). */
+  function unpavedOk(avoid, base) {
+    if (!avoid || !avoid.unpaved) return null;
+    const cap = ((base && base.why.unpavedKm) || 0) + K.UNPAVED_FREE_KM;
+    return (r) => !((r.why.unpavedKm || 0) > cap);
+  }
+  function pick(base, routes, limitS, price, ok = null) {
     const rel = (r) => (r.timeS - base.timeS) / Math.max(1, base.timeS);
     const road = (r) => K.ROAD.good * (r.why.goodKm || 0) - K.ROAD.poor * (r.why.poorKm || 0);
     const g = (r) => r.why.goodness + K.ROAD.w * (road(r) - road(base));
     const u = (r) => g(r) - price * rel(r);
     let best = base;
     for (const r of routes) {
-      if (r === base || r.timeS > limitS || !Number.isFinite(r.why.goodness)) continue;
+      if (r === base || r.timeS > limitS || !Number.isFinite(r.why.goodness) || (ok && !ok(r))) continue;
       const x = rel(r), dg = g(r) - base.why.goodness;
       if (x > 0 && dg < K.BUY_MIN * x) continue;
       if (x <= 0 && dg <= 0) continue;
@@ -1352,7 +1399,7 @@
       if (!backs.length) continue;
       const quickBack = backs.reduce((x, y) => (y.timeS < x.timeS ? y : x));
       const limitS = quickBack.timeS * (1 + L.budget) + L.slackS;
-      const back = K.BUY[level] != null ? pick(quickBack, backs, limitS, K.BUY[level]) : quickBack;
+      const back = K.BUY[level] != null ? pick(quickBack, backs, limitS, K.BUY[level], unpavedOk(req.avoid, quickBack)) : quickBack;
       const r = loopRoute(v, obj, [{ edges: Array.from(o.edgeIdx), fs: o.fs, ft: o.ft }, { edges: Array.from(back.edgeIdx), fs: back.fs, ft: back.ft }], level, back.why.a);
       r.kind = 'round'; r.why.role = 'round';
       r.out = { timeS: o.timeS, distM: o.distM, role: o.why.role }; r.back = { timeS: back.timeS, distM: back.distM, a: back.why.a };

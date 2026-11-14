@@ -136,7 +136,12 @@
       // A junction from the route's directions (IDEAS V-04): the road you're on to the junction, the way straight on as a
       // thin stub, and the exit at its angle; a roundabout as a ring, arrival as a flag.
       body += `<path d="M50 92 L50 52" stroke="${ink}" stroke-width="${w}" stroke-linecap="round"/><circle cx="50" cy="92" r="4.2" fill="${ink}"/>`;
-      if (note.dir === 'A') {
+      if (note.dir === 'A' && (note.side === 'left' || note.side === 'right')) {
+        // the destination beside the road: the road on past it, a short way off to the side it is on, the flag there
+        const sx = note.side === 'right' ? 74 : 26, tip = note.side === 'right' ? 92 : 8;
+        body += `<path d="M50 52 L50 36" stroke="${ink}" stroke-width="${w}"/><path d="M50 36 L50 12" stroke="${ink}" stroke-width="1.4" opacity="0.55"/><path d="M50 36 L${sx} 36" stroke="${ink}" stroke-width="${w}" stroke-linecap="round"/>`
+          + `<path d="M${sx} 36 L${sx} 10" stroke="${ink}" stroke-width="2"/><path d="M${sx} 10 L${tip} 17 L${sx} 24 Z" fill="${accent}"/>`;
+      } else if (note.dir === 'A') {
         body += `<path d="M50 52 L50 14" stroke="${ink}" stroke-width="${w}"/><path d="M50 14 L76 22 L50 30 Z" fill="${accent}"/>`;
       } else if (note.dir === 'O') {
         body += `<circle cx="50" cy="38" r="14" fill="none" stroke="${ink}" stroke-width="${w}"/><path d="M60 28 L78 10" stroke="${ink}" stroke-width="${w}" stroke-linecap="round"/><polygon points="82,6 70,10 78,18" fill="${ink}"/>`;

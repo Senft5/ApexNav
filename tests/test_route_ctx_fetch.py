@@ -137,3 +137,12 @@ def test_keys(out):
     k = out["keys"]
     assert k["merged"] == {"mapillaryToken": "mine", "seatgeekClientId": "sg"}
     assert k["viaOpts"] == "k1" and k["viaStorage"] == "sg" and k["none"] is None
+
+
+def test_the_app_loads_the_workers_keys_at_start_up():
+    """2026-11-14: loadKeys was never called, so Mapillary's signs, SeatGeek's events, OHGO's work zones and NASS's crops
+    only worked on a phone where someone typed a key in. cockpit.js asks once a start (loadKeys keeps them a day)."""
+    src = open(os.path.join(ROOT, "web", "cockpit.js")).read()
+    assert "ApexRouteCtxUtil.loadKeys().catch(() => {})" in src
+    html = open(os.path.join(ROOT, "web", "index.html")).read()
+    assert html.index('src="route_ctx/ctx_util.js"') < html.index('src="cockpit.js"'), "ctx_util loads before the app starts"
