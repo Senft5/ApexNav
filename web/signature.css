@@ -149,6 +149,8 @@
 .log-page details.quiet:not([hidden]) + .panel:not(.index-panel) { border-top: 0; }
 /* the drive list straight into a panel (no quiet line between): the panel's rule closes the list, the last row draws none */
 .log-page #historyPanel:not(:has(~ details.quiet:not([hidden]))) .road-index tr:last-child > td { border-bottom: 0; }
+/* Share older drives holds only the road-data panel, which stays hidden until you are a member: closed or open, an empty fold is not shown */
+#shareOlder:not(:has(> #contribPanel:not([hidden]))) { display: none; }
 
 /* fields are wells, as Where to? is on the map page */
 .log-page :is(select, input:not([type="range"]):not([type="checkbox"]), textarea) { border: 0; background-color: var(--well); }

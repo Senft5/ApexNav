@@ -17,10 +17,13 @@
     const fresh = (list) => list.filter((x) => x && typeof x.path === 'string' && now() - x.at < MAX_AGE_MS);
     let busy = null;
 
-    /** Keeps a send for later. `aged` adds age_s (seconds since it was made) to the body when it goes. */
-    function add(path, body, aged = false) {
+    /**
+     * Keeps a send for later. `aged` adds age_s (seconds since it was made) to the body when it goes. `o.capped`: a send
+     * the server may refuse for the day (429, a drive post past ten), dropped then instead of holding up the rest.
+     */
+    function add(path, body, aged = false, o = {}) {
       const list = fresh(load());
-      list.push({ path, body, at: now(), aged });
+      list.push({ path, body, at: now(), aged, ...(o.capped ? { capped: true } : {}) });
       save(list.slice(-MAX_ITEMS));     // the oldest go first when it fills
     }
 
@@ -38,7 +41,7 @@
           let status = null;
           try { status = await send(item.path, body); } catch (_) { status = null; }
           if (status == null) break;                                         // still no connection: try again later
-          if (status >= 500 || status === 408 || status === 429) break;     // the server is busy: keep the rest in order
+          if (status >= 500 || status === 408 || (status === 429 && !item.capped)) break;   // the server is busy: keep the rest in order
           list = list.filter((x) => x !== item);
           if (status < 300) sent++;
           save(list);

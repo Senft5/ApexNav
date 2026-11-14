@@ -93,6 +93,9 @@ jobs:
       matrix: ${{ fromJSON(needs.plan.outputs.states) }}
     steps:
       - name: The extract
+        id: get
+        # a state refused here is fetched again by osm-again, on another runner (another address)
+        continue-on-error: true
         run: |
           mkdir -p osm
           # Geofabrik refuses some runners' addresses for minutes at a time (florida, 2026-11-13: 9 tries over 4 min):
@@ -104,6 +107,7 @@ jobs:
           done
           ls -la osm
       - uses: actions/upload-artifact@v4
+        if: steps.get.outcome == 'success'
         with:
           name: osm-${{ matrix.state }}
           path: osm
@@ -111,8 +115,46 @@ jobs:
           overwrite: true
           compression-level: 0
 
-  band:
+  # Geofabrik refuses a runner's address for half an hour or more at times (district-of-columbia, 2026-11-14: every try
+  # for 25 min) while the runners beside it download fine: the states left without an extract, fetched once more here,
+  # on a fresh runner, one at a time
+  osm-again:
     needs: [plan, osm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      actions: read
+    steps:
+      - name: The extracts still missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATES: ${{ needs.plan.outputs.states }}
+        run: |
+          mkdir -p again
+          have=$(gh api --paginate "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?per_page=100" --jq '.artifacts[].name')
+          echo "$STATES" | python3 -c "import json,sys; [print(j['state'], j['url']) for j in json.load(sys.stdin)['include']]" > states.txt
+          : > missing.txt
+          while read -r st url; do grep -qx "osm-$st" <<<"$have" || echo "$st $url" >> missing.txt; done < states.txt
+          echo "missing: $(wc -l < missing.txt)"; cat missing.txt
+          while read -r st url; do
+            mkdir -p "again/$st"
+            for round in 1 2 3; do
+              curl -fSL --retry 8 --retry-delay 30 --retry-all-errors -o "again/$st/$st.osm.pbf" "$url" && break
+              [ "$round" = 3 ] && exit 1
+              echo "round $round refused; waiting 5 min"; sleep 300
+            done
+          done < missing.txt
+          ls -laR again
+      - uses: actions/upload-artifact@v4
+        if: hashFiles('again/**/*.pbf') != ''
+        with:
+          name: osm-again
+          path: again
+          retention-days: 2
+          compression-level: 0
+
+  band:
+    needs: [plan, osm, osm-again]
     runs-on: ubuntu-latest
     timeout-minutes: 345
     strategy:
@@ -145,6 +187,11 @@ jobs:
           mkdir -p "$WORK/osm"
           for s in ${{ matrix.states }}; do
             for k in 1 2 3; do gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n "osm-$s" -D "$WORK/osm" && break; sleep 15; done
+            # a state Geofabrik refused the first time: osm-again's (one artifact, a folder per state)
+            if [ ! -s "$WORK/osm/$s.osm.pbf" ]; then
+              [ -d "$WORK/again" ] || gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n osm-again -D "$WORK/again" || true
+              cp "$WORK/again/$s/$s.osm.pbf" "$WORK/osm/" || { echo "::error::no extract for $s"; exit 1; }
+            fi
           done
           ls -la "$WORK/osm"
       - name: The region's context grid (graph-data ctx/v1), else Cincinnati's

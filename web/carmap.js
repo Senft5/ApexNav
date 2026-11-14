@@ -287,7 +287,8 @@
       if (ready && theme === state.theme && night === state.night) return;    // the shell says it again on every trait change
       state.theme = theme; state.night = night; paint();
     },
-    route(coords) { state.route = Array.isArray(coords) ? coords.filter((p) => Array.isArray(p) && finite(p[0]) && finite(p[1])) : []; glider.setRoute(state.route, nowS()); kick(); setData(); camera(); },
+    route(coords) { state.route = Array.isArray(coords) ? coords.filter((p) => Array.isArray(p) && finite(p[0]) && finite(p[1])) : []; glider.setRoute(state.route, nowS()); kick(); setData(); camera();
+      if (state.overview && state.route.length >= 2) car.overview(); },   // a reroute during Overview shows the new route whole
     corners(list) { state.corners = (Array.isArray(list) ? list : []).filter((c) => c && Array.isArray(c.at)).slice(0, 600); setData(); },
     hazards(list) { state.hazards = (Array.isArray(list) ? list : []).filter((h) => h && Array.isArray(h.at)).slice(0, 40); setData(); },
     // the cafés and fuel along the route by name (web/carplay.js alongMessage places)
@@ -325,16 +326,16 @@
     mode(m) {
       const next = m === 'guide' || m === 'preview' ? m : 'idle';
       if (next === state.mode) return;
-      state.mode = next; state.follow = true; placePlates(); camera();
+      state.mode = next; state.follow = true; state.overview = false; placePlates(); camera();
       if (ready) map.once('moveend', placePlates);
     },
     zoom(dir) { if (ready) map.easeTo({ zoom: map.getZoom() + (dir > 0 ? 1 : -1), duration: 300 }); },
-    pan(dx, dy) { if (!ready) return; state.follow = false; map.panBy([dx * map.getContainer().clientWidth / 3, dy * map.getContainer().clientHeight / 3], { duration: 300 }); },
-    recentre() { state.follow = true; if (state.mode === 'preview') state.mode = 'idle'; camera(); },
+    pan(dx, dy) { if (!ready) return; state.follow = false; state.overview = false; map.panBy([dx * map.getContainer().clientWidth / 3, dy * map.getContainer().clientHeight / 3], { duration: 300 }); },
+    recentre() { state.follow = true; state.overview = false; if (state.mode === 'preview') state.mode = 'idle'; camera(); },
     // Overview while guiding (Apple Maps' and Waze's): the whole route until Recentre, a pan or a new mode
     overview() {
       if (!ready || state.route.length < 2) return;
-      state.follow = false; fitRoute({ top: 40, bottom: 40, left: 40 + state.inset, right: 80 }, true);
+      state.follow = false; state.overview = true; fitRoute({ top: 40, bottom: 40, left: 40 + state.inset, right: 80 }, true);
       map.once('moveend', placePlates);
     },
     inset(px) {

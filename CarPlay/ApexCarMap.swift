@@ -265,7 +265,7 @@ final class ApexNativeCarMap: UIView {
         showRouteLine()
         wake()
         placePlates()
-        if mode == "preview" { fitRoute(animated: true) }
+        if mode == "preview" || overviewing { fitRoute(animated: true) }   // a reroute during Overview shows the new route whole
     }
 
     private func showRouteLine() {
@@ -324,7 +324,7 @@ final class ApexNativeCarMap: UIView {
         if px != inset { inset = px; placeLimit(); if mode == "preview" { fitRoute(animated: false) } else { startBlend(now, dur: 0) } }
         guard m != mode else { return }
         mode = m
-        follow = true
+        follow = true; overviewing = false
         if m == "guide" { followZoom = max(followZoom, 15) }
         if m == "preview" { fitRoute(animated: true) } else { startBlend(now, dur: 0.45) }
         placePlates()
@@ -343,7 +343,7 @@ final class ApexNativeCarMap: UIView {
     }
 
     func pan(dx: Int, dy: Int) {
-        follow = false
+        follow = false; overviewing = false
         blend = nil
         let mid = CGPoint(x: map.bounds.midX + CGFloat(dx) * map.bounds.width / 3, y: map.bounds.midY + CGFloat(dy) * map.bounds.height / 3)
         map.setCenter(map.convert(mid, toCoordinateFrom: map), animated: true)
@@ -351,14 +351,15 @@ final class ApexNativeCarMap: UIView {
     }
 
     /// Overview while guiding (Apple Maps' and Waze's): the whole route, until Recentre, a pan or a new mode.
+    private var overviewing = false
     func overview() {
         guard route.count >= 2 else { return }
-        follow = false
+        follow = false; overviewing = true
         fitRoute(animated: true)
     }
 
     func recentre() {
-        follow = true
+        follow = true; overviewing = false
         if mode == "preview" { mode = "idle" }
         startBlend(CACurrentMediaTime(), dur: 0.45)
         wake()

@@ -305,6 +305,7 @@ console.log(JSON.stringify({
     (m) => `${m} m`, 'No gas on the map within 5 mi.'),
   nearbyNone: C.nearbyMessage('coffee', 'Coffee', [], null, 'No coffee on the map within 5 mi.'),
   nearbyKeys: C.nearbyKeys(['charge', 'coffee', 'nope'], { charge: { label: 'Chargers' }, coffee: { label: 'Coffee' } }),
+  arrived: [C.arrivedMessage('Maryville'), C.arrivedMessage('Cherohala Skyway Visitor Center'), C.arrivedMessage('')],
   paused: ['Rerouting…', 'Wrong way · no signal to reroute', 'Off route', null, ''].map((w) => C.pausedMessage(w)),
   limits: [C.limitMessage(54.7, 'mph'), C.limitMessage(80, 'km/h'), C.limitMessage(null, 'mph'), C.limitMessage(0, 'mph'), C.limitMessage(500, 'mph')],
   loops: [C.loopsMessage('time', false), C.loopsMessage('distance', false), C.loopsMessage('distance', true)],
@@ -569,9 +570,9 @@ def test_overview_shows_the_whole_route_while_guiding():
     assert 'mapController?.recentre(); overviewButton?.title = "Overview"' in swift, "a pan ends it"
     assert '@MainActor func overview() { if let native { native.overview() } else { js("car.overview()") } }' in swift
     native = open(os.path.join(ROOT, "CarPlay", "ApexCarMap.swift"), encoding="utf-8").read()
-    assert "func overview() {" in native and "follow = false\n        fitRoute(animated: true)" in native
+    assert "func overview() {" in native and "follow = false; overviewing = true\n        fitRoute(animated: true)" in native and "|| overviewing { fitRoute(animated: true) }" in native
     web = open(os.path.join(ROOT, "web", "carmap.js"), encoding="utf-8").read()
-    assert "overview() {" in web and "state.follow = false; fitRoute(" in web
+    assert "overview() {" in web and "state.follow = false; state.overview = true; fitRoute(" in web
 
 
 def test_nearby_on_the_cars_places(maps):
@@ -589,6 +590,15 @@ def test_nearby_on_the_cars_places(maps):
     assert "nearbyFor(cat).then(({ rows, failed }) => carPost(ApexCarPlay.nearbyMessage(" in js
 
 
+def test_the_car_says_arrived_at_the_end(maps):
+    """Apple Maps ends a trip with "Arrived"; the car's card sat on "Arriving" at 0 ft for the rest of the drive."""
+    short, long, none = maps["arrived"]
+    assert short == {"kind": "paused", "key": "arrived", "reason": "arrived", "text": "Arrived · Maryville"}
+    assert long["text"] == "Arrived" and none["text"] == "Arrived", "a name too long for a glance is left off"
+    js = cockpit_source()
+    assert "if (end > 500 && Math.max(state.cursorM, routeWatch.bestM) > end - 40 && !String(track.id || '').startsWith('loop_')) {" in js, "a loop says nothing at its start"
+
+
 def test_off_route_the_car_says_rerouting(maps):
     """Apple Maps and Waze say "Rerouting" on the car; Vetta's card kept the last turn, its distance frozen, while off route."""
     rr, wrong, off, none, empty = maps["paused"]
@@ -599,7 +609,7 @@ def test_off_route_the_car_says_rerouting(maps):
     js = cockpit_source()
     assert "state.cursorIdx < 0 ? ApexCarPlay.pausedMessage(offRouteText()) : null;" in js, "the status line's own words"
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
-    assert 'case "paused":' in swift and "session.pauseTrip(for: rerouting ? .rerouting : .proceedToRoute, description: text)" in swift
+    assert 'case "paused":' in swift and "session.pauseTrip(for: reason, description: text)" in swift and 'why == "rerouting" ? .rerouting : why == "arrived" ? .arrived : .proceedToRoute' in swift
     assert "maneuver = nil; maneuverKey = \"\"" in swift, "the next guide resumes the trip"
 
 
