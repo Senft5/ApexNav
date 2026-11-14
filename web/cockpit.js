@@ -528,6 +528,9 @@
       if (has('apex-alt')) map.setPaintProperty('apex-alt', 'line-color', C.route);
       if (has('apex-explore')) map.setPaintProperty('apex-explore', 'line-color', C.route);
       if (has('apex-twisty')) map.setPaintProperty('apex-twisty', 'line-color', C.amber);
+      for (const id of ['apex-turnarrow-casing', 'apex-turnarrow-headline']) if (has(id)) map.setPaintProperty(id, 'line-color', C.route);
+      if (has('apex-turnarrow')) map.setPaintProperty('apex-turnarrow', 'line-color', C.routeCasing);
+      if (has('apex-turnarrow-head')) map.setPaintProperty('apex-turnarrow-head', 'fill-color', C.routeCasing);
       if (has('apex-places')) { map.setPaintProperty('apex-places', 'text-color', P.label); map.setPaintProperty('apex-places', 'text-halo-color', P.halo); placeGlyphs(P.label, P.halo); }
       // Measured roads by the pavement measured there (coverage.js surface): smooth, fair, rough; ink where roughness is unknown
       if (has('apex-coverage')) map.setPaintProperty('apex-coverage', 'line-color', ['match', ['get', 's'], 1, C.gain, 2, C.amber, 3, C.signal, C.dim]);
@@ -591,8 +594,43 @@
       map.addSource('apex-ribbon-src', { type: 'geojson', data: emptyFC() }); ribbonKey = null;
       map.addLayer({ id: 'apex-ribbon', type: 'line', source: 'apex-ribbon-src', layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': ['get', 'c'], 'line-width': width(4, 9) } });
+      // the arrow at the next turn of a route being driven (turn_arrow.js), over the route line: the theme's paper inside the
+      // route's ink, the head a filled triangle. Its size is in pixels (paintTurnArrow builds it for the zoom it is seen at).
+      map.addSource('apex-turnarrow-src', { type: 'geojson', data: emptyFC() }); turnArrowKey = null;
+      const isShaft = ['==', ['get', 'part'], 'shaft'], isHead = ['==', ['get', 'part'], 'head'], AC = look.colors || {};
+      map.addLayer({ id: 'apex-turnarrow-casing', type: 'line', source: 'apex-turnarrow-src', filter: isShaft, layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': AC.route || '#1C1A17', 'line-width': TURN_ARROW_PX.shaft + 2 * TURN_ARROW_PX.edge } });
+      map.addLayer({ id: 'apex-turnarrow-headline', type: 'line', source: 'apex-turnarrow-src', filter: isHead, layout: { 'line-join': 'round' },
+        paint: { 'line-color': AC.route || '#1C1A17', 'line-width': 2 * TURN_ARROW_PX.edge } });
+      map.addLayer({ id: 'apex-turnarrow', type: 'line', source: 'apex-turnarrow-src', filter: isShaft, layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': AC.routeCasing || '#F2EBDD', 'line-width': TURN_ARROW_PX.shaft } });
+      map.addLayer({ id: 'apex-turnarrow-head', type: 'fill', source: 'apex-turnarrow-src', filter: isHead,
+        paint: { 'fill-color': AC.routeCasing || '#F2EBDD', 'fill-antialias': true } });
     }
     const emptyFC = () => ({ type: 'FeatureCollection', features: [] });
+    // The next turn's arrow (turn_arrow.js) while a route is driven, from 2 km out until the turn is taken: drawn for the
+    // zoom it is seen at, so it keeps its size in pixels as the drive's camera zooms with speed. Off the route, an arrival,
+    // no route: none.
+    const TURN_ARROW_PX = { shaft: 10, edge: 3, halfW: 13, head: 17, before: 70, after: 40 }, TURN_ARROW_AHEAD_M = 2000;
+    let turnArrowKey = null;
+    function paintTurnArrow(steps, i) {
+      const src = mapReady && map.getSource('apex-turnarrow-src');
+      if (!src) return;
+      const st = steps && i >= 0 ? steps[i] : null, ahead = st ? st.m - state.cursorM : NaN;
+      const z = map.getZoom(), lat = map.getCenter().lat, zk = Math.round(z * 4) / 4;
+      const show = !!(st && window.ApexTurnArrow && window.ApexGpsHalo && track && ahead <= TURN_ARROW_AHEAD_M && zk >= 13);
+      const key = show ? `${track.id}:${i}:${zk}` : 'none';
+      if (key === turnArrowKey) return;
+      turnArrowKey = key;
+      let fc = null;
+      if (show) {
+        const mpp = ApexGpsHalo.metresPerPx(lat, zk), P = TURN_ARROW_PX;
+        // along the route at least 25 m before and 15 m past the turn, so a turn close in still reads as a turn
+        fc = ApexTurnArrow.arrow(track, st, { before: Math.max(25, P.before * mpp), after: Math.max(15, P.after * mpp), head: P.head * mpp, halfW: P.halfW * mpp });
+      }
+      src.setData(fc || emptyFC());
+      if (window.apexDebug) window.apexDebug.turnArrow = fc ? { step: i, m: st.m } : null;
+    }
     // the kinds of place drawn (OpenMapTiles poi classes): what a driver stops for
     const PLACE_CLASSES = ['restaurant', 'fast_food', 'cafe', 'bar', 'beer', 'ice_cream', 'bakery', 'fuel', 'grocery', 'lodging', 'car', 'attraction', 'museum'];
     const PLACE_WORD = { restaurant: 'Restaurant', fast_food: 'Fast food', cafe: 'Café', bar: 'Bar', beer: 'Bar', ice_cream: 'Ice cream', bakery: 'Bakery',
@@ -1067,6 +1105,30 @@
     map.on('rotate', paintCompass);
     map.on('moveend', paintCompass);
     $('compassBtn').addEventListener('click', () => { pauseFollow(); map.easeTo({ bearing: 0, duration: 450 }); });
+    // Route overview in a drive (as Apple and Google Maps have it): the rest of the route from where you are to the end, north
+    // up and flat, for OVERVIEW_S; then the drive's camera glides back by itself, as after a drag (Recenter counts it down,
+    // and a tap on it comes back at once). The key shows only while a route is driven and the camera follows.
+    const OVERVIEW_S = 10;
+    function routeOverview() {
+      const t = track;
+      if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
+      let w = 180, e = -180, so = 90, n = -90;
+      const add = (la, lo) => { if (!Number.isFinite(la) || !Number.isFinite(lo)) return; w = Math.min(w, lo); e = Math.max(e, lo); so = Math.min(so, la); n = Math.max(n, la); };
+      const from = Math.max(0, state.cursorIdx), step = Math.max(1, Math.floor((t.lat.length - from) / 400));
+      for (let i = from; i < t.lat.length; i += step) add(t.lat[i], t.lon[i]);
+      add(t.lat[t.lat.length - 1], t.lon[t.lon.length - 1]);
+      if (state.live) add(state.live.lat, state.live.lon);
+      if (!(e >= w && n >= so)) return;
+      pauseFollow();
+      fitInView([[w, so], [e, n]], viewInsets().b + 40);
+      scheduleResume(OVERVIEW_S);
+      paintOverviewKey();
+    }
+    function paintOverviewKey() {
+      const on = !!(driveActive && state.mode === 'live' && track && track.kind === 'route' && state.cursorIdx >= 0);
+      if ($('overviewBtn').hidden === on) $('overviewBtn').hidden = !on;
+    }
+    $('overviewBtn').addEventListener('click', routeOverview);
     $('recenterBtn').addEventListener('click', () => { if (locDenied && !track && $('app').classList.contains('idle')) { showPerms(); return; } resumeFollow(); render(false); });   // the idle map with Location off has nowhere to come back to: say so
 
     // =======================================================================
@@ -1294,18 +1356,18 @@
     }
     // the app's own camera move (a route fit): follow pauses with no recenter key; a drag of the map brings it (U-122)
     function holdFollow() { state.follow = false; clearTimeout(resumeTimer); clearInterval(resumeTick); recenterLeft(0); }
-    function scheduleResume() {
+    function scheduleResume(total = FOLLOW_RESUME_S) {
       clearTimeout(resumeTimer); clearInterval(resumeTick);
-      let left = FOLLOW_RESUME_S;
-      recenterLeft(left);
-      resumeTick = setInterval(() => { left -= 1; if (left > 0) recenterLeft(left); }, 1000);
-      resumeTimer = setTimeout(resumeFollow, FOLLOW_RESUME_S * 1000);
+      let left = total;
+      recenterLeft(left, total);
+      resumeTick = setInterval(() => { left -= 1; if (left > 0) recenterLeft(left, total); }, 1000);
+      resumeTimer = setTimeout(resumeFollow, total * 1000);
     }
     // U-71: the key's face is always the glyph; a countdown drains a bar along its foot (restarted for each new one), and
     // the seconds go only to its label
-    function recenterLeft(s) {
+    function recenterLeft(s, total = FOLLOW_RESUME_S) {
       const b = $('recenterBtn'), bar = b.querySelector('.rc-left');
-      if (s === FOLLOW_RESUME_S) { b.classList.remove('counting'); void bar.offsetWidth; b.style.setProperty('--rc-s', `${s}s`); }
+      if (s === total) { b.classList.remove('counting'); void bar.offsetWidth; b.style.setProperty('--rc-s', `${s}s`); }
       b.classList.toggle('counting', s > 0);
       b.setAttribute('aria-label', s > 0 ? `Recenter (on its own in ${s} s)` : 'Recenter');
     }
@@ -1999,6 +2061,8 @@
       for (let j = Math.max(0, pend); pend >= 0 && j < steps.length; j++) {
         if (ApexDirections.phrase(steps[j]) && !state.spoken.has(`${track.id}:dir:${j}:now`)) { turnHold.m = steps[j].m; break; }
       }
+      paintTurnArrow(steps, pend);
+      paintOverviewKey();
       const moving = !!(state.playing || live) && vMps != null, now = performance.now();
       const reactS = reaction.reactionS;
       // U-58: Auto reads the road ahead. A corner within two leads (at least 800 m) that is tight or needs braking keeps
