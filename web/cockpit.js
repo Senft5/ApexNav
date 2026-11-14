@@ -7161,9 +7161,20 @@
       driveLine: async (stops, p) => {
         if (!Array.isArray(stops) || stops.length < 2) return;
         closeSheet(); showView(null);
-        const name = String(p.title || 'A friend\u2019s drive').slice(0, 60);
-        await buildRoute(stops, `post_${p.id}`, name);
-        if (plannedRoute && plannedRoute.id === `post_${p.id}`) toast(`${name}${p.mine ? '' : `, @${p.handle}'s line`}: ${ApexUnits.long(totalM(), 1)}.`);
+        const name = String(p.title || 'A friend\u2019s drive').slice(0, 60), id = `post_${p.id}`;
+        // from where you are to the start of their line, then along it (as Best roads nearby leads to a stage); from the
+        // line's own start when there's no fix, you're already on it, or it's further than a drive to it makes sense
+        const here = await locate().catch(() => null), first = stops[0];
+        const away = here ? Math.hypot((here.lat - first.lat) * 110540, (here.lon - first.lon) * 111320 * Math.cos(first.lat * Math.PI / 180)) : Infinity;
+        const lead = Number.isFinite(away) && away > 300 && away < 150000;
+        const pts = lead ? [{ lat: here.lat, lon: here.lon }, ...stops] : stops, last = stops[stops.length - 1];
+        await buildRoute(pts, id, name, null, { from: null, to: { lat: last.lat, lon: last.lon }, via: stops.slice(0, -1).map((q) => ({ lat: q.lat, lon: q.lon, shaping: true })) });
+        const t = plannedRoute;
+        if (!t || t.id !== id) return;
+        const whose = p.mine ? '' : `, @${p.handle}'s line`;
+        if (!lead) { toast(`${name}${whose}: ${ApexUnits.long(totalM(), 1)}.`); return; }
+        const toStart = t.dist[Core.nearestIndex(first.lat, first.lon, t.lat, t.lon, -1).index] || 0;
+        toast(`${name}${whose}: ${ApexUnits.long(toStart, 1)} to the start, then ${ApexUnits.long(Math.max(0, totalM() - toStart), 1)} of it.`);
       } }) : null; } catch (e) { console.error('drive posts', e); } });
     const inboxTick = () => { if (inbox && !driveActive && document.visibilityState === 'visible') inbox.refresh(); };
     document.addEventListener('visibilitychange', inboxTick);
