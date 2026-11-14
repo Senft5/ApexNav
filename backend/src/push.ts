@@ -46,9 +46,9 @@ export async function pushRegister(env: Env, v: Viewer, req: Request): Promise<{
   return { ok: true, sending: pushConfigured(env) };
 }
 
-/** DELETE /api/push/token {token}: this phone signs out or turns pushes off. No token: every phone of this person. */
+/** DELETE /api/push/token {token}: this phone signs out or turns pushes off. No token: every phone of this person, and the kinds turned off (Delete account). */
 export async function pushForget(env: Env, userId: string, token?: unknown): Promise<void> {
-  if (token === undefined || token === null || token === "") { await writeTokens(env, userId, []); return; }
+  if (token === undefined || token === null || token === "") { await writeTokens(env, userId, []); if (env.PHOTOS) await env.PHOTOS.delete(offKey(userId)); return; }
   const t = tokenOf(token);
   const list = await readTokens(env, userId);
   if (list.some((x) => x.t === t)) await writeTokens(env, userId, list.filter((x) => x.t !== t));
@@ -63,6 +63,32 @@ export async function pushQuiet(env: Env, v: Viewer, req: Request): Promise<void
   else await env.PHOTOS.delete(`pushquiet/${v.id}`);
 }
 
+/** The kinds a driver can each turn off (Garage → Settings → Notifications), and which pushes each holds. */
+export const PUSH_GROUPS: Record<string, string[]> = {
+  friends: ["request", "friend"], kudos: ["kudos", "post_kudos"], comments: ["post_comment"], duels: ["duel"], crews: ["crew_drive"],
+};
+const offKey = (userId: string) => `pushoff/${userId}`;
+const groupOf = (kind: string) => Object.keys(PUSH_GROUPS).find((g) => PUSH_GROUPS[g].includes(kind)) || null;
+async function offOf(env: Env, userId: string): Promise<string[]> {
+  if (!env.PHOTOS) return [];
+  try { const v = JSON.parse((await env.PHOTOS.get(offKey(userId))) || "[]"); return Array.isArray(v) ? v.filter((g) => typeof g === "string" && g in PUSH_GROUPS) : []; } catch (_) { return []; }
+}
+
+/** GET /api/push/kinds → { off }: the kinds this person turned off (none: every kind is on). */
+export async function pushKindsGet(env: Env, v: Viewer): Promise<{ off: string[]; kinds: string[] }> {
+  return { off: await offOf(env, v.id), kinds: Object.keys(PUSH_GROUPS) };
+}
+/** PUT /api/push/kinds {off}: kept in KV beside the tokens, written only when it changes, erased with the account. */
+export async function pushKindsPut(env: Env, v: Viewer, req: Request): Promise<{ off: string[] }> {
+  const b = (await req.json().catch(() => ({}))) as { off?: unknown };
+  if (!Array.isArray(b.off) || b.off.some((g) => typeof g !== "string" || !(g in PUSH_GROUPS))) throw new HttpError(400, "bad_kinds");
+  const off = Object.keys(PUSH_GROUPS).filter((g) => (b.off as string[]).includes(g));
+  if (!env.PHOTOS) return { off };
+  const was = await offOf(env, v.id);
+  if (was.join() !== off.join()) { if (off.length) await env.PHOTOS.put(offKey(v.id), JSON.stringify(off)); else await env.PHOTOS.delete(offKey(v.id)); }
+  return { off };
+}
+
 /** What a push says and where its tap goes: `link` is an app link the shell opens as any other (apexnav://open?view=friends). */
 export interface Push { kind: string; title: string; body: string; link: string }
 
@@ -75,6 +101,8 @@ export async function notify(env: Env, userIds: string[], p: Push): Promise<numb
     for (const id of [...new Set(userIds)].slice(0, 60)) {
       const list = await readTokens(env, id);
       if (!list.length || (await env.PHOTOS!.get(`pushquiet/${id}`))) continue;   // no phone, or driving now
+      const g = groupOf(p.kind);
+      if (g && (await offOf(env, id)).includes(g)) continue;                       // this kind turned off
       const gone: string[] = [];
       for (const k of list) {
         const r = await sendAlert(env, k.t, alert, (k.e ?? "production") as ApnsEnv);

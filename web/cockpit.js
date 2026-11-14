@@ -8450,6 +8450,28 @@
     function paintPushState() {
       const n = $('pushState'); if (!n) return;
       n.textContent = !pushShell() ? 'Notifications come from the Vetta app on iPhone.' : state.toggles.push ? 'On. Nothing comes while you drive.' : 'Off.';
+      paintPushKinds();
+    }
+    // each kind its own switch, under the main one while it is on (the server keeps which are off: GET/PUT /api/push/kinds)
+    const PUSH_KINDS = [['friends', 'Friend requests'], ['kudos', 'Kudos'], ['comments', 'Comments and mentions'], ['duels', 'Duels'], ['crews', 'Crew drives']];
+    let pushOff = null;
+    function paintPushKinds() {
+      const box = $('pushKinds'); if (!box) return;
+      const show = !!(pushShell() && state.toggles.push && pushMember());
+      box.hidden = !show || !pushOff;
+      if (!show) return;
+      if (!pushOff) { pushOff = []; apiCall('GET', '/api/push/kinds').then(jsonOf).then((r) => { pushOff = r && Array.isArray(r.off) ? r.off : []; paintPushKinds(); }).catch(() => { pushOff = null; }); return; }
+      box.replaceChildren(...PUSH_KINDS.map(([k, label]) => {
+        const on = !pushOff.includes(k), b = el('button', { type: 'button', className: `sw${on ? ' on' : ''}`, role: 'switch' }, el('i'), el('span', { textContent: label }));
+        b.setAttribute('aria-checked', String(on));
+        b.addEventListener('click', async () => {
+          const was = pushOff, next = on ? [...pushOff, k] : pushOff.filter((x) => x !== k);
+          pushOff = next; paintPushKinds();
+          const r = await apiCall('PUT', '/api/push/kinds', { off: next }).catch(() => null);
+          if (!r || !r.ok) { pushOff = was; paintPushKinds(); toast('Couldn’t change it. Check signal.'); }
+        });
+        return b;
+      }));
     }
     // after your first post: one offer to hear about its kudos and comments (never again once seen)
     function pushOffer() {

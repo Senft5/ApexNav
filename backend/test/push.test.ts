@@ -143,6 +143,24 @@ describe("push notifications", () => {
     expect(calls).toEqual([]);
   });
 
+  it("each kind can be turned off: kudos off still lets a comment through; bad kinds are refused", async () => {
+    await configure();
+    const [a, b] = [await makeUser("alice"), await makeUser("bob")];
+    await befriend(a, b);
+    await phone(a, 1);
+    expect(await json(api(a, "GET", "/api/push/kinds"))).toEqual({ off: [], kinds: ["friends", "kudos", "comments", "duels", "crews"] });
+    expect(await json(api(a, "PUT", "/api/push/kinds", { off: ["duels", "kudos"] }))).toEqual({ off: ["kudos", "duels"] });
+    expect((await api(a, "PUT", "/api/push/kinds", { off: ["everything"] })).status).toBe(400);
+    const line = encodeLine(Array.from({ length: 91 }, (_, i) => [35 + i * 0.001, -84] as [number, number]));
+    const { id } = await json(api(a, "POST", "/api/posts", { title: "Cherohala Skyway", driven_on: today, length_m: 10000, line }));
+    await ok(api(b, "POST", `/api/posts/${id}/kudos`));
+    await ok(api(b, "POST", `/api/posts/${id}/comments`, { body: "That fog!" }));
+    await settle(1);
+    expect(calls.map((x) => x.body.aps.alert.body)).toEqual(["@bob commented on your drive."]);
+    await ok(api(a, "PUT", "/api/push/kinds", { off: [] }));
+    expect(await env.PHOTOS!.get(`pushoff/${a.id}`)).toBeNull();
+  });
+
   it("a token Apple calls gone is dropped; sign-out drops this phone; Delete account drops them all; bad tokens are refused", async () => {
     await configure();
     const [a, b] = [await makeUser("alice"), await makeUser("bob")];
