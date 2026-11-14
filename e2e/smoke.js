@@ -8486,6 +8486,20 @@ flow('Compare with a single drive: one line says it needs two, no empty panels; 
   check(/Shared road/.test(two.cards) && !two.road && !two.corners && !two.pick, 'two drives: the comparison is drawn: ' + JSON.stringify(two));
 });
 
+flow('Compare two drives on different roads: one line says they share no road, no gap chart or corner table of dashes (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  // the same profile 2 km apart (seed 0 and 1): nothing of one road lies on the other
+  await page.evaluate(async (src) => { const gen = eval(src);
+    for (let k = 0; k < 2; k++) await ApexRecording.store(ApexRecording.parse(ApexCore, gen('saw', k), 'X' + k + '.csv', { id: 'X' + k, name: ['Dry Ridge Rd', 'Pebble Ridge'][k], date: `2026-0${7 + k}-01T09:00`, source: 'web-gps' })); }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html?tab=compare');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && /share|Shared/.test(document.querySelector('#cards').textContent), null, { timeout: 20000 });
+  const r = await page.evaluate(() => ({ cards: document.getElementById('cards').textContent.trim(), road: document.getElementById('cmpRoad').hidden,
+    corners: document.getElementById('cmpCorners').hidden, pick: document.querySelector('.compare-pick').hidden }));
+  check(/share no road/.test(r.cards) && r.road && r.corners && !r.pick, 'different roads: one line, the pickers stay, nothing empty under it: ' + JSON.stringify(r));
+});
+
 flow('the drive page\'s map: with no map to be had the picture keeps its blank panel; MapLibre loads only for it (TestFlight 15)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/analysis.html');

@@ -886,8 +886,8 @@
       const B = summaryOf(b);
       // 2026-11-12 (free roamer B): with nothing to compare, one line says why, and the empty Road, Gap and Corner panels
       // (and, with a single drive, the two pickers) are not drawn
-      const none = () => {
-        $('cards').innerHTML = `<p class="note" style="grid-column:1/-1">${drives.length < 2 ? 'Compare needs two drives. Drive this road again and it lands here.' : 'Pick two different drives.'}</p>`;
+      const none = (apart) => {
+        $('cards').innerHTML = `<p class="note" style="grid-column:1/-1">${drives.length < 2 ? 'Compare needs two drives. Drive this road again and it lands here.' : apart ? 'These two drives share no road. Pick a drive of the same road.' : 'Pick two different drives.'}</p>`;
         $('cmpRoad').hidden = $('cmpCorners').hidden = true; document.querySelector('.compare-pick').hidden = drives.length < 2;
       };
       if (!summaryOf(a) || !B || a === b) { none(); return; }
@@ -895,6 +895,7 @@
       if (run !== compareRun) return;                                    // another pair picked meanwhile
       const r = res && res.r;
       if (!A || !r) { none(); return; }
+      if (!(r.overlap_m > 0)) { none(true); return; }                  // different roads: no gap, no corner pairs, only A's speed line (free roamer B, 2026-11-14)
       $('cmpRoad').hidden = $('cmpCorners').hidden = document.querySelector('.compare-pick').hidden = false;
       const c = (v, label, extra, k = '') => `<div class="card"><b class="${k}">${v}</b><span>${label}</span>${extra ? `<em>${extra}</em>` : ''}</div>`;
       $('cards').innerHTML =
