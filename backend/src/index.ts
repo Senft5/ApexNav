@@ -402,6 +402,7 @@ on("GET", "/api/feed/week", async (req, env) => json(await drivePosts.feedWeek(e
 on("GET", "/api/feed", async (req, env) => json(await drivePosts.feed(env, await requireMember(req, env), new URL(req.url))));
 on("POST", "/api/posts", async (req, env) => json(await drivePosts.postCreate(env, await requireMember(req, env), req), 201));
 on("GET", "/api/posts/:id", async (req, env, m) => json(await drivePosts.postGet(env, await requireMember(req, env), m.groups!.id)));
+on("PUT", "/api/posts/:id", async (req, env, m) => json(await drivePosts.postEdit(env, await requireMember(req, env), m.groups!.id, req)));
 on("DELETE", "/api/posts/:id", async (req, env, m) => { await drivePosts.postDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 on("POST", "/api/posts/:id/kudos", async (req, env, m, ctx) => {
   const v = await requireMember(req, env), k = await drivePosts.postKudos(env, v, m.groups!.id, true);

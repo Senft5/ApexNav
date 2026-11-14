@@ -200,6 +200,18 @@ export async function postGet(env: Env, v: Viewer, id: string) {
 }
 
 /** DELETE /api/posts/:id: yours only; its kudos and comments go with it. */
+/** PUT /api/posts/:id {title?, caption?}: the author changes the drive's name or what they said; nothing else. */
+export async function postEdit(env: Env, v: Viewer, id: string, req: Request): Promise<{ title: string; caption: string | null }> {
+  const b = await body<Record<string, unknown>>(req);
+  const old = await env.DB.prepare("SELECT title, caption FROM drive_posts WHERE id = ? AND author = ?").bind(id, v.id).first<{ title: string; caption: string | null }>();
+  if (!old) throw new HttpError(404, "no_post");
+  const title = b.title === undefined ? old.title : optText(b.title, 60, "title");
+  if (!title) throw new HttpError(400, "bad_title");
+  const caption = b.caption === undefined ? old.caption : optText(b.caption, 280, "caption");
+  await env.DB.prepare("UPDATE drive_posts SET title = ?, caption = ? WHERE id = ? AND author = ?").bind(title, caption, id, v.id).run();
+  return { title, caption };
+}
+
 export async function postDelete(env: Env, v: Viewer, id: string): Promise<void> {
   const r = await env.DB.prepare("DELETE FROM drive_posts WHERE id = ? AND author = ?").bind(id, v.id).run();
   if (!r.meta.changes) throw new HttpError(404, "no_post");
