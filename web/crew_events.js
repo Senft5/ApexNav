@@ -588,7 +588,8 @@
 
     /** A Sunday run is a name, a day, a time, where to meet and which road; roles, regroup points, notes, the meet listing
      *  and the template are set on the planned drive's card under More (P-10). */
-    function planForm(crews, done, pick) {
+    // preset: { title, route: { name, geom } } from a crew roadbook's road (roadbooks.js): its name, and the road as the route
+    function planForm(crews, done, pick, preset = null) {
       const form = el('div', { className: 'stack-8 plan-drive' });
       const crew = rowSel('Crew');
       for (const c of crews) crew.append(el('option', { value: c.id, textContent: c.name, selected: c.id === pick }));
@@ -610,6 +611,7 @@
       });
       crew.addEventListener('change', fillTemplates); fillTemplates();
       const title = el('input', { className: 'field', maxLength: 60, placeholder: 'Name it, like Cherohala Saturday', autocomplete: 'off' });
+      if (preset && preset.title) title.value = String(preset.title).slice(0, 60);
       title.setAttribute('aria-label', 'Drive name');
       // when: the day as a row of stops, the time as a stepper (never the browser's pickers)
       const date = dayStrip(dayKey(new Date(Date.now() + 86400000))), time = timeStepper('09:00');
@@ -643,8 +645,8 @@
       for (const [n, t] of REPEAT_OPTS) { const b = btn(t, () => { repeat = n; paintRep(); }, 'chip'); b.dataset.v = String(n); repRow.append(b); }
       paintRep();
       // the planned route, only when there is one (P-29: no switch that cannot be switched)
-      const route = page.plannedRoute();
-      const withRoute = route ? sw(`Add the planned route (${route.name})`, true) : null;
+      const route = preset && preset.route && Array.isArray(preset.route.geom) && preset.route.geom.length > 1 ? preset.route : page.plannedRoute();
+      const withRoute = route ? sw(preset && preset.route ? `Add the road (${route.name})` : `Add the planned route (${route.name})`, true) : null;
       const routeRow = withRoute || el('div', { className: 'row' }, el('span', { className: 'note', textContent: 'No route yet.' }),
         ...(page.openWhereTo ? [btn('Add a route', () => page.openWhereTo(), 'linkbtn')] : []));
       const label = (text) => el('p', { className: 'ctl-label', textContent: text });
@@ -738,7 +740,10 @@
         planKey.setAttribute('aria-label', 'Plan a drive');
         planKey.addEventListener('click', () => openPlan(o.crewId));
       } else if (one.length) planKey = btn('Plan a drive', () => openPlan(), 'ink-btn');
-      const openPlan = (pick) => { formHost.replaceChildren(planForm(one, () => { formHost.replaceChildren(); if (planKey) planKey.hidden = false; redo(); }, pick)); if (planKey) planKey.hidden = true; };
+      const openPlan = (pick, preset) => {
+        formHost.replaceChildren(planForm(one, () => { formHost.replaceChildren(); if (planKey) planKey.hidden = false; redo(); }, pick, preset)); if (planKey) planKey.hidden = true;
+        if (preset && formHost.isConnected) try { formHost.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (_) {}
+      };
       const sec = o.crewId
         ? el('div', { className: 'stack-8 cp-week' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Upcoming drives' }), planKey || ''), formHost, ...(o.before ? [o.before] : []), list, meets)
         : el('div', { className: 'stack-8' }, el('h3', { textContent: 'Crew drives' }), ...(planKey ? [planKey] : []), formHost, list, meets);
@@ -748,7 +753,7 @@
     }
     let lastPlan = null, lastRedo = null;
     /** Opens the plan form for one crew in the section last drawn (the crew page's "Plan one"). */
-    function plan(crewId) { if (lastPlan) lastPlan(crewId); }
+    function plan(crewId, preset) { if (lastPlan) lastPlan(crewId, preset); return !!lastPlan; }
     /** Draws the Crew drives sheet again (a card on the crew page changed a drive). */
     function refresh() { if (lastRedo) lastRedo(); }
     return { section, plan, card, refresh, meetCard };
