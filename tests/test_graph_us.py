@@ -40,7 +40,8 @@ def test_jobs_cover_each_block_once_with_the_states_under_its_margin():
     assert (-85.0, 38.0, -84.0, 39.0) in boxes and (-78.0, 37.0, -77.0, 38.0) in boxes
     assert (-90.0, 38.0, -89.0, 39.0) not in boxes, "no state there: no block"
     for j in js:
-        assert j["east"] - j["west"] <= U.CHUNK_DEG
+        assert j["east"] - j["west"] <= (U.DENSE_CHUNK_DEG if j["west"] >= U.DENSE_WEST else U.CHUNK_DEG)
+        assert not j["west"] < U.DENSE_WEST < j["east"], "no chunk across the dense line"
         for _, b, clip in j["blocks"]:
             assert clip == [b[0] - 0.4, b[1] - 0.4, b[2] + 0.4, b[3] + 0.4] or tuple(clip) == (b[0] - 0.4, b[1] - 0.4, b[2] + 0.4, b[3] + 0.4)
     # a job fetches the states under its blocks' margins: by the river both, on Lake Erie only Ohio
@@ -151,3 +152,13 @@ def test_a_state_geofabrik_refused_is_fetched_again_on_another_runner():
     assert 'grep -qx "osm-$st"' in again and "name: osm-again" in again
     band = wf[wf.index("\n  band:"):wf.index("\n  publish:")]
     assert "-n osm-again" in band and 'echo "::error::no extract for $s"; exit 1' in band, "no extract either way: the band fails, never builds without the state"
+
+
+def test_the_dense_east_is_cut_finer_and_the_matrix_fits():
+    """2026-11-14: the -95..-80 chunks (Chicago, Detroit, Cleveland) took up to 4 h 17 min of the 5 h 45 min limit. East of
+    -100 the chunks are 8 degrees (whole ones: the blocks stay on the grid); the lower 48 whole is still under GitHub's 256 jobs a matrix."""
+    full = {f"s{i}": (-125.0 + i, 24.0, -124.0 + i, 50.0) for i in range(59)}
+    js = U.jobs(full)
+    assert len(js) <= 256
+    assert all(float(b[1][0]).is_integer() for j in js for b in j["blocks"]), "every block on whole degrees"
+    assert {(j["west"], j["east"]) for j in js if j["west"] >= -100} == {(-100.0, -92.0), (-92.0, -84.0), (-84.0, -76.0), (-76.0, -68.0), (-68.0, -66.0)}
