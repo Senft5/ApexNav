@@ -264,8 +264,9 @@ def test_places(out):
 def test_only_road_hazards_alert_the_car():
     html = cockpit_source()
     assert "if (text && opts.alert && driveActive) carPost({ kind: 'hazard'" in html
-    # the urgent speech lane also carries turn-now directions and crests: only member, reported and convoy hazards set alert
-    assert html.count("alert: true") == 3
+    # the urgent speech lane also carries turn-now directions and crests: only member, reported and convoy hazards set alert,
+    # and the DOTs' slow traffic on the route ahead (road_events.js, dotAheadTick)
+    assert html.count("alert: true") == 4
 
 
 MAPRUN = r"""
@@ -391,7 +392,7 @@ def test_the_phones_one_key_offers_reach_the_car(maps):
     assert maps["offerSame"]["short"] == "" and maps["offerSame"]["key"] == "Skip Cherohala…" and maps["offerSame"]["seconds"] == 20
     assert maps["offerNone"] == [None, None, None, 5]
     js = cockpit_source()
-    assert js.count("offerKey(`") == 3, "the police report ahead, the road closure ahead and the late-for-home offers"
+    assert js.count("offerKey(`") == 4, "the police report ahead, the road closure ahead, a DOT crash or closure ahead and the late-for-home offers"
     assert "m.action === 'offer' && car.offer && m.id === car.offer.id && performance.now() < car.offer.until" in js
     assert "carPost({ kind: 'offerDone', id })" in js
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()

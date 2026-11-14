@@ -252,6 +252,13 @@ const write = (f, j) => fs.writeFileSync(path.join(dir, f), JSON.stringify(j));
   G._indexes.clear(); G._mem.clear(); asked.length = 0;
   out.prefetch = await G.prefetchArea({ s: 39.0, w: -84.6, n: 39.2, e: -84.4 }, { fetchFn });
   out.prefetchAsked = asked.filter((u) => u.endsWith('.vgr')).sort();
+  // a saved route's line: only the tiles within 2 km of it (a line wholly in tile 382_516, near no edge), kept the same way
+  G._mem.clear(); asked.length = 0;
+  const lat = [], lon = []; for (let k = 0; k < 2000; k++) { lat.push(39.1 + k * 5 / 110540 * 0.2); lon.push(-84.42 + k * 5 / 86000 * 0.2); }
+  out.along = await G.prefetchAlong(lat, lon, { fetchFn });
+  out.alongAsked = asked.filter((u) => u.endsWith('.vgr'));
+  out.tilesAlong = G.tilesAlong([39.1, 39.1], [-84.501, -84.499]).map((t) => `${t.i}_${t.j}`).sort();
+  out.none = G.tilesAlong(null, null);
   console.log(JSON.stringify(out));
 })();
 """
@@ -261,6 +268,9 @@ const write = (f, j) => fs.writeFileSync(path.join(dir, f), JSON.stringify(j));
     assert r["other"]["asked"] == ["/api/graph/v1/381_516.vgr", "/api/graph/v1/382_516.vgr"]      # one build across the edge
     assert r["prefetch"] == {"tiles": 2, "kept": 2}
     assert r["prefetchAsked"] == ["/api/graph/v1/381_516.vgr", "/api/graph/v1/382_516.vgr"]   # the region build still differs
+    assert r["along"] == {"tiles": 1, "kept": 1} and r["alongAsked"] == ["/api/graph/v1/382_516.vgr"], "a route's own tiles only"
+    assert r["tilesAlong"] == ["381_516", "382_516"], "a line by a tile edge takes the tiles within 2 km on both sides"
+    assert r["none"] == []
 
 
 @needs_node

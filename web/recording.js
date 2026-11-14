@@ -8,7 +8,7 @@
   // so the Log lists a year of drives without reading 1.6 MB of rows each. Opening v3 only adds the store: 'drives' is
   // never touched by the upgrade, so every drive already on a phone stays; summaries() builds the missing ones from the
   // drives' own rows the first time it is asked (in the analysis worker, off the page's thread).
-  const DB_VERSION = 3, SUMMARY_VERSION = 2;   // 2: run (flow.js, IDEAS D-30)
+  const DB_VERSION = 3, SUMMARY_VERSION = 3;   // 2: run (flow.js, IDEAS D-30); 3: shape (the Log's row thumbnail)
   function idb() {
     if (dbp) return dbp;
     dbp = new Promise((res, rej) => {
@@ -47,6 +47,15 @@
    * What the Log's list, the end card and the Garage need of a drive, from its own record: no row is copied, nothing is
    * estimated (a score without clean corners stays null). Null without the core (the drive is summarised later).
    */
+  /** The drive's shape for the Log's row: up to n of its known points, evenly spaced, [[lat, lon], …] to 5 places; null under 2. */
+  function shapeOf(d, n = 32) {
+    if (!d || !Array.isArray(d.lat) || !Array.isArray(d.lon)) return null;
+    const idx = [];
+    for (let i = 0; i < Math.min(d.lat.length, d.lon.length); i++) if (finiteN(d.lat[i]) && finiteN(d.lon[i])) idx.push(i);
+    if (idx.length < 2) return null;
+    const k = Math.min(n, idx.length), r5 = (v) => Math.round(v * 1e5) / 1e5;
+    return Array.from({ length: k }, (_, j) => idx[Math.round(j * (idx.length - 1) / (k - 1))]).map((i) => [r5(d.lat[i]), r5(d.lon[i])]);
+  }
   function summarize(Core, d) {
     if (!Core || !d || !d.id || !Array.isArray(d.lat)) return null;
     let ds = { score: null, corners: 0, components: null }, corners = [], run;
@@ -63,6 +72,7 @@
     return {
       id: d.id, sv: SUMMARY_VERSION, name: d.name, date: d.date, date_known: d.date_known, source: d.source,
       len_m: finiteN(len) ? len : null, n: d.lat.length, secs, bbox: s <= n ? [s, n, w, e] : null,
+      shape: shapeOf(d),
       ds: { score: ds.score, corners: ds.corners || 0, components: ds.components || null }, corners, run,
       tags: d.tags, note: d.note, ended: d.ended, contributed: d.contributed, car: d.car ? { label: d.car.label } : undefined,
       battery: d.battery, laps: Array.isArray(d.laps) ? d.laps.length : undefined,
@@ -115,6 +125,16 @@
     const t0 = db.transaction(['drives', 'summaries']);
     const [keys, sums] = await Promise.all([req(t0.objectStore('drives').getAllKeys()), req(t0.objectStore('summaries').getAll())]);
     const have = new Map((sums || []).filter((x) => x && x.sv === SUMMARY_VERSION).map((x) => [x.id, x]));
+    // a version-2 summary only lacks the shape: added from the drive's points, never scored again (no core needed)
+    for (const x of sums || []) {
+      if (!x || x.sv !== 2 || have.has(x.id)) continue;
+      const t = db.transaction(['drives', 'summaries'], 'readwrite');
+      t.objectStore('drives').get(x.id).onsuccess = (e) => {
+        const d = e.target.result; if (!d) return;
+        const y = { ...x, sv: SUMMARY_VERSION, shape: shapeOf(d) }; t.objectStore('summaries').put(y); have.set(x.id, y);
+      };
+      try { await done(t); } catch (_) {}
+    }
     const live = new Set(keys), gone = (sums || []).filter((x) => x && !live.has(x.id)).map((x) => x.id);
     for (const id of keys) {
       if (have.has(id) || !Core) continue;
@@ -358,6 +378,6 @@
     return `${s.hits >= 2 ? 'Confirmed' : 'Seen'} on ${s.hits} of ${s.passes} drives`;
   }
 
-  const api = { all, get, ids, store, patch, summaries, summarize, runOf, remove, keepPut, keepAll, keepRemove, parse, timesOf, repair, scorableCorners, toTrack, corroborate, seenLabel, cornersOf, scoreOf, DB_VERSION, SUMMARY_VERSION };
+  const api = { all, get, ids, store, patch, summaries, summarize, shapeOf, runOf, remove, keepPut, keepAll, keepRemove, parse, timesOf, repair, scorableCorners, toTrack, corroborate, seenLabel, cornersOf, scoreOf, DB_VERSION, SUMMARY_VERSION };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRecording = api;
 })(typeof window !== 'undefined' ? window : globalThis);

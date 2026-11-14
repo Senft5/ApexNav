@@ -2,8 +2,8 @@
 // public feeds, for the phone's and the car's maps and for routing round full closures (web/road_events.js; cockpit.js):
 //   Indiana: INDOT's CARS events API (in.carsprogram.org, PUBLIC_DOMAIN), about 14 MB of JSON statewide.
 //   Kentucky: KYTC's WZDx 4.1 work zones (a public Google Cloud Storage file, no CORS, so relayed here).
-//   Ohio: ODOT's OHGO public API needs a free key the owner registers (docs/OWNER_TODO.md, the `ohgoApiKey` the route
-//   context already uses, in the CTX_KEYS secret); with it, its incidents and construction are added; without it Ohio is
+//   Ohio: ODOT's OHGO public API needs a free key the owner registers (docs/OWNER_TODO.md): `ohgoApiKey` in the CTX_KEYS
+//   secret the route context reads, or the secret OHGO_API_KEY; with it, its incidents, construction, travel delays and sudden slowdowns are added; without it Ohio is
 //   simply not in the list.
 // Each feed is compacted to a short row per event, the truck-only restrictions (width, weight, height, oversize) and the
 // shoulder and rest-area closures left out. The phone asks for the whole region, never sending where it is; the answer
@@ -22,9 +22,10 @@ const SEC = { "x-content-type-options": "nosniff", "content-security-policy": "d
  * traffic), "crash", "traffic" (anything else that slows a drive). label: what the pin and the voice say. until: epoch ms
  * the agency expects it to end, or null when it gave none.
  */
-export interface TrafficEvent { id: string; kind: string; label: string; lat: number; lon: number; road: string | null; until: number | null; src: string; heading?: number }
+export interface TrafficEvent { id: string; kind: string; label: string; lat: number; lon: number; road: string | null; until: number | null; src: string; heading?: number; text?: string }
 // one way only ("I-65 southbound"): the way it applies as a compass heading, so the phone never calls the far side's
 const HEADING: Record<string, number> = { northbound: 0, eastbound: 90, southbound: 180, westbound: 270 };
+const OH_DIR: Record<string, string> = { n: "northbound", s: "southbound", e: "eastbound", w: "westbound" };
 
 const r5 = (v: number) => Math.round(v * 1e5) / 1e5;
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -107,21 +108,115 @@ export function parseOhgo(json: unknown, kind: "incident" | "construction", nowM
   for (const r of rows as Record<string, any>[]) {
     try {
       if (!r || !finite(r.latitude) || !finite(r.longitude) || !inRange(r.latitude, r.longitude)) continue;
-      const cat = String(r.category ?? r.type ?? "").toLowerCase(), roadStatus = String(r.roadStatus ?? r.status ?? "").toLowerCase();
+      // checked against OHGO's live answer 2026-11-14: roadStatus (incidents) or status (construction) is Open, Restricted or
+      // Closed; direction is "N" / "S" / "E" / "W" (incidents) or "westbound" / "both directions" (construction)
+      const cat = String(r.category ?? "").toLowerCase(), st = String(r.roadStatus ?? r.status ?? "").toLowerCase();
       const end = Date.parse(r.endDate ?? "");
       if (Number.isFinite(end) && end <= nowMs) continue;
       const start = Date.parse(r.startDate ?? "");
       if (Number.isFinite(start) && start > nowMs) continue;
-      const dir = dirOf(String(r.direction ?? "") + "bound") ?? dirOf(String(r.description ?? ""));
+      const rawDir = String(r.direction ?? "").trim().toLowerCase(), both = /both/.test(rawDir);
+      const dir = both ? null : (OH_DIR[rawDir] ?? dirOf(rawDir) ?? dirOf(String(r.description ?? "")));
+      const ramp = /\bramp\b/i.test(`${r.routeName ?? ""} ${r.location ?? ""}`);
       let k: string, label: string;
-      if (/closed/.test(roadStatus) && !/lane|ramp|shoulder/.test(roadStatus)) { if (/both/i.test(String(r.direction ?? "")) || !dir) { k = "closure"; label = "Road closed"; } else { k = "closed_way"; label = `Closed ${dir}`; } }
-      else if (/ramp/.test(roadStatus)) { k = "lane"; label = "Ramp closed"; }
-      else if (/lane/.test(roadStatus)) { k = "lane"; label = "Lane closed"; }
-      else if (kind === "construction") { k = "roadwork"; label = "Roadwork"; }
-      else if (/crash|accident|collision/.test(cat)) { k = "crash"; label = "Crash"; }
+      if (/crash|accident|collision/.test(cat)) { k = "crash"; label = "Crash"; }
+      else if (st === "closed" && ramp) { k = "lane"; label = "Ramp closed"; }
+      else if (st === "closed") { if (both || !dir) { k = "closure"; label = "Road closed"; } else { k = "closed_way"; label = `Closed ${dir}`; } }
+      else if (st === "restricted") { k = "lane"; label = "Lane closed"; }
+      else if (kind === "construction" || /repair|maint|road ?work/.test(cat)) { k = "roadwork"; label = "Roadwork"; }
       else { k = "traffic"; label = "Traffic alert"; }
       out.push({ id: `dot:OH:${String(r.id ?? "").slice(0, 40)}`, kind: k, label, lat: r5(r.latitude), lon: r5(r.longitude),
-        road: cut(r.routeName ?? r.location, 40), until: Number.isFinite(end) ? end : null, src: "ODOT", ...(dir && !/both/i.test(String(r.direction ?? "")) ? { heading: HEADING[dir] } : {}) });
+        road: cut(r.routeName ?? r.location, 40), until: Number.isFinite(end) ? end : null, src: "ODOT", ...(dir ? { heading: HEADING[dir] } : {}) });
+    } catch { /* as above */ }
+  }
+  return out;
+}
+
+/**
+ * OHGO's slowdowns (its docs, 2026-11-14; both lists were empty at night when checked): travel-delays (a stretch's
+ * currentAvgSpeed against normalAvgSpeed, mph, and delayTime, minutes) and dangerous-slowdowns (currentMPH against normalMPH
+ * where traffic drops suddenly, as at the back of a queue). A delay under 2 minutes with speed above 60 % of normal is left
+ * out; anything under 15 mph is "Traffic stopped".
+ */
+export function parseOhgoSlow(json: unknown, kind: "delay" | "slowdown"): TrafficEvent[] {
+  const rows = (json as { results?: unknown })?.results;
+  if (!Array.isArray(rows)) return [];
+  const out: TrafficEvent[] = [];
+  const num = (r: Record<string, any>, ...k: string[]) => { for (const x of k) if (finite(r[x])) return r[x] as number; return NaN; };
+  for (const r of rows as Record<string, any>[]) {
+    try {
+      const lat = num(r, "latitude", "Latitude"), lon = num(r, "longitude", "Longitude");
+      if (!inRange(lat, lon)) continue;
+      const now = kind === "delay" ? num(r, "currentAvgSpeed", "CurrentAvgSpeed") : num(r, "currentMPH", "CurrentMPH");
+      const normal = kind === "delay" ? num(r, "normalAvgSpeed", "NormalAvgSpeed") : num(r, "normalMPH", "NormalMPH");
+      const delay = num(r, "delayTime", "DelayTime");
+      if (kind === "delay" && !(delay >= 2 || (now > 0 && normal > 0 && now < 0.6 * normal))) continue;
+      const rawDir = String(r.direction ?? r.Direction ?? "").trim().toLowerCase();
+      const dir = /both/.test(rawDir) ? null : (OH_DIR[rawDir] ?? dirOf(rawDir) ?? dirOf(String(r.description ?? r.Description ?? "")));
+      const label = finite(now) && now < 15 ? "Traffic stopped" : kind === "slowdown" ? "Sudden slowdown" : "Slow traffic";
+      out.push({ id: `dot:OH:${kind}:${String(r.id ?? r.Id ?? "").slice(0, 40)}`, kind: "slow", label, lat: r5(lat), lon: r5(lon),
+        road: cut(r.routeName ?? r.RouteName ?? r.location ?? r.Location, 40), until: null, src: "ODOT", ...(dir ? { heading: HEADING[dir] } : {}) });
+    } catch { /* as above */ }
+  }
+  return out;
+}
+
+/**
+ * OHGO's road weather sensors (checked live 2026-11-14): each site's surface sensors report a status ("Dry", "Wet", "Trace
+ * Wet", "Chemically Wet", "Snow Watch", "Ice Watch", "Ice", "Snow", "Frost" ...) and a surface temperature (deg F). The worst
+ * at a site is kept: ice, snow, frost, a watch, or a wet surface at or under 32 F is "ice"; a wet one is "wet"; dry or
+ * unknown is left out. A reading over 2 h old (lastUpdate, Eastern time without a zone) is left out too.
+ */
+export function parseOhgoWeather(json: unknown, nowMs: number): TrafficEvent[] {
+  const rows = (json as { results?: unknown })?.results;
+  if (!Array.isArray(rows)) return [];
+  const out: TrafficEvent[] = [];
+  for (const r of rows as Record<string, any>[]) {
+    try {
+      if (!r || !finite(r.latitude) || !finite(r.longitude) || !inRange(r.latitude, r.longitude)) continue;
+      let worst = 0, label = "";
+      for (const x of Array.isArray(r.surfaceSensors) ? r.surfaceSensors : []) {
+        const st = String(x?.status ?? "").toLowerCase(), t = x?.surfaceTemperature;
+        const at = Date.parse(String(x?.lastUpdate ?? "") + "-05:00");     // Eastern (EST; an hour out in summer, never a day)
+        if (Number.isFinite(at) && nowMs - at > 2 * 3600e3) continue;
+        const wet = /wet|slush|water/.test(st), cold = finite(t) && t > -60 && t <= 32;
+        let w = 0, l = "";
+        if (/watch/.test(st)) { w = 2; l = "Road near freezing"; }                     // "Snow Watch", "Ice Watch": a warning, not snow
+        else if (/ice|black/.test(st)) { w = 3; l = "Icy road"; }
+        else if (/snow|slush/.test(st)) { w = 3; l = "Snow on the road"; }
+        else if (/frost/.test(st)) { w = 3; l = "Frost on the road"; }
+        else if (wet && cold) { w = 3; l = "Road may be icy"; }
+        else if (wet) { w = 1; l = "Wet road"; }
+        if (w > worst) { worst = w; label = l; }
+      }
+      if (!worst) continue;
+      out.push({ id: `dot:OH:wx:${String(r.id ?? "").slice(0, 30)}`, kind: worst >= 2 ? "ice" : "wet", label, lat: r5(r.latitude), lon: r5(r.longitude),
+        road: null, until: null, src: "ODOT sensor" });
+    } catch { /* as above */ }
+  }
+  return out;
+}
+
+/**
+ * OHGO's message signs (checked live 2026-11-14): `messages` are the pages a sign shows, in capitals, padded with spaces and
+ * CR LF. Travel-time pages ("TRAVEL TIME TO", "MINUTES TO") are left out (the route already has its time); the rest become one line ("Main St closed 3 miles
+ * ahead"), for the plate only: a sign is never read aloud. The way it faces comes from its location ("I-71 SB @ ...").
+ */
+export function parseOhgoSigns(json: unknown): TrafficEvent[] {
+  const rows = (json as { results?: unknown })?.results;
+  if (!Array.isArray(rows)) return [];
+  const out: TrafficEvent[] = [];
+  const AB: Record<string, string> = { nb: "northbound", sb: "southbound", eb: "eastbound", wb: "westbound" };
+  for (const r of rows as Record<string, any>[]) {
+    try {
+      if (!r || !finite(r.latitude) || !finite(r.longitude) || !inRange(r.latitude, r.longitude) || !Array.isArray(r.messages)) continue;
+      const pages = r.messages.map((m: unknown) => String(m ?? "").replace(/\s+/g, " ").trim()).filter((m: string) => m && !/travel time|minutes to/i.test(m));
+      if (!pages.length) continue;
+      const line = pages.join(". ").toLowerCase().replace(/(^|\. )([a-z])/g, (_m: string, a: string, b: string) => a + b.toUpperCase())
+        .replace(/\b(i|us|sr|cr)-?(\d+)/g, (_m: string, a: string, n: string) => `${a.toUpperCase()}-${n}`).replace(/\b([nsew]) (I-\d+)/g, (_m: string, d: string, i: string) => `${d.toUpperCase()} ${i}`);
+      const m = /\b(nb|sb|eb|wb)\b/i.exec(String(r.location ?? "")), dir = m ? AB[m[1].toLowerCase()] : null;
+      out.push({ id: `dot:OH:sign:${String(r.id ?? "").slice(0, 30)}`, kind: "sign", label: "Sign", lat: r5(r.latitude), lon: r5(r.longitude),
+        road: cut(r.location, 40), until: null, src: "ODOT", text: line.slice(0, 90), ...(dir ? { heading: HEADING[dir] } : {}) });
     } catch { /* as above */ }
   }
   return out;
@@ -141,10 +236,14 @@ export async function trafficEvents(env: Env, fetcher: typeof fetch = fetch, now
   ];
   let key: unknown = null;
   try { key = env.CTX_KEYS ? (JSON.parse(env.CTX_KEYS) as Record<string, unknown>).ohgoApiKey : null; } catch { key = null; }
+  if (!(typeof key === "string" && key)) key = env.OHGO_API_KEY ?? null;   // or a secret of its own (one paste for the owner)
   if (typeof key === "string" && key) jobs.push(["ODOT", async () => {
     const q = `?api-key=${encodeURIComponent(key as string)}`;
-    const [inc, con] = await Promise.all([get(fetcher, `${OHGO}/incidents${q}`), get(fetcher, `${OHGO}/construction${q}`)]);
-    return [...parseOhgo(inc, "incident", nowMs), ...parseOhgo(con, "construction", nowMs)];
+    const [inc, con, delays, slow, wx, signs] = await Promise.all([get(fetcher, `${OHGO}/incidents${q}`), get(fetcher, `${OHGO}/construction${q}`),
+      get(fetcher, `${OHGO}/travel-delays${q}`).catch(() => null), get(fetcher, `${OHGO}/dangerous-slowdowns${q}`).catch(() => null),
+      get(fetcher, `${OHGO}/weather-sensor-sites${q}`).catch(() => null), get(fetcher, `${OHGO}/digital-signs${q}`).catch(() => null)]);   // (the last four: a bonus, never the reason Ohio is missing)
+    return [...parseOhgo(inc, "incident", nowMs), ...parseOhgo(con, "construction", nowMs), ...parseOhgoSlow(delays, "delay"), ...parseOhgoSlow(slow, "slowdown"),
+      ...parseOhgoWeather(wx, nowMs), ...parseOhgoSigns(signs)];
   }]);
   const ok: string[] = [], failed: string[] = [], events: TrafficEvent[] = [];
   await Promise.all(jobs.map(async ([name, run]) => { try { events.push(...(await run())); ok.push(name); } catch { failed.push(name); } }));
@@ -162,5 +261,67 @@ export async function trafficResponse(env: Env, fetcher: typeof fetch = fetch): 
   if (!out.sources.length) return new Response(JSON.stringify({ error: "traffic_unavailable" }), { status: 502, headers: { "content-type": "application/json", "cache-control": "no-store", ...SEC } });
   const res = new Response(JSON.stringify(out), { headers: { "content-type": "application/json", "cache-control": `public, max-age=${TRAFFIC_S}`, ...SEC } });
   if (cache) await cache.put(key, res.clone());
+  return res;
+}
+
+// ---- Road cameras (Ohio's OHGO traffic cameras, 2026-11-14) -----------------------------------------------------------
+// ODOT's ~1,100 traffic cameras: still pictures of the road, refreshed by ODOT every few minutes, for the map's opt-in Road
+// cameras layer (web/road_cams.js): snow, ice or a wet road before a drive. Traffic cameras, not speed or plate cameras
+// (those are Avoid cameras, web/cameras.js). The list changes rarely: asked of OHGO at most once a day per edge. The phone
+// loads each picture straight from ODOT's image server (itscameras.dot.state.oh.us, in the page's img-src).
+export const CAMS_S = 86400, CAM_IMG_HOST = "itscameras.dot.state.oh.us";
+export interface RoadCam { id: string; lat: number; lon: number; name: string; views: { dir: string; url: string }[] }
+
+/** One page of OHGO's /cameras as rows: a camera with a point and at least one picture on ODOT's own image host. */
+export function parseOhgoCams(json: unknown): RoadCam[] {
+  const rows = (json as { results?: unknown })?.results;
+  if (!Array.isArray(rows)) return [];
+  const out: RoadCam[] = [];
+  for (const r of rows as Record<string, any>[]) {
+    try {
+      if (!r || !finite(r.latitude) || !finite(r.longitude) || !inRange(r.latitude, r.longitude)) continue;
+      const views = (Array.isArray(r.cameraViews) ? r.cameraViews : []).flatMap((v: any) => {
+        let u: URL;
+        try { u = new URL(String(v?.largeUrl ?? v?.smallUrl ?? "")); } catch { return []; }
+        if (u.protocol !== "https:" || u.hostname !== CAM_IMG_HOST) return [];
+        u.port = "";                                                     // ":443" spelled out on some
+        const dir = cut(v?.direction, 20);
+        return [{ dir: dir && dir !== "View" ? dir : "", url: u.toString() }];
+      }).slice(0, 4);
+      if (!views.length) continue;
+      out.push({ id: String(r.id ?? "").slice(0, 30), lat: r5(r.latitude), lon: r5(r.longitude), name: cut(r.location ?? r.description, 60) ?? "Road camera", views });
+    } catch { /* as above */ }
+  }
+  return out;
+}
+
+/** GET /api/traffic/v1/cameras.json: every page of OHGO's cameras, cached a day; 503 no_key without the owner's key. */
+export async function camerasResponse(env: Env, fetcher: typeof fetch = fetch): Promise<Response> {
+  const head = { "content-type": "application/json", ...SEC };
+  let key: unknown = null;
+  try { key = env.CTX_KEYS ? (JSON.parse(env.CTX_KEYS) as Record<string, unknown>).ohgoApiKey : null; } catch { key = null; }
+  if (!(typeof key === "string" && key)) key = env.OHGO_API_KEY ?? null;
+  if (!(typeof key === "string" && key)) return new Response(JSON.stringify({ error: "no_key" }), { status: 503, headers: { ...head, "cache-control": "no-store" } });
+  const cache = typeof caches !== "undefined" ? (caches as unknown as { default: Cache }).default : null;
+  const ck = new Request("https://apexnav.cache/traffic/v1/cameras.json");
+  const hit = cache ? await cache.match(ck) : undefined;
+  if (hit) return new Response(hit.body, { headers: hit.headers });
+  const q = (page: number) => `${OHGO}/cameras?${page > 1 ? `page=${page}&` : ""}api-key=${encodeURIComponent(key as string)}`;
+  const getCams = async (url: string) => {
+    const r = await fetcher(url, { headers: { "user-agent": "Vetta-traffic/1.0", accept: "application/json" }, cf: { cacheTtl: CAMS_S, cacheEverything: true } } as RequestInit);
+    if (!r.ok) throw new Error(`upstream ${r.status}`);
+    return r.json() as Promise<{ totalPageCount?: unknown }>;
+  };
+  let cams: RoadCam[] = [];
+  try {
+    const first = await getCams(q(1));
+    const pages = Math.min(10, finite(first.totalPageCount) ? Math.max(1, Math.floor(first.totalPageCount)) : 1);
+    const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => getCams(q(i + 2))));
+    cams = [first, ...rest].flatMap(parseOhgoCams);
+  } catch {
+    return new Response(JSON.stringify({ error: "cameras_unavailable" }), { status: 502, headers: { ...head, "cache-control": "no-store" } });
+  }
+  const res = new Response(JSON.stringify({ src: "ODOT", cams }), { headers: { ...head, "cache-control": `public, max-age=${CAMS_S}` } });
+  if (cache) await cache.put(ck, res.clone());
   return res;
 }

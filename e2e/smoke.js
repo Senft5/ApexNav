@@ -205,6 +205,27 @@ async function clippedText(page) {
   }).catch(() => []);
 }
 
+// A key too small to hit, on every flow's last screen (2026-11-14): a button, link, switch, tab or field in view, on top,
+// under 24 x 24 px (WCAG 2.5.8; Apple asks 44 pt, and the drive's keys are bigger still). A link inside a sentence, the
+// map's own markers and a flow's own test fields (#e2e*) are left out. TAP_LOG=1 lists them instead of failing.
+async function smallTargets(page) {
+  return page.evaluate(() => {
+    const hits = [], where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).slice(0, 3).join('.') : '');
+    const W = innerWidth, H = innerHeight;
+    for (const el of document.querySelectorAll('button, a[href], [role="button"], [role="tab"], [role="switch"], [role="radio"], [role="checkbox"], input:not([type="hidden"]), select, summary')) {
+      const r = el.getBoundingClientRect(); if (!r.width || !r.height || r.bottom < 0 || r.top > H || r.right < 0 || r.left > W) continue;
+      let hidden = false; for (let n = el; n && n.nodeType === 1; n = n.parentElement) { if (n.hidden || n.getAttribute('aria-hidden') === 'true' || n.inert) { hidden = true; break; } }
+      if (hidden || el.disabled || el.closest('.maplibregl-marker') || /^e2e/.test(el.id)) continue;
+      const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || +cs.opacity === 0 || cs.pointerEvents === 'none') continue;
+      const x = Math.min(Math.max(r.left + r.width / 2, 0), W - 1), y = Math.min(Math.max(r.top + r.height / 2, 0), H - 1), top = document.elementFromPoint(x, y);
+      if (!top || !(el === top || el.contains(top))) continue;
+      if (el.tagName === 'A' && cs.display === 'inline') continue;    // a link in a sentence (WCAG 2.5.8 inline exception)
+      if (r.width < 24 || r.height < 24) hits.push(`${where(el)} "${(el.getAttribute('aria-label') || el.textContent).trim().slice(0, 30)}" ${Math.round(r.width)}x${Math.round(r.height)}`);
+    }
+    return hits.slice(0, 12);
+  }).catch(() => []);
+}
+
 // A control in view that a screen reader can't name (VoiceOver says only "button"): an icon key with no aria-label, an
 // empty link, a field with no label (LAUNCH.md section 3, IDEAS U-15). In every open page, like leftovers above.
 async function unnamed(page) {
@@ -2282,6 +2303,93 @@ flow('avoid police reports, driving: a report that lands on the route ahead is o
   check(/Going round the police report/.test(await page.textContent('#dsNote')), 'the drive says it is going round: ' + await page.textContent('#dsNote'));
 }, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });
 
+// the DOTs' word on the route ahead (road_events.js onRouteAhead, 2026-11-14): a crash your way miles on is offered once with
+// Go round; one on the other carriageway is not
+flow('a DOT crash on the route ahead, your way, is offered miles out with Go round, which routes round it; the far side\'s is not (Worker and router stubbed)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  const asked = [];
+  let events = [];                                                      // none while planning; two once driving
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}'), locs = req.locations;
+    asked.push(req);
+    if (!events.length) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(locs)) });
+    const a = locs[0], b = locs[locs.length - 1], pts = [];             // the way round: east 4 km, north, back west
+    for (let i = 0; i <= 40; i++) pts.push([a.lat, a.lon + 0.045 * i / 40]);
+    for (let i = 1; i <= 100; i++) pts.push([a.lat + (b.lat - a.lat) * i / 100, a.lon + 0.045]);
+    for (let i = 1; i <= 40; i++) pts.push([b.lat, a.lon + 0.045 - (a.lon + 0.045 - b.lon) * i / 40]);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ trip: { legs: [{ shape: polyline6(pts), maneuvers: [
+      { type: 1, begin_shape_index: 0, length: 8, street_names: ['East Fork Road'] }, { type: 4, begin_shape_index: pts.length - 1, length: 0 }] }],
+      summary: { length: 16, time: 1100, has_highway: false, has_toll: false, has_ferry: false } } }) });
+  });
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/traffic/v1/events.json') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ sources: ['INDOT'], events }) });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex && window.apex.live, null, { timeout: 20000 });
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.96, lon: -83.92 }, { lat: 36.06, lon: -83.92 }], 'route_dest', 'To the ridge', null,
+    { from: null, to: { lat: 36.06, lon: -83.92 }, via: [] }));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'route' && apexDebug.track.request, null, { timeout: 20000 });
+  const plan = await page.evaluate(() => { const t = apexDebug.track, i = Math.floor(t.lat.length * 0.5), j = Math.floor(t.lat.length * 0.3); window.__plan = t;
+    return { lat: t.lat[i], lon: t.lon[i], farLat: t.lat[j], farLon: t.lon[j], startLat: t.lat[0], startLon: t.lon[0], lat2: t.lat[3], lon2: t.lon[3] }; });
+  const crs = (Math.atan2((plan.lon2 - plan.startLon) * Math.cos(plan.startLat * Math.PI / 180), plan.lat2 - plan.startLat) * 180 / Math.PI + 360) % 360;
+  const crash = { id: 'dot:IN:crash', kind: 'crash', label: 'Crash', lat: +plan.lat.toFixed(5), lon: +plan.lon.toFixed(5), road: 'US 129', until: null, src: 'INDOT', heading: Math.round(crs) };
+  events = [{ ...crash, id: 'dot:IN:far', lat: +plan.farLat.toFixed(5), lon: +plan.farLon.toFixed(5), heading: (Math.round(crs) + 180) % 360 }, crash];
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  await page.evaluate(() => apexDebug.loadRoadEvents());               // the events land (the drive asks every 5 min)
+  await page.evaluate(() => { window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } }; });
+  const fix = () => page.evaluate(([lat, lon, crs]) => window.apex.live({ lat, lon, accuracy_m: 5, speed_mps: 15, course_deg: crs, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }), [plan.startLat, plan.startLon, crs]);
+  let offered = null;
+  for (let k = 0; k < 40 && !offered; k++) {
+    await fix();
+    offered = await page.evaluate(() => { const t = document.getElementById('toast'); return t && t.classList.contains('show') && /Crash on your route/.test(t.textContent) ? t.textContent : null; });
+    if (!offered) await page.waitForTimeout(250);
+  }
+  const dbg = await page.evaluate(() => apexDebug.dotAhead);
+  check(!!offered && /Go round/.test(offered), 'the crash on the route ahead is offered with Go round: ' + offered + ' ' + JSON.stringify(dbg));
+  check(dbg && dbg.hit && dbg.hit.id === 'dot:IN:crash' && dbg.hit.aheadM > 3000, 'the one your way, miles out, not the far side\'s nearer one: ' + JSON.stringify(dbg && dbg.hit));
+  const offer = await page.evaluate(() => window.__car.filter((m) => m.kind === 'offer').pop());
+  check(offer && offer.key === 'Go round' && /^Crash on your route in /.test(offer.title) && /^Crash in /.test(offer.short), 'the offer on the car: ' + JSON.stringify(offer));
+  const before = asked.length;
+  await page.evaluate((id) => window.apex.onNative({ type: 'carplay', action: 'offer', id }), offer.id);
+  await page.waitForFunction(() => apexDebug.track !== window.__plan && apexDebug.track && apexDebug.track.kind === 'route', null, { timeout: 15000 });
+  const ex = asked.slice(before).map((r) => r.exclude_locations || []);
+  check(ex.length && ex.every((e) => e.some((x) => Math.abs(x.lat - crash.lat) < 1e-4 && Math.abs(x.lon - crash.lon) < 1e-4)), 'the way round was asked round the crash: ' + JSON.stringify(ex));
+  await page.waitForTimeout(300);
+  check(/Going round the crash/.test(await page.textContent('#dsNote')), 'the drive says it is going round: ' + await page.textContent('#dsNote'));
+}, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });
+
+flow('Road cameras: an opt-in layer of Ohio DOT\'s traffic cameras, loaded only when switched on; a tap shows the road now (Worker stubbed)', async (page, base) => {
+  let asked = 0;
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/traffic/v1/cameras.json') { asked++; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ src: 'ODOT', cams: [
+      { id: 'c1', lat: 39.96, lon: -83.0, name: 'I-70 at SR-256', views: [{ dir: '', url: 'https://itscameras.dot.state.oh.us/images/col/i70.jpg' }] }] }) }); }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.route('https://itscameras.dot.state.oh.us/**', (route) => route.fulfill({ contentType: 'image/png',
+    body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') }));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded(), null, { timeout: 20000 });
+  check(!(await page.evaluate(() => !!window.ApexRoadCams)) && asked === 0, 'nothing loaded or asked before the switch');
+  await page.evaluate(() => { document.getElementById('swTab').click(); document.querySelector('[data-toggle="roadcams"]').click(); });
+  await page.waitForFunction(() => window.apexDebug.map.getLayer('roadcams-dots'), null, { timeout: 10000 });
+  check(asked === 1, 'the cameras asked once: ' + asked);
+  await page.evaluate(() => apexDebug.roadCams().open('c1'));
+  await page.waitForFunction(() => { const i = document.querySelector('.rc-pic'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 10000 });
+  const got = await page.evaluate(() => ({ src: document.querySelector('.rc-pic').src, title: document.querySelector('.overlay.show h3').textContent, note: document.querySelector('.overlay.show .note').textContent }));
+  check(/^https:\/\/itscameras\.dot\.state\.oh\.us\/images\/col\/i70\.jpg\?t=\d+$/.test(got.src) && got.title === 'I-70 at SR-256' && /Ohio DOT/.test(got.note), 'the picture opens: ' + JSON.stringify(got));
+  await page.evaluate(() => [...document.querySelectorAll('.overlay.show button')].find((b) => b.textContent === 'Close').click());
+  await page.evaluate(() => document.querySelector('[data-toggle="roadcams"]').click());
+  check(await page.evaluate(() => apexDebug.map.getLayoutProperty('roadcams-dots', 'visibility') === 'none'), 'off hides them');
+});
+
 // a road closure that lands on the route ahead mid-drive: Go round, as for police, with no switch (2026-11-12)
 flow('a road closure, driving: a closure reported on the route ahead is offered once with Go round, which routes round it, with no switch on (Worker and router stubbed)', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
@@ -3819,6 +3927,37 @@ flow('end card best corner: a filmed drive loops its best corner over the keys a
   check(!gone.shown && !gone.src, 'the next drive, unfilmed, shows no clip and plays nothing: ' + JSON.stringify(gone));
 });
 
+flow('the Log list: each drive has its road\'s shape beside its name; a summary from before shapes gets one without being scored again (2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexRecording && window.ApexCore);
+  await page.evaluate(async () => { for (const [id, f] of [['sh1', 12], ['sh2', 30]]) { const lat = [], lon = []; for (let i = 0; i < 500; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + Math.sin(i / f) * 0.0012); }
+    await ApexRecording.store({ id, name: 'Road ' + id, date: new Date(Date.now() - (id === 'sh1' ? 2 : 1) * 86400e3).toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map((_, i) => Math.sin(i / f) * 3), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }); } });
+  // no Score yet: the hero is the distance driven, not a big "--"
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#historyTable tr.row-link', { timeout: 15000 });
+  const hero = await page.evaluate(() => document.getElementById('historyCards').innerText.replace(/\s+/g, ' ').trim());
+  check(/^[\d.]+ ?(mi|km) In 2 drives · no Score yet A Score needs a few clean corners\.$/.test(hero), 'no Score yet: the miles driven, big: ' + hero);
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexRecording && window.ApexCore);
+  await page.evaluate(async () => {
+    // sh2's summary as the app before this kept it: version 2, no shape, a score of its own that must survive
+    const db = await new Promise((ok, no) => { const r = indexedDB.open('apexnav'); r.onsuccess = () => ok(r.result); r.onerror = no; });
+    await new Promise((ok) => { const t = db.transaction('summaries', 'readwrite'), st = t.objectStore('summaries');
+      st.get('sh2').onsuccess = (e) => { const x = e.target.result; delete x.shape; x.sv = 2; x.ds = { ...x.ds, score: 777 }; st.put(x); }; t.oncomplete = ok; });
+    db.close(); });
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#historyTable tr.row-link', { timeout: 15000 });
+  const rows = await page.evaluate(() => [...document.querySelectorAll('#historyTable tr.row-link')].map((r) => { const sv = r.querySelector('.ix-shape svg'), b = sv && sv.getBoundingClientRect();
+    return { id: r.dataset.drive, svg: !!sv, hidden: sv && sv.getAttribute('aria-hidden'), d: sv ? sv.querySelector('path').getAttribute('d').length : 0, w: b && Math.round(b.width), score: (r.querySelector('.ix-score') || {}).textContent }; }));
+  const sum = await page.evaluate(async () => (await ApexRecording.summaries(null)).map((x) => ({ id: x.id, sv: x.sv, n: (x.shape || []).length, score: x.ds.score })));
+  check(rows.length === 2 && rows.every((r) => r.svg && r.hidden === 'true' && r.d > 100 && r.w === 48), 'each row draws its road, 48 pt, quiet to VoiceOver: ' + JSON.stringify(rows));
+  const old = sum.find((x) => x.id === 'sh2');
+  check(old && old.sv === 3 && old.n === 32 && old.score === 777 && rows.find((r) => r.id === 'sh2').score.trim() === '777', 'the old summary got its shape and kept its score (not scored again): ' + JSON.stringify(sum));
+});
+
 flow('drive ended: Open in the Log is the solid key with no score, Share card with one, fixed from the first frame; a drive on a route keeps its name (REVIEW4 U-75, REVIEW5 U-118)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
@@ -5220,7 +5359,7 @@ flow('a saved stage: the live delta shows while you drive it and the result at t
   check(said.length === 1, `the result is said once (${JSON.stringify(said)})`);
 });
 
-flow('your best pass: on a road driven before (no stage saved) the bar shows the delta and the co-driver sums the stretch up (pass_coach.js)', async (page, base) => {
+flow('your best pass: on a road driven before (no stage saved) the bar shows the time gap and the co-driver sums the stretch up (pass_coach.js, owner 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
     window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
@@ -5241,41 +5380,42 @@ flow('your best pass: on a road driven before (no stage saved) the bar shows the
     const prof = Core.profileRecording({ lat, lon, distance_m: lat.map((_, i) => i * 5), speed_mph: v.map((x) => x * MPH), lon_g: lonG, lat_g: roughG });
     await ApexRecording.store({ id: 'e2e_before', name: 'Esses run', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: v, lon_g: lonG, lat_g: roughG,
       g_known: null, events: prof.events, elev: null, hz: 1 });
-    window.__road = { lat, lon, v, latG, lonG };
+    window.__road = { lat, lon, v, latG, lonG }; window.__clock = Date.now();
     await window.apexDebug.refreshSavedDrives();
   });
   check(await page.evaluate(() => window.apexDebug.passRefs) >= 6, 'the earlier drive\'s corners are remembered');
   await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
   await page.waitForTimeout(300);
   if (await page.isVisible('#permSheet.show')) await page.click('#permGo');
-  // drive it again, smoother, as the app's frames (half a bin apart), in bursts a second apart
+  // drive it again, smoother and 5 % quicker, as the app's frames (half a bin apart, each with its own clock), in bursts a second apart
   let barText = '';
   for (let burst = 0; burst < 10; burst++) {
     await page.evaluate((burst) => {
       const r = window.__road;
       for (let j = burst * 160; j < Math.min(1600, (burst + 1) * 160); j++) {
         const i = Math.min(799, Math.floor(j / 2)), f = (j % 2) / 2, k = Math.min(799, i + 1);
-        window.apex.live({ lat: r.lat[i] + (r.lat[k] - r.lat[i]) * f, lon: r.lon[i] + (r.lon[k] - r.lon[i]) * f, accuracy_m: 4, speed_mps: r.v[i], course_deg: 0,
-          lat_g: r.latG[i], lon_g: r.lonG[i], has_fix: true, calibration: 'locked' });
+        window.__clock += 2500 / (r.v[i] * 1.05);
+        window.apex.live({ lat: r.lat[i] + (r.lat[k] - r.lat[i]) * f, lon: r.lon[i] + (r.lon[k] - r.lon[i]) * f, accuracy_m: 4, speed_mps: r.v[i] * 1.05, course_deg: 0,
+          lat_g: r.latG[i] * 1.1025, lon_g: r.lonG[i], has_fix: true, calibration: 'locked', at: window.__clock });
       }
     }, burst);
     await page.waitForTimeout(1050);
     if (!barText && await page.isVisible('#coachBar')) barText = await page.textContent('#coachBar');
   }
-  check(/This stretch\s*\+\d+ vs best/.test(barText), `the bar showed the stretch ahead of your best (${JSON.stringify(barText)})`);
+  check(/This stretch\s*−\d+\.\d s vs best/.test(barText), `the bar showed the time gap, ahead of your best (${JSON.stringify(barText)})`);
   // then a straight: 600 m on with no remembered corner ends the stretch, and the co-driver says how it went, once
   for (let burst = 0; burst < 10 && !(await page.evaluate(() => window.__said.some((t) => /^Best stretch yet/.test(t)))); burst++) {
     await page.evaluate((burst) => {
       const r = window.__road, n = r.lat.length, dLa = r.lat[n - 1] - r.lat[n - 2], dLo = r.lon[n - 1] - r.lon[n - 2];
       for (let j = 1; j <= 80; j++) { const k = burst * 80 + j;
+        window.__clock += 125;
         window.apex.live({ lat: r.lat[n - 1] + dLa * k / 2, lon: r.lon[n - 1] + dLo * k / 2, accuracy_m: 4, speed_mps: 20, course_deg: 0,
-          lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); }
+          lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked', at: window.__clock }); }
     }, burst);
     await page.waitForTimeout(1000);
   }
   const said = await page.evaluate(() => window.__said.filter((t) => /stretch|your best|through there/i.test(t)));
-  check(said.filter((t) => /^Best stretch yet\. \d+ up\.$/.test(t)).length === 1, `the stretch is summed up once (${JSON.stringify(said)})`);
-  check(!said.some((t) => /faster|speed|later|sooner|second/i.test(t)), 'never time or speed');
+  check(said.filter((t) => /^Best stretch yet\. (\w+ tenths?|\d+\.\d seconds) up\.$/.test(t)).length === 1, `the stretch is summed up once, in time (${JSON.stringify(said)})`);
   check(!(await page.isVisible('#coachBar')), 'the bar goes when the stretch ends');
 });
 
@@ -6085,7 +6225,7 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   });
   check(dt.has && dt.lines.length === 0, 'a drive with g kept once a second has no touch of its own: ' + JSON.stringify(dt.lines));
   // and its corners against your records by kind (the record of each kind is held by the first drive to reach it)
-  check(dt.best.length >= 2 && /^Cleanest tight corner: \d{1,3}( · your best of \d+| · level with your best(, .+)?| · your best \d{1,3}(, .+)?)?$/.test(dt.best[0]), 'a drive against your records: ' + JSON.stringify(dt.best));
+  check(dt.best.length >= 2 && /^Cleanest tight corner: \d{1,3}( · your best of \d+ tight corners| · level with your best(, .+)?| · your best \d{1,3}(, .+)?)?$/.test(dt.best[0]), 'a drive against your records: ' + JSON.stringify(dt.best));
   // corner by corner on its road: these three drives are on three roads, so no corner has been driven three times
   check(dt.road && dt.road.corners === 0 && dt.road.best === 0, 'no corner of this road driven three times yet: ' + JSON.stringify(dt.road));
   check(dt.say.join(' | ') === 'Brakes on: 1.1 g a second · usually 0.8 | Turn-in: one quick movement · usually 0.9', 'a drive\'s touch in words: ' + dt.say);
@@ -6196,14 +6336,16 @@ flow('landscape mount: the map takes the left, the instruments a column on the r
 }, { viewport: { width: 844, height: 390 } });
 
 flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew with its ends cut; the Feed on People shows friends\' posts with kudos and comments one tap in (Worker stubbed, docs/SOCIAL.md 2.13)', async (page, base) => {
-  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1');
+    // a stage saved in the Log, on the drive posted below
+    localStorage.setItem('apex.segments', JSON.stringify([{ id: 's1', name: 'Tellico climb', lat0: 35.36 + 50 * 5 / 110540, lon0: -84.29, lat1: 35.36 + 400 * 5 / 110540, lon1: -84.29, length_m: 1750 }])); } catch (_) {} });
   const sent = [];
   // bob's post: a line of 60 points north
   const enc = (pts) => { let o = '', a0 = 0, b0 = 0; const e = (v) => { v = v < 0 ? ~(v << 1) : v << 1; while (v >= 32) { o += String.fromCharCode((32 | (v & 31)) + 63); v >>= 5; } o += String.fromCharCode(v + 63); };
     for (const [a, b] of pts) { const x = Math.round(a * 1e5), y = Math.round(b * 1e5); e(x - a0); e(y - b0); a0 = x; b0 = y; } return o; };
   const line = enc(Array.from({ length: 60 }, (_, i) => [35.3 + i * 0.001, -84.1 + Math.sin(i / 6) * 0.004]));
   const bobPost = { id: 'P1AAAAAAAAAAAAAA', handle: 'bob', photo_id: null, mine: false, crew: null, title: 'Cherohala Skyway', caption: 'Fog on top, dry below.', driven_on: '2026-11-12',
-    length_m: 32000, score: 812, roads: ['Cherohala Skyway', 'TN-165', 'Tellico River Rd'], stages: [], line, created_at: new Date(Date.now() - 2 * 3600e3).toISOString().slice(0, 19).replace('T', ' '), kudos: 2, my_kudos: false, comments: 1 };
+    length_m: 32000, score: 812, roads: ['Cherohala Skyway', 'TN-165', 'Tellico River Rd'], stages: [{ name: 'Skyway summit', score: 801 }, { name: 'Tellico descent', score: null }], line, created_at: new Date(Date.now() - 2 * 3600e3).toISOString().slice(0, 19).replace('T', ' '), kudos: 2, my_kudos: false, comments: 1 };
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (m !== 'GET') { sent.push({ m, p: u.pathname, b: route.request().postData() }); return u.pathname.endsWith('/comments') || u.pathname === '/api/posts' ? json({ id: 'C2AAAAAAAAAAAAAA' }, 201) : route.fulfill({ status: 204 }); }
@@ -6227,6 +6369,8 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
       box: getComputedStyle(k).borderLeftWidth, titleRule: getComputedStyle(k.querySelector('.feed-title')).borderTopWidth }; });
   check(look.stats.length === 2 && /^Vetta Score812$/.test(look.stats[0]) && /^Distance19\.9\s*mi$/.test(look.stats[1]) && look.wide === 0 && look.below && look.go && look.end && look.box === '0px' && look.titleRule === '0px',
     'a post: Score and Distance in a row, the line full width under them with its start and finish: ' + JSON.stringify(look));
+  const st = await page.evaluate(() => [...document.querySelectorAll('#accountBody .feed-card .feed-stages > div')].map((d) => d.textContent));
+  check(JSON.stringify(st) === JSON.stringify(['Skyway summit801', 'Tellico descent--']), 'the stages it went over, each with its Score (unknown stays --): ' + JSON.stringify(st));
   // kudos: one tap, at once
   await page.click('#accountBody .feed-card .feed-acts button[aria-label^="Kudos"]');
   await page.waitForFunction(() => document.querySelector('#accountBody .feed-card .feed-acts button[aria-pressed="true"]'));
@@ -6258,11 +6402,12 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   });
   await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !document.getElementById('endPostRow').hidden && !b.getAttribute('aria-disabled'); }, null, { timeout: 15000 });
   check(await page.evaluate(() => document.getElementById('endPost').classList.contains('solid') && !document.getElementById('endShare').classList.contains('solid') && document.getElementById('endPost').textContent === 'Post to friends'), 'Post to friends is the solid key; Share card sits beside it');
-  // one tap (2026-11-14): Post to friends sends it at once, no sheet; Undo in the toast takes it back
+  // one tap (2026-11-14): Post to friends sends it at once, no sheet; Undo in the toast takes it back. It carries the saved
+  // stage it went over (a straight line has no corners, so its Score there is unknown: null)
   await page.click('#endPost');
   await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Posted to friends');
   const one = JSON.parse(sent.filter((x) => x.p === '/api/posts').pop().b);
-  check(one.crew_id === null && one.score === 790 && one.title === 'Cherohala Skyway' && !(await page.$('.post-sheet')), 'one tap posts the drive to your friends, no sheet: ' + JSON.stringify({ ...one, line: one.line && one.line.length }));
+  check(one.crew_id === null && one.score === 790 && one.title === 'Cherohala Skyway' && JSON.stringify(one.stages) === JSON.stringify([{ name: 'Tellico climb', score: null }]) && !(await page.$('.post-sheet')), 'one tap posts the drive to your friends, no sheet: ' + JSON.stringify({ ...one, line: one.line && one.line.length }));
   await page.click('#toast .toast-key:text-is("Undo")');
   await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Post to friends' && !document.getElementById('endPost').disabled);
   check(sent.some((x) => x.m === 'DELETE' && x.p === '/api/posts/C2AAAAAAAAAAAAAA'), 'Undo takes the post back');
@@ -6277,6 +6422,50 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   const first = (() => { const s = p.line; let i = 0, r = 0, sh = 0, b; do { b = s.charCodeAt(i++) - 63; r |= (b & 31) << sh; sh += 5; } while (b >= 32); return (r & 1 ? ~(r >> 1) : r >> 1) / 1e5; })();
   check(p.crew_id === 'k1' && p.caption === 'First run with the crew.' && p.score === 790 && p.title === 'Cherohala Skyway' && first > 35.36 + 0.0044,
     'the post: to the crew, the caption, the Score, and the line starting 500 m in: ' + JSON.stringify({ ...p, line: p.line.length, first }));
+});
+flow('post media: a friend\'s photo shows on their post in the Feed, and Add a photo on the Post sheet sends yours as a JPEG after the post (Worker stubbed, backend/src/post_media.ts)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const sent = [], JPG = Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAeACgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDz+iiiv0Q8MKKKKACiiigAooooAKKKKACiiigD/9k=', 'base64');
+  const bobPost = { id: 'P1AAAAAAAAAAAAAA', handle: 'bob', photo_id: null, mine: false, crew: null, title: 'Cherohala Skyway', caption: null, driven_on: '2026-11-12',
+    length_m: 32000, score: 812, roads: [], stages: [], line: null, media: { kind: 'photo', label: null }, created_at: '2026-11-12 10:00:00', kudos: 0, my_kudos: false, comments: 0 };
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (m !== 'GET') { sent.push({ m, p: u.pathname, type: route.request().headers()['content-type'], n: (route.request().postDataBuffer() || Buffer.alloc(0)).length });
+      if (u.pathname === '/api/posts') return json({ id: 'P2AAAAAAAAAAAAAA' }, 201);
+      if (u.pathname.endsWith('/media')) return json({ kind: 'photo', mime: 'image/jpeg', bytes: 1, label: null });
+      return route.fulfill({ status: 204 }); }
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/feed') return json([bobPost]);
+    if (u.pathname === '/api/posts/P1AAAAAAAAAAAAAA/media') return route.fulfill({ status: 200, contentType: 'image/jpeg', body: JPG });
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .feed-card .feed-media img', { timeout: 15000 });
+  const img = await page.evaluate(() => { const i = document.querySelector('#accountBody .feed-card .feed-media img'); return { w: i.naturalWidth, label: i.closest('.feed-media').getAttribute('aria-label') }; });
+  check(img.w === 40 && img.label === 'Photo', 'a friend\'s photo shows on their post: ' + JSON.stringify(img));
+  // your drive: Add a photo, Post; the post first, then its photo, as a JPEG
+  await page.evaluate(() => document.querySelector('.tab[data-view="map"]').click());
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording);
+  await page.evaluate(async () => {
+    ApexCore.driverScore = () => ({ score: 790, components: {} });
+    const lat = [], lon = []; for (let i = 0; i < 600; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
+    const d = { id: 'pd2', name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] };
+    await ApexRecording.store(d);
+    apexDebug.showEndCard(d, Date.now() - 30 * 60000, { quiet: true });
+  });
+  await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !document.getElementById('endPostRow').hidden && !b.getAttribute('aria-disabled'); }, null, { timeout: 15000 });
+  await page.click('#endPostMore');
+  await page.waitForSelector('.post-sheet .post-media button:text-is("Add a photo")');
+  await page.setInputFiles('.post-sheet .post-media input[type=file]', { name: 'shot.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAACgAAAAeCAIAAADRv8uKAAAAL0lEQVR4nO3NMQ0AMAgAsDENyMF/kIUFPp7WQKMr34V/sorFYrFYLBaLxWKxeGUAOWUBVBcDkCYAAAAASUVORK5CYII=', 'base64') });
+  await page.waitForSelector('.post-sheet .post-media img');
+  check(/Photo/.test(await page.textContent('.post-sheet .post-media')), 'the photo waits on the sheet, with Remove');
+  await page.click('.post-sheet button:text-is("Post")');
+  await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Posted', null, { timeout: 10000 });
+  const posts = sent.filter((x) => x.p.startsWith('/api/posts')), order = posts.map((x) => `${x.m} ${x.p} ${x.type || ''}`);
+  check(order[0] === 'POST /api/posts application/json' && order[1] === 'PUT /api/posts/P2AAAAAAAAAAAAAA/media image/jpeg' && posts[1].n > 100, 'the post, then its photo as a JPEG: ' + JSON.stringify(order));
+  check(/Posted to your friends\./.test(await page.textContent('#toast')), 'and it says where it went');
 });
 flow('a drive posted with no signal waits on the phone and goes up once there is one (Worker stubbed, IDEAS F-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
@@ -6507,6 +6696,10 @@ flow('For you: the People badge counts what is new and what waits; People lists 
   check(rows.length === 3, 'the request is a card above, not a row: ' + JSON.stringify(rows));
   check(rows[0][0] && rows[0][1] === 'Topped · 20 min ago' && rows[0][2] === '@bob scored 850 on Dry Ridge climb, over your best of 800.', 'topped, new, in a sentence: ' + JSON.stringify(rows[0]));
   check(/^Kudos · 2 h ago$/.test(rows[1][1]) && /^Ridge Runners: Cherohala Saturday, .+\. Are you going\?$/.test(rows[2][2]), 'kudos and the crew drive: ' + JSON.stringify(rows));
+  // (free roamer B, 2026-11-14) a rule closes For you before your friends, so they don't read as its fourth and fifth rows
+  const closed = await page.evaluate(() => { const y = document.querySelector('#accountBody > .you-row'), last = [...document.querySelectorAll('#accountBody .inbox-row')].pop();
+    return { rule: parseFloat(getComputedStyle(y).borderTopWidth), below: y.getBoundingClientRect().top >= last.getBoundingClientRect().bottom - 1 }; });
+  check(closed.rule === 1 && closed.below, 'one rule between For you and your friends: ' + JSON.stringify(closed));
   check(await page.isVisible('#accountBody .request-card:has-text("@dan")'), 'the request stays a card with its keys');
   // a row with no key (kudos): its sentence sits under the kicker, the full width, not squeezed beside it
   const kudos = await page.$eval('#accountBody .inbox-row:has-text("Kudos")', (r) => { const k = r.querySelector('.inbox-kick').getBoundingClientRect(), t = r.querySelector('.inbox-text').getBoundingClientRect();
@@ -7639,7 +7832,7 @@ flow('import: a drive from a file is named after the road that carried it (IDEAS
   const note = await page.textContent('#dvNote');
   check(/^Date unknown · Imported/.test(note.trim()), 'its page says the date is unknown, not the time it was imported: ' + note);
   await page.goto(`${base}/analysis.html`);
-  await page.waitForFunction(() => /Latest Vetta Score/.test((document.querySelector('.hero-what') || {}).textContent || '') && document.querySelector('tr.row-link'), null, { timeout: 15000 });
+  await page.waitForFunction(() => /Latest Vetta Score|no Score yet/.test((document.querySelector('.hero-what') || {}).textContent || '') && document.querySelector('tr.row-link'), null, { timeout: 15000 });   // none of these straight drives scores
   const hero = await page.evaluate(() => ({ what: document.querySelector('.hero-what').textContent, stamp: document.querySelector('tr.row-link[data-drive="rec_demo_csv"] .stamp-d').textContent }));
   check(hero.stamp === '--' && !(/Dry Ridge Road/.test(hero.what) && /Today|AM|PM/.test(hero.what)), 'the index stamps it "--" and the hero names no time for it: ' + JSON.stringify(hero));
 });
@@ -8243,6 +8436,32 @@ flow('offline area grown old: its row says the month it was saved, Update fetche
   check(o.name === 'Around 35.63, -83.47' && o.lat === 35.63 && o.radiusKm === 3, 'same place, size and name: ' + JSON.stringify(o));
   await page.waitForFunction(() => ![...document.querySelectorAll('#myAreas button')].some((b) => b.textContent === 'Update'), null, { timeout: 5000 });
 });
+
+flow('offline area saved while the signal drops: it says only part was kept and offers Update, which finishes it (IDEAS F-02)', async (page, base) => {
+  let drop = true;
+  await page.route('https://tiles.openfreemap.org/**', (route) => {
+    const u = route.request().url();
+    if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } }, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) });
+    if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
+    if (drop && /\/t\/14\/\d+\/\d*[02468]\.pbf$/.test(u)) return route.abort();   // the signal goes for some of the detail tiles
+    return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(16) });
+  });
+  await page.route('https://s3.amazonaws.com/**', (route) => route.fulfill({ contentType: 'image/png', body: Buffer.alloc(8) }));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded(), null, { timeout: 15000 });
+  await page.evaluate(() => { window.apexDebug.map.jumpTo({ center: [-83.47, 35.63], zoom: 11 }); document.getElementById('myAreaBtn').click(); });
+  await saidOn(page, /only \d+% kept, the signal dropped\. Press Update to finish it\./, { timeout: 60000 });
+  const a = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.offlineAreas'))[0]);
+  check(a.missing > 0 && a.missing < a.tiles && !a.full, 'the area counts what it couldn’t keep: ' + JSON.stringify({ missing: a.missing, tiles: a.tiles, full: a.full }));
+  await page.waitForFunction(() => /only \d+% kept/.test(document.getElementById('myAreas').textContent), null, { timeout: 5000 });
+  check(await page.evaluate(() => [...document.querySelectorAll('#myAreas button')].some((b) => b.textContent === 'Update')), 'a partial area offers Update though it is fresh');
+  drop = false;
+  await page.evaluate(() => [...document.querySelectorAll('#myAreas button')].find((b) => b.textContent === 'Update').click());
+  await page.waitForFunction(() => { const o = JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]'); return o.length === 1 && !o[0].missing; }, null, { timeout: 60000 });
+  await page.waitForFunction(() => !/only \d+% kept/.test(document.getElementById('myAreas').textContent) && ![...document.querySelectorAll('#myAreas button')].some((b) => b.textContent === 'Update'), null, { timeout: 5000 });
+  await saidOn(page, /^Updated .* for offline/, { timeout: 5000 });
+}, { viewport: { width: 1280, height: 900 } });
 
 flow('offline area, as a member: Save the map here keeps the measured roads round it; with no signal a plan still has them, and clearing them (what Sign out calls) leaves nothing (IDEAS F-02)', async (page, base) => {
   let online = true;
@@ -9263,7 +9482,7 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
     panels: [...document.querySelectorAll('#tab-history .panel, main > section:not([hidden]) .panel')].filter((p) => !p.hidden && p.offsetParent).map((p) => p.id),
     quiet: [...document.querySelectorAll('details.quiet')].filter((d) => !d.hidden).map((d) => d.querySelector('summary').textContent.split(':')[0]),
     old: /Driver Score|Import \.csv/.test(document.body.innerText) }));
-  check(/Latest Vetta Score/.test(log.hero) && log.seg.slice(0, 2).join() === 'Drives,Stages' && !log.old, 'Log: ' + JSON.stringify(log));
+  check(/Latest Vetta Score|^[\d.]+ ?(mi|km)\s+In 1 drive · no Score yet/.test(log.hero) && log.seg.slice(0, 2).join() === 'Drives,Stages' && !log.old, 'Log: ' + JSON.stringify(log));
   check(JSON.stringify(log.panels) === '["historyPanel"]' && log.quiet.includes('Your week'), 'one bordered list, the rest quiet lines: ' + JSON.stringify(log));
   // Drive detail: the Score first, Replay the primary, tags as stamps; nothing wider than the phone
   await page.click('.road-index tbody tr');
@@ -9747,11 +9966,14 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
     if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(style) });
     if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
     return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) }); });
-  // off until the owner says yes (his decision card of 2026-11-13): the flag apex.mapPlaces switches it on
+  // on by default since the owner said yes (2026-11-14); apex.mapPlaces = '0' turns it off
   await planPage(page, base);
   await page.waitForFunction(() => apexDebug.map.getLayer('apex-places'), null, { timeout: 10000 });
-  check(await page.evaluate(() => apexDebug.map.getLayoutProperty('apex-places', 'visibility')) === 'none', 'places are off by default, until the owner says yes');
-  await page.evaluate(() => localStorage.setItem('apex.mapPlaces', '1'));
+  await page.evaluate(() => localStorage.setItem('apex.mapPlaces', '0'));
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && apexDebug.map && apexDebug.map.getLayer('apex-places'), null, { timeout: 20000 });
+  check(await page.evaluate(() => apexDebug.map.getLayoutProperty('apex-places', 'visibility')) === 'none', 'the flag set to 0 still turns places off');
+  await page.evaluate(() => localStorage.removeItem('apex.mapPlaces'));
   await page.reload();
   await page.waitForFunction(() => window.apexDebug && apexDebug.map && apexDebug.map.getLayer('apex-places') && apexDebug.state.lastPosition, null, { timeout: 20000 });
   await page.evaluate(() => apexDebug.map.jumpTo({ center: [-84.615, 39.155] }));   // the map opens on what it last showed: back over you
@@ -10204,6 +10426,33 @@ flow('corners ahead: after a long straight on the planned route, the co-driver s
   check(said.length === 1 && /^Twisty section in (half a mile|three quarters of a mile|\d+ feet)\. 2\.\d miles, \d+ corners\.$/.test(said[0]), 'the call: ' + JSON.stringify(await page.evaluate(() => window.__said)));
   for (let i = 760; i <= 800; i += 2) { await at(i); await page.waitForTimeout(40); }
   check((await twisty()).length === 1, 'once: ' + JSON.stringify(await twisty()));
+});
+
+flow('along the way: a viewpoint on the planned route is said by name and side as it comes up, once (along_ahead.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexAlongAhead);
+  const KY = 110540, kx = 111320 * Math.cos(35.5 * Math.PI / 180), gpx = [];
+  for (let m = 0; m <= 5000; m += 5) gpx.push(`<trkpt lat="${(35.5 + m / KY).toFixed(7)}" lon="-83.9000000"/>`);
+  await page.setInputFiles('#gpxFile', { name: 'parkway.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Parkway</name><trkseg>${gpx.join('')}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Parkway', null, { timeout: 10000 });
+  await page.waitForTimeout(1500);                                                        // the map's own places, if any, have landed
+  // the map's viewpoint 150 m west of the road at 2 km (as scenic.js along puts it on the route)
+  await page.evaluate(({ KY, kx }) => { apexDebug.track.scenic = [{ kind: 'view', name: 'Craggy Pinnacle', lat: 35.5 + 2000 / KY, lon: -83.9 - 150 / kx, m: 2000, offM: 150 }]; }, { KY, kx });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const views = () => page.evaluate(() => window.__said.filter((s) => /Craggy/.test(s)));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  for (let i = 100; i <= 280; i += 5) { await at(i); await page.waitForTimeout(50); }       // 0.5 to 1.4 km: not yet
+  check((await views()).length === 0, 'not yet: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  for (let i = 280; i <= 380 && !(await views()).length; i += 2) { await at(i); await page.waitForTimeout(80); }
+  const said = await views();
+  check(said.length === 1 && /^Craggy Pinnacle on the left, in (\d+ feet|a quarter mile)\.$/.test(said[0]), 'the call: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  for (let i = 380; i <= 420; i += 2) { await at(i); await page.waitForTimeout(40); }
+  check((await views()).length === 1, 'once: ' + JSON.stringify(await views()));
 });
 
 for (const [when, iso, expect] of [['at dusk', '2026-06-21T00:30:00Z', 1], ['at noon', '2026-06-21T17:00:00Z', 0]]) {
@@ -11616,6 +11865,9 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
       const nameless = await unnamed(page);
       if (process.env.A11Y_LOG) for (const h of nameless) console.log(`A11Y ${name} | ${h}`);
       else check(!nameless.length, `a control in view a screen reader can't name:\n  ${nameless.join('\n  ')}`);
+      const small = await smallTargets(page);
+      if (process.env.TAP_LOG) for (const h of small) console.log(`TAP ${name} | ${h}`);
+      else check(!small.length, `a key in view too small to hit (under 24 px):\n  ${small.join('\n  ')}`);
       const cut = await clippedText(page);
       if (process.env.CLIP_LOG) for (const h of cut) console.log(`CLIP ${name} | ${h}`);
       else check(!cut.length, `text in view cut off by its box or the screen's edge:\n  ${cut.join('\n  ')}`);

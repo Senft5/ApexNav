@@ -26,6 +26,7 @@ import {
 import { deleteAccount, exportMyData } from "./account";
 import { itemsDelete, itemsGet, itemsPut } from "./member_items";
 import * as drivePosts from "./drive_posts";
+import { mediaGet, mediaPut } from "./post_media";
 import { afterCrewDrive, afterDuel, afterFriend, afterKudos, afterPostComment, afterPostKudos, pushForget, pushQuiet, pushRegister } from "./push";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewBadge, crewFeed, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
@@ -63,7 +64,7 @@ import { highlightCreate, highlightDelete, highlightList, highlightRate } from "
 export { ConvoyIndex, ConvoyRoom } from "./convoy";
 import { crewHomeSet, crewMeetCells } from "./crew_meet";
 import { chargers } from "./chargers";
-import { trafficResponse } from "./traffic";
+import { camerasResponse, trafficResponse } from "./traffic";
 import { dailyServerCheck, serverSide, serviceHistory, serviceReport } from "./service_check";
 import { QUERY_WARN, countedDb } from "./query_budget";
 import { SHED_ROUTES, countedKv, countedR2, flushUsage, usageState } from "./usage";
@@ -315,6 +316,8 @@ on("GET", "/api/graph/v1/index.json", (req, env) => graphIndex(req, fetch, env))
 on("GET", "/api/graph/v1/:name", (req, env, m) => graphTile(req, m.groups!.name, fetch, env));
 // Official traffic events from the state DOTs' free feeds (traffic.ts; web/road_events.js): public, the whole region, cached 5 min
 on("GET", "/api/traffic/v1/events.json", (_req, env) => trafficResponse(env));
+// Ohio's traffic cameras (still pictures of the road) for the map's opt-in Road cameras layer (traffic.ts; web/road_cams.js)
+on("GET", "/api/traffic/v1/cameras.json", (_req, env) => camerasResponse(env));
 // Avoid cameras' own camera list for the region (graph.ts cameraList; web/cameras.js), from the graph-data branch
 on("GET", "/api/cameras/v1/region.json", (_req, env) => cameraList(fetch, env));
 // CI's upload of the map data into R2 (src/data_store.ts): a GitHub OIDC token of this repository's main branch, no secret
@@ -396,6 +399,8 @@ on("POST", "/api/posts/:id/comments", async (req, env, m, ctx) => {
   await later(ctx, afterPostComment(env, v, m.groups!.id, c.author, c.title));
   return json({ id: c.id }, 201);
 });
+on("PUT", "/api/posts/:id/media", async (req, env, m) => json(await mediaPut(env, await requireMember(req, env), m.groups!.id, req)));
+on("GET", "/api/posts/:id/media", async (req, env, m) => mediaGet(env, await requireMember(req, env), m.groups!.id));
 on("DELETE", "/api/comments/:id", async (req, env, m) => { await drivePosts.commentDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 on("POST", "/api/kudos", async (req, env, _m, ctx) => {
   const v = await requireMember(req, env), k = await kudosGive(env, v, req);
@@ -486,7 +491,7 @@ export default {
 
 // The env a request or cron sees: its D1 queries counted (src/query_budget.ts) and its D1 rows and KV calls metered for
 // the usage guard (src/usage.ts).
-const KV_BINDINGS = new Set<PropertyKey>(["BACKUPS", "PHOTOS", "OSM", "CTX"]), R2_BINDINGS = new Set<PropertyKey>(["ARCHIVE", "DATA"]);
+const KV_BINDINGS = new Set<PropertyKey>(["BACKUPS", "PHOTOS", "OSM", "CTX"]), R2_BINDINGS = new Set<PropertyKey>(["ARCHIVE", "DATA", "MEDIA"]);
 function metered(env: Env, q: { n: number }, limit?: number): Env {
   const db = countedDb(env.DB, q, limit), wrapped = new Map<PropertyKey, unknown>();
   return new Proxy(env, {

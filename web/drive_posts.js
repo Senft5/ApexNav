@@ -77,7 +77,17 @@
   }
 
   const STYLE = `
+    .feed-media { position: relative; background: #000; min-height: 120px; }
+    .feed-media video, .feed-media img { display: block; width: 100%; max-height: 440px; object-fit: contain; }
+    .feed-media-label { position: absolute; left: 8px; top: 8px; background: var(--panel); color: var(--panel-ink); padding: 2px 8px; font-weight: 700; font-size: 13px; }
+    .post-media { display: flex; align-items: center; gap: 10px; }
+    .post-media img, .post-media video { width: 64px; height: 64px; object-fit: cover; background: #000; }
     .feed { display: grid; }
+    .feed-stages { display: grid; gap: 4px; }
+    .feed-stages small { color: var(--panel-dim); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+    .feed-stages div { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--rule); padding-top: 4px; }
+    .feed-stages span { overflow-wrap: anywhere; min-width: 0; }
+    .feed-stages b { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
     .feed-card { border-top: 1px solid var(--rule); color: var(--panel-ink); display: grid; gap: 10px; padding: 14px 0 4px; }
     .feed-sheet .feed-card { border-top: 0; padding-top: 0; }
     .feed-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -135,6 +145,34 @@
       return { ov, box, close };
     };
 
+    // a post's clip or photo (backend/src/post_media.ts): fetched when its card comes near the screen, kept for the page
+    const mediaUrls = new Map();
+    const near = (node, fn) => {
+      if (!root.IntersectionObserver) { fn(); return; }
+      const io = new root.IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { io.disconnect(); fn(); } }, { rootMargin: '300px' });
+      io.observe(node);
+    };
+    function mediaBox(p) {
+      const clip = p.media.kind === 'clip';
+      const m = el('div', { className: `feed-media ${clip ? 'clip' : 'photo'}` });
+      m.setAttribute('role', 'img'); m.setAttribute('aria-label', clip ? `Clip${p.media.label ? `, ${p.media.label}` : ''}` : 'Photo');
+      if (p.media.label) m.append(el('span', { className: 'feed-media-label', textContent: p.media.label }));
+      near(m, async () => {
+        if (!mediaUrls.has(p.id)) mediaUrls.set(p.id, apiCall('GET', `/api/posts/${encodeURIComponent(p.id)}/media`)
+          .then(async (r) => (r && r.ok ? URL.createObjectURL(await r.blob()) : null)).catch(() => null));
+        const url = await mediaUrls.get(p.id);
+        if (!url) { m.hidden = true; return; }
+        if (clip) {
+          // muted, looping and inline, as any feed's video; a tap stops or starts it
+          const v = el('video', { src: url, muted: true, loop: true, autoplay: true, playsInline: true });
+          v.setAttribute('playsinline', ''); v.setAttribute('muted', '');
+          v.addEventListener('click', () => { if (v.paused) v.play().catch(() => {}); else v.pause(); });
+          m.prepend(v);
+        } else m.prepend(el('img', { src: url, alt: '' }));
+      });
+      return m;
+    }
+
     function kudosKey(p) {
       const n = el('span', { textContent: String(p.kudos || 0) });
       const b = el('button', { type: 'button' }); b.innerHTML = ICON.kudos; b.append(n);
@@ -180,6 +218,11 @@
         [[xy[0], 'go', 5.5], [xy[xy.length - 1], 'end', 6]].forEach(([q, cls, r]) => { if (!q) return; const [x, y] = q.split(' ');
           const c = doc.createElementNS(NS, 'circle'); c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', r); c.setAttribute('class', cls); svg.append(c); });
         box.append(svg);
+      }
+      if (p.media) box.append(mediaBox(p));
+      if (Array.isArray(p.stages) && p.stages.length) {                // the saved stages it went over, each with its Score
+        box.append(el('div', { className: 'feed-stages' }, el('small', { textContent: p.stages.length === 1 ? 'Stage' : 'Stages' }),
+          ...p.stages.map((x) => el('div', {}, el('span', { textContent: x.name }), el('b', { textContent: x.score == null ? '--' : String(x.score) })))));
       }
       const f = facts({ roads: p.roads }, fmtLen);
       if (f) box.append(el('p', { className: 'feed-facts', textContent: f }));
@@ -292,7 +335,8 @@
     function bodyOf(d, to, caption) {
       const line = trimLine(d.lat, d.lon, page.inZone || (() => false));
       return { title: String(d.name || 'Drive').slice(0, 60), caption: caption || null, driven_on: d.driven_on, length_m: Number.isFinite(d.len_m) ? Math.round(d.len_m) : null,
-        score: Number.isFinite(d.score) ? Math.round(d.score) : null, roads: (d.roads || []).slice(0, 8), line: line ? encode(line) : null, crew_id: to || null };
+        score: Number.isFinite(d.score) ? Math.round(d.score) : null, roads: (d.roads || []).slice(0, 8), line: line ? encode(line) : null, crew_id: to || null,
+        stages: (d.stages || []).filter((x) => x && x.name).slice(0, 3).map((x) => ({ name: String(x.name).slice(0, 60), score: Number.isFinite(x.score) ? Math.round(x.score) : null })) };
     }
     /** One tap (2026-11-14, the drive's card): the drive to your friends, no sheet. Resolves its id, or null (said in a toast). */
     async function post(d) {
@@ -309,7 +353,16 @@
       return !!(r && r.ok);
     }
 
-    /** The Post sheet after a drive. d: { name, driven_on, len_m, score, lat, lon, roads }. Resolves true once posted. */
+    /** Sends the clip or photo of a post just made; false when it didn't go up. */
+    async function putMedia(id, m) {
+      const path = `/api/posts/${encodeURIComponent(id)}/media${m.label ? `?label=${encodeURIComponent(String(m.label).slice(0, 60))}` : ''}`;
+      const send = page.upload || ((pa, blob, type) => root.ApexSync.apiFetch(pa, { method: 'PUT', headers: { 'content-type': type }, body: blob }));
+      const r = await send(path, m.blob, m.mime).catch(() => null);
+      return !!(r && r.ok);
+    }
+
+    /** The Post sheet after a drive. d: { name, driven_on, len_m, score, lat, lon, roads, media? }, media a clip made on the
+     *  drive's page ({ blob, mime, label }); without one the driver can add a photo. Resolves true once posted. */
     async function compose(d) {
       let crews = [];
       try { crews = (page.crews ? await page.crews() : []) || []; } catch (_) { crews = []; }
@@ -327,19 +380,54 @@
         }
         paint();
         const say = el('textarea', { className: 'field', maxLength: 280, placeholder: 'How was it? (optional)', 'aria-label': 'Caption' });
+        // the clip that came with it, or a photo the driver adds (redrawn as a JPEG on the phone, so no EXIF leaves it)
+        let media = d.media && d.media.blob ? d.media : null;
+        const mrow = el('div', { className: 'post-media' });
+        const pick = el('input', { type: 'file', accept: 'image/*', hidden: true });
+        const paintMedia = () => {
+          if (!media) {
+            mrow.replaceChildren(pick, btn('Add a photo', () => pick.click(), 'ink-btn'));
+            mrow.hidden = !(page.preparePhoto || (root.ApexPhotos && root.ApexPhotos.prepare));
+            return;
+          }
+          const url = URL.createObjectURL(media.blob), clip = /^video\//.test(media.mime);
+          const thumb = clip ? el('video', { src: url, muted: true, playsInline: true }) : el('img', { src: url, alt: '' });
+          mrow.hidden = false;
+          mrow.replaceChildren(pick, thumb, el('span', { textContent: clip ? `Clip${media.label ? `: ${media.label}` : ''}` : 'Photo' }),
+            btn('Remove', () => { media = null; paintMedia(); }, 'linkbtn'));
+        };
+        pick.addEventListener('change', async () => {
+          const f = pick.files && pick.files[0]; pick.value = '';
+          if (!f) return;
+          const prep = page.preparePhoto || root.ApexPhotos.prepare;
+          const blob = await prep(f).catch(() => null);
+          if (!blob) { toast('Couldn’t read that photo.'); return; }
+          media = { blob, mime: 'image/jpeg', label: null }; paintMedia();
+        });
+        paintMedia();
         const line = trimLine(d.lat, d.lon, page.inZone || (() => false));
         const post = btn('Post', async () => {
           post.disabled = true;
           const body = bodyOf(d, to, say.value.trim());
           const r = await apiCall('POST', '/api/posts', body).catch(() => null);
           // no signal (IDEAS F-05): the post waits on the phone and goes when there is one (outbox.js), as a hazard report does
-          if ((!r || r.status >= 500) && page.later) { page.later('/api/posts', body); s.close(); done(true); toast('No signal. Your post goes up when you have one.'); return; }
+          // (a post with a clip or photo can't wait: the outbox keeps text only, so the sheet stays open for another try)
+          if ((!r || r.status >= 500) && page.later && !media) { page.later('/api/posts', body); s.close(); done(true); toast('No signal. Your post goes up when you have one.'); return; }
           if (!r || !r.ok) { post.disabled = false; toast(r && r.status === 429 ? 'That’s ten posts today.' : 'Couldn’t post it. Check signal.'); return; }
+          const where = to ? `Posted to ${(crews.find((c) => c.id === to) || {}).name || 'your crew'}.` : 'Posted to your friends.';
+          if (media) {
+            post.textContent = 'Posting…';
+            const { id } = (await jsonOf(r)) || {};
+            const up = id ? await putMedia(id, media) : false;
+            s.close(); done(true);
+            toast(up ? where : `${where} The ${/^video\//.test(media.mime) ? 'clip' : 'photo'} didn’t go up.`);
+            return;
+          }
           s.close(); done(true);
-          toast(to ? `Posted to ${(crews.find((c) => c.id === to) || {}).name || 'your crew'}.` : 'Posted to your friends.');
+          toast(where);
         }, 'ink-btn solid');
         const cancel = btn('Cancel', () => { s.close(); done(false); }, 'linkbtn');
-        s.box.append(el('h2', { textContent: 'Post this drive' }), chips, say,
+        s.box.append(el('h2', { textContent: 'Post this drive' }), chips, say, mrow,
           el('p', { className: 'note', textContent: line ? 'Its start and end stay off the line.' : 'No line: too short to show without its start and end.' }),
           el('div', { className: 'row' }, post, cancel));
       });

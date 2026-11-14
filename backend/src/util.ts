@@ -15,6 +15,7 @@ export interface Env {
   BACKUPS?: KVNamespace;
   ARCHIVE?: R2Bucket;       // R2 (Workers Paid): weekly database copies (backup.ts); graph tiles later
   DATA?: R2Bucket;          // the map data (graph tiles, context grid, cameras) mirrored by CI (src/data_store.ts)
+  MEDIA?: R2Bucket;         // clips and photos on drive posts, key post/<post id> (src/post_media.ts); none = posts carry none
   PHOTOS?: KVNamespace;     // photo bytes, key p/<id> (src/photos.ts); also siwa/<user id>, a Sign in with Apple refresh token (src/apple_revoke.ts)
   APPLE_TEAM_ID?: string;   // Sign in with Apple token revocation (src/apple_revoke.ts): the team id and the key's id and .p8 text
   APPLE_SIWA_KEY_ID?: string;
@@ -23,6 +24,7 @@ export interface Env {
   APNS_KEY_P8?: string;      // used, which works when the owner ticks APNs on that same key
   NREL_API_KEY?: string;    // secret: NLR (ex-NREL) Alternative Fuel Stations key (src/chargers.ts); none = 503 no_key
   CTX_KEYS?: string;        // secret: free client keys for the route-context sources, JSON (src/route_feeds.ts)
+  OHGO_API_KEY?: string;    // secret: ODOT OHGO public API key (src/traffic.ts, and ohgoApiKey in /api/ctx/keys when CTX_KEYS has none)
   OSM?: KVNamespace;        // optional: the OSM relay's tiles (src/osm_relay.ts), a week each; the Cache API does without it
   CTX?: KVNamespace;        // context-grid bundles, key v1/... (src/context_grid.ts); bound once the owner creates it
   FLAGS?: string;           // feature flags JSON (src/flags.ts), set in the dashboard to change a rollout without a release
