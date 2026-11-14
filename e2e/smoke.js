@@ -3966,6 +3966,36 @@ flow('the Log list: each drive has its road\'s shape beside its name; a summary 
   check(old && old.sv === 3 && old.n === 32 && old.score === 777 && rows.find((r) => r.id === 'sh2').score.trim() === '777', 'the old summary got its shape and kept its score (not scored again): ' + JSON.stringify(sum));
 });
 
+flow('the Log marks your best drive on a road you have scored twice or more, once, and never a road driven once (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexRecording && window.ApexCore);
+  // Dry Ridge Rd twice (814, then 811) and Pebble Ridge once (836, the highest of all, but its only drive)
+  const set = [['pb1', 'Dry Ridge Rd', 3, 814], ['pb2', 'Dry Ridge Rd', 2, 811], ['pb3', 'Pebble Ridge', 1, 836]];
+  await page.evaluate(async (set) => { for (const [id, name, ago] of set) { const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + Math.sin(i / 20) * 0.0012); }
+    await ApexRecording.store({ id, name, date: new Date(Date.now() - ago * 86400e3).toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map((_, i) => Math.sin(i / 20) * 3), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }); } }, set);
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#historyTable tr.row-link', { timeout: 15000 });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexRecording);
+  await page.evaluate(async (set) => {
+    const db = await new Promise((ok, no) => { const r = indexedDB.open('apexnav'); r.onsuccess = () => ok(r.result); r.onerror = no; });
+    await new Promise((ok) => { const t = db.transaction('summaries', 'readwrite'), st = t.objectStore('summaries');
+      for (const [id, , , score] of set) st.get(id).onsuccess = (e) => { const x = e.target.result; x.ds = { ...x.ds, score }; st.put(x); };
+      t.oncomplete = ok; });
+    db.close(); }, set);
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#historyTable tr.row-link', { timeout: 15000 });
+  const rows = await page.evaluate(() => [...document.querySelectorAll('#historyTable tr.row-link')].map((r) => ({ id: r.dataset.drive,
+    pb: !!r.querySelector('.ix-score .pb'), score: r.querySelector('.ix-score').textContent.trim(), label: r.getAttribute('aria-label') || '' })));
+  const marked = rows.filter((r) => r.pb).map((r) => r.id);
+  check(rows.length === 3 && marked.length === 1 && marked[0] === 'pb1', 'one Best, on the 814 of Dry Ridge Rd, none on a road driven once: ' + JSON.stringify(rows));
+  const one = rows.find((r) => r.id === 'pb1');
+  check(one && /^Best\s*814$/.test(one.score) && /your best on this road/.test(one.label), 'the badge reads Best over the score and VoiceOver hears it: ' + JSON.stringify(one));
+});
+
 flow('the App Store rating: asked on the end card after a good drive, parked, from the third drive, once per version; never moving (guideline 5.6.1)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__posted = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { window.__posted.push(m); } } } }; });
