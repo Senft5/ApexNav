@@ -458,6 +458,19 @@
       halo.setLngLat([cam.pLon, cam.pLat]);
     }
     map.on('zoom', () => { if (fixAcc) paintHalo(); });
+    // the heading beam (gps_halo.js beam): a soft cone from the arrow toward where the phone points, from the app's compass,
+    // while you stand or walk (in a car the arrow points along the road); none without a compass reading
+    const beamEl = document.createElement('div');
+    beamEl.className = 'heading-beam'; beamEl.hidden = true; beamEl.setAttribute('aria-hidden', 'true');
+    beamEl.innerHTML = '<svg viewBox="0 0 120 120" width="120" height="120"><defs><radialGradient id="hbFade" cx="60" cy="60" r="58" gradientUnits="userSpaceOnUse"><stop offset="0.15" stop-color="currentColor" stop-opacity="0.7"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></radialGradient></defs><path d="M60 60 L38 6 A58 58 0 0 1 82 6 Z" fill="url(#hbFade)"/></svg>';
+    const beamMk = new maplibregl.Marker({ element: beamEl, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat([-84.70, 39.24]).addTo(map);
+    beamEl.removeAttribute('aria-label'); beamEl.removeAttribute('role'); beamEl.removeAttribute('tabindex');
+    let fixBeam = null;                                                 // { deg, at } from the last idle frame
+    function paintBeam() {
+      const on = fixBeam && performance.now() - fixBeam.at < 5000 && state.mode !== 'live' && !replayOn && cam.ready;
+      beamEl.hidden = !on;
+      if (on) beamMk.setLngLat([cam.pLon, cam.pLat]).setRotation(fixBeam.deg);
+    }
     const puckEl = document.createElement('div');
     puckEl.className = 'puck';
     puckEl.setAttribute('role', 'img');
@@ -1233,6 +1246,7 @@
         puck.setLngLat([cam.pLon, cam.pLat]).setRotation(cam.pBear);
         sightTag.setLngLat([cam.pLon, cam.pLat]);
         if (fixAcc) paintHalo();
+        if (fixBeam) paintBeam();
       }
       if (!state.follow) return;
       const f = CAM_FEEL[state.camFeel] || CAM_FEEL.dynamic, t = camTargets();
@@ -11871,12 +11885,14 @@
     let idleSnapped = false;
     function showIdleFix(frame) {
       refreshAutoNight();
-      if (replayOn || state.mode === 'live') { fixAcc = null; paintHalo(); return; }   // a replay or preview owns the map
+      if (replayOn || state.mode === 'live') { fixAcc = null; fixBeam = null; paintHalo(); paintBeam(); return; }   // a replay or preview owns the map
       fixAcc = Number.isFinite(frame.accuracy_m) ? { m: frame.accuracy_m, at: performance.now() } : null;
+      const hd = window.ApexGpsHalo ? ApexGpsHalo.beam(frame.heading_deg, frame.speed_mps) : null;
+      fixBeam = hd == null ? null : { deg: hd, at: performance.now() };
       setVehicle({ lat: frame.lat, lon: frame.lon, bearing: Number.isFinite(frame.course_deg) ? frame.course_deg : state.bearing,
                    vMps: Number.isFinite(frame.speed_mps) ? frame.speed_mps : 0, onTrack: false, latG: null, lonG: 0, rough: 0 }, !idleSnapped);
       idleSnapped = true;
-      paintHalo();
+      paintHalo(); paintBeam();
     }
     setInterval(() => {
       // A native drive keeps going through a GPS gap (tunnel): say so instead of dropping back to the replay.

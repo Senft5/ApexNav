@@ -798,7 +798,9 @@ final class MotionLane: @unchecked Sendable {
 /// F-13: one live frame as the page reads it (window.apex.live), encoded off the main thread. nil is JSON null, never 0.
 struct LiveFrame: Encodable, Sendable {
     var lat, lon, accuracyM: Double?
-    var speedMps, courseDeg, elevationM, gradePct: Double?
+    var speedMps, courseDeg: Double?
+    var headingDeg: Double?   // where the phone points (compass, true north): the idle map's heading beam; nil when unknown
+    var elevationM, gradePct: Double?
     var latG, lonG, camberDeg, crestVerticalG, roughnessRms, vertPeakG, impactG: Double?
     var camberV: Int = IMUPipeline.camberVersion   // camber from the fixed pipeline (unknown when unobserved, never a decayed 0)
     var recording: Bool
@@ -813,7 +815,7 @@ struct LiveFrame: Encodable, Sendable {
     var seq: Int?
 
     enum CodingKeys: String, CodingKey {
-        case lat, lon, accuracyM = "accuracy_m", speedMps = "speed_mps", courseDeg = "course_deg", elevationM = "elevation_m",
+        case lat, lon, accuracyM = "accuracy_m", speedMps = "speed_mps", courseDeg = "course_deg", headingDeg = "heading_deg", elevationM = "elevation_m",
              gradePct = "grade_pct", latG = "lat_g", lonG = "lon_g", camberDeg = "camber_deg", crestVerticalG = "crest_vertical_g",
              roughnessRms = "roughness_rms", vertPeakG = "vert_peak_g", impactG = "impact_g", camberV = "camber_v", recording, calibration, thermal,
              lowPowerMode = "low_power_mode", battery, charging, hasFix = "has_fix", locationOff = "location_off", segments, at, seq
@@ -830,14 +832,15 @@ struct LiveFrame: Encodable, Sendable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         // every key, null when unknown: the page tells unknown from absent
         try c.encode(lat, forKey: .lat); try c.encode(lon, forKey: .lon); try c.encode(accuracyM, forKey: .accuracyM)
-        try c.encode(speedMps, forKey: .speedMps); try c.encode(courseDeg, forKey: .courseDeg); try c.encode(elevationM, forKey: .elevationM)
+        try c.encode(speedMps, forKey: .speedMps); try c.encode(courseDeg, forKey: .courseDeg); try c.encode(headingDeg, forKey: .headingDeg)
+        try c.encode(elevationM, forKey: .elevationM)
         try c.encode(gradePct, forKey: .gradePct); try c.encode(latG, forKey: .latG); try c.encode(lonG, forKey: .lonG)
         try c.encode(camberDeg, forKey: .camberDeg); try c.encode(crestVerticalG, forKey: .crestVerticalG)
         try c.encode(roughnessRms, forKey: .roughnessRms); try c.encode(vertPeakG, forKey: .vertPeakG); try c.encode(impactG, forKey: .impactG)
         try c.encode(camberV, forKey: .camberV)
         try c.encode(recording, forKey: .recording); try c.encode(calibration, forKey: .calibration); try c.encode(thermal, forKey: .thermal)
         try c.encode(lowPowerMode, forKey: .lowPowerMode); try c.encode(battery, forKey: .battery); try c.encode(charging, forKey: .charging)
-        try c.encode(hasFix, forKey: .hasFix); try c.encode(segments, forKey: .segments); try c.encode(at, forKey: .at); try c.encode(seq, forKey: .seq)
+        try c.encode(hasFix, forKey: .hasFix); try c.encode(locationOff, forKey: .locationOff); try c.encode(segments, forKey: .segments); try c.encode(at, forKey: .at); try c.encode(seq, forKey: .seq)
     }
 }
 
@@ -873,6 +876,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private var lonDeg: Double = 0.0
     private var speedMps: Double = 0.0
     private var courseDeg: Double?
+    private var headingDeg: Double?        // the compass, true north, while it is sure to within 30 degrees
+    private var headingAt: Date = .distantPast
     private var fixSpeedMps: Double = -1    // the last fix's own speed, -1 when it had none (the car map then measures it)
     private var fixAt = Date()              // when the last fix was taken
 
@@ -920,6 +925,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         #endif
         if !replaying {
             locManager.startUpdatingLocation()
+            if CLLocationManager.headingAvailable() { locManager.headingFilter = 3; locManager.startUpdatingHeading() }   // the idle map's heading beam
             updateSensorStack()   // NA-2: the 100 Hz IMU and the barometer start with a drive, not with the app
         }
         NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -1517,7 +1523,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         let r = LiveFrame.r
         let frame = LiveFrame(
             lat: r(hasFix ? latDeg : nil, 7), lon: r(hasFix ? lonDeg : nil, 7), accuracyM: r(hasFix ? accuracyM : nil, 1),
-            speedMps: r(speedMps, 2), courseDeg: r(courseDeg, 1), elevationM: r(fusion.elevationM, 2), gradePct: r(odometer.gradePct, 2),
+            speedMps: r(speedMps, 2), courseDeg: r(courseDeg, 1), headingDeg: r(Date().timeIntervalSince(headingAt) < 5 ? headingDeg : nil, 0), elevationM: r(fusion.elevationM, 2), gradePct: r(odometer.gradePct, 2),
             latG: r(imu(pipeline.latAccMps2 / Self.gStd), 3), lonG: r(imu(pipeline.lonAccMps2 / Self.gStd), 3),
             camberDeg: r(pipeline.camberRad.flatMap { imu($0 * 180.0 / Double.pi) }, 2), crestVerticalG: r(imu(pipeline.crestAccMps2 / Self.gStd), 3),
             roughnessRms: r(imu(pipeline.roughRMSMps2 / Self.gStd), 4), vertPeakG: r(imu(vertPeak / Self.gStd), 3), impactG: r(imu(impact / Self.gStd), 2),
@@ -1625,6 +1631,17 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         )
         Task { @MainActor in
             self.ingest(fix: fix)
+        }
+    }
+
+    /// The compass, for the heading beam on the idle map (as Apple Maps draws it): true north, and only while iOS is sure of
+    /// it to within 30 degrees; the page shows no beam without it.
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        let sure = newHeading.headingAccuracy >= 0 && newHeading.headingAccuracy <= 30 && newHeading.trueHeading >= 0
+        let deg: Double? = sure ? newHeading.trueHeading : nil
+        Task { @MainActor in
+            self.headingDeg = deg
+            self.headingAt = Date()
         }
     }
 
