@@ -5847,6 +5847,8 @@ flow('a ghost duel: on your stage a friend has driven, the bar shows the live ga
   await page.route('**/api/**', (route) => route.fallback ? route.fallback() : route.continue());
   await page.goto(base + '/index.html?notes=full');
   await page.waitForFunction(() => window.apex && window.ApexGhostDuel && window.ApexSync && window.apexDebug);
+  // a headless page plays no voice clips (a clip line, "Five clean in a row.", would wait on one for ever): the device voice says all
+  await page.evaluate(() => { if (window.ApexVoice) { ApexVoice.play = async () => false; ApexVoice.playWhole = async () => false; } });
   await page.evaluate(() => {
     const Core = window.ApexCore, lat = [], lon = [];
     let la = 35.6, lo = -83.9, h = 0;
