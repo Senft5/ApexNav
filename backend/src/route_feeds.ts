@@ -11,7 +11,9 @@ import { Env, HttpError, json } from "./util";
 // as {"seatgeekClientId": "...", "mapillaryToken": "MLY|...", "ohgoApiKey": "...", "nassApiKey": "..."}.
 // GET /api/ctx/keys hands the known names to the app (they are client keys, the kind each service expects inside an app; the
 // code never holds one). Unknown names are dropped; no secret is set → {}.
-export const CTX_KEY_NAMES = ["seatgeekClientId", "mapillaryToken", "ohgoApiKey", "nassApiKey"];
+// Not nassApiKey: USDA QuickStats sends no CORS header, so the app can't read it (every call failed, 2026-11-14); harvest
+// keeps the USDA typical windows until a relay here asks NASS for it.
+export const CTX_KEY_NAMES = ["seatgeekClientId", "mapillaryToken", "ohgoApiKey"];
 export function ctxKeys(env: Env): Response {
   let all: Record<string, unknown> = {};
   try { all = env.CTX_KEYS ? JSON.parse(env.CTX_KEYS) : {}; } catch { all = {}; }
