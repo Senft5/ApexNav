@@ -185,6 +185,7 @@
     .feed-kudos-from { display: flex; align-items: center; gap: 8px; min-height: 44px; background: none; border: 0; padding: 0; color: var(--panel-ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
     .feed-faces { display: inline-flex; } .feed-faces > * + * { margin-left: -8px; }
     .feed-kudos-row { display: flex; align-items: center; gap: 12px; min-height: 48px; width: 100%; background: none; border: 0; padding: 0; color: var(--panel-ink); font: inherit; text-align: left; cursor: pointer; }
+    .feed-comment .feed-reply { display: inline-block; min-height: 32px; padding: 6px 0; font-size: 13px; color: var(--panel-dim); }
     .feed-tags { display: flex; flex-wrap: wrap; gap: 8px; }
     .feed-tags .feed-tag { min-height: 44px; }
     .feed-comment .feed-more { width: 44px; height: 44px; display: grid; place-items: center; text-decoration: none; font-size: 20px; color: var(--panel-ink); }
@@ -383,7 +384,11 @@
       const list = el('div', { className: 'feed-comments' });
       const draw = () => list.replaceChildren(...p.comment_list.map((c) => {
         const row = el('div', { className: 'feed-comment' }, face(c, 30),
-          el('div', {}, el('b', { textContent: c.mine ? 'You' : `@${c.handle || '?'}` }), el('small', { textContent: ` ${ago(c.created_at, Date.now())}` }), withMentions(c.body)));
+          el('div', {}, el('b', { textContent: c.mine ? 'You' : `@${c.handle || '?'}` }), el('small', { textContent: ` ${ago(c.created_at, Date.now())}` }), withMentions(c.body),
+            ...(c.mine || !c.handle ? [] : [btn('Reply', () => {   // as on any social app: their handle in the box, ready to write
+              const at = `@${c.handle} `; if (!field.value.startsWith(at)) field.value = (at + field.value).slice(0, 280);
+              field.focus(); try { field.setSelectionRange(field.value.length, field.value.length); } catch (_) {}
+            }, 'linkbtn feed-reply')])));
         const k = el('button', { type: 'button', className: 'linkbtn feed-more', textContent: '···' }); k.setAttribute('aria-label', 'More for this comment');
         k.addEventListener('click', () => {
           const m = sheet('This comment', 'feed-menu'); const keys = el('div', { className: 'row', style: 'flex-wrap:wrap' });

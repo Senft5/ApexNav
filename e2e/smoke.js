@@ -6700,6 +6700,10 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   await page.waitForSelector('.feed-kudos-sheet .feed-kudos-row:has-text("@dan")');
   await page.click('.feed-kudos-sheet button:has-text("Done")');
   await page.waitForSelector('.feed-kudos-sheet', { state: 'detached' });
+  // (2026-11-14) Reply under a comment puts its writer's handle in the box
+  await page.click('.feed-sheet .feed-comment button:has-text("Reply")');
+  check(await page.inputValue('.feed-sheet .feed-say .field') === '@cara ', 'Reply puts @cara in: ' + await page.inputValue('.feed-sheet .feed-say .field'));
+  await page.fill('.feed-sheet .feed-say .field', '');
   // (2026-11-14) typing @ suggests who to mention: the post's people, then friends
   await page.locator('.feed-sheet .feed-say .field').pressSequentially('@ca');
   await page.waitForSelector('.feed-sheet .feed-tags:not([hidden]) button:has-text("@cara")');
