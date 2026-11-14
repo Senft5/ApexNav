@@ -64,7 +64,7 @@ describe("someone beat you", () => {
     await publish(b, adopted, 950);
     await settle(1);
     expect(said()).toEqual([]);
-  });
+  }, 20_000);   // three accounts, friendships, a shared stage: 4.4 s here, over the 5 s default on a busy CI runner (2026-11-14)
 
   it("turned off with the kind; the kinds list carries it", async () => {
     await configure();
