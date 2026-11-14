@@ -61,6 +61,24 @@ describe("roadbooks", () => {
     expect((await get(f, id)).status).toBe(404);
   });
 
+  it("your friends' books with a road in them are listed, newest first; private, empty, strangers' and blocked ones are not", async () => {
+    const a = await makeUser("alice"), f = await makeUser("friend"), g = await makeUser("gina"), s = await makeUser("stranger");
+    await befriend(a, f); await befriend(a, g);
+    const fb = await book(f, { name: "Friend's Ohio", visibility: "friends" }); await ok(add(f, fb));
+    const fp = await book(f, { name: "Friend's private" }); await ok(add(f, fp));
+    await book(f, { name: "Friend's empty", visibility: "friends" });
+    const gb = await book(g, { name: "Gina's public", visibility: "public" }); await ok(add(g, gb));
+    const sb = await book(s, { name: "Stranger's public", visibility: "public" }); await ok(add(s, sb));
+    const mine = await book(a, { visibility: "friends" }); await ok(add(a, mine));
+    await env.DB.prepare("UPDATE roadbooks SET updated_at = '2026-01-01 00:00:00' WHERE id = ?").bind(fb).run();
+    const list = await json(api(a, "GET", "/api/roadbooks/friends"));
+    expect(list.map((x: Msg) => [x.name, x.by, x.roads, x.mine])).toEqual([["Gina's public", "gina", 1, false], ["Friend's Ohio", "friend", 1, false]]);
+    expect(list[0].road_list).toBeUndefined();                          // cards only: the shapes come when one is opened
+    await ok(api(a, "POST", "/api/blocks", { user_id: g.id }));
+    expect((await json(api(a, "GET", "/api/roadbooks/friends"))).map((x: Msg) => x.name)).toEqual(["Friend's Ohio"]);
+    expect((await api(null, "GET", "/api/roadbooks/friends")).status).toBe(401);
+  });
+
   it("showing a book needs a handle; names, shapes and limits are checked", async () => {
     const a = await makeUser("alice");
     await env.DB.prepare("UPDATE users SET handle = NULL WHERE id = ?").bind(a.id).run();

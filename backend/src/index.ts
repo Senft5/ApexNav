@@ -15,7 +15,7 @@ import { cronHealth, runCron } from "./cron_runs";
 import { appleSignIn } from "./apple";
 import { crewHazardKinds, hazardsNear, reportHazard, voteHazard } from "./hazards";
 import { routeDelete, routeGet, routesSharedWithMe, shareRoute } from "./routes_shared";
-import { bookCreate, bookDelete, bookFollow, bookGet, bookUpdate, booksMine, booksNear, roadAdd, roadRemove, roadStamp, roadUpdate } from "./roadbooks";
+import { bookCreate, bookDelete, bookFollow, bookGet, bookUpdate, booksFriends, booksMine, booksNear, roadAdd, roadRemove, roadStamp, roadUpdate } from "./roadbooks";
 import { duelAccept, duelCreate, duelEnd, duelList } from "./duels";
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
@@ -356,6 +356,7 @@ on("GET", "/api/routes/:id", async (req, env, m) => json(await routeGet(env, awa
 on("DELETE", "/api/routes/:id", async (req, env, m) => json(await routeDelete(env, await requireMember(req, env), m.groups!.id)));
 // Roadbooks (src/roadbooks.ts): collections of great roads. A public one opens by its link with no account; the rest need a member.
 on("GET", "/api/roadbooks/near", async (req, env) => json(await booksNear(env, await viewer(req, env), new URL(req.url))));
+on("GET", "/api/roadbooks/friends", async (req, env) => json(await booksFriends(env, await requireMember(req, env))));
 on("GET", "/api/roadbooks", async (req, env) => json(await booksMine(env, await requireMember(req, env))));
 on("POST", "/api/roadbooks", async (req, env) => json(await bookCreate(env, await requireMember(req, env), req), 201));
 on("PUT", "/api/roadbooks/roads/:rid/stamp", async (req, env, m) => json(await roadStamp(env, await requireMember(req, env), m.groups!.rid, true)));

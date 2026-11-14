@@ -3053,7 +3053,7 @@ flow('turn by turn in road order: exit 19, then the sharp right a mile on, on th
     + JSON.stringify(guides.map((g) => [g.instruction, Math.round(g.at)])));
 });
 
-flow('the turn arrow and route overview: the next turn of a route being driven has an arrow on the map, gone once taken; one key shows the rest of the route', async (page, base) => {
+flow('the turn arrow and route overview: the next turn of a route being driven has an arrow on the map, gone once taken; one key shows the rest of the route; the route behind you fades', async (page, base) => {
   // a road north 1.2 km, then right onto Main St for 600 m to the destination (turn_arrow.js)
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.APEX_REVIEW = true; window.webkit = { messageHandlers: { apex: { postMessage() {} } } }; });
@@ -3090,6 +3090,11 @@ flow('the turn arrow and route overview: the next turn of a route being driven h
   const drawn = await page.evaluate(() => { const m = window.apexDebug.map;
     return { shaft: m.queryRenderedFeatures({ layers: ['apex-turnarrow'] }).length, head: m.queryRenderedFeatures({ layers: ['apex-turnarrow-head'] }).length }; });
   check(drawn.shaft > 0 && drawn.head > 0, 'the arrow is drawn on the map, shaft and head: ' + JSON.stringify(drawn));
+  // the route behind you is faint: the route line's gradient steps up to the route's ink where the car is
+  const behind = await page.evaluate(() => ({ p: window.apexDebug.behind, at: window.apexDebug.state.cursorM / window.apexDebug.track.dist[window.apexDebug.track.dist.length - 1],
+    g: window.apexDebug.map.getPaintProperty('apex-route', 'line-gradient') }));
+  // within one fix (40 m of 1.8 km): the notes, which paint it, can run a frame behind the cursor
+  check(behind.p > 0.3 && Math.abs(behind.p - behind.at) < 0.04 && JSON.stringify(behind.g).includes('line-progress'), 'the route behind you fades where the car is: ' + JSON.stringify(behind));
   // the route overview key: the rest of the route in view, north up and flat; Recenter takes its place and comes back at once
   check(await page.isVisible('#overviewBtn'), 'a route being driven has the overview key');
   await page.click('#overviewBtn');
@@ -3104,6 +3109,10 @@ flow('the turn arrow and route overview: the next turn of a route being driven h
   for (let m = turnM + 20; m <= turnM + 200; m += 40) { await driveTo(m); await page.waitForTimeout(80); }
   await page.waitForFunction(() => !window.apexDebug.turnArrow, null, { timeout: 5000 })
     .catch(() => check(false, 'past the turn the arrow goes (the next step is the arrival): ' + JSON.stringify(turnM)));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'end' }));
+  await page.waitForFunction(() => !window.apexDebug.driveActive, null, { timeout: 5000 }).catch(() => {});
+  const after = await page.evaluate(() => ({ behind: window.apexDebug.behind, g: window.apexDebug.map.getPaintProperty('apex-route', 'line-gradient') || null, key: getComputedStyle(document.getElementById('overviewBtn')).display }));
+  check(after.behind === null && !after.g && after.key === 'none', 'the drive ended: the whole line again, no overview key: ' + JSON.stringify(after));
 });
 
 flow('the sight-line speed rides under the position arrow, on the phone and on the car map (the owner, 2026-10-29)', async (page, base) => {
@@ -5385,6 +5394,7 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
     if (u.pathname === '/api/routes/RRRRRRRRRRRRRRRR') return json({ id: 'RRRRRRRRRRRRRRRR', name: 'Cherohala loop', geom, from_handle: 'alice' });
     if (u.pathname.startsWith('/api/roadbooks')) calls.push(`${m} ${u.pathname}${u.search}`);
     if (u.pathname === '/api/roadbooks/near') return json([...books.values()].filter((b) => !b.mine && b.visibility === 'public').map((b) => ({ ...card(b), km: 14 })));
+    if (u.pathname === '/api/roadbooks/friends') return json([{ id: 'FFFFFFFFFFFFFFFF', name: 'Dan\'s back roads', about: null, visibility: 'friends', by: 'dan', mine: false, roads: 3, length_m: 21000, lat: 35.6, lon: -83.8, followers: 0, following: false }]);
     if (u.pathname === '/api/roadbooks' && m === 'GET') return signedIn ? json({ mine: [...books.values()].filter((b) => b.mine).map(boxed), following: [...books.values()].filter((b) => b.following).map(boxed) }) : json({ error: 'sign_in_required' }, 401);
     if (u.pathname === '/api/roadbooks' && m === 'POST') { const id = 'MMMMMMMMMMMMMMM' + (n++); books.set(id, { id, name: body().name, about: null, visibility: 'private', by: 'me', mine: true, followers: 0, following: false, road_list: [] }); return json({ id }, 201); }
     if ((x = /^\/api\/roadbooks\/roads\/([^/]+)\/stamp$/.exec(u.pathname))) { for (const b of books.values()) for (const r of b.road_list) if (r.id === x[1]) { r.stamped = m === 'PUT'; r.stamps += m === 'PUT' ? 1 : -1; return json({ stamped: r.stamped, stamps: r.stamps }); } return json({}, 404); }
@@ -5426,6 +5436,9 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
   await page.waitForSelector('.side-pop.open .rb-row:has-text("Foothills Parkway set")');
   check(/@cara · 1 road · .* · 4 following · .* away/.test(await page.textContent('.side-pop.open .rb-row:has-text("Foothills Parkway set")')), 'a public book near you says whose, how big, who follows and how far');
   check(calls.some((c) => /^GET \/api\/roadbooks\/near\?lat=-?\d+\.\d&lon=-?\d+\.\d$/.test(c)), 'near you is asked by the coarse cell only: ' + calls.filter((c) => /near/.test(c)));
+  // a friend's friends-only book, found without a link (free roamer B, 2026-11-14)
+  await page.waitForSelector('.side-pop.open .rb-row:has-text("Dan\'s back roads")', { timeout: 8000 });
+  check(/@dan · 3 roads · /.test(await page.textContent('.side-pop.open .rb-row:has-text("Dan\'s back roads")')) && /From friends/i.test(await page.textContent('.side-pop.open')), 'a friend\'s book is listed under From friends, whose and how big');
   // your book's page: the map, the road with its thumbnail and Drive it; Edit makes it public
   await page.click('.side-pop.open .rb-row:has-text("Smokies classics")');
   await page.waitForSelector('.rb-pop.open .rb-road:has-text("Cherohala loop")');

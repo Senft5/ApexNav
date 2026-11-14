@@ -498,7 +498,8 @@
     /** People's Roadbooks sheet: yours, the ones you follow, public ones near you. count(text) gets the row's small line. */
     function section(count) {
       const sec = el('div', { className: 'stack-12' }, el('h3', { textContent: 'Roadbooks' }));
-      const mineBox = el('div', {}), followBox = el('div', {}), nearBox = el('div', { className: 'stack-8' });
+      const mineBox = el('div', {}), followBox = el('div', {}), friendsBox = el('div', {}), nearBox = el('div', { className: 'stack-8' });
+      let friendBooks = [];
       const lead = el('p', { className: 'people-lead', textContent: 'Your lists of great roads, for you, friends or everyone.' });
       const fill = (data) => {
         const mine = data ? data.mine : [], fol = data ? data.following : [];
@@ -506,15 +507,19 @@
         if (count) count([mine.length ? `${mine.length} yours` : '', fol.length ? `${fol.length} followed` : ''].filter(Boolean).join(' · '));
         const sub = (b) => [b.mine ? VIS[b.visibility] : `@${b.by || '?'}`, bookLine(b, fmtLen), progress(b.road_list).done ? progress(b.road_list).text : ''].filter(Boolean).join(' · ');
         mineBox.replaceChildren(...(mine.length ? mine.map((b) => row(b, sub(b), () => open(b.id))) : []));
+        // your friends' books you don't follow yet (GET /api/roadbooks/friends): without it a friends book opened only by its link
+        const fresh = friendBooks.filter((b) => !fol.some((x) => x.id === b.id));
+        friendsBox.replaceChildren(...(fresh.length ? [el('h4', { className: 'rb-h', textContent: 'From friends', style: 'margin:12px 0 0;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:var(--panel-dim)' }), ...fresh.map((b) => row(b, sub(b), () => open(b.id)))] : []));
         followBox.replaceChildren(...(fol.length ? [el('h4', { className: 'rb-h', textContent: 'Following', style: 'margin:12px 0 0;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:var(--panel-dim)' }), ...fol.map((b) => row(b, sub(b), () => open(b.id)))] : []));
       };
       liveFill = fill;
       const reload = () => loadLists().then((d) => { if (!d) fill(null); return d; });
       sec.append(lead,
-        newForm('New roadbook', (id) => { reload().then(() => page.changed && page.changed()); open(id); }), mineBox, followBox,
+        newForm('New roadbook', (id) => { reload().then(() => page.changed && page.changed()); open(id); }), mineBox, followBox, friendsBox,
         el('h4', { textContent: 'Near you', style: 'margin:12px 0 0;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:var(--panel-dim)' }), nearBox);
       if (lists) fill(lists);
       reload().catch((e) => console.error('roadbooks', e));
+      call('GET', '/api/roadbooks/friends').then((r) => { if (r.ok && Array.isArray(r.data)) { friendBooks = r.data; fill(lists); } }).catch(() => {});
       near(nearBox);
       sec._reload = reload;
       return sec;
