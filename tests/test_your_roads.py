@@ -225,7 +225,7 @@ def test_the_reminder_is_opt_in_and_asks_only_when_turned_on():
     assert 'data-setting="nudge" data-title="Reminder"' in src and 'data-toggle="nudge"' in src
     assert "native.postMessage({ cmd: 'nudge', op: 'allow' })" in src
     # the permission is asked from the switch, nowhere else
-    assert src.count("op: 'allow'") == 1
+    assert src.count("cmd: 'nudge', op: 'allow'") == 1                # the reminder's ask (Notifications asks its own, ApexPush.swift)
     assert "'nudge'" in (WEB / "garage_settings.js").read_text()
     app = (ROOT / "ApexNavApp.swift").read_text()
     assert "import UserNotifications" in app

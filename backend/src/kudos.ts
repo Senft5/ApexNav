@@ -20,9 +20,11 @@ async function target(env: Env, v: Viewer, req: Request) {
   return { owner: owner.id, canon, day: b.driven_on };
 }
 
-export async function kudosGive(env: Env, v: Viewer, req: Request): Promise<void> {
+export async function kudosGive(env: Env, v: Viewer, req: Request): Promise<{ owner: string; canon: string } | null> {
   const t = await target(env, v, req);
-  await env.DB.prepare("INSERT OR IGNORE INTO kudos (giver_id, owner_id, canon_id, driven_on) VALUES (?, ?, ?, ?)").bind(v.id, t.owner, t.canon, t.day).run();
+  // the push (src/push.ts) only when the kudos is new (giving it again while it stands tells no one twice)
+  const ins = await env.DB.prepare("INSERT OR IGNORE INTO kudos (giver_id, owner_id, canon_id, driven_on) VALUES (?, ?, ?, ?)").bind(v.id, t.owner, t.canon, t.day).run();
+  return ins.meta.changes ? { owner: t.owner, canon: t.canon } : null;
 }
 
 export async function kudosTake(env: Env, v: Viewer, req: Request): Promise<void> {
