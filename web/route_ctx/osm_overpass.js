@@ -36,9 +36,10 @@
 //   'roundabout' (mini), 'calming' (label bump/hump/table/cushion/chicane/...), 'level_crossing', 'curve_sign' (W1-*,
 //   hazard=curve*), 'animal_crossing' (label deer/horse/...), 'buggy' (horse-drawn vehicles: W11-14, hazard tags),
 //   'hazard' (other hazard=* values, label), 'viewpoint' (300 m), 'historic' (300 m; label name, value tag), 'fuel'
-//   (800 m; value 1 open 24/7, 0 has other hours, NaN unknown; `hours` = opening_hours, label brand/name).
+//   (800 m; value 1 open 24/7, 0 has other hours, NaN unknown; `hours` = opening_hours, label brand/name), 'ford' (the
+//   road crosses water at a node on it).
 // Spans: 'roundabout', 'one_lane_bridge' (bridge with lanes=1, two-way), 'covered_bridge', 'access_private',
-//   'access_destination', 'cycle_route' (label route name), 'byway' (label byway name), 'divided'.
+//   'access_destination', 'cycle_route' (label route name), 'byway' (label byway name), 'divided', 'ford' (a way through water).
 (function (root) {
   'use strict';
   const G = root.ApexOsmCommon || (typeof require === 'function' ? require('./osm_common.js') : null);
@@ -60,7 +61,7 @@
   const KEEP = new Set(['highway', 'name', 'ref', 'maxspeed', 'maxspeed:forward', 'maxspeed:backward', 'lanes', 'oneway', 'surface', 'maxheight', 'maxwidth', 'maxweight',
     'smoothness', 'hgv', 'access', 'vehicle', 'motor_vehicle', 'motorcar', 'bridge', 'covered', 'junction', 'traffic_calming',
     'crossing', 'railway', 'hazard', 'animal', 'traffic_sign', 'barrier', 'tourism', 'historic', 'amenity', 'opening_hours', 'brand',
-    'route', 'network', 'scenic', 'service', 'stop', 'dual_carriageway', 'memorial', 'bridge:name', 'tunnel']);
+    'route', 'network', 'scenic', 'service', 'stop', 'dual_carriageway', 'memorial', 'bridge:name', 'tunnel', 'ford']);
   const CHANNELS = ['maxspeed_kph', 'lanes', 'divided', 'oneway', 'surface_paved', 'smoothness', 'hgv', 'access_level', 'guard_rail',
     'cycle_route', 'byway', 'signals_per_km', 'stops_per_km', 'crossings_per_km', 'calming_per_km', 'side_roads_per_km', 'driveway_joins_per_km',
     'maxheight_m', 'maxwidth_m', 'maxweight_t'];
@@ -151,7 +152,7 @@
     const pois = tiles.map((k) => `nwr(${bb(k)})[~"^(tourism|historic)$"~"^(viewpoint|memorial|marker|monument|milestone|wayside_cross|wayside_shrine|ruins|fort|battlefield|mill|archaeological_site|boundary_stone|bridge|building|church|yes)$"];` +
       `nwr(${bb(k)})[amenity=fuel];`).join('');
     return `[out:json][timeout:25][maxsize:67108864];(${ways})->.r;` +
-      `(node(w.r)[highway~"^(traffic_signals|stop|give_way|crossing|mini_roundabout)$"];node(w.r)[traffic_calming];node(w.r)[railway=level_crossing];node(w.r)[crossing];)->.on;` +
+      `(node(w.r)[highway~"^(traffic_signals|stop|give_way|crossing|mini_roundabout)$"];node(w.r)[traffic_calming];node(w.r)[railway=level_crossing];node(w.r)[crossing];node(w.r)[ford];)->.on;` +
       `node(around.r:${R_SIGN})[~"^(hazard|traffic_sign)$"~"."]->.signs;way(around.r:15)[barrier=guard_rail]->.rails;(${pois})->.poi;` +
       `rel(bw.r)[route~"^(bicycle|road)$"]->.rels;` +
       `.r out body geom qt;.on out body qt;.signs out body qt;.rails out tags geom qt;.poi out tags center qt;` +
@@ -283,6 +284,7 @@
         else if (t.railway === 'level_crossing') push(h, 'level_crossing');
         else if (t.highway === 'crossing' || (t.crossing && t.crossing !== 'no')) push(h, 'crossing', { label: t.crossing || undefined });
       }
+      if (t.ford && t.ford !== 'no') { const h = on(nd); if (h) push(h, 'ford'); }   // the road goes through water here
       if (t.hazard || t.traffic_sign) {
         const hz = hazardOf(t);
         if (!hz) continue;
@@ -336,6 +338,7 @@
     span('roundabout', (i) => !!(match[i] && /^(roundabout|circular)$/.test(match[i].tags.junction || '')));
     span('one_lane_bridge', (i) => !!(match[i] && match[i].tags.bridge && match[i].tags.bridge !== 'no' && lanesOf(match[i].tags) === 1 && !isOneway(match[i].tags)), (i) => match[i].tags['bridge:name'] || match[i].tags.name);
     span('covered_bridge', (i) => !!(match[i] && (match[i].tags.bridge === 'covered' || (match[i].tags.bridge && match[i].tags.covered === 'yes'))), (i) => match[i].tags['bridge:name'] || match[i].tags.name);
+    span('ford', (i) => !!(match[i] && match[i].tags.ford && match[i].tags.ford !== 'no'));
     span('access_private', (i) => ch.access_level[i] === 2);
     span('access_destination', (i) => ch.access_level[i] === 1);
     span('divided', (i) => ch.divided[i] === 1);

@@ -22,7 +22,7 @@ export const R_SIGN = 40;
 export const KEEP = new Set(["highway", "name", "ref", "maxspeed", "maxspeed:forward", "maxspeed:backward", "lanes", "oneway", "surface", "maxheight", "maxwidth", "maxweight",
   "smoothness", "hgv", "access", "vehicle", "motor_vehicle", "motorcar", "bridge", "covered", "junction", "traffic_calming",
   "crossing", "railway", "hazard", "animal", "traffic_sign", "barrier", "tourism", "historic", "amenity", "opening_hours", "brand",
-  "route", "network", "scenic", "service", "stop", "dual_carriageway", "memorial", "bridge:name", "tunnel"]);
+  "route", "network", "scenic", "service", "stop", "dual_carriageway", "memorial", "bridge:name", "tunnel", "ford"]);
 
 /** "s,w,n,e" → the grid tile "i_j" it is, or null: exactly one 0.05° box on the grid, nothing finer or larger. */
 export function tileOf(bbox: string | null): string | null {
@@ -42,7 +42,7 @@ export function query(tiles: string[]): string {
   const pois = tiles.map((k) => `nwr(${bb(k)})[~"^(tourism|historic)$"~"^(viewpoint|memorial|marker|monument|milestone|wayside_cross|wayside_shrine|ruins|fort|battlefield|mill|archaeological_site|boundary_stone|bridge|building|church|yes)$"];` +
     `nwr(${bb(k)})[amenity=fuel];`).join("");
   return `[out:json][timeout:25][maxsize:67108864];(${ways})->.r;` +
-    `(node(w.r)[highway~"^(traffic_signals|stop|give_way|crossing|mini_roundabout)$"];node(w.r)[traffic_calming];node(w.r)[railway=level_crossing];node(w.r)[crossing];)->.on;` +
+    `(node(w.r)[highway~"^(traffic_signals|stop|give_way|crossing|mini_roundabout)$"];node(w.r)[traffic_calming];node(w.r)[railway=level_crossing];node(w.r)[crossing];node(w.r)[ford];)->.on;` +
     `node(around.r:${R_SIGN})[~"^(hazard|traffic_sign)$"~"."]->.signs;way(around.r:15)[barrier=guard_rail]->.rails;(${pois})->.poi;` +
     `rel(bw.r)[route~"^(bicycle|road)$"]->.rels;` +
     `.r out body geom qt;.on out body qt;.signs out body qt;.rails out tags geom qt;.poi out tags center qt;` +
