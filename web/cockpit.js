@@ -6301,6 +6301,17 @@
       await addViaAt(pin);
       b.disabled = false;
     });
+    // Share a place (place_link.js), as Apple and Google Maps' cards do: a vettadrive.app link that opens this card on the
+    // same spot, with its name, in the app or on the website; the share sheet, the clipboard only on a page without one
+    $('pinShareBtn').addEventListener('click', async () => {
+      const p = droppedPin;
+      if (!p || !window.ApexPlaceLink) return;
+      const shown = $('pinPlace').textContent, name = shown && shown !== '--' && shown !== 'Dropped pin' ? shown : '';
+      const link = ApexPlaceLink.url(ApexSync.siteBase, { lat: p.lat, lon: p.lon, name });
+      const how = await ApexSaveFile.shareLink({ title: name || 'A place on Vetta', text: name || 'A place on Vetta', url: link });
+      if (how === 'copied') toast('Link copied.');
+      else if (how === 'failed') toast('Couldn\'t open the share sheet. Try again.');
+    });
     $('pinSaveBtn').addEventListener('click', () => {
       if (!droppedPin) return;
       const point = droppedPin;
@@ -7176,9 +7187,20 @@
       driveLine: async (stops, p) => {
         if (!Array.isArray(stops) || stops.length < 2) return;
         closeSheet(); showView(null);
-        const name = String(p.title || 'A friend\u2019s drive').slice(0, 60);
-        await buildRoute(stops, `post_${p.id}`, name);
-        if (plannedRoute && plannedRoute.id === `post_${p.id}`) toast(`${name}${p.mine ? '' : `, @${p.handle}'s line`}: ${ApexUnits.long(totalM(), 1)}.`);
+        const name = String(p.title || 'A friend\u2019s drive').slice(0, 60), id = `post_${p.id}`;
+        // from where you are to the start of their line, then along it (as Best roads nearby leads to a stage); from the
+        // line's own start when there's no fix, you're already on it, or it's further than a drive to it makes sense
+        const here = await locate().catch(() => null), first = stops[0];
+        const away = here ? Math.hypot((here.lat - first.lat) * 110540, (here.lon - first.lon) * 111320 * Math.cos(first.lat * Math.PI / 180)) : Infinity;
+        const lead = Number.isFinite(away) && away > 300 && away < 150000;
+        const pts = lead ? [{ lat: here.lat, lon: here.lon }, ...stops] : stops, last = stops[stops.length - 1];
+        await buildRoute(pts, id, name, null, { from: null, to: { lat: last.lat, lon: last.lon }, via: stops.slice(0, -1).map((q) => ({ lat: q.lat, lon: q.lon, shaping: true })) });
+        const t = plannedRoute;
+        if (!t || t.id !== id) return;
+        const whose = p.mine ? '' : `, @${p.handle}'s line`;
+        if (!lead) { toast(`${name}${whose}: ${ApexUnits.long(totalM(), 1)}.`); return; }
+        const toStart = t.dist[Core.nearestIndex(first.lat, first.lon, t.lat, t.lon, -1).index] || 0;
+        toast(`${name}${whose}: ${ApexUnits.long(toStart, 1)} to the start, then ${ApexUnits.long(Math.max(0, totalM() - toStart), 1)} of it.`);
       } }) : null; } catch (e) { console.error('drive posts', e); } });
     const inboxTick = () => { if (inbox && !driveActive && document.visibilityState === 'visible') inbox.refresh(); };
     document.addEventListener('visibilitychange', inboxTick);
@@ -11378,6 +11400,7 @@
       if (ok(p.convoy)) needSocial().then(() => { if (convoy && convoy.takeInvite) convoy.takeInvite(p.convoy); });
       if (ok(p.roadbook)) { openRoadbookLink(p.roadbook); return; }      // a roadbook someone sent: its page
       if (ok(p.road)) { closeSheet(); openRoadLink(p.road); return; }   // DA-4: a road someone sent, as a route card
+      if (ok(p.place)) { openPlaceToken(p.place); return; }             // a place someone sent (place_link.js): its card
       // apexnav://open?go=drive (a Shortcuts automation, IDEAS C-05); go=report and go=end from Siri (IDEAS V-07), during a drive only
       if (p.go) {
         if (p.go === 'drive') { closeSheet(); driveFromLink(); }
@@ -11690,6 +11713,7 @@
       else if (params.get('go')) spokenLink(params.get('go'), params.get('q'));   // Siri from a cold start: a place, a loop
       if (/^[A-Za-z0-9_-]{16}$/.test(params.get('roadbook') || '')) openRoadbookLink(params.get('roadbook'));   // ?roadbook=: a roadbook's link
       roadFromLocation(location.search);                               // DA-4: ?road= (the app), #road= (the website)
+      placeFromLocation(location.search);                              // ?place= (the app), #place= (the website)
       if (params.get('again')) driveAgain(params.get('again'));      // panel D-1: Drive it again from a Log page opened on its own   // the app opened from apexnav://open?go=drive (IDEAS C-05)
       recoverKept().catch((e) => console.error('recover drives', e));   // Round 3: a drive never ended goes to the Log
     }
@@ -11701,7 +11725,27 @@
       if (/road=/.test(location.hash)) try { history.replaceState(history.state, '', location.pathname + location.search); } catch (_) {}
       openRoadLink(road);
     }
-    window.addEventListener('hashchange', () => roadFromLocation(''));   // a second road link into an open page
+    window.addEventListener('hashchange', () => { roadFromLocation(''); placeFromLocation(''); });   // a second link into an open page
+    // A place someone sent (place_link.js): the map on it and its card, as if tapped; then dropped from the address
+    function placeFromLocation(search) {
+      const t = window.ApexPlaceLink ? ApexPlaceLink.fromLocation(search, location.hash) : null;
+      if (!t) return;
+      if (/place=/.test(location.hash)) try { history.replaceState(history.state, '', location.pathname + location.search); } catch (_) {}
+      openPlaceToken(t);
+    }
+    function openPlaceToken(t) {
+      const p = window.ApexPlaceLink ? ApexPlaceLink.decode(t) : null;
+      if (!p) { toast('That place link is incomplete. Ask for it again.'); return; }
+      if (state.mode === 'live') { toast('Open the place link again when the drive is over.'); return; }
+      idleSnapped = true;                                                // the first fix doesn't pull the map back to you
+      const show = () => {
+        closeSheet();
+        pauseFollow();                                                   // the map stays on the place; Recenter brings you back
+        map.jumpTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 16) });
+        showPin({ lat: p.lat, lon: p.lon }, p.name ? { name: p.name, kind: 'Sent to you' } : null);
+      };
+      if (mapReady) show(); else map.once('load', () => setTimeout(show, 0));
+    }
     // F-15: the Log's frame loads while the map is idle after launch (not in a drive or a hidden page: then its first open loads it)
     setTimeout(() => idle(prewarmLog), 5000);
     // F-03: the social modules once the launch is over; a link that needs them, or People, asks for them at once

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { api } from "./helpers";
-import { compact, KEEP, MIRRORS, osmTile, query, tileOf } from "../src/osm_relay";
+import { env } from "cloudflare:workers";
+import { builtTile, bundleKey, compact, KEEP, MIRRORS, osmTile, query, resetBuiltForTest, tileOf } from "../src/osm_relay";
 import fx from "./fixtures/overpass_tile.json";
 
 // A real Overpass answer's elements (Dry Ridge Road, Colerain Township; OSM ODbL) with two tags the phone never reads.
@@ -78,5 +79,60 @@ describe("OSM relay (/api/ctx/osm)", () => {
   it("compact keeps positions to 6 decimals and drops everything else", () => {
     const c = compact({ elements: [{ type: "node", id: 1, lat: 39.123456789, lon: -84.1, tags: { highway: "stop", note: "x" }, user: "someone", version: 3 }] });
     expect(c).toEqual({ elements: [{ type: "node", id: 1, lat: 39.123457, lon: -84.1, tags: { highway: "stop" } }] });
+  });
+
+  describe("built tiles (tools/osm_ctx/build.py, R2 osm/v1)", () => {
+    const DATA = (env as unknown as { DATA: R2Bucket }).DATA;
+    const gz = async (text: string) => new Response(new Blob([text]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
+    // tiles 700_-1600 .. 704_-1596 are one bundle (140_-320); 700_-1600 and 700_-1599 are in it, 701_-1600 isn't (a border)
+    const line = (t: string, els: unknown[]) => `${t}\t${JSON.stringify({ elements: els })}\n`;
+    const way = { type: "way", id: 7, tags: { highway: "secondary", name: "Built Road" }, geometry: [{ lat: 35, lon: -80 }, { lat: 35.01, lon: -80 }], nodes: [1, 2] };
+    const put = async () => { resetBuiltForTest(); await DATA.put("osm/v1/140_-320.txt.gz", await gz(line("700_-1600", [way]) + line("700_-1599", []))); };
+
+    it("answers a built tile from R2 without asking Overpass, and keeps it in the cache", async () => {
+      await put();
+      const seen = stub(() => new Response("{}", { status: 500 }));
+      const r = await api(null, "GET", "/api/ctx/osm?bbox=35,-80,35.05,-79.95");
+      expect(r.status).toBe(200);
+      expect(r.headers.get("x-cache")).toBe("built");
+      expect(await r.json()).toEqual({ elements: [way] });
+      const empty = await api(null, "GET", "/api/ctx/osm?bbox=35,-79.95,35.05,-79.9");
+      expect(empty.status).toBe(200);
+      expect(await empty.json()).toEqual({ elements: [] });                 // built and empty: no roads there, not unknown
+      expect(seen).toEqual([]);
+      await DATA.delete("osm/v1/140_-320.txt.gz"); resetBuiltForTest();
+      expect((await api(null, "GET", "/api/ctx/osm?bbox=35,-80,35.05,-79.95")).headers.get("x-cache")).toBe("hit");
+    });
+
+    it("a tile its bundle leaves out (across the border) or with no bundle goes to Overpass", async () => {
+      await put();
+      const seen = stub(ok);
+      const r = await api(null, "GET", "/api/ctx/osm?bbox=35.05,-80,35.1,-79.95");
+      expect(r.status).toBe(200);
+      expect(r.headers.get("x-cache")).toBe("miss");
+      expect(seen.length).toBeGreaterThan(0);
+      expect(await builtTile(DATA, "690_-1600")).toBeNull();
+      expect(await builtTile(undefined, "700_-1600")).toBeNull();
+      expect(bundleKey("700_-1600")).toBe("osm/v1/140_-320.txt.gz");
+      expect(bundleKey("-3_-1")).toBe("osm/v1/-1_-1.txt.gz");
+      await DATA.delete("osm/v1/140_-320.txt.gz"); resetBuiltForTest();
+    });
+
+    it("with a build in R2, a tile it doesn't hold answers 504 at once and Overpass is still asked for the next plan", async () => {
+      resetBuiltForTest();
+      await DATA.put("osm/v1/index.json", JSON.stringify({ built: "2026-11-18", bundles: 1 }));
+      const box = fresh();
+      let release: () => void = () => {};
+      const gate = new Promise<void>((r) => { release = r; });
+      stub(async () => { await gate; return ok(); });
+      const later: Promise<unknown>[] = [];
+      const t0 = Date.now();
+      const r = await osmTile(new URL(`https://x/api/ctx/osm?bbox=${box}`), { DATA }, { waitUntil: (p) => later.push(p) }, globalThis.fetch, 5000);
+      expect(r.status).toBe(504);
+      expect(Date.now() - t0).toBeLessThan(1000);
+      release(); await Promise.all(later);
+      expect((await osmTile(new URL(`https://x/api/ctx/osm?bbox=${box}`), { DATA })).headers.get("x-cache")).toBe("hit");
+      await DATA.delete("osm/v1/index.json"); resetBuiltForTest();
+    });
   });
 });

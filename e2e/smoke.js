@@ -6657,6 +6657,36 @@ flow('drive posts: Drive it on a friend\'s post lays a route along their line, t
   check(await page.evaluate(() => apexDebug.track.name) === 'Skyway summit', 'named for the stage');
 });
 
+flow('drive posts: Drive it from somewhere else leads from where you are to the start of their line, then along it (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const enc = (pts) => { let o = '', a0 = 0, b0 = 0; const e = (v) => { v = v < 0 ? ~(v << 1) : v << 1; while (v >= 32) { o += String.fromCharCode((32 | (v & 31)) + 63); v >>= 5; } o += String.fromCharCode(v + 63); };
+    for (const [a, b] of pts) { const x = Math.round(a * 1e5), y = Math.round(b * 1e5); e(x - a0); e(y - b0); a0 = x; b0 = y; } return o; };
+  const pts = Array.from({ length: 200 }, (_, i) => [35.3 + i * 0.001, -84.1 + Math.sin(i / 6) * 0.004]);
+  const bobPost = { id: 'P1AAAAAAAAAAAAAA', handle: 'bob', photo_id: null, mine: false, crew: null, title: 'Cherohala Skyway', caption: '', driven_on: '2026-11-12',
+    length_m: 22000, score: 812, roads: [], stages: [], line: enc(pts), created_at: new Date(Date.now() - 2 * 3600e3).toISOString().slice(0, 19).replace('T', ' '), kudos: 0, my_kudos: false, comments: 0 };
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/feed') return json([bobPost]);
+    return json([]);
+  });
+  const asked = [];
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => { const req = JSON.parse(route.request().postData() || '{}'); asked.push(req.locations);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) }); });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card .feed-drive', { timeout: 15000 });
+  await page.click('#accountBody .feed-card .feed-drive');
+  await page.waitForFunction(() => window.apexDebug && apexDebug.track && apexDebug.track.id === 'post_P1AAAAAAAAAAAAAA', null, { timeout: 20000 });
+  const locs = asked.find((l) => Array.isArray(l) && l.length > 2) || [];
+  const near = (a, b) => Math.abs(a.lat - b[0]) < 1e-4 && Math.abs(a.lon - b[1]) < 1e-4;
+  check(locs.length >= 9 && near(locs[0], [35.25, -84.1]) && near(locs[1], pts[0]) && near(locs[locs.length - 1], pts[pts.length - 1]),
+    'from where you are, then the stops on bob\'s line: ' + JSON.stringify(locs.slice(0, 3).map((l) => [l.lat, l.lon])));
+  const after = await page.evaluate(() => ({ toast: document.getElementById('toast').textContent, req: apexDebug.track.request }));
+  check(/Cherohala Skyway, @bob's line: [\d.]+ (mi|km) to the start, then [\d.]+ (mi|km) of it\./.test(after.toast), 'the toast says how far to the start, then how much of it: ' + after.toast);
+  check(after.req && after.req.from === null && near(after.req.to, pts[pts.length - 1]) && after.req.via.length >= 8 && after.req.via.every((v) => v.shaping), 'a reroute keeps to their line (its stops kept as shaping points): ' + JSON.stringify(after.req && { to: after.req.to, via: after.req.via.length }));
+}, { geolocation: { latitude: 35.25, longitude: -84.1 }, permissions: ['geolocation'] });
+
 flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew with its ends cut; the Feed on People shows friends\' posts with kudos and comments one tap in (Worker stubbed, docs/SOCIAL.md 2.13)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1');
     // a stage saved in the Log, on the drive posted below
@@ -10625,6 +10655,31 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
   await page.waitForFunction(() => window.apexDebug.state.mode === 'live', null, { timeout: 5000 });
   check(await page.evaluate(() => apexDebug.map.getLayoutProperty('apex-places', 'visibility')) === 'none', 'no places on the map in a drive');
 }, { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
+flow('a place someone sent: Share on the place card makes a vettadrive.app link with the spot and its name, and that link opens the same card on the map (place_link.js, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.whatsNew', '99'); } catch (_) {}
+    window.__shared = []; Object.defineProperty(navigator, 'share', { configurable: true, value: async (d) => { window.__shared.push(d); } }); });
+  await page.route(/^https:\/\/overpass/, (route) => route.fulfill({ contentType: 'application/json', body: '{"elements":[]}' }));
+  await page.route('**/api/ctx/keys', (route) => route.fulfill({ contentType: 'application/json', body: '{"keys":{}}' }));
+  // the link as Share builds it: the place in the fragment, so the website's server never sees it
+  await page.goto(base + '/index.html#place=39.15500_-84.61500_' + Buffer.from('Bean There Coffee', 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''));
+  await page.waitForSelector('#pinOverlay.show', { timeout: 20000 }).catch(async () => { throw new Error('the link opened no card: ' + await page.evaluate(() => location.href)); });
+  const card = await page.evaluate(() => { const c = apexDebug.map.getCenter(); return { name: document.getElementById('pinPlace').textContent, kind: document.getElementById('pinKind').textContent,
+    at: [+c.lat.toFixed(4), +c.lng.toFixed(4)], hash: location.hash, share: !!document.getElementById('pinShareBtn').offsetParent }; });
+  check(card.name === 'Bean There Coffee' && /^Sent to you/.test(card.kind) && card.at[0] === 39.155 && card.at[1] === -84.615 && card.hash === '' && card.share,
+    'the link opens its card, by name, on the map, and leaves the address: ' + JSON.stringify(card));
+  // Share: the share sheet with the link that opens it
+  await page.click('#pinShareBtn');
+  await page.waitForFunction(() => window.__shared.length === 1, null, { timeout: 3000 });
+  const sent = await page.evaluate(() => window.__shared[0]);
+  const m = /\/#place=([A-Za-z0-9._-]+)$/.exec(sent.url || '');
+  check(m && sent.title === 'Bean There Coffee' && m[1].startsWith('39.15500_-84.61500_'), 'Share sends the place link: ' + JSON.stringify(sent));
+  // a broken link says so and opens nothing
+  await page.click('#pinCancelBtn');
+  await page.evaluate(() => { location.hash = 'place=junk'; });
+  await page.waitForFunction(() => /place link is incomplete/.test(document.getElementById('toast').textContent), null, { timeout: 3000 });
+  check(!(await page.evaluate(() => document.getElementById('pinOverlay').classList.contains('show'))), 'a broken place link opens no card');
+}, { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 35.5, longitude: -83.9 }, permissions: ['geolocation'] });
 
 flow('along the route by name: the Along line opens a list of the cafés and fuel stops by their names on the map, and a tap on one (or its pin) says its name and offers it as a stop; in a drive the next fuel stamp names its station (the owner, 2026-11-11)', async (page, base) => {
   await planRouter(page);
