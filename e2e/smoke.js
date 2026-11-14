@@ -10773,6 +10773,32 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
   check(await page.evaluate(() => apexDebug.map.getLayoutProperty('apex-places', 'visibility')) === 'none', 'no places on the map in a drive');
 }, { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
+flow('the place card says how long the drive there takes on its Go key, from the quick router; no answer leaves the key plain', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.whatsNew', '99'); } catch (_) {} });
+  await page.route(/^https:\/\/overpass/, (route) => route.fulfill({ contentType: 'application/json', body: '{"elements":[]}' }));
+  await page.route('**/api/ctx/keys', (route) => route.fulfill({ contentType: 'application/json', body: '{"keys":{}}' }));
+  let asked = 0, answer = true;
+  await page.route('https://valhalla1.openstreetmap.de/sources_to_targets', (route) => { asked++;
+    if (!answer) return route.abort();
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ sources_to_targets: [[{ time: 731, distance: 9.4 }]] }) }); });
+  const link = (name) => '#place=39.15500_-84.61500_' + Buffer.from(name, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.state.lastPosition, null, { timeout: 20000 });
+  await page.evaluate((h) => { location.hash = h; }, link('Bean There Coffee'));
+  await page.waitForSelector('#pinOverlay.show', { timeout: 20000 });
+  await page.waitForFunction(() => document.getElementById('pinGoBtn').textContent === 'Go here · 12 min', null, { timeout: 5000 })
+    .catch(async () => { throw new Error('no time on the Go key: ' + await page.evaluate(() => document.getElementById('pinGoBtn').textContent) + ' asked ' + asked); });
+  check((await page.getAttribute('#pinGoBtn', 'aria-label')) === 'Go here, a 12 min drive', 'the time is read aloud with the key');
+  await page.click('#pinCancelBtn');
+  answer = false;
+  await page.evaluate((h) => { location.hash = h; }, link('Somewhere Else'));
+  await page.waitForFunction(() => document.getElementById('pinOverlay').classList.contains('show') && document.getElementById('pinPlace').textContent === 'Somewhere Else', null, { timeout: 10000 });
+  for (let i = 0; i < 100 && asked < 2; i++) await page.waitForTimeout(100);   // the second card asked, and got no answer
+  await page.waitForTimeout(300);
+  const plain = await page.evaluate(() => ({ text: document.getElementById('pinGoBtn').textContent, aria: document.getElementById('pinGoBtn').getAttribute('aria-label') }));
+  check(plain.text === 'Go here' && plain.aria === null && asked === 2, 'no answer: the key stays plain, never the last place\'s time: ' + JSON.stringify({ plain, asked }));
+}, { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 39.1035, longitude: -84.512 }, permissions: ['geolocation'] });
+
 flow('a place someone sent: Share on the place card makes a vettadrive.app link with the spot and its name, and that link opens the same card on the map (place_link.js, 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.whatsNew', '99'); } catch (_) {}
     window.__shared = []; Object.defineProperty(navigator, 'share', { configurable: true, value: async (d) => { window.__shared.push(d); } }); });

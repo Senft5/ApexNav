@@ -1338,11 +1338,30 @@
         const asked = droppedPin;
         ApexPlacePhoto.lookup(point.lat, point.lon).then((p) => { if (droppedPin === asked && p) placePhoto(p); }).catch(() => {});
       }
+      pinDriveTime(point);
       if (!place) reversePin(point);
       else if (window.ApexPlaceInfo) {                                  // hours, phone and site, once known (place_info.js)
         const asked = droppedPin;
         ApexPlaceInfo.lookup(place.name, point.lat, point.lon).then((tags) => { if (droppedPin === asked && tags) placeInfo(ApexPlaceInfo.contact(tags, new Date())); }).catch(() => {});
       }
+    }
+    // How long the drive there takes, on the Go key ("Go here · 12 min"), as Apple and Google Maps' place cards say it: the
+    // quick router's time from where you are (Valhalla's sources_to_targets, the Quick route's own router). Unknown (no fix,
+    // no answer, under 150 m or over 300 km) leaves the key as it is.
+    let pinTimeAsk = 0;
+    async function pinDriveTime(point) {
+      const go = $('pinGoBtn'), ask = ++pinTimeAsk, here = state.lastPosition;
+      go.textContent = 'Go here'; go.removeAttribute('aria-label');
+      if (!here || !window.ApexRouteCallouts || !Number.isFinite(here.lat) || !Number.isFinite(here.lon)) return;
+      const km = FunRoute.kmBetween(here, point);
+      if (!(km >= 0.15 && km <= 300)) return;
+      try {
+        const m = await valhallaMatrix([here], [point]);
+        const t = ApexRouteCallouts.time(m.times[0] && m.times[0][0]);
+        if (ask !== pinTimeAsk || droppedPin !== point || !t) return;
+        go.textContent = `Go here \u00b7 ${t}`;
+        go.setAttribute('aria-label', `Go here, a ${t} drive`);
+      } catch (_) { /* no answer: the key without a time */ }
     }
     // the card's photo, shown once it has loaded (a broken one never shows); null clears it
     function placePhoto(p) {
