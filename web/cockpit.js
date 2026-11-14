@@ -10196,6 +10196,7 @@
     const endEl = () => ({ card: $('endCard').querySelector('.end-card'), glyph: $('endGlyph'), meta: $('endMeta'), score: $('endScore') });
     function endCardOpen(c) {
       endDrive = c;
+      endClipReset();
       $('endName').textContent = c.name || 'Your drive';
       $('endMeta').textContent = ApexFormat.factsLine(c);              // RA-3: the Log's numbers, from the one helper
       if (window.ApexEndReveal) ApexEndReveal.open(endEl(), { facts: ApexFormat.factsLine(c), runs: Array.isArray(c.lat) && Array.isArray(c.lon) ? endTrailRuns(c.lat, c.lon) : [] });
@@ -10308,6 +10309,7 @@
       $('endShare').hidden = !scored; $('endShareLink').hidden = scored;
       $('endLogKey').hidden = scored; $('endLog').hidden = !scored;
       $('endAgain').hidden = !(Number.isFinite(endDrive.len_m) && endDrive.len_m >= ApexYourRoads.MIN_LEN_M);   // panel D-1: a road, not an errand
+      paintEndClip(c.id);                                              // big bet 5: the best corner, when filmed
       // the card's words changed its height: the drive is fitted again to the map the card now leaves
       const sheet = $('endCard').querySelector('.card-sheet');
       if (endTrailOn && sheet && Math.abs(sheet.getBoundingClientRect().top - endTrailTop) > 4) showEndTrail(endDrive);
@@ -10451,6 +10453,45 @@
       if (await drivePosts.compose(endPostOf())) { endPosted('Posted'); pushOffer(); }
     });
     $('endStage').addEventListener('click', () => { if (endDrive) openLog(`analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`); });
+    // Big bet 5: a filmed drive's best corner (best_clip.js: ranked by its own Driver Score, cut from the app's own film),
+    // looping on the card once the drive is stored. One tap makes the portrait clip and opens the share sheet. No film, the
+    // website, or no corner fully inside the film: no tile (nothing guessed).
+    let endClipFound = null;
+    function endClipReset() {
+      endClipFound = null; $('endClip').hidden = true; $('endClip').removeAttribute('aria-busy');
+      const v = $('endClipVideo'); v.ontimeupdate = null; try { v.pause(); } catch (_) {} v.removeAttribute('src');
+    }
+    async function paintEndClip(id) {
+      if (!window.ApexBestClip) return;
+      let f = null;
+      try { f = await ApexBestClip.find(id); } catch (_) { f = null; }
+      if (!f || !endDrive || endDrive.id !== id || !$('endCard').classList.contains('show')) return;
+      endClipFound = f;
+      $('endClipLabel').textContent = f.label || 'Your best corner'; $('endClipAct').textContent = 'Share clip';
+      $('endClip').setAttribute('aria-label', `Share a clip of your best corner, ${f.label || ''}`.trim());
+      const v = $('endClipVideo');
+      v.src = `${f.url}#t=${f.start},${f.end}`;
+      v.ontimeupdate = () => { if (v.currentTime >= f.end || v.currentTime < f.start - 0.5) v.currentTime = f.start; };   // the stretch, again
+      $('endClip').hidden = false;
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) v.play().catch(() => {});
+      const sheet = $('endCard').querySelector('.card-sheet');         // a taller card: the drive is fitted again above it
+      if (endTrailOn && sheet && Math.abs(sheet.getBoundingClientRect().top - endTrailTop) > 4) showEndTrail(endDrive);
+    }
+    new MutationObserver(() => { if (!$('endCard').classList.contains('show')) { try { $('endClipVideo').pause(); } catch (_) {} } })
+      .observe($('endCard'), { attributes: true, attributeFilter: ['class'] });
+    $('endClip').addEventListener('click', async () => {
+      const f = endClipFound, k = $('endClip');
+      if (!f || k.getAttribute('aria-busy') === 'true') return;
+      k.setAttribute('aria-busy', 'true'); $('endClipAct').textContent = 'Making the clip…';
+      try {
+        const r = await ApexBestClip.make(f);
+        const ext = /mp4/.test(r.mime || '') ? 'mp4' : 'webm';
+        const name = `${(endDrive && endDrive.name || 'drive').replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'drive'} best corner.${ext}`;
+        const out = window.ApexDriveCard ? await ApexDriveCard.shareFile(r.blob, name, r.mime || `video/${ext}`) : 'failed';
+        if (out === 'saved') toast('Clip saved.');
+      } catch (_) { toast('This phone can’t make the clip. It plays in the Log.'); }
+      finally { if (endClipFound === f) { k.removeAttribute('aria-busy'); $('endClipAct').textContent = 'Share clip'; } }
+    });
     $('endShare').addEventListener('click', async () => {
       if (!endDrive || !window.ApexDriveCard || $('endShare').getAttribute('aria-disabled') === 'true') return;   // U-118: still scoring
       // F-04: the picture's model came with the score from the worker (the drive's shape and corner mix); a whole record
