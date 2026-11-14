@@ -15,6 +15,10 @@ name: Graph US (own routing, the lower 48)
 # Triggers: a manual run (once on main), or a push to claude/project-thread-39xbx9 changing tools/graph_etl/US_BUILD
 # (its `only=` and `live=` lines), the way to run it before it is on main.
 on:
+  # monthly, the 1st at 03:23 UTC (the whole lower 48 goes live): roads change slowly, and each build asks Geofabrik for
+  # all 49 extracts (~10 GB)
+  schedule:
+    - cron: "23 3 1 * *"
   workflow_dispatch:
     inputs:
       only:
