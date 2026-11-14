@@ -103,13 +103,53 @@ export async function diag(tile: string, fetcher: typeof fetch = fetch, ms = MIR
 }
 const cacheKey = (tile: string) => new Request(`https://apexnav.cache/osm/v1/${tile}`);
 
+// Built tiles (tools/osm_ctx/build.py, .github/workflows/osm-ctx.yml, 2026-11-14): the same elements built each week from
+// the Geofabrik extracts and kept in R2 (DATA, osm/v1/<bi>_<bj>.txt.gz, one 0.25° bundle of 25 tiles, a line each:
+// "<tile>\t<json>"), read before Overpass, which timed out or refused on nearly every service check from 2026-11-12. A
+// tile outside the built region, or across its border (not in its bundle), still goes to Overpass.
+export const BUNDLE = 5;
+export const bundleKey = (tile: string) => { const [i, j] = tile.split("_").map(Number); return `osm/v1/${Math.floor(i / BUNDLE)}_${Math.floor(j / BUNDLE)}.txt.gz`; };
+type R2Get = { get(k: string): Promise<{ body: ReadableStream } | null> };
+// the last bundles read, per isolate: the next tile a plan asks for is usually in the same 0.25° bundle
+const bundles = new Map<string, Promise<string | null>>();
+const BUNDLES_KEPT = 3;
+export function resetBuiltForTest(): void { bundles.clear(); }
+async function bundleText(data: R2Get, key: string): Promise<string | null> {
+  let p = bundles.get(key);
+  if (!p) {
+    p = (async () => {
+      try {
+        const o = await data.get(key);
+        if (!o) return null;
+        return await new Response(o.body.pipeThrough(new DecompressionStream("gzip"))).text();
+      } catch { return null; }
+    })();
+    bundles.set(key, p);
+    while (bundles.size > BUNDLES_KEPT) bundles.delete(bundles.keys().next().value as string);
+  }
+  const text = await p;
+  if (text == null) bundles.delete(key);   // not there (yet), or R2 failed: asked again next time
+  return text;
+}
+/** The tile's built elements (compact JSON text), or null when it wasn't built (Overpass then). */
+export async function builtTile(data: R2Get | undefined, tile: string): Promise<string | null> {
+  if (!data) return null;
+  const text = await bundleText(data, bundleKey(tile));
+  if (!text) return null;
+  const head = `${tile}\t`;
+  const at = text.startsWith(head) ? 0 : (() => { const k = text.indexOf(`\n${head}`); return k < 0 ? -1 : k + 1; })();
+  if (at < 0) return null;
+  const end = text.indexOf("\n", at);
+  return text.slice(at + head.length, end < 0 ? undefined : end);
+}
+
 const inflight = new Map<string, Promise<string | null>>();
 /**
  * GET /api/ctx/osm?bbox=: the tile's compact elements from the cache, else from the mirrors (then kept). `waiter` keeps a
  * miss running past the response; `waitMs` is how long the response waits for a miss before answering 504 (still
  * finishing and keeping it).
  */
-export async function osmTile(url: URL, env: { OSM?: Kv }, waiter?: Waiter, fetcher: typeof fetch = fetch, waitMs = WAIT_MS): Promise<Response> {
+export async function osmTile(url: URL, env: { OSM?: Kv; DATA?: R2Get }, waiter?: Waiter, fetcher: typeof fetch = fetch, waitMs = WAIT_MS): Promise<Response> {
   const tile = tileOf(url.searchParams.get("bbox"));
   const headers = { "content-type": "application/json", "cache-control": `public, max-age=${KEEP_S}`, "x-content-type-options": "nosniff" };
   if (!tile) return new Response(JSON.stringify({ error: "bad_bbox" }), { status: 400, headers: { "content-type": "application/json" } });
@@ -122,6 +162,11 @@ export async function osmTile(url: URL, env: { OSM?: Kv }, waiter?: Waiter, fetc
     const kv = env.OSM ? await env.OSM.get(kvKey, "text") : null;
     if (kv) { if (cache) await cache.put(key, new Response(kv, { headers })); return new Response(kv, { headers: { ...headers, "x-cache": "kv" } }); }
   } catch { /* the cache is a speed-up, never a failure */ }
+  const built = await builtTile(env.DATA, tile);
+  if (built != null) {
+    try { if (cache) await cache.put(key, new Response(built, { headers })); } catch { /* read from R2 again next time */ }
+    return new Response(built, { headers: { ...headers, "x-cache": "built" } });
+  }
   let job = inflight.get(tile);
   if (!job) {
     job = (async () => {

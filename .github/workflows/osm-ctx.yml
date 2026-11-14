@@ -1,0 +1,144 @@
+name: OSM route context (OH+KY+IN, R2)
+
+# A plan's OpenStreetMap road details (limits, surface, signals, signs, guard rails, viewpoints, fuel, bike and scenic
+# routes: web/route_ctx/osm_overpass.js) built each week from the Geofabrik extracts (tools/osm_ctx/build.py) instead of
+# asked of the public Overpass servers, which timed out or refused on nearly every service check from 2026-11-12. The
+# 0.25 degree bundles go to our R2 bucket through the Worker (tools/graph_etl/upload_r2.sh, GitHub OIDC, main only), and
+# /api/ctx/osm (backend/src/osm_relay.ts) answers a built tile before it asks Overpass. Only tiles wholly inside the three
+# states' .poly are built; the border's go to Overpass as before.
+#
+# Triggers: weekly (Wednesday, after the graph build's extracts are cached), a manual run, or a push to this branch that
+# changes tools/osm_ctx/ (a dry run: the Cincinnati block only, the bundles as an artifact, nothing uploaded).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 6 * * 3"
+  push:
+    branches: [claude/roam-c-osm-ctx]
+    paths:
+      - "tools/osm_ctx/**"
+      - ".github/workflows/osm-ctx.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: osm-ctx
+  cancel-in-progress: false
+
+env:
+  STATES: "ohio kentucky indiana"
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      week: ${{ steps.week.outputs.w }}
+    steps:
+      - name: Week (cache key, shared with the graph build)
+        id: week
+        run: echo "w=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - name: Restore the download cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .graph_cache/osm
+          key: graph-osm-${{ steps.week.outputs.w }}
+      - name: Download the Geofabrik extracts
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .graph_cache/osm
+          for s in $STATES; do
+            curl -fSL --retry 5 --retry-delay 10 -o ".graph_cache/osm/$s.osm.pbf" "https://download.geofabrik.de/north-america/us/$s-latest.osm.pbf"
+          done
+          ls -la .graph_cache/osm
+      - name: Save the download cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .graph_cache/osm
+          key: graph-osm-${{ steps.week.outputs.w }}
+
+  band:
+    needs: download
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        band: ["36.5", "37.5", "38.5", "39.5", "40.5", "41.5"]
+    env:
+      WORK: /home/runner/osm_work
+      DRY: ${{ github.event_name == 'push' && '1' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
+          pip install "osmium>=4.0" "shapely>=2.0"
+      - name: Restore the extracts
+        uses: actions/cache/restore@v4
+        with:
+          path: .graph_cache/osm
+          key: graph-osm-${{ needs.download.outputs.week }}
+          fail-on-cache-miss: true
+      - name: The states' outlines
+        run: |
+          mkdir -p "$WORK"
+          for s in $STATES; do curl -fsSL --retry 5 -o "$WORK/$s.poly" "https://download.geofabrik.de/north-america/us/$s.poly"; done
+      - name: Build the band's blocks
+        run: |
+          if [ -n "$DRY" ] && [ "${{ matrix.band }}" != "38.5" ]; then echo "dry run: the Cincinnati block only"; exit 0; fi
+          osmium merge --overwrite -o "$WORK/region.osm.pbf" .graph_cache/osm/*.osm.pbf
+          polys=""; for s in $STATES; do polys="$polys --poly $WORK/$s.poly"; done
+          b=${{ matrix.band }}; t=$(python3 -c "print(min(42.5, $b + 1))")
+          for w in $(python3 -c "print(' '.join(str(-89.75 + k) for k in range(10)))"); do
+            e=$(python3 -c "print(min(-80.5, $w + 1))")
+            if [ -n "$DRY" ] && [ "$w" != "-84.75" ]; then continue; fi
+            echo "::group::block $w,$b,$e,$t"
+            clip=$(python3 -c "m=0.05; print(f'{$w-m},{$b-m},{$e+m},{$t+m}')")
+            osmium extract --overwrite -s smart -b "$clip" -o "$WORK/block.osm.pbf" "$WORK/region.osm.pbf"
+            python -m tools.osm_ctx.build --pbf "$WORK/block.osm.pbf" --box "$w,$b,$e,$t" $polys --out out
+            rm -f "$WORK/block.osm.pbf"
+            echo "::endgroup::"
+          done
+          rm -f "$WORK/region.osm.pbf"
+          mkdir -p out/osm/v1
+          echo "band $b: $(ls out/osm/v1 | wc -l) bundles, $(du -sh out/osm/v1 | cut -f1)" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: osm-band-${{ matrix.band }}
+          path: out
+          retention-days: 7
+          if-no-files-found: ignore
+
+  publish:
+    needs: [download, band]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: osm-band-*
+          path: built
+          merge-multiple: true
+      - name: Index
+        run: |
+          n=$(ls built/osm/v1/*.txt.gz | wc -l)
+          [ "$n" -gt 100 ] || { echo "::error::only $n bundles built"; exit 1; }
+          python3 -c "
+          import json, os, sys
+          d = 'built/osm/v1'; files = sorted(f for f in os.listdir(d) if f.endswith('.txt.gz'))
+          json.dump({'built': '$(date -u +%F)', 'extract_week': '${{ needs.download.outputs.week }}', 'bundles': len(files),
+                     'bytes': sum(os.path.getsize(os.path.join(d, f)) for f in files), 'source': 'Geofabrik ohio, kentucky, indiana'},
+                    open(os.path.join(d, 'index.json'), 'w'))"
+          cat built/osm/v1/index.json | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Upload to R2
+        run: tools/graph_etl/upload_r2.sh built | tee -a "$GITHUB_STEP_SUMMARY"
