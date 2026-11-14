@@ -2828,7 +2828,7 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
     .catch(async () => { throw new Error('the saved route from the car never opened: ' + JSON.stringify(await page.evaluate(() => window.apexDebug.track && window.apexDebug.track.id))); });
   await page.evaluate(() => { ApexSavedRoutes.remove(localStorage, 'saved_e2e'); localStorage.removeItem('apex.pinnedPlaces'); });
   // Nearby on the car (Apple Maps' Gas, Coffee, Food): the kinds head Places, and one kind comes back nearest first by name
-  check(placesCar.nearby && placesCar.nearby.map((k) => k.name).join('|') === 'Gas|Coffee|Food', 'Nearby heads the car\'s Places: ' + JSON.stringify(placesCar.nearby));
+  check(placesCar.nearby && placesCar.nearby.map((k) => k.name).join('|') === 'Gas|Coffee|Food|Parking', 'Nearby heads the car\'s Places: ' + JSON.stringify(placesCar.nearby));
   await page.evaluate(() => { window.__pois = ApexStages.poisAll; window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true });
     ApexStages.poisAll = async () => [{ cls: 'fuel', sub: '', name: 'Shell', lat: 35.6, lon: -84.09 }, { cls: 'fuel', sub: '', name: 'Pilot', lat: 35.601, lon: -84.1 },
       { cls: 'cafe', name: 'Bean There', lat: 35.6, lon: -84.1 }];
@@ -10541,7 +10541,7 @@ flow('find nearby: Where to? has Gas, Coffee and Food; a key, or "gas near me" t
       { cls: 'fuel', sub: null, name: 'Shell', lat, lon: lon + 0.0116 }, { cls: 'restaurant', name: null, lat: lat + 0.2, lon }]; }; });
   await tap('#destInput', 'Where to?');
   const keys = await page.evaluate(() => [...document.querySelectorAll('#nearbyKeys .chip')].map((b) => ({ t: b.textContent, h: Math.round(b.getBoundingClientRect().height), l: b.getAttribute('aria-label') })));
-  check(keys.map((k) => k.t).join() === 'Gas,Coffee,Food' && keys.every((k) => k.h >= 44 && / nearby$/.test(k.l)), 'three keys under Where to?: ' + JSON.stringify(keys));
+  check(keys.map((k) => k.t).join() === 'Gas,Coffee,Food,Parking' && keys.every((k) => k.h >= 44 && / nearby$/.test(k.l)), 'four keys under Where to? (Parking 2026-11-14): ' + JSON.stringify(keys));
   // each named place's own hours, in one Overpass request for the list (place_info.js lookupMany): the café open all day
   const overpass = [];
   await page.route(/^https:\/\/overpass/, (route) => { const q = decodeURIComponent((route.request().postData() || '').replace(/^data=/, '')); overpass.push(q);
