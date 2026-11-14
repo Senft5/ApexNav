@@ -2252,6 +2252,67 @@ flow('avoid police reports, driving: a report that lands on the route ahead is o
   check(/Going round the police report/.test(await page.textContent('#dsNote')), 'the drive says it is going round: ' + await page.textContent('#dsNote'));
 }, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });
 
+// the DOTs' word on the route ahead (road_events.js onRouteAhead, 2026-11-14): a crash your way miles on is offered once with
+// Go round; one on the other carriageway is not
+flow('a DOT crash on the route ahead, your way, is offered miles out with Go round, which routes round it; the far side\'s is not (Worker and router stubbed)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  const asked = [];
+  let events = [];                                                      // none while planning; two once driving
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}'), locs = req.locations;
+    asked.push(req);
+    if (!events.length) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(locs)) });
+    const a = locs[0], b = locs[locs.length - 1], pts = [];             // the way round: east 4 km, north, back west
+    for (let i = 0; i <= 40; i++) pts.push([a.lat, a.lon + 0.045 * i / 40]);
+    for (let i = 1; i <= 100; i++) pts.push([a.lat + (b.lat - a.lat) * i / 100, a.lon + 0.045]);
+    for (let i = 1; i <= 40; i++) pts.push([b.lat, a.lon + 0.045 - (a.lon + 0.045 - b.lon) * i / 40]);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ trip: { legs: [{ shape: polyline6(pts), maneuvers: [
+      { type: 1, begin_shape_index: 0, length: 8, street_names: ['East Fork Road'] }, { type: 4, begin_shape_index: pts.length - 1, length: 0 }] }],
+      summary: { length: 16, time: 1100, has_highway: false, has_toll: false, has_ferry: false } } }) });
+  });
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/traffic/v1/events.json') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ sources: ['INDOT'], events }) });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex && window.apex.live, null, { timeout: 20000 });
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.96, lon: -83.92 }, { lat: 36.06, lon: -83.92 }], 'route_dest', 'To the ridge', null,
+    { from: null, to: { lat: 36.06, lon: -83.92 }, via: [] }));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'route' && apexDebug.track.request, null, { timeout: 20000 });
+  const plan = await page.evaluate(() => { const t = apexDebug.track, i = Math.floor(t.lat.length * 0.5), j = Math.floor(t.lat.length * 0.3); window.__plan = t;
+    return { lat: t.lat[i], lon: t.lon[i], farLat: t.lat[j], farLon: t.lon[j], startLat: t.lat[0], startLon: t.lon[0], lat2: t.lat[3], lon2: t.lon[3] }; });
+  const crs = (Math.atan2((plan.lon2 - plan.startLon) * Math.cos(plan.startLat * Math.PI / 180), plan.lat2 - plan.startLat) * 180 / Math.PI + 360) % 360;
+  const crash = { id: 'dot:IN:crash', kind: 'crash', label: 'Crash', lat: +plan.lat.toFixed(5), lon: +plan.lon.toFixed(5), road: 'US 129', until: null, src: 'INDOT', heading: Math.round(crs) };
+  events = [{ ...crash, id: 'dot:IN:far', lat: +plan.farLat.toFixed(5), lon: +plan.farLon.toFixed(5), heading: (Math.round(crs) + 180) % 360 }, crash];
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  await page.evaluate(() => apexDebug.loadRoadEvents());               // the events land (the drive asks every 5 min)
+  await page.evaluate(() => { window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } }; });
+  const fix = () => page.evaluate(([lat, lon, crs]) => window.apex.live({ lat, lon, accuracy_m: 5, speed_mps: 15, course_deg: crs, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }), [plan.startLat, plan.startLon, crs]);
+  let offered = null;
+  for (let k = 0; k < 40 && !offered; k++) {
+    await fix();
+    offered = await page.evaluate(() => { const t = document.getElementById('toast'); return t && t.classList.contains('show') && /Crash on your route/.test(t.textContent) ? t.textContent : null; });
+    if (!offered) await page.waitForTimeout(250);
+  }
+  const dbg = await page.evaluate(() => apexDebug.dotAhead);
+  check(!!offered && /Go round/.test(offered), 'the crash on the route ahead is offered with Go round: ' + offered + ' ' + JSON.stringify(dbg));
+  check(dbg && dbg.hit && dbg.hit.id === 'dot:IN:crash' && dbg.hit.aheadM > 3000, 'the one your way, miles out, not the far side\'s nearer one: ' + JSON.stringify(dbg && dbg.hit));
+  const offer = await page.evaluate(() => window.__car.filter((m) => m.kind === 'offer').pop());
+  check(offer && offer.key === 'Go round' && /^Crash on your route in /.test(offer.title) && /^Crash in /.test(offer.short), 'the offer on the car: ' + JSON.stringify(offer));
+  const before = asked.length;
+  await page.evaluate((id) => window.apex.onNative({ type: 'carplay', action: 'offer', id }), offer.id);
+  await page.waitForFunction(() => apexDebug.track !== window.__plan && apexDebug.track && apexDebug.track.kind === 'route', null, { timeout: 15000 });
+  const ex = asked.slice(before).map((r) => r.exclude_locations || []);
+  check(ex.length && ex.every((e) => e.some((x) => Math.abs(x.lat - crash.lat) < 1e-4 && Math.abs(x.lon - crash.lon) < 1e-4)), 'the way round was asked round the crash: ' + JSON.stringify(ex));
+  await page.waitForTimeout(300);
+  check(/Going round the crash/.test(await page.textContent('#dsNote')), 'the drive says it is going round: ' + await page.textContent('#dsNote'));
+}, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });
+
 // a road closure that lands on the route ahead mid-drive: Go round, as for police, with no switch (2026-11-12)
 flow('a road closure, driving: a closure reported on the route ahead is offered once with Go round, which routes round it, with no switch on (Worker and router stubbed)', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')

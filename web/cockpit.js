@@ -3877,7 +3877,26 @@
       const far = ApexUnits.long(hit.aheadM, 1);
       offerKey(`Road closed on your route in ${far}.`, `Road closed in ${far}`, { label: 'Go round', ms: 15000, onClick: () => goRoundClosed(t, hit, pts) });
     }
-    async function goRoundClosed(t, hit, pts) {
+    // The DOTs' word on the route ahead (road_events.js onRouteAhead, 2026-11-14): a crash or a one-way closure your way 1 to
+    // 20 km on is offered once with Go round, as a reported closure is; slow traffic is said once. Every 5 s at most.
+    const dotAhead = { at: 0, offered: new Set() };
+    function dotAheadTick(me) {
+      const t = track, now = Date.now();
+      if (!window.ApexRoadEvents || !t || !t.request || t.kind !== 'route' || state.mode !== 'live' || !driveActive || rerouter.off || now - dotAhead.at < 5000) return;
+      dotAhead.at = now;
+      const near = ApexRoadEvents.near(roadEvents.list, me.lat, me.lon, now);
+      const hit = near.length ? ApexRoadEvents.onRouteAhead(t, routeWatch.bestM, near, { maxM: 20000 }) : null;
+      if (window.apexDebug) window.apexDebug.dotAhead = { n: near.length, hit };
+      if (!hit || dotAhead.offered.has(hit.id)) return;
+      dotAhead.offered.add(hit.id);                                     // (the call 600 m out still comes: "Crash ahead")
+      const far = ApexUnits.long(hit.aheadM, 1), what = hit.kind === 'crash' ? 'Crash' : hit.kind === 'slow' ? 'Slow traffic' : 'Road closed';
+      if (hit.kind === 'slow') { say(`${what} on your route in ${far}.`, false, null, null, { kind: 'hazard', key: `dot:${hit.id}`, alert: true, tokens: ['line:rep_hazard'], named: true }); return; }
+      const pts = [{ lat: hit.lat, lon: hit.lon }];
+      offerKey(`${what} on your route in ${far}.`, `${what} in ${far}`, { label: 'Go round', ms: 15000,
+        // (the public router hears of it with this session's own avoids, R-22: a crash is no closure in anyone's list)
+        onClick: () => { avoidPoints.push(pts[0]); goRoundClosed(t, pts[0], pts, hit.kind === 'crash' ? 'that crash' : 'that closure', hit.kind === 'crash' ? 'Going round the crash.' : 'Going round the road closure.'); } });
+    }
+    async function goRoundClosed(t, hit, pts, that = 'that closure', going = 'Going round the road closure.') {
       const L = state.live;
       if (track !== t || !L || !t.request) return;
       const ahead = waysAhead(t);
@@ -3885,11 +3904,11 @@
       try { [r] = await routePoints([{ lat: L.lat, lon: L.lon, heading: headingOf(L) }, ...ahead, t.request.to], { osrm: true, level: t.funLevel || (isLoop(t) ? LOOP_STYLE : 'quick'), avoid: { ...avoid, closed: pts } }); }
       catch (_) { toast('Couldn\'t plan a way round. Check signal.'); return; }
       if (track !== t || state.mode !== 'live') return;
-      if (!r || ApexHazardReports.passesNear(r.coords, [hit], 40)) { toast('No way round that closure. Staying on this route.'); return; }
+      if (!r || ApexHazardReports.passesNear(r.coords, [hit], 40)) { toast(`No way round ${that}. Staying on this route.`); return; }
       const nt = await trackAhead(t, r, ahead);
       if (track !== t || state.mode !== 'live') return;
       await buildRoute(null, t.id, t.name, nt);
-      toast('Going round the road closure.');
+      toast(going);
     }
     // Traffic ahead (iOS app only; docs/ARCHITECTURE.md section 8). Every 2 min while on a planned route, Apple times the next
     // 20 km in chunks, now and at 3 am. A jam (or a slowdown) costs the route fun even with no delay; on a jam, a detour that
@@ -9644,6 +9663,7 @@
         tokens: [!next.label && ApexVoiceLines.TEXT[`line:rep_${next.kind}`] ? `line:rep_${next.kind}` : 'line:rep_hazard'], named: !!next.label }); }
       try { policeAheadTick(me); } catch (_) { /* never in the way of the drive */ }
       try { closedAheadTick(me); } catch (_) { /* never in the way of the drive */ }
+      try { dotAheadTick(me); } catch (_) { /* never in the way of the drive */ }
       const passed = reported.watch.update(reported.list, me, reported.mine);
       if (passed && !reported.asking) askStill(passed);
     }
