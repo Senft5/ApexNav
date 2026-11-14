@@ -54,10 +54,13 @@ export function cutLine(pts: [number, number][]): [number, number][] | null {
 
 const NOT_BLOCKED = (who: string) => `NOT EXISTS (SELECT 1 FROM blocks bk WHERE (bk.blocker = ?1 AND bk.blocked = ${who}) OR (bk.blocker = ${who} AND bk.blocked = ?1))`;
 /** Who sees a post p (the viewer is ?1): its author; else, not across a block and not hidden by reports, the author's friends
- *  (a post to friends) or the crew's members (a post to a crew). */
+ *  they share with (a post to friends: the per-friend Share switch, grants.share_scores, which a post's Score falls under)
+ *  or the crew's members while the author is one too (a post to a crew; leaving a crew takes your posts out of it). */
 export const POST_SEEN = (p: string) => `(${p}.author = ?1 OR (${NOT_BLOCKED(`${p}.author`)} AND NOT ${reportedSql("drive", `${p}.id`)} AND CASE WHEN ${p}.crew_id IS NULL
     THEN EXISTS (SELECT 1 FROM friendships f WHERE f.status = 'accepted' AND f.user_a = MIN(${p}.author, ?1) AND f.user_b = MAX(${p}.author, ?1))
-    ELSE EXISTS (SELECT 1 FROM crew_members cm WHERE cm.crew_id = ${p}.crew_id AND cm.user_id = ?1) END))`;
+     AND EXISTS (SELECT 1 FROM grants g WHERE g.user_id = ${p}.author AND g.audience_type = 'friend' AND g.audience_id = ?1 AND g.share_scores = 1)
+    ELSE EXISTS (SELECT 1 FROM crew_members cm WHERE cm.crew_id = ${p}.crew_id AND cm.user_id = ?1)
+     AND EXISTS (SELECT 1 FROM crew_members ca WHERE ca.crew_id = ${p}.crew_id AND ca.user_id = ${p}.author) END))`;
 
 const optText = (v: unknown, max: number, field: string) => {
   if (v === undefined || v === null || v === "") return null;
