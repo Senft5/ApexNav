@@ -113,10 +113,14 @@
       return true;
     } catch (_) { return false; }   // a full phone (QuotaExceededError) or no IndexedDB: the caller says so
   }
-  async function clear() { try { await tx('readwrite', (s) => s.clear()); } catch (_) {} try { root.localStorage.removeItem(AREAS); } catch (_) {} }
+  async function clear() { try { await tx('readwrite', (s) => s.clear()); } catch (_) {} try { root.localStorage.removeItem(AREAS); } catch (_) {} tellShell(); }
 
   function areas() { try { const v = JSON.parse(root.localStorage.getItem(AREAS) || '[]'); return Array.isArray(v) ? v : []; } catch (_) { return []; } }
-  function saveAreas(list) { try { root.localStorage.setItem(AREAS, JSON.stringify(list)); } catch (_) {} }
+  function saveAreas(list) { try { root.localStorage.setItem(AREAS, JSON.stringify(list)); } catch (_) {} tellShell(); }
+  /** The iOS shell keeps the car map's own offline packs to match the saved areas (packOf); the whole list each time. */
+  function tellShell() {
+    try { const h = root.webkit && root.webkit.messageHandlers && root.webkit.messageHandlers.apex; if (h) h.postMessage({ cmd: 'offlinePacks', packs: packs() }); } catch (_) {}
+  }
   async function removeArea(id) {
     saveAreas(areas().filter((a) => a.id !== id));
     try {
@@ -254,9 +258,40 @@
   }
   /** The share of an area's map kept, 0..1 (1 for an area with nothing missing, or an older record without the count). */
   const keptShare = (a) => (a && a.missing > 0 && a.tiles > 0 ? Math.max(0, Math.min(1, 1 - a.missing / a.tiles)) : 1);
+  // The car's map (CarPlay/ApexCarOffline.swift): MapLibre Native can't read this page's IndexedDB, so the shell keeps its
+  // own offline pack for each saved area, from this description. A disc area: its box (the square the tiles cover). A route:
+  // the z13 tiles within its corridor, as squares [s, w, n, e], from its kept line walked every 500 m (the line is thinned,
+  // so its points alone can be km apart). Areas saved before the line was kept: their box. null for a record it can't use.
+  const tileBox = (z, x, y) => { const n = 2 ** z, lat = (t) => Math.atan(Math.sinh(Math.PI * (1 - 2 * t / n))) * 180 / Math.PI;
+    return [lat(y + 1), x / n * 360 - 180, lat(y), (x + 1) / n * 360 - 180].map((v) => Math.round(v * 1e5) / 1e5); };
+  function packOf(a) {
+    if (!a || typeof a.id !== 'string') return null;
+    const at = typeof a.at === 'string' ? a.at : '', r5 = (v) => Math.round(v * 1e5) / 1e5;
+    if (Number.isFinite(a.radiusKm) && Number.isFinite(a.lat) && Number.isFinite(a.lon)) {
+      const dLat = a.radiusKm / 110.54, dLon = a.radiusKm / (111.32 * Math.cos(a.lat * Math.PI / 180));
+      return { id: a.id, at, bounds: [r5(a.lat - dLat), r5(a.lon - dLon), r5(a.lat + dLat), r5(a.lon + dLon)] };
+    }
+    if (Array.isArray(a.line) && a.line.length >= 2) {
+      const lat = [], lon = [];
+      for (let i = 0; i < a.line.length; i++) {
+        const [la, lo] = a.line[i];
+        if (i) {
+          const [pa, po] = a.line[i - 1], km = Math.hypot((la - pa) * 110.54, (lo - po) * 111.32 * Math.cos(la * Math.PI / 180)), steps = Math.ceil(km / 0.5);
+          for (let k = 1; k < steps; k++) { lat.push(pa + (la - pa) * k / steps); lon.push(po + (lo - po) * k / steps); }
+        }
+        lat.push(la); lon.push(lo);
+      }
+      const squares = tilesAlong(lat, lon, Number.isFinite(a.alongKm) ? a.alongKm : 1.5, 13, 13).map(([z, x, y]) => tileBox(z, x, y));
+      return { id: a.id, at, bounds: boxOf(lat, lon), squares };
+    }
+    if (Array.isArray(a.box) && a.box.length === 4 && a.box.every(Number.isFinite)) return { id: a.id, at, bounds: a.box.slice() };
+    return null;
+  }
+  /** What the car's map should keep: one pack per saved area that describes itself. */
+  const packs = () => areas().map(packOf).filter(Boolean);
   /** Bytes saved, from the areas list. */
   const bytesSaved = () => areas().reduce((s, a) => s + (a.bytes || 0), 0);
 
-  const api = { tilesFor, plan, tilesAlong, planAlong, boxOf, lineOf, areasOf, servable, overflow, RECENT_MAX, RECENT_DAYS, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, ageOf, keptShare, STALE_DAYS, MAX_TILES, PROTO, DEM };
+  const api = { tilesFor, plan, tilesAlong, planAlong, boxOf, lineOf, areasOf, servable, overflow, RECENT_MAX, RECENT_DAYS, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, ageOf, keptShare, packOf, packs, tellShell, STALE_DAYS, MAX_TILES, PROTO, DEM };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexOfflineTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);

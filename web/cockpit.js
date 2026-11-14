@@ -327,6 +327,9 @@
     const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
     // Offline areas (offline_tiles.js, IDEAS F-02): map requests go through a protocol that serves a saved copy first
     try { if (window.ApexOfflineTiles) ApexOfflineTiles.install(maplibregl); } catch (_) {}
+    // the car's map keeps its own copy of the saved areas (CarPlay/ApexCarOffline.swift): the list as it is now, at launch,
+    // so areas saved before this build (or while the car's map couldn't keep them) are caught up
+    try { if (window.ApexOfflineTiles && ApexOfflineTiles.tellShell) ApexOfflineTiles.tellShell(); } catch (_) {}
     const map = new maplibregl.Map({ container: 'map', style: MAP_STYLE,
       center: startPos ? [startPos.lon, startPos.lat] : [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0,
       trackResize: false,   // F-02: the page's own observer resizes it (below), once, not again after setPixelRatio already did

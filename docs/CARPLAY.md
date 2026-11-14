@@ -83,6 +83,12 @@ the one brain (routing, directions, notes, hazards, the voice); it runs in `Apex
 the phone's window was ever opened, so the car can open Vetta cold. Mockups: docs/design/carplay (blue tags Apple draws,
 yellow tags we do).
 
+- **The car's map with no signal (2026-11-14):** the native map can't read the page's IndexedDB, where the phone keeps its saved
+  map areas and route maps (web/offline_tiles.js), so `CarPlay/ApexCarOffline.swift` keeps a MapLibre offline pack for each
+  of them (a disc area's box z8-14; a route's corridor as z13 squares, z8-14). The page sends the whole list on every change and
+  at launch (`cmd: "offlinePacks"`, offline_tiles.js `packOf` / `tellShell`); packs are added, resumed when unfinished,
+  replaced when an area is updated and removed when it is deleted. Only on a phone that has been connected to a car (the
+  tiles are fetched a second time); the first connection catches up every area saved before.
 - **Our map in the base view (native since 2026-10-30, REVIEW_FEEL.md F-07):** MapLibre Native for iOS (Metal, its own render
   thread; the Swift package `MapLibre`, project.yml) in `CarPlay/ApexCarMap.swift`, one map engine in the app's process for the
   main screen, the Dashboard and the cluster, sharing one tile cache on disk, instead of a WKWebView (a WebContent process
