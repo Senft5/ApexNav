@@ -57,3 +57,57 @@ def test_recent_tiles_are_kept_capped_and_refreshed():
     out = json.loads(subprocess.run([NODE, "-e", RECENT, ROOT], capture_output=True, text=True, check=True).stdout)
     assert out["drop"] == ["t0", "t1", "t2"] and out["under"] == []
     assert out["fresh"] and not out["old"] and out["oldArea"] and out["oldStyle"] and not out["none"]
+
+
+PARTIAL = r"""
+const enc = (o) => new TextEncoder().encode(JSON.stringify(o)).buffer;
+let room = Infinity, kept = 0, mode = 'ok';
+const store = new Map();
+globalThis.indexedDB = { open() {
+  const r = {}; setTimeout(() => { r.result = { transaction() {
+    const t = {};
+    t.objectStore = () => ({
+      get(url) { const g = {}; setTimeout(() => { g.result = store.get(url); g.onsuccess && g.onsuccess(); }); return g; },
+      put(v) { setTimeout(() => { if (kept >= room) { t.error = new Error('QuotaExceededError'); t.onerror && t.onerror(); } else { kept++; store.set(v.url, v); t.oncomplete && t.oncomplete(); } }); },
+    });
+    return t;
+  } }; r.onsuccess(); });
+  return r;
+} };
+const ls = new Map();
+globalThis.localStorage = { getItem: (k) => ls.get(k) ?? null, setItem: (k, v) => ls.set(k, String(v)), removeItem: (k) => ls.delete(k) };
+let n = 0;
+globalThis.fetch = async (url) => {
+  const body = /style/.test(url) ? enc({ sources: { v: { type: 'vector', url: 'https://t.test/planet' } }, layers: [] })
+    : /planet$/.test(url) ? enc({ tiles: ['https://t.test/{z}/{x}/{y}.pbf'] }) : new ArrayBuffer(10);
+  if (/\.pbf$/.test(url) || /\.png|webp/.test(url)) {
+    n++;
+    if (n % 7 === 0) return { ok: false, status: 404 };                        // the sea: fine
+    if (mode === 'signal' && n % 2 === 0) throw new TypeError('Failed to fetch'); // the signal goes
+  }
+  return { ok: true, status: 200, arrayBuffer: async () => body };
+};
+const O = require(process.argv[1] + '/web/offline_tiles.js');
+(async () => {
+  const run = (id) => O.download({ lat: 39.1, lon: -84.5, radiusKm: 3, styleUrl: 'https://t.test/style', id }).then((a) => ({ missing: a.missing ?? 0, full: !!a.full, tiles: a.tiles, share: O.keptShare(a) }), (e) => ({ threw: e.message }));
+  const ok = await run('a1');
+  mode = 'signal'; n = 0; const signal = await run('a2');
+  mode = 'ok'; n = 0; room = kept + 10; const full = await run('a3');
+  room = kept; const none = await run('a4');
+  console.log(JSON.stringify({ ok, signal, full, none, old: O.keptShare({ tiles: 100 }) }));
+})();
+"""
+
+
+def test_a_partly_kept_area_says_so():
+    """A full phone or a signal lost mid-save: the area records the tiles it couldn't keep (`missing`, `full` when out of
+    room), so Your data says "only N% kept" and offers Update, instead of passing a partial map off as whole. A tile the
+    server hasn't got (the sea, HTTP 404) isn't missing; a style the phone can't keep fails the save."""
+    out = json.loads(subprocess.run([NODE, "-e", PARTIAL, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["ok"]["missing"] == 0 and out["ok"]["share"] == 1, "404s (the sea) are fine"
+    assert out["signal"]["missing"] > 0 and not out["signal"]["full"] and out["signal"]["share"] < 1
+    assert out["full"]["missing"] > 0 and out["full"]["full"]
+    assert out["none"] == {"threw": "not kept"}, "no room even for the style: the save fails"
+    assert out["old"] == 1, "an older record without the count reads as whole"
+    src = open(os.path.join(ROOT, "web", "cockpit.js")).read()
+    assert "only ${part}. Press Update to finish it." in src and "const redo = age.stale || !!part;" in src
