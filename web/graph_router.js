@@ -88,7 +88,7 @@
     // highway-free way over HWY_ABSURD x the quickest's time is still the level's way (the card says Quick is the way); the
     // budget never shuts out the highway-free quickest (+ HWY_FREE_SLACK_S). A point snapped onto a highway moves to the
     // nearest other road within HWY_SNAP_M (a car on the highway, heading given and within HWY_ON_M of it, stays on it)
-    NO_HWY: { fun: true, max: true }, HWY_LINK_X: 25, HWY_ABSURD: 2, HWY_FREE_SLACK_S: 60, HWY_SNAP_M: 150, HWY_ON_M: 25,
+    NO_HWY: { fun: true, max: true }, TRUNK_FUN_KM: 1.5, HWY_LINK_X: 25, HWY_ABSURD: 2, HWY_FREE_SLACK_S: 60, HWY_SNAP_M: 150, HWY_ON_M: 25,
     // loops (loop()): at Quick motorway and trunk cost x LOOP_HWY_X on every leg (a short link to good roads, never the
     // bulk), at Fun and Long way they are never driven (NO_HWY, the same exception); the
     // stages within reach of half the length at LOOP_REACH_MS; at most LOOP_STAGES of them chained, LOOP_TRIES loops
@@ -1144,13 +1144,36 @@
 
   // ---- highways (NO_HWY levels) ---------------------------------------------------------------------------------------
   /** A motorway, trunk or one of their links (the tiles give a link its road's class; the ETL's motorway flag too), or an
-   *  expressway of a lower class (`motorroad=yes` / `expressway=yes`: the tiles' expressway flag, in builds from 2026-11-09). */
-  function isHwyEdge(v, e) { const B = v.bits || flagBits(); return v.cls[e] <= CLS.trunk || !!(v.flags[e] & (B.motorway | B.expressway)); }
-  /** Per edge, 1 on a highway (kept per view). */
+   *  expressway of a lower class (`motorroad=yes` / `expressway=yes`: the tiles' expressway flag, in builds from 2026-11-09).
+   *  Not a two-way trunk whose road bends (hwyOf: The Snake, US 421, 2026-11-14: OSM tags many mountain US routes trunk). */
+  function isHwyEdge(v, e) { return hwyOf(v)[e] === 1; }
+  function hwyClassEdge(v, e) { const B = v.bits || flagBits(); return v.cls[e] <= CLS.trunk || !!(v.flags[e] & (B.motorway | B.expressway)); }
+  /**
+   * Per edge, 1 on a highway (kept per view). A two-way trunk (no one-way carriageways, not a link) is a two-lane road: by
+   * its name across the view, one with TRUNK_FUN_KM corner points a km or more is a rider's road, not a highway (The Snake
+   * 4.4, US 421 by Shady Valley 2.5; Cincinnati's US 127, US 27 and the AA Highway 0 to 0.25).
+   */
   function hwyOf(v) {
     if (v.isHwy) return v.isHwy;
-    const h = new Uint8Array(v.E);
-    for (let e = 0; e < v.E; e++) if (isHwyEdge(v, e)) h[e] = 1;
+    const B = v.bits || flagBits(), h = new Uint8Array(v.E), byName = new Map();
+    const nameOf = (e) => { const ix = v.name[e], t = v.tiles[v.eTile[e]]; return ix >= 0 && t.names ? t.names[ix] : null; };
+    const twoWayTrunk = (e) => v.cls[e] === CLS.trunk && !(v.flags[e] & (B.oneway | B.ramp | B.motorway | B.expressway));
+    for (let e = 0; e < v.E; e++) {
+      if (!hwyClassEdge(v, e)) continue;
+      h[e] = 1;
+      if (!twoWayTrunk(e)) continue;
+      const n = nameOf(e);
+      if (!n) continue;
+      let a = byName.get(n);
+      if (!a) byName.set(n, (a = { len: 0, fun: 0 }));
+      a.len += v.len[e];
+      if (Number.isFinite(v.fun[e])) a.fun += v.fun[e];
+    }
+    for (let e = 0; e < v.E; e++) {
+      if (!h[e] || !twoWayTrunk(e)) continue;
+      const a = byName.get(nameOf(e));
+      if (a && a.len > 0 && a.fun / (a.len / 1000) >= K.TRUNK_FUN_KM) h[e] = 0;
+    }
     v.isHwy = h;
     return h;
   }

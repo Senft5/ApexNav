@@ -41,6 +41,19 @@ const CASES = {
   },
 
   // turn restrictions (no and only), one-ways, U-turns only at dead ends
+  riderTrunk() {
+    // A to B by a two-way trunk (100 s) or the Back Road (a tertiary, 200 s, some corners): at Fun the trunk is a highway
+    // when straight (Cincinnati's US 127) and a rider's road when it bends (The Snake, US 421)
+    const run = (fun, flags) => {
+      const nodes = [at(39.3, -84.6), at(39.3, -84.58), at(39.3, -84.56), at(39.31, -84.58)];
+      const edges = [];
+      two(edges, 0, 1, { quality: 0.8, cls: 1, name: 'US 421', t: 50, fun, flags }); two(edges, 1, 2, { quality: 0.8, cls: 1, name: 'US 421', t: 50, fun, flags });
+      two(edges, 0, 3, { quality: 0.7, cls: 4, name: 'Back Road', t: 100, fun: 3 }); two(edges, 3, 2, { quality: 0.7, cls: 4, name: 'Back Road', t: 100, fun: 3 });
+      const v = R.view(H.tiles(nodes, edges).tiles);
+      return R.plan(v, { from: { lat: 39.3, lon: -84.5999 }, to: { lat: 39.3, lon: -84.5601 }, level: 'fun' }).routes[0].names.map((x) => x.name);
+    };
+    return { bends: run(12, 0), straight: run(0, 0), divided: run(12, 1) };
+  },
   gates() {
     // A to B by the Gated road (a gate halfway, 100 s) or the Detour (160 s): a gate on a through road is open, one on a
     // residential street or with access private still blocks

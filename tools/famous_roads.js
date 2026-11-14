@@ -31,7 +31,7 @@ const CASES = {
   parkway: { name: 'Blue Ridge Parkway (Blowing Rock to Linville Falls)', from: { lat: 36.1350, lon: -81.6780 }, to: { lat: 35.9570, lon: -81.9270 }, road: /Blue Ridge Parkway/i },
   skyline: { name: 'Skyline Drive (Front Royal to Thornton Gap)', from: { lat: 38.9000, lon: -78.1900 }, to: { lat: 38.6630, lon: -78.3200 }, road: /Skyline Drive/i },
   backdragon: { name: 'Back of the Dragon (VA 16)', from: { lat: 36.8340, lon: -81.5150 }, to: { lat: 37.1150, lon: -81.5190 }, road: /\b16\b|Back of the Dragon|B F Buchanan Highway|^Park Boulevard$/i },
-  snake: { name: 'The Snake (US 421, Mountain City to Shady Valley)', from: { lat: 36.4750, lon: -81.8050 }, to: { lat: 36.5900, lon: -82.0600 }, road: /421/i },
+  snake: { name: 'The Snake (US 421, Mountain City to Shady Valley)', from: { lat: 36.4750, lon: -81.8050 }, to: { lat: 36.5900, lon: -82.0600 }, road: /421|^Shady Street$|^Daniel Boone Trail$/i },
   nickel: { name: 'Triple Nickel (OH 555)', from: { lat: 39.4890, lon: -81.8660 }, to: { lat: 39.7690, lon: -82.0920 }, road: /555/i },
   nickel2: { name: 'Triple Nickel (OH 555), Little Hocking to Zanesville', from: { lat: 39.2700, lon: -81.7000 }, to: { lat: 39.9400, lon: -82.0130 }, road: /555/i },
   oh78: { name: 'OH 78 (McConnelsville to Woodsfield)', from: { lat: 39.6490, lon: -81.8530 }, to: { lat: 39.7620, lon: -81.1150 }, road: /\b78\b/i },

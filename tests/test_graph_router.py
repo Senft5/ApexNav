@@ -305,6 +305,14 @@ def test_fun_and_long_way_never_take_the_highway():
         assert x["limitS"] >= x["timeS"], "the budget never shuts out the highway-free way"
 
 
+def test_a_two_lane_trunk_that_bends_is_a_riders_road():
+    """2026-11-14 (tools/famous_roads.js): OSM tags many mountain US routes trunk, and Fun never drove The Snake (US 421,
+    4.4 corner points a km). A two-way trunk whose road bends (TRUNK_FUN_KM) is not a highway; a straight one (Cincinnati's
+    US 127, the AA Highway) or a divided one still is."""
+    r = case("riderTrunk")
+    assert r == {"bends": ["US 421"], "straight": ["Back Road"], "divided": ["Back Road"]}, r
+
+
 def test_the_highway_exception_takes_the_shortest_link_and_says_why():
     """A river crossed only by I-275's bridge: Fun and Long way drive River Road to the bridge's ramp, the bridge and the
     ramp off (1.7 km), not I-275 from the start (5.3 km, Quick's way), and the card says so; a car on I-275 rerouted at
