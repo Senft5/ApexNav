@@ -6522,6 +6522,44 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   check(p.crew_id === 'k1' && p.caption === 'First run with the crew.' && p.score === 790 && p.title === 'Cherohala Skyway' && first > 35.36 + 0.0044,
     'the post: to the crew, the caption, the Score, and the line starting 500 m in: ' + JSON.stringify({ ...p, line: p.line.length, first }));
 });
+flow('the Feed: each post\'s line is on the real map, two posts drawn by one hidden map, and a map that can\'t load leaves the plain line (post_map.js, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  // the map's style, plain paper (no tiles here); counted, so one map is seen to draw both posts
+  let styles = 0;
+  await page.route('https://tiles.openfreemap.org/**', (route) => {
+    if (!route.request().url().includes('/styles/')) return route.abort();
+    styles++;
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#eee' } }] }) });
+  });
+  const enc = (pts) => { let o = '', a0 = 0, b0 = 0; const e = (v) => { v = v < 0 ? ~(v << 1) : v << 1; while (v >= 32) { o += String.fromCharCode((32 | (v & 31)) + 63); v >>= 5; } o += String.fromCharCode(v + 63); };
+    for (const [a, b] of pts) { const x = Math.round(a * 1e5), y = Math.round(b * 1e5); e(x - a0); e(y - b0); a0 = x; b0 = y; } return o; };
+  const post = (id, k) => ({ id, handle: 'bob', photo_id: null, mine: false, crew: null, title: `Drive ${k}`, caption: null, driven_on: '2026-11-12', length_m: 9000, score: 700 + k,
+    roads: [], stages: [], line: enc(Array.from({ length: 60 }, (_, i) => [39.1 + k * 0.05 + i * 0.001, -84.6 + Math.sin(i / 6) * 0.004])), created_at: '2026-11-12 10:00:00', kudos: 0, my_kudos: false, comments: 0 });
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/feed') return json([post('P1AAAAAAAAAAAAAA', 1), post('P2AAAAAAAAAAAAAA', 2)]);
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card', { timeout: 15000 });
+  const before = styles;
+  await page.waitForFunction(() => document.querySelectorAll('#accountBody .feed-line.on-map').length === 2, null, { timeout: 20000 })
+    .catch(async () => { throw new Error('both posts on the map: ' + await page.evaluate(() => document.querySelectorAll('#accountBody .feed-line.on-map').length)); });
+  const m = await page.evaluate(() => [...document.querySelectorAll('#accountBody .feed-line.on-map')].map((l) => ({
+    bg: getComputedStyle(l).backgroundImage, casing: getComputedStyle(l.querySelector('.casing')).display, line: l.querySelector('path:not(.casing)').getAttribute('d').length,
+    hidden: !!document.querySelector('div[aria-hidden="true"][style*="-"] .maplibregl-canvas') })));
+  check(m.every((x) => /^url\("blob:/.test(x.bg) && x.casing === 'inline' && x.line > 100 && x.hidden) && styles - before <= 1,
+    'each post: a still of the map under its line, cased, both drawn by one hidden map: ' + JSON.stringify({ m, styles: styles - before }));
+  // with no map to be had (offline): the plain line, no picture, no blank box
+  const off = await page.evaluate(async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
+    const s = ApexPostMap.snapper({ gl: maplibregl, style: 'x', palette: () => null, restyle: () => {} });
+    return s.snap('k', [[39, -84], [39.01, -84.01]], 340, 170, 18);
+  });
+  check(off === null, 'offline, no map is asked for');
+});
 flow('post media: a friend\'s photo shows on their post in the Feed, and Add a photo on the Post sheet sends yours as a JPEG after the post (Worker stubbed, backend/src/post_media.ts)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   const sent = [], JPG = Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAeACgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDz+iiiv0Q8MKKKKACiiigAooooAKKKKACiiigD/9k=', 'base64');
