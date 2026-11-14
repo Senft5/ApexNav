@@ -7213,7 +7213,9 @@
       invite: (c) => crewInviteLink(c),
       openRoute: (id) => openSharedRoute(id), builds: () => builds, onAllDrives: toDrives,
       posts: (c) => (drivePosts && drivePosts.crewDrives ? drivePosts.crewDrives(c.id) : null),
-      books: (c) => (roadbooks && roadbooks.ofCrew ? roadbooks.ofCrew(c) : null),   // the crew's roadbooks: every member adds roads (roadbooks.js)   // the drives members posted to this crew onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); },
+      // the drives members posted to this crew (posts), and its roadbooks, every member adding roads (roadbooks.js)
+      books: (c) => (roadbooks && roadbooks.ofCrew ? roadbooks.ofCrew(c) : null),
+      onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); },
       // the owner's TestFlight note 05: the crew page's Upcoming drives is the crew's drives list, a + plans one (no Crew drives row)
       drives: (c, o) => (crewEvents ? crewEvents.section([{ id: c.id, name: c.name, visibility: c.visibility, role: c.is_owner ? 'owner' : 'member' }], { crewId: c.id, ...o }) : null),
       // P-18: the crew page's drive is the Crew drives sheet's card; a change on one redraws the other
@@ -7334,6 +7336,13 @@
       zones: () => privacyZones, planned: () => (plannedRoute && Array.isArray(plannedRoute.lat) && plannedRoute.lat.length > 1 ? plannedRoute : null),
       report: (o) => safety && safety.report(o), changed: () => { if (booksRowCount) booksRowCount(); }, mapUnder,
       stages: () => { try { const l = JSON.parse(localStorage.getItem('apex.segments') || '[]'); return Array.isArray(l) ? l : []; } catch (_) { return []; } },
+      // a crew roadbook's road as a crew drive: People's Crews side, the crew's plan form named after the road, the road as
+      // its route (shared with the crew as Plan it does with a planned route)
+      planCrewDrive: (road, crew) => {
+        if (!crewEvents || !crew) return;
+        setPeopleSide('crews');
+        setTimeout(() => { if (!crewEvents.plan(crew.id, { title: road.name, route: { name: road.name, geom: road.geom } })) toast('Open the crew to plan a drive.'); }, 0);
+      },
       driveRoad: async (road, book) => {
         closeSheet();
         // from where you are to the road's start, then the road as drawn (as Drive it on a post leads to their line); close
