@@ -9839,14 +9839,15 @@
       if (!driveActive) return;
       // off the route: the status line's words as the car's paused trip ("Rerouting…"), never the old turn frozen; back on it
       // (or on the new route) the key differs, so the next maneuver goes out at once
-      const off = track && track.kind === 'route' && state.mode === 'live' && state.cursorIdx < 0 ? ApexCarPlay.pausedMessage(offRouteText()) : null;
-      if (off) { if (off.key !== car.guideKey) { car.guideKey = off.key; car.guideAt = performance.now(); carPost(off); } return; }
-      // arrived: the last 40 m of a route to somewhere (a loop ends where it began, so it says nothing at its start)
+      // arrived: the last 40 m of a route to somewhere reached (a loop ends where it began, so it says nothing at its start);
+      // it stays Arrived when the car drives on or off the route, never Rerouting to a place already reached
       const end = track && track.kind === 'route' && state.mode === 'live' ? totalM() : 0;
-      if (end > 500 && state.cursorM > end - 40 && !String(track.id || '').startsWith('loop_')) {
+      if (end > 500 && Math.max(state.cursorM, routeWatch.bestM) > end - 40 && !String(track.id || '').startsWith('loop_')) {
         if (car.guideKey !== 'arrived') { car.guideKey = 'arrived'; car.guideAt = performance.now(); carPost(ApexCarPlay.arrivedMessage(track.name)); }
         return;
       }
+      const off = track && track.kind === 'route' && state.mode === 'live' && state.cursorIdx < 0 ? ApexCarPlay.pausedMessage(offRouteText()) : null;
+      if (off) { if (off.key !== car.guideKey) { car.guideKey = off.key; car.guideAt = performance.now(); carPost(off); } return; }
       // U-59: a drive with no route (or on the road ahead) is still a drive on the car: the record card and the distance driven
       const now = performance.now(), g = !track || track.kind !== 'route'
         ? ApexCarPlay.recordingMessage(drive.rec ? drive.rec.km * 1000 : null, (m) => ApexUnits.long(m, 1))

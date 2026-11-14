@@ -9,3 +9,7 @@
 ## 2026-11-14 (carplay arrived): Arrived pauses the trip, it doesn't end the drive (claude/project-thread-me97iw)
 - Why: the drive is the driver's (they may park or drive on); the phone's End decides when it is saved. The card just stops claiming a maneuver.
 - Undo: drop the arrived branch in cockpit.js carGuide.
+
+## 2026-11-14 (carplay review pass): Arrived sticks; Overview follows a reroute (claude/project-thread-me97iw)
+- Why: the in-car review pass found two rough edges. Driving on past the destination flipped the card from Arrived to "Rerouting…" toward a place already reached, so Arrived now keys on the furthest point reached (routeWatch.bestM) and comes before the off-route check. A reroute during Overview left the old route's frame, so both car maps refit the new route while Overview is on.
+- Undo: `state.cursorM` in place of the max in carGuide; drop `overviewing` (ApexCarMap.swift) / `state.overview` (carmap.js).

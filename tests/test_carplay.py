@@ -570,9 +570,9 @@ def test_overview_shows_the_whole_route_while_guiding():
     assert 'mapController?.recentre(); overviewButton?.title = "Overview"' in swift, "a pan ends it"
     assert '@MainActor func overview() { if let native { native.overview() } else { js("car.overview()") } }' in swift
     native = open(os.path.join(ROOT, "CarPlay", "ApexCarMap.swift"), encoding="utf-8").read()
-    assert "func overview() {" in native and "follow = false\n        fitRoute(animated: true)" in native
+    assert "func overview() {" in native and "follow = false; overviewing = true\n        fitRoute(animated: true)" in native and "|| overviewing { fitRoute(animated: true) }" in native
     web = open(os.path.join(ROOT, "web", "carmap.js"), encoding="utf-8").read()
-    assert "overview() {" in web and "state.follow = false; fitRoute(" in web
+    assert "overview() {" in web and "state.follow = false; state.overview = true; fitRoute(" in web
 
 
 def test_nearby_on_the_cars_places(maps):
@@ -596,7 +596,7 @@ def test_the_car_says_arrived_at_the_end(maps):
     assert short == {"kind": "paused", "key": "arrived", "reason": "arrived", "text": "Arrived · Maryville"}
     assert long["text"] == "Arrived" and none["text"] == "Arrived", "a name too long for a glance is left off"
     js = cockpit_source()
-    assert "if (end > 500 && state.cursorM > end - 40 && !String(track.id || '').startsWith('loop_')) {" in js, "a loop says nothing at its start"
+    assert "if (end > 500 && Math.max(state.cursorM, routeWatch.bestM) > end - 40 && !String(track.id || '').startsWith('loop_')) {" in js, "a loop says nothing at its start"
 
 
 def test_off_route_the_car_says_rerouting(maps):

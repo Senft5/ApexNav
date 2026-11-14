@@ -2928,9 +2928,12 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
     car.overview(); await wait();
     const b = car.map.getBounds(), inView = [[35.40, -84.10], [35.45, -84.02], [35.50, -84.10]].every(([la, lo]) => b.contains([lo, la]));
     const o = { z0, z: car.map.getZoom(), pitch: car.map.getPitch(), bearing: car.map.getBearing(), follow: car.state.follow, inView };
+    // a reroute during Overview: the new route whole
+    car.route([[35.40, -84.10], [35.30, -84.30]]); await wait();
+    const b2 = car.map.getBounds(); o.rerouted = [[35.40, -84.10], [35.30, -84.30]].every(([la, lo]) => b2.contains([lo, la]));
     car.recentre(); await wait(); o.after = { follow: car.state.follow, pitch: car.map.getPitch() };
     return o; });
-  check(ov.inView && ov.z < ov.z0 && ov.pitch === 0 && ov.bearing === 0 && ov.follow === false && ov.after.follow && ov.after.pitch > 0,
+  check(ov.inView && ov.rerouted && ov.z < ov.z0 && ov.pitch === 0 && ov.bearing === 0 && ov.follow === false && ov.after.follow && ov.after.pitch > 0,
     'Overview: the whole route, flat, then Recentre follows the car again: ' + JSON.stringify(ov));
 });
 
