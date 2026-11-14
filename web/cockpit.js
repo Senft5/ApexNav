@@ -7708,6 +7708,13 @@
         el('div', { className: 'stack-8' },
           btn('Send a friend link', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Link copied. You\'re friends once they open it, and you both get 5 points when they first share road data.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
           el('div', { className: 'row' }, add, btn('Send request', sendRequest)),
+          // (2026-11-14) as you type, the members whose handle starts with it, each with Add: no guessing at a handle
+          ...(peopleSuggest && me.member ? [peopleSuggest.finder(add, async (h) => {
+            const r = await apiCall('POST', '/api/friends/request', { handle: h }).catch(() => null);
+            if (!r || !r.ok) { toast('Couldn’t send that. Try again.'); return false; }
+            setSent([...sentList().filter((x) => x !== h), h]);
+            return true;
+          })] : []),
           btn('A link anyone can use', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'), 'linkbtn'),
           btn('Show my code', () => showFriendQr(qrBox), 'linkbtn'), qrBox),
         reqSec);

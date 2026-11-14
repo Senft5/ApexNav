@@ -7310,6 +7310,8 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   const posted = [];
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method(), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/users/search') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(u.searchParams.get('q') === 'ga'
+      ? [{ handle: 'gab', photo_id: null, you: null }, { handle: 'cara_ga', photo_id: null, you: 'friend' }] : []) });
     if (m === 'POST' && u.pathname === '/api/invites') { posted.push([m, u.pathname, null]); return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ url: 'https://vettadrive.app/?invite=TOKEN' + posted.length }) }); }
     if (m !== 'GET' && u.pathname !== '/api/crews/invite/preview') { posted.push([m, u.pathname, route.request().postData()]); return route.fulfill({ status: 204 }); }
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me', requests: 1 });
@@ -7396,6 +7398,15 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   await page.waitForSelector('.side-pop.open[aria-label="Invite"]');
   const inv = await page.textContent('.side-pop.open[aria-label="Invite"]');
   check(/^Send a friend link$/.test((await page.textContent('.side-pop.open .ink-btn.solid')).trim()) && /A link anyone can use/.test(inv) && !/New to Vetta|Already on Vetta/.test(inv) && !/invite-only/i.test(inv) && !/@dan|Accept/.test(inv) && await page.isVisible('.side-pop.open input[aria-label="Friend handle"]'), 'the Invite sheet: an invite link and add by handle, no requests: ' + inv);
+  // (2026-11-14) typing a handle finds the members whose handle starts with it, each with Add (a friend says so)
+  await page.fill('.side-pop.open input[aria-label="Friend handle"]', '@Ga');
+  await page.waitForSelector('.side-pop.open .find-list .find-row');
+  const found = await page.$$eval('.side-pop.open .find-list .find-row', (l) => l.map((r) => [r.querySelector('.find-h').textContent, (r.querySelector('button, small') || {}).textContent]));
+  check(JSON.stringify(found) === JSON.stringify([['@gab', 'Add'], ['@cara_ga', 'Friends']]), 'people found as you type: ' + JSON.stringify(found));
+  await page.click('.side-pop.open .find-row button[aria-label="Add @gab"]');
+  await page.waitForSelector('.side-pop.open .find-row small:text-is("Sent")');
+  check(posted.some(([m, p, b]) => m === 'POST' && p === '/api/friends/request' && /"handle":"gab"/.test(b)), 'Add sends the request');
+  await page.fill('.side-pop.open input[aria-label="Friend handle"]', '');
   // (2026-11-14) Show my code: a friend link as a QR code, a new one for the next person
   await page.click('.side-pop.open button:has-text("Show my code")');
   await page.waitForSelector('.side-pop.open .friend-qr canvas[aria-label="Your friend code"]');

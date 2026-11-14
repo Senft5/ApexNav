@@ -17,7 +17,20 @@
     return (Array.isArray(list) ? list : []).filter((s) => s && s.handle && !h.has(s.handle)).slice(0, max);
   }
 
+  /** What you typed, as a handle to look for: lower case, no @, 2 to 20 of a-z 0-9 _; else null (nothing is asked). */
+  function searchQ(text) {
+    const q = String(text == null ? '' : text).trim().replace(/^@/, '').toLowerCase();
+    return /^[a-z0-9_]{2,20}$/.test(q) ? q : null;
+  }
+  /** The key on a found person's row: Add, or where you already stand. */
+  function stand(you) { return you === 'friend' ? 'Friends' : you === 'sent' ? 'Sent' : you === 'asked' ? 'Accept' : 'Add'; }
+
   const STYLE = `
+    .find-list { display: grid; gap: 2px; }
+    .find-row { display: flex; align-items: center; gap: 10px; min-height: 48px; }
+    .find-row .find-h { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+    .find-row .ink-btn { min-height: 36px; min-width: 76px; }
+    .find-row small { color: var(--panel-dim); font-size: 13px; padding: 0 8px; }
     .suggest-sec h3 { margin-bottom: 8px; }
     .suggest-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
     .suggest-card { position: relative; flex: 0 0 136px; scroll-snap-align: start; display: grid; justify-items: center; gap: 4px; padding: 14px 8px 10px;
@@ -61,9 +74,36 @@
       }).catch(() => {});
       return box;
     }
-    return { into };
+    /** Find people as you type their handle (Invite sheet): `input` is the handle field; rows go in the box this returns.
+     *  add(handle) sends the request (the sheet's own Send request); a friend shows Friends, a request either way its state. */
+    function finder(input, add) {
+      const list = el('div', { className: 'find-list', role: 'list', 'aria-label': 'People found' });
+      let timer = null, asked = '';
+      const paint = (rows) => list.replaceChildren(...rows.map((r) => {
+        const row = el('div', { className: 'find-row', role: 'listitem' },
+          page.avatar ? page.avatar(r.photo_id || null, r.handle, 36) : el('span'), el('b', { className: 'find-h', textContent: `@${r.handle}` }));
+        if (r.you === 'friend' || r.you === 'sent') row.append(el('small', { textContent: stand(r.you) }));
+        else {
+          const k = btn(stand(r.you), async () => { k.disabled = true; const okd = await add(r.handle); if (okd === false) k.disabled = false; else k.replaceWith(el('small', { textContent: r.you === 'asked' ? 'Friends' : 'Sent' })); }, 'ink-btn solid');
+          k.setAttribute('aria-label', `${stand(r.you)} @${r.handle}`);
+          row.append(k);
+        }
+        return row;
+      }));
+      input.addEventListener('input', () => {
+        clearTimeout(timer);
+        const q = searchQ(input.value);
+        if (!q) { asked = ''; list.replaceChildren(); return; }
+        timer = setTimeout(() => {
+          asked = q;
+          apiCall('GET', `/api/users/search?q=${encodeURIComponent(q)}`).then(jsonOf).then((rows) => { if (asked === q && Array.isArray(rows)) paint(rows); }).catch(() => {});
+        }, 250);
+      });
+      return list;
+    }
+    return { into, finder };
   }
 
-  const api = { reason, shown, mount, HIDE_KEY };
+  const api = { reason, shown, searchQ, stand, mount, HIDE_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexPeopleSuggest = api;
 })(typeof window !== 'undefined' ? window : globalThis);
