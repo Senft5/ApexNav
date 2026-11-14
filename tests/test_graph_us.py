@@ -25,6 +25,19 @@ def test_states_are_the_lower_48_only():
     assert list(U.states(INDEX)) == ["ohio", "west-virginia"]
 
 
+def test_the_pacific_northwest_is_in_though_its_polygons_run_out_to_sea():
+    """2026-11-14: Geofabrik's Washington reaches -126.7 and Oregon past -126; at 1 degree of slack the first build left both
+    out (Seattle, Portland, the Oregon coast off the map)."""
+    ix = {"features": [{"properties": {"id": "us/washington", "parent": "us"}, "geometry": box(-126.74, 45.54, -116.91, 49.05)},
+                       {"properties": {"id": "us/oregon", "parent": "us"}, "geometry": box(-126.11, 41.99, -116.46, 46.30)},
+                       {"properties": {"id": "us/hawaii", "parent": "us"}, "geometry": box(-178.5, 18.8, -154.7, 28.5)},
+                       {"properties": {"id": "us/alaska", "parent": "us"}, "geometry": box(-179.2, 51.2, -129.9, 71.4)}]}
+    assert list(U.states(ix)) == ["oregon", "washington"]
+    boxes = {tuple(b[1]) for j in U.jobs(U.states(ix)) for b in j["blocks"]}
+    assert (-123.0, 47.0, -122.0, 48.0) in boxes and (-124.0, 45.0, -123.0, 46.0) in boxes, "Seattle and the Oregon coast"
+    assert all(b[0] >= -125.0 for b in boxes), "blocks stay on the lower 48's grid"
+
+
 def test_geofabriks_us_prefixed_ids_are_states_by_their_short_names():
     ix = {"features": [{"properties": {"id": "us/ohio", "parent": "us", "urls": {"pbf": "https://x/ohio.pbf"}}, "geometry": box(-84.82, 38.4, -80.52, 42.33)},
                        {"properties": {"id": "us/alaska", "parent": "us"}, "geometry": box(-179.2, 51.2, -129.9, 71.4)}]}

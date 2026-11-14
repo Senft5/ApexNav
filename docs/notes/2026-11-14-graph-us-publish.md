@@ -12,3 +12,6 @@ The first bands_from run failed in plan: Geofabrik refused that runner's index r
 
 ## 2026-11-14 (graph US publish): another run's bands are fetched by id, and all of them or none (claude/project-thread-39xbx9)
 actions/download-artifact with run-id lists only the first 100 of that run's artifacts: the bands_from publish put 100 of 141 bands live (10,522 of 12,865 tiles; Texas, Florida, the Northeast and the Pacific Northwest left out, nothing lost against the old OH/KY/IN map). The publish now lists the run's artifacts paginated, downloads each by id, and fails unless there is one per band job. Undo: put download-artifact back with run-id (only safe under 100 bands).
+
+## 2026-11-14 (graph US publish): Washington and Oregon are states of the lower 48 (claude/project-thread-39xbx9)
+All 141 bands went live (12,865 tiles), but Seattle, Portland and the Oregon coast were off the map: us_plan.states kept a state only when its Geofabrik polygon lay within 1 degree of the lower 48's box, and Washington's runs out to sea to -126.7, Oregon's past -126. The slack is now 3 degrees (LOWER48_SLACK; Alaska and Hawaii are still far outside); blocks stay on the -125 grid. A whole rebuild follows. Undo: LOWER48_SLACK = 1.0.
