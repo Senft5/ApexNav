@@ -53,7 +53,7 @@
     TURN_RIGHT_S: 2, TURN_RIGHT_K: 4, TURN_LEFT_S: 5, TURN_LEFT_K: 8, STRAIGHT_RAD: 0.35, UTURN_S: 30,
     // passing a node with a signal, a stop sign, give way, a level crossing, calming or a crossing (the tiles' node flags;
     // the same seconds the ETL adds for those inside an edge, tools/graph_etl/build.py DELAY_S; end nodes are ours)
-    SIGNAL_S: 15, STOP_S: 7, GIVE_WAY_S: 2, LEVEL_CROSSING_S: 4, CALMING_S: 3, CROSSING_S: 1, BARRIER_S: 120,
+    SIGNAL_S: 15, STOP_S: 7, GIVE_WAY_S: 2, LEVEL_CROSSING_S: 4, CALMING_S: 3, CROSSING_S: 1, BARRIER_S: 120, OPEN_GATE_CLS: 4,
     // the search's weight on a signal's, stop's and give way's seconds (Route tuning's "Traffic lights and stops",
     // web/route_tuning.js): 1 counts their wait as it is; above it the search keeps off them, while the route's time (the
     // card's, the ETA's) still counts only the real wait
@@ -138,6 +138,17 @@
    * tile key so the same tiles always make the same ids), cross-tile edges stitched to the loaded neighbour (an edge into
    * a tile that isn't loaded can't be used), the reverse adjacency, dead ends, and a node grid for snapping.
    */
+  function openGates(N, E, first, rfirst, redge, flags, cls, nflags) {
+    const B = flagBits(), NB = nodeBits(), through = (e) => cls[e] <= K.OPEN_GATE_CLS && !(flags[e] & B.private);
+    for (let e = 0; e < E; e++) if ((flags[e] & B.barrier) && through(e)) flags[e] &= ~B.barrier;
+    for (let a = 0; a < N; a++) {
+      if (!(nflags[a] & NB.barrier)) continue;
+      let ok = first[a + 1] > first[a] || rfirst[a + 1] > rfirst[a];
+      for (let e = first[a]; e < first[a + 1] && ok; e++) ok = through(e);
+      for (let r = rfirst[a]; r < rfirst[a + 1] && ok; r++) ok = through(redge[r]);
+      if (ok) nflags[a] &= ~NB.barrier;
+    }
+  }
   function view(tiles) {
     const list = (tiles || []).filter((t) => t && t.nodes && t.edges).slice().sort((a, b) => (keyOf(a.tile.i, a.tile.j) < keyOf(b.tile.i, b.tile.j) ? -1 : 1));
     const T = list.length, index = new Map();
@@ -196,6 +207,11 @@
     for (let a = 0; a < N; a++) rfirst[a + 1] += rfirst[a];
     const fill = rfirst.slice(0, N);
     for (let e = 0; e < E; e++) if (to[e] >= 0) redge[fill[to[e]]++] = e;
+    // a gate on a through road (tertiary and up, no access tag) is open: park roads and parkways are gated for winter
+    // closures every few km (the Blue Ridge Parkway, 2026-11-14: 16 gates from Blowing Rock to Linville Falls, each
+    // costing the private-road toll, so Fun never took it). Closures come from the road feeds; a gate on a smaller road,
+    // or with access=no/private, still blocks.
+    openGates(N, E, first, rfirst, redge, flags, cls, nflags);
     // dead ends: one neighbour, in or out (the only place a U-turn is allowed)
     const deadEnd = new Uint8Array(N);
     for (let a = 0; a < N; a++) {
