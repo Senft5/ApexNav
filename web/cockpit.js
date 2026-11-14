@@ -10321,6 +10321,24 @@
         n.hidden = shown >= 2; if (!n.hidden) shown++;
       }
     }
+    // The App Store rating (StoreKit requestReview in the shell; docs/APP_REVIEW.md 5.6.1): after a good drive, parked, from
+    // the third drive on, once per app version (end_line.js askReview). A few seconds after the score lands, if the card is
+    // still up, so it never covers the number as it counts.
+    async function endReviewAsk(c, best) {
+      const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
+      const version = (/ApexNav\/([^\s(]+)/.exec(navigator.userAgent) || [])[1] || null;
+      let askedFor = null; try { askedFor = localStorage.getItem('vetta.reviewAsked'); } catch (_) {}
+      let drives = null; try { drives = (await ApexRecording.summaries(null)).length; } catch (_) { drives = null; }
+      // the phone's speed now: the shell's last fix (live or idle), and only a fresh one (10 s) counts as known
+      const speedNow = () => (state.lastMotion && Number.isFinite(state.lastMotion.speedMps) && performance.now() - (state.lastPositionAt || -1e9) < 10000 ? state.lastMotion.speedMps : null);
+      const v = speedNow();
+      if (!window.ApexEndLine || !ApexEndLine.askReview || !ApexEndLine.askReview({ app: !!native, score: c.ds.score, best, drives, speedMps: v, version, askedFor })) return;
+      setTimeout(() => {
+        const v2 = speedNow(), still = v2 != null && v2 < 1.5;   // still parked, 3 s on
+        if (!still || !endDrive || endDrive.id !== c.id || !$('endCard').classList.contains('show')) return;
+        try { localStorage.setItem('vetta.reviewAsked', version); native.postMessage({ cmd: 'askReview' }); } catch (_) {}
+      }, 3000);
+    }
     function endCardScored(c, others, opts = {}) {
       if (!endDrive || endDrive.id !== c.id) return;                   // another card since
       endDrive = { ...endDrive, ...c };
@@ -10362,6 +10380,7 @@
       let best = false;
       if (c.ds.score != null && window.ApexEndLine) { try { best = ApexEndLine.bestOnRoad({ id: c.id, name: c.name, score: c.ds.score }, others || []); } catch (_) { best = false; } }
       $('endLine').textContent = best ? ['Your best on this road.', tipLine].filter(Boolean).join(' ') : tipLine;
+      endReviewAsk(c, best);                                           // a good drive, parked: the App Store rating, once a version
       // IDEAS D-27: the skill Your driving is practicing, read on this drive alone (analysis_client.js practiceOf)
       const prLine = c.practice && typeof c.practice.line === 'string' ? c.practice.line : '';
       $('endPractice').textContent = prLine; $('endPractice').hidden = !prLine;

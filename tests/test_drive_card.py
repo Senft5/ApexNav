@@ -72,6 +72,7 @@ def test_no_times_or_speeds_on_the_card():
     for word in ["mph", "km/h", "speed", "elapsed", "duration", "secs", "time"]:
         assert word not in draw.lower(), word
     assert "APEX NAV" not in src and "'VETTA'" in draw                  # the product's name since 2026-10-28
+    assert "g.fillText(SITE," in draw and "const SITE = 'vettadrive.com'" in src   # a shared card says where Vetta is
 
 
 def test_nine_by_sixteen(out):
