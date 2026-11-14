@@ -7283,6 +7283,8 @@ flow('friend profile: a friend on People → Profile shows what the friend share
     if (u.pathname === '/api/friends/U1/profile') return json({ handle: 'bob', name: 'Bob <b>S</b>', friends_since: '2026-09-01', crews: ['Ridge Runners'], cars: [],
       stages: [{ stage: 'Esses', best: 812, days_month: 3, last: '2026-10-27' }], totals: { stages: 1, days_month: 3, best: 812 } });
     if (u.pathname === '/api/points') return json({ total: 0 });
+    if (u.pathname === '/api/roadbooks/friends') return json([{ id: 'BOBBOOKAAAAAAAAA', name: 'Bob\'s Kentucky', visibility: 'friends', by: 'bob', mine: false, roads: 4, length_m: 30000, followers: 0, following: false },
+      { id: 'CARABOOKAAAAAAAA', name: 'Cara\'s set', visibility: 'public', by: 'cara', mine: false, roads: 2, length_m: 9000, followers: 0, following: false }]);
     if (u.pathname === '/api/presence') return json([{ handle: 'bob', photo_id: null, delay_s: 0, fuzz: false, road: 'Dry Ridge Rd', lat: 38.7, lon: -84.6, at: new Date(Date.now() - 30e3).toISOString() }]);
     return json([]);
   });
@@ -7294,6 +7296,10 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   const t = await page.textContent('.profile-view');
   check(t.includes('@bob') && /Bob <b>S<\/b> · friends since September( 2026)?/.test(t) && t.includes('Esses · best 812 · 3 days this month') && t.includes('Ridge Runners'), 'the profile, as text: ' + t);
   check(!/Times are never shown|on them this month/.test(t), 'no line saying what is not shown, and "this month" once under its head: ' + t);
+  // their roadbooks you may open, on their profile (free roamer B, 2026-11-14): Bob's only
+  await page.waitForSelector('.profile-view .rb-of-friend:not([hidden]) .rb-row', { timeout: 8000 });
+  const rbs = await page.locator('.profile-view .rb-of-friend .rb-row b').allInnerTexts();
+  check(JSON.stringify(rbs) === '["Bob\'s Kentucky"]', 'their roadbooks are on their profile, nobody else\'s: ' + JSON.stringify(rbs));
   // the person first, as a social app opens a profile: their photo, who they are and what they are doing now (the list's line)
   const who = await page.evaluate(() => { const w = document.querySelector('.profile-view .profile-who'); return w && { photo: !!w.firstElementChild && w.firstElementChild.getBoundingClientRect().width >= 48,
     text: w.innerText, live: !!w.querySelector('small.live'), first: w.previousElementSibling.classList.contains('side-pop-head') }; });

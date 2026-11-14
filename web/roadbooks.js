@@ -580,9 +580,24 @@
       return true;
     }
 
+    /** A friend's profile: their books you may open (GET /api/roadbooks/friends, by their handle), each a row that opens it.
+     *  An element that stays empty (and hidden) when they have none. */
+    function ofFriend(handle) {
+      const box = el('div', { className: 'stack-8 rb-of-friend' });
+      box.hidden = true;
+      const h = String(handle || '').toLowerCase();
+      call('GET', '/api/roadbooks/friends').then((r) => {
+        const theirs = r.ok && Array.isArray(r.data) ? r.data.filter((b) => String(b.by || '').toLowerCase() === h) : [];
+        if (!theirs.length || !h) return;
+        box.replaceChildren(el('b', { textContent: 'Roadbooks' }), ...theirs.map((b) => row(b, bookLine(b, fmtLen), () => open(b.id))));
+        box.hidden = false;
+      }).catch(() => {});
+      return box;
+    }
+
     /** Has this member any book of their own or followed (as last read, or as this phone kept it)? People shows the row then. */
     const hasAny = () => { const l = lists || readJson(CACHE_KEY, null); return !!l && ((l.books && l.books.length > 0) || (l.mine && (l.mine.length + l.following.length) > 0)); };
-    return { section, nearSection, open, addPart, keep, afterDrive, scanLog, hasAny, lists: () => lists, reload: loadLists };
+    return { section, nearSection, open, addPart, keep, ofFriend, afterDrive, scanLog, hasAny, lists: () => lists, reload: loadLists };
   }
 
   const api = { fromTrack, fromStage, coverage, overlaps, boxOf, lengthM, progress, bookLine, overview, overviewFrame, tour, link, mount, TOUR_MAX, STAMP_AT, TRIM_M, MAX_POINTS, MIN_ROAD_M };
