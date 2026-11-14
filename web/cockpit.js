@@ -3189,7 +3189,10 @@
     }
     // Keys a provider may need (docs/OWNER_TODO.md lists them); none of them is required, a missing one is 'no-key'.
     function routeCtxSettings() {
-      try { return JSON.parse(localStorage.getItem('apex.routeKeys') || '{}') || {}; } catch (_) { return {}; }
+      // the keys the providers read themselves (ctx_util keyFor: 'apex.keys', the Worker's merged in by loadKeys). Nothing
+      // ever wrote 'apex.routeKeys', so until 2026-11-14 every keyed provider was gated 'no-key' even with a key on the phone
+      const read = (k) => { try { const v = JSON.parse(localStorage.getItem(k) || '{}'); return v && typeof v === 'object' ? v : {}; } catch (_) { return {}; } };
+      return { ...read('apex.keys'), ...read('apex.routeKeys') };
     }
     // What the crowd and car providers need from the app (route_ctx/crowd.js, car.js): members' road data (/api/roads?cells=,
     // signed out: null and they say so), the Worker for chargers, the crews' shared lines when Prefer has them, your taste
@@ -3213,7 +3216,7 @@
       } : undefined;
       return { lookupCells, apiGet: get, graphScore,
         crewLines: (typeof preferCache !== 'undefined' && preferCache.crewLines) || null, myTracks: null, taste, peer: {},
-        osmRelay: !!(window.ApexFlags && ApexFlags.on('osm_relay', false)) };   // the OSM relay: off unless the server says on
+        osmRelay: !!(window.ApexFlags && ApexFlags.on('osm_relay', false)) };   // the OSM relay: as the server's flags say (on since 2026-11-14); off until they load
     }
     // After a route is chosen (route_ctx/car.js): a car with no range meeting a long stretch without fuel is asked for it once;
     // stretches without signal offer to save their maps, then to share the ETA before the signal goes.
@@ -3301,6 +3304,8 @@
     }
     const NO_FIX = 'Couldn\'t get your location. Type a start or tap the map.';
     let plannedRoute = null;
+    // Drive it on a friend's post (drive_posts.js rivalsOf): their stages with Scores, to set yours against when the drive ends
+    let postRival = null;
     // Avoid towns (R-15): km of each candidate near a city, town or village (FunRoute.townKm), which ranking then costs.
     // Only when the driver asked; unknown (no tiles) stays unknown and costs nothing.
     // (ms: the card waits that long for the map's place tiles, 0.4 s; the refine after it, longer)
@@ -6019,10 +6024,10 @@
     // to?, and "gas", "coffee near me" or "food" typed lists the nearest by name from the map's own tiles (stages.js
     // poisAll, kept on the phone: works with no signal where the map was seen), the same places the car's Places name.
     const isElectric = () => { const c = routingCar(); return !!(c && c.fuel === 'electric'); };
-    // the keys' glyphs (24 px grid, BRAND.md Icons): a pump, a bolt, a cup, a fork and knife
+    // the keys' glyphs (24 px grid, BRAND.md Icons): a pump, a bolt, a cup, a fork and knife, a P on its sign
     const NEARBY_GLYPH = { gas: 'M5 21V5.5A1.5 1.5 0 0 1 6.5 4h6A1.5 1.5 0 0 1 14 5.5V21M3.5 21h12M7.5 9h4M14 10h1.5a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 0 3 0V8.5L17.5 6',
       charge: 'M13 3 6 13.5h5L10 21l7-10.5h-5z', coffee: 'M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 11h1.5a2.5 2.5 0 0 1 0 5H16M9 3.5v2.5M12.5 3.5v2.5',
-      food: 'M7 3v7M5 3v5a2 2 0 0 0 4 0V3M7 10v11M17 21V3c-2 1.5-3 4.5-3 9h3' };
+      food: 'M7 3v7M5 3v5a2 2 0 0 0 4 0V3M7 10v11M17 21V3c-2 1.5-3 4.5-3 9h3', parking: 'M5 3h14v18H5zM10 17V7h3.5a3 3 0 0 1 0 6H10' };
     function paintNearbyKeys() {
       const box = $('nearbyKeys');
       if (!window.ApexNearby) { box.hidden = true; return; }
@@ -7005,7 +7010,8 @@
     const toDrives = () => { const pop = crewDrivesEl && crewDrivesEl.closest('.side-pop'); if (pop) pop.classList.add('open'); else if (crewDrivesEl) crewDrivesEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     onSocial(() => { try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, askPublicSharing,
       invite: (c) => crewInviteLink(c),
-      openRoute: (id) => openSharedRoute(id), builds: () => builds, onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); },
+      openRoute: (id) => openSharedRoute(id), builds: () => builds, onAllDrives: toDrives,
+      posts: (c) => (drivePosts && drivePosts.crewDrives ? drivePosts.crewDrives(c.id) : null),   // the drives members posted to this crew onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); },
       // the owner's TestFlight note 05: the crew page's Upcoming drives is the crew's drives list, a + plans one (no Crew drives row)
       drives: (c, o) => (crewEvents ? crewEvents.section([{ id: c.id, name: c.name, visibility: c.visibility, role: c.is_owner ? 'owner' : 'member' }], { crewId: c.id, ...o }) : null),
       // P-18: the crew page's drive is the Crew drives sheet's card; a change on one redraws the other
@@ -7055,6 +7061,9 @@
     if (Themes.accent && Themes.accent()) { Themes.setAccent(null); applyTheme(); }
     // feature flags (flags.js, IDEAS Y-06): fetched once a start, used from then on
     if (window.ApexFlags && window.ApexSync) ApexFlags.load((p) => ApexSync.apiFetch(p)).catch(() => {});
+    // route context's free client keys (Mapillary signs, SeatGeek events, OHGO work zones, NASS crops; the Worker's
+    // CTX_KEYS): once a day, a key typed in on this phone wins. Before this they only worked where typed in by hand
+    if (window.ApexRouteCtxUtil && window.ApexSync) ApexRouteCtxUtil.loadKeys().catch(() => {});
     // Send feedback (web/feedback.js, IDEAS L-05): Settings → Feedback; the owner reads it in People.
     let accountMe = null, feedbackUi = null;
     onSocial(() => { try {
@@ -7207,6 +7216,7 @@
         await buildRoute(pts, id, name, null, { from: null, to: { lat: last.lat, lon: last.lon }, via: stops.slice(0, -1).map((q) => ({ lat: q.lat, lon: q.lon, shaping: true })) });
         const t = plannedRoute;
         if (!t || t.id !== id) return;
+        postRival = Array.isArray(p.rivals) && p.rivals.length ? { rivals: p.rivals, handle: p.handle, mine: !!p.mine, at: Date.now() } : null;
         const whose = p.mine ? '' : `, @${p.handle}'s line`;
         if (!lead) { toast(`${name}${whose}: ${ApexUnits.long(totalM(), 1)}.`); return; }
         const toStart = t.dist[Core.nearestIndex(first.lat, first.lon, t.lat, t.lon, -1).index] || 0;
@@ -7595,6 +7605,24 @@
         el('p', { className: 'people-lead', textContent: 'They sign in with your link, and you’re friends the moment they do.' })));
 
       // One Invite key (the owner, 2026-10-30): someone new gets an invite link, a member your handle or a request; requests here too.
+      async function showFriendQr(box) {
+        const r = await apiCall('POST', '/api/invites').catch(() => null), j = r && r.ok ? await jsonOf(r) : null;
+        if (!j || !j.url) { toast(r && r.status === 429 ? 'You have 10 open friend links. Wait for some to be used.' : 'Couldn\'t make a code. Try again.'); return; }
+        let qrcode = window.qrcode;
+        if (!qrcode) {
+          try { qrcode = await new Promise((ok, fail) => { const sc = document.createElement('script'); sc.src = 'vendor/qrcode.js'; sc.onload = () => (window.qrcode ? ok(window.qrcode) : fail(new Error('qr'))); sc.onerror = fail; document.head.append(sc); }); }
+          catch (_) { copyText(j.url, 'Couldn\'t draw the code, so the link is copied instead.'); return; }
+        }
+        const qr = qrcode(0, 'M'); qr.addData(j.url); qr.make();
+        const n = qr.getModuleCount(), cell = Math.max(4, Math.floor(232 / (n + 8))), size = (n + 8) * cell;
+        const cv = el('canvas', { width: size, height: size, className: 'friend-qr-code', 'aria-label': 'Your friend code' });
+        cv.setAttribute('role', 'img'); cv.style.cssText = 'width:232px;height:232px;image-rendering:pixelated;border-radius:8px;justify-self:center';
+        const g = cv.getContext('2d');
+        g.fillStyle = '#fff'; g.fillRect(0, 0, size, size); g.fillStyle = '#000';
+        for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (qr.isDark(y, x)) g.fillRect((x + 4) * cell, (y + 4) * cell, cell, cell);
+        box.replaceChildren(cv, el('p', { className: 'note', textContent: 'They point their camera at it and tap Accept. One person per code.' }),
+          el('div', { className: 'row' }, btn('New code', () => showFriendQr(box), 'linkbtn'), btn('Hide', () => box.replaceChildren(), 'linkbtn')));
+      }
       const ipop = popSheet('Invite'); pops.push(ipop);
       ipop.querySelector('.side-pop-head button').addEventListener('click', () => { inviteOpen = false; unstash('apex.add'); });
       const add = el('input', { className: 'field', placeholder: 'Their handle', autocomplete: 'off', autocapitalize: 'none', 'aria-label': 'Friend handle', value: stash('apex.add'), enterKeyHint: 'send' });
@@ -7613,6 +7641,9 @@
       };
       // P-05: a request in is a card on the list, not a drawer here; the sheet keeps the requests you sent
       const reqSec = el('div', { className: 'stack-8' }, ...(waiting.length ? [el('h3', { textContent: 'Requests you sent' })] : []));
+      // Show my code (2026-11-14): at a meet, a friend link as a QR code. Their camera opens it, they tap Accept, and you're
+      // friends; one person per code, so New code makes the next one (the link is the same one-use invite Send a friend link makes)
+      const qrBox = el('div', { className: 'stack-8 friend-qr' });
       for (const h of waiting) reqSec.append(el('div', { className: 'friend-sent' }, el('span', { textContent: `@${h} · request sent` }),
         btn('Cancel', async () => { await apiCall('POST', '/api/friends/request/cancel', { handle: h }); setSent(sentList().filter(x => x !== h)); redo(); }, 'linkbtn')));
       ipop.append(
@@ -7620,7 +7651,8 @@
         el('div', { className: 'stack-8' },
           btn('Send a friend link', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Link copied. You\'re friends once they open it, and you both get 5 points when they first share road data.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
           el('div', { className: 'row' }, add, btn('Send request', sendRequest)),
-          btn('A link anyone can use', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'), 'linkbtn')),
+          btn('A link anyone can use', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'), 'linkbtn'),
+          btn('Show my code', () => showFriendQr(qrBox), 'linkbtn'), qrBox),
         reqSec);
       const openInvite = () => { inviteOpen = true; ipop.classList.add('open'); };
       if (stash('apex.add') && peopleSide === 'friends') inviteOpen = true;   // a friend link opens its sheet, never over the Crews side
@@ -10640,6 +10672,7 @@
       $('endFeel').textContent = feel; $('endFeel').hidden = !feel;
       $('endPractice').textContent = ''; $('endPractice').hidden = true;   // IDEAS D-27: with the score (endCardScored)
       $('endRoad').textContent = ''; $('endRoad').hidden = true;           // the road's line, with the score too
+      $('endRival').textContent = ''; $('endRival').hidden = true;         // Drive it on a friend's post: with the score (endCardScored)
       $('endRun').textContent = ''; $('endRun').hidden = true;             // IDEAS D-30: a month's best run, with the score too
       // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
       $('endScore').textContent = '…'; $('endScore').classList.add('unk'); $('endScore').setAttribute('aria-busy', 'true');
@@ -10669,7 +10702,7 @@
     // asked for or earned first (the practice, a month's best run), then the road's and what the phone felt
     function endLinesCap() {
       let shown = 0;
-      for (const id of ['endPractice', 'endRun', 'endRoad', 'endFeel']) {
+      for (const id of ['endRival', 'endPractice', 'endRun', 'endRoad', 'endFeel']) {
         const n = $(id);
         if (!n.textContent) { n.hidden = true; continue; }
         n.hidden = shown >= 2; if (!n.hidden) shown++;
@@ -10744,6 +10777,23 @@
       const roadLine = typeof c.road === 'string' ? c.road : '';
       $('endRoad').textContent = roadLine; $('endRoad').hidden = !roadLine;
       endLinesCap();
+      // Drive it on a friend's post: your Score on their stages against theirs, from this drive's own passes of those stretches
+      // (segmentPass, the same that scored theirs). Said once; kept for 12 h until a drive goes over one of them.
+      const rv = postRival;
+      if (rv && Date.now() - rv.at > 12 * 3600e3) postRival = null;
+      else if (rv && window.ApexAnalysis && window.ApexDrivePosts) (async () => {
+        const segs = rv.rivals.map((r) => ({ name: r.name, lat0: r.ends[0], lon0: r.ends[1], lat1: r.ends[2], lon1: r.ends[3], length_m: r.length_m }));
+        let got = [];
+        try { got = (await ApexAnalysis.job('stagesOf', { id: c.id, segs })).stages || []; } catch (_) { got = []; }
+        if (!got.length || !endDrive || endDrive.id !== c.id) return;
+        if (postRival === rv) postRival = null;
+        const rows = got.map((g) => { const r = rv.rivals.find((x) => x.name === g.name); return { name: g.name, you: g.score, them: r ? r.score : null }; });
+        const line = ApexDrivePosts.rivalLine(rows, rv);
+        if (!line) return;
+        $('endRival').textContent = line; endLinesCap();
+        const sheet = $('endCard').querySelector('.card-sheet');      // a taller card: the drive is fitted again above it
+        if (endTrailOn && sheet && Math.abs(sheet.getBoundingClientRect().top - endTrailTop) > 4) showEndTrail(endDrive);
+      })();
       if (window.ApexEndLine && !opts.quiet) {                       // Round 3: never aloud to a parked car or a pocket
         const pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
         // one of the pack's sign-offs, the same for this drive every time, from a clip the loaded bank holds (U-113)

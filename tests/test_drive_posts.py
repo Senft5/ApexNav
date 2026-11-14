@@ -33,6 +33,12 @@ console.log(JSON.stringify({
   wk: [D.weekLine({ drives: 2, length_m: 45000, best: 790 }, (m) => (m / 1000).toFixed(0) + ' km'), D.weekLine({ drives: 1, length_m: 0, best: null }, String),
     D.weekShown([{ you: true }]), D.weekShown([{ you: true }, { you: false }]), D.weekShown(null)],
   kl: [D.kudosLine(['bob'], 1), D.kudosLine(['bob', 'cara'], 2), D.kudosLine(['bob', 'cara', 'dan'], 5), D.kudosLine(['bob', 'cara', 'dan'], 3), D.kudosLine([], 4)],
+  rivals: (() => { const L = Array.from({ length: 100 }, (_, i) => [35 + i * 0.001, -84]), p = { line: D.encode(L), stages: [
+      { name: 'A', score: 801, ends: [L[10][0], L[10][1], L[60][0], L[60][1]] }, { name: 'B', score: null, ends: [L[60][0], L[60][1], L[90][0], L[90][1]] },
+      { name: 'C', score: 700 }, { name: 'D', score: 650, ends: [36, -84, 36.1, -84] }, { name: 'E', score: 640, ends: [L[60][0], L[60][1], L[90][0], L[90][1]] }] };
+    return { all: D.rivalsOf(p).map((r) => [r.name, r.length_m]), one: D.rivalsOf(p, 4).map((r) => r.name), none: D.rivalsOf({ stages: p.stages }) }; })(),
+  rl: [D.rivalLine([{ name: 'A', you: 780, them: 801 }], { handle: 'bob' }), D.rivalLine([{ name: 'A', you: 830.4, them: 801 }, { name: 'B', you: 700, them: 700 }, { name: 'C', you: 1, them: 2 }], { mine: true }),
+    D.rivalLine([{ name: 'A', you: null, them: 801 }], { handle: 'bob' })],
   ago: [D.ago('2026-11-13 12:00:00', Date.parse('2026-11-13T12:01:00Z')), D.ago('2026-11-13 12:00:00', Date.parse('2026-11-13T15:00:00Z'))],
 }));
 """
@@ -79,3 +85,15 @@ def test_week_line():
 
 def test_kudos_line():
     assert run()["kl"] == ["Kudos from @bob", "Kudos from @bob and @cara", "Kudos from @bob, @cara and 3 others", "Kudos from @bob, @cara and 1 other", ""]
+
+
+def test_rivals_and_the_end_card_line():
+    r = run()
+    # stages with a Score and ends on the line, each with its length along it (about 50 x 111 m); B has no Score, C no
+    # ends, D ends off the line
+    assert [n for n, _ in r["rivals"]["all"]] == ["A", "E"]
+    assert 5400 < r["rivals"]["all"][0][1] < 5700
+    assert r["rivals"]["one"] == ["E"] and r["rivals"]["none"] == []
+    assert r["rl"][0] == "A: 780, 21 under @bob's 801."
+    assert r["rl"][1] == "A: 830, 29 over your posted 801. B: 700, level with your posted 700."
+    assert r["rl"][2] == ""
