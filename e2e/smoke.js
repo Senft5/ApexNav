@@ -9569,6 +9569,40 @@ flow('the co-driver says a low sun once when the route turns into it, and not ag
   check((await calls()).length === 1, 'not again with the sun in view: ' + JSON.stringify(await calls()));
 });
 
+flow('the co-driver says a speed limit that drops ahead once, before the sign, early enough to slow (limit_ahead.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexLimitAhead);
+  // a straight road north, 3 km: 55 mph, then 35 mph from 1.5 km (into a town)
+  const lat = (m) => 35.5 + m / 110540, LON = -83.9, gpx = [];
+  for (let m = 0; m <= 3000; m += 5) gpx.push(`<trkpt lat="${lat(m).toFixed(7)}" lon="${LON.toFixed(7)}"/>`);
+  await page.setInputFiles('#gpxFile', { name: 'town.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Into town</name><trkseg>${gpx.join('')}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Into town', null, { timeout: 10000 });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  await page.evaluate(() => { const t = apexDebug.track; t.limitMps = t.dist.map((d) => (d < 1500 ? 55 : 35) * 0.44704); });
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const said = () => page.evaluate(() => window.__said.filter((s) => /^Limit /.test(s)));
+  let whenM = null;
+  for (let i = await iAt(900), end = await iAt(1490); i <= end; i += 4) {
+    await page.evaluate(([i]) => { const t = apexDebug.track;
+      window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 25, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, [i]);
+    await page.waitForTimeout(40);
+    if (whenM == null && (await said()).length) whenM = await page.evaluate(() => apexDebug.state.cursorM);
+  }
+  check(JSON.stringify(await said()) === '["Limit 35 ahead."]', 'said once: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  // at 25 m/s: 75 m to hear it plus an easy slowing to 35 mph, about 200 m before the sign; not a kilometre early
+  check(whenM != null && whenM >= 1500 - 260 && whenM <= 1500 - 120, 'said about 200 m before the sign, at ' + whenM);
+  for (let i = await iAt(1500), end = await iAt(1800); i <= end; i += 4) {
+    await page.evaluate(([i]) => { const t = apexDebug.track;
+      window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 16, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, [i]);
+    await page.waitForTimeout(20);
+  }
+  check((await said()).length === 1, 'not again in town: ' + JSON.stringify(await said()));
+});
+
 flow('road marks: a stop sign and a railway crossing from the map are pinned on the route and called with the notes, the stop early enough to brake (road_marks.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;

@@ -70,7 +70,7 @@ def test_wiring():
     assert page.index('src="flow.js"') < page.index('src="flow_live.js"')
     js = (ROOT / "web" / "cockpit.js").read_text(encoding="utf-8")
     assert "ApexFlowLive.createWatch(Core, ApexFlow" in js
-    assert "const quiet = brakeSay || sunSay || breakSay || flowSay;" in js     # the lowest of the quiet slots
+    assert "const quiet = limitSay || brakeSay || sunSay || breakSay || flowSay;" in js     # the lowest of the quiet slots
     assert "drive.flow = null" in js                                    # every drive starts its count again
 
 
