@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { api } from "./helpers";
-import { IN_EVENTS, KY_WZDX, OHGO, parseIndiana, parseOhgo, parseOhgoSlow, parseWzdx, trafficEvents } from "../src/traffic";
+import { IN_EVENTS, KY_WZDX, OHGO, parseIndiana, parseOhgo, parseOhgoSigns, parseOhgoSlow, parseOhgoWeather, parseWzdx, trafficEvents } from "../src/traffic";
 import inFeed from "./fixtures/traffic_in.json";
 import kyFeed from "./fixtures/traffic_ky.json";
 import ohInc from "./fixtures/traffic_oh_incidents.json";
 import ohCon from "./fixtures/traffic_oh_construction.json";
+import ohWx from "./fixtures/traffic_oh_weather.json";
+import ohSigns from "./fixtures/traffic_oh_signs.json";
 
 const NOW = Date.parse("2026-11-14T03:00:00Z");
 const real = globalThis.fetch;
@@ -80,6 +82,22 @@ describe("OHGO (with the owner's free key), as its live answer reads (2026-11-14
     expect(s[0]).toMatchObject({ id: "dot:OH:slowdown:s1", kind: "slow", label: "Sudden slowdown", heading: 270, road: "I-90" });
     expect(parseOhgoSlow(null, "delay")).toEqual([]);
   });
+  it("road weather sensors: the worst surface at a site; dry and stale readings left out", () => {
+    const at = Date.parse("2026-11-14T05:30:00Z");                     // the fixture's readings: 00:25 Eastern
+    const rows = byId(parseOhgoWeather(ohWx, at));
+    expect(rows["dot:OH:wx:582008"]).toMatchObject({ kind: "ice", label: "Road near freezing", src: "ODOT sensor" });   // "Snow Watch"
+    expect(rows["dot:OH:wx:200098"]).toMatchObject({ kind: "wet", label: "Wet road" });
+    expect(rows["dot:OH:wx:200001"]).toBeUndefined();                  // dry
+    expect(parseOhgoWeather(ohWx, at + 3 * 3600e3)).toEqual([]);        // over 2 h old
+    const cold = { results: [{ id: "c", latitude: 40, longitude: -83, surfaceSensors: [{ status: "Wet", surfaceTemperature: 31, lastUpdate: "2026-11-14T00:20:00" }, { status: "Dry", surfaceTemperature: 30 }] }] };
+    expect(parseOhgoWeather(cold, at)[0]).toMatchObject({ kind: "ice", label: "Road may be icy" });
+  });
+  it("message signs: one readable line the way the sign faces; travel times and blank signs left out", () => {
+    const rows = parseOhgoSigns(ohSigns);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: "dot:OH:sign:211", kind: "sign", label: "Sign", heading: 180, road: "I-71 SB @ N of 17th Ave",
+      text: "Main st closed 3 miles ahead. 2 lt lns blocked on S I-71 3 miles ahead" });
+  });
   it("drops construction that has ended", () => {
     const old = { ...(ohCon as any).results[0], endDate: "2026-11-01T00:00:00" };
     expect(parseOhgo({ results: [old] }, "construction", NOW)).toEqual([]);
@@ -115,7 +133,7 @@ describe("GET /api/traffic/v1/events.json", () => {
     const out = await trafficEvents({ CTX_KEYS: JSON.stringify({ ohgoApiKey: "k 1" }) } as never, f, NOW);   // the route context's key slot
     expect(out.sources).toEqual(["INDOT", "KYTC", "ODOT"]);
     expect(seen).toContain(`${OHGO}/incidents?api-key=k%201`);
-    expect(seen.filter((u) => u.includes("api-key"))).toHaveLength(4);   // incidents, construction, travel delays, slowdowns
+    expect(seen.filter((u) => u.includes("api-key"))).toHaveLength(6);   // incidents, construction, travel delays, slowdowns, weather, signs
     expect((await trafficEvents({ CTX_KEYS: "not json" } as never, f, NOW)).sources).toEqual(["INDOT", "KYTC"]);
     // or a secret of its own
     seen.length = 0;

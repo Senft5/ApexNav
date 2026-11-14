@@ -1,0 +1,39 @@
+{
+"results": [
+{
+"id": "211",
+"latitude": 40.00717,
+"longitude": -82.98522,
+"location": "I-71 SB @ N of 17th Ave",
+"description": "Message Board",
+"signTypeName": "DMS",
+"messages": [
+"          MAIN ST            \r\n           CLOSED            \r\n       3 MILES AHEAD         ",
+"      2 LT LNS BLOCKED       \r\n         ON S I-71           \r\n       3 MILES AHEAD         "
+],
+"imageUrls": []
+},
+{
+"id": "110",
+"latitude": 39.412658,
+"longitude": -84.352171,
+"location": "I-75 NB at Kyle Station Rd",
+"description": "Travel Time",
+"signTypeName": "DDMS",
+"messages": [
+"TRAVEL TIME TO:               \r\n       I-675 / 16 MI 16       \r\n       US-35 / 26 MI 25       "
+],
+"imageUrls": []
+},
+{
+"id": "103",
+"latitude": 39.9353,
+"longitude": -83.64598,
+"location": "I-70 WB @ Buena Vista Rd",
+"description": "Message Board",
+"signTypeName": "DMS",
+"messages": [],
+"imageUrls": []
+}
+]
+}

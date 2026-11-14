@@ -22,7 +22,7 @@ const SEC = { "x-content-type-options": "nosniff", "content-security-policy": "d
  * traffic), "crash", "traffic" (anything else that slows a drive). label: what the pin and the voice say. until: epoch ms
  * the agency expects it to end, or null when it gave none.
  */
-export interface TrafficEvent { id: string; kind: string; label: string; lat: number; lon: number; road: string | null; until: number | null; src: string; heading?: number }
+export interface TrafficEvent { id: string; kind: string; label: string; lat: number; lon: number; road: string | null; until: number | null; src: string; heading?: number; text?: string }
 // one way only ("I-65 southbound"): the way it applies as a compass heading, so the phone never calls the far side's
 const HEADING: Record<string, number> = { northbound: 0, eastbound: 90, southbound: 180, westbound: 270 };
 const OH_DIR: Record<string, string> = { n: "northbound", s: "southbound", e: "eastbound", w: "westbound" };
@@ -161,6 +161,67 @@ export function parseOhgoSlow(json: unknown, kind: "delay" | "slowdown"): Traffi
   return out;
 }
 
+/**
+ * OHGO's road weather sensors (checked live 2026-11-14): each site's surface sensors report a status ("Dry", "Wet", "Trace
+ * Wet", "Chemically Wet", "Snow Watch", "Ice Watch", "Ice", "Snow", "Frost" ...) and a surface temperature (deg F). The worst
+ * at a site is kept: ice, snow, frost, a watch, or a wet surface at or under 32 F is "ice"; a wet one is "wet"; dry or
+ * unknown is left out. A reading over 2 h old (lastUpdate, Eastern time without a zone) is left out too.
+ */
+export function parseOhgoWeather(json: unknown, nowMs: number): TrafficEvent[] {
+  const rows = (json as { results?: unknown })?.results;
+  if (!Array.isArray(rows)) return [];
+  const out: TrafficEvent[] = [];
+  for (const r of rows as Record<string, any>[]) {
+    try {
+      if (!r || !finite(r.latitude) || !finite(r.longitude) || !inRange(r.latitude, r.longitude)) continue;
+      let worst = 0, label = "";
+      for (const x of Array.isArray(r.surfaceSensors) ? r.surfaceSensors : []) {
+        const st = String(x?.status ?? "").toLowerCase(), t = x?.surfaceTemperature;
+        const at = Date.parse(String(x?.lastUpdate ?? "") + "-05:00");     // Eastern (EST; an hour out in summer, never a day)
+        if (Number.isFinite(at) && nowMs - at > 2 * 3600e3) continue;
+        const wet = /wet|slush|water/.test(st), cold = finite(t) && t > -60 && t <= 32;
+        let w = 0, l = "";
+        if (/watch/.test(st)) { w = 2; l = "Road near freezing"; }                     // "Snow Watch", "Ice Watch": a warning, not snow
+        else if (/ice|black/.test(st)) { w = 3; l = "Icy road"; }
+        else if (/snow|slush/.test(st)) { w = 3; l = "Snow on the road"; }
+        else if (/frost/.test(st)) { w = 3; l = "Frost on the road"; }
+        else if (wet && cold) { w = 3; l = "Road may be icy"; }
+        else if (wet) { w = 1; l = "Wet road"; }
+        if (w > worst) { worst = w; label = l; }
+      }
+      if (!worst) continue;
+      out.push({ id: `dot:OH:wx:${String(r.id ?? "").slice(0, 30)}`, kind: worst >= 2 ? "ice" : "wet", label, lat: r5(r.latitude), lon: r5(r.longitude),
+        road: null, until: null, src: "ODOT sensor" });
+    } catch { /* as above */ }
+  }
+  return out;
+}
+
+/**
+ * OHGO's message signs (checked live 2026-11-14): `messages` are the pages a sign shows, in capitals, padded with spaces and
+ * CR LF. Travel-time pages ("TRAVEL TIME TO", "MINUTES TO") are left out (the route already has its time); the rest become one line ("Main St closed 3 miles
+ * ahead"), for the plate only: a sign is never read aloud. The way it faces comes from its location ("I-71 SB @ ...").
+ */
+export function parseOhgoSigns(json: unknown): TrafficEvent[] {
+  const rows = (json as { results?: unknown })?.results;
+  if (!Array.isArray(rows)) return [];
+  const out: TrafficEvent[] = [];
+  const AB: Record<string, string> = { nb: "northbound", sb: "southbound", eb: "eastbound", wb: "westbound" };
+  for (const r of rows as Record<string, any>[]) {
+    try {
+      if (!r || !finite(r.latitude) || !finite(r.longitude) || !inRange(r.latitude, r.longitude) || !Array.isArray(r.messages)) continue;
+      const pages = r.messages.map((m: unknown) => String(m ?? "").replace(/\s+/g, " ").trim()).filter((m: string) => m && !/travel time|minutes to/i.test(m));
+      if (!pages.length) continue;
+      const line = pages.join(". ").toLowerCase().replace(/(^|\. )([a-z])/g, (_m: string, a: string, b: string) => a + b.toUpperCase())
+        .replace(/\b(i|us|sr|cr)-?(\d+)/g, (_m: string, a: string, n: string) => `${a.toUpperCase()}-${n}`).replace(/\b([nsew]) (I-\d+)/g, (_m: string, d: string, i: string) => `${d.toUpperCase()} ${i}`);
+      const m = /\b(nb|sb|eb|wb)\b/i.exec(String(r.location ?? "")), dir = m ? AB[m[1].toLowerCase()] : null;
+      out.push({ id: `dot:OH:sign:${String(r.id ?? "").slice(0, 30)}`, kind: "sign", label: "Sign", lat: r5(r.latitude), lon: r5(r.longitude),
+        road: cut(r.location, 40), until: null, src: "ODOT", text: line.slice(0, 90), ...(dir ? { heading: HEADING[dir] } : {}) });
+    } catch { /* as above */ }
+  }
+  return out;
+}
+
 async function get(fetcher: typeof fetch, url: string): Promise<unknown> {
   const r = await fetcher(url, { headers: { "user-agent": "Vetta-traffic/1.0", accept: "application/json" }, cf: { cacheTtl: TRAFFIC_S, cacheEverything: true } } as RequestInit);
   if (!r.ok) throw new Error(`upstream ${r.status}`);
@@ -178,9 +239,11 @@ export async function trafficEvents(env: Env, fetcher: typeof fetch = fetch, now
   if (!(typeof key === "string" && key)) key = env.OHGO_API_KEY ?? null;   // or a secret of its own (one paste for the owner)
   if (typeof key === "string" && key) jobs.push(["ODOT", async () => {
     const q = `?api-key=${encodeURIComponent(key as string)}`;
-    const [inc, con, delays, slow] = await Promise.all([get(fetcher, `${OHGO}/incidents${q}`), get(fetcher, `${OHGO}/construction${q}`),
-      get(fetcher, `${OHGO}/travel-delays${q}`).catch(() => null), get(fetcher, `${OHGO}/dangerous-slowdowns${q}`).catch(() => null)]);   // (slowdowns: a bonus, never the reason Ohio is missing)
-    return [...parseOhgo(inc, "incident", nowMs), ...parseOhgo(con, "construction", nowMs), ...parseOhgoSlow(delays, "delay"), ...parseOhgoSlow(slow, "slowdown")];
+    const [inc, con, delays, slow, wx, signs] = await Promise.all([get(fetcher, `${OHGO}/incidents${q}`), get(fetcher, `${OHGO}/construction${q}`),
+      get(fetcher, `${OHGO}/travel-delays${q}`).catch(() => null), get(fetcher, `${OHGO}/dangerous-slowdowns${q}`).catch(() => null),
+      get(fetcher, `${OHGO}/weather-sensor-sites${q}`).catch(() => null), get(fetcher, `${OHGO}/digital-signs${q}`).catch(() => null)]);   // (the last four: a bonus, never the reason Ohio is missing)
+    return [...parseOhgo(inc, "incident", nowMs), ...parseOhgo(con, "construction", nowMs), ...parseOhgoSlow(delays, "delay"), ...parseOhgoSlow(slow, "slowdown"),
+      ...parseOhgoWeather(wx, nowMs), ...parseOhgoSigns(signs)];
   }]);
   const ok: string[] = [], failed: string[] = [], events: TrafficEvent[] = [];
   await Promise.all(jobs.map(async ([name, run]) => { try { events.push(...(await run())); ok.push(name); } catch { failed.push(name); } }));

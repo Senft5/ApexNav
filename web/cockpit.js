@@ -3889,8 +3889,8 @@
       if (window.apexDebug) window.apexDebug.dotAhead = { n: near.length, hit };
       if (!hit || dotAhead.offered.has(hit.id)) return;
       dotAhead.offered.add(hit.id);                                     // (the call 600 m out still comes: "Crash ahead")
-      const far = ApexUnits.long(hit.aheadM, 1), what = hit.kind === 'crash' ? 'Crash' : hit.kind === 'slow' ? 'Slow traffic' : 'Road closed';
-      if (hit.kind === 'slow') { say(`${what} on your route in ${far}.`, false, null, null, { kind: 'hazard', key: `dot:${hit.id}`, alert: true, tokens: ['line:rep_hazard'], named: true }); return; }
+      const far = ApexUnits.long(hit.aheadM, 1), what = hit.kind === 'crash' ? 'Crash' : hit.kind === 'slow' ? (hit.label || 'Slow traffic') : hit.kind === 'ice' ? (hit.label || 'Icy road') : 'Road closed';
+      if (hit.kind === 'slow' || hit.kind === 'ice') { say(`${what} on your route in ${far}.`, false, null, null, { kind: 'hazard', key: `dot:${hit.id}`, alert: true, tokens: ['line:rep_hazard'], named: true }); return; }
       const pts = [{ lat: hit.lat, lon: hit.lon }];
       offerKey(`${what} on your route in ${far}.`, `${what} in ${far}`, { label: 'Go round', ms: 15000,
         // (the public router hears of it with this session's own avoids, R-22: a crash is no closure in anyone's list)
@@ -9677,6 +9677,8 @@
       if (!p) return;
       if ($('hzPlateTitle').textContent !== p.title) $('hzPlateTitle').textContent = p.title;
       if ($('hzPlateDetail').textContent !== p.detail) $('hzPlateDetail').textContent = p.detail;
+      const wrap = !!(h && h.words);                                     // a sign's own words wrap, up to three lines
+      if ($('hzPlateDetail').classList.contains('wrap') !== wrap) $('hzPlateDetail').classList.toggle('wrap', wrap);
     }
     function askStill(h) {
       reported.asking = h;

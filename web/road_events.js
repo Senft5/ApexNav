@@ -4,9 +4,11 @@
 // hazards as drivers' reports (hazard_reports.js), marked `official` so nobody is asked "still there?" about a DOT's word.
 (function (root) {
   'use strict';
-  const KINDS = new Set(['closure', 'closed_way', 'lane', 'roadwork', 'slow', 'crash', 'traffic']);
+  const KINDS = new Set(['closure', 'closed_way', 'lane', 'roadwork', 'slow', 'crash', 'traffic', 'ice', 'wet', 'sign']);
+  // ice / wet: an Ohio road weather sensor's surface (backend/src/traffic.ts parseOhgoWeather); sign: a message sign's words,
+  // on the plate only (`silent`: never read aloud)
   // long-lived and everywhere (a city has dozens): shown only as you come near, so the map isn't a wall of cones
-  const QUIET = new Set(['roadwork', 'lane']);
+  const QUIET = new Set(['roadwork', 'lane', 'wet', 'sign']);
   const NEAR_KM = 20, QUIET_KM = 3, MAX = 60;
   const REFRESH_MS = 5 * 60000, REMERGE_M = 1000;
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -20,7 +22,9 @@
     for (const e of list) {
       if (!e || typeof e.id !== 'string' || !KINDS.has(e.kind) || !finite(e.lat) || !finite(e.lon) || Math.abs(e.lat) > 90 || Math.abs(e.lon) > 180) continue;
       const r = { id: e.id.slice(0, 60), kind: e.kind, label: str(e.label, 30) || 'Traffic alert', lat: e.lat, lon: e.lon,
-        road: str(e.road, 40), until: finite(e.until) ? e.until : null, src: str(e.src, 12), official: true };
+        road: str(e.road, 40), until: finite(e.until) ? e.until : null, src: str(e.src, 16), official: true };
+      if (str(e.text, 90)) r.words = str(e.text, 90);              // (not `text`: nextAhead's spoken line)
+      if (r.kind === 'sign') r.silent = true;
       if (finite(e.heading)) r.heading = ((e.heading % 360) + 360) % 360;
       out.push(r);
     }
@@ -42,9 +46,9 @@
   /** Full closures (both ways) only: what the router keeps off. One-way and lane closures are shown, never routed round. */
   const closures = (list) => (Array.isArray(list) ? list : []).filter((h) => h && h.official && h.kind === 'closure');
 
-  // Early word on the route ahead (2026-11-14): a crash, a one-way closure or slow traffic the planned route drives through,
+  // Early word on the route ahead (2026-11-14): a crash, a one-way closure, slow traffic or an icy road the planned route drives through,
   // your way, 1 to 25 km on, so there is time to go round (a voice call 600 m out is too late on a highway).
-  const AHEAD_KINDS = new Set(['crash', 'closed_way', 'slow']);
+  const AHEAD_KINDS = new Set(['crash', 'closed_way', 'slow', 'ice']);
   const ON_ROUTE_M = 40, SAME_WAY_DEG = 70, M_LAT = 110540;
   const turn = (a, b) => Math.abs(((a - b) % 360 + 540) % 360 - 180);
   /**
