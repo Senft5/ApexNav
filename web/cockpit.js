@@ -2392,11 +2392,20 @@
     function startVideo() {
       if (!track || state.mode === 'live' || !mapReady) return;
       const t = track;
-      video = ApexFlyoverVideo.start({ map, fps: 30,
+      // a portrait map (the phone) records 9:16 for Reels and Shorts; the speed only when the clip switch shows it
+      const cv = map.getCanvas(), portrait = !!cv && cv.height > cv.width, speedOn = !ApexFlyoverVideo.speedShown || ApexFlyoverVideo.speedShown();
+      video = ApexFlyoverVideo.start({ map, fps: 30, portrait,
         overlay: () => { const s = sample(t, state.cursorM), n = lastNotes[0];
-          return { title: t.name, note: n ? `${n.call}${n.dist != null ? ` · ${n.dist}${n.unit || ''}` : ''}` : '', speed: Number.isFinite(s.speedMps) ? `${Math.round(ApexUnits.speed(s.speedMps))} ${ApexUnits.speedU()}` : '' }; },
-        onStop: (blob, mime) => { $('videoBtn').classList.remove('on'); $('videoBtn').textContent = 'Video';
-          if (blob.size > 0) ApexSaveFile.saveFile(blob, ApexFlyoverVideo.fileName(t.name, mime), mime.split(';')[0]).then((r) => { if (r !== 'cancelled') toast('Video ready.'); }); else toast('Couldn\'t record the video on this phone.'); } });
+          return { title: t.name, note: n ? `${n.call}${n.dist != null ? ` · ${n.dist}${n.unit || ''}` : ''}` : '', speed: speedOn && Number.isFinite(s.speedMps) ? `${Math.round(ApexUnits.speed(s.speedMps))} ${ApexUnits.speedU()}` : '' }; },
+        onStop: async (blob, mime) => { $('videoBtn').classList.remove('on'); $('videoBtn').textContent = 'Video';
+          if (!(blob.size > 0)) { toast('Couldn\'t record the video on this phone.'); return; }
+          // its caption (corner_clip.js caption: the road, where the app is, the tags) copied as it is shared
+          try { await ApexLazy.load('clips'); } catch (_) {}
+          const rec = t.id && window.ApexRecording ? await ApexRecording.get(t.id).catch(() => null) : null;
+          let copied = false;
+          const caption = window.ApexCornerClip && ApexCornerClip.caption ? ApexCornerClip.caption(rec || { name: t.name }, '') : '';
+          const r = await ApexSaveFile.saveFile(blob, ApexFlyoverVideo.fileName(t.name, mime), mime.split(';')[0], { caption, copied: () => { copied = true; } });
+          if (r !== 'cancelled') toast(copied ? 'Video ready. Its caption is copied.' : 'Video ready.'); } });
       if (!video) { toast('This browser can\'t record video.'); return; }
       $('videoBtn').classList.add('on'); $('videoBtn').textContent = 'Stop';
       state.cursorM = 0; resumeFollow(); setPlaying(true);
@@ -2551,12 +2560,20 @@
         const k = ApexRouteFeel.load(localStorage, String(t.id), t.dist);
         if (k) t.measured = k;
       }
-      const keptFeel = !!(t.measured && t.measured.keptAt != null);
+      // one bar that carries nothing (the phone says online, nothing gets through): signed in on this phone, but membership
+      // or the members' data couldn't be asked, so the kept copy stands in, as with no signal
+      const keptCopy = () => (window.ApexRouteFeel && t.id && Array.isArray(t.dist) && ApexSavedRoutes.has(localStorage, t.id) && window.ApexSync && ApexSync.signedIn()
+        ? ApexRouteFeel.load(localStorage, String(t.id), t.dist) : null);
+      let keptFeel = !!(t.measured && t.measured.keptAt != null);
       if (!window.ApexContributor || !t.lat || t.lat.length < 40) return;
-      if (!keptFeel && (!window.ApexSync || !(await ApexSync.member()))) return;
+      if (!keptFeel && t.measured === undefined) {
+        const me = window.ApexSync ? await RouteLoading.optional(ApexSync.member(), 8000) : null;
+        if (!me) { const k = keptCopy(); if (!k) return; t.measured = k; keptFeel = true; }
+      } else if (!keptFeel && (!window.ApexSync || !(await ApexSync.member()))) return;
       if (t.measured === undefined) {
         try { t.measured = await ApexContributor.measuredAlong(t, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }); }
         catch (_) { t.measured = null; }
+        if (t.measured == null) { const k = keptCopy(); if (k) t.measured = k; }
         keepFeelAlong(t);
       }
       if (t === plannedRoute) paintRouteReports(t);
@@ -2577,7 +2594,7 @@
           (m.avgPasses != null ? ` · ${m.avgPasses.toFixed(1)} runs on average` : '') +
           (t.crowdCorrected >= 30 ? ` · corners from members' drives on ${ApexUnits.long(t.crowdCorrected, 1)}` : '') +
           (t.crowdBumps > 0 ? ` · ${t.crowdBumps === 1 ? 'a bump' : `${t.crowdBumps} bumps`} members felt` : '') +
-          (keptFeel ? ` (kept ${keptWhen(m.keptAt)})` : '');
+          (m.keptAt != null ? ` (kept ${keptWhen(m.keptAt)})` : '');
     }
     // A saved route keeps what members measured along it (route_feel.js), refreshed whenever its card asks with signal.
     function keepFeelAlong(t) {
@@ -2598,10 +2615,14 @@
       for (let i = 0; i < t.lat.length; i += 200) pts.push({ lat: t.lat[i], lon: t.lon[i] });
       pts.push({ lat: t.lat[t.lat.length - 1], lon: t.lon[t.lon.length - 1] });
       // no signal: the reports kept when the route was saved (route_reports.js), expired ones dropped, with their age
-      const kept = navigator.onLine === false && window.ApexRouteReports && t.id ? ApexRouteReports.load(localStorage, String(t.id)) : null;
-      let list = [];
+      // (or one bar that carries nothing: the live ask didn't get through in 8 s)
+      const keptCopy = () => (window.ApexRouteReports && t.id ? ApexRouteReports.load(localStorage, String(t.id)) : null);
+      let kept = navigator.onLine === false ? keptCopy() : null, list = [];
+      if (!kept) {
+        try { list = await RouteLoading.optional(hazardsAround(pts), 8000); } catch (_) { return; }
+        if (!list || list.unknown) { kept = keptCopy(); if (!kept) return; }
+      }
       if (kept) list = kept.rows;
-      else try { list = await hazardsAround(pts); } catch (_) { return; }
       if (plannedRoute !== t) return;
       let text = ApexRoadPage.routeReportsLine(ApexRoadPage.onThisRoad(t, null, Array.isArray(list) ? list : []), (m) => ApexUnits.long(m, 1));
       if (text && kept) text += ` (as of ${new Date(kept.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${Date.now() - kept.at > 864e5 ? `, ${new Date(kept.at).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''})`;
@@ -2923,12 +2944,16 @@
       if (hazardsCover(points)) return closureCache.list;
       if (closureCache.asking && closureCache.askMid && points.every((p) => p && FunRoute.kmBetween(p, closureCache.askMid) <= 35)) return closureCache.asking;
       const ask = (async () => {
-        let list = [];
+        let list = null;
         try {
           const r = await ApexSync.apiFetch(`/api/hazards?${ApexPrivacyZones.cellQuery(mid.lat, mid.lon, 50)}`, { method: 'GET' });   // VI-1: by cell
-          if (r.ok) list = await r.json();
-        } catch (_) { /* offline or signed out: no closures known */ }
-        Object.assign(closureCache, { key: `${mid.lat.toFixed(1)},${mid.lon.toFixed(1)}`, mid: { lat: mid.lat, lon: mid.lon }, at: performance.now(), list: Array.isArray(list) ? list : [], asking: null });
+          list = r.ok ? await r.json() : [];                                                 // signed out: an answer, none for you
+        } catch (_) { list = null; }
+        // the ask never got through (no signal, or one bar that carries nothing): not "none reported", so not kept as the
+        // area's answer for 5 min; the next plan asks again, and a saved route falls back to the reports kept with it
+        if (!Array.isArray(list) && list !== null) list = [];
+        if (list === null) { closureCache.asking = null; return Object.assign([], { unknown: true }); }
+        Object.assign(closureCache, { key: `${mid.lat.toFixed(1)},${mid.lon.toFixed(1)}`, mid: { lat: mid.lat, lon: mid.lon }, at: performance.now(), list, asking: null });
         // the reports landed after the card went up (a slow answer; a plan waits 0.2 s at most): its word again (police
         // reports with Avoid police on, and a reported closure the route passes, always)
         if (plannedRoute && !driveActive && typeof renderRouteCard === 'function') setTimeout(() => { try { if (plannedRoute) renderRouteCard(plannedRoute); } catch (_) {} }, 0);
@@ -5461,7 +5486,7 @@
     }
     // Views: ROUTE / DRIVES / SETUP open the side panel; tapping the open tab again, the map
     // behind it, or swiping it right closes it. ANALYSIS is its own page.
-    const LEGAL_SITE = 'https://apexnav.senftns.workers.dev';   // the published privacy and terms pages (web/privacy.html, web/terms.html)
+    const LEGAL_SITE = 'https://vettadrive.com';   // the published privacy and terms pages (web/privacy.html, web/terms.html)
     const VIEW_TITLES = { people: 'People', garage: 'Garage' };
     // People (the owner, 2026-10-30): one tab, two sides; 'crew' (old links, a convoy invite) opens its Crews side.
     const PEOPLE_SIDES = { friends: 'friends', crew: 'crews', crews: 'crews' };
@@ -6760,7 +6785,7 @@
       map, maplibregl, el, btn, toast, copyText, showView, apiFetch: ApexSync.apiFetch, overlayParent: $('toast').parentElement,
       reportSheet: $('hzOverlay'),                                     // the Report key's sheet: the leader's convoy calls go on top
       driving: () => driveActive,
-      siteOrigin: () => (ApexSync.inApp ? ApexSync.apiBase : location.origin),
+      siteOrigin: () => ApexSync.siteBase,
       wsUrl: (id) => `${ApexSync.inApp ? ApexSync.apiBase.replace(/^http/, 'ws') : location.origin.replace(/^http/, 'ws')}/api/convoy/${encodeURIComponent(id)}/connect`,
       getFix: () => {
         const p = state.lastPosition;
@@ -7019,6 +7044,12 @@
       inZone: (lat, lon) => { try { return !!(window.ApexPrivacyZones && ApexPrivacyZones.zoneAt(ApexPrivacyZones.load(localStorage), lat, lon)); } catch (_) { return false; } },
       myHandle: () => (accountMe && accountMe.handle) || null,
       upload: (path, blob, type) => ApexSync.apiFetch(path, { method: 'PUT', headers: { 'content-type': type }, body: blob }),
+      // the real map under each post's line (post_map.js), in the theme's palette; never while a drive is on
+      mapUnder: (() => { let snap = null; return (id, pts, w, h, pad) => {
+        if (driveActive || !window.ApexPostMap || !window.maplibregl || !window.ApexBasemap) return null;
+        snap = snap || ApexPostMap.snapper({ gl: maplibregl, style: MAP_STYLE, palette: () => look.map, restyle: ApexBasemap.restyle,
+          transform: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
+        return snap.snap(`${look.map.bg}|${look.map.road}|${id}`, pts, w, h, pad); }; })(),
       openFriend: (h) => { document.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); if (window.apexOpenFriend) window.apexOpenFriend(String(h).toLowerCase()); } }) : null; } catch (e) { console.error('drive posts', e); } });
     const inboxTick = () => { if (inbox && !driveActive && document.visibilityState === 'visible') inbox.refresh(); };
     document.addEventListener('visibilitychange', inboxTick);
@@ -7057,7 +7088,7 @@
     let openCrewId = null, openFriendId = null, crewOpen = null;   // crewOpen: the crew open over the crews dashboard (this visit)   // the crew tile and the friend row left open across a redraw
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
     // Links people share open the website (in the app the page's own origin is apexnav://app, which no one else can open).
-    const shareOrigin = () => (ApexSync.inApp ? ApexSync.apiBase : location.origin);
+    const shareOrigin = () => ApexSync.siteBase;   // vettadrive.app (sync.js SITE_BASE)
     const crewPreview = { token: null, data: null };   // what the crew link is for, fetched once per link
     let renderGen = 0;   // two renders at once (a link while one runs): only the newest one draws
     // The no-connection page (renderAccount) follows the phone: it asks again by itself when the connection is back, and
@@ -7828,6 +7859,8 @@
       if (sums.missing) sums = (await ApexAnalysis.job('summaries')).list;   // drives saved before summaries: built in the worker
       const list = sums.map((s) => ({ dist: [s.len_m || 0], battery: s.battery }));
       const s = ApexMyData.phoneSummary(list, localStorage);
+      // no drives on the phone: no Download drives and no Delete drives that could only say so (free roamer B, 2026-11-14)
+      $('myGpxBtn').hidden = $('myDrivesDelBtn').hidden = !list.length;
       $('myDataNote').textContent = ApexMyData.phoneText(s, (m) => ApexUnits.long(m))   // U-126: counts only what exists
         + (() => { const b = window.ApexBattery ? ApexBattery.overall(list) : null; return b ? ` Driving uses about ${b.perHour}% battery an hour on this phone (${b.drives} drive${b.drives === 1 ? '' : 's'}).` : ''; })();
       renderOffline();
@@ -7847,6 +7880,7 @@
       const o = ApexMyData.offlineSummary(localStorage, await voiceCacheBytes(), est.usage, est.quota);
       renderAreas();
       const note = $('myOfflineNote'); if (note) note.textContent = ApexMyData.offlineText(o);
+      $('myOfflineDelBtn').hidden = !(o.routes > 0) && !(o.areas > 0) && !(o.voiceBytes > 0);   // "Nothing saved for offline": nothing to delete
     }
     // a download on the web, the share sheet in the iOS app (save_file.js): a download link does nothing in the app's web view
     const saveFile = (text, name, type) => ApexSaveFile.saveFile(text, name, type);
@@ -9194,6 +9228,10 @@
       }
       reported.aheadFor = t;
       const got = await askCellsAlong(t, () => reported.aheadFor === t);
+      if (reported.aheadFor !== t) return;
+      // a cell the live ask couldn't get (one bar, a dead stretch at the start): the reports kept with a saved route fill it
+      const kept = window.ApexRouteReports && t.id && window.ApexSync && ApexSync.signedIn() ? ApexRouteReports.load(localStorage, String(t.id)) : null;
+      if (kept) for (const [k, rows] of Object.entries(kept.cells)) if (!got || !(k in got)) reported.ahead.set(k, rows);
       if (!got) return;
       for (const [k, rows] of Object.entries(got)) reported.ahead.set(k, rows);
       if (window.apexDebug) window.apexDebug.askedAhead = Object.keys(got).length;
@@ -10676,8 +10714,12 @@
         const r = await ApexBestClip.make(f);
         const ext = /mp4/.test(r.mime || '') ? 'mp4' : 'webm';
         const name = `${(endDrive && endDrive.name || 'drive').replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'drive'} best corner.${ext}`;
-        const out = window.ApexDriveCard ? await ApexDriveCard.shareFile(r.blob, name, r.mime || `video/${ext}`) : 'failed';
-        if (out === 'saved') toast('Clip saved.');
+        let copied = false;
+        const rec = window.ApexRecording ? await ApexRecording.get(f.driveId).catch(() => null) : null;
+        const caption = window.ApexCornerClip && ApexCornerClip.caption ? ApexCornerClip.caption(rec || endDrive || {}, f.call) : '';
+        const out = window.ApexDriveCard ? await ApexDriveCard.shareFile(r.blob, name, r.mime || `video/${ext}`, { caption, copied: () => { copied = true; } }) : 'failed';
+        if (out === 'saved') toast(copied ? 'Clip saved. Its caption is copied.' : 'Clip saved.');
+        else if (copied && out === 'shared') toast('Its caption is copied, ready to paste.');
       } catch (_) { toast('This phone can’t make the clip. It plays in the Log.'); }
       finally { if (endClipFound === f) { k.removeAttribute('aria-busy'); $('endClipAct').textContent = 'Share clip'; } }
     });
@@ -11100,7 +11142,16 @@
       const a = document.createElement('a'); a.href = 'apexnav://open?' + q.toString(); a.textContent = 'Have the app? Open it there'; a.style.cssText = 'color:var(--accent);font-weight:600;white-space:nowrap';
       const x = document.createElement('button'); x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Stay in the browser'); x.className = 'linkbtn';
       x.onclick = () => { bar.remove(); try { sessionStorage.setItem('apex.stayInBrowser', '1'); } catch (_) {} };
-      bar.append(a, x); document.body.append(bar);
+      // Get the app (launch marketing, 2026-11-14): the App Store with a campaign tag (ct), so App Store Connect's own counts
+      // say which kind of link brought them; no tracking SDK. Hidden until the owner sets the app's id and provider token.
+      const APP_STORE_ID = null, APP_STORE_PT = null;                  // App Store Connect: the app's Apple ID (digits), the provider token (pt)
+      const ct = q.has('roadbook') ? 'route-share' : q.has('crew') ? 'crew' : q.has('convoy') ? 'convoy' : 'invite';
+      const kids = [a];
+      if (/^\d{6,12}$/.test(String(APP_STORE_ID || '')) && /^\d{1,12}$/.test(String(APP_STORE_PT || ''))) {
+        const g = document.createElement('a'); g.href = `https://apps.apple.com/app/id${APP_STORE_ID}?pt=${APP_STORE_PT}&ct=${ct}&mt=8`;
+        g.textContent = 'Get the app'; g.style.cssText = 'font-weight:600;white-space:nowrap'; kids.push(g);
+      }
+      bar.append(...kids, x); document.body.append(bar);
     })();
 
     // =======================================================================

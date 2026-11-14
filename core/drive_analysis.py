@@ -561,6 +561,7 @@ def coach(a: dict, others: list) -> dict:
             out.append({"apex": c["apex"], "m": ma, "best": None, "gain_s": None, "tip": None, "passes": 0})
             continue
         best, best_from, passes = ma, -1, 1
+        prior, prior_from = None, -1                                        # your fastest other pass, within the grip ceiling
         oa, sa = _marks(a, c["start"], c["end"], c["apex"])                 # D-07 marks, in m along A's road from its apex
         ta = _turn_in(a, c["start"], c["end"])
         ma["turn_in_m"] = None if ta is None or ta > c["apex"] else (c["apex"] - ta) * 5.0
@@ -599,10 +600,13 @@ def coach(a: dict, others: list) -> dict:
             speeds.append(float(mb["min_mps"]))
             if mb["envelope_use"] <= PACE_CEILING and mb["time_s"] < best["time_s"]:
                 best, best_from = mb, j
+            if mb["envelope_use"] <= PACE_CEILING and (prior is None or mb["time_s"] < prior["time_s"]):
+                prior, prior_from = mb, j
         gain = ma["time_s"] - best["time_s"]
         tip = _tip(ma, best if best_from >= 0 and gain >= TIP_GAIN_S else None)
         out.append({"apex": c["apex"], "m": ma, "best": None if best_from < 0 else best, "best_from": best_from,
-                    "gain_s": gain, "tip": tip, "passes": passes, "spread": _spread(brakes, mins, passes, froms, turns, speeds)})
+                    "gain_s": gain, "tip": tip, "passes": passes, "spread": _spread(brakes, mins, passes, froms, turns, speeds),
+                    "prior_s": None if prior is None else float(prior["time_s"]), "prior_from": prior_from})
     clean = [x for x in out if x["gain_s"] is not None]
     this_s = float(sum(x["m"]["time_s"] for x in clean))
     gain_s = float(sum(x["gain_s"] for x in clean if x["gain_s"] >= TIP_GAIN_S))     # below that is GPS alignment noise

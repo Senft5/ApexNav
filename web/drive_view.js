@@ -721,6 +721,19 @@
       }
       list.prepend(el('h2', null, 'Where to find time'), ul);
     }
+    // your best yet: the corners this drive beat every other pass of, and by how much (above Where to find time: news first)
+    const wins = newBests(co);
+    if (wins.length) {
+      const ul = el('ol', 'dv-time dv-bests');
+      for (const w of wins) {
+        const c = d.corners[w.k], from = co.others && co.others[w.from], li = el('li'), b = el('button');
+        b.innerHTML = `<b>${w.k + 1}</b><span>${esc(callOf(c))}</span><em class="gain">${fmtD(-w.by_s)}</em>`
+          + `<span class="note">vs your next best${from && from.date ? ` \u00b7 ${esc(from.date)}` : ''}</span>`;
+        b.onclick = () => { pick(c.apex, c.start, c.end); openCorner(w.k, b); };
+        li.append(b); ul.append(li);
+      }
+      list.prepend(el('h2', null, wins.length === 1 ? 'Your best yet here' : `Your best yet in ${wins.length} corners`), ul);
+    }
     const grid2 = el('div', 'dv-corners');
     d.corners.forEach((c, k) => {
       const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${callOf(c)}, apex ${Math.round(c.apex_mps * MPH)} ${SPD_WORDS()}`);
@@ -784,6 +797,23 @@
     return { move, setRoadFeel, markRecords, restyleMap() { if (basemap) basemap.restyle(); }, recenterMap() { if (basemap) basemap.recenter(); }, destroy() { ro.disconnect(); if (basemap) basemap.destroy(); }, summary: S };
   }
 
-  const api = { mount, overlaySvg, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };
+  /**
+   * The corners where this drive was your fastest pass (coach: no other pass quicker), by how much it beat your next best:
+   * [{ k, by_s, from }] (from: that pass's index in co.others), most first, up to n. A pass past the grip ceiling is not
+   * celebrated (PHILOSOPHY.md §1), nor a gap under the alignment noise (TIP_GAIN_S, 0.2 s).
+   */
+  function newBests(co, n = 3) {
+    if (!co || !Array.isArray(co.corners)) return [];
+    const out = [];
+    co.corners.forEach((x, k) => {
+      if (!x || !x.m || x.best_from !== -1 || !Number.isFinite(x.prior_s) || !Number.isFinite(x.m.time_s)) return;
+      if (!(x.m.envelope_use <= 1.0)) return;
+      const by = x.prior_s - x.m.time_s;
+      if (by >= 0.2) out.push({ k, by_s: by, from: x.prior_from });
+    });
+    return out.sort((a, b) => b.by_s - a.by_s || a.k - b.k).slice(0, n);
+  }
+
+  const api = { mount, newBests, overlaySvg, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveView = api;
 })(typeof window !== 'undefined' ? window : globalThis);

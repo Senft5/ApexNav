@@ -172,9 +172,10 @@
     return shareFile(blob, fileName, 'image/png');
   }
   /** Any file the same way (the end card's best corner clip too). */
-  async function shareFile(blob, fileName, mime) {
+  async function shareFile(blob, fileName, mime, opts = {}) {
     // the shell's share sheet in the app (save_file.js), where a download link does nothing (feedback 07)
-    if (root.ApexSaveFile && typeof location !== 'undefined' && location.protocol === 'apexnav:') return root.ApexSaveFile.saveFile(blob, fileName, mime, { share: true });
+    if (root.ApexSaveFile && typeof location !== 'undefined' && location.protocol === 'apexnav:') return root.ApexSaveFile.saveFile(blob, fileName, mime, { ...opts, share: true });
+    if (opts.caption && root.ApexSaveFile && await root.ApexSaveFile.copyText(String(opts.caption).slice(0, 500)) && opts.copied) opts.copied();
     const file = typeof File === 'function' ? new File([blob], fileName, { type: mime }) : null;
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file] }); return 'shared'; } catch (e) { if (e && e.name === 'AbortError') return 'cancelled'; }

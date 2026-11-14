@@ -4780,6 +4780,41 @@ flow('reports ahead of a dead zone: a drive on a planned route asks for the cell
   check(ids.includes('live35.8') && !ids.some((x) => x.startsWith('gone')), 'with no signal the report ahead is known, the expired one dropped: ' + JSON.stringify(ids));
 });
 
+flow('one bar at the start of a saved route: the phone says it is online but the asks for the reports ahead never get through, so those kept with the route stand in (Worker and router stubbed, IDEAS F-03)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(JSON.parse(route.request().postData() || '{}').locations)) }));
+  const soon = new Date(Date.now() + 40 * 60000).toISOString();
+  let weak = false;
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (weak) return route.abort('timedout');                       // nothing gets through, though the phone is "online"
+    if (u.pathname === '/api/me') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ signed_in: true, member: true, handle: 'e2e' }) });
+    if (u.pathname === '/api/hazards') {
+      const lat = Number(u.searchParams.get('lat'));
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify([{ id: 'kept' + lat.toFixed(1), kind: 'gravel', lat, lon: -83.92, heading: null, confirms: 2, clears: 0, expires_at: soon, m: 0 }]) });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.signedIn', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex && window.apex.live, null, { timeout: 20000 });
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.52, lon: -83.92 }, { lat: 36.08, lon: -83.92 }], 'route_dest', 'Up the valley', null,
+    { from: null, to: { lat: 36.08, lon: -83.92 }, via: [] }));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'route' && apexDebug.track.request, null, { timeout: 20000 });
+  await page.evaluate(() => document.getElementById('routeSaveBtn').click());
+  await page.waitForFunction(() => window.apexDebug.keptReports > 0, null, { timeout: 20000 });
+  // one bar from here: opened again from the car's Places and driven
+  weak = true;
+  await page.evaluate(() => { const p = JSON.parse(localStorage.getItem('apex.savedRoutes') || '[]')[0]; window.apex.onNative({ type: 'carplay', action: 'saved', id: p.id }); });
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.name === 'Up the valley' && apexDebug.track.kind === 'route', null, { timeout: 15000 });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.evaluate(async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.70 + i * 0.0025, lon: -83.92, accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, calibration: 'locked' }); await new Promise((r) => setTimeout(r, 10)); } });
+  await page.waitForFunction(() => { apexDebug.loadReported(true); return apexDebug.reportedIds().includes('kept35.8'); }, null, { timeout: 20000, polling: 1000 });
+  check(true, 'the report kept with the route is known ahead');
+});
+
 flow('a saved route keeps its reports: Save asks for the cells it runs through, and opened again with no signal its card names them with their age, expired ones dropped (Worker and router stubbed, IDEAS F-03)', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
     ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
@@ -4866,6 +4901,18 @@ flow('a saved route keeps its road feel: Save keeps what members measured along 
   // the Log's frame warms a few seconds after launch (cockpit.js prewarmLog); let it finish first, as on a phone, so going
   // offline mid-load doesn't leave it half loaded (CI 2026-11-14: analysis_page.js without themes.js)
   await page.waitForFunction(() => { const f = document.getElementById('logFrame'); return f && f.contentWindow && f.contentWindow.ApexLogFrame; }, null, { timeout: 30000 });
+  // one bar that carries nothing: the phone says it's online, but nothing gets through. Membership can't be asked
+  // (member() answers null when its call fails), or it can and the members' data can't: the kept copy stands in either way
+  const reopen = () => page.evaluate(() => { document.getElementById('measuredNote').textContent = '';
+    const p = JSON.parse(localStorage.getItem('apex.savedRoutes') || '[]')[0]; window.apex.onNative({ type: 'carplay', action: 'saved', id: p.id }); });
+  await page.evaluate(() => { localStorage.setItem('apex.signedIn', '1'); ApexSync.member = async () => null; window.__asked = 0; });
+  await reopen();
+  await page.waitForFunction(() => /\(kept \d/.test(document.getElementById('measuredNote').textContent), null, { timeout: 15000 });
+  check(await page.evaluate(() => apexDebug.track.crowdCorrected === 100 && window.__asked === 0), 'one bar, membership unasked: the kept corners, nothing measured');
+  await page.evaluate(() => { ApexSync.member = async () => ({ signed_in: true, member: true }); ApexContributor.measuredAlong = async () => { window.__asked++; throw new TypeError('Failed to fetch'); }; });
+  await reopen();
+  await page.waitForFunction(() => /\(kept \d/.test(document.getElementById('measuredNote').textContent), null, { timeout: 15000 });
+  check(await page.evaluate(() => apexDebug.track.crowdCorrected === 100 && window.__asked === 1), 'one bar, the members\' data unasked: the kept corners stand in');
   // no signal: membership can't be asked and nothing is measured; the route opened again from the car's Places
   await page.context().setOffline(true);
   await page.evaluate(() => { ApexSync.member = async () => { throw new Error('offline'); }; window.__asked = 0; document.getElementById('measuredNote').textContent = '';
@@ -5030,7 +5077,7 @@ flow('review mode (U-94): the recording\'s hazard report is the sheet, Undo and 
   await page.evaluate(() => clearInterval(window.__fixes));
 });
 
-flow('your data: Settings counts what the phone holds and downloads drives as GPX, offline data deleted (IDEAS Z-03/Z-04, F-06)', async (page, base) => {
+flow('your data: Settings counts what the phone holds and downloads drives as GPX, offline data deleted; a key with nothing to act on is not shown (IDEAS Z-03/Z-04, F-06)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.ApexRecording && window.ApexMyData);
@@ -5039,21 +5086,26 @@ flow('your data: Settings counts what the phone holds and downloads drives as GP
   await page.click('.tab[data-view="garage"]');
   await openSetting(page, 'data');
   await page.waitForFunction(() => /1 drive \(0.2 mi\)/.test(document.getElementById('myDataNote').textContent));
+  const shown = () => page.evaluate(() => ['myGpxBtn', 'myDrivesDelBtn', 'myOfflineDelBtn'].map((id) => document.getElementById(id).checkVisibility()));
+  check(JSON.stringify(await shown()) === '[true,true,false]', 'a drive: Download and Delete drives; nothing offline, no Delete offline data: ' + JSON.stringify(await shown()));
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#myGpxBtn')]);
   const gpx = require('fs').readFileSync(await dl.path(), 'utf8');
   check(/<trk><name>Test road<\/name>/.test(gpx) && (gpx.match(/<trkpt /g) || []).length === 3, 'the GPX holds the drive');
   await page.click('#myDrivesDelBtn');
   await page.click('.confirm-sheet .cs-yes:has-text("Delete drives")');             // the confirm sheet, not a system alert (REVIEW.md 1.2)
   await page.waitForFunction(() => /^Nothing on this phone yet/.test(document.getElementById('myDataNote').textContent));   // U-126: no line of zeros
+  check(JSON.stringify(await shown()) === '[false,false,false]', 'no drives: no Download or Delete drives (free roamer B, 2026-11-14): ' + JSON.stringify(await shown()));
   // offline data (IDEAS F-06): a saved route counted, then deleted; the drives are not touched by it
   await page.evaluate(() => { localStorage.setItem('apex.savedRoutes', JSON.stringify([{ id: 'r1', coords: [[0, 0], [1, 1]] }])); document.querySelector('.tab[data-view="garage"]').click(); });
   // the Garage tab again closes the Menu; since AM-1 a closed Menu can't be reached, so it is opened once more
   if (!(await page.evaluate(() => document.getElementById('sheet').classList.contains('open')))) await page.click('.tab[data-view="garage"]');
   await openSetting(page, 'data');
   await page.waitForFunction(() => /Offline data: 1 saved route /.test(document.getElementById('myOfflineNote').textContent));
+  check(await page.evaluate(() => document.getElementById('myOfflineDelBtn').checkVisibility()), 'a saved route: Delete offline data is there');
   await page.click('#myOfflineDelBtn');
   await page.click('.confirm-sheet .cs-yes');
   await page.waitForFunction(() => /^Nothing saved for offline/.test(document.getElementById('myOfflineNote').textContent));
+  check(!(await page.evaluate(() => document.getElementById('myOfflineDelBtn').checkVisibility())), 'deleted: the key goes with it');
   check((await page.evaluate(() => localStorage.getItem('apex.savedRoutes'))) === null, 'saved routes gone');
 });
 
@@ -6477,6 +6529,44 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   const first = (() => { const s = p.line; let i = 0, r = 0, sh = 0, b; do { b = s.charCodeAt(i++) - 63; r |= (b & 31) << sh; sh += 5; } while (b >= 32); return (r & 1 ? ~(r >> 1) : r >> 1) / 1e5; })();
   check(p.crew_id === 'k1' && p.caption === 'First run with the crew.' && p.score === 790 && p.title === 'Cherohala Skyway' && first > 35.36 + 0.0044,
     'the post: to the crew, the caption, the Score, and the line starting 500 m in: ' + JSON.stringify({ ...p, line: p.line.length, first }));
+});
+flow('the Feed: each post\'s line is on the real map, two posts drawn by one hidden map, and a map that can\'t load leaves the plain line (post_map.js, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  // the map's style, plain paper (no tiles here); counted, so one map is seen to draw both posts
+  let styles = 0;
+  await page.route('https://tiles.openfreemap.org/**', (route) => {
+    if (!route.request().url().includes('/styles/')) return route.abort();
+    styles++;
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#eee' } }] }) });
+  });
+  const enc = (pts) => { let o = '', a0 = 0, b0 = 0; const e = (v) => { v = v < 0 ? ~(v << 1) : v << 1; while (v >= 32) { o += String.fromCharCode((32 | (v & 31)) + 63); v >>= 5; } o += String.fromCharCode(v + 63); };
+    for (const [a, b] of pts) { const x = Math.round(a * 1e5), y = Math.round(b * 1e5); e(x - a0); e(y - b0); a0 = x; b0 = y; } return o; };
+  const post = (id, k) => ({ id, handle: 'bob', photo_id: null, mine: false, crew: null, title: `Drive ${k}`, caption: null, driven_on: '2026-11-12', length_m: 9000, score: 700 + k,
+    roads: [], stages: [], line: enc(Array.from({ length: 60 }, (_, i) => [39.1 + k * 0.05 + i * 0.001, -84.6 + Math.sin(i / 6) * 0.004])), created_at: '2026-11-12 10:00:00', kudos: 0, my_kudos: false, comments: 0 });
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/feed') return json([post('P1AAAAAAAAAAAAAA', 1), post('P2AAAAAAAAAAAAAA', 2)]);
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card', { timeout: 15000 });
+  const before = styles;
+  await page.waitForFunction(() => document.querySelectorAll('#accountBody .feed-line.on-map').length === 2, null, { timeout: 20000 })
+    .catch(async () => { throw new Error('both posts on the map: ' + await page.evaluate(() => document.querySelectorAll('#accountBody .feed-line.on-map').length)); });
+  const m = await page.evaluate(() => [...document.querySelectorAll('#accountBody .feed-line.on-map')].map((l) => ({
+    bg: getComputedStyle(l).backgroundImage, casing: getComputedStyle(l.querySelector('.casing')).display, line: l.querySelector('path:not(.casing)').getAttribute('d').length,
+    hidden: !!document.querySelector('div[aria-hidden="true"][style*="-"] .maplibregl-canvas') })));
+  check(m.every((x) => /^url\("blob:/.test(x.bg) && x.casing === 'inline' && x.line > 100 && x.hidden) && styles - before <= 1,
+    'each post: a still of the map under its line, cased, both drawn by one hidden map: ' + JSON.stringify({ m, styles: styles - before }));
+  // with no map to be had (offline): the plain line, no picture, no blank box
+  const off = await page.evaluate(async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
+    const s = ApexPostMap.snapper({ gl: maplibregl, style: 'x', palette: () => null, restyle: () => {} });
+    return s.snap('k', [[39, -84], [39.01, -84.01]], 340, 170, 18);
+  });
+  check(off === null, 'offline, no map is asked for');
 });
 flow('post media: a friend\'s photo shows on their post in the Feed, and Add a photo on the Post sheet sends yours as a JPEG after the post (Worker stubbed, backend/src/post_media.ts)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
@@ -8857,7 +8947,7 @@ flow('film the drive: the app\'s own video of a drive is offered on its page, li
   const keys = await page.evaluate(() => [...document.querySelectorAll('#dvDashcam .dc-own button')].map((b) => b.textContent));
   check(keys.length === 1 && keys[0] === 'This drive\'s video · 7 s', 'only the video filmed on this drive is offered: ' + JSON.stringify(keys));
   check(/Vetta filmed this drive/.test(await page.textContent('#dvDashcam')), 'the panel says it was filmed');
-  await page.evaluate(() => { window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type) => { window.__saved = { size: blob.size, name, type }; return 'saved'; }; });
+  await page.evaluate(() => { window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type, o) => { window.__saved = { size: blob.size, name, type, caption: o && o.caption }; if (o && o.copied) o.copied(); return 'saved'; }; });
   await page.click('#dvDashcam .dc-own button');
   await page.waitForFunction(() => /Video starts 1\.5 s into the drive/.test(document.querySelector('#dvDashcam').textContent), null, { timeout: 8000 });
   // the corner (2 to 4 s into the drive) is in the video though its lead isn't all there: offered, cut from the video's start
@@ -8866,6 +8956,11 @@ flow('film the drive: the app\'s own video of a drive is offered on its page, li
   await page.waitForFunction(() => window.__saved, null, { timeout: 30000 });
   const saved = await page.evaluate(() => window.__saved);
   check(saved.size > 500 && /^Filmed_road-corner-1-/.test(saved.name), 'a clip from the drive\'s own video, with no lining up: ' + JSON.stringify(saved));
+  check(saved.caption === 'Filmed road · Left 4\nCalled by Vetta. Free on iPhone, link in bio.\n#drivingroads #backroads' && /caption is copied/.test(await page.textContent('#dvDashcam .dc-clip-note')),
+    'its caption goes with it, copied: ' + JSON.stringify(saved.caption));
+  check(await page.isChecked('#dvDashcam .dc-speed'), 'Show speed on clips: on until switched off');
+  await page.uncheck('#dvDashcam .dc-speed');
+  check(await page.evaluate(() => localStorage.getItem('apex.clipSpeed') === 'off' && !ApexCornerClip.speedShown()), 'off, kept on this phone');
   // one tap from the corner itself: on a fresh page, the corner's card offers Clip this corner, which opens the video and shares the clip
   await page.goto(base + '/analysis.html?drive=fd1');
   await page.waitForSelector('#dvDashcam .dc-own button');
@@ -8949,6 +9044,32 @@ flow('post a corner clip: on the Log a clip made from the drive\'s own film goes
   check(body.title === 'Filmed road' && /^\d{4}-\d\d-\d\d$/.test(body.driven_on) && body.length_m === 1495, 'the post is the drive\'s: ' + JSON.stringify({ ...body, line: !!body.line }));
   check(!(await page.evaluate(() => document.getElementById('logFrame').hidden)), 'and the Log is back');
   check(/Posted to your friends\./.test(await fr.textContent('#dvDashcam .dc-clip-note')), 'the Log says where it went');
+});
+
+flow('your best yet: the drive page leads with the corners this drive beat every other pass of, and by how much (coach prior_s)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  // one road three times: the newest 4% quicker everywhere, the same smooth line
+  await page.evaluate(async (src) => {
+    const gen = eval(src);
+    const tweak = (csv, f) => csv.split('\n').map((l, i) => { if (!i || !l) return l; const c = l.split(','); c[5] = (+c[5] * f).toFixed(3); return c.join(','); }).join('\n');
+    const fs = [0.94, 0.96, 1.0];
+    for (let k = 0; k < 3; k++) {
+      const d = ApexRecording.parse(ApexCore, tweak(gen('clean', 0), fs[k]), 'b' + k + '.csv', { id: 'b' + k, name: 'Dry Ridge Rd', date: `2026-0${6 + k}-01T09:00`, source: 'web-gps' });
+      await ApexRecording.store(d);
+    }
+  }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html?tab=drive&drive=b2');
+  await page.waitForSelector('.dv-bests li button', { timeout: 20000 });
+  const r = await page.evaluate(() => ({ h: document.querySelector('.dv-bests').previousElementSibling.textContent,
+    rows: [...document.querySelectorAll('.dv-bests li button')].map((b) => b.textContent) }));
+  check(/^Your best yet (here|in \d corners)$/.test(r.h) && r.rows.length >= 1 && r.rows.every((t) => /−\d\.\d s/.test(t) && /vs your next best/.test(t)),
+    'the corners it beat your next best through, by how much: ' + JSON.stringify(r));
+  // a slower drive of the same road has none
+  await page.goto(base + '/analysis.html?tab=drive&drive=b0');
+  await page.waitForSelector('.dv-corners .dv-corner', { timeout: 20000 });
+  check(!(await page.$('.dv-bests')), 'the slowest pass has no best yet');
 });
 
 flow('side by side: a corner filmed on this drive and on your best pass plays as one clip, both from the same point, the gap counting (big bet 5)', async (page, base) => {
@@ -9642,8 +9763,8 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   const rowsOf = await page.evaluate(() => { const box = document.querySelector('.data-rows'); return { groups: [...box.querySelectorAll('.nav-group')].map((h) => h.textContent),
     rows: [...box.querySelectorAll('.nav-row')].filter((r) => !r.hidden).map((r) => {   // signed out: no Delete account row
       const b = r.getBoundingClientRect(); return [r.id, Math.round(b.left), Math.round(b.width), Math.round(b.height)]; }) }; });
-  check(rowsOf.groups.join() === 'Take a copy,Offline,Remove' && rowsOf.rows.length === 7 && new Set(rowsOf.rows.map((r) => r[1] + '/' + r[2])).size === 1 && rowsOf.rows.every((r) => r[3] >= 44),
-    'Your data: seven rows in three groups, one edge and width, 44 pt or more: ' + JSON.stringify(rowsOf));
+  check(rowsOf.groups.join() === 'Take a copy,Offline,Remove' && rowsOf.rows.length === 6 && !rowsOf.rows.some((r) => r[0] === 'myOfflineDelBtn') && new Set(rowsOf.rows.map((r) => r[1] + '/' + r[2])).size === 1 && rowsOf.rows.every((r) => r[3] >= 44),
+    'Your data: six rows in three groups (nothing saved offline: no Delete offline data), one edge and width, 44 pt or more: ' + JSON.stringify(rowsOf));
   let alerted = false; page.on('dialog', (d) => { alerted = true; d.dismiss(); });
   await page.evaluate(() => document.getElementById('myEraseBtn').click());
   await page.waitForSelector('.confirm-sheet [role="alertdialog"], .confirm-sheet .cs-box[role="alertdialog"]');
@@ -10596,6 +10717,12 @@ for (const [when, iso, expect] of [['at dusk', '2026-06-21T00:30:00Z', 1], ['at 
         window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, [i]);
       await page.waitForTimeout(40);
     }
+    // the call's lead at 20 m/s is the last few fixes: the page may take a moment to read them and speak, so give it 2 s
+    // (each fix the same, at 20 m before the sign) before deciding
+    const deer = () => page.evaluate(() => window.__said.filter((s) => /Deer crossing/.test(s)).length);
+    for (let k = 0; k < 20 && (await deer()) < 1; k++) { await page.evaluate(([i]) => { const t = apexDebug.track;
+      window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, [await iAt(1180)]);
+      await page.waitForTimeout(100); }
     const said = await page.evaluate(() => window.__said.filter((s) => /Deer crossing/.test(s)));
     check(said.length === expect, `${when}: ${JSON.stringify(await page.evaluate(() => window.__said))}`);
   });
