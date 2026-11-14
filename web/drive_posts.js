@@ -315,6 +315,8 @@
           post.disabled = true;
           const body = bodyOf(d, to, say.value.trim());
           const r = await apiCall('POST', '/api/posts', body).catch(() => null);
+          // no signal (IDEAS F-05): the post waits on the phone and goes when there is one (outbox.js), as a hazard report does
+          if ((!r || r.status >= 500) && page.later) { page.later('/api/posts', body); s.close(); done(true); toast('No signal. Your post goes up when you have one.'); return; }
           if (!r || !r.ok) { post.disabled = false; toast(r && r.status === 429 ? 'That’s ten posts today.' : 'Couldn’t post it. Check signal.'); return; }
           s.close(); done(true);
           toast(to ? `Posted to ${(crews.find((c) => c.id === to) || {}).name || 'your crew'}.` : 'Posted to your friends.');

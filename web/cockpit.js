@@ -6906,6 +6906,7 @@
     // Drive posts and the Feed (web/drive_posts.js, docs/SOCIAL.md 2.13): Post on the drive's card; the Feed on People → Friends
     let drivePosts = null;
     onSocial(() => { try { drivePosts = window.ApexDrivePosts ? ApexDrivePosts.mount({ el, btn, toast, apiCall, jsonOf,
+      later: (path, body) => outbox.add(path, body, false, { capped: true }),   // posted with no signal: sent when there is one
       avatar: (id, h, px) => (window.ApexPhotos ? ApexPhotos.avatar(id, h, px) : el('span')),
       fmtLen: (m) => ApexUnits.long(m, 1),
       report: safety && safety.report, block: safety ? (handle) => safety.block(handle, () => renderAccount()) : null,
@@ -9583,7 +9584,7 @@
       return r.status;
     });
     let outboxAt = 0;
-    const flushOutbox = () => { outboxAt = performance.now(); if (navigator.onLine === false || window.APEX_REVIEW) return; outbox.flush().then((n) => { if (!n) return; health.bump('hazard_sent_late', n); toast(n === 1 ? 'Sent what you reported with no signal.' : `Sent ${n} things you reported with no signal.`); loadReported(true); }).catch(() => {}); };
+    const flushOutbox = () => { outboxAt = performance.now(); if (navigator.onLine === false || window.APEX_REVIEW) return; outbox.flush().then((n) => { if (!n) return; health.bump('hazard_sent_late', n); toast(n === 1 ? 'Sent what waited for signal.' : `Sent ${n} things that waited for signal.`); loadReported(true); }).catch(() => {}); };
     window.addEventListener('online', flushOutbox);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') flushOutbox(); });
     if (outbox.size()) setTimeout(flushOutbox, 3000);

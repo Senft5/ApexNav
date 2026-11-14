@@ -5011,7 +5011,7 @@ flow('no signal: a hazard report waits on the phone and goes when the connection
   check(await page.evaluate(() => JSON.parse(localStorage.getItem('apex.outbox')).length) === 1, 'kept on the phone');
   offline = false;
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
-  await saidOn(page, /Sent what you reported/, { timeout: 5000 });
+  await saidOn(page, /Sent what waited for signal/, { timeout: 5000 });
   check(posted.length === 1 && posted[0].kind === 'debris' && posted[0].heading === 90 && Number.isInteger(posted[0].age_s), 'sent with its age');
   check(await page.evaluate(() => localStorage.getItem('apex.outbox')) === null, 'and gone from the phone');
 });
@@ -6128,6 +6128,41 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   const first = (() => { const s = p.line; let i = 0, r = 0, sh = 0, b; do { b = s.charCodeAt(i++) - 63; r |= (b & 31) << sh; sh += 5; } while (b >= 32); return (r & 1 ? ~(r >> 1) : r >> 1) / 1e5; })();
   check(p.crew_id === 'k1' && p.caption === 'First run with the crew.' && p.score === 790 && p.title === 'Cherohala Skyway' && first > 35.36 + 0.0044,
     'the post: to the crew, the caption, the Score, and the line starting 500 m in: ' + JSON.stringify({ ...p, line: p.line.length, first }));
+});
+flow('a drive posted with no signal waits on the phone and goes up once there is one (Worker stubbed, IDEAS F-05)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  let down = false; const posted = [];
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/posts' && m === 'POST') { if (down) return route.abort('internetdisconnected'); posted.push(JSON.parse(route.request().postData())); return json({ id: 'P9AAAAAAAAAAAAAA' }, 201); }
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording && window.ApexDrivePosts);
+  await page.evaluate(() => document.querySelector('.tab[data-view="map"]').click());
+  await page.evaluate(async () => {
+    ApexCore.driverScore = (v) => ({ score: 790, components: {} });
+    const lat = [], lon = []; for (let i = 0; i < 600; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
+    const d = { id: 'pd2', name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] };
+    await ApexRecording.store(d);
+    apexDebug.showEndCard(d, Date.now() - 30 * 60000, { quiet: true });
+  });
+  await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !b.hidden && !b.getAttribute('aria-disabled'); }, null, { timeout: 15000 });
+  down = true;
+  await page.click('#endPost');
+  await page.waitForSelector('.post-sheet textarea');
+  await page.fill('.post-sheet textarea', 'No bars up top.');
+  await page.click('.post-sheet button:text-is("Post")');
+  await page.waitForFunction(() => /goes up when you have one/.test(document.getElementById('toast').textContent), null, { timeout: 10000 });
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.outbox') || '[]'));
+  check(kept.length === 1 && kept[0].path === '/api/posts' && kept[0].body.caption === 'No bars up top.' && kept[0].capped === true && !(await page.$('.post-sheet')), 'the post waits on the phone, the sheet closed: ' + JSON.stringify(kept).slice(0, 300));
+  // signal back: it goes up, once
+  down = false;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForFunction(() => /Sent what waited for signal/.test(document.getElementById('toast').textContent), null, { timeout: 10000 });
+  check(posted.length === 1 && posted[0].caption === 'No bars up top.' && posted[0].score === 790 && await page.evaluate(() => !localStorage.getItem('apex.outbox')), 'sent once signal is back: ' + JSON.stringify(posted).slice(0, 300));
 });
 flow('push notifications: Garage > Notifications asks iOS only at the switch, hands the phone\'s token to the Worker, a push\'s tap opens the post, and off takes the token back (Worker and shell stubbed, docs/SOCIAL.md 2.12)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
