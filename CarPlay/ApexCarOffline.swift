@@ -25,6 +25,11 @@ final class ApexCarOffline {
 
     private let wantKey = "apex.carOfflineWant", seenKey = "apex.carSeen", tag = "vetta-car"
     private var tries = 0
+    private var observing = false, reportedAt = Date.distantPast, reportedBytes: UInt64? = nil
+    /// Sends to the page (set by the shell): the bytes the car's packs hold, for Garage → Your data (IDEAS F-06).
+    var toPage: (([String: Any]) -> Void)? {
+        didSet { reportedBytes = nil; report(throttled: false) }       // a page (re)loaded: tell it again
+    }
     static let minZoom = 8.0, maxZoom = 14.0, maxSquares = 2000
 
     /// The page's list (cmd "offlinePacks", web/offline_tiles.js tellShell). Kept; acted on once a car has been connected.
@@ -75,6 +80,12 @@ final class ApexCarOffline {
             return
         }
         tries = 0
+        if !observing {
+            observing = true
+            NotificationCenter.default.addObserver(forName: .MLNOfflinePackProgressChanged, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.report(throttled: true) }
+            }
+        }
         let want = wants(), wanted = Set(want.map(\.key))
         var have = Set<String>()
         for pack in packs {
@@ -82,11 +93,24 @@ final class ApexCarOffline {
             if wanted.contains(key) && !have.contains(key) {
                 have.insert(key)
                 if pack.state != .complete { pack.resume() }                // unfinished (no signal then): carry on
+                else { pack.requestProgress() }                             // its size, for Your data
             } else {
                 storage.removePack(pack, withCompletionHandler: nil)        // deleted, updated (a new `at`), or a duplicate
             }
         }
         for w in want where !have.contains(w.key) { add(w) }
+        report(throttled: false)
+    }
+
+    /// What the car's packs hold on the phone, to the page: at most every 5 s while they download, and when it changes.
+    private func report(throttled: Bool) {
+        guard let toPage, let packs = MLNOfflineStorage.shared.packs else { return }
+        if throttled && Date().timeIntervalSince(reportedAt) < 5 { return }
+        let ours = packs.filter { keyOf($0) != nil }
+        let bytes = ours.reduce(UInt64(0)) { $0 + $1.progress.countOfBytesCompleted }
+        guard bytes != reportedBytes else { return }
+        reportedAt = Date(); reportedBytes = bytes
+        toPage(["type": "carOffline", "bytes": NSNumber(value: bytes), "packs": ours.count, "done": ours.allSatisfy { $0.state == .complete }])
     }
 
     private func add(_ w: Want) {

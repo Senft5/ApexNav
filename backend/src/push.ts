@@ -100,6 +100,7 @@ export const PUSH = {
   postKudos: (from: string | null, title: string, post: string): Push => ({ kind: "post_kudos", title: "Kudos", body: `${at(from)} gave kudos to ${title}.`, link: `${LINK}?view=friends&post=${post}` }),
   postComment: (from: string | null, title: string, post: string): Push => ({ kind: "post_comment", title, body: `${at(from)} commented on your drive.`, link: `${LINK}?view=friends&post=${post}` }),
   postAlso: (from: string | null, owner: string | null, title: string, post: string): Push => ({ kind: "post_comment", title, body: `${at(from)} also commented on ${owner ? `@${owner}'s` : "a"} drive.`, link: `${LINK}?view=friends&post=${post}` }),
+  postMention: (from: string | null, owner: string | null, title: string, post: string): Push => ({ kind: "post_comment", title, body: `${at(from)} mentioned you on ${owner ? `@${owner}'s` : "a"} drive.`, link: `${LINK}?view=friends&post=${post}` }),
   crewDrive: (crew: string, title: string, by: string | null): Push => ({ kind: "crew_drive", title: crew, body: `${at(by)} planned ${title}. Are you going?`, link: `${LINK}?view=crews` }),
 };
 
@@ -144,17 +145,26 @@ export async function afterPostKudos(env: Env, v: Viewer, post: string, author: 
   await notify(env, [author], PUSH.postKudos(v.handle, title, post));
 }
 
-/** A comment on your drive post, from someone else; and to the others who commented on it before (who can still see it,
- *  and neither blocked nor blocked by this commenter), as any social app does. Never the comment's words: a push is seen
- *  on a lock screen. */
-export async function afterPostComment(env: Env, v: Viewer, post: string, author: string, title: string): Promise<void> {
+/** A comment on your drive post, from someone else; to anyone it @mentions who can see the post; and to the others who
+ *  commented on it before (who can still see it), as any social app does. Never to or from someone blocked, never twice to
+ *  one person, and never the comment's words: a push is seen on a lock screen. */
+export async function afterPostComment(env: Env, v: Viewer, post: string, author: string, title: string, mentions: string[] = []): Promise<void> {
   if (author !== v.id) await notify(env, [author], PUSH.postComment(v.handle, title, post));
   if (!pushConfigured(env)) return;
+  const told = new Set([author, v.id]);
+  const NO_BLOCK = (who: string) => `NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ${who} AND b.blocked = ?3) OR (b.blocker = ?3 AND b.blocked = ${who}))`;
+  if (mentions.length) {
+    const r = await env.DB.prepare(`SELECT u.id, ou.handle AS owner FROM users u JOIN drive_posts p ON p.id = ?2 JOIN users ou ON ou.id = p.author
+       WHERE u.handle IN (${mentions.map((_, i) => `?${i + 4}`).join(", ")}) AND u.id != ?3 AND ${NO_BLOCK("u.id")} AND ${POST_SEEN("p").replaceAll("?1", "u.id")}`)
+      .bind(null, post, v.id, ...mentions).all<{ id: string; owner: string | null }>();
+    const to = r.results.filter((x) => !told.has(x.id));
+    for (const x of to) told.add(x.id);
+    if (to.length) await notify(env, to.map((x) => x.id), PUSH.postMention(v.handle, to[0].owner, title, post));
+  }
   const seen = POST_SEEN("p").replaceAll("?1", "c.author");   // the post as each earlier commenter sees it
   const r = await env.DB.prepare(`SELECT DISTINCT c.author AS id, ou.handle AS owner FROM drive_comments c JOIN drive_posts p ON p.id = c.post_id JOIN users ou ON ou.id = p.author
-     WHERE c.post_id = ?2 AND c.author != ?3 AND c.author != p.author
-       AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = c.author AND b.blocked = ?3) OR (b.blocker = ?3 AND b.blocked = c.author)) AND ${seen}
+     WHERE c.post_id = ?2 AND c.author != ?3 AND c.author != p.author AND ${NO_BLOCK("c.author")} AND ${seen}
      LIMIT 20`).bind(null, post, v.id).all<{ id: string; owner: string | null }>();
-  const rows = r.results;
+  const rows = r.results.filter((x) => !told.has(x.id));
   if (rows.length) await notify(env, rows.map((x) => x.id), PUSH.postAlso(v.handle, rows[0].owner, title, post));
 }

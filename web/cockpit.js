@@ -1290,7 +1290,22 @@
       $('pinViaBtn').hidden = !plannedRoute?.request;
       $('pinOverlay').classList.add('show');
       suppressMapClickUntil = Date.now() + 700;
+      placeInfo(null);
       if (!place) reversePin(point);
+      else if (window.ApexPlaceInfo) {                                  // hours, phone and site, once known (place_info.js)
+        const asked = droppedPin;
+        ApexPlaceInfo.lookup(place.name, point.lat, point.lon).then((tags) => { if (droppedPin === asked && tags) placeInfo(ApexPlaceInfo.contact(tags, new Date())); }).catch(() => {});
+      }
+    }
+    // the card's open-now line and Call / Website keys; null clears them (a dropped pin, or nothing known)
+    function placeInfo(c) {
+      const h = $('pinHours'), box = $('pinContact');
+      h.hidden = !(c && c.hours); h.className = 'pin-hours' + (c && c.hours ? (c.hours.open ? ' open' : ' closed') : '');
+      h.textContent = c && c.hours ? c.hours.text : '';
+      const keys = c ? [c.phone && ['Call', c.phone, `Call ${c.phone.text}`], c.web && ['Website', c.web, `Website, ${c.web.text}`]].filter(Boolean) : [];
+      box.replaceChildren(...keys.map(([label, x, aria]) => { const a = document.createElement('a'); a.className = 'ink-btn'; a.href = x.href; a.textContent = label;
+        a.setAttribute('aria-label', aria); if (/^https?:/.test(x.href)) { a.target = '_blank'; a.rel = 'noopener'; } return a; }));
+      box.hidden = !keys.length;
     }
     mapEl.addEventListener('pointerdown', (e) => {
       activeMapPointers.add(e.pointerId);
@@ -4584,6 +4599,17 @@
       } catch (_) { /* no position or no worker: the first plan loads its tiles */ }
     }
     const OWN_KEEP_KM = 15;
+    // a drive on a planned route (IDEAS F-04): our road network within 2 km of all of it kept on the phone as it starts, with
+    // signal, so a reroute in a dead zone 40 km on still has roads (the 15 km round you above doesn't reach that far yet).
+    // A few seconds in, after the drive's own start; bytes only, one tile at a time; tiles kept already are skipped.
+    function keepNetworkAlong(t) {
+      if (!t || t.kind !== 'route' || !Array.isArray(t.lat) || t.lat.length < 2 || navigator.onLine === false || window.APEX_REVIEW) return;
+      if (!window.ApexGraphTiles || !ApexGraphTiles.keepAlong || !ownOn() || localStorage.getItem('apex.ownWarm') === '0') return;
+      setTimeout(() => {
+        if (track !== t) return;                                        // another route (or none) by then
+        ApexGraphTiles.keepAlong(t.lat, t.lon).then((k) => { if (window.apexDebug) window.apexDebug.keptAlong = k; }).catch(() => {});
+      }, 5000);
+    }
     // at launch, before any position: the tiles' index (the region's is asked once a day, kept for offline) and the
     // routing worker with its scripts, so a first plan never waits for either (2026-11-08: on the website the worker was
     // started by the first plan when the map had no fix yet, its four scripts fetched after Enter: 0.8 s)
@@ -5981,6 +6007,14 @@
       paintPlaces(q, out, out.length ? '' : ApexNearby.emptyLine(cat, failed, 8, (m) => ApexUnits.long(m)), 0);
       paintNearbyPins(rows, cat, here, out);
       warmPlace(out[0]);
+      // then whether each is open, under its name (place_info.js, one request for the list); unknown says nothing
+      if (window.ApexPlaceInfo && out.length) ApexPlaceInfo.lookupMany(rows.map((r) => (r.named ? { name: r.label, lat: r.lat, lon: r.lon } : null))).then((tags) => {
+        if (seq !== suggestSeq || !tags) return;
+        const now = new Date();
+        let any = false;
+        tags.forEach((t, i) => { const h = t ? ApexPlaceInfo.contact(t, now).hours : null; if (h) { out[i].sub = h.text; any = true; } });
+        if (any) paintPlaces(q, out, '', 0);
+      }).catch(() => {});
     }
     // the listed places on the map too, by name (an unnamed one by its stamp), the map fitted to them above the sheet; a tap
     // on one goes there, as its row does. They go when the list stops being a kind, the plan closes, or a route is planned.
@@ -7301,7 +7335,9 @@
       you.append(el('div', { className: 'row', style: 'align-items:center;gap:12px' }, ...(faceKey ? [faceKey] : []), el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' })));   // no "points": a number with no unit (REVIEW2.md U-41)
       // Who sees what (P-09): under You, every audience and what it gets
       if (whoSees) you.append(el('div', { className: 'nav-rows' }, whoSees.row()));
+      // your drive posts, as your friends see them on your profile (docs/SOCIAL.md 2.13), with kudos, comments and Delete
       gbody.append(you);
+      if (drivePosts && drivePosts.drivesOf && me.member && me.id) gbody.append(drivePosts.drivesOf(me.id));
       // Lists one tap away open as side sheets over People (REVIEW2.md U-30): each a row with its count and a chevron.
       const popSheet = (title) => { const p = el('aside', { className: 'side-pop people-pop' }); p.setAttribute('aria-label', title);
         p.append(el('div', { className: 'side-pop-head' }, el('h3', { textContent: title }), btn('Done', () => p.classList.remove('open'), 'linkbtn'))); return p; };
@@ -7900,10 +7936,12 @@
         return n;
       } catch (_) { return null; }
     }
+    // what the car map's own offline packs hold (the shell says, CarPlay/ApexCarOffline.swift); unknown off the app
+    let carOfflineBytes = null;
     async function renderOffline() {
       let est = {};
       try { est = (navigator.storage && navigator.storage.estimate) ? await navigator.storage.estimate() : {}; } catch (_) {}
-      const o = ApexMyData.offlineSummary(localStorage, await voiceCacheBytes(), est.usage, est.quota);
+      const o = { ...ApexMyData.offlineSummary(localStorage, await voiceCacheBytes(), est.usage, est.quota), carBytes: carOfflineBytes };
       renderAreas();
       const note = $('myOfflineNote'); if (note) note.textContent = ApexMyData.offlineText(o);
       $('myOfflineDelBtn').hidden = !(o.routes > 0) && !(o.areas > 0) && !(o.voiceBytes > 0);   // "Nothing saved for offline": nothing to delete
@@ -9708,6 +9746,23 @@
         });
         return b;
       }));
+      alongHours(t, rows);
+    }
+    // each named place's hours when you'd get there (place_info.js, one request for the list): the route's time spread
+    // over its length; "On arrival" once that is a quarter hour or more away. Unknown says nothing.
+    function alongHours(t, rows) {
+      if (!window.ApexPlaceInfo || !rows.some((r) => r.named)) return;
+      ApexPlaceInfo.lookupMany(rows.map((r) => (r.named ? { name: r.title, lat: r.lat, lon: r.lon } : null))).then((tags) => {
+        if (plannedRoute !== t || !tags) return;
+        const total = t.dist[t.dist.length - 1], subs = $('routeAlongPanel').querySelectorAll('.place small');
+        tags.forEach((tg, i) => {
+          const r = rows[i], el = subs[i];
+          if (!tg || !el || !r) return;
+          const s = Number.isFinite(t.timeS) && total > 0 && Number.isFinite(r.m) ? t.timeS * r.m / total : 0;
+          const h = ApexPlaceInfo.contact(tg, new Date(Date.now() + s * 1000)).hours;
+          if (h) el.textContent = ApexRouteCard.factText([el.textContent, `${s >= 900 ? 'On arrival: ' : ''}${h.text}`].filter(Boolean).join(' · '));
+        });
+      }).catch(() => {});
     }
     $('routeAlongLine').addEventListener('click', () => {
       const open = $('routeAlongPanel').hidden && $('routeAlongPanel').childElementCount > 0;
@@ -10377,6 +10432,7 @@
       openPlan(false);                                                 // the plan sheet too, and the keyboard with it
       if (track && track.kind === 'route') persistActive(track);       // kept if the app is closed mid-drive
       askAhead(track);                                                 // a planned route: the reports along it, ahead of a dead zone
+      keepNetworkAlong(track);                                         // and our road network along it, for a reroute there
       clearCarOffer();
       // U-59: the car enters every drive, a route or none (it went into a drive only on a guide message, so a free drive never
       // reached it: no End, no card). A route driven again goes back on the car's map first.
@@ -10451,7 +10507,9 @@
       $('endMeta').textContent = ApexFormat.factsLine(c);              // RA-3: the Log's numbers, from the one helper
       if (window.ApexEndReveal) ApexEndReveal.open(endEl(), { facts: ApexFormat.factsLine(c), runs: Array.isArray(c.lat) && Array.isArray(c.lon) ? endTrailRuns(c.lat, c.lon) : [] });
       const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(c) : null;   // Round 3: a drive that ended itself says how
-      $('endLine').textContent = ended ? ended + '.' : '';
+      // a wet or icy drive says so (road_surface.js label): its score and gaps are set against your wet passes, not your dry
+      const wetW = window.ApexRoadSurface ? ApexRoadSurface.label(c.surface) : '';
+      $('endLine').textContent = [ended, wetW].filter(Boolean).map((x) => x + '.').join(' ');
       // panel round 2 (HE-1): one measured road-feel line from this drive's own rows (road_feel.js); none for a drive whose
       // mount never calibrated, so nothing unmeasured is ever said
       const feel = window.ApexRoadFeel && c.feel ? ApexRoadFeel.endLine(c.feel, (m) => ApexUnits.long(m, 1)) : '';
@@ -10547,11 +10605,13 @@
       // U-111: one coaching sentence, the Log's (analysis_client.js coachLineOf, written in the job that scored the drive)
       const tip = none ? '' : typeof c.coach === 'string' ? c.coach : '';
       const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(c) : null;
+      const S = window.ApexRoadSurface, wetW = S ? S.label(c.surface) : '';   // "Wet road.": set against your wet passes only
       const tipLine = [ended ? ended + '.' : '', tip].filter(Boolean).join(' ');
       // your best on this road (REVIEW.md 4.4): against your earlier drives named after the same road; then the pack's closing line
       let best = false;
-      if (c.ds.score != null && window.ApexEndLine) { try { best = ApexEndLine.bestOnRoad({ id: c.id, name: c.name, score: c.ds.score }, others || []); } catch (_) { best = false; } }
-      $('endLine').textContent = best ? ['Your best on this road.', tipLine].filter(Boolean).join(' ') : tipLine;
+      if (c.ds.score != null && window.ApexEndLine) { try { best = ApexEndLine.bestOnRoad({ id: c.id, name: c.name, score: c.ds.score }, (others || []).filter((o) => !S || !o || S.alike(c.surface, o.surface))); } catch (_) { best = false; } }
+      const bestW = !best ? '' : wetW ? `Your best ${c.surface === 'ice' ? 'icy' : 'wet'} drive on this road.` : 'Your best on this road.';
+      $('endLine').textContent = [best ? bestW : wetW ? wetW + '.' : '', tipLine].filter(Boolean).join(' ');
       endReviewAsk(c, best);                                           // a good drive, parked: the App Store rating, once a version
       // IDEAS D-27: the skill Your driving is practicing, read on this drive alone (analysis_client.js practiceOf)
       const prLine = c.practice && typeof c.practice.line === 'string' ? c.practice.line : '';
@@ -10591,13 +10651,13 @@
       let secs = null;
       try { const T = Core.elapsedS(d.speed_mps), s = T[T.length - 1]; secs = Number.isFinite(s) ? s : null; } catch (_) { secs = null; }
       const c = { id: d.id, name: d.name, ended: d.ended, len_m: Array.isArray(d.dist) && d.dist.length ? d.dist[d.dist.length - 1] : null, secs,
-                  lat: d.lat, lon: d.lon, elev: d.elev, dist: d.dist, corners: null, ds: null, record: d,
+                  lat: d.lat, lon: d.lon, elev: d.elev, dist: d.dist, corners: null, ds: null, record: d, surface: d.surface,
                   feel: window.ApexRoadFeel ? ApexRoadFeel.summary({ dist: d.dist, camber: d.camber, rough: d.rough }) : null };
       endCardOpen(c);
       (async () => {
         let others = [];
         if (d.ds.score != null) try {
-          others = (await ApexRecording.summaries()).filter((o) => o.id !== d.id && o.name === d.name).map((o) => ({ id: o.id, name: o.name, score: o.ds && o.ds.score != null ? Math.round(o.ds.score) : null }));
+          others = (await ApexRecording.summaries()).filter((o) => o.id !== d.id && o.name === d.name).map((o) => ({ id: o.id, name: o.name, surface: o.surface || null, score: o.ds && o.ds.score != null ? Math.round(o.ds.score) : null }));
         } catch (_) { others = []; }
         let practice = null;                                           // IDEAS D-27: the practised skill, when the drive is stored
         const plan = practicePlan();
@@ -10830,6 +10890,7 @@
         const job = driveJob(rec, (when) => driveName(road, when));
         const card = endCardFacts(rec, job, extra);
         card.feel = window.ApexRoadFeel ? ApexRoadFeel.summary(ApexRoadFeel.columns(rec.rows)) : null;   // HE-1
+        card.surface = extra.surface || null;
         endCardOpen(card);
         try {
           const { rows: _, ...recState } = rec.snapshot(rec.samples);
@@ -11461,6 +11522,7 @@
       onNative(msg) {
         if (msg && msg.type === 'journals') { if (journalsWaiter) journalsWaiter(msg); return; }
         if (msg && msg.type === 'driveCam') { driveCamSaid(msg.state); return; }
+        if (msg && msg.type === 'carOffline') { carOfflineBytes = Number.isFinite(msg.bytes) ? msg.bytes : null; if (typeof renderOffline === 'function') renderOffline().catch(() => {}); return; }
         if (msg && msg.type === 'lifecycle') { if (driveActive) keepSave(); return; }   // going to the background: kept now
         if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'nudge') { nudgeAnswered(!!msg.granted); return; }

@@ -144,3 +144,10 @@ def test_the_car_map_is_told_what_to_keep():
     assert 'cmd == "offlinePacks"' in app and "ApexCarOffline.shared.carConnected()" in car
     assert "MLNShapeOfflineRegion" in swift and "MLNTilePyramidOfflineRegion" in swift and "styleURL = " not in swift and "ApexNativeCarMap.styleURL" in swift
     assert "path: CarPlay/ApexCarOffline.swift" in open(os.path.join(ROOT, "project.yml")).read()
+
+
+def test_your_data_counts_the_car_maps_copy():
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarOffline.swift")).read()
+    assert '"type": "carOffline", "bytes"' in swift and ".MLNOfflinePackProgressChanged" in swift
+    assert "ApexCarOffline.shared.toPage = " in open(os.path.join(ROOT, "ApexNavApp.swift")).read()
+    assert "msg.type === 'carOffline'" in open(os.path.join(ROOT, "web", "cockpit.js")).read()

@@ -7,6 +7,33 @@
 (function (root) {
   'use strict';
   const CUT_M = 500, MAX_POINTS = 600, PREVIEW = 3;
+  /** A comment's text with each @handle in bold (the server tells whoever it names, if they can see the post). */
+  const MENTION = /(^|[^A-Za-z0-9_@])(@[A-Za-z0-9_]{3,20})(?![A-Za-z0-9_])/g;
+  /** The @handle being typed just before the caret: { start, q } (q may be empty), or null when none is. */
+  function mentionAt(text, caret) {
+    const m = String(text || '').slice(0, caret).match(/(^|[^A-Za-z0-9_@])@([A-Za-z0-9_]{0,20})$/);
+    return m ? { start: caret - m[2].length - 1, q: m[2].toLowerCase() } : null;
+  }
+  /** Up to `max` handles starting with q, each once, in the order given (the post's people first, then friends). */
+  function suggest(q, handles, own, max = 4) {
+    const out = [];
+    for (const h of handles) {
+      const k = String(h || '').toLowerCase();
+      if (k && k !== own && k.startsWith(q) && !out.includes(k)) out.push(k);
+      if (out.length >= max) break;
+    }
+    return out;
+  }
+  function mentionParts(text) {
+    const out = []; let last = 0;
+    for (const m of String(text || '').matchAll(MENTION)) {
+      const start = m.index + m[1].length;
+      if (start > last) out.push([false, text.slice(last, start)]);
+      out.push([true, m[2]]); last = start + m[2].length;
+    }
+    if (last < String(text || '').length) out.push([false, text.slice(last)]);
+    return out;
+  }
 
   const metres = (a, b) => {
     const R = 6371000, r = Math.PI / 180, dLat = (b[0] - a[0]) * r, dLon = (b[1] - a[1]) * r;
@@ -136,6 +163,8 @@
     .feed-comment { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: start; }
     .feed-comment p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
     .feed-comment small { color: var(--panel-dim); font-size: 12px; }
+    .feed-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .feed-tags .feed-tag { min-height: 44px; }
     .feed-comment .feed-more { width: 44px; height: 44px; display: grid; place-items: center; text-decoration: none; font-size: 20px; color: var(--panel-ink); }
     .feed-say { display: flex; gap: 8px; }
     .feed-say .field { flex: 1; min-width: 0; }
@@ -154,6 +183,8 @@
    */
   function mount(page) {
     const { el, btn, toast, apiCall, jsonOf } = page;
+    let friendHandles = null;   // your friends' handles, asked once the first time you type @ in a comment
+    const withMentions = (text) => el('p', {}, ...mentionParts(text).map(([at, t]) => (at ? el('b', { textContent: t }) : root.document.createTextNode(t))));
     const doc = root.document;
     if (doc && !doc.getElementById('drivePostsStyle')) doc.head.append(el('style', { id: 'drivePostsStyle', textContent: STYLE }));
     const face = (p, px) => (page.avatar ? page.avatar(p.photo_id || null, p.handle, px) : el('span'));
@@ -304,7 +335,7 @@
       const list = el('div', { className: 'feed-comments' });
       const draw = () => list.replaceChildren(...p.comment_list.map((c) => {
         const row = el('div', { className: 'feed-comment' }, face(c, 30),
-          el('div', {}, el('b', { textContent: c.mine ? 'You' : `@${c.handle || '?'}` }), el('small', { textContent: ` ${ago(c.created_at, Date.now())}` }), el('p', { textContent: c.body })));
+          el('div', {}, el('b', { textContent: c.mine ? 'You' : `@${c.handle || '?'}` }), el('small', { textContent: ` ${ago(c.created_at, Date.now())}` }), withMentions(c.body)));
         const k = el('button', { type: 'button', className: 'linkbtn feed-more', textContent: '···' }); k.setAttribute('aria-label', 'More for this comment');
         k.addEventListener('click', () => {
           const m = sheet('This comment', 'feed-menu'); const keys = el('div', { className: 'row', style: 'flex-wrap:wrap' });
@@ -332,7 +363,25 @@
         field.value = ''; draw(); if (o.after) o.after();
       }, 'ink-btn solid');
       field.addEventListener('keydown', (e) => { if (e.key === 'Enter') send.click(); });
-      s.box.replaceChildren(card(p, { full: true, after: o.after, gone: s.close }), list, el('div', { className: 'feed-say' }, field, send), el('div', { className: 'row' }, btn('Done', s.close, 'linkbtn')));
+      // @ suggests who to mention: the post's driver, who commented, then your friends (one ask, the first time)
+      const tags = el('div', { className: 'feed-tags', role: 'list' }); tags.hidden = true;
+      const paint = () => {
+        const at = mentionAt(field.value, field.selectionStart == null ? field.value.length : field.selectionStart);
+        const own = page.myHandle ? page.myHandle() : null;
+        const names = at ? suggest(at.q, [p.handle, ...p.comment_list.map((c) => c.handle), ...(friendHandles || [])], own) : [];
+        tags.replaceChildren(...names.map((h) => btn(`@${h}`, () => {
+          const end = at.start + 1 + at.q.length, v = field.value;
+          field.value = `${v.slice(0, at.start)}@${h} ${v.slice(end)}`.slice(0, 280);
+          const c = Math.min(at.start + h.length + 2, field.value.length);
+          field.focus(); try { field.setSelectionRange(c, c); } catch (_) {}
+          paint();
+        }, 'ink-btn feed-tag')));
+        tags.hidden = !names.length;
+        if (at && friendHandles === null) { friendHandles = []; apiCall('GET', '/api/friends').then(jsonOf).then((l) => {
+          friendHandles = Array.isArray(l) ? l.filter((f) => f.status === 'accepted' && f.handle).map((f) => f.handle) : []; paint(); }).catch(() => {}); }
+      };
+      field.addEventListener('input', paint);
+      s.box.replaceChildren(card(p, { full: true, after: o.after, gone: s.close }), list, tags, el('div', { className: 'feed-say' }, field, send), el('div', { className: 'row' }, btn('Done', s.close, 'linkbtn')));
       if (o.focus) field.focus();
     }
 
@@ -357,9 +406,12 @@
       const box = el('section', { className: 'stack-8 feed-sec profile-drives' }); box.hidden = true;
       const list = el('div', { className: 'feed' });
       box.append(el('b', { textContent: 'Drives' }), list);
+      let all = false;   // See all: every post the Feed gives (its latest page), in place
       const redo = () => apiCall('GET', `/api/feed?author=${encodeURIComponent(author)}`).then(jsonOf).then((rows) => {
         if (!Array.isArray(rows)) return;
-        list.replaceChildren(...rows.slice(0, PREVIEW).map((p) => card(p, { after: redo })));
+        const more = !all && rows.length > PREVIEW;
+        list.replaceChildren(...(all ? rows : rows.slice(0, PREVIEW)).map((p) => card(p, { after: redo })),
+          ...(more ? [btn('See all', () => { all = true; redo(); }, 'linkbtn feed-all')] : []));
         box.hidden = !rows.length;
       }).catch(() => {});
       redo();
@@ -485,6 +537,6 @@
     return { section, full, open, compose, post, remove, card, drivesOf };
   }
 
-  const api = { trimLine, encode, decode, throughPoints, lineSvg, ago, facts, mount, CUT_M, MAX_POINTS };
+  const api = { trimLine, encode, decode, throughPoints, lineSvg, ago, facts, mentionParts, mentionAt, suggest, mount, CUT_M, MAX_POINTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDrivePosts = api;
 })(typeof window !== 'undefined' ? window : globalThis);

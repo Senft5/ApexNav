@@ -107,7 +107,9 @@ and in random batches so a trace cannot be re-assembled.
   week's time attack (See the board), kudos on your runs, a duel accepted or decided, new followers of your roadbooks
   (counted, never named: a public book's followers may be strangers), a crew drive you haven't answered (Answer), and
   kudos and comments on your drive posts, or a new comment after yours on someone else's post, one row per post with the
-  newest name and how many others (Open: the post and its comments; 2026-11-14).
+  newest name and how many others (Open: the post and its comments; 2026-11-14). A comment that @mentions you on a post
+  you can see shows as a Mention instead. Typing @ in a comment suggests the post's driver, who commented, then your
+  friends; a tap puts the handle in.
 - The People tab's badge counts what is new since you last had People → Friends on screen, plus what waits on you
   (friend requests, duels asked of you, a crew link, convoy invites). Asked when the app opens, comes to the front, and
   every five minutes while it is in front, never while driving.
@@ -129,7 +131,8 @@ and in random batches so a trace cannot be re-assembled.
 ### 2.12 Push notifications (built 2026-11-13; sends once APNs is on the owner's key)
 - What For you says, told to the phone the moment it happens: a friend request, a new friend, kudos on a run (once
   per run), kudos and comments on your drive post (and a new comment on a post you commented on, to the earlier
-  commenters who can still see it and aren't blocked either way, 2026-11-14), a duel asked of you or taken, a crew drive planned in your crew.
+  commenters who can still see it and aren't blocked either way, 2026-11-14; and "@bob mentioned you" to whoever a
+  comment @mentions, if they can see the post, five handles at most, one push per person), a duel asked of you or taken, a crew drive planned in your crew.
   Never to or from someone blocked; the words are the server's own (a handle, a stage or crew name, a drive's title),
   never a comment's text. A tap opens what it is about: the post with its comments, the friend, or People.
 - Garage → Settings → **Notifications**: one switch, off until turned on, and only then does iOS ask. In the
@@ -159,7 +162,8 @@ and in random batches so a trace cannot be re-assembled.
 - Stages on a post (built 2026-11-14): the stages you saved in the Log that the drive went over (at most three, in the
   order driven) go on its post, each with its Vetta Score there (`--` when too few clean corners); never a time.
 - A friend's drives on their profile (built 2026-11-14): their newest posts you can see (`GET /api/feed?author=`, the
-  Feed's own rules), with kudos and comments, between what to do with them and what they see of you.
+  Feed's own rules), with kudos and comments, between what to do with them and what they see of you. Your own posts
+  sit under You in the Garage the same way, each with ··· to delete it (2026-11-14). Three show, then See all.
 - Next: "Post to crew" from a corner clip on the drive's page (analysis thread adds the key, `page.post(blob, meta)`).
   Kudos and comments push (2.12).
 

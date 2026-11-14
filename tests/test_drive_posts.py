@@ -27,6 +27,9 @@ console.log(JSON.stringify({
   inBox: xy.every(([x, y]) => x >= 0 && x <= 200 && y >= 0 && y <= 96),
   facts: D.facts({ length_m: 32000, roads: ['A', 'B', 'C', 'D'] }, (m) => (m / 1000).toFixed(1) + ' km'),
   factsNone: D.facts({ length_m: null, roads: [] }, String),
+  mentions: [D.mentionParts('@sam nice, and you@bob? @cara!'), D.mentionParts('no one here'), D.mentionParts('@ab @toolonghandle_toolong x')],
+  at: [D.mentionAt('hey @Sa', 7), D.mentionAt('hey @', 5), D.mentionAt('mail x@y', 8), D.mentionAt('@sam done', 9), D.mentionAt('@bo and', 3)],
+  sug: [D.suggest('c', ['cara', 'Cara', 'carl', 'me', 'cy', 'ce', 'cz'], 'me'), D.suggest('', ['bob', 'me', null], 'me')],
   ago: [D.ago('2026-11-13 12:00:00', Date.parse('2026-11-13T12:01:00Z')), D.ago('2026-11-13 12:00:00', Date.parse('2026-11-13T15:00:00Z'))],
 }));
 """
@@ -51,3 +54,16 @@ def test_codec_svg_and_facts():
     assert r["facts"] == "32.0 km · A, B +2"
     assert r["factsNone"] == ""
     assert r["ago"] == ["just now", "3 h"]
+
+
+def test_mentions_bold_handles_only():
+    m = run()["mentions"]
+    assert m[0] == [[True, "@sam"], [False, " nice, and you@bob? "], [True, "@cara"], [False, "!"]]   # an email-ish "you@bob" isn't one
+    assert m[1] == [[False, "no one here"]]
+    assert m[2] == [[False, "@ab @toolonghandle_toolong x"]]                                          # too short, too long
+
+
+def test_mention_suggestions():
+    r = run()
+    assert r["at"] == [{"start": 4, "q": "sa"}, {"start": 4, "q": ""}, None, None, {"start": 0, "q": "bo"}]
+    assert r["sug"] == [["cara", "carl", "cy", "ce"], ["bob"]]

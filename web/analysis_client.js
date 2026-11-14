@@ -256,7 +256,7 @@
       try { const s = Rec().scoreOf(Core, d); card = root.ApexDriveCard ? root.ApexDriveCard.cardModel({ ...d, corners: s.corners, ds: s.ds }) : null; } catch (_) { card = null; }
       const sums = await Rec().summaries(Core);
       const others = sums.filter((o) => o.id !== d.id && o.name === d.name)
-        .map((o) => ({ id: o.id, name: o.name, score: o.ds && o.ds.score != null ? Math.round(o.ds.score) : null }));
+        .map((o) => ({ id: o.id, name: o.name, surface: o.surface || null, score: o.ds && o.ds.score != null ? Math.round(o.ds.score) : null }));
       let practice = null;                                             // IDEAS D-27: the practised skill, on this drive alone
       try { practice = practiceOf(Core, d, plan); } catch (_) { practice = null; }
       let coach = null;                                                // U-111: the Log's sentence, written once, here

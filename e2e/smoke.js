@@ -3813,6 +3813,28 @@ flow('drive ended: your best on this road on the card, and the pack closes with 
   check(JSON.stringify(out.played) === JSON.stringify(['sys:end', 'end:score', 'n:h2', 'end:best']), 'Marguerite closes with the score from her clips: ' + JSON.stringify(out.played));
 });
 
+flow('drive ended on a wet road: the card says so, and your best wet drive here is a best though a dry one scored higher (road_surface.js alike)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    const S = window.speechSynthesis; if (S) S.speak = (u) => setTimeout(() => u.onend && u.onend(), 20); });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording && window.ApexEndLine && window.ApexRoadSurface);
+  const out = await page.evaluate(async () => {
+    ApexCore.driverScore = (v) => ({ score: v.length, components: {} });
+    const rec = (id, n, day, surface) => { const lat = [], lon = []; for (let i = 0; i < n; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
+      return { id, name: 'Cherohala Skyway', date: `2026-10-${day}T15:00:00Z`, lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+        lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [], ...(surface ? { surface } : {}) }; };
+    await ApexRecording.store(rec('dry1', 300, '10'));
+    await ApexRecording.store(rec('wet1', 100, '20', 'wet'));
+    const d = rec('wet2', 200, '29', 'wet');
+    await ApexRecording.store(d);
+    apexDebug.showEndCard(d, Date.now() - 30 * 60000);
+    for (let i = 0; i < 50 && document.getElementById('endScore').textContent !== '200'; i++) await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 300));
+    return { line: document.getElementById('endLine').textContent, score: document.getElementById('endScore').textContent };
+  });
+  check(out.score === '200' && /^Your best wet drive on this road\./.test(out.line) && !/Wet road\./.test(out.line), 'the card: ' + JSON.stringify(out));
+});
+
 flow('first open in the app: the welcome runs, and Start is what asks the shell for location (REVIEW4 U-65, U-68, U-80)', async (page, base) => {
   await page.addInitScript(() => { window.__native = []; window.APEX_EMBED = true; window.APEX_PLATFORM = 'ios';
     window.webkit = { messageHandlers: { apex: { postMessage(m) { window.__native.push(m && m.cmd ? m.cmd : m); } } } }; });
@@ -4811,6 +4833,8 @@ flow('reports ahead of a dead zone: a drive on a planned route asks for the cell
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
   await page.waitForFunction(() => window.apexDebug.askedAhead > 0, null, { timeout: 15000 });   // asked as the drive starts
   check(asked.includes('35.8,-83.9') && !asked.includes('35.5,-83.9') && !asked.includes('36.1,-83.9'), 'the cells along the way were asked, never the start\'s or the end\'s: ' + JSON.stringify(asked));
+  // and our road network along the route is kept as the drive starts (graph_tiles.js keepAlong), for a reroute further on
+  await page.waitForFunction(() => window.apexDebug.keptAlong && Number.isFinite(window.apexDebug.keptAlong.tiles), null, { timeout: 15000 });
   // no signal from here; the car is well along the route, in the 35.8 cell
   offline = true;
   await page.evaluate(async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.70 + i * 0.0025, lon: -83.92, accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, calibration: 'locked' }); await new Promise((r) => setTimeout(r, 10)); } });
@@ -6652,6 +6676,11 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   await page.click('#accountBody .feed-card .feed-acts button[aria-label="1 comments"]');
   await page.waitForSelector('.feed-sheet .feed-comment');
   check(/Was that you at the overlook\?/.test(await page.textContent('.feed-sheet .feed-comments')), 'the comments, under the post');
+  // (2026-11-14) typing @ suggests who to mention: the post's people, then friends
+  await page.locator('.feed-sheet .feed-say .field').pressSequentially('@ca');
+  await page.waitForSelector('.feed-sheet .feed-tags:not([hidden]) button:has-text("@cara")');
+  await page.click('.feed-sheet .feed-tags button:has-text("@cara")');
+  check(await page.inputValue('.feed-sheet .feed-say .field') === '@cara ' && await page.isHidden('.feed-sheet .feed-tags'), 'a tap puts the handle in: ' + await page.inputValue('.feed-sheet .feed-say .field'));
   await page.fill('.feed-sheet .feed-say .field', 'Yes! Waved.');
   await page.click('.feed-sheet .feed-say button:has-text("Send")');
   await page.waitForFunction(() => document.querySelectorAll('.feed-sheet .feed-comment').length === 2);
@@ -6778,6 +6807,28 @@ flow('post media: a friend\'s photo shows on their post in the Feed, and Add a p
   check(order[0] === 'POST /api/posts application/json' && order[1] === 'PUT /api/posts/P2AAAAAAAAAAAAAA/media image/jpeg' && posts[1].n > 100, 'the post, then its photo as a JPEG: ' + JSON.stringify(order));
   check(/Posted to your friends\./.test(await page.textContent('#toast')), 'and it says where it went');
 });
+flow('Garage → You shows your own drive posts, three and See all, with Delete on each (Worker stubbed, docs/SOCIAL.md 2.13)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const at = new Date(Date.now() - 3600e3).toISOString().slice(0, 19).replace('T', ' ');
+  const post = (n) => ({ id: `P${n}AAAAAAAAAAAAAAA`.slice(0, 16), handle: 'me', photo_id: null, mine: true, crew: null, title: `Drive ${n}`, caption: null, driven_on: '2026-11-12',
+    length_m: 20000, score: 700 + n, roads: [], stages: [], line: null, created_at: at, kudos: 0, my_kudos: false, comments: 0 });
+  const asked = [];
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, id: 'ME1', member: true, handle: 'me' });
+    if (u.pathname === '/api/feed') { asked.push(u.searchParams.get('author')); return json([1, 2, 3, 4, 5].map(post)); }
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForSelector('#garageMeBody .profile-drives:not([hidden]) .feed-card', { timeout: 15000 });
+  check(asked.includes('ME1'), 'asked for your own posts by your id: ' + JSON.stringify(asked));
+  check(await page.$$eval('#garageMeBody .profile-drives .feed-card', (l) => l.length) === 3, 'three at first');
+  check(await page.$$eval('#garageMeBody .profile-drives .feed-card .feed-more', (l) => l.length) === 3, 'each has its ··· (Delete)');
+  await page.click('#garageMeBody .profile-drives button:has-text("See all")');
+  await page.waitForFunction(() => document.querySelectorAll('#garageMeBody .profile-drives .feed-card').length === 5);
+  check(!(await page.$('#garageMeBody .profile-drives button:has-text("See all")')), 'See all goes once all are shown');
+});
+
 flow('a drive posted with no signal waits on the phone and goes up once there is one (Worker stubbed, IDEAS F-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   let down = false; const posted = [];
@@ -6995,7 +7046,7 @@ flow('For you: the People badge counts what is new and what waits; People lists 
     if (u.pathname === '/api/segments') return json([{ id: 'MY1', origin_id: null, name: 'Dry Ridge climb', geom, start_lat: 35.6, start_lon: -83.9 }]);
     if (u.pathname === '/api/points') return json({ total: 0 });
     if (u.pathname === '/api/posts/P1') return json({ id: 'P1', author_handle: 'me', mine: true, title: 'Tellico climb', driven_on: '2026-11-13', length_m: 30000, score: 812, roads: [], stages: [], line: null,
-      created_at: at(500), kudos: 2, my_kudos: false, comments: 2, comment_list: [{ id: 'K1', body: 'That fog!', created_at: at(400), handle: 'cara', mine: false, can_delete: true }] });
+      created_at: at(500), kudos: 2, my_kudos: false, comments: 2, comment_list: [{ id: 'K1', body: 'That fog! @bob was there', created_at: at(400), handle: 'cara', mine: false, can_delete: true }] });
     return json([]);
   });
   await page.goto(base + '/index.html');
@@ -7041,6 +7092,7 @@ flow('For you: the People badge counts what is new and what waits; People lists 
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
   await page.click('#accountBody .inbox-row:has-text("Tellico climb") button:has-text("Open")');
   await page.waitForSelector('.feed-sheet .feed-comment:has-text("That fog!")', { timeout: 8000 });
+  check(await page.textContent('.feed-sheet .feed-comment p b') === '@bob', 'an @mention in a comment is in bold');
 });
 
 flow('Billet: a primary key is light metal with dark ink, not dark on dark (REVIEW_PEOPLE.md P-01)', async (page, base) => {
@@ -8570,6 +8622,9 @@ flow('offline area: Save the map here keeps the map, labels and terrain; with no
   check(area.tiles > 500 && area.tiles <= 2500 && Math.abs(area.lat - 35.6) < 0.01, 'an area of tiles round the map: ' + JSON.stringify(area));
   check(tiles > 400, 'the tiles were fetched: ' + tiles);
   await page.waitForFunction(() => /1 map area/.test(document.getElementById('myOfflineNote').textContent), null, { timeout: 5000 });
+  // in the app the shell says what the car map's own copy holds (CarPlay/ApexCarOffline.swift): Your data counts it too
+  await page.evaluate(() => window.apex.onNative({ type: 'carOffline', bytes: 5 * 1048576, packs: 1, done: true }));
+  await page.waitForFunction(() => /the car map's copy 5\.0 MB/.test(document.getElementById('myOfflineNote').textContent), null, { timeout: 5000 });
   // no signal: the map opens from the saved style and tiles
   online = false;
   await page.reload();
@@ -10377,8 +10432,17 @@ flow('find nearby: Where to? has Gas, Coffee and Food; a key, or "gas near me" t
   await tap('#destInput', 'Where to?');
   const keys = await page.evaluate(() => [...document.querySelectorAll('#nearbyKeys .chip')].map((b) => ({ t: b.textContent, h: Math.round(b.getBoundingClientRect().height), l: b.getAttribute('aria-label') })));
   check(keys.map((k) => k.t).join() === 'Gas,Coffee,Food' && keys.every((k) => k.h >= 44 && / nearby$/.test(k.l)), 'three keys under Where to?: ' + JSON.stringify(keys));
+  // each named place's own hours, in one Overpass request for the list (place_info.js lookupMany): the café open all day
+  const overpass = [];
+  await page.route(/^https:\/\/overpass/, (route) => { const q = decodeURIComponent((route.request().postData() || '').replace(/^data=/, '')); overpass.push(q);
+    const els = [...q.matchAll(/around:60,(-?[\d.]+),(-?[\d.]+)\)\["name"="([^"]+)"\]/g)].filter((m) => m[3] === 'Bean There Coffee')
+      .map((m, i) => ({ type: 'node', id: i + 1, lat: +m[1], lon: +m[2], tags: { name: m[3], opening_hours: '24/7' } }));
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: els }) }); });
   await tap('#nearbyKeys .chip:nth-child(2)', 'Coffee');
   await page.waitForFunction(() => document.querySelectorAll('#placeList .place').length >= 2, null, { timeout: 5000 });
+  await page.waitForFunction(() => { const s = document.querySelector('#placeList .place small'); return s && s.textContent === 'Open 24 hours'; }, null, { timeout: 5000 })
+    .catch(async () => { throw new Error('the café says it is open: ' + JSON.stringify({ overpass, list: await page.textContent('#placeList') })); });
+  check(new Set(overpass).size === 1 && !/no name/.test(overpass[0]), 'one query for the list (raced over the servers, as cameras.js), named places only: ' + JSON.stringify(overpass));
   const rows = await page.evaluate(() => ({ q: document.getElementById('destInput').value, keys: document.getElementById('nearbyKeys').hidden,
     rows: [...document.querySelectorAll('#placeList .place')].map((b) => [b.querySelector('b').textContent, b.querySelector('span').textContent]) }));
   check(rows.q === 'Coffee' && rows.keys && rows.rows.length === 2 && rows.rows[0][0] === 'Bean There Coffee' && /^0\.\d mi$/.test(rows.rows[0][1])
@@ -10411,6 +10475,10 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
     if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(style) });
     if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
     return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) }); });
+  // the place's own OSM tags, from Overpass (place_info.js): open all day, a phone and a site
+  let asked = '';
+  await page.route(/^https:\/\/overpass/, (route) => { asked = decodeURIComponent(route.request().postData() || ''); return route.fulfill({ contentType: 'application/json',
+    body: JSON.stringify({ elements: [{ type: 'node', id: 1, tags: { name: 'Bean There Coffee', opening_hours: '24/7', phone: '+1 513 555 0101', website: 'beanthere.example.com' } }] }) }); });
   // on by default since the owner said yes (2026-11-14); apex.mapPlaces = '0' turns it off
   await planPage(page, base);
   await page.waitForFunction(() => apexDebug.map.getLayer('apex-places'), null, { timeout: 10000 });
@@ -10436,6 +10504,11 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
   await page.waitForSelector('#pinOverlay.show', { timeout: 3000 });
   const card = await page.evaluate(() => ({ name: document.getElementById('pinPlace').textContent, kind: document.getElementById('pinKind').textContent, go: !!document.getElementById('pinGoBtn').offsetParent }));
   check(card.name === 'Bean There Coffee' && /^Café · 0\.\d mi$/.test(card.kind) && card.go, 'the place card: its name, kind and how far: ' + JSON.stringify(card));
+  // then whether it is open, and Call and Website, from its own tags (2026-11-14, as Apple Maps' card)
+  await page.waitForFunction(() => !document.getElementById('pinHours').hidden && !document.getElementById('pinContact').hidden, null, { timeout: 5000 });
+  const more = await page.evaluate(() => ({ hours: document.getElementById('pinHours').textContent, keys: [...document.querySelectorAll('#pinContact a')].map((a) => [a.textContent, a.getAttribute('href'), a.getBoundingClientRect().height]) }));
+  check(more.hours === 'Open 24 hours' && JSON.stringify(more.keys.map((k) => k.slice(0, 2))) === '[["Call","tel:+15135550101"],["Website","https://beanthere.example.com/"]]' && more.keys.every((k) => k[2] >= 44)
+    && /"name"="Bean There Coffee"/.test(asked), 'the card says it is open and offers Call and Website: ' + JSON.stringify({ more, asked }));
   await page.click('#pinCancelBtn');
   // in a drive the map carries the road, not the shops
   await page.evaluate(() => { for (let i = 0; i < 5; i++) window.apex.live({ lat: 39.155 + i * 1e-5, lon: -84.615, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0, lon_g: 0 }); });
@@ -10446,6 +10519,11 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
 
 flow('along the route by name: the Along line opens a list of the cafés and fuel stops by their names on the map, and a tap on one (or its pin) says its name and offers it as a stop; in a drive the next fuel stamp names its station (the owner, 2026-11-11)', async (page, base) => {
   await planRouter(page);
+  // the Shell's own hours (place_info.js): open all day, so the same whenever you'd get there
+  await page.route(/^https:\/\/overpass/, (route) => { const q = decodeURIComponent((route.request().postData() || '').replace(/^data=/, ''));
+    const els = [...q.matchAll(/around:60,(-?[\d.]+),(-?[\d.]+)\)\["name"="([^"]+)"\]/g)].filter((m) => m[3] === 'Shell')
+      .map((m) => ({ type: 'node', id: 9, lat: +m[1], lon: +m[2], tags: { name: 'Shell', opening_hours: '24/7' } }));
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: els }) }); });
   const { tap } = await planPage(page, base);
   // the map's points (offline here): a named café and an unnamed fuel station beside the route, from the route's own samples
   await page.evaluate(() => { ApexStages.pois = async (pts) => { const a = pts[Math.min(1, pts.length - 1)], b = pts[Math.min(3, pts.length - 1)];
@@ -10465,6 +10543,10 @@ flow('along the route by name: the Along line opens a list of the cafés and fue
     h: b.getBoundingClientRect().height, wide: b.getBoundingClientRect().right <= innerWidth })));
   check(rows.length >= 2 && rows[0].name === 'Bean There Coffee' && /^Café/.test(rows[0].sub) && rows.some((r) => r.name === 'Fuel station, no name on the map')
     && rows.every((r) => /( in|at the start)$/.test(r.at) && r.h >= 44 && r.wide), 'each place by its name (an unnamed one says so), where on the route, a 44 px row: ' + JSON.stringify(rows));
+  // the Shell says it is open (all day, so on arrival too); the café, with no hours known, says nothing more
+  await page.waitForFunction(() => [...document.querySelectorAll('#routeAlongPanel .place')].some((b) => b.querySelector('b').textContent === 'Shell' && /Open 24 hours$/.test(b.querySelector('small').textContent)), null, { timeout: 5000 })
+    .catch(async () => { throw new Error('the Shell says it is open: ' + await page.textContent('#routeAlongPanel')); });
+  check(!/Open|Closed/.test(await page.evaluate(() => document.querySelector('#routeAlongPanel .place small').textContent)), 'no hours known: nothing said');
   await scan(page, 'Along the route, open');
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/along-open.png` });
   await page.evaluate(() => document.querySelector('#routeAlongPanel .place').click());
