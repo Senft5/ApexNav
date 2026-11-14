@@ -913,14 +913,16 @@
       if (!window.ApexScenic || !ApexScenic.declutter) return;
       // the route notes' stamps (LPR, SPD, a hazard) are `fixed`: always shown, the map's pins kept off them (scenic.js)
       const notePins = pins.map((p) => ({ marker: p.marker, el: p.el, kind: `note:${p.e.code}`, fixed: true, m: p.e.dist_m }));
-      const shown = poiDeclutter.pins.concat(notePins).filter((p) => p.el.style.display !== 'none' && p.el.isConnected), c = map.getContainer();
+      // the route tags (route_callouts.js) too: a stamp under one is hidden, the tag stays (it sits above its point)
+      const tagPins = callouts.map((mk) => ({ marker: mk, el: mk.getElement(), kind: 'callout', fixed: true, m: 0, tag: true }));
+      const shown = poiDeclutter.pins.concat(notePins, tagPins).filter((p) => p.el.style.display !== 'none' && p.el.isConnected), c = map.getContainer();
       const close = map.getZoom() >= VIEW_NAME_ZOOM;                    // a named viewpoint's name, only where it has room
       for (const p of shown) if (p.kind === 'view' && p.name) { const t = close ? p.name : SCENIC_LABEL.view; if (p.el.textContent !== t) p.el.textContent = t; }
       const keep = ApexScenic.declutter(shown.map((p) => {
-        const xy = map.project(p.marker.getLngLat());
-        return { kind: p.kind, named: p.named, fixed: !!p.fixed, m: p.m, x: xy.x, y: xy.y, w: p.el.offsetWidth, h: p.el.offsetHeight };
+        const xy = map.project(p.marker.getLngLat()), h = p.el.offsetHeight;
+        return { kind: p.kind, named: p.named, fixed: !!p.fixed, m: p.m, x: xy.x, y: p.tag ? xy.y - 6 - h / 2 : xy.y, w: p.el.offsetWidth, h };   // a tag's box is above its point
       }), { w: c.clientWidth, h: c.clientHeight });
-      shown.forEach((p, i) => { p.el.style.visibility = keep[i] ? '' : 'hidden'; });
+      shown.forEach((p, i) => { if (!p.tag) p.el.style.visibility = keep[i] ? '' : 'hidden'; });
     }
     map.on('move', declutterSoon);
     map.on('resize', declutterSoon);
@@ -4974,6 +4976,8 @@
         callouts.push(new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -6] }).setLngLat([g.lon, g.lat]).addTo(map));
         el.setAttribute('aria-label', g.label);                            // after the Marker, which labels it "Map marker"
       }
+      declutterSoon();                                                     // the stamps under a tag step aside
+      if (window.apexDebug) window.apexDebug.calloutAt = () => callouts.map((mk) => { const q = map.project(mk.getLngLat()), r = map.getContainer().getBoundingClientRect(); return [q.x + r.left, q.y + r.top]; });
     }
     function setFunLevel(level) {
       if (!FunRoute.LEVELS[level]) return;

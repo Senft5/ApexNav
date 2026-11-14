@@ -1812,7 +1812,7 @@
     .poi-pin.poi-charge { border-color: #2e6b8a; color: color-mix(in srgb, #2e6b8a 60%, var(--panel-ink, #222)); }  /* an electric car's chargers (scenic.js forCar) */
     /* Find nearby's places: the name on the stamp, a size up from the route's along stamps (they are what you asked for) */
     /* the routes' tags on the map (route_callouts.js): time over corners, a tail to the line; the picked route's filled */
-    .route-callout { position: relative; display: grid; justify-items: center; gap: 1px; padding: 4px 9px 5px; border: 1.5px solid var(--panel-ink, #222); border-radius: 8px; background: var(--panel, #fff); color: var(--panel-ink, #222); font: inherit; line-height: 1.1; white-space: nowrap; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
+    .route-callout { display: grid; justify-items: center; gap: 1px; padding: 4px 9px 5px; border: 1.5px solid var(--panel-ink, #222); border-radius: 8px; background: var(--panel, #fff); color: var(--panel-ink, #222); font: inherit; line-height: 1.1; white-space: nowrap; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
     .route-callout b { font: 700 14px var(--font-ui, sans-serif); }
     .route-callout small { font: 600 10px var(--font-ui, sans-serif); opacity: 0.75; }
     .route-callout::after { content: ''; position: absolute; left: 50%; bottom: -6px; width: 9px; height: 9px; transform: translateX(-50%) rotate(45deg); background: inherit; border: inherit; border-width: 0 1.5px 1.5px 0; border-radius: 0 0 2px 0; }
