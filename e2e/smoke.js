@@ -2343,6 +2343,32 @@ flow('a DOT crash on the route ahead, your way, is offered miles out with Go rou
   check(/Going round the crash/.test(await page.textContent('#dsNote')), 'the drive says it is going round: ' + await page.textContent('#dsNote'));
 }, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });
 
+flow('Road cameras: an opt-in layer of Ohio DOT\'s traffic cameras, loaded only when switched on; a tap shows the road now (Worker stubbed)', async (page, base) => {
+  let asked = 0;
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/traffic/v1/cameras.json') { asked++; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ src: 'ODOT', cams: [
+      { id: 'c1', lat: 39.96, lon: -83.0, name: 'I-70 at SR-256', views: [{ dir: '', url: 'https://itscameras.dot.state.oh.us/images/col/i70.jpg' }] }] }) }); }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.route('https://itscameras.dot.state.oh.us/**', (route) => route.fulfill({ contentType: 'image/png',
+    body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') }));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded(), null, { timeout: 20000 });
+  check(!(await page.evaluate(() => !!window.ApexRoadCams)) && asked === 0, 'nothing loaded or asked before the switch');
+  await page.evaluate(() => { document.getElementById('swTab').click(); document.querySelector('[data-toggle="roadcams"]').click(); });
+  await page.waitForFunction(() => window.apexDebug.map.getLayer('roadcams-dots'), null, { timeout: 10000 });
+  check(asked === 1, 'the cameras asked once: ' + asked);
+  await page.evaluate(() => apexDebug.roadCams().open('c1'));
+  await page.waitForFunction(() => { const i = document.querySelector('.rc-pic'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 10000 });
+  const got = await page.evaluate(() => ({ src: document.querySelector('.rc-pic').src, title: document.querySelector('.overlay.show h3').textContent, note: document.querySelector('.overlay.show .note').textContent }));
+  check(/^https:\/\/itscameras\.dot\.state\.oh\.us\/images\/col\/i70\.jpg\?t=\d+$/.test(got.src) && got.title === 'I-70 at SR-256' && /Ohio DOT/.test(got.note), 'the picture opens: ' + JSON.stringify(got));
+  await page.evaluate(() => [...document.querySelectorAll('.overlay.show button')].find((b) => b.textContent === 'Close').click());
+  await page.evaluate(() => document.querySelector('[data-toggle="roadcams"]').click());
+  check(await page.evaluate(() => apexDebug.map.getLayoutProperty('roadcams-dots', 'visibility') === 'none'), 'off hides them');
+});
+
 // a road closure that lands on the route ahead mid-drive: Go round, as for police, with no switch (2026-11-12)
 flow('a road closure, driving: a closure reported on the route ahead is offered once with Go round, which routes round it, with no switch on (Worker and router stubbed)', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')

@@ -263,3 +263,65 @@ export async function trafficResponse(env: Env, fetcher: typeof fetch = fetch): 
   if (cache) await cache.put(key, res.clone());
   return res;
 }
+
+// ---- Road cameras (Ohio's OHGO traffic cameras, 2026-11-14) -----------------------------------------------------------
+// ODOT's ~1,100 traffic cameras: still pictures of the road, refreshed by ODOT every few minutes, for the map's opt-in Road
+// cameras layer (web/road_cams.js): snow, ice or a wet road before a drive. Traffic cameras, not speed or plate cameras
+// (those are Avoid cameras, web/cameras.js). The list changes rarely: asked of OHGO at most once a day per edge. The phone
+// loads each picture straight from ODOT's image server (itscameras.dot.state.oh.us, in the page's img-src).
+export const CAMS_S = 86400, CAM_IMG_HOST = "itscameras.dot.state.oh.us";
+export interface RoadCam { id: string; lat: number; lon: number; name: string; views: { dir: string; url: string }[] }
+
+/** One page of OHGO's /cameras as rows: a camera with a point and at least one picture on ODOT's own image host. */
+export function parseOhgoCams(json: unknown): RoadCam[] {
+  const rows = (json as { results?: unknown })?.results;
+  if (!Array.isArray(rows)) return [];
+  const out: RoadCam[] = [];
+  for (const r of rows as Record<string, any>[]) {
+    try {
+      if (!r || !finite(r.latitude) || !finite(r.longitude) || !inRange(r.latitude, r.longitude)) continue;
+      const views = (Array.isArray(r.cameraViews) ? r.cameraViews : []).flatMap((v: any) => {
+        let u: URL;
+        try { u = new URL(String(v?.largeUrl ?? v?.smallUrl ?? "")); } catch { return []; }
+        if (u.protocol !== "https:" || u.hostname !== CAM_IMG_HOST) return [];
+        u.port = "";                                                     // ":443" spelled out on some
+        const dir = cut(v?.direction, 20);
+        return [{ dir: dir && dir !== "View" ? dir : "", url: u.toString() }];
+      }).slice(0, 4);
+      if (!views.length) continue;
+      out.push({ id: String(r.id ?? "").slice(0, 30), lat: r5(r.latitude), lon: r5(r.longitude), name: cut(r.location ?? r.description, 60) ?? "Road camera", views });
+    } catch { /* as above */ }
+  }
+  return out;
+}
+
+/** GET /api/traffic/v1/cameras.json: every page of OHGO's cameras, cached a day; 503 no_key without the owner's key. */
+export async function camerasResponse(env: Env, fetcher: typeof fetch = fetch): Promise<Response> {
+  const head = { "content-type": "application/json", ...SEC };
+  let key: unknown = null;
+  try { key = env.CTX_KEYS ? (JSON.parse(env.CTX_KEYS) as Record<string, unknown>).ohgoApiKey : null; } catch { key = null; }
+  if (!(typeof key === "string" && key)) key = env.OHGO_API_KEY ?? null;
+  if (!(typeof key === "string" && key)) return new Response(JSON.stringify({ error: "no_key" }), { status: 503, headers: { ...head, "cache-control": "no-store" } });
+  const cache = typeof caches !== "undefined" ? (caches as unknown as { default: Cache }).default : null;
+  const ck = new Request("https://apexnav.cache/traffic/v1/cameras.json");
+  const hit = cache ? await cache.match(ck) : undefined;
+  if (hit) return new Response(hit.body, { headers: hit.headers });
+  const q = (page: number) => `${OHGO}/cameras?${page > 1 ? `page=${page}&` : ""}api-key=${encodeURIComponent(key as string)}`;
+  const getCams = async (url: string) => {
+    const r = await fetcher(url, { headers: { "user-agent": "Vetta-traffic/1.0", accept: "application/json" }, cf: { cacheTtl: CAMS_S, cacheEverything: true } } as RequestInit);
+    if (!r.ok) throw new Error(`upstream ${r.status}`);
+    return r.json() as Promise<{ totalPageCount?: unknown }>;
+  };
+  let cams: RoadCam[] = [];
+  try {
+    const first = await getCams(q(1));
+    const pages = Math.min(10, finite(first.totalPageCount) ? Math.max(1, Math.floor(first.totalPageCount)) : 1);
+    const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => getCams(q(i + 2))));
+    cams = [first, ...rest].flatMap(parseOhgoCams);
+  } catch {
+    return new Response(JSON.stringify({ error: "cameras_unavailable" }), { status: 502, headers: { ...head, "cache-control": "no-store" } });
+  }
+  const res = new Response(JSON.stringify({ src: "ODOT", cams }), { headers: { ...head, "cache-control": `public, max-age=${CAMS_S}` } });
+  if (cache) await cache.put(ck, res.clone());
+  return res;
+}

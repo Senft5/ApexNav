@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { api } from "./helpers";
-import { IN_EVENTS, KY_WZDX, OHGO, parseIndiana, parseOhgo, parseOhgoSigns, parseOhgoSlow, parseOhgoWeather, parseWzdx, trafficEvents } from "../src/traffic";
+import { IN_EVENTS, KY_WZDX, OHGO, camerasResponse, parseOhgoCams, parseIndiana, parseOhgo, parseOhgoSigns, parseOhgoSlow, parseOhgoWeather, parseWzdx, trafficEvents } from "../src/traffic";
 import inFeed from "./fixtures/traffic_in.json";
 import kyFeed from "./fixtures/traffic_ky.json";
 import ohInc from "./fixtures/traffic_oh_incidents.json";
 import ohCon from "./fixtures/traffic_oh_construction.json";
 import ohWx from "./fixtures/traffic_oh_weather.json";
 import ohSigns from "./fixtures/traffic_oh_signs.json";
+import ohCams from "./fixtures/traffic_oh_cams.json";
 
 const NOW = Date.parse("2026-11-14T03:00:00Z");
 const real = globalThis.fetch;
@@ -139,5 +140,26 @@ describe("GET /api/traffic/v1/events.json", () => {
     seen.length = 0;
     expect((await trafficEvents({ OHGO_API_KEY: "k2" } as never, f, NOW)).sources).toEqual(["INDOT", "KYTC", "ODOT"]);
     expect(seen).toContain(`${OHGO}/construction?api-key=k2`);
+  });
+});
+
+describe("GET /api/traffic/v1/cameras.json (Ohio's traffic cameras)", () => {
+  it("needs the owner's key", async () => {
+    const r = await camerasResponse({} as never, (async () => new Response("{}")) as typeof fetch);
+    expect(r.status).toBe(503);
+  });
+  it("reads every page, keeps pictures on ODOT's own image host only, without the :443", async () => {
+    const seen: string[] = [];
+    const f = (async (input: RequestInfo | URL) => { seen.push(String(input)); return new Response(JSON.stringify(ohCams)); }) as typeof fetch;
+    const c = (caches as unknown as { default: Cache }).default;
+    await c.delete(new Request("https://apexnav.cache/traffic/v1/cameras.json"));
+    const r = await camerasResponse({ OHGO_API_KEY: "k3" } as never, f);
+    expect(r.status).toBe(200);
+    expect(r.headers.get("cache-control")).toBe("public, max-age=86400");
+    expect(seen).toEqual([`${OHGO}/cameras?api-key=k3`, `${OHGO}/cameras?page=2&api-key=k3`]);
+    const j = (await r.json()) as { cams: { id: string; views: { url: string }[] }[] };
+    expect(j.cams.map((x) => x.id)).toEqual(["00000000000001", (ohCams as any).results[1].id, "00000000000001", (ohCams as any).results[1].id]);   // (the stub answers both pages alike)
+    expect(j.cams.every((x) => x.views.every((v) => v.url.startsWith("https://itscameras.dot.state.oh.us/")))).toBe(true);
+    expect(parseOhgoCams({ results: [{ id: "z", latitude: 40, longitude: -83, cameraViews: [{ largeUrl: "http://itscameras.dot.state.oh.us/a.jpg" }] }] })).toEqual([]);
   });
 });

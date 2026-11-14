@@ -184,7 +184,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, nudge: false, push: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, nudge: false, push: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -840,6 +840,7 @@
       map.on('moveend', () => { clearTimeout(twisty.timer); twisty.timer = setTimeout(updateTwisty, 600); });
       updateCoverage();
       map.on('moveend', () => { clearTimeout(coverage.timer); coverage.timer = setTimeout(updateCoverage, 700); });
+      if (state.toggles.roadcams) map.once('idle', () => roadCamsLayer(true));   // left on last time: after the launch, never in its way
       if (track) loadTrackOnMap();
       // Tap a faint option on the map to take it.
       map.on('click', 'apex-alt', (e) => {
@@ -8706,6 +8707,7 @@
           if (state.toggles.meets) toast(`Meets within ${ApexUnits.long(80000, 0)} of the map. Tap a pin.`);   // the Worker's 80 km, in the driver's units
         });
       }
+      if (k === 'roadcams') roadCamsLayer(state.toggles.roadcams);   // Ohio's traffic cameras (road_cams.js), loaded on first use
       if (k === 'coverage') {
         updateCoverage();
         if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Tap a road for what was measured. A road with no line earns its first drivers extra points.');
@@ -9036,6 +9038,22 @@
     const reported = { list: [], at: -Infinity, cellKey: '', busy: false, said: new Set(), mine: new Set(), pins: new Map(), watch: ApexHazardReports.createPassWatch(), asking: null, local: [],
                        cells: ApexPrivacyZones.cellCache(120e3), ahead: ApexPrivacyZones.cellCache(6 * 3600e3, 16), aheadFor: null };
     if (window.apexDebug) { window.apexDebug.loadReported = (force) => loadReported(force); window.apexDebug.reportedIds = () => reported.list.map((h) => h.id); }   // e2e: a report that lands mid-drive
+    // ---- Road cameras (road_cams.js, 2026-11-14): Ohio DOT's traffic cameras, an opt-in layer; a tap shows the road now ----
+    let roadCams = null;
+    async function roadCamsLayer(on) {
+      try {
+        if (!roadCams) {
+          if (!on) return;
+          await ApexLazy.load('roadcams');
+          const css = getComputedStyle(document.documentElement);
+          roadCams = ApexRoadCams.mount({ map, el, btn, toast, apiFetch: (path) => ApexSync.apiFetch(path, { method: 'GET' }),
+            driving: () => driveActive && state.mode === 'live',
+            ink: () => ({ dot: css.getPropertyValue('--panel-ink').trim() || '#1a1a1a', edge: css.getPropertyValue('--panel').trim() || '#ffffff' }) });
+        }
+        await roadCams.setLayer(on);
+      } catch (_) { if (on) toast('Road cameras didn\'t load. Check signal.'); }
+    }
+    if (window.apexDebug) window.apexDebug.roadCams = () => roadCams;
     // ---- the DOTs' own traffic events (road_events.js; backend/src/traffic.ts) ------------------------------------------
     // Closures, lane closures, roadwork, slow traffic and crashes from INDOT, KYTC (and ODOT with the owner's key): the whole
     // region asked every 5 min while planning or driving, never where you are; signed in or not. What is near you joins the
