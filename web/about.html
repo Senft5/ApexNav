@@ -4,90 +4,279 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov https://itscameras.dot.state.oh.us https://www.trimarc.org https://*.fbcdn.net; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Vetta · A co-driver for the long way home</title>
-  <meta name="description" content="Vetta reads the road ahead out loud, finds the twisty roads near you and scores how smoothly you drove them: how well you used each corner's grip, never your top speed." />
+  <meta name="theme-color" content="#0A0A0B" />
+  <title>Vetta · Every corner, called</title>
+  <meta name="description" content="Vetta is a co-driver for back roads: it finds the twisty roads near you, calls every corner out loud before you get there, and scores how cleanly you drove it, never your top speed." />
+  <meta property="og:title" content="Vetta · Every corner, called" />
+  <meta property="og:description" content="The co-driver for back roads. Finds the good roads, calls every corner, scores the drive." />
+  <meta property="og:image" content="https://vettadrive.com/brand/icon-1024.png" />
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="brand/icon-180.png" />
-  <!-- the app's faces (fonts.css is `optional`, so preloaded: here for the first frame, never a swap mid-read) -->
   <link rel="preload" href="fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="fonts/fonts.css" />
   <style>
-    /* Vetta Line (docs/design/SIGNATURE.md): paper, hairlines and a soft lift, titles in the numeral face, one red thing */
-    :root { --paper: #ece3d3; --ink: #1b1914; --dim: #5f594d; --red: #c8102e; --rule: #cfc4b0; --hair: rgba(27, 25, 20, 0.16);
-      --num: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif; --lift: 0 1px 2px rgba(20, 16, 8, 0.10), 0 12px 32px rgba(20, 16, 8, 0.16); }
+    /* vettadrive.com (2026-11-14 rebuild): the app's new Night tokens (graphite, white, one red), its faces; no script on the page. */
+    :root { --bg: #0A0A0B; --bg2: #111214; --raised: #1B1C20; --ink: #F5F5F7; --dim: #A0A3AB; --red: #FF3341; --red-deep: #c8102e;
+      --hair: #2B2D33; --num: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+      --gut: max(20px, env(safe-area-inset-left, 0px)); }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.5 "Inter Tight", system-ui, -apple-system, sans-serif; }
-    main { max-width: 980px; margin: 0 auto; padding: calc(32px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) calc(64px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px)); }
-    /* the status bar's band: text scrolling up passes under it, never visibly behind the Dynamic Island or notch */
-    body::before { content: ""; position: fixed; z-index: 100; left: 0; right: 0; top: 0; height: env(safe-area-inset-top, 0px); background: var(--paper); }
-    header { display: flex; align-items: center; gap: 12px; }
-    header img { width: 44px; height: 44px; }
-    header b { font: 800 26px/1 var(--num); letter-spacing: 0.04em; text-transform: uppercase; }
-    h1 { font: 800 clamp(44px, 9vw, 76px)/0.98 var(--num); letter-spacing: 0.005em; margin: 40px 0 16px; max-width: 12em; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.5 "Inter Tight", system-ui, -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+    a { color: inherit; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 0 var(--gut); }
+    .num { font-family: var(--num); }
+
+    /* top bar */
+    nav { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      background: rgba(10, 10, 11, 0.74); border-bottom: 1px solid var(--hair); padding-top: env(safe-area-inset-top, 0px); }
+    nav .wrap { display: flex; align-items: center; gap: 24px; height: 64px; }
+    .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .brand svg { width: 30px; height: 30px; color: var(--ink); }
+    .brand b { font: 800 24px/1 var(--num); letter-spacing: 0.08em; }
+    nav .links { margin-left: auto; display: flex; gap: 22px; align-items: center; font-size: 15px; }
+    nav .links a { text-decoration: none; color: var(--dim); }
+    nav .links a:hover { color: var(--ink); }
+    @media (max-width: 640px) { nav .links a.hide-s { display: none; } }
+
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 0 24px;
+      border-radius: 999px; font-weight: 700; text-decoration: none; font-size: 16px; white-space: nowrap; }
+    .btn.red { background: var(--red); color: #0A0A0B; }
+    .btn.red:hover { background: #ff5561; }
+    .btn.line { border: 1px solid #3a3d45; color: var(--ink); }
+    nav .btn { min-height: 40px; padding: 0 18px; font-size: 14px; color: #0A0A0B !important; }
+    .soon { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+
+    /* hero */
+    .hero { position: relative; overflow: hidden; padding: 72px 0 96px; }
+    .hero .road { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .road .asphalt { fill: none; stroke: var(--raised); stroke-width: 90; stroke-linecap: round; }
+    .road .line { fill: none; stroke: var(--red); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 1600; stroke-dashoffset: 1600;
+      animation: draw 3.2s cubic-bezier(.6,.05,.25,1) .2s forwards; filter: drop-shadow(0 0 10px rgba(255, 51, 65, .55)); }
+    .road .centre { fill: none; stroke: rgba(245, 245, 247, 0.16); stroke-width: 2; stroke-dasharray: 14 18; }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+    .hero .grid { position: relative; display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 48px; align-items: center; }
+    .eyebrow { font: 700 14px/1 var(--num); letter-spacing: 0.22em; text-transform: uppercase; color: var(--red); margin: 0 0 22px; }
+    h1 { font: 800 clamp(64px, 11vw, 148px)/0.86 var(--num); text-transform: uppercase; letter-spacing: -0.005em; margin: 0 0 28px; }
     h1 em { font-style: normal; color: var(--red); }
-    .lead { font-size: 20px; color: var(--dim); max-width: 640px; margin: 0 0 28px; }
-    .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 40px; }
-    .btn { display: inline-flex; align-items: center; min-height: 52px; background: var(--ink); color: var(--paper); text-decoration: none; padding: 0 22px; font-weight: 700; }
-    .btn.ghost { background: color-mix(in srgb, var(--ink) 6%, var(--paper)); color: var(--ink); }
-    .note { color: var(--dim); font-size: 15px; }
-    .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 28px; margin: 8px 0 48px; }
-    .shots figure { margin: 0; }
-    .shots img { width: 100%; height: auto; display: block; border-radius: 18px; box-shadow: var(--lift); }
-    .shots figcaption { font-size: 15px; color: var(--dim); margin-top: 12px; }
-    h2 { font: 800 34px/1.05 var(--num); margin: 48px 0 16px; border-top: 1px solid var(--hair); padding-top: 22px; }
-    .promises { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
-    .promises div { padding: 14px 0 0; border-top: 1px solid var(--hair); }
-    .promises b { display: block; margin-bottom: 4px; font: 700 22px/1.1 var(--num); letter-spacing: 0.01em; }
-    ul.features { padding-left: 20px; }
-    ul.features li { margin: 6px 0; }
-    footer { margin-top: 56px; border-top: 1px solid var(--hair); padding-top: 16px; font-size: 15px; color: var(--dim); display: flex; flex-wrap: wrap; gap: 14px; }
-    footer a { color: var(--ink); }
+    .lead { font-size: clamp(18px, 2vw, 21px); color: var(--dim); max-width: 30em; margin: 0 0 34px; }
+    .lead b { color: var(--ink); font-weight: 600; }
+    .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .fine { margin-top: 18px; font-size: 14px; color: var(--dim); }
+
+    /* phones */
+    .phone { position: relative; width: min(330px, 78vw); margin: 0 auto; border-radius: 46px; padding: 10px; background: var(--raised);
+      box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, 0 40px 80px -20px rgba(0,0,0,.8), 0 0 120px -30px rgba(255, 51, 65, .35); }
+    .phone img { display: block; width: 100%; height: auto; border-radius: 37px; }
+    .phone.crop { aspect-ratio: 330 / 470; overflow: hidden; }
+    .row .phone.crop { aspect-ratio: 330 / 560; }
+    .phone.crop img { height: 100%; object-fit: cover; object-position: top; }
+    .phone.crop::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 10px; height: 38%; border-radius: 0 0 37px 37px;
+      background: linear-gradient(to bottom, rgba(28,28,31,0), var(--raised)); }
+    .hero .phone { transform: rotate(3deg); }
+    .chip { position: absolute; z-index: 2; background: var(--ink); color: #0A0A0B; border-radius: 14px; padding: 10px 14px;
+      font-weight: 700; font-size: 14px; line-height: 1.2; box-shadow: 0 14px 30px rgba(0,0,0,.5); }
+    .chip small { display: block; font-weight: 600; color: #5B5F68; font-size: 12px; }
+    .chip.a { left: -28px; bottom: 120px; transform: rotate(-3deg); }
+    .chip.b { right: -18px; top: 70px; background: var(--red); }
+    .chip.b small { color: rgba(11,11,12,.7); }
+
+    /* facts band */
+    .facts { border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); background: var(--bg2); }
+    .facts .wrap { display: grid; grid-template-columns: repeat(4, 1fr); }
+    .facts div { padding: 28px 18px; border-left: 1px solid var(--hair); }
+    .facts div:first-child { border-left: 0; }
+    .facts b { display: block; font: 800 46px/1 var(--num); }
+    .facts b i { font-style: normal; color: var(--red); }
+    .facts span { color: var(--dim); font-size: 15px; }
+
+    /* feature rows */
+    section.row { padding: 110px 0; }
+    .row .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
+    .row.flip .copy { order: 2; }
+    .row h2 { font: 800 clamp(46px, 6.4vw, 86px)/0.92 var(--num); text-transform: uppercase; margin: 0 0 20px; }
+    .row h2 em { font-style: normal; color: var(--red); }
+    .row p { font-size: 19px; color: var(--dim); max-width: 26em; margin: 0; }
+    .row .k { font: 700 14px/1 var(--num); letter-spacing: 0.22em; text-transform: uppercase; color: var(--red); margin: 0 0 18px; }
+    .row ul { list-style: none; padding: 0; margin: 26px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+    .row li { border: 1px solid var(--hair); border-radius: 999px; padding: 7px 14px; font-size: 14px; color: var(--ink); }
+    .alt { background: var(--bg2); }
+
+    /* promises */
+    .promises { padding: 110px 0; border-top: 1px solid var(--hair); }
+    .promises h2 { font: 800 clamp(40px, 5vw, 64px)/0.95 var(--num); text-transform: uppercase; margin: 0 0 40px; }
+    .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .tiles div { background: var(--bg2); border: 1px solid var(--hair); border-radius: 14px; padding: 26px 22px; }
+    .tiles b { display: block; font: 800 28px/1 var(--num); text-transform: uppercase; margin-bottom: 12px; }
+    .tiles b::before { content: ""; display: block; width: 10px; height: 10px; border-radius: 50%; background: var(--red); margin-bottom: 18px; }
+    .tiles span { color: var(--dim); font-size: 16px; }
+    .tiles code { color: var(--ink); }
+
+    /* closing */
+    .end { position: relative; text-align: center; padding: 130px 0; overflow: hidden; border-top: 1px solid var(--hair);
+      background: radial-gradient(60% 80% at 50% 100%, rgba(255, 51, 65, .22), transparent 70%); }
+    .end h2 { font: 800 clamp(56px, 9vw, 120px)/0.88 var(--num); text-transform: uppercase; margin: 0 0 30px; }
+    .end h2 em { font-style: normal; color: var(--red); }
+    .end .cta { justify-content: center; }
+    .end .fine { max-width: 34em; margin: 26px auto 0; }
+
+    footer { border-top: 1px solid var(--hair); padding: 28px 0 calc(28px + env(safe-area-inset-bottom, 0px)); color: var(--dim); font-size: 14px; }
+    footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+    footer a { color: var(--ink); text-decoration: none; }
+    footer .brand { margin-right: auto; }
+    footer .brand b { font-size: 18px; }
+    footer .brand svg { width: 22px; height: 22px; }
+
+    @media (max-width: 900px) {
+      .hero { padding: 40px 0 72px; }
+      .hero .grid, .row .grid { grid-template-columns: 1fr; gap: 56px; }
+      .row.flip .copy { order: 0; }
+      section.row { padding: 80px 0; }
+      .facts .wrap { grid-template-columns: repeat(2, 1fr); }
+      .facts div:nth-child(3) { border-left: 0; }
+      .facts div:nth-child(n+3) { border-top: 1px solid var(--hair); }
+      .tiles { grid-template-columns: 1fr 1fr; }
+      .chip.a { left: 0; } .chip.b { right: 0; }
+    }
+    @media (max-width: 520px) {
+      .tiles { grid-template-columns: 1fr; }
+      .facts b { font-size: 38px; }
+      .cta .btn { flex: 1 1 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) { .road .line { animation: none; stroke-dashoffset: 0; } html { scroll-behavior: auto; } }
   </style>
 </head>
 <body>
-<main>
-  <header><img src="brand/mark.svg" alt="" /><b>Vetta</b></header>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 100 100"><g transform="translate(-7 0)">
+    <circle cx="34" cy="84" r="8" fill="currentColor"/>
+    <path d="M34 84 V52 Q34 26 62 21.5" fill="none" stroke="currentColor" stroke-width="9"/>
+    <path d="M60 9 L88 18 L63 34 Z" fill="currentColor"/>
+    <circle cx="51" cy="43" r="6.5" fill="#FF3341"/></g></symbol>
+</svg>
 
-  <h1>A co-driver for <em>the long way home</em>.</h1>
-  <p class="lead">Vetta reads the road ahead out loud, finds the twisty roads near you, and scores how smoothly you drove them: how well you used each corner's grip, never your top speed.</p>
-  <div class="cta">
-    <a class="btn" href="https://vettadrive.app/">Open the app in your browser</a>
-    <a class="btn ghost" href="https://vettadrive.app/?drive=dry_ridge&amp;play=1">Watch a replay</a>
-    <span class="note">On iPhone: a TestFlight beta for now, ahead of the App Store.</span>
+<nav aria-label="Vetta">
+  <div class="wrap">
+    <a class="brand" href="#top"><svg aria-hidden="true"><use href="#mark"/></svg><b>VETTA</b></a>
+    <div class="links">
+      <a class="hide-s" href="#roads">Features</a>
+      <a class="hide-s" href="#promises">Promises</a>
+      <a class="btn red" href="https://vettadrive.app/">Open Vetta</a>
+    </div>
+  </div>
+</nav>
+
+<main id="top">
+  <header class="hero">
+    <svg class="road" viewBox="0 0 1440 820" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <path class="asphalt" d="M600 900 C 720 860, 760 780, 860 720 S 960 430, 1120 390 S 1380 470, 1520 150"/>
+      <path class="centre" d="M600 900 C 720 860, 760 780, 860 720 S 960 430, 1120 390 S 1380 470, 1520 150"/>
+      <path class="line" d="M600 900 C 720 860, 760 780, 860 720 S 960 430, 1120 390 S 1380 470, 1520 150"/>
+    </svg>
+    <div class="wrap grid">
+      <div>
+        <p class="eyebrow">The co-driver for back roads</p>
+        <h1>Every corner, <em>called.</em></h1>
+        <p class="lead">Vetta <b>finds the twisty roads</b> near you, <b>calls every corner</b> out loud before you get there, and <b>scores how cleanly</b> you drove it.</p>
+        <div class="cta">
+          <a class="btn red" href="https://vettadrive.app/">Open Vetta</a>
+          <span class="btn line" aria-disabled="true">iPhone app <span class="soon">&nbsp;Beta now · App Store soon</span></span>
+        </div>
+        <p class="fine">Free to drive. No ads. Built in Cincinnati.</p>
+      </div>
+      <div style="position:relative">
+        <div class="phone crop"><img src="brand/site/cockpit.webp" alt="Vetta's cockpit calling the next corner: 400 feet, left 4, opens over a crest, with crests and a dip marked on the map ahead" width="660" height="950" /></div>
+        <div class="chip b">Left 4 opens<small>called 400 ft out</small></div>
+        <div class="chip a">Works with no signal<small>the voice runs on the phone</small></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="facts" aria-label="Vetta in numbers">
+    <div class="wrap">
+      <div><b>100<i>×</i></b><span>motion readings a second</span></div>
+      <div><b>5<i>m</i></b><span>road sections it measures</span></div>
+      <div><b>0</b><span>ads, ever</span></div>
+      <div><b>1</b><span>score for clean, never speed</span></div>
+    </div>
   </div>
 
-  <div class="shots">
-    <figure><img src="brand/shots/cockpit.png" alt="The cockpit on a back road: the next note, Left 4 opens over a crest, called 400 feet ahead, with crests and a dip marked on the map" width="390" height="844" loading="lazy" />
-      <figcaption>Notes called before the corner, crests and dips on the map. The bundled Dry Ridge Road replay.</figcaption></figure>
-    <figure><img src="brand/shots/crew.png" alt="A crew's page: its livery, the next drive, a sunrise run with four going, and its members" width="390" height="844" loading="lazy" />
-      <figcaption>Your crew's own page: plan a drive and see who's going. An example crew.</figcaption></figure>
-  </div>
+  <section class="row" id="roads">
+    <div class="wrap grid">
+      <div class="copy">
+        <p class="k">01 · Find</p>
+        <h2>Finds the <em>good</em> roads.</h2>
+        <p>Pick a length. Vetta builds a loop from the twistiest roads around you and brings you home.</p>
+        <ul><li>15 to 90 mile loops</li><li>Fun route to anywhere</li><li>Calls work with no signal</li></ul>
+      </div>
+      <div class="phone crop"><img src="brand/site/loop.webp" alt="A 26 mile loop on the map: 43 minutes, 94 corners, with an elevation profile and loop lengths to choose from" width="660" height="1434" loading="lazy" /></div>
+    </div>
+  </section>
 
-  <h2>Four promises</h2>
-  <div class="promises">
-    <div><b>No top speeds</b>Nothing records or shows how fast anyone went flat out. A time counts on a road you drove clean, with its Score beside it, and a board has only the drivers who ran its road.</div>
-    <div><b>Shared with your people</b>Your Scores and times go to your friends and private crews, and you can switch that off for any of them. Your drives themselves stay on your phone, and privacy zones keep home and work out of everything.</div>
-    <div><b>Unknown stays unknown</b>When the app doesn't know, it shows <code>--</code>, never a guess dressed up as a measurement.</div>
-    <div><b>Free to drive</b>No ads, no personal data sold. Driving, your drives and your exports are always free.</div>
-  </div>
+  <section class="row flip alt">
+    <div class="wrap grid">
+      <div class="copy">
+        <p class="k">02 · Score</p>
+        <h2>Clean beats <em>fast.</em></h2>
+        <p>Every drive gets a Vetta Score, corner by corner: how smoothly you braked, turned and flowed. Never your top speed.</p>
+        <ul><li>Corner by corner</li><li>One thing to work on</li><li>Replay any drive</li></ul>
+      </div>
+      <div class="phone crop"><img src="brand/site/drive.webp" alt="A drive on Dry Ridge Road scored 673 out of 1000, with its corners on the map and one thing to work on" width="660" height="1434" loading="lazy" /></div>
+    </div>
+  </section>
 
-  <h2>What it does</h2>
-  <ul class="features">
-    <li><b>Pace notes, spoken</b> in plain words or rally notes, timed to your speed so you hear them at the entry, not the apex. The voice works with no signal.</li>
-    <li><b>Directions in the same voice</b>, never on top of a corner call.</li>
-    <li><b>Find the good roads</b>: loops of the length you want, or the most fun way to a destination. More hairpins or more sweepers, your call.</li>
-    <li><b>A Vetta Score</b> for every drive, corner by corner, and a live delta against your best on the stages you mark.</li>
-    <li><b>Drive together</b>: convoys, crew drives with a convoy on the day, hazard reports for the drivers behind you.</li>
-    <li><b>A crash check</b> that asks if you're OK after a hard impact. A backup to your phone's own, not a replacement.</li>
-  </ul>
-  <p class="note">Always drive within the law and the conditions. Vetta is not a racing app.</p>
+  <section class="row">
+    <div class="wrap grid">
+      <div class="copy">
+        <p class="k">03 · Share</p>
+        <h2>Post the <em>drive.</em></h2>
+        <p>A card with the road's outline and your score, and a clip of your best corner filmed from the mount.</p>
+        <ul><li>One-tap share card</li><li>Best-corner clips</li><li>Your friends' feed</li></ul>
+      </div>
+      <div class="phone crop"><img src="brand/site/card.webp" style="object-position: 50% 30%" alt="The drive card for Dry Ridge Road: the road's outline and a Vetta Score of 673" width="660" height="1434" loading="lazy" /></div>
+    </div>
+  </section>
 
-  <footer>
-    <a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="licenses.html">Licences</a>
-    <span>Support: <span id="contact">a contact address is coming</span></span>
-    <span>Map data &copy; OpenStreetMap contributors</span>
-  </footer>
+  <section class="row flip alt">
+    <div class="wrap grid">
+      <div class="copy">
+        <p class="k">04 · Crew</p>
+        <h2>Bring the <em>crew.</em></h2>
+        <p>Plan the Sunday drive, see who's going, stay together on one map, and warn the cars behind about gravel.</p>
+        <ul><li>Crews and drives</li><li>Convoys</li><li>Time attacks</li></ul>
+      </div>
+      <div class="phone crop"><img src="brand/site/crew.webp" alt="An example crew's page: its livery, the next drive at sunrise with four going, and its members" width="660" height="1434" loading="lazy" /></div>
+    </div>
+  </section>
+
+  <section class="promises" id="promises">
+    <div class="wrap">
+      <h2>Four promises</h2>
+      <div class="tiles">
+        <div><b>No top speeds</b><span>Nothing records or shows how fast anyone went flat out.</span></div>
+        <div><b>Shared with your people</b><span>Scores go to your friends and crews, with a switch for each. Drives stay on your phone.</span></div>
+        <div><b>Unknown stays unknown</b><span>When Vetta doesn't know, it shows <code>--</code>, never a guess.</span></div>
+        <div><b>Free to drive</b><span>No ads, no data sold. Driving, your drives and exports are always free.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="end">
+    <div class="wrap">
+      <h2>Take the <em>long way</em> home.</h2>
+      <div class="cta"><a class="btn red" href="https://vettadrive.app/">Open Vetta</a></div>
+      <p class="fine">Screens are from the app's bundled example drive. Always drive within the law and the conditions: Vetta is not a racing app.</p>
+    </div>
+  </section>
 </main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top"><svg aria-hidden="true"><use href="#mark"/></svg><b>VETTA</b></a>
+    <a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="licenses.html">Licences</a>
+    <span>Map data &copy; OpenStreetMap contributors</span>
+  </div>
+</footer>
 </body>
 </html>
