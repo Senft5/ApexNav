@@ -6981,11 +6981,12 @@ flow('Garage → You shows your own drive posts, three and See all, with Delete 
   const at = new Date(Date.now() - 3600e3).toISOString().slice(0, 19).replace('T', ' ');
   const post = (n) => ({ id: `P${n}AAAAAAAAAAAAAAA`.slice(0, 16), handle: 'me', photo_id: null, mine: true, crew: null, title: `Drive ${n}`, caption: null, driven_on: '2026-11-12',
     length_m: 20000, score: 700 + n, roads: [], stages: [], line: null, created_at: at, kudos: 0, my_kudos: false, comments: 0 });
-  const asked = [];
+  const asked = [], edited = {};
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, id: 'ME1', member: true, handle: 'me' });
-    if (u.pathname === '/api/feed') { asked.push(u.searchParams.get('author')); return json([1, 2, 3, 4, 5].map(post)); }
+    if (u.pathname === '/api/feed') { asked.push(u.searchParams.get('author')); return json([1, 2, 3, 4, 5].map((n) => ({ ...post(n), ...(edited[n] || {}) }))); }
+    if (route.request().method() === 'PUT' && /^\/api\/posts\/P1/.test(u.pathname)) { const b = JSON.parse(route.request().postData()); edited[1] = { title: b.title, caption: b.caption || null }; return json(edited[1]); }
     return json([]);
   });
   await page.goto(base + '/index.html?view=garage');
@@ -6996,6 +6997,16 @@ flow('Garage → You shows your own drive posts, three and See all, with Delete 
   await page.click('#garageMeBody .profile-drives button:has-text("See all")');
   await page.waitForFunction(() => document.querySelectorAll('#garageMeBody .profile-drives .feed-card').length === 5);
   check(!(await page.$('#garageMeBody .profile-drives button:has-text("See all")')), 'See all goes once all are shown');
+  // (2026-11-14) Edit behind ···: the name and what you said, saved and shown at once
+  await page.click('#garageMeBody .profile-drives .feed-card[data-id="P1AAAAAAAAAAAAAA"] .feed-more');
+  await page.click('.feed-menu button:text-is("Edit")');
+  await page.waitForSelector('.feed-edit input[aria-label="Drive name"]');
+  check(await page.inputValue('.feed-edit input[aria-label="Drive name"]') === 'Drive 1', 'the sheet holds the name as it is');
+  await page.fill('.feed-edit input[aria-label="Drive name"]', 'Skyway at dawn');
+  await page.fill('.feed-edit textarea', 'Fog on top.');
+  await page.click('.feed-edit button:text-is("Save")');
+  await page.waitForFunction(() => /Skyway at dawn/.test(document.querySelector('#garageMeBody .profile-drives .feed-card[data-id="P1AAAAAAAAAAAAAA"]').textContent));
+  check(/Fog on top\./.test(await page.textContent('#garageMeBody .profile-drives .feed-card[data-id="P1AAAAAAAAAAAAAA"]')) && !(await page.$('.feed-edit')), 'the card shows the new name and caption: ' + await page.textContent('#garageMeBody .profile-drives .feed-card[data-id="P1AAAAAAAAAAAAAA"] .feed-title'));
 });
 
 flow('a drive posted with no signal waits on the phone and goes up once there is one (Worker stubbed, IDEAS F-05)', async (page, base) => {
