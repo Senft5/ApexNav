@@ -117,7 +117,7 @@ enum ApexWebBundle {
 
     /// "Open in the app" links from the web (apexnav://open?invite=…): the page's own link parameters, and only those, carried
     /// over to the cockpit page, which handles them exactly as it does on the web. Anything else opens the app as usual.
-    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy", "go", "q", "road", "roadbook", "view", "friend", "post"]   // q: a place said to Siri (base64url, ApexIntents.swift); go=drive: start a drive (IDEAS C-05); road: a road someone sent (web/road_link.js); view/friend/post: a push's tap (ApexPush.swift)
+    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy", "go", "q", "road", "roadbook", "view", "friend", "post", "place"]   // q: a place said to Siri (base64url, ApexIntents.swift); go=drive: start a drive (IDEAS C-05); road: a road someone sent (web/road_link.js); view/friend/post: a push's tap (ApexPush.swift)
     private static let linkValue = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
     /// Universal links (the owner's domain, 2026-11-14): a shared link on vettadrive.app opens here when the app is installed
     /// (project.yml associated-domains; the Worker's apple-app-site-association lists which). A road comes in the fragment
@@ -131,6 +131,10 @@ enum ApexWebBundle {
         var items = comps.queryItems ?? []
         if url.scheme == "https", let frag = comps.fragment, frag.hasPrefix("road=") {
             items.append(URLQueryItem(name: "road", value: String(frag.dropFirst("road=".count))))
+        }
+        // a place someone sent (web/place_link.js) comes the same way, #place=
+        if url.scheme == "https", let frag = comps.fragment, frag.hasPrefix("place=") {
+            items.append(URLQueryItem(name: "place", value: String(frag.dropFirst("place=".count))))
         }
         let kept = items.filter { item in
             guard linkKeys.contains(item.name), let v = item.value, (1...200).contains(v.count) else { return false }
