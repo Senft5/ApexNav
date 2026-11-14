@@ -99,3 +99,6 @@
 [data-theme="roadbook"] .stamps > :is(.on, [aria-checked="true"], [aria-pressed="true"]) { background: var(--panel-ink); color: var(--panel); transform: none; box-shadow: none; }
 
 [data-theme="roadbook"] .log-page :is(button.btn, a.btn, label.btn):not(.solid):not(.on):not([aria-pressed="true"]):not(.danger) { border-color: transparent; background: var(--raised); }
+/* a red row in a grouped list (Erase everything) sits on the raised grey, where the one red holds 4.38:1 by day: its
+   words take a touch of the ink, darker by day and lighter by night, so they clear 4.5:1 (CI 2026-11-14) */
+[data-theme="roadbook"] .nav-rows > .nav-row.danger { color: color-mix(in srgb, var(--accent) 85%, var(--panel-ink)); }
