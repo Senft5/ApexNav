@@ -3840,6 +3840,37 @@ flow('end card best corner: a filmed drive loops its best corner over the keys a
   check(!gone.shown && !gone.src, 'the next drive, unfilmed, shows no clip and plays nothing: ' + JSON.stringify(gone));
 });
 
+flow('the Log list: each drive has its road\'s shape beside its name; a summary from before shapes gets one without being scored again (2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexRecording && window.ApexCore);
+  await page.evaluate(async () => { for (const [id, f] of [['sh1', 12], ['sh2', 30]]) { const lat = [], lon = []; for (let i = 0; i < 500; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + Math.sin(i / f) * 0.0012); }
+    await ApexRecording.store({ id, name: 'Road ' + id, date: new Date(Date.now() - (id === 'sh1' ? 2 : 1) * 86400e3).toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map((_, i) => Math.sin(i / f) * 3), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }); } });
+  // no Score yet: the hero is the distance driven, not a big "--"
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#historyTable tr.row-link', { timeout: 15000 });
+  const hero = await page.evaluate(() => document.getElementById('historyCards').innerText.replace(/\s+/g, ' ').trim());
+  check(/^[\d.]+ ?(mi|km) In 2 drives · no Score yet A Score needs a few clean corners\.$/.test(hero), 'no Score yet: the miles driven, big: ' + hero);
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexRecording && window.ApexCore);
+  await page.evaluate(async () => {
+    // sh2's summary as the app before this kept it: version 2, no shape, a score of its own that must survive
+    const db = await new Promise((ok, no) => { const r = indexedDB.open('apexnav'); r.onsuccess = () => ok(r.result); r.onerror = no; });
+    await new Promise((ok) => { const t = db.transaction('summaries', 'readwrite'), st = t.objectStore('summaries');
+      st.get('sh2').onsuccess = (e) => { const x = e.target.result; delete x.shape; x.sv = 2; x.ds = { ...x.ds, score: 777 }; st.put(x); }; t.oncomplete = ok; });
+    db.close(); });
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#historyTable tr.row-link', { timeout: 15000 });
+  const rows = await page.evaluate(() => [...document.querySelectorAll('#historyTable tr.row-link')].map((r) => { const sv = r.querySelector('.ix-shape svg'), b = sv && sv.getBoundingClientRect();
+    return { id: r.dataset.drive, svg: !!sv, hidden: sv && sv.getAttribute('aria-hidden'), d: sv ? sv.querySelector('path').getAttribute('d').length : 0, w: b && Math.round(b.width), score: (r.querySelector('.ix-score') || {}).textContent }; }));
+  const sum = await page.evaluate(async () => (await ApexRecording.summaries(null)).map((x) => ({ id: x.id, sv: x.sv, n: (x.shape || []).length, score: x.ds.score })));
+  check(rows.length === 2 && rows.every((r) => r.svg && r.hidden === 'true' && r.d > 100 && r.w === 48), 'each row draws its road, 48 pt, quiet to VoiceOver: ' + JSON.stringify(rows));
+  const old = sum.find((x) => x.id === 'sh2');
+  check(old && old.sv === 3 && old.n === 32 && old.score === 777 && rows.find((r) => r.id === 'sh2').score.trim() === '777', 'the old summary got its shape and kept its score (not scored again): ' + JSON.stringify(sum));
+});
+
 flow('drive ended: Open in the Log is the solid key with no score, Share card with one, fixed from the first frame; a drive on a route keeps its name (REVIEW4 U-75, REVIEW5 U-118)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
@@ -7709,7 +7740,7 @@ flow('import: a drive from a file is named after the road that carried it (IDEAS
   const note = await page.textContent('#dvNote');
   check(/^Date unknown · Imported/.test(note.trim()), 'its page says the date is unknown, not the time it was imported: ' + note);
   await page.goto(`${base}/analysis.html`);
-  await page.waitForFunction(() => /Latest Vetta Score/.test((document.querySelector('.hero-what') || {}).textContent || '') && document.querySelector('tr.row-link'), null, { timeout: 15000 });
+  await page.waitForFunction(() => /Latest Vetta Score|no Score yet/.test((document.querySelector('.hero-what') || {}).textContent || '') && document.querySelector('tr.row-link'), null, { timeout: 15000 });   // none of these straight drives scores
   const hero = await page.evaluate(() => ({ what: document.querySelector('.hero-what').textContent, stamp: document.querySelector('tr.row-link[data-drive="rec_demo_csv"] .stamp-d').textContent }));
   check(hero.stamp === '--' && !(/Dry Ridge Road/.test(hero.what) && /Today|AM|PM/.test(hero.what)), 'the index stamps it "--" and the hero names no time for it: ' + JSON.stringify(hero));
 });
@@ -9359,7 +9390,7 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
     panels: [...document.querySelectorAll('#tab-history .panel, main > section:not([hidden]) .panel')].filter((p) => !p.hidden && p.offsetParent).map((p) => p.id),
     quiet: [...document.querySelectorAll('details.quiet')].filter((d) => !d.hidden).map((d) => d.querySelector('summary').textContent.split(':')[0]),
     old: /Driver Score|Import \.csv/.test(document.body.innerText) }));
-  check(/Latest Vetta Score/.test(log.hero) && log.seg.slice(0, 2).join() === 'Drives,Stages' && !log.old, 'Log: ' + JSON.stringify(log));
+  check(/Latest Vetta Score|^[\d.]+ ?(mi|km)\s+In 1 drive · no Score yet/.test(log.hero) && log.seg.slice(0, 2).join() === 'Drives,Stages' && !log.old, 'Log: ' + JSON.stringify(log));
   check(JSON.stringify(log.panels) === '["historyPanel"]' && log.quiet.includes('Your week'), 'one bordered list, the rest quiet lines: ' + JSON.stringify(log));
   // Drive detail: the Score first, Replay the primary, tags as stamps; nothing wider than the phone
   await page.click('.road-index tbody tr');

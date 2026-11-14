@@ -350,6 +350,10 @@
       $('historyCards').innerHTML = `<div class="hero-score"><b>${latest ? latest.ds.score : UNK}</b><small>/1000</small></div>`
         + `<p class="hero-what">Latest Vetta Score${latest ? ` · <span></span>${ApexAnalysis.monthOf(latest) === null ? '' : ` · ${dateLabel(latest).replace(/, \d{1,2}:\d{2}(\s?[AP]M)?$/i, '')}`}` : ''}</p>`   // the day, not the minute: one line; an undated import none
         + (best && best !== latest ? `<p class="hero-best">Best ${best.ds.score} · <span></span></p>` : '');
+      // no Score yet (first drives in town, too few clean corners): the distance you have driven, big, instead of a big "--"
+      const far = !latest && drives.length ? /^([\d.,]+)\s*(.*)$/.exec(ApexUnits.long(totalKm * 1000, 1)) : null;
+      if (far) $('historyCards').innerHTML = `<div class="hero-score"><b>${far[1]}</b><small>${far[2]}</small></div>`
+        + `<p class="hero-what">In ${drives.length} ${drives.length === 1 ? 'drive' : 'drives'} · no Score yet</p><p class="hero-best">A Score needs a few clean corners.</p>`;
       if (latest) $('historyCards').querySelector('.hero-what span').textContent = latest.name;   // names are user text
       if (best && best !== latest) $('historyCards').querySelector('.hero-best span').textContent = best.name;
       $('trendPanel').hidden = scored.length < 3;
@@ -389,11 +393,16 @@
       const listName = (n) => String(n || '').replace(/^To \d+[A-Za-z]?(-\d+)? (?=.*\b(St|Street|Rd|Road|Ln|Lane|Dr|Drive|Ave|Avenue|Blvd|Ct|Court|Way|Pl|Place|Pike|Hwy|Cir|Circle|Ter|Trl|Trail|Pkwy|Run|Loop)\.?$)/, 'To ');
       const stamp = (d) => { const m = monthOf(d) ? new Date(d.date.slice(0, 10) + 'T12:00:00') : null;
         return m ? `<span class="stamp-d"><b>${m.getDate()}</b>${m.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}</span>` : '<span class="stamp-d"><b>--</b></span>'; };
+      // the road's shape beside its name (2026-11-14), as Strava and Apple Fitness show a workout's map: you find a drive by
+      // the road's look before you read it. From the summary's 32 points; none known, nothing drawn.
+      const shapeThumb = (d) => { const sh = Array.isArray(d.shape) && d.shape.length > 1 ? d.shape : null; if (!sh || !window.ApexRouteThumb) return '';
+        return (ApexRouteThumb.svg(sh.map((p) => p[0]), sh.map((p) => p[1]), { w: 48, h: 48, pad: 6, line: C.accent, hi: C.panelInk, width: 2 }) || '').replace(' role="img" aria-label="Route map"', ' aria-hidden="true"'); };
       const rows = shown.slice().reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${escH(d.name)}">
         <td class="ix-date">${stamp(d)}</td>
+        <td class="ix-shape">${shapeThumb(d)}</td>
         <td class="l ix-road"><b>${escH(listName(d.name))}</b><span class="sub">${ApexFormat.factsLine(d, ['distance', 'corners'])}${ApexDriveTags.normalize(d.tags).length ? ` · <span class="tagline">${escH(ApexDriveTags.normalize(d.tags).join(', '))}</span>` : ''}</span></td>
         <td class="ix-score">${d.ds.score != null ? `<span class="score">${d.ds.score}</span>` : ''}</td></tr>`).join('');
-      $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="3"><span class="note">No drives yet.</span></td></tr>' : !shown.length ? '<tr><td class="l" colspan="3"><span class="note">No drives with those tags.</span></td></tr>' : rows;
+      $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="4"><span class="note">No drives yet.</span></td></tr>' : !shown.length ? '<tr><td class="l" colspan="4"><span class="note">No drives with those tags.</span></td></tr>' : rows;
       setTimeout(renderRecords, 0);
       setTimeout(renderSteadiness, 0);                                  // the coach runs per road: after the Log has painted
       setTimeout(renderDrivingCard, 0);
