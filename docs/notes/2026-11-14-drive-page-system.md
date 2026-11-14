@@ -8,6 +8,7 @@
 - Secondary keys such as Pick a video sit on the raised fill.
 - Newly possible: a drive's own page looks like the rest of the app, day and night. Shots: /mnt/project-files/ui-thread/drive-page-system.png.
 - CSS only (`web/system.css`), scoped to `[data-theme="roadbook"]`.
+- Red words on the raised grey use a new token, `--accent-raised`: the red with 15% of the ink. This covers corner numbers, lost tenths and Erase everything. The pure red holds only 4.38:1 on the raised grey by day; the inked red clears 4.5:1.
 
 # CALL SHEET
 

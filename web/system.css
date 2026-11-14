@@ -99,6 +99,9 @@
 [data-theme="roadbook"] .stamps > :is(.on, [aria-checked="true"], [aria-pressed="true"]) { background: var(--panel-ink); color: var(--panel); transform: none; box-shadow: none; }
 
 [data-theme="roadbook"] .log-page :is(button.btn, a.btn, label.btn):not(.solid):not(.on):not([aria-pressed="true"]):not(.danger) { border-color: transparent; background: var(--raised); }
-/* a red row in a grouped list (Erase everything) sits on the raised grey, where the one red holds 4.38:1 by day: its
-   words take a touch of the ink, darker by day and lighter by night, so they clear 4.5:1 (CI 2026-11-14) */
-[data-theme="roadbook"] .nav-rows > .nav-row.danger { color: color-mix(in srgb, var(--accent) 85%, var(--panel-ink)); }
+/* red words on the raised grey: the one red holds 4.38:1 there by day, so they take a touch of the ink (--accent-raised),
+   darker by day and lighter by night, and clear 4.5:1 (CI 2026-11-14) */
+[data-theme="roadbook"] { --accent-raised: color-mix(in srgb, var(--accent) 85%, var(--panel-ink)); }
+[data-theme="roadbook"] .nav-rows > .nav-row.danger { color: var(--accent-raised); }
+/* the same red inside the Log's raised cards (a corner's number, a lost tenth): the cards hand their words the inked red */
+[data-theme="roadbook"] .log-page :is(.dp-card, .seg, .dv-corner, .dv-time button, .card, .empty) { --signal: var(--accent-raised); --accent: var(--accent-raised); }
