@@ -74,6 +74,9 @@
        own width and stay unzoomed, so they still fit and track the finger. */
     #tab-history > :not(#trendPanel):not(#steadyPanel), #tab-segments > .bar-top, #segList, #segDetail table, #tab-segments .more > summary, #contribPanel { zoom: var(--type-scale, 1); }
     #tab-driving { zoom: var(--type-scale, 1); }   /* Your driving is words and numerals: all of it at the phone's text size */
+    /* the Log's head (Drives, Stages), already display-sized type, grows to the fit scale (1.6x at most): at 2x it was wider than the phone and pushed the whole page sideways, the empty Log's key cut off */
+    #tab-history > .log-head:not(#trendPanel):not(#steadyPanel), #tab-segments > .log-head.bar-top { zoom: var(--type-scale-fit, 1);
+      margin-inline: calc(-16px / var(--type-scale-fit, 1)); padding-inline: calc(16px / var(--type-scale-fit, 1)); }   /* its full-bleed rule reaches the page edge, not past it, at any size */
     /* IN-1 (panel round 2): the drive's page too: its title, the score and coaching line, the keys, the corner list, tags
        and the panels' words; the map, lanes and charts (.dv-grid) and the dashcam keep their measured size. */
     #tab-drive > div:first-child, #tab-drive > div:has(#dvTitle), #dvRoot > .dv-head, #dvActs, #dvRoot > .dv-list, #dvTagsPanel, #dvRecce, #dvVote, #dvFlyby, #dvRoad > h2 { zoom: var(--type-scale, 1); }
@@ -232,7 +235,10 @@
     /* an empty state is one line and its action, never a box of explanation (REVIEW2.md U-33) */
     /* An empty Log or Stages page (design pass 2026-11-10): the page's own furniture in pencil, a head, one line, one key.
        A bare sentence on a blank sheet read as an error, not as a book waiting for its first entry. */
-    .first-page { display: grid; gap: 0; padding-top: 2px; }
+    .first-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding-top: 2px; }
+    /* large text: the pencil drawing keeps to its score boxes (a drawn row of the index was wider than the phone at 2x
+       and pushed the empty Log's words and Start key off the right edge) */
+    html[data-type-size] .fp-ghost .fp-index { display: none; } html[data-type-size] .fp-digits i { width: 28px; height: 48px; }
     .fp-ghost { color: var(--panel-dim); border-bottom: 1px solid var(--rule); margin-bottom: 16px; }
     .fp-ghost .hero-score { display: flex; align-items: flex-end; padding: 6px 0 14px; border-bottom: 1px solid var(--rule); }
     .fp-digits { display: inline-flex; gap: 6px; } .fp-digits i { width: 40px; height: 68px; border: 1.5px dashed var(--panel-dim); }   /* three places for the score's figures */
