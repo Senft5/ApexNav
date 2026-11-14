@@ -4826,6 +4826,8 @@ flow('reports ahead of a dead zone: a drive on a planned route asks for the cell
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
   await page.waitForFunction(() => window.apexDebug.askedAhead > 0, null, { timeout: 15000 });   // asked as the drive starts
   check(asked.includes('35.8,-83.9') && !asked.includes('35.5,-83.9') && !asked.includes('36.1,-83.9'), 'the cells along the way were asked, never the start\'s or the end\'s: ' + JSON.stringify(asked));
+  // and our road network along the route is kept as the drive starts (graph_tiles.js keepAlong), for a reroute further on
+  await page.waitForFunction(() => window.apexDebug.keptAlong && Number.isFinite(window.apexDebug.keptAlong.tiles), null, { timeout: 15000 });
   // no signal from here; the car is well along the route, in the 35.8 cell
   offline = true;
   await page.evaluate(async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.70 + i * 0.0025, lon: -83.92, accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, calibration: 'locked' }); await new Promise((r) => setTimeout(r, 10)); } });
