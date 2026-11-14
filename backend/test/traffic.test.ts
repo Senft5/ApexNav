@@ -146,7 +146,7 @@ describe("GET /api/traffic/v1/events.json", () => {
 
 describe("GET /api/traffic/v1/cameras.json (Ohio's and Kentucky's traffic cameras)", () => {
   const c = () => (caches as unknown as { default: Cache }).default;
-  const CK = "https://apexnav.cache/traffic/v1/cameras.json?v=2";
+  const CK = "https://apexnav.cache/traffic/v1/cameras.json?v=3";
   const stub = (seen: string[], kyOk = true) => (async (input: RequestInfo | URL) => {
     const u = String(input); seen.push(u);
     if (u === KY_CAMS) return kyOk ? new Response(JSON.stringify(kyCams)) : new Response("down", { status: 500 });
@@ -183,10 +183,16 @@ describe("GET /api/traffic/v1/cameras.json (Ohio's and Kentucky's traffic camera
     const r = await camerasResponse({ OHGO_API_KEY: "k3" } as never, stub([], false));
     expect(r.status).toBe(200);
     expect(r.headers.get("cache-control")).toBe("public, max-age=600");
-    expect(((await r.json()) as { sources: string[] }).sources).toEqual(["ODOT"]);
+    expect(await r.json()).toMatchObject({ sources: ["ODOT"], failed: ["KYTC"] });
     await c().delete(new Request(CK));
     expect((await camerasResponse({} as never, stub([], false))).status).toBe(502);
     expect(parseKyCams({ features: [{ attributes: { snapshot: "https://evil.example/a.jpg", latitude: 38, longitude: -85 } }] })).toEqual([]);
     expect(parseKyCams(null)).toEqual([]);
+    // OHGO answering 200 with no cameras (an error as JSON) is a failure: kept 10 minutes, never a day without Ohio
+    await c().delete(new Request(CK));
+    const empty = (async (input: RequestInfo | URL) => new Response(String(input) === KY_CAMS ? JSON.stringify(kyCams) : JSON.stringify({ results: [] }))) as typeof fetch;
+    const e = await camerasResponse({ OHGO_API_KEY: "k3" } as never, empty);
+    expect(e.headers.get("cache-control")).toBe("public, max-age=600");
+    expect(await e.json()).toMatchObject({ sources: ["KYTC"], failed: ["ODOT"] });
   });
 });
