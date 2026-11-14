@@ -33,6 +33,15 @@ def test_astar_matches_brute_force_dijkstra():
     assert r["found"] > 600 and r["restricted"] > 100, r
 
 
+def test_a_gate_on_a_through_road_is_open():
+    """2026-11-14 (tools/famous_roads.js): the Blue Ridge Parkway's winter gates (16 between Blowing Rock and Linville
+    Falls), Beartooth's and Angeles Crest's each cost the private-road toll, so Fun and Long way went round them. A gate
+    on tertiary and up is open; on a residential street, or with access private, it still blocks."""
+    r = case("gates")
+    assert r["secondary"] == ["Gated"] and r["tertiary"] == ["Gated"], r
+    assert "Detour" in r["residential"] and r["privateSecondary"] == ["Detour"], r
+
+
 def test_restrictions_oneways_and_uturns():
     r = case("rules")
     assert r["free"] == ["South", "West"], r                         # the left at C
