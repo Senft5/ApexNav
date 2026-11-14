@@ -278,6 +278,9 @@ console.log(JSON.stringify({
   // M-3 (panel round 1): the plates in the driver's notation, as the strip's next cells print it
   plainPlates: C.cornersMessage({ events: [...t.events, { type: 'corner', dir: 'L', severity: 2, shape: 'square', dist_m: 1000 }, { type: 'corner', dir: 'R', severity: 1, shape: 'acute', dist_m: 1100 }] }, at, 'plain').list.map((c) => c.text),
   rallyPlates: C.cornersMessage({ events: [{ type: 'corner', dir: 'L', severity: 4, grade: '-', dist_m: 10 }, { type: 'corner', dir: 'L', severity: 2, shape: 'square', dist_m: 1000 }, { type: 'corner', dir: 'R', severity: 1, shape: 'acute', dist_m: 1100 }] }, at, 'rally').list.map((c) => c.text),
+  cams: C.hazardsMessage([{ id: 7, kind: 'gravel', lat: 35.2, lon: -83.5 }], { gravel: 'Gravel' },
+    [{ kind: 'alpr', lat: 35.31, lon: -83.41 }, { kind: 'speed', lat: 35.3, lon: -83.4 }, { kind: 'speed', lat: null, lon: 1 }]).list,
+  camsFull: C.hazardsMessage(Array.from({ length: 40 }, (_, i) => ({ id: i, kind: 'gravel', lat: 35, lon: -83 })), {}, [{ kind: 'speed', lat: 35.3, lon: -83.4 }]).list.length,
   hazards: C.hazardsMessage([{ id: 7, kind: 'gravel', lat: 35.2, lon: -83.5 }, { id: 8, label: 'Cattle grid', lat: 35, lon: -83 }, { id: 9, kind: 'x' }], { gravel: 'Gravel' }),
   along: C.alongMessage([{ kind: 'cafe', name: 'Bean There Coffee' }, { kind: 'view', name: 'Overlook' }, { kind: 'fuel', name: 'Shell' }, { kind: 'fuel', name: 'Speedway' },
     { kind: 'fuel', name: 'Marathon' }, { kind: 'fuel', name: null }]),
@@ -294,6 +297,16 @@ console.log(JSON.stringify({
   noLanes: C.guideMessage({ id: 'r', dist: [0, 5000], steps: [{ m: 1200, type: 15, street: 'Deals Gap Road' }] }, 100, 3600, require(process.argv[1] + '/web/directions.js').phrase),
   laneGlyphs: [C.laneGlyphs(require(process.argv[1] + '/web/lanes.js').lanes([[2, 0, 0], [10, 8, 2], [256, 0, 0]])), C.laneGlyphs([{ angle: 0, use: false, ok: false }, { angle: 0 }]),
     C.laneGlyphs(Array.from({ length: 9 }, () => ({ angle: 0, use: true })))],
+  stops: C.stopsMessage([{ kind: 'fuel', name: ' Shell ', lat: 35.1, lon: -84, m: 5000 }, { kind: 'cafe', name: '', lat: 35.2, lon: -84, m: 2000 },
+    { kind: 'view', name: 'Overlook', lat: 35.3, lon: -84, m: 3000 }, { kind: 'charge', name: 'EVgo', lat: 35.4, lon: -84, m: 1100 }, { kind: 'fuel', name: 'Behind', lat: 35, lon: -84, m: 900 }], 1000,
+    (m) => `${(m / 1609.344).toFixed(1)} mi`),
+  stopsNone: C.stopsMessage(null, 0),
+  nearby: C.nearbyMessage('gas', 'Gas', [{ label: 'Pilot', lat: 35.601, lon: -84.1, m: 111 }, { label: '', lat: 1, lon: 1, m: 5 }, { label: 'Shell', lat: 35.6, lon: -84.09, m: 905 }],
+    (m) => `${m} m`, 'No gas on the map within 5 mi.'),
+  nearbyNone: C.nearbyMessage('coffee', 'Coffee', [], null, 'No coffee on the map within 5 mi.'),
+  nearbyKeys: C.nearbyKeys(['charge', 'coffee', 'nope'], { charge: { label: 'Chargers' }, coffee: { label: 'Coffee' } }),
+  arrived: [C.arrivedMessage('Maryville'), C.arrivedMessage('Cherohala Skyway Visitor Center'), C.arrivedMessage('')],
+  paused: ['Rerouting…', 'Wrong way · no signal to reroute', 'Off route', null, ''].map((w) => C.pausedMessage(w)),
   limits: [C.limitMessage(54.7, 'mph'), C.limitMessage(80, 'km/h'), C.limitMessage(null, 'mph'), C.limitMessage(0, 'mph'), C.limitMessage(500, 'mph')],
   loops: [C.loopsMessage('time', false), C.loopsMessage('distance', false), C.loopsMessage('distance', true)],
   offerUndo: C.offerMessage('o8', 'Pothole reported', '', 'Undo', 5000, 'OK'),
@@ -535,6 +548,83 @@ def test_the_car_offers_the_same_loop_times_as_the_phones_dial():
     assert '("1½ hours", 90, nil)' in row and '("3 hours", 180, nil)' in row
     # and the page takes every one of them: it used to accept only 30, 60 and 120, so the car's 1½ and 3 hours did nothing
     assert "m.action === 'loop' && LOOP_MINUTES.includes(m.minutes)" in cockpit_source()
+
+
+def test_the_cars_map_shows_the_routes_speed_cameras(maps):
+    """Waze shows speed cameras on the car; Vetta knew the route's cameras (the phone's notes) and the car didn't."""
+    gravel, speed, lpr = maps["cams"]
+    assert gravel["title"] == "Gravel", "reports first"
+    assert speed == {"id": "cam:35.3,-83.4", "at": [35.3, -83.4], "title": "Speed camera"}, "speed cameras before plate readers"
+    assert lpr["title"] == "Camera" and len(maps["cams"]) == 3, "a camera with no place is dropped"
+    assert maps["camsFull"] == 40
+    js = cockpit_source()
+    assert "Array.isArray(plannedRoute.alpr) && state.toggles.lpr ? plannedRoute : null;" in js, "the phone's camera switch"
+    assert "carHazards();                                                      // and its cameras" in js
+
+
+def test_overview_shows_the_whole_route_while_guiding():
+    """Apple Maps and Waze have Overview while guiding; the car could only follow the arrow or be panned."""
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert '[CPBarButton(title: "Stops") { _ in ApexCar.shared.send("stops") }, overview]' in swift, "a route only, beside Stops"
+    assert 'if b.title == "Overview" { mapController?.overview(); b.title = "Recentre" } else { mapController?.recentre(); b.title = "Overview" }' in swift
+    assert 'mapController?.recentre(); overviewButton?.title = "Overview"' in swift, "a pan ends it"
+    assert '@MainActor func overview() { if let native { native.overview() } else { js("car.overview()") } }' in swift
+    native = open(os.path.join(ROOT, "CarPlay", "ApexCarMap.swift"), encoding="utf-8").read()
+    assert "func overview() {" in native and "follow = false; overviewing = true\n        fitRoute(animated: true)" in native and "|| overviewing { fitRoute(animated: true) }" in native
+    web = open(os.path.join(ROOT, "web", "carmap.js"), encoding="utf-8").read()
+    assert "overview() {" in web and "state.follow = false; state.overview = true; fitRoute(" in web
+
+
+def test_nearby_on_the_cars_places(maps):
+    """Apple Maps on CarPlay has Gas, Coffee and Food; the phone had Find nearby and the car didn't."""
+    n = maps["nearby"]
+    assert n["kind"] == "nearby" and n["cat"] == "gas" and n["title"] == "Gas" and n["empty"] == ""
+    assert [r["name"] for r in n["list"]] == ["Pilot", "Shell"] and n["list"][0] == {"name": "Pilot", "detail": "111 m", "at": [35.601, -84.1]}
+    assert maps["nearbyNone"]["list"] == [] and maps["nearbyNone"]["empty"] == "No coffee on the map within 5 mi."
+    assert maps["nearbyKeys"] == [{"cat": "charge", "name": "Chargers"}, {"cat": "coffee", "name": "Coffee"}]
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert 'case "nearby":' in swift and 'ApexCar.shared.send("nearby", ["cat": cat])' in swift
+    assert 'CPListSection(items: kinds, header: "Nearby", sectionIndexTitle: nil)' in swift
+    assert "self?.go(to: p.coord, name: p.name)" in swift, "a tap plans the way there, as Where to? does"
+    js = cockpit_source()
+    assert "nearbyFor(cat).then(({ rows, failed }) => carPost(ApexCarPlay.nearbyMessage(" in js
+
+
+def test_the_car_says_arrived_at_the_end(maps):
+    """Apple Maps ends a trip with "Arrived"; the car's card sat on "Arriving" at 0 ft for the rest of the drive."""
+    short, long, none = maps["arrived"]
+    assert short == {"kind": "paused", "key": "arrived", "reason": "arrived", "text": "Arrived · Maryville"}
+    assert long["text"] == "Arrived" and none["text"] == "Arrived", "a name too long for a glance is left off"
+    js = cockpit_source()
+    assert "if (end > 500 && Math.max(state.cursorM, routeWatch.bestM) > end - 40 && !String(track.id || '').startsWith('loop_')) {" in js, "a loop says nothing at its start"
+
+
+def test_off_route_the_car_says_rerouting(maps):
+    """Apple Maps and Waze say "Rerouting" on the car; Vetta's card kept the last turn, its distance frozen, while off route."""
+    rr, wrong, off, none, empty = maps["paused"]
+    assert rr == {"kind": "paused", "key": "off:Rerouting…", "reason": "rerouting", "text": "Rerouting…"}
+    assert wrong["reason"] == "proceed" and len(wrong["text"]) <= 24 and wrong["text"].startswith("Wrong way")
+    assert off["reason"] == "proceed" and off["text"] == "Off route"
+    assert none is None and empty is None, "on the route: the maneuver, never a pause"
+    js = cockpit_source()
+    assert "state.cursorIdx < 0 ? ApexCarPlay.pausedMessage(offRouteText()) : null;" in js, "the status line's own words"
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert 'case "paused":' in swift and "session.pauseTrip(for: reason, description: text)" in swift and 'why == "rerouting" ? .rerouting : why == "arrived" ? .arrived : .proceedToRoute' in swift
+    assert "maneuver = nil; maneuverKey = \"\"" in swift, "the next guide resumes the trip"
+
+
+def test_add_a_stop_from_the_car(maps):
+    """Apple Maps and Waze add a stop while guiding; the phone could ("Add as a stop") and the car couldn't."""
+    rows = maps["stops"]["list"]
+    assert [r["name"] for r in rows] == ["Café", "Shell"], "ahead only, 150 m on at least, fuel and cafés by name, no viewpoints"
+    assert rows[0]["detail"] == "0.6 mi ahead" and rows[1]["detail"] == "Fuel · 2.5 mi ahead" and rows[1]["at"] == [35.1, -84]
+    assert maps["stopsNone"] == {"kind": "stops", "list": []}
+    js = cockpit_source()
+    assert "else if (m.action === 'stops') carPost(ApexCarPlay.stopsMessage(" in js
+    assert "if (p) carAsked(() => addViaAt({ lat: p.lat, lon: p.lon," in js, "only a place on the route's own list, and a failure says why on the car"
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert '[CPBarButton(title: "Stops") { _ in ApexCar.shared.send("stops") }, overview]' in swift and 'case "stops":' in swift
+    assert 'ApexCar.shared.send("stop", ["lat": s.lat, "lon": s.lon, "name": s.name])' in swift
 
 
 def test_the_cars_map_shows_the_posted_speed_limit(maps):

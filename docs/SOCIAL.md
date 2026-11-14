@@ -124,6 +124,20 @@ and in random batches so a trace cannot be re-assembled.
   cards; your own crew's listed drive says to answer on the crew page instead of Join. Asked by the map centre's 0.1-degree
   cell, never from a privacy zone, at most once per cell every 5 minutes. `web/meets_map.js`, no migration.
 
+### 2.12 Push notifications (built 2026-11-13; sends once APNs is on the owner's key)
+- What For you says, told to the phone the moment it happens: a friend request, a new friend, kudos on a run (once
+  per run), kudos and comments on your drive post, a duel asked of you or taken, a crew drive planned in your crew.
+  Never to or from someone blocked; the words are the server's own (a handle, a stage or crew name, a drive's title),
+  never a comment's text. A tap opens what it is about: the post with its comments, the friend, or People.
+- Garage → Settings → **Notifications**: one switch, off until turned on, and only then does iOS ask. In the
+  foreground a push goes to the list only (the page is open). Nothing while you drive: the page turns
+  `PUT /api/push/quiet` on at a drive's start (three hours at most) and off at its end. After your first post, one offer.
+- `backend/src/push.ts` (who is told what, the tokens) on `backend/src/apns.ts` (the send path): `POST/DELETE
+  /api/push/token`; tokens in KV `push/<user id>` (no table, so no migration and nothing in backups), at most three
+  phones, a sandbox flag for builds from Xcode; a token Apple calls gone is dropped. Sent in `waitUntil` after the write,
+  so a push never slows or fails the request. `ApexPush.swift`: the token, the tap. Shell: `aps-environment`.
+- Next: a switch per kind, if anyone asks for one.
+
 ### 2.13 Drive posts and the Feed (built 2026-11-13; big bet #4)
 - After a drive with a Score, a member taps **Post** on the drive's card (the solid key; Share card, the picture for
   other apps, beside it): Friends or one of their crews on a slide switch, an optional line, Post. The card carries the
@@ -136,8 +150,8 @@ and in random batches so a trace cannot be re-assembled.
   the post's author deletes a comment. Blocks hide both ways; three established reports hide; the owner's queue removes.
 - `backend/src/drive_posts.ts` (migration 0059: `drive_posts`, `drive_post_kudos`, `drive_comments`), `web/drive_posts.js`.
   10 posts a day, 30 comments an hour, 200 comments a post. In Download my data; gone with the account.
-- Next: photos on a post (the photos table's kind CHECK needs a rebuild), stages on the card, pushes for kudos and
-  comments once APNs is on.
+- Next: photos on a post (the photos table's kind CHECK needs a rebuild), stages on the card. Kudos and comments push
+  (2.12).
 
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.

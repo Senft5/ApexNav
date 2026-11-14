@@ -2,6 +2,7 @@
 cut), how much of a road a drive covers (a stamp is found in the Log, never tapped), and the lines the pages say."""
 import json
 import os
+import re
 import shutil
 import subprocess
 
@@ -87,4 +88,4 @@ def test_wired_into_the_app():
     for needle in ("ApexRoadbooks.mount(", "roadbooks.afterDrive(", "navRow('Roadbooks'", "roadbooks.addPart(", "openRoadbookLink("):
         assert needle in cockpit, needle
     # the app's link handler passes the key on (apexnav://open?roadbook=…)
-    assert '"roadbook"]' in open(os.path.join(ROOT, "ApexNavApp.swift"), encoding="utf-8").read()
+    assert '"roadbook"' in re.search(r"static let linkKeys: Set<String> = \[([^\]]*)\]", open(os.path.join(ROOT, "ApexNavApp.swift"), encoding="utf-8").read()).group(1)

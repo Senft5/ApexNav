@@ -37,21 +37,24 @@ export async function setHandle(env: Env, v: Viewer, req: Request): Promise<void
 
 // ---- friends -------------------------------------------------------------------------------------
 /** Same answer whether or not the handle exists, so handles cannot be enumerated. */
-export async function friendRequest(env: Env, v: Viewer, req: Request): Promise<void> {
+export async function friendRequest(env: Env, v: Viewer, req: Request): Promise<{ to: string; mutual: boolean } | null> {
   const { handle } = await body<{ handle?: string }>(req);
   const h = str(handle, "handle", 3, 20).toLowerCase();
   const target = await first<{ id: string }>(env,
     "SELECT u.id FROM users u JOIN members m ON m.user_id = u.id WHERE u.handle = ? AND u.id != ?", h, v.id);
-  if (!target || (await isBlocked(env, v.id, target.id))) return;
+  if (!target || (await isBlocked(env, v.id, target.id))) return null;
   const [a, b] = pair(v.id, target.id);
   const existing = await first<{ status: string; requested_by: string }>(env,
     "SELECT status, requested_by FROM friendships WHERE user_a = ? AND user_b = ?", a, b);
   if (!existing) {
     await run(env, "INSERT INTO friendships (user_a, user_b, status, requested_by) VALUES (?, ?, 'pending', ?)", a, b, v.id);
+    return { to: target.id, mutual: false };
   } else if (existing.status === "pending" && existing.requested_by !== v.id) {
     await run(env, "UPDATE friendships SET status = 'accepted' WHERE user_a = ? AND user_b = ?", a, b);   // they asked first: mutual
     await friendDefaults(env, a, b);
+    return { to: target.id, mutual: true };
   }
+  return null;   // asked again, or friends already: no one is told twice
 }
 
 /** Friends and incoming requests. Requests you sent are not listed (IDEAS Z-12): a row only for handles that exist would
@@ -71,13 +74,15 @@ export async function friendRequestCancel(env: Env, v: Viewer, req: Request): Pr
                    AND (user_a = ?1 OR user_b = ?1) AND (SELECT id FROM users WHERE handle = ?2) IN (user_a, user_b)`, v.id, h);
 }
 
-export async function friendAccept(env: Env, v: Viewer, req: Request): Promise<void> {
+export async function friendAccept(env: Env, v: Viewer, req: Request): Promise<string> {
   const { user_id } = await body<{ user_id?: string }>(req);
-  const [a, b] = pair(v.id, str(user_id, "user_id", 1, 64));
+  const other = str(user_id, "user_id", 1, 64);
+  const [a, b] = pair(v.id, other);
   const r = await run(env,
     "UPDATE friendships SET status = 'accepted' WHERE user_a = ? AND user_b = ? AND status = 'pending' AND requested_by != ?", a, b, v.id);
   if (!r.meta.changes) throw new HttpError(404, "no_request");
   await friendDefaults(env, a, b);
+  return other;
 }
 
 /** Unfriend / decline / cancel / block: the friendship goes, and with it every grant and published entry between the two. */
