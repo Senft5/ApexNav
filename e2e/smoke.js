@@ -10606,6 +10606,31 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
   check(await page.evaluate(() => apexDebug.map.getLayoutProperty('apex-places', 'visibility')) === 'none', 'no places on the map in a drive');
 }, { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
+flow('a place someone sent: Share on the place card makes a vettadrive.app link with the spot and its name, and that link opens the same card on the map (place_link.js, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.whatsNew', '99'); } catch (_) {}
+    window.__shared = []; Object.defineProperty(navigator, 'share', { configurable: true, value: async (d) => { window.__shared.push(d); } }); });
+  await page.route(/^https:\/\/overpass/, (route) => route.fulfill({ contentType: 'application/json', body: '{"elements":[]}' }));
+  await page.route('**/api/ctx/keys', (route) => route.fulfill({ contentType: 'application/json', body: '{"keys":{}}' }));
+  // the link as Share builds it: the place in the fragment, so the website's server never sees it
+  await page.goto(base + '/index.html#place=39.15500_-84.61500_' + Buffer.from('Bean There Coffee', 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''));
+  await page.waitForSelector('#pinOverlay.show', { timeout: 20000 }).catch(async () => { throw new Error('the link opened no card: ' + await page.evaluate(() => location.href)); });
+  const card = await page.evaluate(() => { const c = apexDebug.map.getCenter(); return { name: document.getElementById('pinPlace').textContent, kind: document.getElementById('pinKind').textContent,
+    at: [+c.lat.toFixed(4), +c.lng.toFixed(4)], hash: location.hash, share: !!document.getElementById('pinShareBtn').offsetParent }; });
+  check(card.name === 'Bean There Coffee' && /^Sent to you/.test(card.kind) && card.at[0] === 39.155 && card.at[1] === -84.615 && card.hash === '' && card.share,
+    'the link opens its card, by name, on the map, and leaves the address: ' + JSON.stringify(card));
+  // Share: the share sheet with the link that opens it
+  await page.click('#pinShareBtn');
+  await page.waitForFunction(() => window.__shared.length === 1, null, { timeout: 3000 });
+  const sent = await page.evaluate(() => window.__shared[0]);
+  const m = /\/#place=([A-Za-z0-9._-]+)$/.exec(sent.url || '');
+  check(m && sent.title === 'Bean There Coffee' && m[1].startsWith('39.15500_-84.61500_'), 'Share sends the place link: ' + JSON.stringify(sent));
+  // a broken link says so and opens nothing
+  await page.click('#pinCancelBtn');
+  await page.evaluate(() => { location.hash = 'place=junk'; });
+  await page.waitForFunction(() => /place link is incomplete/.test(document.getElementById('toast').textContent), null, { timeout: 3000 });
+  check(!(await page.evaluate(() => document.getElementById('pinOverlay').classList.contains('show'))), 'a broken place link opens no card');
+}, { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 35.5, longitude: -83.9 }, permissions: ['geolocation'] });
+
 flow('along the route by name: the Along line opens a list of the cafés and fuel stops by their names on the map, and a tap on one (or its pin) says its name and offers it as a stop; in a drive the next fuel stamp names its station (the owner, 2026-11-11)', async (page, base) => {
   await planRouter(page);
   // the Shell's own hours (place_info.js): open all day, so the same whenever you'd get there
