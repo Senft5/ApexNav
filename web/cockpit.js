@@ -3216,7 +3216,7 @@
       } : undefined;
       return { lookupCells, apiGet: get, graphScore,
         crewLines: (typeof preferCache !== 'undefined' && preferCache.crewLines) || null, myTracks: null, taste, peer: {},
-        osmRelay: !!(window.ApexFlags && ApexFlags.on('osm_relay', false)) };   // the OSM relay: off unless the server says on
+        osmRelay: !!(window.ApexFlags && ApexFlags.on('osm_relay', false)) };   // the OSM relay: as the server's flags say (on since 2026-11-14); off until they load
     }
     // After a route is chosen (route_ctx/car.js): a car with no range meeting a long stretch without fuel is asked for it once;
     // stretches without signal offer to save their maps, then to share the ETA before the signal goes.
