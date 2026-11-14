@@ -3945,6 +3945,46 @@ flow('meets on the map: off by default; on, public meets near the map are pinned
   check(await page.evaluate(() => !document.querySelector('.mm-pin')), 'off again, the pins go');
 });
 
+flow('roadbooks on the map: off by default; on, only the books with a road in view are opened, driven solid and the rest dashed; a tap opens the book (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const line = (lat, lon) => Array.from({ length: 30 }, (_, i) => [+(lon + i * 2e-3).toFixed(5), +(lat + Math.sin(i / 4) * 1e-3).toFixed(5)]);
+  const box = (g) => [Math.min(...g.map((p) => p[1])), Math.max(...g.map((p) => p[1])), Math.min(...g.map((p) => p[0])), Math.max(...g.map((p) => p[0]))];
+  const g1 = line(35.45, -83.98), g2 = line(35.47, -83.94), far = line(39.1, -84.5);
+  const near = { id: 'NEARNEARNEARNEAR', name: 'Smokies classics', mine: true, visibility: 'private', by: 'me', followers: 0, roads: 2, length_m: 10000,
+    road_list: [{ id: 'r1', name: 'The Dragon', geom: g1, length_m: 5000, stamps: 1, stamped: true }, { id: 'r2', name: 'Cherohala', geom: g2, length_m: 5000, stamps: 0, stamped: false }] };
+  const away = { id: 'FARFARFARFARFARF', name: 'Ohio River', mine: false, visibility: 'public', by: 'sam', followers: 3, following: true, roads: 1, length_m: 5000,
+    road_list: [{ id: 'r9', name: 'River Road', geom: far, length_m: 5000, stamps: 0, stamped: false }] };
+  const opened = [];
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), p = u.pathname, json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (p === '/api/roadbooks') return json({ mine: [{ ...near, road_list: near.road_list.map((r) => ({ id: r.id, name: r.name, box: box(r.geom), stamped: r.stamped })) }], crews: [],
+      following: [{ ...away, road_list: away.road_list.map((r) => ({ id: r.id, name: r.name, box: box(r.geom), stamped: false })) }] });
+    if (p === '/api/roadbooks/NEARNEARNEARNEAR') { opened.push('near'); return json(near); }
+    if (p === '/api/roadbooks/FARFARFARFARFARF') { opened.push('far'); return json(away); }
+    return json([]);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apex && typeof window.apex.live === 'function');
+  check(await page.evaluate(() => apexDebug.state.toggles.roadbooks === false), 'the layer is off by default');
+  await page.waitForTimeout(1500);                                                        // the account is known
+  await page.evaluate(() => { apexDebug.state.follow = false; apexDebug.map.jumpTo({ center: [-83.93, 35.46], zoom: 12 }); });
+  await page.click('#swTab');
+  await page.click('[data-toggle="roadbooks"]');
+  await page.waitForFunction(() => { const s = apexDebug.map.getSource('apex-books-src'); return s && apexDebug.map.getLayoutProperty('apex-books', 'visibility') === 'visible'; }, null, { timeout: 15000 });
+  await page.waitForFunction(() => { const d = apexDebug.map.getSource('apex-books-src').serialize().data; return d && d.features && d.features.length === 2; }, null, { timeout: 10000 });
+  const drawn = await page.evaluate(() => apexDebug.map.getSource('apex-books-src').serialize().data.features.map((f) => [f.properties.name, f.properties.d]));
+  check(JSON.stringify(drawn) === JSON.stringify([['The Dragon', 1], ['Cherohala', 0]]) && opened.length === 1 && opened[0] === 'near', 'the book in view is opened and drawn, the far one is not asked for: ' + JSON.stringify({ drawn, opened }));
+  check(await page.evaluate(() => JSON.stringify(apexDebug.map.getPaintProperty('apex-books', 'line-dasharray')) === '[2,1.2]' && !apexDebug.map.getPaintProperty('apex-books-driven', 'line-dasharray')), 'to drive is dashed, driven is solid');
+  // a tap on a road opens its book
+  await page.click('#swTab').catch(() => {});
+  await page.waitForFunction(() => apexDebug.map.queryRenderedFeatures({ layers: ['apex-books'] }).length > 0, null, { timeout: 10000 });
+  const pt = await page.evaluate(() => { const p = apexDebug.map.project([-83.94 + 10 * 2e-3, 35.47 + Math.sin(10 / 4) * 1e-3]), r = apexDebug.map.getCanvas().getBoundingClientRect(); return { x: p.x + r.left, y: p.y + r.top }; });
+  await page.mouse.click(pt.x, pt.y);
+  await page.waitForSelector('.rb-pop.open .rb-road', { timeout: 8000 });
+  check(/Smokies classics/.test(await page.textContent('.rb-pop.open h3')), 'the tap opened the road\'s roadbook');
+});
+
 flow('drive ended: your best on this road on the card, and the pack closes with the score from its own clips (REVIEW.md 4.4)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     const S = window.speechSynthesis; if (S) S.speak = (u) => setTimeout(() => u.onend && u.onend(), 20); });
@@ -6790,6 +6830,7 @@ flow('Your driving before 30 clean corners: one first-picture panel with a progr
   });
   check(/^\d+ of 30 clean corners\. /.test(r.say) && r.w > 0 && r.w < 100, 'the panel counts toward 30: ' + JSON.stringify(r));
   check(r.rows === 0 && r.dashes === 0 && r.fits, 'no skill rows or dashes, and it fits a phone: ' + JSON.stringify(r));
+  check(await page.evaluate(() => document.getElementById('drivingShare').hidden), 'no DNA card before every skill is measured');
 });
 
 flow('Your driving: the profile over every drive opens from the Log, names the weak side, and is kept between visits (driver_profile.js)', async (page, base) => {
@@ -6844,6 +6885,11 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   const pace = await page.evaluate(() => { const p = document.querySelector('#drivingRoot .dp-pace'); return p ? p.innerText : null; });
   check(pace && /Your pace/.test(pace) && /\b\d{1,3}\b/.test(pace) && /sane limit/.test(pace) && !/Work on/.test(pace), 'the pace panel: ' + pace);
   check(!/Work on: Pace/.test(text), 'pace is never the thing to work on');
+  // Share my DNA (dna_card.js): all six measured, so the picture is offered; it draws 9:16 and goes out as a file
+  const dna = await page.evaluate(() => { const b = document.getElementById('drivingShare'); return { shown: !b.hidden, text: b.textContent }; });
+  check(dna.shown && dna.text === 'Share my DNA', 'the DNA card is offered once all six skills are known: ' + JSON.stringify(dna));
+  const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.click('#drivingShare')]);
+  check(dl.suggestedFilename() === 'driving-dna.png', 'the DNA card saves as a picture: ' + dl.suggestedFilename());
   check(!/mph|km\/h|\d s\b/.test(text), 'never a speed or a time');
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
   // touch: these drives' g runs straight between fixes (as recordings before ten readings a second did), so there is none
@@ -10026,6 +10072,16 @@ flow('a ghost duel on the drive page: your pass of a stage against a friend\'s s
   check(r.head === 'Dry Ridge vs @sam', 'the panel names the stage and the friend: ' + r.head);
   check(/^\d+\.\d s ahead of @sam their best, Nov 1$/.test(r.line.trim()), 'the gap at the finish: ' + r.line);
   check(r.h3[0] === 'Where you were quicker' && r.rows.length >= 1 && r.rows.length <= 3 && r.rows.every((t) => /(Corner \d+ · .+|To the finish)−\d+\.\d s$/.test(t)), 'the corners that decided it: ' + JSON.stringify(r));
+  // one key: you were quicker, so a dare; it sends a 7-day time duel on your stage, and the panel says so
+  let sent = null;
+  await page.route('**/api/duels', (route) => { sent = JSON.parse(route.request().postData() || 'null'); route.fulfill({ status: 201, contentType: 'application/json', body: '{"id":"du1"}' }); });
+  const key = await page.textContent('#dvGhostActs button');
+  check(key === 'Dare @sam to beat it', 'the key under the result: ' + key);
+  await page.click('#dvGhostActs button');
+  await page.waitForSelector('#dvGhostActs [role=status]');
+  check(sent && sent.handle === 'sam' && sent.segment_id === 'seg_mine' && sent.days === 7 && sent.kind === 'time', 'a 7-day time duel on your stage: ' + JSON.stringify(sent));
+  const said = await page.textContent('#dvGhostActs [role=status]');
+  check(said === 'Sent. @sam has 7 days on Dry Ridge once they say yes.' && !(await page.$('#dvGhostActs button')), 'the panel says it was sent: ' + said);
 });
 
 flow('side by side: a corner filmed on this drive and on your best pass plays as one clip, both from the same point, the gap counting (big bet 5)', async (page, base) => {
