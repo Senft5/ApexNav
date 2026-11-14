@@ -27,7 +27,7 @@ import { deleteAccount, exportMyData } from "./account";
 import { itemsDelete, itemsGet, itemsPut } from "./member_items";
 import * as drivePosts from "./drive_posts";
 import { mediaGet, mediaPut } from "./post_media";
-import { afterCrewDrive, afterDuel, afterFriend, afterKudos, afterPostComment, afterPostKudos, pushForget, pushQuiet, pushRegister } from "./push";
+import { afterCrewDrive, afterDuel, afterFriend, afterKudos, afterPostComment, afterPostKudos, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewBadge, crewFeed, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
 import { decalsPlace } from "./livery";
@@ -409,6 +409,8 @@ on("POST", "/api/kudos", async (req, env, _m, ctx) => {
 });
 // push notifications (src/push.ts): this phone's APNs token, kept while signed in
 on("POST", "/api/push/token", async (req, env) => json(await pushRegister(env, await requireUser(req, env), req)));
+on("GET", "/api/push/kinds", async (req, env) => json(await pushKindsGet(env, await requireUser(req, env))));
+on("PUT", "/api/push/kinds", async (req, env) => json(await pushKindsPut(env, await requireUser(req, env), req)));
 on("PUT", "/api/push/quiet", async (req, env) => { await pushQuiet(env, await requireMember(req, env), req); return noContent(); });
 on("DELETE", "/api/push/token", async (req, env) => { const v = await requireUser(req, env); const b = (await req.json().catch(() => ({}))) as { token?: unknown }; await pushForget(env, v.id, b.token); return noContent(); });
 on("DELETE", "/api/kudos", async (req, env) => { await kudosTake(env, await requireMember(req, env), req); return noContent(); });

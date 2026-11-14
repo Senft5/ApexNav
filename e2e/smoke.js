@@ -6856,12 +6856,13 @@ flow('a drive posted with no signal waits on the phone and goes up once there is
 flow('push notifications: Garage > Notifications asks iOS only at the switch, hands the phone\'s token to the Worker, a push\'s tap opens the post, and off takes the token back (Worker and shell stubbed, docs/SOCIAL.md 2.12)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__posted = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { window.__posted.push(m); } } } }; });
-  const sent = [];
+  const sent = [], kinds = [];
   const post = { id: 'P1AAAAAAAAAAAAAA', handle: 'me', photo_id: null, mine: true, crew: null, title: 'Cherohala Skyway', caption: null, driven_on: '2026-11-12', length_m: 32000, score: 812,
     roads: [], stages: [], line: null, created_at: '2026-11-12 10:00:00', kudos: 1, my_kudos: false, comments: 1,
     comment_list: [{ id: 'C1AAAAAAAAAAAAAA', body: 'That fog!', created_at: '2026-11-12 11:00:00', handle: 'bob', photo_id: null, mine: false, can_delete: true }] };
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/push/kinds') { if (m === 'PUT') kinds.push(JSON.parse(route.request().postData()).off); return json({ off: kinds.length ? kinds[kinds.length - 1] : ['duels'] }); }
     if (u.pathname.startsWith('/api/push')) { sent.push({ m, p: u.pathname, b: JSON.parse(route.request().postData() || '{}') }); return m === 'POST' ? json({ ok: true, sending: true }) : route.fulfill({ status: 204 }); }
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/posts/P1AAAAAAAAAAAAAA') return json(post);
@@ -6882,6 +6883,13 @@ flow('push notifications: Garage > Notifications asks iOS only at the switch, ha
   check(sent.length === 1 && sent[0].m === 'POST' && sent[0].b.token === token && sent[0].b.sandbox === false, 'the phone\'s token goes to the Worker: ' + JSON.stringify(sent));
   const note = await page.textContent('#pushState');
   check(/On\. Nothing comes while you drive\./.test(note), 'the sheet says it is on, and never while driving: ' + note);
+  // (2026-11-14) each kind has its own switch under it, as the server keeps them (duels off here)
+  await page.waitForSelector('.garage-pop.open #pushKinds:not([hidden]) .sw');
+  const sw = await page.$$eval('.garage-pop.open #pushKinds .sw', (l) => l.map((b) => [b.textContent, b.getAttribute('aria-checked')]));
+  check(JSON.stringify(sw) === JSON.stringify([['Friend requests', 'true'], ['Kudos', 'true'], ['Comments and mentions', 'true'], ['Duels', 'false'], ['Crew drives', 'true']]), 'one switch per kind: ' + JSON.stringify(sw));
+  await page.click('.garage-pop.open #pushKinds .sw:has-text("Kudos")');
+  for (let i = 0; i < 40 && !kinds.length; i++) await page.waitForTimeout(50);
+  check(JSON.stringify(kinds) === '[["duels","kudos"]]' && await page.getAttribute('.garage-pop.open #pushKinds .sw:has-text("Kudos")', 'aria-checked') === 'false', 'Kudos off is kept on the server: ' + JSON.stringify(kinds));
   // a push's tap: kudos on your post opens that post with its comments
   await page.evaluate(() => window.apex.onNative({ type: 'link', params: { view: 'friends', post: 'P1AAAAAAAAAAAAAA' } }));
   await page.waitForSelector('.feed-sheet', { timeout: 8000 });
