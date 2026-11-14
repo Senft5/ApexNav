@@ -10,6 +10,7 @@ import { DATE_RE, Env, HttpError, body, randomToken } from "./util";
 import { cleanText } from "./convoy";
 import { isCrewMember } from "./social";
 import { reportedSql } from "./reports_sql";
+import { mediaErase, mediaOf } from "./post_media";
 
 export const MAX_POINTS = 600, CUT_M = 500, FEED_N = 30, MAX_POSTS_DAY = 10, MAX_COMMENTS_HOUR = 30, MAX_COMMENTS = 200;
 const ID_RE = /^[A-Za-z0-9_-]{16}$/;
@@ -113,10 +114,10 @@ export async function postCreate(env: Env, v: Viewer, req: Request): Promise<{ i
 }
 
 type Row = { id: string; author: string; handle: string | null; photo_id: string | null; crew_id: string | null; crew_name: string | null; title: string; caption: string | null;
-  driven_on: string; length_m: number | null; score: number | null; roads: string | null; stages: string | null; line: string | null; created_at: string;
+  driven_on: string; length_m: number | null; score: number | null; roads: string | null; stages: string | null; line: string | null; media: string | null; created_at: string;
   kudos: number; my_kudos: number; comments: number };
 const SELECT = `SELECT p.id, p.author, u.handle, u.photo_id, p.crew_id, c.name AS crew_name, p.title, p.caption, p.driven_on, p.length_m, p.score, p.roads,
-    p.stages, p.line, p.created_at,
+    p.stages, p.line, p.media, p.created_at,
     (SELECT COUNT(*) FROM drive_post_kudos k WHERE k.post_id = p.id) AS kudos,
     EXISTS (SELECT 1 FROM drive_post_kudos k WHERE k.post_id = p.id AND k.user_id = ?1) AS my_kudos,
     (SELECT COUNT(*) FROM drive_comments dc WHERE dc.post_id = p.id AND (dc.author = ?1 OR (${NOT_BLOCKED("dc.author")} AND NOT ${reportedSql("comment", "dc.id")}))) AS comments
@@ -125,7 +126,7 @@ const shape = (r: Row, me: string) => ({
   id: r.id, handle: r.handle, photo_id: r.photo_id, mine: r.author === me, crew: r.crew_id ? { id: r.crew_id, name: r.crew_name } : null,
   title: r.title, caption: r.caption, driven_on: r.driven_on, length_m: r.length_m, score: r.score,
   roads: r.roads ? (JSON.parse(r.roads) as string[]) : [], stages: r.stages ? (JSON.parse(r.stages) as { name: string; score: number | null }[]) : [],
-  line: r.line, created_at: r.created_at, kudos: r.kudos, my_kudos: !!r.my_kudos, comments: r.comments,
+  line: r.line, media: (() => { const m = mediaOf(r.media); return m ? { kind: m.kind, label: m.label } : null; })(), created_at: r.created_at, kudos: r.kudos, my_kudos: !!r.my_kudos, comments: r.comments,
 });
 
 /** GET /api/feed?before=: the newest posts you can see (yours too), FEED_N at a time, older than `before` (a created_at). */
@@ -158,6 +159,7 @@ export async function postGet(env: Env, v: Viewer, id: string) {
 export async function postDelete(env: Env, v: Viewer, id: string): Promise<void> {
   const r = await env.DB.prepare("DELETE FROM drive_posts WHERE id = ? AND author = ?").bind(id, v.id).run();
   if (!r.meta.changes) throw new HttpError(404, "no_post");
+  await mediaErase(env, [id]);
 }
 
 /** POST/DELETE /api/posts/:id/kudos: one per person per post; not on your own. → the post's author when the kudos is new. */

@@ -5989,6 +5989,50 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   check(p.crew_id === 'k1' && p.caption === 'First run with the crew.' && p.score === 790 && p.title === 'Cherohala Skyway' && first > 35.36 + 0.0044,
     'the post: to the crew, the caption, the Score, and the line starting 500 m in: ' + JSON.stringify({ ...p, line: p.line.length, first }));
 });
+flow('post media: a friend\'s photo shows on their post in the Feed, and Add a photo on the Post sheet sends yours as a JPEG after the post (Worker stubbed, backend/src/post_media.ts)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const sent = [], JPG = Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAeACgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDz+iiiv0Q8MKKKKACiiigAooooAKKKKACiiigD/9k=', 'base64');
+  const bobPost = { id: 'P1AAAAAAAAAAAAAA', handle: 'bob', photo_id: null, mine: false, crew: null, title: 'Cherohala Skyway', caption: null, driven_on: '2026-11-12',
+    length_m: 32000, score: 812, roads: [], stages: [], line: null, media: { kind: 'photo', label: null }, created_at: '2026-11-12 10:00:00', kudos: 0, my_kudos: false, comments: 0 };
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (m !== 'GET') { sent.push({ m, p: u.pathname, type: route.request().headers()['content-type'], n: (route.request().postDataBuffer() || Buffer.alloc(0)).length });
+      if (u.pathname === '/api/posts') return json({ id: 'P2AAAAAAAAAAAAAA' }, 201);
+      if (u.pathname.endsWith('/media')) return json({ kind: 'photo', mime: 'image/jpeg', bytes: 1, label: null });
+      return route.fulfill({ status: 204 }); }
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/feed') return json([bobPost]);
+    if (u.pathname === '/api/posts/P1AAAAAAAAAAAAAA/media') return route.fulfill({ status: 200, contentType: 'image/jpeg', body: JPG });
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .feed-card .feed-media img', { timeout: 15000 });
+  const img = await page.evaluate(() => { const i = document.querySelector('#accountBody .feed-card .feed-media img'); return { w: i.naturalWidth, label: i.closest('.feed-media').getAttribute('aria-label') }; });
+  check(img.w === 40 && img.label === 'Photo', 'a friend\'s photo shows on their post: ' + JSON.stringify(img));
+  // your drive: Add a photo, Post; the post first, then its photo, as a JPEG
+  await page.evaluate(() => document.querySelector('.tab[data-view="map"]').click());
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording);
+  await page.evaluate(async () => {
+    ApexCore.driverScore = () => ({ score: 790, components: {} });
+    const lat = [], lon = []; for (let i = 0; i < 600; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
+    const d = { id: 'pd2', name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] };
+    await ApexRecording.store(d);
+    apexDebug.showEndCard(d, Date.now() - 30 * 60000, { quiet: true });
+  });
+  await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !b.hidden && !b.getAttribute('aria-disabled'); }, null, { timeout: 15000 });
+  await page.click('#endPost');
+  await page.waitForSelector('.post-sheet .post-media button:text-is("Add a photo")');
+  await page.setInputFiles('.post-sheet .post-media input[type=file]', { name: 'shot.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAACgAAAAeCAIAAADRv8uKAAAAL0lEQVR4nO3NMQ0AMAgAsDENyMF/kIUFPp7WQKMr34V/sorFYrFYLBaLxWKxeGUAOWUBVBcDkCYAAAAASUVORK5CYII=', 'base64') });
+  await page.waitForSelector('.post-sheet .post-media img');
+  check(/Photo/.test(await page.textContent('.post-sheet .post-media')), 'the photo waits on the sheet, with Remove');
+  await page.click('.post-sheet button:text-is("Post")');
+  await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Posted', null, { timeout: 10000 });
+  const posts = sent.filter((x) => x.p.startsWith('/api/posts')), order = posts.map((x) => `${x.m} ${x.p} ${x.type || ''}`);
+  check(order[0] === 'POST /api/posts application/json' && order[1] === 'PUT /api/posts/P2AAAAAAAAAAAAAA/media image/jpeg' && posts[1].n > 100, 'the post, then its photo as a JPEG: ' + JSON.stringify(order));
+  check(/Posted to your friends\./.test(await page.textContent('#toast')), 'and it says where it went');
+});
 flow('push notifications: Garage > Notifications asks iOS only at the switch, hands the phone\'s token to the Worker, a push\'s tap opens the post, and off takes the token back (Worker and shell stubbed, docs/SOCIAL.md 2.12)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__posted = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { window.__posted.push(m); } } } }; });
