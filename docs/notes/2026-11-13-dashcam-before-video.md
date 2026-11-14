@@ -16,6 +16,10 @@
 - **Done:** the e2e flow "valhalla down: planning inside our tiles…" failed on this PR's CI at 1511 ms against a 1.5 s
   budget for a loop. The loop takes 1.2 to 1.5 s locally on main and on a commit from before today's routing PRs, so
   nothing got slower: the budget had no room. It is 2 s now, still under the shortest Valhalla wait (OWN_CHECK_MS, 2.5 s).
+- **Done:** the e2e flow "a saved route keeps its reports…" failed on this PR's CI with "ApexRowSelect is not defined".
+  The Log loaded with no signal, row_select.js had not been kept by the browser, and analysis_page.js called it bare, so
+  the whole Log page died. Every other caller already checks `root.ApexRowSelect` first. analysis_page.js now does too,
+  and the Log keeps the plain select. Checked by loading analysis.html with row_select.js blocked: no page error.
 - **Active bugs:** none known.
 - **Next:** keep walking the phone screens.
 

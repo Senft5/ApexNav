@@ -6,7 +6,8 @@
     let MPH = window.ApexUnits ? ApexUnits.speed(1) : Core.MPS_TO_MPH;   // mph or km/h per m/s (U-22); the map page can change it (F-15)
     const $ = (id) => document.getElementById(id);
     const UNK = '<i class="unk">--</i>';   // a score we don't know: "--" in the numeral font, in pencil, never two black bars (REVIEW2.md U-34)
-    for (const id of ['segDrive', 'selA', 'selB']) ApexRowSelect.enhance($(id));   // the app's row list, not the browser's select (REVIEW2.md U-18)
+    // a script that didn't load (opened with no signal before the browser kept it) leaves the plain select, not a dead page
+    if (window.ApexRowSelect) for (const id of ['segDrive', 'selA', 'selB']) ApexRowSelect.enhance($(id));   // the app's row list, not the browser's select (REVIEW2.md U-18)
     let prefs = { theme: 'roadbook', toggles: { night: false } };
     try { prefs = Object.assign(prefs, JSON.parse(localStorage.getItem('apex.prefs') || 'null') || {}); if (prefs.themeV !== 2) prefs.theme = 'roadbook'; } catch (_) {}
     const params = new URLSearchParams(location.search);
@@ -764,7 +765,7 @@
           const go = document.createElement('button'); go.className = 'btn'; go.textContent = 'Share stage';
           row.append(Object.assign(document.createElement('p'), { className: 'note share-with', textContent: 'Share this stage with a friend' }));
           go.onclick = async () => { go.textContent = (await ApexSync.shareSegment(seg.id, 'friend', sel2.value)) ? 'Shared' : 'Failed. Try again'; };
-          sel2.setAttribute('aria-label', 'Share with'); row.append(sel2, go); ApexRowSelect.enhance(sel2);
+          sel2.setAttribute('aria-label', 'Share with'); row.append(sel2, go); if (window.ApexRowSelect) ApexRowSelect.enhance(sel2);
         }
       }
     }
