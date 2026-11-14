@@ -13,6 +13,11 @@ by the weekly OSM build (.github/workflows/osm-ctx.yml): Overpass timed out or r
     OUT/osm/v2/points/<bi>_<bj>.json = {"fuel": [[lat, lon], ...], "schools": [...], "worship": [...]}, one per covered cell
         fuel stations (web/route_ctx/car.js, the fuel-stop spacing) and schools and places of worship (route_ctx/events.js,
         school-run and church traffic), 5 decimal places, positions only (backend/src/osm_relay.ts pointCells)
+    OUT/osm/v2/lines/<bi>_<bj>.json = {"t": {"<i>_<j>": {"lit": [[value, [lat, lon, ...]]], "tunnel": [[...]], "cycle": [[...]]}}}
+        lit roads, road tunnels and the roads of bicycle routes for route_ctx/driver.js, by its 0.1 degree tiles (i, j =
+        floor(lat / 0.1), floor(lon / 0.1)) in bundles of 5 x 5 tiles (bi, bj = floor(i / 5), floor(j / 5)); every tile
+        wholly inside the .poly is listed, an empty one too, so the server can tell "none" from "not built". A line is
+        in every tile one of its points falls in (as driver.js caches Overpass's), simplified to LINE_TOL degrees
 
 Waterfalls:
 A node or a way tagged natural=waterfall or waterway=waterfall, a way at the mean of its nodes, one per place (4 decimal
@@ -37,6 +42,9 @@ from tools.osm_ctx.build import read_poly
 STEP = 0.25
 PKEYS = ("opening_hours", "phone", "contact:phone", "website", "contact:website")   # place_info.js contact() and read()
 POINTS = {"fuel": "fuel", "school": "schools", "place_of_worship": "worship"}   # amenity -> the file's list (car.js, events.js)
+LINE_TILE, LINE_BUNDLE, LINE_TOL = 0.1, 5, 0.00002                                  # driver.js TILE; ~2 m (it paints 30 m cells)
+LINE_ROAD = ("motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential")  # driver.js query's road
+LIT = ("yes", "24/7", "automatic", "sunset-sunrise", "interval", "limited", "no", "disused")           # driver.js LIT's keys
 CKEYS = ("motor_vehicle:conditional", "motorcar:conditional", "vehicle:conditional", "access:conditional")   # conditional_closures.js KEYS
 
 
@@ -128,6 +136,72 @@ def points_by_cell(points, cs) -> dict:
     return by
 
 
+def _line_road(hw: str) -> bool:
+    return hw in LINE_ROAD or (hw.endswith("_link") and hw[:-5] in LINE_ROAD)
+
+
+def read_lines(paths) -> list:
+    """[(kind, value, [(lat, lon), ...])]: driven roads with a lit tag (value its tag), road tunnels, and the ways of
+    bicycle route relations that are roads of any kind (value 1), as driver.js query() and parseOsm() read Overpass."""
+    from shapely.geometry import LineString
+    cyc = set()
+    for path in paths:
+        for o in osmium.FileProcessor(path, osmium.osm.RELATION):
+            if o.tags.get("route") == "bicycle":
+                cyc.update(m.ref for m in o.members if m.type == "w")
+    out = []
+    for path in paths:
+        for o in osmium.FileProcessor(path).with_locations():
+            if not o.is_way() or "highway" not in o.tags:
+                continue
+            hw, road = o.tags["highway"], _line_road(o.tags["highway"])
+            lit = o.tags.get("lit") if road and o.tags.get("lit") in LIT else None
+            tun = road and o.tags.get("tunnel") == "yes"
+            if lit is None and not tun and o.id not in cyc:
+                continue
+            pts = [(n.location.lat, n.location.lon) for n in o.nodes if n.location.valid()]
+            if len(pts) < 1:
+                continue
+            if len(pts) > 2:
+                pts = list(LineString([(b, a) for a, b in pts]).simplify(LINE_TOL).coords)
+                pts = [(b, a) for a, b in pts]
+            g = [(round(a, 5), round(b, 5)) for a, b in pts]
+            if lit is not None:
+                out.append(("lit", lit, g))
+            if tun:
+                out.append(("tunnel", 1, g))
+            if o.id in cyc:
+                out.append(("cycle", 1, g))
+    return out
+
+
+def line_tiles(cover) -> list:
+    """The 0.1 degree tiles (i, j) wholly inside `cover`."""
+    from shapely.geometry import box as sbox
+    w, s, e, n = cover.bounds
+    out = []
+    for i in range(math.floor(s / LINE_TILE), math.ceil(n / LINE_TILE)):
+        for j in range(math.floor(w / LINE_TILE), math.ceil(e / LINE_TILE)):
+            if cover.contains(sbox(j * LINE_TILE + 1e-7, i * LINE_TILE + 1e-7, (j + 1) * LINE_TILE - 1e-7, (i + 1) * LINE_TILE - 1e-7)):
+                out.append((i, j))
+    return out
+
+
+def lines_by_bundle(lines, tiles) -> dict:
+    """{(bi, bj): {"t": {"i_j": {"lit": [[value, flat]], "tunnel": [[flat]], "cycle": [[flat]]}}}} over the covered tiles."""
+    by, at = {}, {}
+    for i, j in tiles:
+        t = {"lit": [], "tunnel": [], "cycle": []}
+        by.setdefault((math.floor(i / LINE_BUNDLE), math.floor(j / LINE_BUNDLE)), {"t": {}})["t"][f"{i}_{j}"] = t
+        at[(i, j)] = t
+    for kind, value, g in lines:
+        flat = [v for p in g for v in p]
+        for k in {(math.floor(a / LINE_TILE), math.floor(b / LINE_TILE)) for a, b in g}:
+            if k in at:
+                at[k][kind].append([value, flat] if kind == "lit" else flat)
+    return by
+
+
 def read(paths) -> list:
     """Waterfalls: [(lat, lon, name|None)], one per place, sorted."""
     seen, out = set(), []
@@ -205,6 +279,14 @@ def main(argv=None):
         with open(os.path.join(a.out, "osm", "v2", "points", f"{bi}_{bj}.json"), "w") as f:
             json.dump(body, f, separators=(",", ":"))
     m = {k: sum(len(v[k]) for v in pts.values()) for k in POINTS.values()}
+    lb = lines_by_bundle(read_lines(a.pbf), line_tiles(cover))
+    os.makedirs(os.path.join(a.out, "osm", "v2", "lines"), exist_ok=True)
+    for (bi, bj), body in lb.items():
+        with open(os.path.join(a.out, "osm", "v2", "lines", f"{bi}_{bj}.json"), "w") as f:
+            json.dump(body, f, separators=(",", ":"))
+    nl = {k: sum(len(t[k]) for b in lb.values() for t in b["t"].values()) for k in ("lit", "tunnel", "cycle")}
+    big = max((os.path.getsize(os.path.join(a.out, "osm", "v2", "lines", f"{bi}_{bj}.json")) for bi, bj in lb), default=0)
+    print(f"lines: lit {nl['lit']}, tunnel {nl['tunnel']}, cycle {nl['cycle']} (per tile) in {len(lb)} bundles, largest {big} bytes")
     print(f"falls: {len(d['falls'])}, roads with conditional access: {len(c['ways'])}, places with hours or contact: {n}, "
           f"fuel {m['fuel']}, schools {m['schools']}, worship {m['worship']}, in {len(cs)} cells")
 

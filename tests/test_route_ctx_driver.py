@@ -153,6 +153,30 @@ def test_query_is_tiles_only_and_provider_never_blocks():
 
 
 
+def test_lit_tunnels_and_cycle_roads_from_our_build_first():
+    """Inside the region the plan's 0.1 degree tiles come from our weekly build (GET /api/ctx/lines, tile ids only) and are
+    kept as Overpass's are; Overpass is never asked for a tile it covers, and with the server down it is asked as before."""
+    js = """(async () => {
+      const t = path(straight(40)), k = D.tilesOf([t])[0], asked = [], over = [];
+      const lat0 = 35.5, lat1 = 35.5 + 1000 / M_LAT;
+      const tile = { lit: [['no', [lat0, -83.5, lat1, -83.5]]], tunnel: [], cycle: [[lat0, -83.5, lat1, -83.5]] };
+      const mem = () => { const m = new Map(); return { getItem: (x) => m.get(x) ?? null, setItem: (x, v) => m.set(x, v), m }; };
+      const fetch = async () => { over.push(1); return { ok: true, status: 200, json: async () => ({ elements: [] }) }; };
+      const st = mem();
+      const ours = await D.provider.fetch([t], { prefs: { lit: true, cyclists: true }, fetch, storage: st, budgetMs: 4000,
+        apiGet: async (p) => { asked.push(p); return { tiles: { [k]: tile } }; } });
+      const kept = [...st.m.keys()].some((x) => x.endsWith(k));
+      const overOurs = over.length;
+      const down = await D.provider.fetch([t], { prefs: { lit: true }, fetch, storage: mem(), budgetMs: 4000, apiGet: async () => null });
+      return { asked, overOurs, overDown: over.length - overOurs, kept, lit: [...new Set(ours.c1.channels.lit)], cyc: [...new Set(ours.c1.channels.cyclist_route)],
+               status: ours.c1.status, down: down.c1.status };
+    })()"""
+    out = run(js)
+    assert out["asked"] == ["/api/ctx/lines?tiles=355_-835"] and out["overOurs"] == 0 and out["kept"]
+    assert 0 in out["lit"] and 1 in out["cyc"] and out["status"] == "ok"
+    assert out["overDown"] >= 1 and out["down"] == "ok"                # Overpass answered (empty): known, nothing lit
+
+
 def test_real_overpass_answer_fort_pitt_tunnel():
     """A real Overpass answer for the driver query (Fort Pitt Tunnel, Pittsburgh): the tunnel ways, lit=24/7 counts as lit."""
     fx = ROOT / "tests" / "fixtures" / "route_ctx" / "overpass_driver_fort_pitt_tunnel.json"
