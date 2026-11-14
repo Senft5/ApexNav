@@ -1,10 +1,11 @@
 # Marketing plan
 
-> **2026-11-14 update (launch marketing thread):** the plan Nate follows is the short ranked one ("Vetta launch marketing
-> plan (zero cost)", a Claude Doc in the project). It changes three things here: launch in the Cincinnati tri-state, not
-> the Southern Appalachians (section 4); the app's own corner clips replace the rendered road-of-the-week flyover as the
-> weekly video; and posting stays by hand on 3 channels (Reels, TikTok, Shorts) until something works, not 7 automated
-> accounts (section 6). Local drafts: `docs/marketing/local_launch.md`. The rest stands as reference.
+> **2026-11-14 update (launch marketing thread):** Nate wants social media only until it's proven: no clubs, meets,
+> DMs or community posts. The plan he follows is the short one ("Vetta launch marketing plan (zero cost)", a Claude Doc in
+> the project): a faceless account on TikTok, Reels and Shorts, 5 posts a week, all footage made by the app (corner
+> clips, flyovers, ghost runs, loops, drive cards). The calendar and captions: `docs/marketing/social_engine.md`. Sections
+> 3 to 6 below (communities, clubs, press, automated posting) are on hold, kept as reference for after it's proven; the
+> launch region moved to the Cincinnati tri-state (section 4).
 
 How Vetta finds its first 10,000 drivers with almost no budget, run by Claude as far as the platforms allow.
 Drafted 2026-10-28. Draft materials are in `docs/marketing/`; nothing is posted or sent until the owner has made the
@@ -51,9 +52,8 @@ the brand legal-speed fun. `tests/test_listing.py` already enforces this for the
 ## 4. The launch region
 
 **The Cincinnati tri-state** (decided 2026-11-14): Vetta's own routing graph, traffic, camera list and context data are
-deepest there and across OH/KY/IN, Nate lives there and can go to meets and club drives, and the BMW CCA Buckeye and PCA
-Ohio Valley calendars already run back-road tours from it (`docs/marketing/local_launch.md`). Goal before launch: 25
-founding drivers in the tri-state and its best roads driven by 2+ members. Then Columbus, Dayton, Louisville, Lexington.
+deepest there and across OH/KY/IN, and Nate drives there, so the roads in the posts are ones the app knows best.
+Then Columbus, Dayton, Louisville, Lexington.
 The Southern Appalachians (the October pick) come later, as a road-trip destination.
 
 ## 5. Timeline
