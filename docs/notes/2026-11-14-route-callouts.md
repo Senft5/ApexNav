@@ -10,3 +10,8 @@
 - What: web/route_callouts.js picks a spot per route (20-80 % of its length, farthest from the others, none under 40 m apart). cockpit.js paintCallouts draws them as maplibregl Markers (buttons with labels for VoiceOver), and fitPlannedRoute adds the tag spots to its bounds.
 - Why: the faint dashed lines alone didn't say what each route costs; the card showed one route at a time. Markers stay tappable and readable at any text size, which a symbol layer doesn't give.
 - Undo: drop the paintCallouts() call in paintAlternates and the calloutTags line in fitPlannedRoute.
+
+## 2026-11-14 A Siri ask while a plan settles waits instead of vanishing
+- What: goSpoken (Siri's "Drive somewhere") waits up to 30 s for a plan still in progress before it searches. routeToQuery used to drop an ask silently while the plan panel was busy.
+- Why: CI e2e "Siri" failed on this PR with nothing said at all. The first plan's route was already up, but the plan was still ranking the others, so the second ask was dropped. The flow now asks while a plan is busy, which reproduces the failure without the fix.
+- Undo: remove the wait loop at the top of goSpoken in cockpit.js.

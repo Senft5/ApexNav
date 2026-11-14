@@ -6023,9 +6023,12 @@
     }
     // Siri (ApexIntents.swift DriveToIntent): "Drive somewhere with Vetta", then the place said aloud. Where to? as if it
     // were typed and Go pressed: your own places by that name first, then the map's search. Never over a drive.
-    function goSpoken(words) {
+    // A plan still settling (its first route already up, the rest still ranked) holds the new ask until it is done, never
+    // drops it: routeToQuery ignores a search while the panel is busy (CI 2026-11-14: the second ask said nothing at all).
+    async function goSpoken(words) {
       const q = String(words || '').replace(/\s+/g, ' ').trim().slice(0, 120);
       if (!q) return null;
+      for (const until = Date.now() + 30000; $('planPanel').classList.contains('busy') && Date.now() < until;) await new Promise((r) => setTimeout(r, 150));
       if (driveActive) { toast('End the drive to plan a new route.'); return null; }
       closeSheet(); openPlan(true);
       $('destInput').value = q; $('fromInput').value = ''; paintTask();

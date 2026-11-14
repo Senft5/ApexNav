@@ -2769,6 +2769,9 @@ flow('Siri: "Drive somewhere with Vetta" plans to the place said, your own first
   const toasts = await page.evaluate(async (q) => { const before = window.apexDebug.track;
     const fix = () => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true });
     fix(); window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } };
+    // asked while the last plan is still settling (its route up, the rest still ranked, as on a slow CI runner): the ask
+    // waits for it, never dropped (CI 2026-11-14: nothing said at all)
+    const panel = document.getElementById('planPanel'); panel.classList.add('busy'); setTimeout(() => panel.classList.remove('busy'), 1500);
     window.apex.onNative({ type: 'link', params: { go: 'to', q } });
     // The phone's GPS keeps reporting while it waits (the flow gave one fix at the start: 5 s on, the page rightly said "GPS
     // lost" and went to the replay, and an ask still in flight then was dropped, failing this flow on a slow runner).
