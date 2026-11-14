@@ -3464,13 +3464,20 @@
     // it), so it draws with no signal on the way. Quietly, with signal; it shows in Your data as a map area and goes when the
     // route is unsaved. Nothing kept (no signal, a route too long) leaves the saved route as it was.
     const routeAreaId = (t) => `route_${String(t.id).replace(/[^\w-]/g, '').slice(0, 60)}`;
+    // a map only partly kept (the phone ran out of room, or the signal went mid-save) says so, and why, rather than pass as whole
+    const partKept = (a) => {
+      const share = window.ApexOfflineTiles && ApexOfflineTiles.keptShare ? ApexOfflineTiles.keptShare(a) : 1;
+      return share < 1 ? `${Math.min(99, Math.floor(share * 100))}% kept, ${a.full ? 'the phone is out of room' : 'the signal dropped'}` : null;
+    };
     async function keepMapAlong(t, quiet = false) {
       if (!window.ApexOfflineTiles || navigator.onLine === false || !t || !Array.isArray(t.lat)) return;
       try {
         const mid = Math.floor(t.lat.length / 2);
         const a = await ApexOfflineTiles.download({ lat: t.lat[mid], lon: t.lon[mid], along: { lat: t.lat, lon: t.lon }, id: routeAreaId(t), styleUrl: MAP_STYLE, name: `Along ${t.name}` });
         if (!ApexSavedRoutes.has(localStorage, t.id)) { await ApexOfflineTiles.removeArea(a.id); return; }   // unsaved meanwhile
-        if (!quiet) toast(`The map along ${t.name} is kept for no signal too, ${Math.max(1, Math.round(a.bytes / 1048576))} MB.`);
+        const part = partKept(a);
+        if (part && !quiet) toast(`The map along ${t.name}: only ${part}. Update it in Settings, Your data.`);
+        else if (!quiet) toast(`The map along ${t.name} is kept for no signal too, ${Math.max(1, Math.round(a.bytes / 1048576))} MB.`);
         if (window.apexDebug) window.apexDebug.mapAlong = a;
       } catch (_) { /* the saved route stands without its map */ }
     }
@@ -7803,7 +7810,9 @@
           roads = await ApexOwnRouting.holdArea(routeCtxOpts().lookupCells, ApexOwnRouting.cellsNear(lat, lon, a.radiusKm), a.id).catch(() => null);
           if (roads) ApexOfflineTiles.setArea(a.id, { roadCells: roads.held, roadOf: roads.cells, roadWays: roads.ways });
         }
-        toast(`${id ? 'Updated' : 'Saved'} ${ApexUnits.long(a.radiusKm * 1000, 0)} round ${id ? a.name.replace(/^Around /, '') : 'here'} for offline, ${(a.bytes / 1048576).toFixed(0)} MB${roads && roads.ways ? `, with ${roads.ways} measured roads` : ''}.`);
+        const part = partKept(a);
+        if (part) toast(`The map ${id ? a.name.replace(/^Around /, 'round ') : 'here'}: only ${part}. Press Update to finish it.`);
+        else toast(`${id ? 'Updated' : 'Saved'} ${ApexUnits.long(a.radiusKm * 1000, 0)} round ${id ? a.name.replace(/^Around /, '') : 'here'} for offline, ${(a.bytes / 1048576).toFixed(0)} MB${roads && roads.ways ? `, with ${roads.ways} measured roads` : ''}.`);
       } catch (_) { toast('Couldn\'t save the map. Check signal and try again.'); }
       finally { areaBusy = false; btn.disabled = false; btn.textContent = idle; renderMyData(); }
     }
@@ -7821,24 +7830,27 @@
         // how old the map is (roads, names and closures change): an area saved half a year ago offers to update in place
         const age = ApexOfflineTiles.ageOf(a, Date.now());
         if (age.month) t.textContent += ` · saved ${age.month}`;
+        const part = partKept(a);
+        if (part) t.textContent += ` · only ${part}`;
+        const redo = age.stale || !!part;
         const acts = document.createElement('span'); acts.className = 'row';
-        if (age.stale && Number.isFinite(a.radiusKm) && Number.isFinite(a.lat) && Number.isFinite(a.lon)) {
+        if (redo && Number.isFinite(a.radiusKm) && Number.isFinite(a.lat) && Number.isFinite(a.lon)) {
           const up = document.createElement('button'); up.className = 'linkbtn'; up.textContent = 'Update';
-          up.setAttribute('aria-label', `Update the map ${a.name}, saved ${age.month}`);
+          up.setAttribute('aria-label', `Update the map ${a.name}, ${part ? `only ${part}` : `saved ${age.month}`}`);
           up.addEventListener('click', () => saveAreaAt(a.lat, a.lon, up, { id: a.id, name: a.name, radiusKm: a.radiusKm, idle: 'Update' }));
           acts.append(up);
         }
         // a saved route's map: fetched again along the route as it is saved now (keepMapAlong, same id)
-        const route = age.stale && !Number.isFinite(a.radiusKm) ? ApexSavedRoutes.list(localStorage).find((p) => routeAreaId(p) === a.id) : null;
+        const route = redo && !Number.isFinite(a.radiusKm) ? ApexSavedRoutes.list(localStorage).find((p) => routeAreaId(p) === a.id) : null;
         if (route) {
           const up = document.createElement('button'); up.className = 'linkbtn'; up.textContent = 'Update';
-          up.setAttribute('aria-label', `Update the map along ${route.name}, saved ${age.month}`);
+          up.setAttribute('aria-label', `Update the map along ${route.name}, ${part ? `only ${part}` : `saved ${age.month}`}`);
           up.addEventListener('click', async () => {
             if (up.disabled) return;
             up.disabled = true; up.textContent = 'Saving the map…';
             await keepMapAlong({ id: route.id, name: route.name, lat: route.coords.map((c) => c[1]), lon: route.coords.map((c) => c[0]) });
             const now = ApexOfflineTiles.areas().find((x) => x.id === a.id);
-            if (!now || ApexOfflineTiles.ageOf(now, Date.now()).stale) toast('Couldn\'t update the map. Check signal and try again.');
+            if (!now || now.at === a.at) toast('Couldn\'t update the map. Check signal and try again.');
             renderMyData();
           });
           acts.append(up);
