@@ -280,6 +280,7 @@
         if (n !== themeAfter) return;
         if (track && track.kind !== 'horizon') loadTrackOnMap();   // the road ahead is never drawn
         if (window.ApexLogHost) ApexLogHost.changed('theme');
+        try { if (themeCards.size) renderThemePicker(); } catch (_) { /* before the Garage was ever drawn */ }   // the looks' cards in the mode the page turned to
       });
     }
     function refreshAutoNight() {
@@ -8945,10 +8946,17 @@
       // asked for, from the plate's Watch a replay, never as part of trying the look
       paintTrial();
     }
+    // a look's card is drawn in the mode the page is in (2026-11-14, the main look's redesign: a day card glared white
+    // in the night Garage); refreshed when the mode turns (paintThemeCards)
+    function previewTokens(box, t) {
+      const m = cardMode(), c = t[m] || t.day;
+      for (const [k, v] of Object.entries(c)) box.style.setProperty(`--${k.replace(/[A-Z]/g, (x) => '-' + x.toLowerCase())}`, v);
+      box._tok = m;
+    }
     function themePreview(t) {
-      const c = t.day, box = document.createElement('div');
+      const box = document.createElement('div');
       box.className = `theme-preview tp-${t.id}`;
-      for (const [k, v] of Object.entries(c)) box.style.setProperty(`--${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}`, v);
+      previewTokens(box, t);
       box.style.setProperty('--font-ui', t.fonts.ui); box.style.setProperty('--font-num', t.fonts.num);
       fillPreview(box, t);
       return box;
@@ -8958,7 +8966,7 @@
     const vocabDeps = () => ({ plain: window.ApexPlainNotes, units: ApexUnits, paceNoteText: Core.paceNoteText, lockup: Inst.lockup, voiceLines: window.ApexVoiceLines });
     const cardMode = () => (document.documentElement.dataset.mode === 'night' ? 'night' : 'day');
     function fillPreview(box, t) {
-      const c = t.day, st = window.ApexVocabulary && ApexVocabulary.sampleStrip(state.noteWords, vocabDeps());
+      const c = t[cardMode()] || t.day, st = window.ApexVocabulary && ApexVocabulary.sampleStrip(state.noteWords, vocabDeps());
       box._words = state.noteWords;
       if (t.car && t.car.dial && t.car.meter) {
         // a car's own theme: its card is the car's cluster, parked (needles at rest: no reading is shown), and the car from
@@ -9018,7 +9026,9 @@
       }
       for (const { t, card, preview, key, inUseTag, ok, quote } of themeCards.values()) {
         const allowed = ok(), inUse = state.theme === t.id && !themeTrial;
-        if (preview._words !== state.noteWords || (t.car && preview._mode !== cardMode())) fillPreview(preview, t);   // the words changed: the strip head follows
+        const turned = preview._tok !== cardMode();
+        if (turned) previewTokens(preview, t);
+        if (turned || preview._words !== state.noteWords || (t.car && preview._mode !== cardMode())) fillPreview(preview, t);   // the words changed: the strip head follows
         const q = t.voice ? ' · suggested voice' : '';
         if (quote.data !== q) quote.data = q;
         card.classList.toggle('in-use', state.theme === t.id);
