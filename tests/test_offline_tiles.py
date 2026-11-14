@@ -151,3 +151,87 @@ def test_your_data_counts_the_car_maps_copy():
     assert '"type": "carOffline", "bytes"' in swift and ".MLNOfflinePackProgressChanged" in swift
     assert "ApexCarOffline.shared.toPage = " in open(os.path.join(ROOT, "ApexNavApp.swift")).read()
     assert "msg.type === 'carOffline'" in open(os.path.join(ROOT, "web", "cockpit.js")).read()
+
+
+AHEAD = r"""
+const enc = (o) => new TextEncoder().encode(JSON.stringify(o)).buffer;
+const store = new Map();
+globalThis.indexedDB = { open() {
+  const r = {}; setTimeout(() => { r.result = { transaction() {
+    const t = {};
+    t.objectStore = () => ({
+      get(url) { const g = {}; setTimeout(() => { g.result = store.get(url); g.onsuccess && g.onsuccess(); t.oncomplete && setTimeout(() => t.oncomplete()); }); return g; },
+      put(v) { setTimeout(() => { store.set(v.url, v); t.oncomplete && t.oncomplete(); }); },
+      openCursor() { const c = {}; setTimeout(() => { c.result = null; c.onsuccess && c.onsuccess(); t.oncomplete && t.oncomplete(); }); return c; },
+    });
+    return t;
+  } }; r.onsuccess(); });
+  return r;
+} };
+globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
+let asked = [], down = false;
+const fetchFn = async (url) => {
+  asked.push(url);
+  if (down && /\.pbf$/.test(url)) throw new TypeError('Failed to fetch');
+  const body = /style/.test(url) ? enc({ sources: { v: { type: 'vector', url: 'https://t.test/planet' } }, layers: [] })
+    : /planet$/.test(url) ? enc({ tiles: ['https://t.test/{z}/{x}/{y}.pbf'] }) : new ArrayBuffer(10);
+  return { ok: true, status: 200, arrayBuffer: async () => body };
+};
+const O = require(process.argv[1] + '/web/offline_tiles.js');
+(async () => {
+  const lat = [], lon = []; for (let i = 0; i <= 100; i++) { lat.push(39.0 + i * 0.005); lon.push(-84.6); }   // 55 km north
+  const first = await O.keepAhead({ lat, lon, styleUrl: 'https://t.test/style', fetchFn });
+  const z14 = asked.filter((u) => /\/14\/\d+\/\d+\.pbf$/.test(u)).length, recent = [...store.values()].filter((v) => v.recent).length;
+  asked = []; const again = await O.keepAhead({ lat, lon, styleUrl: 'https://t.test/style', fetchFn });
+  const againAsked = asked.length;
+  store.clear(); asked = []; down = true;
+  const gone = await O.keepAhead({ lat, lon, styleUrl: 'https://t.test/style', fetchFn });
+  const goneAsked = asked.filter((u) => /\.pbf$/.test(u)).length;
+  const capped = await O.keepAhead({ lat, lon, styleUrl: 'https://t.test/style', fetchFn, max: 3 });
+  console.log(JSON.stringify({ first, z14, recent, again, againAsked, gone, goneAsked, capped: capped.tiles }));
+})();
+"""
+
+
+def test_the_map_ahead_of_a_drive_is_kept():
+    """A drive on a planned route not saved for offline keeps the map along it as recent tiles (keepAhead), so a dead zone on
+    the way still has its map: a narrow corridor (about 4 MB per 100 km), capped, the ones held already skipped, and it stops
+    once the signal is gone instead of asking for every tile."""
+    out = json.loads(subprocess.run([NODE, "-e", AHEAD, ROOT], capture_output=True, text=True, check=True).stdout)
+    f = out["first"]
+    assert 60 < f["tiles"] <= 200 and f["fetched"] == f["tiles"] and f["missing"] == 0, f
+    assert out["z14"] >= 23, "the closest zoom, all along the 55 km"
+    assert out["recent"] == f["tiles"], "kept as recent tiles (they age out), not as an area"
+    assert out["again"]["fetched"] == 0 and out["againAsked"] == 0, "held ones (and the style) are not asked again"
+    assert out["gone"]["missing"] == 5 and out["goneAsked"] == 5, "five failures in a row and it stops"
+    assert out["capped"] == 3
+    src = open(os.path.join(ROOT, "web", "cockpit.js")).read()
+    assert "ApexOfflineTiles.keepAhead({ lat: t.lat, lon: t.lon, styleUrl: MAP_STYLE })" in src
+    assert "!ApexOfflineTiles.areas().some((a) => a.id === routeAreaId(t))" in src, "a saved route's area holds more already"
+
+
+CAR_AHEAD = r"""
+const ls = new Map(), sent = [];
+globalThis.localStorage = { getItem: (k) => ls.get(k) ?? null, setItem: (k, v) => ls.set(k, String(v)), removeItem: (k) => ls.delete(k) };
+globalThis.webkit = { messageHandlers: { apex: { postMessage: (m) => sent.push(m) } } };
+globalThis.indexedDB = { open() { const r = {}; setTimeout(() => { r.result = { transaction() { const t = {}; t.objectStore = () => ({ clear() { setTimeout(() => t.oncomplete && t.oncomplete()); } }); return t; } }; r.onsuccess(); }); return r; } };
+const O = require(process.argv[1] + '/web/offline_tiles.js');
+(async () => {
+  const lat = [], lon = []; for (let i = 0; i <= 100; i++) { lat.push(39.0 + i * 0.005); lon.push(-84.6); }
+  const id = O.setCarAhead(lat, lon), again = O.setCarAhead(lat, lon);
+  const p = sent[sent.length - 1].packs, d = p.find((x) => x.id === id);
+  await O.clear();
+  console.log(JSON.stringify({ id, again, n: p.length, squares: d && d.squares.length, at: d && d.at, afterClear: sent[sent.length - 1].packs.length, none: O.setCarAhead([1], [1]) }));
+})();
+"""
+
+
+def test_the_car_map_keeps_the_drive_ahead_too():
+    """CarPlay's map can't read the page's tiles, so the drive's corridor (keepAhead's) goes to the shell as one more pack:
+    the last planned route driven, replaced by the next, its id the route's box so driving it again fetches nothing new;
+    Delete offline data drops it too."""
+    out = json.loads(subprocess.run([NODE, "-e", CAR_AHEAD, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["id"].startswith("drive_") and out["again"] == out["id"] and len(out["id"]) <= 120
+    assert out["n"] == 1 and 10 < out["squares"] < 80 and out["at"] == ""
+    assert out["afterClear"] == 0 and out["none"] is None
+    assert "NATIVE_SHELL && ApexOfflineTiles.setCarAhead" in open(os.path.join(ROOT, "web", "cockpit.js")).read()

@@ -135,7 +135,9 @@ and in random batches so a trace cannot be re-assembled.
   comment @mentions, if they can see the post, five handles at most, one push per person), a duel asked of you or taken, a crew drive planned in your crew.
   Never to or from someone blocked; the words are the server's own (a handle, a stage or crew name, a drive's title),
   never a comment's text. A tap opens what it is about: the post with its comments, the friend, or People.
-- Garage → Settings → **Notifications**: one switch, off until turned on, and only then does iOS ask. In the
+- Garage → Settings → **Notifications**: one switch, off until turned on, and only then does iOS ask. While it is on,
+  one switch per kind under it (Friend requests, Kudos, Comments and mentions, Duels, Crew drives), all on at first;
+  which are off is kept in KV `pushoff/<user id>` (`GET/PUT /api/push/kinds`), erased with the account (2026-11-14). In the
   foreground a push goes to the list only (the page is open). Nothing while you drive: the page turns
   `PUT /api/push/quiet` on at a drive's start (three hours at most) and off at its end. After your first post, one offer.
 - `backend/src/push.ts` (who is told what, the tokens) on `backend/src/apns.ts` (the send path): `POST/DELETE
@@ -164,6 +166,9 @@ and in random batches so a trace cannot be re-assembled.
 - A friend's drives on their profile (built 2026-11-14): their newest posts you can see (`GET /api/feed?author=`, the
   Feed's own rules), with kudos and comments, between what to do with them and what they see of you. Your own posts
   sit under You in the Garage the same way, each with ··· to delete it (2026-11-14). Three show, then See all.
+- Who gave kudos (2026-11-14): under a post, "Kudos from @bob, @cara and 3 others" with their faces; a tap lists them
+  all (newest first, 50 at most, never someone blocked either way) and a name opens their profile. `kudos_from` on
+  `GET /api/posts/:id`.
 - Next: "Post to crew" from a corner clip on the drive's page (analysis thread adds the key, `page.post(blob, meta)`).
   Kudos and comments push (2.12).
 
