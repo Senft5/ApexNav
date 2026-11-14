@@ -10455,7 +10455,7 @@ flow('the co-driver says a long descent once as the car nears its top, from the 
   // into the last 500 m and over the top: said once, in words
   for (let i = 200; i <= 420; i += 3) { await at(i, 20); await page.waitForTimeout(60); }
   const said = await calls();
-  check(said.length === 1 && /^Long descent ahead: [\d.]+ miles at 8 percent\. A lower gear saves the brakes\.$/.test(said[0]), 'said once near the top: ' + JSON.stringify(said));
+  check(said.length === 1 && /^Long descent ahead\. A lower gear saves the brakes\.$/.test(said[0]), 'said once near the top: ' + JSON.stringify(said));
   for (let i = 420; i <= 500; i += 3) { await at(i, 20); await page.waitForTimeout(40); }
   check((await calls()).length === 1, 'and not again on the way down: ' + JSON.stringify(await calls()));
 });
@@ -10496,7 +10496,7 @@ flow('the co-driver says a low sun once when the route turns into it, and not ag
   check((await calls()).length === 1, 'not again with the sun in view: ' + JSON.stringify(await calls()));
 });
 
-flow('the stage briefing: a drive on a planned route starts with how far, how many corners and the first marks, once (briefing.js)', async (page, base) => {
+flow('the stage briefing: a drive on a planned route starts with how far and how many corners, once, from the voice pack (briefing.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
     // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
@@ -10523,7 +10523,7 @@ flow('the stage briefing: a drive on a planned route starts with how far, how ma
     await page.waitForTimeout(150);
   }
   const said = await brief();
-  check(said.length === 1 && new RegExp(`^\\d+(\\.\\d)? miles, ${corners} corners\\. Stop sign in 1\\.9 miles\\.$`).test(said[0]), 'the briefing: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  check(said.length === 1 && new RegExp(`^\\d+ miles, ${corners} corners\\.$`).test(said[0]), 'the briefing: ' + JSON.stringify(await page.evaluate(() => window.__said)));
   for (let k = 0; k < 8; k++) { await page.evaluate(() => { const t = apexDebug.track;
     window.apex.live({ lat: t.lat[2], lon: t.lon[2], accuracy_m: 5, speed_mps: 3, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }); await page.waitForTimeout(100); }
   check((await brief()).length === 1, 'once: ' + JSON.stringify(await brief()));
@@ -10553,7 +10553,7 @@ flow('corners ahead: after a long straight on the planned route, the co-driver s
   check((await twisty()).length === 0, 'not yet: ' + JSON.stringify(await page.evaluate(() => window.__said)));
   for (let i = 640; i <= 760 && !(await twisty()).length; i += 2) { await at(i); await page.waitForTimeout(80); }
   const said = await twisty();
-  check(said.length === 1 && /^Twisty section in (half a mile|three quarters of a mile|\d+ feet)\. 2\.\d miles, \d+ corners\.$/.test(said[0]), 'the call: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  check(said.length === 1 && /^Twisty section ahead\. \d+ corners\.$/.test(said[0]), 'the call: ' + JSON.stringify(await page.evaluate(() => window.__said)));
   for (let i = 760; i <= 800; i += 2) { await at(i); await page.waitForTimeout(40); }
   check((await twisty()).length === 1, 'once: ' + JSON.stringify(await twisty()));
 });
