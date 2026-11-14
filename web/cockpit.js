@@ -7019,6 +7019,12 @@
       inZone: (lat, lon) => { try { return !!(window.ApexPrivacyZones && ApexPrivacyZones.zoneAt(ApexPrivacyZones.load(localStorage), lat, lon)); } catch (_) { return false; } },
       myHandle: () => (accountMe && accountMe.handle) || null,
       upload: (path, blob, type) => ApexSync.apiFetch(path, { method: 'PUT', headers: { 'content-type': type }, body: blob }),
+      // the real map under each post's line (post_map.js), in the theme's palette; never while a drive is on
+      mapUnder: (() => { let snap = null; return (id, pts, w, h, pad) => {
+        if (driveActive || !window.ApexPostMap || !window.maplibregl || !window.ApexBasemap) return null;
+        snap = snap || ApexPostMap.snapper({ gl: maplibregl, style: MAP_STYLE, palette: () => look.map, restyle: ApexBasemap.restyle,
+          transform: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
+        return snap.snap(`${look.map.bg}|${look.map.road}|${id}`, pts, w, h, pad); }; })(),
       openFriend: (h) => { document.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); if (window.apexOpenFriend) window.apexOpenFriend(String(h).toLowerCase()); } }) : null; } catch (e) { console.error('drive posts', e); } });
     const inboxTick = () => { if (inbox && !driveActive && document.visibilityState === 'visible') inbox.refresh(); };
     document.addEventListener('visibilitychange', inboxTick);
