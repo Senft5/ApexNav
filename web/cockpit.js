@@ -435,13 +435,29 @@
         state.lastMotion = { heading: Number.isFinite(c.heading) ? c.heading : null, speedMps: Number.isFinite(c.speed) ? c.speed : null };
         feedMotion(c.speed);
         if (state.mode === 'live') return;   // a web drive feeds its own frames
-        showIdleFix({ lat: c.latitude, lon: c.longitude, course_deg: Number.isFinite(c.heading) ? c.heading : NaN, speed_mps: Number.isFinite(c.speed) ? c.speed : 0 });
+        showIdleFix({ lat: c.latitude, lon: c.longitude, course_deg: Number.isFinite(c.heading) ? c.heading : NaN, speed_mps: Number.isFinite(c.speed) ? c.speed : 0, accuracy_m: c.accuracy });
       }, () => {}, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
     });
     const DEM_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
     let demSource = null;
     try { demSource = new mlcontour.DemSource({ url: DEM_URL, encoding: 'terrarium', maxzoom: 13, worker: true }); demSource.setupMaplibre(maplibregl); } catch (_) { demSource = null; }
 
+    // How sure the fix is (gps_halo.js), as Apple and Google Maps draw it: a faint disc under the arrow on the idle map, as
+    // wide as the fix's accuracy; none in a drive or replay, or when the fix says nothing of its accuracy
+    const haloEl = document.createElement('div');
+    haloEl.className = 'gps-halo'; haloEl.hidden = true; haloEl.setAttribute('aria-hidden', 'true');
+    const halo = new maplibregl.Marker({ element: haloEl, pitchAlignment: 'map' }).setLngLat([-84.70, 39.24]).addTo(map);
+    haloEl.removeAttribute('aria-label'); haloEl.removeAttribute('role'); haloEl.removeAttribute('tabindex');
+    let fixAcc = null;                                                  // { m, at } of the last idle fix
+    function paintHalo() {
+      const fresh = fixAcc && performance.now() - fixAcc.at < 30000 && state.mode !== 'live' && !replayOn && cam.ready && window.ApexGpsHalo;
+      const r = fresh ? ApexGpsHalo.radiusPx(fixAcc.m, cam.pLat, map.getZoom()) : 0;
+      haloEl.hidden = !r;
+      if (!r) return;
+      haloEl.style.width = haloEl.style.height = `${2 * r}px`;
+      halo.setLngLat([cam.pLon, cam.pLat]);
+    }
+    map.on('zoom', () => { if (fixAcc) paintHalo(); });
     const puckEl = document.createElement('div');
     puckEl.className = 'puck';
     puckEl.setAttribute('role', 'img');
@@ -1206,6 +1222,7 @@
         puckSent = { lat: cam.pLat, lon: cam.pLon, bear: cam.pBear };
         puck.setLngLat([cam.pLon, cam.pLat]).setRotation(cam.pBear);
         sightTag.setLngLat([cam.pLon, cam.pLat]);
+        if (fixAcc) paintHalo();
       }
       if (!state.follow) return;
       const f = CAM_FEEL[state.camFeel] || CAM_FEEL.dynamic, t = camTargets();
@@ -1321,11 +1338,30 @@
         const asked = droppedPin;
         ApexPlacePhoto.lookup(point.lat, point.lon).then((p) => { if (droppedPin === asked && p) placePhoto(p); }).catch(() => {});
       }
+      pinDriveTime(point);
       if (!place) reversePin(point);
       else if (window.ApexPlaceInfo) {                                  // hours, phone and site, once known (place_info.js)
         const asked = droppedPin;
         ApexPlaceInfo.lookup(place.name, point.lat, point.lon).then((tags) => { if (droppedPin === asked && tags) placeInfo(ApexPlaceInfo.contact(tags, new Date())); }).catch(() => {});
       }
+    }
+    // How long the drive there takes, on the Go key ("Go here · 12 min"), as Apple and Google Maps' place cards say it: the
+    // quick router's time from where you are (Valhalla's sources_to_targets, the Quick route's own router). Unknown (no fix,
+    // no answer, under 150 m or over 300 km) leaves the key as it is.
+    let pinTimeAsk = 0;
+    async function pinDriveTime(point) {
+      const go = $('pinGoBtn'), ask = ++pinTimeAsk, here = state.lastPosition;
+      go.textContent = 'Go here'; go.removeAttribute('aria-label');
+      if (!here || !window.ApexRouteCallouts || !Number.isFinite(here.lat) || !Number.isFinite(here.lon)) return;
+      const km = FunRoute.kmBetween(here, point);
+      if (!(km >= 0.15 && km <= 300)) return;
+      try {
+        const m = await valhallaMatrix([here], [point]);
+        const t = ApexRouteCallouts.time(m.times[0] && m.times[0][0]);
+        if (ask !== pinTimeAsk || droppedPin !== point || !t) return;
+        go.textContent = `Go here \u00b7 ${t}`;
+        go.setAttribute('aria-label', `Go here, a ${t} drive`);
+      } catch (_) { /* no answer: the key without a time */ }
     }
     // the card's photo, shown once it has loaded (a broken one never shows); null clears it
     function placePhoto(p) {
@@ -10006,13 +10042,21 @@
       $('routeCardAlong').hidden = true; $('routeAlongPanel').hidden = true; $('routeAlongPanel').replaceChildren();
       $('routeAlongLine').setAttribute('aria-expanded', 'false');
     }
-    // IDEAS R-24: waterfalls near the route, from OpenStreetMap through Overpass (the map's tiles have none). A trip over 1°
-    // across, the servers down or offline: none, and the Along line says what the tiles gave.
+    // IDEAS R-24: waterfalls near the route, from OpenStreetMap (the map's tiles have none): inside Ohio, Kentucky and
+    // Indiana from the list built weekly with the OSM tiles (GET /api/ctx/falls.json, asked once a session), elsewhere
+    // through Overpass. A trip over 1° across, the servers down or offline: none, and the Along line says what the tiles gave.
+    let fallsRegion = null;
     async function fallsNear(t) {
       if (!window.ApexCameras || !ApexScenic.fallsQuery) return [];
       let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
       for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
       if (n - s > 1 || e - w > 1) return [];
+      if (ApexScenic.fallsInRegion) {
+        if (!fallsRegion) fallsRegion = apiCall('GET', '/api/ctx/falls.json').then((r) => (r && r.ok ? r.json() : null)).catch(() => null)
+          .then((d) => { if (!d) setTimeout(() => { fallsRegion = null; }, 10 * 60000); return d; });
+        const got = ApexScenic.fallsInRegion(await fallsRegion, s - 0.005, w - 0.005, n + 0.005, e + 0.005);
+        if (got) return got;
+      }
       try {
         const json = await ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexScenic.fallsQuery(s - 0.005, w - 0.005, n + 0.005, e + 0.005)));
         return ApexScenic.fallsFrom(json);
@@ -11804,10 +11848,12 @@
     let idleSnapped = false;
     function showIdleFix(frame) {
       refreshAutoNight();
-      if (replayOn || state.mode === 'live') return;   // a replay or preview owns the map
+      if (replayOn || state.mode === 'live') { fixAcc = null; paintHalo(); return; }   // a replay or preview owns the map
+      fixAcc = Number.isFinite(frame.accuracy_m) ? { m: frame.accuracy_m, at: performance.now() } : null;
       setVehicle({ lat: frame.lat, lon: frame.lon, bearing: Number.isFinite(frame.course_deg) ? frame.course_deg : state.bearing,
                    vMps: Number.isFinite(frame.speed_mps) ? frame.speed_mps : 0, onTrack: false, latG: null, lonG: 0, rough: 0 }, !idleSnapped);
       idleSnapped = true;
+      paintHalo();
     }
     setInterval(() => {
       // A native drive keeps going through a GPS gap (tunnel): say so instead of dropping back to the replay.

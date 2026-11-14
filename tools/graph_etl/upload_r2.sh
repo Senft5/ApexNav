@@ -55,7 +55,7 @@ if [ -d "$dir/ctx/v1" ]; then
 fi
 if [ -d "$dir/osm/v2" ]; then   # the OSM route context bundles (.github/workflows/osm-ctx.yml), the index last
   echo "osm route context:"
-  ( cd "$dir/osm/v2" && ls *.bin 2>/dev/null | sed "s|.*|$dir/osm/v2/& osm/v2/&|" ) | upload || fail=1
+  ( cd "$dir/osm/v2" && ls *.bin falls.json 2>/dev/null | sed "s|.*|$dir/osm/v2/& osm/v2/&|" ) | upload || fail=1
   [ -f "$dir/osm/v2/index.json" ] && { echo "$dir/osm/v2/index.json osm/v2/index.json" | upload || fail=1; }
 fi
 if [ -f "$dir/cameras/v1/region.json" ]; then

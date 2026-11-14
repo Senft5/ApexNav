@@ -201,3 +201,16 @@ describe("a crew's posted drives", () => {
     expect((await api(b, "GET", "/api/feed?crew=bad%20id")).status).toBe(400);
   });
 });
+
+describe("editing a post", () => {
+  it("the author changes the name and what they said; nobody else can; a name can't go empty", async () => {
+    const [a, b] = [await makeUser("alice"), await makeUser("bob")];
+    await befriend(a, b);
+    const { id } = await post(a);
+    expect(await json(api(a, "PUT", `/api/posts/${id}`, { caption: "Dry all the way, actually." }))).toEqual({ title: "Cherohala Skyway", caption: "Dry all the way, actually." });
+    expect(await json(api(a, "PUT", `/api/posts/${id}`, { title: "Skyway at dawn", caption: "" }))).toEqual({ title: "Skyway at dawn", caption: null });
+    expect((await api(a, "PUT", `/api/posts/${id}`, { title: "" })).status).toBe(400);
+    expect((await api(b, "PUT", `/api/posts/${id}`, { caption: "mine now" })).status).toBe(404);
+    expect((await feedOf(b))[0]).toMatchObject({ title: "Skyway at dawn", caption: null });
+  });
+});

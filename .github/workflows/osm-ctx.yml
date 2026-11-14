@@ -121,8 +121,45 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  falls:
+    needs: download
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
+          pip install "osmium>=4.0" "shapely>=2.0"
+      - name: Restore the extracts
+        uses: actions/cache/restore@v4
+        with:
+          path: .graph_cache/osm
+          key: graph-osm-${{ needs.download.outputs.week }}
+          fail-on-cache-miss: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: osm-polys
+          path: polys
+      - name: The region's waterfalls (web/scenic.js, IDEAS R-24)
+        run: |
+          args=""
+          for s in $STATES; do
+            osmium tags-filter --overwrite -o "falls-$s.osm.pbf" ".graph_cache/osm/$s.osm.pbf" nwr/natural=waterfall nwr/waterway=waterfall
+            args="$args --pbf falls-$s.osm.pbf --poly polys/$s.poly"
+          done
+          python -m tools.osm_ctx.falls $args --out out | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: osm-falls
+          path: out
+          retention-days: 7
+
   publish:
-    needs: [download, band]
+    needs: [download, band, falls]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -133,6 +170,10 @@ jobs:
           pattern: osm-band-*
           path: built
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: osm-falls
+          path: built
       - name: Index
         run: |
           n=$(ls built/osm/v2/*.bin | wc -l)

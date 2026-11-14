@@ -199,6 +199,24 @@
     return out;
   }
 
-  const api = { along, forCar, fuelGap, summary, places, placeLine, nextAnswer, declutter, fallsQuery, fallsFrom, NEAR_M, FUEL_WARN_M, KIND_NAME };
+  /**
+   * The waterfalls in a box from the region's built list (GET /api/ctx/falls.json, tools/osm_ctx/falls.py), as fallsFrom
+   * gives them; null when the list doesn't cover the whole box (a route near or past the region's border: ask Overpass).
+   */
+  function fallsInRegion(doc, s, w, n, e) {
+    if (!doc || !Array.isArray(doc.cells) || !Array.isArray(doc.falls) || !(doc.bundle > 0)) return null;
+    if (![s, w, n, e].every(finite) || s > n || w > e) return null;
+    const step = doc.bundle, have = new Set(doc.cells.map((c) => `${c[0]}_${c[1]}`));
+    for (let bi = Math.floor(s / step); bi <= Math.floor(n / step); bi++) {
+      for (let bj = Math.floor(w / step); bj <= Math.floor(e / step); bj++) if (!have.has(`${bi}_${bj}`)) return null;
+    }
+    const out = [];
+    for (const f of doc.falls) {
+      const [lat, lon, name] = f;
+      if (finite(lat) && finite(lon) && lat >= s && lat <= n && lon >= w && lon <= e) out.push({ kind: 'falls', name: typeof name === 'string' && name ? name : null, lat, lon });
+    }
+    return out;
+  }
+  const api = { along, forCar, fuelGap, summary, places, placeLine, nextAnswer, declutter, fallsQuery, fallsFrom, fallsInRegion, NEAR_M, FUEL_WARN_M, KIND_NAME };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexScenic = api;
 })(typeof window !== 'undefined' ? window : globalThis);

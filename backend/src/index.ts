@@ -43,7 +43,7 @@ import { pointsFor } from "./points";
 import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
 import { ctxKeys, workzones } from "./route_feeds";
-import { osmTile } from "./osm_relay";
+import { fallsList, osmTile } from "./osm_relay";
 import { traceTile } from "./trace_relay";
 import { grantedThemes } from "./themes";
 import { isDeveloper } from "./developers";
@@ -184,6 +184,8 @@ on("GET", "/api/ctx/osm", async (req, env, _m, ctx) => {
   if (url.searchParams.get("diag") === "1" && !isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
   return osmTile(url, env, ctx);
 });
+// The region's waterfalls, built weekly with the OSM tiles (osm_relay.ts fallsList; web/scenic.js fallsInRegion)
+on("GET", "/api/ctx/falls.json", async (_req, env) => fallsList(env.DATA));
 // The router's edges for a stage cut from the map tiles (trace_relay.ts; route_ctx/router_edges.js), kept 3 days per shape
 on("GET", "/api/ctx/trace", async (req) => traceTile(new URL(req.url)));
 on("GET", "/api/shop", async (req, env) => json(await shop(env, await requireMember(req, env))));
@@ -402,6 +404,7 @@ on("GET", "/api/feed/week", async (req, env) => json(await drivePosts.feedWeek(e
 on("GET", "/api/feed", async (req, env) => json(await drivePosts.feed(env, await requireMember(req, env), new URL(req.url))));
 on("POST", "/api/posts", async (req, env) => json(await drivePosts.postCreate(env, await requireMember(req, env), req), 201));
 on("GET", "/api/posts/:id", async (req, env, m) => json(await drivePosts.postGet(env, await requireMember(req, env), m.groups!.id)));
+on("PUT", "/api/posts/:id", async (req, env, m) => json(await drivePosts.postEdit(env, await requireMember(req, env), m.groups!.id, req)));
 on("DELETE", "/api/posts/:id", async (req, env, m) => { await drivePosts.postDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 on("POST", "/api/posts/:id/kudos", async (req, env, m, ctx) => {
   const v = await requireMember(req, env), k = await drivePosts.postKudos(env, v, m.groups!.id, true);

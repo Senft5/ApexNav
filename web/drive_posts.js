@@ -401,6 +401,7 @@
         e.stopPropagation();
         const s = sheet('This post', 'feed-menu');
         const keys = el('div', { className: 'row', style: 'flex-wrap:wrap' });
+        if (p.mine) keys.append(btn('Edit', () => { s.close(); edit(p, o, b.closest('.feed-card')); }, 'ink-btn'));
         if (p.mine) keys.append(btn('Delete post', async () => {
           s.close();
           const r = await apiCall('DELETE', `/api/posts/${encodeURIComponent(p.id)}`).catch(() => null);
@@ -414,6 +415,28 @@
         s.box.append(keys);
       });
       return b;
+    }
+
+    // Edit (your own post, behind ···): its name and what you said, nothing else; Save redraws where it was
+    function edit(p, o, node) {
+      const s = sheet('Edit post', 'feed-edit');
+      const name = el('input', { className: 'field', maxLength: 60, value: p.title || '', 'aria-label': 'Drive name' });
+      const say = el('textarea', { className: 'field', maxLength: 280, placeholder: 'How was it? (optional)', 'aria-label': 'Caption' });
+      say.value = p.caption || '';
+      const save = btn('Save', async () => {
+        const title = name.value.trim();
+        if (!title) { name.focus(); return; }
+        save.disabled = true;
+        const r = await apiCall('PUT', `/api/posts/${encodeURIComponent(p.id)}`, { title, caption: say.value.trim() }).catch(() => null);
+        const j = r && r.ok ? await jsonOf(r) : null;
+        if (!j) { save.disabled = false; toast('Couldn’t save it. Check signal.'); return; }
+        p.title = j.title; p.caption = j.caption;
+        s.close(); toast('Saved.');
+        if (node && node.isConnected) node.replaceChildren(...card(p, o).childNodes);   // this card at once, then the list it sits in
+        if (o && o.after) o.after();
+      }, 'ink-btn solid');
+      s.box.append(el('div', { className: 'stack-12' }, el('h3', { textContent: 'Edit post' }), name, say, el('div', { className: 'row' }, save, btn('Cancel', s.close, 'linkbtn'))));
+      name.focus();
     }
 
     /** A post on its own, with its comments and a line to add one. */
