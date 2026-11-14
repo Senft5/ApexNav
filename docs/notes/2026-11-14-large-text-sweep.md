@@ -6,8 +6,9 @@
   - the head's full-bleed margins grew with the zoom;
   - the head (Drives, Stages) grew at the full scale.
   The grid is now `minmax(0, 1fr)`. At large text the drawing keeps only its score boxes. The head grows to the fit scale (1.6x at most), and its margins are divided by it.
+- Fixed too (the sweep with three drives in the Log): drive names ran up to 192 px off the screen at large text, because every table cell is `nowrap` and the list was as wide as its longest name. Now a drive's name wraps (it was cut off at 1x too when long enough). At large text the road's little map steps aside, and the hero number (46.6 mi) grows to the fit scale.
 - Tests: full e2e locally (two shards at a time; "saved for offline" failed under that load and passes alone); pytest.
-- Next: the drive screen and a drive's page in the large-text sweep.
+- Next: the drive screen doesn't scale with text (glance sizes, on purpose); a drive's page is covered by the Dynamic Type flow. Another roam item.
 
 # CALL SHEET
 ## 2026-11-14 the Log's head grows to the fit scale, not the full one

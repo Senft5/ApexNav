@@ -76,6 +76,11 @@
     #tab-history > :not(#trendPanel):not(#steadyPanel), #tab-segments > .bar-top, #segList, #segDetail table, #tab-segments .more > summary, #contribPanel { zoom: var(--type-scale, 1); }
     #tab-driving { zoom: var(--type-scale, 1); }   /* Your driving is words and numerals: all of it at the phone's text size */
     /* the Log's head (Drives, Stages), already display-sized type, grows to the fit scale (1.6x at most): at 2x it was wider than the phone and pushed the whole page sideways, the empty Log's key cut off */
+    /* the Log's hero number is display type too (88 px): the fit scale, so 46.6 mi stays whole at 2x */
+    #tab-history > #historyCards:not(#trendPanel):not(#steadyPanel) { zoom: var(--type-scale-fit, 1); }
+    /* a drive's name wraps instead of pushing the list past the phone's edge; at large text the road's little map steps aside for it */
+    .road-index td.ix-road { white-space: normal; overflow-wrap: anywhere; }
+    html[data-type-size] .road-index .ix-shape { display: none; }
     #tab-history > .log-head:not(#trendPanel):not(#steadyPanel), #tab-segments > .log-head.bar-top { zoom: var(--type-scale-fit, 1);
       margin-inline: calc(-16px / var(--type-scale-fit, 1)); padding-inline: calc(16px / var(--type-scale-fit, 1)); }   /* its full-bleed rule reaches the page edge, not past it, at any size */
     /* IN-1 (panel round 2): the drive's page too: its title, the score and coaching line, the keys, the corner list, tags

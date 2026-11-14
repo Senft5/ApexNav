@@ -8766,7 +8766,7 @@ flow('contrast in every look: the welcome, the map, People, the Garage and the L
 
 // U-15 / IN-1: the main screens at the phone's larger text sizes (1.5x and the largest, 2x): no text cut off by its box
 // or the screen's edge, no key too small to hit; the checks every flow runs on its last screen at the default size
-flow('large text on every screen: the welcome, the map, a route card, People, the Garage and the Log cut nothing at 1.5x and 2x (IDEAS U-15, IN-1)', async (page, base) => {
+flow('large text on every screen: the welcome, the map, a route card, People, the Garage and the Log (empty and with drives) cut nothing at 1.5x and 2x (IDEAS U-15, IN-1)', async (page, base) => {
   graphDir = graphFixture();
   const found = [];
   const read = async (p, where) => { await p.evaluate(() => { const st = document.querySelector('.stage'); if (st) st.scrollLeft = 0; });
@@ -8800,6 +8800,15 @@ flow('large text on every screen: the welcome, the map, a route card, People, th
         await ownTrip(p, base);
         await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(1200);
         await read(p, `${k}x route card`);
+        // the Log with drives in it: three, one with a long name
+        await p.evaluate(async () => { for (const [id, name, km] of [['lt1', 'Cherohala Skyway', 30], ['lt2', 'Tail of the Dragon (US-129)', 18], ['lt3', 'Foothills Parkway West', 27]]) {
+          const lat = [], lon = []; for (let i = 0; i < km * 200; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + 0.001 * Math.sin(i / 40)); }
+          await ApexRecording.store({ id, name, date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+            lon_g: lat.map(() => 0), lat_g: lat.map((_, i) => 0.3 * Math.sin(i / 40)), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }); } });
+        await p.goto(base + '/analysis.html');
+        await p.waitForSelector('#historyTable tr.row-link', { timeout: 15000 });
+        await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(800);
+        await read(p, `${k}x log with drives`);
       } finally { await ctx.close(); }
     }
   } finally { graphDir = null; }
