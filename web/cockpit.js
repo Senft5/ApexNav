@@ -5652,13 +5652,24 @@
     // search's top row when it lands (placesFor), before a full geocode (routeToQuery). A start typed too: routeToQuery.
     function goTyped() {
       const q = $('destInput').value.trim(), top = shownRows.q === q && shownRows.rows[0];
-      const take = (p) => { if (p.saved) openSaved(p.saved); else routeToPlace(p); };
-      if (top) { take(top); return; }
-      if ($('fromInput').value.trim() || $('planPanel').classList.contains('busy')) { routeToQuery(); return; }
+      const take = (p) => (p.saved ? openSaved(p.saved) : routeToPlace(p));
+      if (top) return take(top);
+      if ($('fromInput').value.trim() || $('planPanel').classList.contains('busy')) return routeToQuery();
       clearTimeout(suggestTimer);
       if (placesAsk.q === q) toast('Searching…');
       const near = window.ApexNearby && ApexNearby.categoryOf(q, isElectric());   // "gas" with none found: the list says so
-      placesFor(q).then((p) => { if ($('destInput').value.trim() !== q) return; if (p) take(p); else if (!near) routeToQuery(); }).catch(() => { if (!near) routeToQuery(); });
+      return placesFor(q).then((p) => { if ($('destInput').value.trim() !== q) return null; if (p) return take(p); return near ? null : routeToQuery(); }).catch(() => (near ? null : routeToQuery()));
+    }
+    // Siri (ApexIntents.swift DriveToIntent): "Drive somewhere with Vetta", then the place said aloud. Where to? as if it
+    // were typed and Go pressed: your own places by that name first, then the map's search. Never over a drive.
+    function goSpoken(words) {
+      const q = String(words || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+      if (!q) return null;
+      if (driveActive) { toast('End the drive to plan a new route.'); return null; }
+      closeSheet(); openPlan(true);
+      $('destInput').value = q; $('fromInput').value = ''; paintTask();
+      clearTimeout(suggestTimer); renderPlaces();                       // the search for these words starts now (placesAsk)
+      return goTyped();
     }
     // Your places by name while typing (pinned first, then recent; tests/test_place_search.py): on the phone, so the list's
     // top row, and Enter, need no network for a place you've been (2026-11-08)
@@ -10689,9 +10700,24 @@
         else if (p.go === 'nextstage') nextStageAnswer();
         else if (p.go === 'skipstage') skipStage();
         else if (p.go === 'nextfuel' || p.go === 'nextcafe') nextPlaceAnswer(p.go === 'nextfuel' ? 'fuel' : 'cafe');
+        else spokenLink(p.go, p.q);
         return;
       }
       showView(ok(p.crew) || ok(p.convoy) ? 'crews' : 'friends'); renderAccount();
+    }
+    // Siri: go=to with the place said (q, base64url UTF-8: ApexIntents.swift linkWords), go=loop60 for "Find a 1 hour loop".
+    // Through carAsked, so a place that can't be found or planned says why on the car's screen too.
+    function linkWords(b) {
+      if (typeof b !== 'string' || !/^[A-Za-z0-9_-]{1,200}$/.test(b)) return '';
+      try { const bin = atob(b.replace(/-/g, '+').replace(/_/g, '/')); return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))); } catch (_) { return ''; }
+    }
+    function spokenLink(go, q) {
+      const loopMin = /^loop(\d{2,3})$/.exec(go || '');
+      if (go === 'to') carAsked(() => goSpoken(linkWords(q)));
+      else if (loopMin && LOOP_MINUTES.includes(+loopMin[1])) {
+        if (driveActive) toast('End the drive to find a loop.');
+        else { closeSheet(); carAsked(() => loop({ minutes: +loopMin[1] })); }
+      }
     }
     // Siri (IDEAS V-07): "how far to the next stage" says it aloud; "skip this stage" drops the stage you're on or the next
     // one and reroutes to your next stop or the destination (only on a fun route with stages, during a drive).
@@ -10968,6 +10994,7 @@
       if (params.get('book') === '1' || params.get('view') === 'route' || params.get('view') === 'drives') openPlan(true);
       if (VIEW_TITLES[params.get('view')] || PEOPLE_SIDES[params.get('view')] || params.get('view') === 'setup') openSheet(params.get('view'));
       if (params.get('go') === 'drive') driveFromLink();
+      else if (params.get('go')) spokenLink(params.get('go'), params.get('q'));   // Siri from a cold start: a place, a loop
       if (/^[A-Za-z0-9_-]{16}$/.test(params.get('roadbook') || '')) openRoadbookLink(params.get('roadbook'));   // ?roadbook=: a roadbook's link
       roadFromLocation(location.search);                               // DA-4: ?road= (the app), #road= (the website)
       if (params.get('again')) driveAgain(params.get('again'));      // panel D-1: Drive it again from a Log page opened on its own   // the app opened from apexnav://open?go=drive (IDEAS C-05)

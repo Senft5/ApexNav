@@ -2519,6 +2519,45 @@ flow('a GPX route has a time from its own envelope (U-64); the Live Activity rea
   check(r.short === 'REC' && r.distance === '' && /^Recording( · \d+\.\d (mi|km))?$/.test(r.note), 'a free drive: ' + JSON.stringify(r));
 }, { geolocation: { latitude: 35.5, longitude: -83.9 }, permissions: ['geolocation'] });
 
+flow('Siri: "Drive somewhere with Vetta" plans to the place said, your own first; "Find a 1 hour loop" builds one (ApexIntents.swift)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1');
+    localStorage.setItem('apex.pinnedPlaces', JSON.stringify([{ name: 'Home', label: '12 Oak St', lat: 35.61, lon: -84.11 }])); } catch (_) {} });
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [] }) }));
+  await page.route('https://nominatim.openstreetmap.org/**', (route) => route.fulfill({ contentType: 'application/json', body: '[]' }));
+  await page.route('https://valhalla1.openstreetmap.de/**', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    if (!req.locations) return route.abort();
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function' && window.apexDebug);
+  await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }));
+  // the words come as base64url UTF-8 (ApexIntents.swift linkWords): "home" said to Siri is your pinned Home
+  const b64 = (t) => Buffer.from(t, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  await page.evaluate((q) => window.apex.onNative({ type: 'link', params: { go: 'to', q } }), b64('home'));
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 20000 })
+    .catch(async () => { throw new Error('no route to the place said: ' + await page.evaluate(() => document.getElementById('destInput').value)); });
+  const to = await page.evaluate(() => { const t = window.apexDebug.track; return { name: t.name, lat: t.lat[t.lat.length - 1], lon: t.lon[t.lon.length - 1], typed: document.getElementById('destInput').value }; });
+  check(Math.abs(to.lat - 35.61) < 0.01 && Math.abs(to.lon + 84.11) < 0.01 && to.typed === 'Home', 'the place said is your pinned Home: ' + JSON.stringify(to));
+  // a place with no match says so, and nothing else is planned
+  const toasts = await page.evaluate(async (q) => { const before = window.apexDebug.track;
+    window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } };
+    window.apex.onNative({ type: 'link', params: { go: 'to', q } });
+    const seen = new Set(); for (let i = 0; i < 60; i++) { seen.add(document.getElementById('toast').textContent); await new Promise((r) => setTimeout(r, 100)); }
+    return { same: window.apexDebug.track === before, toast: [...seen].join(' | '), notice: window.__car.filter((m) => m.kind === 'notice').map((m) => m.titles[0]) }; }, b64('Zzyzx Qqq Nowhere'));
+  check(toasts.same && toasts.notice.some((t) => /No match/.test(t)), 'a place nobody knows: no route, and why, on the car too: ' + JSON.stringify(toasts));
+  // junk in the link is ignored
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'to', q: '%%%' } }));
+  // "Find a 1 hour loop in Vetta": the loop dial's hour, asked as the car asks it (here outside the loop map's states, so
+  // the answer is why, on the car too); a length the dial doesn't have does nothing
+  await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'link', params: { go: 'loop45' } }); });
+  await page.waitForTimeout(500);
+  check(!(await page.evaluate(() => window.__car.some((m) => m.kind === 'notice'))), 'a length the dial lacks: nothing');
+  await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'link', params: { go: 'loop60' } }); });
+  await page.waitForFunction(() => (window.apexDebug.track && /^loop/.test(window.apexDebug.track.id || '')) || window.__car.some((m) => m.kind === 'notice'), null, { timeout: 20000 })
+    .catch(async () => { throw new Error('the loop was never asked: ' + JSON.stringify(await page.evaluate(() => window.__car.map((m) => m.kind)))); });
+});
+
 flow('CarPlay feed: a planned route sends its line, every corner and the theme; the car can mute and ask again (CarPlay/ApexCarPlay.swift)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } }; });
