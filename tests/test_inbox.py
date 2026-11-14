@@ -25,6 +25,9 @@ const items = [
   { kind: 'follows', at, book: 'Smokies classics', book_id: 'b', n: 3 },
   { kind: 'crew_drive', at, crew: 'Ridge Runners', title: 'Cherohala Saturday', starts_at: '2026-11-14 14:00:00' },
   { kind: 'request', at, handle: 'cara', waiting: true },
+  { kind: 'post_kudos', at, handle: 'bob', title: 'Tellico climb', post_id: 'p1', yours: true, others: 2 },
+  { kind: 'post_comment', at, handle: 'bob', title: 'Tellico climb', post_id: 'p1', yours: true, others: 0 },
+  { kind: 'post_comment', at, handle: 'sam', title: 'Cherohala dawn', post_id: 'p2', yours: false, owner: 'cara', others: 1 },
   { kind: 'something_new', at },
 ];
 const now = Date.parse('2026-11-11T12:00:00Z');
@@ -58,7 +61,10 @@ def test_every_kind_is_a_sentence_with_one_key_at_most():
     assert lines[8][1] == "3 new people follow Smokies classics."
     assert lines[9][0] == "Crew drive" and lines[9][1].startswith("Ridge Runners: Cherohala Saturday, ") and lines[9][1].endswith("Are you going?")
     assert lines[10][0] == "Friend request"
-    assert lines[11] is None                                                              # an unknown kind says nothing
+    assert lines[11] == ["Kudos", "@bob and 2 others gave kudos to Tellico climb.", "post"]
+    assert lines[12] == ["Comment", "@bob commented on Tellico climb.", "post"]
+    assert lines[13] == ["Comment", "@sam and 1 other also commented on @cara’s Cherohala dawn.", "post"]
+    assert lines[14] is None                                                              # an unknown kind says nothing
     for l in lines:
         if l:
             assert l[1].endswith((".", "?")), l                                          # BRAND: every message is a sentence
@@ -70,7 +76,7 @@ def test_ago_in_plain_words():
 
 def test_badge_counts_what_is_new_or_waiting():
     r = _run()
-    assert r["freshAll"] == 11                      # everything but the unknown kind
+    assert r["freshAll"] == 14                      # everything but the unknown kind
     assert r["freshSeen"] == 2                      # the request still waits, and the one newer than seen
     assert r["freshNone"] == [0, 0]
     assert r["carded"] == ["duel_ask", "request"]   # People shows these as cards; the list doesn't repeat them

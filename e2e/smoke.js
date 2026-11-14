@@ -6967,6 +6967,7 @@ flow('For you: the People badge counts what is new and what waits; People lists 
     { kind: 'kudos', at: at(90), handle: 'cara', stage: 'Dry Ridge climb', canon_id: 'SEG1', driven_on: '2026-11-10' },
     { kind: 'request', at: at(200), handle: 'dan', waiting: true },
     { kind: 'crew_drive', at: at(300), event_id: 'E1', title: 'Cherohala Saturday', starts_at: '2030-11-14 14:00:00', crew: 'Ridge Runners', crew_id: 'C1' },
+    { kind: 'post_comment', at: at(400), handle: 'cara', post_id: 'P1', title: 'Tellico climb', yours: true, owner: null, others: 1 },
   ];
   let asked = 0;
   await page.route(base + '/api/**', (route) => {
@@ -6976,18 +6977,21 @@ flow('For you: the People badge counts what is new and what waits; People lists 
     if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }, { id: 'U4', handle: 'dan', name: null, status: 'pending', incoming: 1 }]);
     if (u.pathname === '/api/segments') return json([{ id: 'MY1', origin_id: null, name: 'Dry Ridge climb', geom, start_lat: 35.6, start_lon: -83.9 }]);
     if (u.pathname === '/api/points') return json({ total: 0 });
+    if (u.pathname === '/api/posts/P1') return json({ id: 'P1', author_handle: 'me', mine: true, title: 'Tellico climb', driven_on: '2026-11-13', length_m: 30000, score: 812, roads: [], stages: [], line: null,
+      created_at: at(500), kudos: 2, my_kudos: false, comments: 2, comment_list: [{ id: 'K1', body: 'That fog!', created_at: at(400), handle: 'cara', mine: false, can_delete: true }] });
     return json([]);
   });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   // before People is opened: the badge, from the social group's first ask (the request and three new rows)
-  await page.waitForFunction(() => (document.querySelector('#crewTab .badge') || {}).textContent === '4', null, { timeout: 20000 });
+  await page.waitForFunction(() => (document.querySelector('#crewTab .badge') || {}).textContent === '5', null, { timeout: 20000 });
   const label = await page.getAttribute('#crewTab .badge', 'aria-label');
-  check(label === '1 friend request, 3 new for you', 'the badge says what it counts: ' + label + ' / ' + await page.textContent('#crewTab .badge'));
+  check(label === '1 friend request, 4 new for you', 'the badge says what it counts: ' + label + ' / ' + await page.textContent('#crewTab .badge'));
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
   await page.waitForSelector('#accountBody .inbox-sec:not([hidden]) .inbox-row');
   const rows = await page.$$eval('#accountBody .inbox-row', (l) => l.map((r) => [r.classList.contains('new'), r.querySelector('.inbox-kick').textContent, r.querySelector('.inbox-text').textContent]));
-  check(rows.length === 3, 'the request is a card above, not a row: ' + JSON.stringify(rows));
+  check(rows.length === 4, 'the request is a card above, not a row: ' + JSON.stringify(rows));
+  check(rows[3][2] === '@cara and 1 other commented on Tellico climb.', 'comments on your drive post, one row: ' + JSON.stringify(rows[3]));
   check(rows[0][0] && rows[0][1] === 'Topped · 20 min ago' && rows[0][2] === '@bob scored 850 on Dry Ridge climb, over your best of 800.', 'topped, new, in a sentence: ' + JSON.stringify(rows[0]));
   check(/^Kudos · 2 h ago$/.test(rows[1][1]) && /^Ridge Runners: Cherohala Saturday, .+\. Are you going\?$/.test(rows[2][2]), 'kudos and the crew drive: ' + JSON.stringify(rows));
   // (free roamer B, 2026-11-14) a rule closes For you before your friends, so they don't read as its fourth and fifth rows
@@ -7016,6 +7020,10 @@ flow('For you: the People badge counts what is new and what waits; People lists 
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await page.waitForFunction(() => (document.querySelector('#crewTab .badge') || {}).textContent === '2');
   check(asked > before, 'asked again on coming to the front');
+  // (2026-11-14) a comment row opens the post with its comments
+  await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
+  await page.click('#accountBody .inbox-row:has-text("Tellico climb") button:has-text("Open")');
+  await page.waitForSelector('.feed-sheet .feed-comment:has-text("That fog!")', { timeout: 8000 });
 });
 
 flow('Billet: a primary key is light metal with dark ink, not dark on dark (REVIEW_PEOPLE.md P-01)', async (page, base) => {
