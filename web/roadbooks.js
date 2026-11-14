@@ -26,7 +26,7 @@
    * zone (the longest stretch outside them is kept). Thinned to MAX_POINTS. null when under MIN_ROAD_M is left.
    * t: { lat, lon, dist } arrays. zones: [{ lat, lon, r }] (privacy_zones.js).
    */
-  function fromTrack(t, zones = []) {
+  function fromTrack(t, zones = [], trim = TRIM_M) {
     const n = t && Array.isArray(t.lat) ? Math.min(t.lat.length, t.lon.length, t.dist.length) : 0;
     if (n < 2) return null;
     const total = t.dist[n - 1], loop = metres(t.lat[0], t.lon[0], t.lat[n - 1], t.lon[n - 1]) <= LOOP_M;
@@ -34,7 +34,7 @@
     let best = null, run = null;
     const close = () => { if (run && (!best || t.dist[run[1]] - t.dist[run[0]] > t.dist[best[1]] - t.dist[best[0]])) best = run; run = null; };
     for (let i = 0; i < n; i++) {
-      const ok = fin(t.lat[i]) && fin(t.lon[i]) && t.dist[i] >= TRIM_M && (!loop || t.dist[i] <= total - TRIM_M) && !inZone(i);
+      const ok = fin(t.lat[i]) && fin(t.lon[i]) && t.dist[i] >= trim && (!loop || t.dist[i] <= total - trim) && !inZone(i);
       if (ok) { if (run) run[1] = i; else run = [i, i]; } else close();
     }
     close();
@@ -44,6 +44,22 @@
     for (let i = a; i < b; i += step) out.push(pt(i));
     out.push(pt(b));
     return out;
+  }
+
+  /**
+   * The road one of your saved stages (the Log's apex.segments: geom a JSON string of [lat, lon]) leaves in a roadbook: its
+   * line as marked, nothing trimmed from its ends (a stage is a road, not where a drive began), but without anything inside a
+   * privacy zone. null with no line, or under MIN_ROAD_M once the zones are left out.
+   */
+  function fromStage(seg, zones = []) {
+    let g = null;
+    try { g = typeof (seg && seg.geom) === 'string' ? JSON.parse(seg.geom) : seg && seg.geom; } catch (_) { g = null; }
+    if (!Array.isArray(g)) return null;
+    g = g.filter((p) => Array.isArray(p) && fin(p[0]) && fin(p[1]));
+    if (g.length < 2) return null;
+    const dist = [0];
+    for (let i = 1; i < g.length; i++) dist.push(dist[i - 1] + metres(g[i - 1][0], g[i - 1][1], g[i][0], g[i][1]));
+    return fromTrack({ lat: g.map((p) => p[0]), lon: g.map((p) => p[1]), dist }, zones, 0);
   }
 
   /** [south, north, west, east] of lat/lon arrays, or null. */
@@ -201,7 +217,8 @@
    * fmtLen(m), origin(), zones() → privacy zones, planned() → the planned route's track or null,
    * driveRoad(road, book), driveBook(book) (Drive them all), report({kind, target, label, done}), recordings (ApexRecording), cellQuery(lat, lon),
    * thumb (ApexRouteThumb), colours() → { line, hi }, changed() → the lists were changed (People redraws its count),
-   * mapUnder(key, pts, w, h, pad) → a picture of the real map under pts' fit, or null (post_map.js, cockpit.js).
+   * mapUnder(key, pts, w, h, pad) → a picture of the real map under pts' fit, or null (post_map.js, cockpit.js),
+   * stages() → your saved stages (the Log's apex.segments).
    */
   function mount(page) {
     const { el, btn, toast, apiCall, jsonOf } = page;
@@ -387,6 +404,30 @@
         list.append(box);
       });
       kids.push(list);
+      // your own stages (the Log's) go in with a tap: the road as you marked it, privacy zones left out
+      if (book.mine && page.stages) {
+        const have = new Set(roads.map((x) => x.name)), left = (page.stages() || []).filter((st) => st && st.name && st.geom && !have.has(String(st.name).slice(0, 60)));
+        if (left.length) {
+          const chips = el('div', { className: 'row rb-stages', style: 'flex-wrap:wrap' });
+          chips.hidden = true;
+          const more = btn('Add one of your stages', () => { more.hidden = true; chips.hidden = false; }, 'linkbtn');
+          left.slice(0, 12).forEach((st) => {
+            const b = btn(String(st.name).slice(0, 60), async () => {
+              const geom = fromStage(st, page.zones ? page.zones() : []);
+              if (!geom) { toast('That stage is too short to keep once your privacy zones are left out.'); return; }
+              b.disabled = true;
+              const r = await call('POST', `/api/roadbooks/${encodeURIComponent(book.id)}/roads`, { name: String(st.name).slice(0, 60), geom });
+              if (!r.ok) { b.disabled = false; toast(r.status === 429 ? 'That roadbook is full (40 roads), or that’s enough for today.' : why(r, 'Couldn’t add it. Try again.')); return; }
+              const f = await call('GET', `/api/roadbooks/${encodeURIComponent(book.id)}`);
+              if (f.ok && f.data) Object.assign(book, f.data);
+              paint(book, s, body); loadLists().then(() => page.changed && page.changed()).catch(() => {});
+              toast(`${st.name} is in ${book.name}.`);
+            }, 'ink-btn');
+            chips.append(b);
+          });
+          kids.push(el('div', { className: 'stack-8' }, more, chips));
+        }
+      }
       body.replaceChildren(...kids);
     }
 
@@ -511,6 +552,6 @@
     return { section, nearSection, open, addPart, afterDrive, scanLog, hasAny, lists: () => lists, reload: loadLists };
   }
 
-  const api = { fromTrack, coverage, overlaps, boxOf, lengthM, progress, bookLine, overview, overviewFrame, tour, link, mount, TOUR_MAX, STAMP_AT, TRIM_M, MAX_POINTS, MIN_ROAD_M };
+  const api = { fromTrack, fromStage, coverage, overlaps, boxOf, lengthM, progress, bookLine, overview, overviewFrame, tour, link, mount, TOUR_MAX, STAMP_AT, TRIM_M, MAX_POINTS, MIN_ROAD_M };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadbooks = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -7196,6 +7196,7 @@
       cellQuery: (lat, lon) => ApexPrivacyZones.cellQuery(lat, lon), fmtLen: (m) => ApexUnits.long(m, 1, true), origin: () => shareOrigin(),
       zones: () => privacyZones, planned: () => (plannedRoute && Array.isArray(plannedRoute.lat) && plannedRoute.lat.length > 1 ? plannedRoute : null),
       report: (o) => safety && safety.report(o), changed: () => { if (booksRowCount) booksRowCount(); }, mapUnder,
+      stages: () => { try { const l = JSON.parse(localStorage.getItem('apex.segments') || '[]'); return Array.isArray(l) ? l : []; } catch (_) { return []; } },
       driveRoad: async (road, book) => {
         closeSheet();
         // from where you are to the road's start, then the road as drawn (as Drive it on a post leads to their line); close

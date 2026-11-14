@@ -147,3 +147,30 @@ def test_the_real_map_lies_under_the_books_roads():
     assert r["casings"] == 3            # one casing under each line, shown only on the map
     cockpit = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
     assert re.search(r"changed: \(\) => \{ if \(booksRowCount\) booksRowCount\(\); \}, mapUnder,", cockpit)
+
+
+STAGE_RUNNER = r"""
+const R = require(process.argv[1] + '/web/roadbooks.js');
+// a 2 km stage as the Log keeps it: 60 points of [lat, lon] in a JSON string
+const g = Array.from({ length: 60 }, (_, i) => [+(39.2 + i * 0.0003).toFixed(6), +(-84.5 + Math.sin(i / 8) * 0.001).toFixed(6)]);
+const seg = { name: 'Kellogg bends', geom: JSON.stringify(g) };
+const r = R.fromStage(seg);
+const zone = R.fromStage(seg, [{ lat: g[10][0], lon: g[10][1], r: 400 }]);
+console.log(JSON.stringify({
+  ends: [r[0][0] === g[0][1], r[0][1] === g[0][0], r[r.length - 1][1] === g[59][0]], len: Math.round(R.lengthM(r) / 100), n: r.length,
+  zone: [zone[0][1] > g[10][0], Math.round(R.lengthM(zone) / 100)],
+  none: [R.fromStage({ geom: '[]' }), R.fromStage({ geom: 'nope' }), R.fromStage({}), R.fromStage(seg, [{ lat: 39.21, lon: -84.5, r: 5000 }]), R.fromStage({ geom: JSON.stringify(g.slice(0, 5)) })],
+  arr: !!R.fromStage({ geom: g }),
+}));
+"""
+
+
+def test_a_stage_goes_into_a_roadbook_as_marked_without_the_zones():
+    r = json.loads(subprocess.run([NODE, "-e", STAGE_RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["ends"] == [True, True, True]       # nothing trimmed off a stage's ends (a route loses its first 400 m), lon first
+    assert r["len"] == 20 and r["n"] == 60
+    assert r["zone"][0] and r["zone"][1] < 20    # a privacy zone over it: the longer side outside it is kept
+    assert r["none"] == [None, None, None, None, None]
+    assert r["arr"]
+    cockpit = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert re.search(r"mapUnder,\n\s+stages: \(\) =>", cockpit)
