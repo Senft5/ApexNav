@@ -170,7 +170,11 @@ final class AppTourTests: XCTestCase {
                 shot(app, "audit \(name) \(size)")
                 do {
                     try app.performAccessibilityAudit(for: .all) { issue in
-                        let el = issue.element.map { e in [e.label, e.identifier, "\(e.elementType.rawValue)"].first { !$0.isEmpty } ?? "?" } ?? "-"
+                        // the element's name, its type and frame (points): which of two same-named keys, and how small it is
+                        let el = issue.element.map { e in
+                            let f = e.frame
+                            return "\([e.label, e.identifier].first { !$0.isEmpty } ?? "?") [type \(e.elementType.rawValue) \(Int(f.minX)),\(Int(f.minY)) \(Int(f.width))x\(Int(f.height))]"
+                        } ?? "-"
                         lines.append("\(name) · \(size) · \(self.auditName(issue.auditType)) · \(el): \(issue.compactDescription)")
                         print("A11Y-AUDIT \(lines.last!)")
                         return true   // recorded here, failed once below with the whole list
