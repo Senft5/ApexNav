@@ -41,14 +41,14 @@ struct ApexCarPalette {
     /// The Roadbook's (web/themes.js roadbook.map and its route and panel inks; tests/test_car_native.py keeps them equal),
     /// for the moment before the page's first look message: a car that opens the app cold.
     static let roadbook: (day: ApexCarPalette, night: ApexCarPalette) = (
-        ApexCarPalette(["bg": "#F2EBDD", "water": "#CFD8D3", "waterLine": "#7F9A9A", "land": "#EFE7D8", "wood": "#E3DCC5", "road": "#FFFFFF",
-                        "roadMinor": "#FFFFFF", "casing": "#1C1A17", "label": "#1C1A17", "halo": "#F2EBDD", "boundary": "#8C8373",
-                        "shadow": "#A08F6E", "highlight": "#FFFFFF", "accentShade": "#B59E78",
-                        "route": "#1C1A17", "plate": "#EDE4D3", "plateInk": "#1C1A17", "accent": "#C8102E"])!,
-        ApexCarPalette(["bg": "#1B1712", "water": "#10161A", "waterLine": "#26343A", "land": "#1D1914", "wood": "#1F1C15", "road": "#36312A",
-                        "roadMinor": "#2B2721", "casing": "#A99F8C", "label": "#A89E8C", "halo": "#1B1712", "boundary": "#332F28",
-                        "shadow": "#080706", "highlight": "#28231C", "accentShade": "#14120E",
-                        "route": "#EDE4D3", "plate": "#151310", "plateInk": "#EDE4D3", "accent": "#E65252"])!
+        ApexCarPalette(["bg": "#EEF0F3", "water": "#B9D3EE", "waterLine": "#8DB3DB", "land": "#F3F4F6", "wood": "#DCEBD9", "road": "#FFFFFF",
+                        "roadMinor": "#FFFFFF", "casing": "#C5C9D1", "label": "#2A2D33", "halo": "#FFFFFF", "boundary": "#9AA0AA",
+                        "shadow": "#9AA3B0", "highlight": "#FFFFFF", "accentShade": "#C2C8D2",
+                        "route": "#0B0B0C", "plate": "#FFFFFF", "plateInk": "#0B0B0C", "accent": "#E0102A"])!,
+        ApexCarPalette(["bg": "#0E1013", "water": "#0B1A2A", "waterLine": "#1C3550", "land": "#121418", "wood": "#111A15", "road": "#2C2F36",
+                        "roadMinor": "#22252B", "casing": "#3A3E46", "label": "#C4C8D0", "halo": "#0E1013", "boundary": "#3A3E46",
+                        "shadow": "#000000", "highlight": "#1E2127", "accentShade": "#0A0B0D",
+                        "route": "#F5F5F7", "plate": "#111214", "plateInk": "#F5F5F7", "accent": "#FF3341"])!
     )
 }
 

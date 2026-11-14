@@ -6,13 +6,13 @@
   'use strict';
   const KEY = 'apex.newsSeen';
   const NEWS = {
-    id: '2026-11-10',
+    id: '2026-11-14',
     items: [
       // a line each, as on a phone's update notes (walkthrough 2026-11-12: four three-line paragraphs were a wall of text)
-      ['Three ways there', 'Quick, Fun or Long way. Fun and Long skip the highway.'],
-      ['What it is like', 'The route card sums up the drive and its best stretch.'],
-      ['Loops your way', 'Pick a distance or a time on the dial, then a direction.'],
-      ['Tune your routes', 'Garage › Settings › Route tuning.'],
+      ['Drive posts', 'Post a drive: its road, Score and clips. Kudos in the Feed.'],
+      ['Places on the map', 'Tap a café or fuel stop: photo, hours, how far.'],
+      ['Turn by turn', 'An arrow at each turn, on the phone and in CarPlay.'],
+      ['Traffic', 'DOT closures and crashes on the map, routed round.'],
     ],
   };
 

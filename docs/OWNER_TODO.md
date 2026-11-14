@@ -17,6 +17,13 @@ something blocks on you, delete it once it's done. Everything else is in docs/ID
 | **Google's sign-in screen says "to continue to senftns.workers.dev"**: in Google Cloud → APIs & Services → OAuth consent screen, set the app name to **Vetta** (and the logo); with the domain (row below), Claude moves the sign-in to it | REVIEW4 U-66: it's the moment a new member decides whether to trust the app | 10 min |
 
 | **Create a free key for EV chargers** (fuel-stop spacing, route_ctx/car.js): the lab once called NREL is now NLR (National Laboratory of the Rockies) and its old site is gone; sign up at **developer.nlr.gov/signup** (any api.data.gov key works too: api.data.gov/signup; free, 1,000 calls an hour), then in Cloudflare (Workers → apexnav → Settings → Variables and Secrets) add the secret `NREL_API_KEY` | Electric cars get planned charging stops on long back-road stretches. Without it the route card says chargers couldn't be checked; petrol cars use OpenStreetMap and need nothing | 5 min |
+## Convoy voice (new, 2026-11-14)
+
+Free up to 1,000 GB a month (a 16-car convoy talking for an hour is about 3 GB). Cloudflare dashboard → **Realtime** →
+**Serverless SFU** → **Create** (name it Vetta) → copy the **App ID** and the **App Token**. Then Workers → apexnav →
+Settings → Variables and Secrets → Add → type Secret: **`REALTIME_APP_ID`** (the App ID), Deploy; again for
+**`REALTIME_APP_TOKEN`** (the token), Deploy. Until both are there the app simply shows no Talk key in a convoy.
+
 ## Free keys for route intelligence (new, 2026-11-03)
 
 All free. Make each account, then put the keys in **one** Worker secret: Cloudflare → Workers → apexnav → Settings →

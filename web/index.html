@@ -8,7 +8,7 @@
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
        first paint is the launch screen: its ink and its lockup at 184 x 50, centred. The cover (#boot) then draws the same in
        the theme's colours once the body exists. -->
-  <style>html { min-height: 100%; background: #151310 url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 372 100'><defs><clipPath id='c'><rect x='0' y='26' width='372' height='48'/></clipPath></defs><circle cx='34' cy='84' r='8' fill='%23EDE4D3'/><path d='M34 84 V52 Q34 26 62 21.5' fill='none' stroke='%23EDE4D3' stroke-width='9'/><path d='M60 9 L88 18 L63 34 Z' fill='%23EDE4D3'/><circle cx='51' cy='43' r='6.5' fill='%23C8102E'/><g clip-path='url%28%23c%29' fill='none' stroke='%23EDE4D3' stroke-linejoin='miter' stroke-miterlimit='10' stroke-width='8.5'><path d='M118 22 L135 78 L152 22'/><path d='M196 30 H170.25 V70 H196 M170.25 50 H190'/><path d='M208 30 H244 M226 30 V80'/><path d='M254 30 H290 M272 30 V80'/><path d='M300 78 L317 22 L334 78 M306 59 H328'/></g></svg>") no-repeat center / 184px 50px fixed; }</style>
+  <style>html { min-height: 100%; background: #111214 url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 372 100'><defs><clipPath id='c'><rect x='0' y='26' width='372' height='48'/></clipPath></defs><circle cx='34' cy='84' r='8' fill='%23EDE4D3'/><path d='M34 84 V52 Q34 26 62 21.5' fill='none' stroke='%23EDE4D3' stroke-width='9'/><path d='M60 9 L88 18 L63 34 Z' fill='%23EDE4D3'/><circle cx='51' cy='43' r='6.5' fill='%23C8102E'/><g clip-path='url%28%23c%29' fill='none' stroke='%23EDE4D3' stroke-linejoin='miter' stroke-miterlimit='10' stroke-width='8.5'><path d='M118 22 L135 78 L152 22'/><path d='M196 30 H170.25 V70 H196 M170.25 50 H190'/><path d='M208 30 H244 M226 30 V80'/><path d='M254 30 H290 M272 30 V80'/><path d='M300 78 L317 22 L334 78 M306 59 H328'/></g></svg>") no-repeat center / 184px 50px fixed; }</style>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#1b1914" />
@@ -379,7 +379,11 @@
     #app:not(.live) .plates { bottom: 72px; }
     #app.plan-open .plates, #app.plan-open .edge { display: none; }
     /* ---------------- while-you-drive switches: an edge tab that slides a small panel over the map ---------------- */
-    .edge { --edge-w: min(288px, calc(100vw - 64px)); position: absolute; right: 0; top: 38%; z-index: 4; display: flex; align-items: flex-start;
+    /* the map's right-hand keys (Layers, then Recenter or Overview under it) start 38% down the map, or higher on a short
+       map (a small phone in a drive: the map between the strip and the gauges is about 230 px) so they stay clear of the
+       map's credit key at the bottom right: 184 px is the Layers tab, a key under it at drive size, and the credit */
+    #app { --keys-top: min(38%, calc(100% - 184px)); }
+    .edge { --edge-w: min(288px, calc(100vw - 64px)); position: absolute; right: 0; top: var(--keys-top); z-index: 4; display: flex; align-items: flex-start;
       transform: translateX(var(--edge-w)); transition: transform 0.12s cubic-bezier(0.2, 0.8, 0.2, 1); }   /* F-16: a small panel, 120 ms */
     /* the edge's box runs as tall as its panel, so closed, the empty strip under the tab lay over the keys below it (Recenter
        took no tap; 2026-11-14): only the tab, and the panel when open, take a touch */
@@ -400,15 +404,15 @@
     #app.sheet-open .edge { display: none; }
     /* Recenter: the second map key, under Layers (REVIEW.md 1.2 Map idle). U-71: the glyph is always its face; the time
        left before it recenters on its own is a bar along its foot that drains, and the seconds are in its label only */
-    #recenterBtn { display: none; position: absolute; right: 0; top: calc(38% + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; }
+    #recenterBtn { display: none; position: absolute; right: 0; top: calc(var(--keys-top) + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; }
     #recenterBtn.show { display: flex; align-items: center; justify-content: center; }
     /* the compass (as Apple Maps shows one): only when the map is turned off north and you aren't driving; its needle points
        north, under Recenter when that shows; a tap turns the map to face north and leaves it there */
-    #compassBtn { position: absolute; right: 0; top: calc(38% + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; display: flex; align-items: center; justify-content: center; }
+    #compassBtn { position: absolute; right: 0; top: calc(var(--keys-top) + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; display: flex; align-items: center; justify-content: center; }
     #compassBtn[hidden], #app.sheet-open #compassBtn, #app.live #compassBtn { display: none; }
-    #recenterBtn.show ~ #compassBtn { top: calc(38% + 124px); }
+    #recenterBtn.show ~ #compassBtn { top: calc(var(--keys-top) + 124px); }
     /* route overview in a drive: where Recenter sits; following, it shows, and once you've looked, Recenter takes its place */
-    #overviewBtn { position: absolute; right: 0; top: calc(38% + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; display: flex; align-items: center; justify-content: center; }
+    #overviewBtn { position: absolute; right: 0; top: calc(var(--keys-top) + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; display: flex; align-items: center; justify-content: center; }
     #overviewBtn[hidden], #recenterBtn.show ~ #overviewBtn, #app.sheet-open #overviewBtn { display: none; }
     #overviewBtn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     #compassBtn svg { width: 28px; height: 28px; }
@@ -1808,7 +1812,7 @@
     .poi-pin.poi-charge { border-color: #2e6b8a; color: color-mix(in srgb, #2e6b8a 60%, var(--panel-ink, #222)); }  /* an electric car's chargers (scenic.js forCar) */
     /* Find nearby's places: the name on the stamp, a size up from the route's along stamps (they are what you asked for) */
     /* the routes' tags on the map (route_callouts.js): time over corners, a tail to the line; the picked route's filled */
-    .route-callout { position: relative; display: grid; justify-items: center; gap: 1px; padding: 4px 9px 5px; border: 1.5px solid var(--panel-ink, #222); border-radius: 8px; background: var(--panel, #fff); color: var(--panel-ink, #222); font: inherit; line-height: 1.1; white-space: nowrap; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
+    .route-callout { display: grid; justify-items: center; gap: 1px; padding: 4px 9px 5px; border: 1.5px solid var(--panel-ink, #222); border-radius: 8px; background: var(--panel, #fff); color: var(--panel-ink, #222); font: inherit; line-height: 1.1; white-space: nowrap; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
     .route-callout b { font: 700 14px var(--font-ui, sans-serif); }
     .route-callout small { font: 600 10px var(--font-ui, sans-serif); opacity: 0.75; }
     .route-callout::after { content: ''; position: absolute; left: 50%; bottom: -6px; width: 9px; height: 9px; transform: translateX(-50%) rotate(45deg); background: inherit; border: inherit; border-width: 0 1.5px 1.5px 0; border-radius: 0 0 2px 0; }
@@ -1962,6 +1966,19 @@
       background: linear-gradient(var(--panel-ink), var(--panel-ink)) 0 0 / 30% 100% no-repeat var(--hair); animation: hud-seek 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
     @keyframes hud-seek { from { background-position: 0 0; } to { background-position: 100% 0; } }
     #driveBar[data-state="off"] .ds-main, #driveBar[data-state="zone"] .ds-main { color: var(--panel-ink); }
+    /* on a route, the trip figures as Apple and Google Maps set them: arrival, time left, distance left, big figures with
+       their units small under them; the recording and sharing a small line below */
+    #dsMain.has-trip { display: flex; flex-direction: column; gap: 3px; padding-bottom: 0; color: var(--panel-ink); }
+    #dsMain.has-trip::before, #dsMain.has-trip::after { display: none; }
+    #dsMain .trip { display: flex; flex-wrap: wrap; gap: 4px clamp(10px, 4vw, 18px); align-items: flex-end; white-space: nowrap; }   /* a figure too many for the width goes under, never past End */
+    #dsMain .tf { display: flex; flex-direction: column; line-height: 1; }
+    #dsMain .tf b { font-size: clamp(21px, 6.6vw, 26px); font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+    #dsMain .tf small { margin-top: 3px; font-size: 13px; font-weight: 600; color: var(--panel-dim); }
+    html[data-theme="tapedeck"] #dsMain .tf b { font-size: clamp(18px, 5.6vw, 24px); }   /* the dot font is wide (U-100) */
+    html[data-theme="tapedeck"] #dsMain .trip { column-gap: clamp(8px, 3.4vw, 16px); }
+    @media (max-width: 340px) { #app #hzReportBtn { padding: 0 6px; } }   /* the figures' room on a 320 px phone */
+    #dsMain .ds-sub { font-size: 13px; font-weight: 600; color: var(--panel-dim); }
+    #dsMain .ds-sub b { font-size: 13px; color: var(--panel-ink); }
     #app .transport { padding: 0 6px 10px; border-bottom: 1px solid var(--hair); }
     /* the replay's transport in the same hand: the trace bare on the paper, the speeds as numerals with the chosen one
        underlined in ink, Video a word; Done is the one key. The replay's name is a paper tag on the map. */
@@ -2047,7 +2064,7 @@
     @keyframes hud-head { from, 70% { opacity: 0; } }
 
     /* The opening cover (web/boot.js): the theme's panel and the mark until the page has drawn. */
-    #boot { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; background: var(--panel, #151310); transition: opacity 0.2s ease-out; }
+    #boot { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; background: var(--panel, #111214); transition: opacity 0.2s ease-out; }
     #boot { color: var(--panel-ink, #EDE4D3); }
     #boot svg { display: block; width: 184px; height: 50px; }
     #boot.gone { opacity: 0; pointer-events: none; }
@@ -2055,6 +2072,7 @@
 </style>
   <link rel="stylesheet" href="controls.css" />
   <link rel="stylesheet" href="signature.css" />
+  <link rel="stylesheet" href="system.css" />   <!-- the main look's shape and depth (web/system.css), last: it outranks the per-screen rules -->
 </head>
 <body>
   <!-- U-80: the launch screen's lockup (Assets.xcassets/LaunchLogo, 184 x 50 pt, centred) drawn again at the same size and
@@ -2475,8 +2493,8 @@
             <h3>About Vetta</h3>
             <div class="row"><span>Version</span><b id="aboutVersion">--</b></div>
             <ul class="promises">
-              <li><b>No top speeds.</b> Nothing records or shows how fast anyone went flat out; a board has only the drivers who ran its road.</li>
-              <li><b>Shared with your people.</b> Friends and private crews see your Scores and times until you switch them off; your drives stay on this phone, and privacy zones keep home and work out of everything.</li>
+              <li><b>Shared with your people.</b> Friends and private crews see your Scores and times from the start. Switch any of them off in Who sees what.</li>
+              <li><b>Home stays home.</b> Privacy zones keep home and work out of everything you share.</li>
               <li><b>Unknown stays unknown.</b> When the app doesn't know, it shows --, never a guess.</li>
               <li><b>Free to drive.</b> No ads, no personal data sold, and nothing you made ever behind a paywall.</li>
             </ul>

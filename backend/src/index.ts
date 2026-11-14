@@ -4,6 +4,7 @@ import { routeHost } from "./hosts";
 import {
   APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, invitePreview, logout, redeemInvite, requireMember, requireUser, sessionCookie, sessionHash, viewer,
 } from "./auth";
+import { voiceAnswer, voicePull, voiceStart, voiceStop } from "./convoy_voice";
 import { convoyAccept, convoyCode, convoyCodeJoin, convoyCodePreview, convoyConnect, convoyCreate, convoyDismiss, convoyInvitePeople, convoyInvites, convoyJoin, convoyPreview, convoyRoom, unwrap } from "./convoy_routes";
 import { Env, HttpError, body, json, str } from "./util";
 import { rateCheck } from "./ratelimit";
@@ -43,7 +44,7 @@ import { pointsFor } from "./points";
 import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
 import { ctxKeys, workzones } from "./route_feeds";
-import { osmTile, placeTags, pointCells, regionList } from "./osm_relay";
+import { lineTiles, osmTile, placeTags, pointCells, regionList, wayShapes } from "./osm_relay";
 import { traceTile } from "./trace_relay";
 import { grantedThemes } from "./themes";
 import { isDeveloper } from "./developers";
@@ -191,6 +192,10 @@ on("GET", "/api/ctx/closures.json", async (_req, env) => regionList(env.DATA, "c
 on("GET", "/api/ctx/places", async (req, env) => placeTags(new URL(req.url), env.DATA));
 // Fuel stations, schools and places of worship by 0.25 degree cell for a plan (osm_relay.ts pointCells; route_ctx car.js, events.js)
 on("GET", "/api/ctx/points", async (req, env) => pointCells(new URL(req.url), env.DATA));
+// Lit roads, tunnels and cycle routes by 0.1 degree tile for a plan (osm_relay.ts lineTiles; route_ctx/driver.js)
+on("GET", "/api/ctx/lines", async (req, env) => lineTiles(new URL(req.url), env.DATA));
+// A drive's ways' whole geometry from the built tiles, for road data (osm_relay.ts wayShapes; web/contributor.js)
+on("GET", "/api/ctx/ways", async (req, env) => wayShapes(new URL(req.url), env.DATA));
 // The router's edges for a stage cut from the map tiles (trace_relay.ts; route_ctx/router_edges.js), kept 3 days per shape
 on("GET", "/api/ctx/trace", async (req) => traceTile(new URL(req.url)));
 on("GET", "/api/shop", async (req, env) => json(await shop(env, await requireMember(req, env))));
@@ -469,6 +474,11 @@ on("POST", "/api/convoy/:id/remove", async (req, env, m) => {
   return noContent();
 });
 // No sign-in check here on purpose: the socket's first frame carries a single-use ticket minted by POST .../ticket.
+// Convoy voice (src/convoy_voice.ts): an open channel for the people in a convoy, carried by Cloudflare Realtime
+on("POST", "/api/convoy/:id/voice", async (req, env, m) => json(await voiceStart(env, await requireMember(req, env), m.groups!.id, req)));
+on("POST", "/api/convoy/:id/voice/pull", async (req, env, m) => json(await voicePull(env, await requireMember(req, env), m.groups!.id, req)));
+on("PUT", "/api/convoy/:id/voice/answer", async (req, env, m) => json(await voiceAnswer(env, await requireMember(req, env), m.groups!.id, req)));
+on("DELETE", "/api/convoy/:id/voice", async (req, env, m) => json(await voiceStop(env, await requireMember(req, env), m.groups!.id)));
 on("GET", "/api/convoy/:id/connect", async (req, env, m) => convoyConnect(req, env, m.groups!.id));
 
 // CORS for the iOS shell only (pages at apexnav://app call this Worker cross-origin with a bearer token).

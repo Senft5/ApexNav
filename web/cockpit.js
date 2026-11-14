@@ -211,7 +211,7 @@
     const BACK_ON_QUIET_MS = 60000;
     const etaPace = ApexEta.createEta();   // live ETA on the current route: pace per section class, a slow arrival (paintEta, U-108)
     const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
-    let etaText = '', etaLeftS = null;
+    let etaText = '', etaLeftS = null, etaFig = null;
     let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
     const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, echo: 0, attacks: [], road: '', roadAt: -1e9, limitKey: '' };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
@@ -913,14 +913,16 @@
       if (!window.ApexScenic || !ApexScenic.declutter) return;
       // the route notes' stamps (LPR, SPD, a hazard) are `fixed`: always shown, the map's pins kept off them (scenic.js)
       const notePins = pins.map((p) => ({ marker: p.marker, el: p.el, kind: `note:${p.e.code}`, fixed: true, m: p.e.dist_m }));
-      const shown = poiDeclutter.pins.concat(notePins).filter((p) => p.el.style.display !== 'none' && p.el.isConnected), c = map.getContainer();
+      // the route tags (route_callouts.js) too: a stamp under one is hidden, the tag stays (it sits above its point)
+      const tagPins = callouts.map((mk) => ({ marker: mk, el: mk.getElement(), kind: 'callout', fixed: true, m: 0, tag: true }));
+      const shown = poiDeclutter.pins.concat(notePins, tagPins).filter((p) => p.el.style.display !== 'none' && p.el.isConnected), c = map.getContainer();
       const close = map.getZoom() >= VIEW_NAME_ZOOM;                    // a named viewpoint's name, only where it has room
       for (const p of shown) if (p.kind === 'view' && p.name) { const t = close ? p.name : SCENIC_LABEL.view; if (p.el.textContent !== t) p.el.textContent = t; }
       const keep = ApexScenic.declutter(shown.map((p) => {
-        const xy = map.project(p.marker.getLngLat());
-        return { kind: p.kind, named: p.named, fixed: !!p.fixed, m: p.m, x: xy.x, y: xy.y, w: p.el.offsetWidth, h: p.el.offsetHeight };
+        const xy = map.project(p.marker.getLngLat()), h = p.el.offsetHeight;
+        return { kind: p.kind, named: p.named, fixed: !!p.fixed, m: p.m, x: xy.x, y: p.tag ? xy.y - 6 - h / 2 : xy.y, w: p.el.offsetWidth, h };   // a tag's box is above its point
       }), { w: c.clientWidth, h: c.clientHeight });
-      shown.forEach((p, i) => { p.el.style.visibility = keep[i] ? '' : 'hidden'; });
+      shown.forEach((p, i) => { if (!p.tag) p.el.style.visibility = keep[i] ? '' : 'hidden'; });
     }
     map.on('move', declutterSoon);
     map.on('resize', declutterSoon);
@@ -4036,8 +4038,13 @@
             if (b.kind === 'skip') skipStage(b.span); else headHome(); } }); }
       }
       etaLeftS = est ? est.leftS : null;
-      const text = est ? `${ApexEta.leftText(est.leftS, est.rough)} · ${etaClock().format(new Date(est.arriveAt))}` : '';
-      if (text !== etaText) { etaText = text; paintDriveStat(); }
+      const clock = est ? etaClock().format(new Date(est.arriveAt)) : '';
+      const text = est ? `${ApexEta.leftText(est.leftS, est.rough)} · ${clock}` : '';
+      // the figures under the map (eta.js figures): arrival, time left, distance left, set as Apple and Google Maps set them
+      const fig = est ? ApexEta.figures(est.leftS, est.rough, clock, ApexUnits.long(Math.max(0, totalM() - atM), 1)) : null;
+      const figKey = fig ? JSON.stringify(fig) : '', was = etaFig ? JSON.stringify(etaFig) : '';
+      etaFig = fig;
+      if (text !== etaText || figKey !== was) { etaText = text; paintDriveStat(); }
     }
     // Perf: one clock formatter (toLocaleTimeString built a new one with every fix); the same words as before
     let etaClockFmt = null;
@@ -4974,6 +4981,8 @@
         callouts.push(new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -6] }).setLngLat([g.lon, g.lat]).addTo(map));
         el.setAttribute('aria-label', g.label);                            // after the Marker, which labels it "Map marker"
       }
+      declutterSoon();                                                     // the stamps under a tag step aside
+      if (window.apexDebug) window.apexDebug.calloutAt = () => callouts.map((mk) => { const q = map.project(mk.getLngLat()), r = map.getContainer().getBoundingClientRect(); return [q.x + r.left, q.y + r.top]; });
     }
     function setFunLevel(level) {
       if (!FunRoute.LEVELS[level]) return;
@@ -6923,6 +6932,7 @@
           const missing = Object.entries(s.config).filter(([, v]) => !v).map(([k]) => k);
           box.append(el('p', { className: 'note', textContent: `Database ${s.db ? 'answers' : 'not answering'} · ${missing.length ? `not set: ${missing.join(', ')}` : 'every binding and secret set'}` }),
             el('p', { className: 'note', textContent: `Road graph on GitHub: ${s.graph_data.http === 200 ? `${s.graph_data.tiles} tiles` : `HTTP ${s.graph_data.http || '--'} ${s.graph_data.error || ''}`} · ${(s.graph_data.ms / 1000).toFixed(1)} s` }),
+            ...(s.realtime ? [el('p', { className: 'note', textContent: `${s.realtime.ok ? dot.up : dot.down} Convoy voice (Cloudflare Realtime): ${s.realtime.ok ? 'answers' : `HTTP ${s.realtime.http || '--'} ${s.realtime.error || ''}`} · ${(s.realtime.ms / 1000).toFixed(1)} s` })] : []),
             ...s.overpass.map((o) => el('p', { className: 'note', textContent: `${o.elements != null ? dot.up : dot.down} Overpass ${o.host} from the server: ${o.elements != null ? `${o.elements} features` : `HTTP ${o.http || '--'} ${o.error || ''}`} · ${(o.ms / 1000).toFixed(1)} s` })));
           // the usage guard (backend src/usage.ts): this month against the $5 plan's included amounts
           const u = s.usage;
@@ -7123,6 +7133,10 @@
       speak: (text, urgent) => { if (!state.toggles.voice) { toast(text); if (urgent && driveActive) carPost({ kind: 'hazard', title: text }); } else if (urgent) say(text, true, null, null, { kind: 'hazard', alert: true }); else sayNext(text, `convoy:${text}`); },
       onRegroup: (rg, convoyName) => regroupSay(rg, convoyName),
       drive: () => startDrive(),                                       // the convoy sheet's "Start the drive" (Convoy now, P-11)
+      // convoy voice (convoy_voice.js): the voices go down while the co-driver speaks; the iOS shell opens a call-style
+      // audio session (speaker, Bluetooth car audio, AirPods) while the channel is on
+      speaking: () => !!speech.busy,
+      nativeTalk: (on) => { if (NATIVE_SHELL) { try { window.webkit.messageHandlers.apex.postMessage({ cmd: 'talk', on: !!on }); } catch (_) {} } },
     }) : null; } catch (e) { console.error('convoy', e); convoy = null; } });   // the convoy never takes the page down
     // Garage (web/garage_ui.js): your cars, and the ones friends and crew-mates show.
     // Block and report (web/safety_ui.js) on every social surface below; the garage uses it for friends' cars.
@@ -9397,7 +9411,8 @@
       else if (r && r.samples > 0) main.push(`<b>● Rec</b> ${ApexUnits.long((r.km) * 1000, 2)}`);
       else main.push(s.gps === 'on' ? 'Starting…' : 'Finding GPS…');
       if (s.mountSetUntil > performance.now()) main.push('Mount set');   // the calibration lock (U-74)
-      if (etaText) main.push(...etaText.split(' · '));                  // U-99: "25 min left" and "7:12" are parts of their own
+      // on a route the time is the trip figures, set apart (below); with no figures it is words in the line (U-99)
+      if (etaText && !etaFig) main.push(...etaText.split(' · '));
       if (NATIVE_SHELL) { const a = ambientStats(); if (a) main.push(a.error ? 'Sharing · retrying' : a.paused ? 'Sharing paused' : `Sharing ${ApexUnits.long((a.km) * 1000, 1)}`); }
       else if (drive.share === 'on') main.push(drive.shareErr ? 'Sharing · retrying' : `Sharing ${ApexUnits.long((drive.shareKm) * 1000, 1)}`);
       else if (drive.share === 'stopped') main.push('Sharing paused');
@@ -9417,7 +9432,12 @@
       // each part stays whole: a narrow screen breaks the line between parts, never inside "77 min left", and never cuts one
       // (U-99: the line was one nowrap run, so "25 min left · 7:12" ended "25…"). The dot rides with the part before it, so a
       // wrapped line never starts with one.
-      const m = main.map((x, i) => `<span>${x}${i < main.length - 1 ? ' ·' : ''}</span>`).join(' '), w = warn.join(' · ');
+      const line = main.map((x, i) => `<span>${x}${i < main.length - 1 ? ' ·' : ''}</span>`).join(' '), w = warn.join(' · ');
+      // on a route, as Apple and Google Maps: three figures you read at a glance (arrival, time left, distance left), the
+      // recording and sharing a small line under them; the line wrapped to three lines on a phone (2026-11-14)
+      const said = etaFig ? `Arriving ${etaText.split(' · ')[1] || ''}, ${etaText.split(' · ')[0]}${etaFig[2] ? `, ${etaFig[2].v} ${etaFig[2].u} to go` : ''}.` : '';
+      const m = etaFig ? `<span class="trip" aria-hidden="true">${etaFig.map((f) => `<span class="tf"><b>${f.v.replace(/</g, '&lt;')}</b><small>${f.u}</small></span>`).join('')}</span><span class="sr-only">${said}</span><span class="ds-sub">${line}</span>` : line;
+      if ($('dsMain').classList.contains('has-trip') !== !!etaFig) $('dsMain').classList.toggle('has-trip', !!etaFig);
       if ($('dsMain').innerHTML !== m) $('dsMain').innerHTML = m;
       // the line's state, for its drawing (index.html #driveBar[data-state]): seek until the first sample is kept
       const ds = s.gps === 'denied' ? 'off' : zoned ? 'zone' : r && r.samples > 0 ? 'rec' : 'seek';

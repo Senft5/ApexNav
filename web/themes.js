@@ -12,29 +12,31 @@
 
   const THEMES = {
     roadbook: {
-      id: 'roadbook', label: 'Roadbook', tag: 'A', blurb: 'Paper and red ink.', pro: false,
-      about: 'Paper, ink and one red pen. Reads in direct sun; night turns the page over after sunset.',
+      id: 'roadbook', label: 'Vetta', tag: 'A', blurb: 'Graphite, white and one red.', pro: false,
+      about: 'Graphite and white with one red: crisp in direct sun, deep and quiet after sunset, when night takes over by itself.',
       // the theme's co-driver (REVIEW.md 4.4): who reads the notes comes with the look. What the voice says, and the line its
       // card quotes, are the pack's (web/voice_lines.js PACKS, U-113), so a card never quotes a line the voice doesn't say.
       voice: { id: 'marguerite', name: 'Marguerite', who: 'Calm, exact, a step ahead.' },
       fonts: FONT, cluster: 'line', notes: 'roadbook', gauge: 'printed',   // the Vetta Line cluster: a hero numeral over a ruled line (instruments.js mountLine)
       renderers: { dial: 'line', meter: 'gball', strip: 'roadbook' },   // the theme contract's three renderers (theme_contract.js)
+      // The 2026-11-14 redesign (the owner: Roadbook was "flat, boring, uninspired and low contrast"): graphite and white with
+      // one red, dark-first, layered surfaces (raised) instead of paper and hairline rules; the route in ink, red marks only
+      // what needs acting on (signal), the record key and the apex. Shape and depth are tokens too (index.html --r-*, --elev-*).
       day: {
-        // panel round 2 (IN-3, PR-2): the route is drawn in ink; the one red pen marks only what needs acting on (signal)
-        stage: '#F2EBDD', ink: '#1C1A17', dim: '#6A6255', route: '#1C1A17', routeCasing: '#F2EBDD',
-        panel: '#EDE4D3', panelInk: '#1C1A17', panelDim: '#6A6255', rule: '#1C1A17', accent: '#C8102E',
-        signal: '#C8102E', amber: '#8A5810', calm: '#1C1A17',
-        face: '#F6F0E4', faceInk: '#1C1A17', faceDim: '#665E51', hair: '#CFC4AE', gain: '#2E6B3F'   // faceDim: 5.1:1 on the paper (contrast.md had 4.22)
+        stage: '#F4F5F7', ink: '#0B0B0C', dim: '#5B5F68', route: '#0B0B0C', routeCasing: '#FFFFFF',
+        panel: '#FFFFFF', panelInk: '#0B0B0C', panelDim: '#5B5F68', rule: '#0B0B0C', accent: '#E0102A',
+        signal: '#E0102A', amber: '#9A5B00', calm: '#0B0B0C',
+        face: '#FFFFFF', faceInk: '#0B0B0C', faceDim: '#5B5F68', hair: '#E1E3E8', gain: '#14804A', raised: '#F1F2F4'
       },
       night: {
-        stage: '#1A1814', ink: '#EDE4D3', dim: '#9A9080', route: '#EDE4D3', routeCasing: '#1A1814',
-        panel: '#151310', panelInk: '#EDE4D3', panelDim: '#8C8373', rule: '#EDE4D3', accent: '#E65252',
-        signal: '#E65252', amber: '#D9A24A', calm: '#EDE4D3',
-        face: '#1A1814', faceInk: '#EDE4D3', faceDim: '#968C7B', hair: '#2E2A23', gain: '#6FBF7F'
+        stage: '#0A0A0B', ink: '#F5F5F7', dim: '#A0A3AB', route: '#F5F5F7', routeCasing: '#0A0A0B',
+        panel: '#111214', panelInk: '#F5F5F7', panelDim: '#A0A3AB', rule: '#F5F5F7', accent: '#FF3341',
+        signal: '#FF3341', amber: '#FFB020', calm: '#F5F5F7',
+        face: '#111214', faceInk: '#F5F5F7', faceDim: '#9A9DA6', hair: '#2B2D33', gain: '#34C77B', raised: '#1B1C20'
       },
       map: {
-        day: { bg: '#F2EBDD', water: '#CFD8D3', waterLine: '#7F9A9A', land: '#EFE7D8', wood: '#E3DCC5', road: '#FFFFFF', roadMinor: '#FFFFFF', casing: '#1C1A17', label: '#1C1A17', halo: '#F2EBDD', boundary: '#8C8373', contour: '#8B6B4A', shadow: '#A08F6E', highlight: '#FFFFFF', accentShade: '#B59E78' },
-        night: { bg: '#1B1712', water: '#10161A', waterLine: '#26343A', land: '#1D1914', wood: '#1F1C15', road: '#36312A', roadMinor: '#2B2721', casing: '#A99F8C', label: '#A89E8C', halo: '#1B1712', boundary: '#332F28', contour: '#3A3126', shadow: '#080706', highlight: '#28231C', accentShade: '#14120E' }
+        day: { bg: '#EEF0F3', water: '#B9D3EE', waterLine: '#8DB3DB', land: '#F3F4F6', wood: '#DCEBD9', road: '#FFFFFF', roadMinor: '#FFFFFF', casing: '#C5C9D1', label: '#2A2D33', halo: '#FFFFFF', boundary: '#9AA0AA', contour: '#C9B89A', shadow: '#9AA3B0', highlight: '#FFFFFF', accentShade: '#C2C8D2' },
+        night: { bg: '#0E1013', water: '#0B1A2A', waterLine: '#1C3550', land: '#121418', wood: '#111A15', road: '#2C2F36', roadMinor: '#22252B', casing: '#3A3E46', label: '#C4C8D0', halo: '#0E1013', boundary: '#3A3E46', contour: '#2A2620', shadow: '#000000', highlight: '#1E2127', accentShade: '#0A0B0D' }
       }
     },
     // Tapedeck (Pro, REVIEW.md 4.1): a late-90s head unit. Near-black glass, blue-green VFD glow, amber for what changes
@@ -226,7 +228,7 @@
   const ACCENTS = {
     rally_blue: { label: 'Rally blue', day: { route: '#1F4FA8', accent: '#1F4FA8' }, night: { route: '#6E9BEF', accent: '#6E9BEF' } },
     racing_green: { label: 'Racing green', day: { route: '#1E5B3A', accent: '#1E5B3A' }, night: { route: '#5DB585', accent: '#5DB585' } },
-    ink: { label: 'Ink', day: { route: '#1C1A17', accent: '#1C1A17' }, night: { route: '#EDE4D3', accent: '#EDE4D3' } },
+    ink: { label: 'Ink', day: { route: '#0B0B0C', accent: '#0B0B0C' }, night: { route: '#F5F5F7', accent: '#F5F5F7' } },
   };
   const ACCENT_KEY = 'apex.accent';
   function accent() { try { const a = root.localStorage.getItem(ACCENT_KEY); return ACCENTS[a] ? a : null; } catch (_) { return null; } }

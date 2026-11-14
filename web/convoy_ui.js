@@ -44,6 +44,12 @@
        calls come when the leader asks (the Report key's sheet, or a tap on the line) and go with the sheet. */
     .convoy-bar .cv-line .cv-rg { color: var(--panel-ink); }
     .convoy-bar .cv-key { flex: none; min-height: 36px; padding: 0 10px; font: 700 13px var(--font-ui, sans-serif); white-space: nowrap; }
+    /* voice: one big key, thumb-sized for a car mount; green while your microphone is open, the accent when muted */
+    .convoy-bar:has(> .cv-talk) { flex-direction: row; align-items: center; gap: 0; }
+    .convoy-bar .cv-talk { flex: none; min-width: 84px; min-height: 48px; margin: 4px; font-size: 15px; }
+    .convoy-bar .cv-talk.on { background: var(--gain, #2a6); border-color: var(--gain, #2a6); color: #fff; }
+    .convoy-bar .cv-talk.muted { color: var(--accent); border-color: var(--accent); }
+    .convoy-bar .cv-line .cv-talking { color: var(--gain, #2a6); font-weight: 700; }
     .convoy-bar .cv-undo { color: var(--signal, #c33); border-color: var(--signal, #c33); }
     #app.live .convoy-bar { top: auto; bottom: 10px; left: 10px; right: auto; max-width: min(360px, calc(100% - 90px)); flex-direction: row; align-items: center; gap: 0;
       border: 1.5px solid var(--panel-ink); box-shadow: 0 2px 0 var(--rule); }
@@ -92,17 +98,55 @@
     const spoken = new Map();                                   // eventId -> 'far' | 'near': each hazard is called at most twice
     const markers = { cars: new Map(), hazards: new Map(), regroup: null };
     let lastRegroup = null;
-    const live = { headline: null, regroup: null, gaps: [], left: [] };   // text nodes updated in place
+    const live = { headline: null, regroup: null, talk: null, gaps: [], left: [] };   // text nodes updated in place
 
     const client = new C.ConvoyClient({
       apiFetch, wsUrl,
-      onChange: (s, what) => { snap = s; store.set('localStorage', RESUME_KEY, s.id || ''); paint(what); },
+      onChange: (s, what) => {
+        snap = s; store.set('localStorage', RESUME_KEY, s.id || '');
+        if (!s.id && voice && voice.state !== 'off') voice.stop();     // the convoy ended or we left: so did its channel
+        paint(what);
+      },
+      onVoice: (m) => voiceEvent(m),
       onHazard: () => tick(),
       onRetract: (ev) => { if (spoken.has(ev.eventId)) toast(`${C.KINDS[ev.type] || 'Hazard'} call cancelled by the leader.`); spoken.delete(ev.eventId); paintMap(); },
       onError: (code) => toast(ERRORS[code] || 'The convoy refused that.'),
       // the leader kept it going: everyone hears it at once, with how long it now has (they can leave as before)
       onExtended: (m) => { const t = `Convoy kept going: ${C.leftText(m.expiresAtMs)}.`; toast(t); if (driving()) speak(t, false); },
     });
+    // Voice (web/convoy_voice.js, docs/CONVOY_VOICE.md): an open channel, hands-free. One key on the convoy's line: Talk,
+    // then Mute / Unmute. Once someone has talked in a convoy, the next convoy joins the channel by itself when it connects.
+    const V = root.ApexConvoyVoice, VOICE_KEY = 'apex.convoyVoice';
+    const voice = V ? new V.ConvoyVoice({ client, apiFetch, speaking: page.speaking || (() => false), native: page.nativeTalk || (() => {}), onChange: () => paintVoice() }) : null;
+    let voiceKeyEl = null, lastVoice = 'off', lastVoiceErr = null;
+    const voiceOffered = () => !!(voice && voice.supported && snap && snap.id && snap.voiceReady && snap.status !== 'replaced');
+    function voiceEvent(m) {
+      if (!voice) return;
+      if (m.type === 'ready' && (voice.state === 'off' || voice.state === 'failed')) {
+        if (voiceOffered() && store.get('localStorage', VOICE_KEY)) voice.start();
+        return;
+      }
+      voice.onVoice(m);
+    }
+    function paintVoice() {
+      if (!voice) return;
+      if (voice.state === 'on') store.set('localStorage', VOICE_KEY, '1');
+      if (voice.state === 'failed' && voice.error !== lastVoiceErr) toast(voice.errorText());
+      lastVoiceErr = voice.state === 'failed' ? voice.error : null;
+      if (voiceKeyEl) {
+        const k = V.keyText(voice.state, voice.muted);
+        voiceKeyEl.textContent = k.text; voiceKeyEl.setAttribute('aria-label', k.label);
+        voiceKeyEl.classList.toggle('on', k.on); voiceKeyEl.classList.toggle('muted', voice.state === 'on' && voice.muted);
+      }
+      if (live.talk) live.talk.textContent = voice.state === 'on' ? V.talkingText(voice.talking, client.members) : '';
+      if (voice.state !== lastVoice) { lastVoice = voice.state; lastKey = null; paint(); }   // the sheet's Leave voice comes and goes
+    }
+    function voiceKey() {
+      voiceKeyEl = el('button', { type: 'button', className: 'ink-btn cv-key cv-talk' });
+      voiceKeyEl.addEventListener('click', () => { voice.press(); });
+      paintVoice();
+      return voiceKeyEl;
+    }
     // Another hour, the leader's (C.canKeep): from the card's key and from the heads-up before the end.
     const KEEP_REFUSED = { convoy_at_limit: 'A convoy runs six hours at most.', too_early: 'You can keep it going in its last half hour.' };
     async function keepGoing() {
@@ -225,7 +269,7 @@
       const s = snap;
       if (!s || !s.id) return JSON.stringify([s && s.status, store.get('sessionStorage', INVITE_KEY) !== '', asked.list.map((i) => i.id), driving()]);
       return JSON.stringify([s.id, s.status, s.unreachable, s.ctx && s.ctx.role, s.ctx && s.ctx.name, s.members.map((m) => [m.key, m.online, m.role, m.handle]),
-                             !!client.route, !!client.regroup, undo && undo.id, !!getRoute(), driving(), C.canKeep(s.ctx)]);
+                             !!client.route, !!client.regroup, undo && undo.id, !!getRoute(), driving(), C.canKeep(s.ctx), voiceOffered(), voice && voice.state]);
     }
     // P-21: one line, a tap opens the convoy. Idle with an invite waiting, the line is the invite; in a drive it sits behind
     // the car, and the leader's calls open from it or from the Report key, never as a row over the map.
@@ -233,7 +277,7 @@
       const s = snap, idle = !(s && s.id);
       const inv = idle && !driving() ? asked.list[0] || null : null, link = idle && !driving() && !inv ? store.get('sessionStorage', INVITE_KEY) : '';
       bar.classList.toggle('show', !idle || !!inv || !!link);
-      live.headline = null; live.regroup = null;
+      live.headline = null; live.regroup = null; live.talk = null; voiceKeyEl = null;
       const line = (dot, name, text) => {
         const b = el('button', { type: 'button', className: 'cv-line' }, el('i', { className: dot }), el('b', { textContent: name }), text);
         b.addEventListener('click', open);
@@ -252,7 +296,9 @@
       const name = s.ctx ? s.ctx.name : 'Convoy', calling = callsOn();
       const ln = line(s.status === 'live' ? '' : 'off', name, live.headline);
       if (live.regroup) ln.append(live.regroup);
+      if (voiceOffered()) ln.append(live.talk = el('span', { className: 'cv-talking' }));
       const kids = [labelled(ln, `Convoy ${name}. ${calling ? 'Open it for your calls' : 'Open it'}`)];
+      if (voiceOffered()) kids.push(voiceKey());
       if (s.status === 'replaced') kids.push(btn('Use it here', () => client.takeOver(), 'ink-btn cv-key'));
       else if (calling && undo) kids.push(btn(`Undo ${C.KINDS[undo.type]}`, undoCall, 'ink-btn cv-key cv-undo'));   // 3 s, then gone
       bar.replaceChildren(...kids);
@@ -510,7 +556,8 @@
       }
       // from the map's sheet, the drive itself is one key away (a convoy started at the petrol station, then go)
       if (h.kind === 'sheet' && !driving() && page.drive) actions.append(btn('Start the drive', () => { close(); page.drive(); }, 'ink-btn'));
-      if (C.canKeep(c)) actions.append(btn('Keep going 1 h', keepGoing, 'ink-btn'));   // its last half hour: the leader's to give it another hour
+      if (C.canKeep(c)) actions.append(btn('Keep going 1 h', keepGoing, 'ink-btn'));
+      if (voice && (voice.state === 'on' || voice.state === 'starting')) actions.append(btn('Leave voice', () => { store.set('localStorage', VOICE_KEY, ''); voice.stop(); }, 'ink-btn'));   // its last half hour: the leader's to give it another hour
       actions.append(btn(c.role === 'leader' ? 'End convoy' : 'Leave', async () => {
         if (!(await ApexConfirm.ask(c.role === 'leader' ? 'End the convoy for everyone?' : 'Leave the convoy?', c.role === 'leader' ? 'End convoy' : 'Leave'))) return;
         await client.leave(); toast(c.role === 'leader' ? 'Convoy ended.' : 'You left the convoy.');
@@ -520,6 +567,7 @@
       if (s.status === 'replaced') kids.push(el('div', { className: 'row' }, el('span', { className: 'note', textContent: 'This convoy is open on another screen.' }), btn('Use it here', () => client.takeOver())));
       else if (s.status !== 'live') kids.push(el('p', { className: 'note', textContent: s.unreachable ? 'Can\'t reach the convoy. Still trying.' : s.status === 'reconnecting' ? 'No connection to the convoy. Retrying…' : 'Connecting…' }));
       box.replaceChildren(...kids);
+      if (h.kind === 'sheet' && voiceOffered() && voice.state !== 'on') box.append(el('p', { className: 'note', textContent: 'Tap Talk to hear and talk to the convoy, hands-free.' }));
       if (h.showQr && c.role === 'leader') { h.showQr = false; showQr(picker); }   // Convoy now: the code first, for the car park
     }
     function renderAll() {

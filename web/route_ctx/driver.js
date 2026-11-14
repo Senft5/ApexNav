@@ -2,8 +2,9 @@
 // a passenger aboard (gentler, flowing roads), the driver's own skill trend (how technical a route to offer), roads lit or
 // unlit after dark, mapped cycle routes (courtesy), and tunnels. Sources: the corridor's own geometry and router timing,
 // the driver's drives in the Log (Smooth and Brakes of the Vetta Score, on the phone only), web/sun.js for dark, and
-// OpenStreetMap via Overpass (lit=*, tunnel=yes, route=bicycle relations; ODbL, attributed in About > Sources; cached per
-// 0.1-degree tile for TILE_MS). Nothing about the driver leaves the phone; Overpass gets tile boxes, as cameras.js does.
+// OpenStreetMap (lit=*, tunnel=yes, route=bicycle relations; ODbL, attributed in About > Sources; cached per 0.1-degree
+// tile for TILE_MS): our weekly build (GET /api/ctx/lines) inside Ohio, Kentucky and Indiana since 2026-11-14, Overpass for
+// a tile outside it. Nothing about the driver leaves the phone; our server and Overpass get tile ids or boxes, as cameras.js does.
 //
 // Settings (vocabulary.js, one home each: the plan sheet's More, "For this drive" row; saved as apex.driverPrefs):
 //   passenger (Passenger aboard), lit (Lit roads at night), cyclists (Cyclist courtesy), tunnels (Tunnels: prefer them).
@@ -143,7 +144,7 @@
   }
 
   // ---- OSM features ----------------------------------------------------------------------------------------------------------
-  const TILE = 0.1, TILE_MS = 30 * 864e5, PREFIX = 'apex.drvosm.', TIMEOUT_MS = 12000;
+  const TILE = 0.1, TILE_MS = 30 * 864e5, PREFIX = 'apex.drvosm.', TIMEOUT_MS = 12000, LINES_PATH = '/api/ctx/lines?tiles=';
   const SERVERS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
   const tileKey = (lat, lon) => `${Math.floor(lat / TILE)}_${Math.floor(lon / TILE)}`;
   const tileBox = (k) => { const [i, j] = k.split('_').map(Number); return [i * TILE, j * TILE, (i + 1) * TILE, (j + 1) * TILE]; };
@@ -195,13 +196,44 @@
     })());
     try { const j = await Promise.race([Promise.any(tries), stopped]); timers.forEach(clearTimeout); ctrls.forEach((c) => { try { if (c) c.abort(); } catch (_) {} }); return j; } catch (_) { return null; }
   }
-  /** Features for the tiles: cached tiles first, the rest in one raced query; null when nothing could be had. */
-  async function osmFeatures(tiles, { fetch: fetchFn, storage, signal, now = Date.now() } = {}) {
-    const have = [], need = [];
+  /**
+   * Our weekly build's tiles (GET /api/ctx/lines, Ohio, Kentucky and Indiana; tools/osm_ctx/region.py): Map key -> features
+   * for the tiles it covers; a tile it doesn't (or the server down) is left out. apiGet: the app's (JSON or null).
+   */
+  async function builtFeatures(apiGet, keys) {
+    const out = new Map();
+    if (typeof apiGet !== 'function' || !keys.length) return out;
+    const parts = [];
+    for (let s = 0; s < keys.length; s += 40) parts.push(keys.slice(s, s + 40));
+    await Promise.all(parts.map(async (part) => {
+      let j = null;
+      try { j = await apiGet(LINES_PATH + part.join(',')); } catch (_) { j = null; }
+      const tiles = j && j.tiles && typeof j.tiles === 'object' ? j.tiles : null;
+      if (!tiles) return;
+      const geom = (flat) => { const g = []; if (Array.isArray(flat)) for (let i = 0; i + 1 < flat.length; i += 2) if (finite(flat[i]) && finite(flat[i + 1])) g.push([flat[i], flat[i + 1]]); return g; };
+      for (const k of part) {
+        const t = tiles[k];
+        if (!t || typeof t !== 'object') continue;
+        const f = [];
+        for (const x of Array.isArray(t.lit) ? t.lit : []) { const v = Array.isArray(x) ? LIT[x[0]] : undefined, g = Array.isArray(x) ? geom(x[1]) : []; if (v !== undefined && g.length) f.push({ kind: 'lit', value: v, geom: g }); }
+        for (const kind of ['tunnel', 'cycle']) for (const x of Array.isArray(t[kind]) ? t[kind] : []) { const g = geom(x); if (g.length) f.push({ kind, value: 1, geom: g }); }
+        out.set(k, f);
+      }
+    }));
+    return out;
+  }
+  /** Features for the tiles: cached tiles first, then our build's, the rest in one raced query; null when nothing could be had. */
+  async function osmFeatures(tiles, { fetch: fetchFn, apiGet, storage, signal, now = Date.now() } = {}) {
+    const have = [];
+    let need = [];
     for (const k of tiles) {
       let c = null; try { c = JSON.parse((storage && storage.getItem(PREFIX + k)) || 'null'); } catch (_) {}
       if (c && now - c.at < TILE_MS && Array.isArray(c.f)) have.push(...c.f); else need.push(k);
     }
+    if (!need.length) return have;
+    const ours = await builtFeatures(apiGet, need);
+    for (const [k, f] of ours) { have.push(...f); try { storage && storage.setItem(PREFIX + k, JSON.stringify({ at: now, f })); } catch (_) {} }
+    need = need.filter((k) => !ours.has(k));
     if (!need.length) return have;
     if (!fetchFn) return have.length ? have : null;
     const json = await fetchFirst(fetchFn, query(need), signal);
@@ -274,7 +306,7 @@
       // past the budget the lookup is called off (its tiles are fetched again next time), so nothing runs on unseen
       const ac = typeof AbortController === 'function' ? new AbortController() : null;
       if (opts.signal && ac) opts.signal.addEventListener('abort', () => ac.abort(), { once: true });
-      const feats = await U.within(osmFeatures(tilesOf(corridors), { fetch: opts.fetch || (root.fetch && root.fetch.bind(root)), storage, signal: ac ? ac.signal : opts.signal }),
+      const feats = await U.within(osmFeatures(tilesOf(corridors), { fetch: opts.fetch || (root.fetch && root.fetch.bind(root)), apiGet: opts.apiGet, storage, signal: ac ? ac.signal : opts.signal }),
         (opts.budgetMs || provider.budgetMs) - 500, opts.signal, null);
       if (ac) ac.abort();
       grids = feats ? gridsOf(feats) : null;

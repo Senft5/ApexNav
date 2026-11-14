@@ -43,7 +43,7 @@ Between road videos (one post each, mid-week):
 | 0–3 | cockpit on a dash mount, demo drive running | co-driver: "Left 4. Crest. Right 3 tightens." |
 | 3–9 | the map strip showing the next three corners | "Vetta reads the road ahead out loud." |
 | 9–13 | Log: the drive's corners, a smooth score | "And scores how smoothly you drove it." |
-| 13–15 | end card | "Corner by corner, never top speed." |
+| 13–15 | end card | "Corner by corner. Quick and clean." |
 
 ### 2. "The road, measured" (20 s)
 
@@ -65,4 +65,4 @@ Between road videos (one post each, mid-week):
 ## Bluesky / Threads / X launch post
 
 I built Vetta: a co-driver for back roads. It reads every corner before you reach it, finds the twisty roads near
-you, and scores how smoothly you used each corner's grip, never your top speed. Free to drive, no ads. {link}
+you, and scores how much of each corner's grip you used, and how smoothly. Free to drive, no ads. {link}

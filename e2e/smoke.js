@@ -3109,6 +3109,17 @@ flow('the turn arrow and route overview: the next turn of a route being driven h
   await page.click('#recenterBtn');
   await page.waitForFunction(() => window.apexDebug.state.follow && getComputedStyle(document.getElementById('overviewBtn')).display !== 'none', null, { timeout: 3000 })
     .catch(() => check(false, 'Recenter brings the drive camera and the overview key back'));
+  // a small phone (iPhone SE): the map between the strip and the gauges is about 230 px; Layers and the key under it stay
+  // clear of the map's credit key at its bottom right
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.waitForTimeout(400);
+  const keys = await page.evaluate(() => { const r = (q) => { const b = document.querySelector(q).getBoundingClientRect(); return { t: b.top, b: b.bottom, l: b.left, r: b.right }; };
+    return { tab: r('#swEdge .edge-tab'), key: r('#overviewBtn'), credit: r('.maplibregl-ctrl-attrib'), stage: r('#app > .stage') }; });
+  // the credit key sits 10 px in from the map's bottom right, 24 px tall (index.html .maplibregl-ctrl-attrib), drawn or not
+  // (these tiles are stubbed, so it is empty here)
+  const creditTop = keys.credit.b > 0 ? keys.credit.t : keys.stage.b - 34;
+  check(keys.key.b <= creditTop && keys.tab.b <= keys.key.t + 4 && keys.tab.t >= keys.stage.t, 'on a small phone the keys clear the credit: ' + JSON.stringify(keys));
+  await page.setViewportSize({ width: 390, height: 844 });
   for (let m = turnM + 20; m <= turnM + 200; m += 40) { await driveTo(m); await page.waitForTimeout(80); }
   await page.waitForFunction(() => !window.apexDebug.turnArrow, null, { timeout: 5000 })
     .catch(() => check(false, 'past the turn the arrow goes (the next step is the arrival): ' + JSON.stringify(turnM)));
@@ -3552,6 +3563,65 @@ flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stub
   check(/Sunday run/.test(await page.textContent('.convoy-bar .cv-line')), 'in the convoy, the line names it');
   await page.evaluate(() => { document.querySelector('.tab[data-view="people"]').click(); document.querySelector('[data-people="crews"]').click(); });
   check(!(await page.$$eval('#crewsBody h3', (h) => h.filter((x) => /Convoy/.test(x.textContent)).length)), 'no Convoy heading on Crews');
+});
+
+flow('convoy voice: Talk joins the channel, the one key mutes and unmutes, and a new voice is listened to (Worker, socket and WebRTC stubbed)', async (page, base) => {
+  await page.addInitScript(() => {
+    try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.convoy', 'AAAAAAAAAAAAAAAAAAAAAA'); } catch (_) {}
+    // no real microphone or SFU here: a fake getUserMedia and RTCPeerConnection that answer like the real ones
+    const track = { enabled: true, stop() {} };
+    navigator.mediaDevices.getUserMedia = async () => ({ getAudioTracks: () => [track], getTracks: () => [track] });
+    window.__track = track;
+    window.RTCPeerConnection = class { constructor() { this.connectionState = 'new'; }
+      addTransceiver() { return { mid: '0', sender: { getParameters: () => ({ encodings: [{}] }), setParameters: async () => {} } }; }
+      async createOffer() { return { type: 'offer', sdp: 'v=0 offer' }; } async createAnswer() { return { type: 'answer', sdp: 'v=0 answer' }; }
+      async setLocalDescription(d) { this.localDescription = d; } async setRemoteDescription() {} close() {} };
+  });
+  const id = 'AAAAAAAAAAAAAAAAAAAAAA', until = Date.now() + 60 * 60000, calls = [], frames = [];
+  const ctx = { sessionId: id, name: 'Sunday run', role: 'member', you: 'k2', leaderKey: 'k1', expiresAtMs: until, seq: 0, leaderEpoch: 1, voiceReady: true, voice: [],
+    members: [{ key: 'k1', handle: 'lead', role: 'leader', online: true }, { key: 'k2', handle: 'me', role: 'member', online: true }] };
+  let sock = null;
+  await page.routeWebSocket(/\/api\/convoy\/.*\/connect/, (ws) => {
+    sock = ws;
+    ws.onMessage((m) => { const f = JSON.parse(m); frames.push(f); if (f.type === 'authenticate') ws.send(JSON.stringify({ type: 'ready', context: ctx, events: [], positions: [], route: null, regroup: null })); });
+  });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname.includes('/voice')) calls.push(`${m} ${u.pathname.replace(`/api/convoy/${id}`, '')}`);
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === `/api/convoy/${id}`) return json(ctx);
+    if (u.pathname === `/api/convoy/${id}/ticket`) return json({ ticket: 't'.repeat(32), expiresAtMs: Date.now() + 60000 }, 201);
+    if (u.pathname === `/api/convoy/${id}/voice` && m === 'POST') return json({ sdp: { type: 'answer', sdp: 'a=rtpmap:111 opus/48000/2\r\n' }, voice: [] });
+    if (u.pathname === `/api/convoy/${id}/voice/pull`) return json({ sdp: { type: 'offer', sdp: 'v=0 pull' }, tracks: [{ key: 'k1', mid: '1' }] });
+    if (u.pathname === `/api/convoy/${id}/voice/answer`) return json({ ok: true });
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForSelector('.convoy-bar.show .cv-talk', { timeout: 15000 });
+  check((await page.textContent('.convoy-bar .cv-talk')) === 'Talk', 'the convoy line has one Talk key');
+  const box = await page.$eval('.convoy-bar .cv-talk', (b) => { const r = b.getBoundingClientRect(); return [r.width, r.height]; });
+  check(box[0] >= 44 && box[1] >= 44, 'the key is thumb-sized for a car mount: ' + box);
+  await page.click('.convoy-bar .cv-talk');
+  await page.waitForFunction(() => document.querySelector('.convoy-bar .cv-talk').textContent === 'Mute', null, { timeout: 5000 });
+  check(calls[0] === 'POST /voice', 'Talk publishes the microphone through the Worker: ' + calls);
+  check(await page.$eval('.convoy-bar .cv-talk', (b) => b.classList.contains('on')), 'the key shows the mic is open');
+  check(frames.some((f) => f.type === 'voice' && f.muted === false), 'the convoy is told we are on, unmuted');
+  if (process.env.SHOTS) await page.screenshot({ path: path.join(process.env.SHOTS, 'convoy-voice-on.png') });
+  await page.click('.convoy-bar .cv-talk');
+  await page.waitForFunction(() => document.querySelector('.convoy-bar .cv-talk').textContent === 'Unmute', null, { timeout: 3000 });
+  check(await page.evaluate(() => window.__track.enabled === false) && frames.some((f) => f.type === 'voice' && f.muted === true), 'Mute turns the mic off and tells the convoy');
+  await page.click('.convoy-bar .cv-talk');
+  await page.waitForFunction(() => document.querySelector('.convoy-bar .cv-talk').textContent === 'Mute', null, { timeout: 3000 });
+  sock.send(JSON.stringify({ type: 'voice', key: 'k1', on: true, muted: false, joined: true }));
+  await page.waitForTimeout(300);
+  check(calls.includes('POST /voice/pull') && calls.includes('PUT /voice/answer'), 'a voice that comes on is listened to: ' + calls);
+  await page.click('.convoy-bar .cv-line');
+  await page.waitForSelector('.convoy-sheet button:has-text("Leave voice")');
+  await page.click('.convoy-sheet button:has-text("Leave voice")');
+  await page.waitForTimeout(200);
+  check(calls.at(-1) === 'DELETE /voice' && !(await page.evaluate(() => localStorage.getItem('apex.convoyVoice'))), 'Leave voice takes us off, and the next convoy will not join by itself');
 });
 
 flow('crew page: an old ?view=crew link opens People on Crews, at your crew; going, chat and the livery reach the Worker (Worker stubbed, REVIEW.md roadmap 20)', async (page, base) => {
@@ -4262,9 +4332,11 @@ flow('the status line wraps between its parts, never "25 min left…", at every 
   const pts = Array.from({ length: 600 }, (_, i) => `<trkpt lat="${(35.5 + i * 1e-4).toFixed(6)}" lon="-83.9"/>`).join('');
   const fits = () => page.evaluate(() => {
     const m = document.getElementById('dsMain'), box = m.getBoundingClientRect(), end = document.getElementById('driveEnd').getBoundingClientRect();
-    const parts = [...m.children].map((x) => x.getBoundingClientRect());
+    // on a route the figures (arrival, time left, distance left) and each part of the small line under them are the parts
+    const parts = [...m.querySelectorAll(m.classList.contains('has-trip') ? '.tf, .ds-sub > span' : ':scope > span')].map((x) => x.getBoundingClientRect());
     return { text: m.textContent, cut: getComputedStyle(m).textOverflow === 'ellipsis' && m.scrollWidth > m.clientWidth,
-      inside: parts.every((r) => r.left >= box.left - 0.5 && r.right <= box.right + 0.5 && r.right <= end.left), lines: new Set(parts.map((r) => Math.round(r.top))).size };
+      inside: parts.every((r) => r.left >= box.left - 0.5 && r.right <= box.right + 0.5 && r.right <= end.left), lines: new Set(parts.map((r) => Math.round(r.top))).size,
+      trip: [...m.querySelectorAll('.tf')].map((x) => x.textContent) };
   });
   for (const theme of ['roadbook', 'tapedeck', 'billet']) {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -4285,7 +4357,7 @@ flow('the status line wraps between its parts, never "25 min left…", at every 
         await page.evaluate((n) => { document.documentElement.dataset.mode = n ? 'night' : 'day'; }, night);
         await page.waitForTimeout(60);
         const r = await fits();
-        check(!r.cut && r.inside && /min left/.test(r.text), `${width} px ${theme}${night ? ' night' : ''}: ${JSON.stringify(r)}`);
+        check(!r.cut && r.inside && /min left/.test(r.text) && r.trip.length === 3, `${width} px ${theme}${night ? ' night' : ''}: ${JSON.stringify(r)}`);
       }
     }
     await page.evaluate(() => { for (let i = 0; i < 2; i++) window.apex.onNative({ type: 'carplay', action: 'end' }); });
@@ -4420,7 +4492,7 @@ flow('surfaces: Home by is the app\'s stepper, the replay has a Done key, the fi
   // U-80: before any stylesheet or script, the page's first paint is the launch screen's ink and lockup
   const first = await page.evaluate(() => { const st = document.head.querySelector('style'), firstScript = document.head.querySelector('script, link[rel=stylesheet]');
     return { before: !!(st && firstScript && (st.compareDocumentPosition(firstScript) & Node.DOCUMENT_POSITION_FOLLOWING)), css: st ? st.textContent : '' }; });
-  check(first.before && /#151310/.test(first.css) && /svg\+xml/.test(first.css) && /184px 50px/.test(first.css), 'the first paint is the launch screen: ' + JSON.stringify({ before: first.before }));
+  check(first.before && /#111214/.test(first.css) && /svg\+xml/.test(first.css) && /184px 50px/.test(first.css), 'the first paint is the launch screen: ' + JSON.stringify({ before: first.before }));
   // U-98: a loop's Home by is a stepper in the theme, "--:--" until a key sets a time
   const pts = Array.from({ length: 300 }, (_, i) => `<trkpt lat="${(35.5 + i * 1e-4).toFixed(6)}" lon="-83.9"/>`).join('');
   await page.setInputFiles('#gpxFile', { name: 'loop.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Loop</name><trkseg>${pts}</trkseg></trk></gpx>`) });
@@ -7330,6 +7402,8 @@ flow('push notifications: Garage > Notifications asks iOS only at the switch, ha
   // a push's tap: kudos on your post opens that post with its comments
   await page.evaluate(() => window.apex.onNative({ type: 'link', params: { view: 'friends', post: 'P1AAAAAAAAAAAAAA' } }));
   await page.waitForSelector('.feed-sheet', { timeout: 8000 });
+  // the sheet opens at once with "Loading…" and fills when the post arrives (CI 2026-11-14: read before it had, twice)
+  await page.waitForFunction(() => /That fog!/.test((document.querySelector('.feed-sheet') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
   const sheet = await page.textContent('.feed-sheet');
   check(/Cherohala Skyway/.test(sheet) && /That fog!/.test(sheet), 'the tap opens the post it is about: ' + sheet.slice(0, 160));
   await page.evaluate(() => document.querySelectorAll('.feed-sheet').forEach((n) => n.remove()));
@@ -10491,7 +10565,7 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   await openSetting(page, 'data');
   const g = await page.evaluate(() => { const s = document.getElementById('sheet'), e = getComputedStyle(document.getElementById('myEraseBtn'));
     return { title: s.querySelector('h2').textContent, themes: document.querySelectorAll('#themeCards > *').length, how: document.querySelectorAll('[data-panel~="garage"] details.how').length, bare: [...document.querySelectorAll('[data-panel~="garage"] > p.note')].filter((p) => !p.id && p.textContent.trim().length >= 140).length, octane: /Octane/.test(document.body.innerText), erase: e.color + '/' + e.textDecorationLine + '/' + e.borderTopStyle }; });
-  check(g.title === 'Garage' && g.themes === 3 && g.how >= 1 && g.bare === 0 && !g.octane && g.erase === 'rgb(200, 16, 46)/none/none', 'Garage: ' + JSON.stringify(g));
+  check(g.title === 'Garage' && g.themes === 3 && g.how >= 1 && g.bare === 0 && !g.octane && g.erase === 'rgb(224, 16, 42)/none/none', 'Garage: ' + JSON.stringify(g));
   // 2026-11-10: Your data is the Settings list's rows in three groups (it was eight keys of eight widths): one left edge, one width
   const rowsOf = await page.evaluate(() => { const box = document.querySelector('.data-rows'); return { groups: [...box.querySelectorAll('.nav-group')].map((h) => h.textContent),
     rows: [...box.querySelectorAll('.nav-row')].filter((r) => !r.hidden).map((r) => {   // signed out: no Delete account row
@@ -10502,7 +10576,7 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   await page.evaluate(() => document.getElementById('myEraseBtn').click());
   await page.waitForSelector('.confirm-sheet [role="alertdialog"], .confirm-sheet .cs-box[role="alertdialog"]');
   const cs = await page.evaluate(() => ({ yes: document.querySelector('.confirm-sheet .cs-yes').textContent, color: getComputedStyle(document.querySelector('.confirm-sheet .cs-yes')).color, focus: document.activeElement.className }));
-  check(!alerted && cs.yes === 'Erase everything' && cs.color === 'rgb(200, 16, 46)' && cs.focus === 'cs-no', 'the confirm sheet: ' + JSON.stringify(cs));
+  check(!alerted && cs.yes === 'Erase everything' && cs.color === 'rgb(224, 16, 42)' && cs.focus === 'cs-no', 'the confirm sheet: ' + JSON.stringify(cs));
   await page.keyboard.press('Escape');
   check(!(await page.$('.confirm-sheet')) && (await page.evaluate(() => ApexRecording.all())).length === 1, 'Cancel (Escape) keeps everything');
   await page.mouse.click(200, 30); await page.waitForTimeout(300);   // a tap outside slides the settings sheets away
@@ -10514,9 +10588,9 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   await page.evaluate(() => document.querySelectorAll('#themeCards .theme-card')[1].querySelector('.theme-preview').scrollIntoView());
   await page.click('#themeCards .theme-card:nth-child(2) .theme-preview');
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'tapedeck');
-  const used = await page.evaluate(() => ({ inUse: document.querySelector('#themeCards .theme-card.in-use .tc-head b').textContent, back: !!document.querySelector('#themeCards [aria-label="Use Roadbook"]') }));
+  const used = await page.evaluate(() => ({ inUse: document.querySelector('#themeCards .theme-card.in-use .tc-head b').textContent, back: !!document.querySelector('#themeCards [aria-label="Use Vetta"]') }));
   check(used.inUse === 'Tapedeck' && used.back, 'the Tapedeck preview, touched, is in use: ' + JSON.stringify(used));
-  await page.click('#themeCards [aria-label="Use Roadbook"]');
+  await page.click('#themeCards [aria-label="Use Vetta"]');
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'roadbook');
 });
 
@@ -11365,6 +11439,20 @@ flow('route callouts: each route found is tagged on the map with its time and co
   check(on.length === 1 && on[0].cur === 'true' && first.every((g) => /^(\d+ min|\d+:\d\d h)$/.test(g.time) && /^\d+ corners?$/.test(g.corners)),
     'every route tagged with its time and corners, one filled: ' + JSON.stringify(first));
   check(on[0].label.startsWith('This route: ') && first.filter((g) => !g.on).every((g) => g.label.startsWith('Take this route: ')), 'the tags say what a tap does: ' + JSON.stringify(first));
+  // each tag sits just above its own point on the route (a CSS position on the tag once pushed every tag after the first down by
+  // the ones before it), and no map stamp is left showing under a tag
+  await page.waitForTimeout(400);
+  const placed = await page.evaluate(() => {
+    const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const tags = [...document.querySelectorAll('.route-callout')].map((b) => b.getBoundingClientRect());
+    const at = window.apexDebug.calloutAt(), els = [...document.querySelectorAll('.route-callout')];
+    const off = els.map((b, i) => { const t = b.getBoundingClientRect(); return Math.round(Math.abs(t.bottom + 6 - at[i][1]) + Math.abs((t.left + t.right) / 2 - at[i][0])); });
+    const stamps = [...document.querySelectorAll('.poi-pin')].filter((e) => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden')
+      .map((e) => e.getBoundingClientRect());
+    return { off, under: stamps.filter((s) => tags.some((t) => hit(s, t))).length, n: stamps.length };
+  });
+  check(placed.off.length >= 2 && placed.off.every((d) => d <= 2), 'each tag sits just above its own point, not pushed down by the tags before it: ' + JSON.stringify(placed));
+  check(placed.under === 0, 'no map stamp shows under a route tag: ' + JSON.stringify(placed));
   const pager = () => page.evaluate(() => document.getElementById('routeCardPager').getAttribute('aria-label') || '');
   check(new RegExp(`^Route ${on[0].i + 1} of `).test(await pager()), 'the filled tag is the card\'s route: ' + await pager());
   const other = first.find((g) => !g.on);
