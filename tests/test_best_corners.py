@@ -99,7 +99,7 @@ def test_a_drive_against_your_records():
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([mine, rec]), capture_output=True, text=True, check=True).stdout)
     assert out["dr"] == dr
     assert out["say"] == ["Cleanest tight corner: 94 · your best 100, 2026-08-12",
-                          "Cleanest medium corner: 99 · your best of 8"]
+                          "Cleanest medium corner: 99 · your best of 8 medium corners"]
     level = subprocess.run([NODE, "-e", "const P=require(process.argv[1]+'/web/driver_profile.js');process.stdout.write(P.driveRecordLines({tight:{level:100,record:{id:'x',at:'2026-05-01T09:00',level:100,n:9}}},'me')[0])", os.getcwd()],
                            capture_output=True, text=True, check=True).stdout
     assert level == "Cleanest tight corner: 100 · level with your best, 2026-05-01"

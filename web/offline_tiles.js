@@ -108,9 +108,10 @@
       await new Promise((ok, fail) => {
         const t = d.transaction(STORE, 'readwrite'), s = t.objectStore(STORE), g = s.get(url);
         g.onsuccess = () => { const tags = areasOf(g.result); if (area && !tags.includes(area)) tags.push(area); s.put({ url, data, areas: tags, at: Date.now() }); };
-        t.oncomplete = ok; t.onerror = () => fail(t.error);
+        t.oncomplete = ok; t.onerror = () => fail(t.error); t.onabort = () => fail(t.error);
       });
-    } catch (_) {}
+      return true;
+    } catch (_) { return false; }   // a full phone (QuotaExceededError) or no IndexedDB: the caller says so
   }
   async function clear() { try { await tx('readwrite', (s) => s.clear()); } catch (_) {} try { root.localStorage.removeItem(AREAS); } catch (_) {} }
 
@@ -188,13 +189,22 @@
 
   /**
    * Saves the area round (lat, lon): the style, its data description, label fonts, map tiles and terrain. onProgress(done, of).
-   * Resolves the area record ({ id, name, lat, lon, radiusKm, tiles, bytes, at }); a failed tile is skipped, not fatal.
+   * Resolves the area record ({ id, name, lat, lon, radiusKm, tiles, bytes, at }); a tile the server lacks is skipped, one
+   * the phone couldn't fetch or keep is counted as `missing` (with `full` when out of room), so the area says it's partial.
    */
   async function download({ lat, lon, radiusKm = 25, name, styleUrl, onProgress, concurrency = 6, along = null, id: areaId = null }) {
     // `along`: a planned route's line ({ lat, lon }): the corridor along it (planAlong) instead of a disc round (lat, lon)
     const p = along ? planAlong(along.lat, along.lon) : plan(lat, lon, radiusKm), id = areaId || `a${Date.now().toString(36)}`;
     if (!p) throw new Error('route too long to keep');
-    const keep = async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(`HTTP ${r.status}`); const b = await r.arrayBuffer(); await put(url, b, id); return b; };
+    // a tile the server hasn't got (HTTP 404: the sea) is fine; one the phone couldn't fetch (signal gone) or couldn't
+    // keep (out of room) is `missing`, counted on the area so it says it was only partly kept and offers Update
+    const NOT_KEPT = 'not kept';
+    const keep = async (url) => {
+      const r = await fetch(url); if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const b = await r.arrayBuffer();
+      if (!(await put(url, b, id))) { const e = new Error(NOT_KEPT); e.full = true; throw e; }
+      return b;
+    };
     const style = JSON.parse(new TextDecoder().decode(await keep(styleUrl)));
     const src = Object.values(style.sources || {}).find((s) => s.type === 'vector' && s.url);
     const tilejson = src ? JSON.parse(new TextDecoder().decode(await keep(src.url))) : null;
@@ -216,17 +226,17 @@
     }
     // a saved route: our network within 2 km of it, so a reroute with no signal on the way still has roads (IDEAS F-04)
     if (root.ApexGraphTiles && root.ApexGraphTiles.prefetchAlong && along) graph = root.ApexGraphTiles.prefetchAlong(along.lat, along.lon).catch(() => null);
-    let done = 0, bytes = 0, k = 0;
+    let done = 0, bytes = 0, k = 0, missing = 0, full = false;
     await Promise.all(Array.from({ length: concurrency }, async () => {
       while (k < urls.length) {
         const url = urls[k++];
-        try { bytes += (await keep(url)).byteLength; } catch (_) { /* a missing tile (the sea) is fine */ }
+        try { bytes += (await keep(url)).byteLength; } catch (e) { if (!/^HTTP /.test(e && e.message)) { missing++; if (e && e.full) full = true; } }
         onProgress && onProgress(++done, urls.length);
       }
     }));
     const g = graph ? await graph : null;
     const area = { id, name: name || 'Saved area', lat, lon, radiusKm: along ? null : p.radiusKm, ...(along ? { alongKm: p.bufferKm, box: boxOf(along.lat, along.lon), line: lineOf(along.lat, along.lon, LINE_TOL_KM), lineTolKm: LINE_TOL_KM } : {}),
-      tiles: urls.length, bytes, at: new Date().toISOString(), graphTiles: g ? g.kept : 0 };
+      tiles: urls.length, bytes, at: new Date().toISOString(), graphTiles: g ? g.kept : 0, ...(missing ? { missing, full } : {}) };
     saveAreas([...areas().filter((a) => a.id !== id), area]);
     // ask the browser to keep the saved map under storage pressure (Safari and Chrome may otherwise evict it); best-effort
     try { const st = root.navigator && root.navigator.storage; if (st && st.persist) st.persist().catch(() => {}); } catch (_) {}
@@ -242,9 +252,11 @@
     const days = Math.max(0, Math.floor((nowMs - t) / 86400000)), d = new Date(t);
     return { days, stale: days >= STALE_DAYS, month: `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()]} ${d.getUTCFullYear()}` };
   }
+  /** The share of an area's map kept, 0..1 (1 for an area with nothing missing, or an older record without the count). */
+  const keptShare = (a) => (a && a.missing > 0 && a.tiles > 0 ? Math.max(0, Math.min(1, 1 - a.missing / a.tiles)) : 1);
   /** Bytes saved, from the areas list. */
   const bytesSaved = () => areas().reduce((s, a) => s + (a.bytes || 0), 0);
 
-  const api = { tilesFor, plan, tilesAlong, planAlong, boxOf, lineOf, areasOf, servable, overflow, RECENT_MAX, RECENT_DAYS, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, ageOf, STALE_DAYS, MAX_TILES, PROTO, DEM };
+  const api = { tilesFor, plan, tilesAlong, planAlong, boxOf, lineOf, areasOf, servable, overflow, RECENT_MAX, RECENT_DAYS, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, ageOf, keptShare, STALE_DAYS, MAX_TILES, PROTO, DEM };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexOfflineTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);

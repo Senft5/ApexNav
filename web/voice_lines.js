@@ -42,7 +42,7 @@
     "line:memo_early_apex": "Last time, an early apex. Turn in later.",
     "line:pass_best": "Best yet through there.", "line:pass_smooth": "Smoother on your best.",
     "line:pass_brake": "Brakes were cleaner on your best.", "line:pass_stretch_best": "Best stretch yet.",
-    "line:pass_level": "Level with your best.",
+    "line:pass_level": "Level with your best.", "line:pass_brake_later": "Brake later.", "line:pass_brake_here": "Brake later here.",
     "line:break_steering": "Steering is getting busier. Time for a break?",
     "line:break_braking": "Braking is getting later. Time for a break?",
     "line:break_time": "Two hours on the road. Time for a break?",

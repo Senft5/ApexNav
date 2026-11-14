@@ -32,7 +32,8 @@
   "kv_namespaces": [{ "binding": "BACKUPS", "id": "3be0be04839649c0a5b474c8389e8e4b" }, { "binding": "PHOTOS", "id": "3c0508c2f35b44b38152ae7bec2bc468" }],
   // ARCHIVE: the weekly database backup in R2 (Workers Paid, 2026-11-13); BACKUPS (KV) keeps its old copies and is used only without it.
   // DATA: the map data (graph tiles, context grid, cameras), uploaded by CI (backend/src/data_store.ts); public OSM-derived data.
-  "r2_buckets": [{ "binding": "ARCHIVE", "bucket_name": "apexnav-archive" }, { "binding": "DATA", "bucket_name": "apexnav-data" }],
+  // MEDIA: clips and photos on drive posts (backend/src/post_media.ts)
+  "r2_buckets": [{ "binding": "ARCHIVE", "bucket_name": "apexnav-archive" }, { "binding": "DATA", "bucket_name": "apexnav-data" }, { "binding": "MEDIA", "bucket_name": "apexnav-media" }],
   "d1_databases": [
     { "binding": "DB", "database_name": "apexnav-db", "database_id": "b0c559d5-48c2-462c-bd97-cf375233f7c1", "migrations_dir": "backend/migrations" }
   ],
@@ -49,7 +50,7 @@
     "durable_objects": { "bindings": [{ "name": "CONVOY", "class_name": "ConvoyRoom" }, { "name": "CONVOY_INDEX", "class_name": "ConvoyIndex" }] },
     "kv_namespaces": [{ "binding": "PHOTOS", "id": "6e4423e88b224430ba9d4bf8c9107deb" }],
     // previews read the same map data as production (public, and only a main-branch CI token can write it)
-    "r2_buckets": [{ "binding": "ARCHIVE", "bucket_name": "apexnav-archive-preview" }, { "binding": "DATA", "bucket_name": "apexnav-data" }],
+    "r2_buckets": [{ "binding": "ARCHIVE", "bucket_name": "apexnav-archive-preview" }, { "binding": "DATA", "bucket_name": "apexnav-data" }, { "binding": "MEDIA", "bucket_name": "apexnav-media-preview" }],
     "d1_databases": [
       { "binding": "DB", "database_name": "apexnav-preview-db", "database_id": "9103ab07-0041-4bb1-ae9f-3a9f324aa543" }
     ]
