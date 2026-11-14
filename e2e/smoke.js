@@ -10960,6 +10960,20 @@ flow('taste from picks: Start on another route than Vetta\'s pick teaches the ta
   }
 }, { ...IPHONE, funLevel: 'fun' });
 
+flow('GPS accuracy: a faint disc round the idle arrow as wide as the fix is unsure, gone when the fix is sharp (gps_halo.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.context().grantPermissions(['geolocation']);
+  await page.context().setGeolocation({ latitude: 39.1035, longitude: -84.512, accuracy: 120 });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => { const h = document.querySelector('.gps-halo'); return h && !h.hidden && h.offsetWidth > 0; }, null, { timeout: 20000 });
+  const got = await page.evaluate(() => { const h = document.querySelector('.gps-halo'), m = window.apexDebug.map, c = m.getCenter();
+    return { w: h.offsetWidth, want: 2 * ApexGpsHalo.radiusPx(120, c.lat, m.getZoom()), hit: getComputedStyle(h).pointerEvents, aria: h.getAttribute('aria-hidden'), label: h.getAttribute('aria-label') }; });
+  check(Math.abs(got.w - got.want) <= 4 && got.w > 40, 'the disc is as wide as the fix\'s 120 m: ' + JSON.stringify(got));
+  check(got.hit === 'none' && got.aria === 'true' && !got.label, 'the disc is never a tap or a spoken thing: ' + JSON.stringify(got));
+  await page.context().setGeolocation({ latitude: 39.1036, longitude: -84.512, accuracy: 4 });
+  await page.waitForFunction(() => document.querySelector('.gps-halo').hidden, null, { timeout: 15000 });
+}, IPHONE);
+
 flow('route callouts: each route found is tagged on the map with its time and corners, the picked one filled; a tap on another tag takes that route (route_callouts.js)', async (page, base) => {
   const asked = [];
   await page.clock.setFixedTime(new Date('2026-11-10T17:00:00Z'));

@@ -81,6 +81,7 @@
   <script src="route_feel.js" defer></script>
   <script src="route_card.js" defer></script>
   <script src="route_callouts.js" defer></script>
+  <script src="gps_halo.js" defer></script>
   <script src="route_reveal.js" defer></script>
   <script src="route_story.js" defer></script>
   <script src="plan_presets.js" defer></script>
@@ -415,6 +416,9 @@
     .pin { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; padding: 2px 5px; border: 1.5px solid; background: var(--panel); white-space: nowrap; cursor: pointer; font-family: var(--font-ui); }
     .pin.alpr { color: var(--signal); border-color: var(--signal); }
         .puck { width: 26px; height: 26px; }
+    /* the fix's accuracy round the idle arrow (gps_halo.js): the ink, faint (red is kept for act now), a hairline edge; never a tap target */
+    .gps-halo { border-radius: 50%; background: color-mix(in srgb, var(--panel-ink) 12%, transparent); border: 1px solid color-mix(in srgb, var(--panel-ink) 40%, transparent); pointer-events: none; }
+    .gps-halo[hidden] { display: none; }
     .reshape-pin { cursor: grabbing; }
     .stop-row { align-items: center; gap: 6px; } .stop-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .poi-pin { cursor: pointer; }

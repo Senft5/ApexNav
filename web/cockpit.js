@@ -435,13 +435,29 @@
         state.lastMotion = { heading: Number.isFinite(c.heading) ? c.heading : null, speedMps: Number.isFinite(c.speed) ? c.speed : null };
         feedMotion(c.speed);
         if (state.mode === 'live') return;   // a web drive feeds its own frames
-        showIdleFix({ lat: c.latitude, lon: c.longitude, course_deg: Number.isFinite(c.heading) ? c.heading : NaN, speed_mps: Number.isFinite(c.speed) ? c.speed : 0 });
+        showIdleFix({ lat: c.latitude, lon: c.longitude, course_deg: Number.isFinite(c.heading) ? c.heading : NaN, speed_mps: Number.isFinite(c.speed) ? c.speed : 0, accuracy_m: c.accuracy });
       }, () => {}, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
     });
     const DEM_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
     let demSource = null;
     try { demSource = new mlcontour.DemSource({ url: DEM_URL, encoding: 'terrarium', maxzoom: 13, worker: true }); demSource.setupMaplibre(maplibregl); } catch (_) { demSource = null; }
 
+    // How sure the fix is (gps_halo.js), as Apple and Google Maps draw it: a faint disc under the arrow on the idle map, as
+    // wide as the fix's accuracy; none in a drive or replay, or when the fix says nothing of its accuracy
+    const haloEl = document.createElement('div');
+    haloEl.className = 'gps-halo'; haloEl.hidden = true; haloEl.setAttribute('aria-hidden', 'true');
+    const halo = new maplibregl.Marker({ element: haloEl, pitchAlignment: 'map' }).setLngLat([-84.70, 39.24]).addTo(map);
+    haloEl.removeAttribute('aria-label'); haloEl.removeAttribute('role'); haloEl.removeAttribute('tabindex');
+    let fixAcc = null;                                                  // { m, at } of the last idle fix
+    function paintHalo() {
+      const fresh = fixAcc && performance.now() - fixAcc.at < 30000 && state.mode !== 'live' && !replayOn && cam.ready && window.ApexGpsHalo;
+      const r = fresh ? ApexGpsHalo.radiusPx(fixAcc.m, cam.pLat, map.getZoom()) : 0;
+      haloEl.hidden = !r;
+      if (!r) return;
+      haloEl.style.width = haloEl.style.height = `${2 * r}px`;
+      halo.setLngLat([cam.pLon, cam.pLat]);
+    }
+    map.on('zoom', () => { if (fixAcc) paintHalo(); });
     const puckEl = document.createElement('div');
     puckEl.className = 'puck';
     puckEl.setAttribute('role', 'img');
@@ -1206,6 +1222,7 @@
         puckSent = { lat: cam.pLat, lon: cam.pLon, bear: cam.pBear };
         puck.setLngLat([cam.pLon, cam.pLat]).setRotation(cam.pBear);
         sightTag.setLngLat([cam.pLon, cam.pLat]);
+        if (fixAcc) paintHalo();
       }
       if (!state.follow) return;
       const f = CAM_FEEL[state.camFeel] || CAM_FEEL.dynamic, t = camTargets();
@@ -11753,10 +11770,12 @@
     let idleSnapped = false;
     function showIdleFix(frame) {
       refreshAutoNight();
-      if (replayOn || state.mode === 'live') return;   // a replay or preview owns the map
+      if (replayOn || state.mode === 'live') { fixAcc = null; paintHalo(); return; }   // a replay or preview owns the map
+      fixAcc = Number.isFinite(frame.accuracy_m) ? { m: frame.accuracy_m, at: performance.now() } : null;
       setVehicle({ lat: frame.lat, lon: frame.lon, bearing: Number.isFinite(frame.course_deg) ? frame.course_deg : state.bearing,
                    vMps: Number.isFinite(frame.speed_mps) ? frame.speed_mps : 0, onTrack: false, latG: null, lonG: 0, rough: 0 }, !idleSnapped);
       idleSnapped = true;
+      paintHalo();
     }
     setInterval(() => {
       // A native drive keeps going through a GPS gap (tunnel): say so instead of dropping back to the replay.
