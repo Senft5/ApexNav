@@ -524,11 +524,10 @@
       });
       let want = planTiles(corridors, covered);
       // our Worker's relay first (backend/src/osm_relay.ts, GET /api/ctx/osm?bbox= one tile box): Overpass server-side, where
-      // CORS doesn't matter, kept a week per tile there; on the plan's clock (a kept tile answers in well under a second).
-      // A tile it doesn't have (504, or any failure: on the preview of 2026-11-04 every public mirror refused or timed out
-      // from Cloudflare, ?diag=1) goes the way it went before the relay: the phone's own query, off the plan's clock, kept
-      // here for the next plan.
-      // only while the server's flag osm_relay is on (off by default: the mirrors refused the Worker); off, as before the relay
+      // CORS doesn't matter; on the plan's clock. Since 2026-11-14 it answers from tiles built weekly from the Geofabrik
+      // extracts (tools/osm_ctx/build.py) and asks Overpass only for a border tile. A tile it doesn't have (504, or any
+      // failure) goes the way it went before the relay: the phone's own query, off the plan's clock, kept for the next plan.
+      // only while the server's flag osm_relay is on (on since 2026-11-14, backend/src/flags.ts); off, as before the relay
       const viaRelay = opts.osmRelay === true && typeof opts.apiGet === 'function' && !stubOf(opts);
       if (want.length && viaRelay) {
         const got = await relayTiles(want, opts);
