@@ -7158,6 +7158,8 @@ flow('push notifications: Garage > Notifications asks iOS only at the switch, ha
   // a push's tap: kudos on your post opens that post with its comments
   await page.evaluate(() => window.apex.onNative({ type: 'link', params: { view: 'friends', post: 'P1AAAAAAAAAAAAAA' } }));
   await page.waitForSelector('.feed-sheet', { timeout: 8000 });
+  // the sheet opens at once with Loading…, then the post (on a loaded runner the read came before the post had arrived)
+  await page.waitForFunction(() => /That fog!/.test((document.querySelector('.feed-sheet') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
   const sheet = await page.textContent('.feed-sheet');
   check(/Cherohala Skyway/.test(sheet) && /That fog!/.test(sheet), 'the tap opens the post it is about: ' + sheet.slice(0, 160));
   await page.evaluate(() => document.querySelectorAll('.feed-sheet').forEach((n) => n.remove()));
