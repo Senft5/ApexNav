@@ -43,6 +43,25 @@ describe("drive posts", () => {
     expect((await api(c, "POST", "/api/posts", { ...POST, crew_id: crew })).status).toBe(404);
   });
 
+  it("a friend you turned sharing off for sees none of your posts; leaving a crew takes your posts out of it", async () => {
+    const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara")];
+    await befriend(a, b);
+    await befriend(a, c);
+    const { id } = await post(a);
+    await ok(api(a, "PUT", "/api/grants", { audience_type: "friend", audience_id: b.id, share_scores: false }));
+    expect(await feedOf(b)).toEqual([]);
+    expect((await api(b, "GET", `/api/posts/${id}`)).status).toBe(404);
+    expect((await feedOf(c)).map((p) => p.id)).toEqual([id]);                  // still shared with cara
+    const crew = (await json(api(c, "POST", "/api/crews", { name: "Ridge Runners" }))).id;
+    const tok = (await json(api(c, "POST", `/api/crews/${crew}/invite`))).token;
+    await ok(api(a, "POST", "/api/crews/join", { token: tok }));
+    const cp = (await post(a, { crew_id: crew })).id;
+    expect((await feedOf(c)).map((p) => p.id)).toContain(cp);
+    await ok(api(a, "DELETE", `/api/crews/${crew}/membership`));
+    expect((await feedOf(c)).map((p) => p.id)).not.toContain(cp);
+    expect((await feedOf(a)).map((p) => p.id)).toContain(cp);                // the author still has it
+  });
+
   it("kudos once each, not on your own; comments, deleted by their author or the post's author", async () => {
     const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara")];
     await befriend(a, b); await befriend(a, c);
