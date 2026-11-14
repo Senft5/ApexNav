@@ -3404,6 +3404,8 @@
       $('destInput').value = p.name;
       await buildRoute(null, p.id, p.name, await trackFromPacked(p));
       toast(`${p.name}. Notes, directions and limits work with no signal; the map needs signal.`);
+      // opened with signal (before setting off): the reports kept with it are asked again, so the dead zone gets today's
+      if (plannedRoute && plannedRoute.id === p.id) keepReportsAlong(plannedRoute);
     }
     function paintSaveBtn() {
       const t = plannedRoute, b = $('routeSaveBtn');
