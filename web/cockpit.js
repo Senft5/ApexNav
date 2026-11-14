@@ -8117,6 +8117,7 @@
     const clearCrowd = () => {
       try { if (window.ApexOwnRouting && ApexOwnRouting.clearCrowd) ApexOwnRouting.clearCrowd(); } catch (_) {}
       try { if (window.ApexRouteFeel) localStorage.removeItem(ApexRouteFeel.KEY); } catch (_) {}   // and kept with saved routes
+      try { localStorage.removeItem('apex.friendStages'); } catch (_) {}   // friends' posted stages the Feed showed (drive_posts.js)
     };
     const clearCarry = () => { try { localStorage.removeItem('apex.roadShare'); } catch (_) {} try { if (window.ApexRoadCarry && ApexRoadCarry.clear) ApexRoadCarry.clear(); } catch (_) {} };
     if (window.ApexRoadCarry && ApexRoadCarry.flush) {
@@ -10854,16 +10855,20 @@
       endLinesCap();
       // Drive it on a friend's post: your Score on their stages against theirs, from this drive's own passes of those stretches
       // (segmentPass, the same that scored theirs). Said once; kept for 12 h until a drive goes over one of them.
-      const rv = postRival;
-      if (rv && Date.now() - rv.at > 12 * 3600e3) postRival = null;
-      else if (rv && window.ApexAnalysis && window.ApexDrivePosts) (async () => {
-        const segs = rv.rivals.map((r) => ({ name: r.name, lat0: r.ends[0], lon0: r.ends[1], lat1: r.ends[2], lon1: r.ends[3], length_m: r.length_m }));
+      // Without Drive it, the same for any friend's posted stage the Feed has shown you that this drive went over.
+      let rv = postRival;
+      if (rv && Date.now() - rv.at > 12 * 3600e3) { postRival = null; rv = null; }
+      const theirs = !rv && drivePosts && drivePosts.friendStages ? drivePosts.friendStages() : [];
+      const pool = rv ? rv.rivals.map((r) => ({ ...r, who: rv })) : theirs.map((r) => ({ ...r, who: { handle: r.handle } }));
+      if (pool.length && window.ApexAnalysis && window.ApexDrivePosts) (async () => {
+        // each by its place in the pool, so two friends' passes of one stage are told apart
+        const segs = pool.map((r, i) => ({ name: `k${i}`, lat0: r.ends[0], lon0: r.ends[1], lat1: r.ends[2], lon1: r.ends[3], length_m: r.length_m }));
         let got = [];
         try { got = (await ApexAnalysis.job('stagesOf', { id: c.id, segs })).stages || []; } catch (_) { got = []; }
         if (!got.length || !endDrive || endDrive.id !== c.id) return;
-        if (postRival === rv) postRival = null;
-        const rows = got.map((g) => { const r = rv.rivals.find((x) => x.name === g.name); return { name: g.name, you: g.score, them: r ? r.score : null }; });
-        const line = ApexDrivePosts.rivalLine(rows, rv);
+        if (rv && postRival === rv) postRival = null;
+        const rows = got.map((g) => { const r = pool[Number(String(g.name).slice(1))]; return r ? { name: r.name, you: g.score, them: r.score, who: r.who } : null; }).filter(Boolean);
+        const line = ApexDrivePosts.rivalLine(rows, null);
         if (!line) return;
         $('endRival').textContent = line; endLinesCap();
         const sheet = $('endCard').querySelector('.card-sheet');      // a taller card: the drive is fitted again above it
