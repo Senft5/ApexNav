@@ -7,7 +7,7 @@ import { Env, HttpError, body, nearCell, randomToken } from "./util";
 import { cleanText } from "./convoy";
 import { reportedSql, removedSql } from "./reports_sql";
 
-export const MAX_BOOKS = 30, MAX_ROADS = 40, MAX_POINTS = 600, MAX_FOLLOWS = 100, ROADS_PER_DAY = 60, NEAR_KM = 160, NEAR_SHOWN = 20;
+export const MAX_BOOKS = 30, MAX_ROADS = 40, MAX_POINTS = 600, MAX_FOLLOWS = 100, ROADS_PER_DAY = 60, NEAR_KM = 160, NEAR_SHOWN = 20, FRIENDS_SHOWN = 30;
 export const MIN_ROAD_M = 300, MAX_ROAD_M = 600_000;
 const ID_RE = /^[A-Za-z0-9_-]{16}$/;
 export const BIND_CHUNK = 90;
@@ -205,6 +205,18 @@ export async function booksMine(env: Env, v: Viewer) {
   const out = rows.map((r) => ({ ...card(r, v.id),
     road_list: roads.filter((x) => x.book_id === r.id).map((x) => ({ id: x.id, name: x.name, length_m: x.length_m, box: [x.south, x.north, x.west, x.east], stamped: !!x.stamped })) }));
   return { mine: out.filter((b) => b.mine), following: out.filter((b) => !b.mine) };
+}
+
+/** Your friends' books you may open (friends or public, with a road in them), newest first: People → Roadbooks → From
+ *  friends. Without it a friends book could only be opened by a link its owner sent. Never across a block (CAN_SEE). */
+export async function booksFriends(env: Env, v: Viewer) {
+  const rows = await all<BookRow>(env,
+    `SELECT ${BOOK_COLS} FROM roadbooks b JOIN users u ON u.id = b.owner
+      WHERE b.owner != ?1 AND b.visibility != 'private' AND b.roads_n > 0
+        AND EXISTS (SELECT 1 FROM friendships f WHERE f.status = 'accepted' AND f.user_a = MIN(b.owner, ?1) AND f.user_b = MAX(b.owner, ?1))
+        AND ${CAN_SEE}
+      ORDER BY b.updated_at DESC LIMIT ${FRIENDS_SHOWN}`, v.id);
+  return rows.map((r) => card(r, v.id));
 }
 
 /** Public books near a coarse cell (VI-1, util.ts nearCell): most followed first, then nearest. Signed out works. */
