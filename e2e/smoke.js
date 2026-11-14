@@ -5429,6 +5429,41 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
   await page.waitForFunction(() => /Sign in to follow a roadbook/.test(document.getElementById('toast').textContent));
 }, { geolocation: { latitude: 35.6, longitude: -83.8 }, permissions: ['geolocation'] });
 
+flow('roadbooks: one of your stages goes into your roadbook with a tap, as you marked it, a privacy zone left out (free roamer B, 2026-11-14)', async (page, base) => {
+  // two stages of your Log (geom [lat, lon] as the Log keeps it), one already in the book; a privacy zone over the other's start
+  const st = Array.from({ length: 60 }, (_, i) => [+(35.6 + i * 3e-4).toFixed(6), +(-83.8 + Math.sin(i / 8) * 1e-3).toFixed(6)]);
+  await page.addInitScript((st) => { try {
+    localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1');
+    localStorage.setItem('apex.segments', JSON.stringify([{ id: 's1', name: 'Wears Valley bends', geom: JSON.stringify(st), length_m: 2000 }, { id: 's2', name: 'Road in it', geom: JSON.stringify(st), length_m: 2000 }]));
+    localStorage.setItem('apex.privacyZones', JSON.stringify([{ lat: st[0][0], lon: st[0][1], r: 200, name: 'Home' }]));
+  } catch (_) {} }, st);
+  const book = { id: 'SSSSSSSSSSSSSSSS', name: 'My Smokies', about: null, visibility: 'private', by: 'me', mine: true, followers: 0, following: false, lat: 35.6, lon: -83.8,
+    road_list: [{ id: 'r1', name: 'Road in it', geom: st.map(([a, b]) => [b, a]), length_m: 2000, stamps: 0, stamped: false }] };
+  const posted = [];
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/roadbooks/SSSSSSSSSSSSSSSS/roads' && m === 'POST') { const r = JSON.parse(route.request().postData()); posted.push(r);
+      book.road_list.push({ id: 'r2', name: r.name, geom: r.geom, length_m: 1800, stamps: 0, stamped: false }); return json({ id: 'r2', length_m: 1800 }, 201); }
+    if (u.pathname === '/api/roadbooks/SSSSSSSSSSSSSSSS') return json({ ...book, roads: book.road_list.length, length_m: 2000 * book.road_list.length });
+    if (u.pathname === '/api/roadbooks') return json({ mine: [], following: [] });
+    return json([]);
+  });
+  await page.goto(base + '/index.html?roadbook=SSSSSSSSSSSSSSSS');
+  await page.waitForSelector('.rb-pop.open button:has-text("Add one of your stages")', { timeout: 15000 });
+  check(await page.locator('.rb-pop.open .rb-stages').isHidden(), 'the stages wait behind one key, not a wall of chips');
+  await page.click('.rb-pop.open button:has-text("Add one of your stages")');
+  const chips = await page.locator('.rb-pop.open .rb-stages button').allInnerTexts();
+  check(chips.length === 1 && chips[0] === 'Wears Valley bends', 'only the stage not in the book yet: ' + JSON.stringify(chips));
+  await page.click('.rb-pop.open .rb-stages button:has-text("Wears Valley bends")');
+  await page.waitForSelector('.rb-pop.open .rb-road:has-text("Wears Valley bends")', { timeout: 8000 });
+  const g = posted[0] && posted[0].geom, away = g ? Math.hypot((g[0][1] - st[0][0]) * 110540, (g[0][0] - st[0][1]) * 90500) : -1;
+  const end = g ? Math.hypot((g[g.length - 1][1] - st[59][0]) * 110540, (g[g.length - 1][0] - st[59][1]) * 90500) : -1;
+  check(posted.length === 1 && posted[0].name === 'Wears Valley bends' && away > 190 && away < 260 && end < 1,
+    'it went in under its name, [lon, lat], starting where the privacy zone ends (not 400 m in) and ending where you marked it: ' + JSON.stringify({ away, end, n: g && g.length }));
+  check(/Wears Valley bends is in My Smokies\./.test(await page.textContent('#toast')) && !(await page.locator('.rb-pop.open button:has-text("Add one of your stages")').count()),
+    'the toast says so, and with every stage in, the key goes');
+});
 flow('roadbooks: Drive them all routes from where you are through the book\'s roads, nearest first, each from its nearer end (free roamer B, 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   // three roads going north ([lon, lat]): A near you, B beyond it (drawn south to north), C past B but drawn north to south
