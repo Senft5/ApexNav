@@ -7221,6 +7221,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   const posted = [];
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method(), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (m === 'POST' && u.pathname === '/api/invites') { posted.push([m, u.pathname, null]); return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ url: 'https://vettadrive.app/?invite=TOKEN' + posted.length }) }); }
     if (m !== 'GET' && u.pathname !== '/api/crews/invite/preview') { posted.push([m, u.pathname, route.request().postData()]); return route.fulfill({ status: 204 }); }
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me', requests: 1 });
     if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }, { id: 'U2', handle: 'cara', name: null, status: 'accepted', incoming: 0 },
@@ -7306,6 +7307,12 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   await page.waitForSelector('.side-pop.open[aria-label="Invite"]');
   const inv = await page.textContent('.side-pop.open[aria-label="Invite"]');
   check(/^Send a friend link$/.test((await page.textContent('.side-pop.open .ink-btn.solid')).trim()) && /A link anyone can use/.test(inv) && !/New to Vetta|Already on Vetta/.test(inv) && !/invite-only/i.test(inv) && !/@dan|Accept/.test(inv) && await page.isVisible('.side-pop.open input[aria-label="Friend handle"]'), 'the Invite sheet: an invite link and add by handle, no requests: ' + inv);
+  // (2026-11-14) Show my code: a friend link as a QR code, a new one for the next person
+  await page.click('.side-pop.open button:has-text("Show my code")');
+  await page.waitForSelector('.side-pop.open .friend-qr canvas[aria-label="Your friend code"]');
+  await page.click('.side-pop.open .friend-qr button:has-text("New code")');
+  for (let i = 0; i < 40 && posted.filter(([m, p]) => m === 'POST' && p === '/api/invites').length < 2; i++) await page.waitForTimeout(50);
+  check(await page.$$eval('.side-pop.open .friend-qr canvas', (l) => l.length) === 1 && posted.filter(([m, p]) => m === 'POST' && p === '/api/invites').length === 2, 'each code is a new one-use friend link');
   await page.click('.side-pop.open button:has-text("Done")');
   // On the map: the sheet closes, the Friends layer comes on
   await profileOf('@cara');
