@@ -205,6 +205,27 @@ async function clippedText(page) {
   }).catch(() => []);
 }
 
+// A key too small to hit, on every flow's last screen (2026-11-14): a button, link, switch, tab or field in view, on top,
+// under 24 x 24 px (WCAG 2.5.8; Apple asks 44 pt, and the drive's keys are bigger still). A link inside a sentence, the
+// map's own markers and a flow's own test fields (#e2e*) are left out. TAP_LOG=1 lists them instead of failing.
+async function smallTargets(page) {
+  return page.evaluate(() => {
+    const hits = [], where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).slice(0, 3).join('.') : '');
+    const W = innerWidth, H = innerHeight;
+    for (const el of document.querySelectorAll('button, a[href], [role="button"], [role="tab"], [role="switch"], [role="radio"], [role="checkbox"], input:not([type="hidden"]), select, summary')) {
+      const r = el.getBoundingClientRect(); if (!r.width || !r.height || r.bottom < 0 || r.top > H || r.right < 0 || r.left > W) continue;
+      let hidden = false; for (let n = el; n && n.nodeType === 1; n = n.parentElement) { if (n.hidden || n.getAttribute('aria-hidden') === 'true' || n.inert) { hidden = true; break; } }
+      if (hidden || el.disabled || el.closest('.maplibregl-marker') || /^e2e/.test(el.id)) continue;
+      const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || +cs.opacity === 0 || cs.pointerEvents === 'none') continue;
+      const x = Math.min(Math.max(r.left + r.width / 2, 0), W - 1), y = Math.min(Math.max(r.top + r.height / 2, 0), H - 1), top = document.elementFromPoint(x, y);
+      if (!top || !(el === top || el.contains(top))) continue;
+      if (el.tagName === 'A' && cs.display === 'inline') continue;    // a link in a sentence (WCAG 2.5.8 inline exception)
+      if (r.width < 24 || r.height < 24) hits.push(`${where(el)} "${(el.getAttribute('aria-label') || el.textContent).trim().slice(0, 30)}" ${Math.round(r.width)}x${Math.round(r.height)}`);
+    }
+    return hits.slice(0, 12);
+  }).catch(() => []);
+}
+
 // A control in view that a screen reader can't name (VoiceOver says only "button"): an icon key with no aria-label, an
 // empty link, a field with no label (LAUNCH.md section 3, IDEAS U-15). In every open page, like leftovers above.
 async function unnamed(page) {
@@ -11668,6 +11689,9 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
       const nameless = await unnamed(page);
       if (process.env.A11Y_LOG) for (const h of nameless) console.log(`A11Y ${name} | ${h}`);
       else check(!nameless.length, `a control in view a screen reader can't name:\n  ${nameless.join('\n  ')}`);
+      const small = await smallTargets(page);
+      if (process.env.TAP_LOG) for (const h of small) console.log(`TAP ${name} | ${h}`);
+      else check(!small.length, `a key in view too small to hit (under 24 px):\n  ${small.join('\n  ')}`);
       const cut = await clippedText(page);
       if (process.env.CLIP_LOG) for (const h of cut) console.log(`CLIP ${name} | ${h}`);
       else check(!cut.length, `text in view cut off by its box or the screen's edge:\n  ${cut.join('\n  ')}`);
