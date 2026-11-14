@@ -15,6 +15,7 @@ const REASONS = ["spam", "abuse", "impersonation", "unsafe", "other"] as const;
 const UNSAFE_RE = /(?!\u200d)[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\u2028\u2029]/u;
 /** Where an auto-hide actually hides something (a person or a private crew is only queued for the owner). */
 import { POST_SEEN } from "./drive_posts";
+import { mediaErase } from "./post_media";
 const HIDES: Record<ReportKind, string | null> = {
   user: null, car: "1",
   crew: "(SELECT visibility FROM crews WHERE id = r.target_id) = 'public'",
@@ -286,4 +287,5 @@ export async function moderationResolve(env: Env, v: Viewer, req: Request): Prom
   }[kind];
   await env.DB.batch([mark, ...act]);
   if (kind === "user") await convoysLeaveAll(env, id);
+  if (kind === "drive") await mediaErase(env, [id]);                // its clip or photo (post_media.ts)
 }
