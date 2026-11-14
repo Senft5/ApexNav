@@ -10494,6 +10494,11 @@ flow('places on the map: named eateries, cafés and fuel close in (never in a dr
 
 flow('along the route by name: the Along line opens a list of the cafés and fuel stops by their names on the map, and a tap on one (or its pin) says its name and offers it as a stop; in a drive the next fuel stamp names its station (the owner, 2026-11-11)', async (page, base) => {
   await planRouter(page);
+  // the Shell's own hours (place_info.js): open all day, so the same whenever you'd get there
+  await page.route(/^https:\/\/overpass/, (route) => { const q = decodeURIComponent((route.request().postData() || '').replace(/^data=/, ''));
+    const els = [...q.matchAll(/around:60,(-?[\d.]+),(-?[\d.]+)\)\["name"="([^"]+)"\]/g)].filter((m) => m[3] === 'Shell')
+      .map((m) => ({ type: 'node', id: 9, lat: +m[1], lon: +m[2], tags: { name: 'Shell', opening_hours: '24/7' } }));
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: els }) }); });
   const { tap } = await planPage(page, base);
   // the map's points (offline here): a named café and an unnamed fuel station beside the route, from the route's own samples
   await page.evaluate(() => { ApexStages.pois = async (pts) => { const a = pts[Math.min(1, pts.length - 1)], b = pts[Math.min(3, pts.length - 1)];
@@ -10513,6 +10518,10 @@ flow('along the route by name: the Along line opens a list of the cafés and fue
     h: b.getBoundingClientRect().height, wide: b.getBoundingClientRect().right <= innerWidth })));
   check(rows.length >= 2 && rows[0].name === 'Bean There Coffee' && /^Café/.test(rows[0].sub) && rows.some((r) => r.name === 'Fuel station, no name on the map')
     && rows.every((r) => /( in|at the start)$/.test(r.at) && r.h >= 44 && r.wide), 'each place by its name (an unnamed one says so), where on the route, a 44 px row: ' + JSON.stringify(rows));
+  // the Shell says it is open (all day, so on arrival too); the café, with no hours known, says nothing more
+  await page.waitForFunction(() => [...document.querySelectorAll('#routeAlongPanel .place')].some((b) => b.querySelector('b').textContent === 'Shell' && /Open 24 hours$/.test(b.querySelector('small').textContent)), null, { timeout: 5000 })
+    .catch(async () => { throw new Error('the Shell says it is open: ' + await page.textContent('#routeAlongPanel')); });
+  check(!/Open|Closed/.test(await page.evaluate(() => document.querySelector('#routeAlongPanel .place small').textContent)), 'no hours known: nothing said');
   await scan(page, 'Along the route, open');
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/along-open.png` });
   await page.evaluate(() => document.querySelector('#routeAlongPanel .place').click());
