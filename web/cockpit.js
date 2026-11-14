@@ -5545,6 +5545,7 @@
       logFrameEl('analysis.html?tab=log');
     }
     window.addEventListener('resize', () => { if (logFrame.el && !logFrame.el.hidden) logInsets(); });
+    const postable = (date) => { const t = Date.parse(date); return Number.isFinite(t) && t <= Date.now() + 86400e3 && t >= Date.now() - 29 * 86400e3; };
     window.ApexLogHost = {
       close(v) {
         refreshSavedDrives().catch(() => {});                          // a drive renamed or deleted in the Log
@@ -5568,6 +5569,32 @@
       },
       stale() { ['drives', 'theme', 'units'].forEach((w) => ApexLogHost.changed(w)); },
       insets: () => safeInsets(),                                      // asked for by the frame as its first script runs
+      // a corner clip made on the Log, to your friends or a crew (drive_posts.js compose, its sheet on this page): for a
+      // member. The Log steps aside while the sheet shows; what the sheet said (posted, or the clip didn't go up) is handed
+      // back for the Log to say, since this page's toast is under it. { posted, said }
+      // date: the drive's (a post is of a drive from the last 30 days, backend drive_posts.ts)
+      canPost: (date) => !!(accountMe && accountMe.member) && (date === undefined || postable(date)),
+      async post(blob, meta = {}) {
+        if (!blob || !(accountMe && accountMe.member)) return { posted: false, said: 'Sign in to post.' };
+        try { await needSocial(); } catch (_) {}
+        const rec = meta.driveId && window.ApexRecording ? await ApexRecording.get(meta.driveId).catch(() => null) : null;
+        if (!drivePosts || !rec) return { posted: false, said: 'Couldn’t post it here.' };
+        let score = null;
+        try { const sum = ApexRecording.summarize(ApexCore, rec); score = sum && sum.ds ? sum.ds.score : null; } catch (_) { score = null; }
+        if (rec.date_known === false || !postable(rec.date)) return { posted: false, said: 'Only drives from the last 30 days can be posted.' };
+        const dt = new Date(rec.date), day = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+        const len = Array.isArray(rec.dist) && rec.dist.length ? rec.dist[rec.dist.length - 1] : null;
+        const d = { name: rec.name, driven_on: day, len_m: len, score, lat: rec.lat, lon: rec.lon, roads: Array.isArray(rec.roads) ? rec.roads : [],
+          media: { blob, mime: String(meta.mime || blob.type || 'video/mp4').split(';')[0], label: String(meta.cornerLabel || '').slice(0, 60) || null } };
+        const f = logFrame.el, shown = !!(f && !f.hidden), t = $('toast');
+        if (shown) f.hidden = true;
+        const before = t.textContent;
+        let posted = false;
+        try { posted = !!(await drivePosts.compose(d)); } finally { if (shown) f.hidden = false; }
+        const said = posted && t.classList.contains('show') && t.textContent !== before ? t.textContent : (posted ? 'Posted.' : '');
+        if (posted) { t.classList.remove('show'); pushOffer(); }
+        return { posted, said };
+      },
     };
     // links into the Log anywhere on the map page (the drive-ended card, a toast's Open) open the frame too
     document.addEventListener('click', (e) => {

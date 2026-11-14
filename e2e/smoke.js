@@ -8822,6 +8822,7 @@ flow('film the drive: the app\'s own video of a drive is offered on its page, li
   const one = await page.evaluate(() => ({ saved: window.__saved, key: document.querySelector('.dv-ovl .dv-clip').textContent }));
   await page.waitForFunction(() => /Clip made/.test(document.querySelector('.dv-ovl .dv-clip').textContent), null, { timeout: 5000 });
   check(one.saved.size > 500 && /^Filmed_road-corner-1-/.test(one.saved.name), 'one tap on the corner: its clip, shared: ' + JSON.stringify(one));
+  check(!(await page.$('.dv-ovl .dv-post, #dvDashcam .dc-post:not([hidden])')), 'no Post key on the Log on its own (no map page to post from)');
   // the reel: both corners the video holds, one after the other in one portrait clip
   await page.evaluate(() => { window.__saved = null; });
   await page.waitForFunction(() => { const b = [...document.querySelectorAll('#dvDashcam .dc-clips button')].find((x) => /in one clip/.test(x.textContent)); return b && !b.hidden && !b.disabled; }, null, { timeout: 10000 });
@@ -8831,6 +8832,68 @@ flow('film the drive: the app\'s own video of a drive is offered on its page, li
   await page.waitForFunction(() => window.__saved, null, { timeout: 40000 });
   const reelSaved = await page.evaluate(() => window.__saved);
   check(reelSaved.size > 500 && /^Filmed_road-best-corners-/.test(reelSaved.name), 'the reel, saved to share: ' + JSON.stringify(reelSaved));
+});
+
+flow('post a corner clip: on the Log a clip made from the drive\'s own film goes to your friends with one more tap, the clip after the post (drive_posts.js through the map page, big bet 5)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} window.APEX_DRIVECAM = '/__drivecam/'; });
+  const sent = [];
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (m !== 'GET') { sent.push({ m, p: u.pathname, q: u.search, type: route.request().headers()['content-type'], n: (route.request().postDataBuffer() || Buffer.alloc(0)).length, b: route.request().postData() && /json/.test(route.request().headers()['content-type'] || '') ? route.request().postData() : null });
+      if (u.pathname === '/api/posts') return json({ id: 'P3AAAAAAAAAAAAAA' }, 201);
+      if (u.pathname.endsWith('/media')) return json({ kind: 'clip', mime: 'video/webm', bytes: 1, label: null });
+      return route.fulfill({ status: 204 }); }
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    return json([]);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording && !document.getElementById('boot'), null, { timeout: 15000 });
+  const T0 = Date.now() - 3600e3;
+  const b64 = await page.evaluate(async (t0) => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 300; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9); }
+    await ApexRecording.store({ id: 'fp1', name: 'Filmed road', date: new Date(t0).toISOString(), t0, t_s: lat.map((_, i) => i / 3), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => -0.1), lat_g: lat.map((_, i) => Math.sin(i / 3) * 0.4), g_known: null, elev: null, hz: 1, source: 'web-gps',
+      events: [{ type: 'corner', code: 'L4', call: 'Left 4', index: 9, dist_m: 45, start_m: 30, end_m: 60, radius_m: 80, apex_mph: 30, dir: 'L', severity: 4 }] });
+    const c = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }), g = c.getContext('2d');
+    const rec = new MediaRecorder(c.captureStream(15), { mimeType: 'video/webm' }), parts = [];
+    rec.ondataavailable = (e) => parts.push(e.data);
+    const stop = new Promise((ok) => { rec.onstop = ok; });
+    rec.start(); let f = 0; const t = setInterval(() => { g.fillStyle = `hsl(${f++ * 12},60%,50%)`; g.fillRect(0, 0, 320, 180); }, 66);
+    await new Promise((r) => setTimeout(r, 7200)); clearInterval(t); rec.stop(); await stop;
+    const buf = new Uint8Array(await new Blob(parts).arrayBuffer());
+    let bin = ''; for (let k = 0; k < buf.length; k += 0x8000) bin += String.fromCharCode(...buf.subarray(k, k + 0x8000));
+    return btoa(bin);
+  }, T0);
+  const name = `${T0 + 1500}.mov`;
+  await page.route('**/__drivecam/index.json', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify([{ name, start_ms: T0 + 1500, dur_s: 7.2 }]) }));
+  await page.route(`**/__drivecam/${name}`, (r) => r.fulfill({ contentType: 'video/webm', body: Buffer.from(b64, 'base64') }));
+  await page.waitForFunction(() => window.ApexLogHost && ApexLogHost.canPost(new Date().toISOString()), null, { timeout: 10000 });
+  // the drive's page, in the Log over the map
+  await page.evaluate(() => { const a = Object.assign(document.createElement('a'), { href: 'analysis.html?drive=fp1', textContent: 'x' }); document.body.append(a); a.click(); a.remove(); });
+  await page.waitForSelector('#logFrame:not([hidden])', { timeout: 15000 });
+  const log = page.frameLocator('#logFrame');
+  await log.locator('#dvDashcam .dc-own button').click({ timeout: 20000 });
+  const fr = page.frame({ url: /analysis\.html/ });
+  await fr.evaluate(() => { window.__saved = null; ApexSaveFile.saveFile = async (blob, name) => { window.__saved = { size: blob.size, name }; return 'saved'; }; });
+  await fr.waitForFunction(() => { const b = document.querySelector('#dvDashcam .dc-clips button'); return b && !b.disabled && document.querySelector('#dvDashcam .dc-clip-pick option'); }, null, { timeout: 15000 });
+  await fr.click('#dvDashcam .dc-clips button');
+  await fr.waitForFunction(() => window.__saved, null, { timeout: 30000 });
+  await fr.waitForSelector('#dvDashcam .dc-post:not([hidden])', { timeout: 5000 });
+  await fr.click('#dvDashcam .dc-post');
+  // the Post sheet on the map page, the Log stepped aside; the clip waits on it with its corner
+  await page.waitForSelector('.post-sheet .post-media video', { timeout: 10000 });
+  check(await page.evaluate(() => document.getElementById('logFrame').hidden), 'the Log steps aside for the Post sheet');
+  check(/Clip: Corner 1 · Left 4/.test(await page.textContent('.post-sheet .post-media')), 'the clip and its corner on the sheet: ' + await page.textContent('.post-sheet .post-media'));
+  await page.click('.post-sheet button:text-is("Post")');
+  await fr.waitForFunction(() => document.querySelector('#dvDashcam .dc-post').textContent === 'Posted', null, { timeout: 15000 });
+  const posts = sent.filter((x) => x.p.startsWith('/api/posts')), order = posts.map((x) => `${x.m} ${x.p} ${x.type || ''}`);
+  const body = JSON.parse(posts[0].b || '{}');
+  check(order[0] === 'POST /api/posts application/json' && /^PUT \/api\/posts\/P3AAAAAAAAAAAAAA\/media video\/(mp4|webm)$/.test(order[1]) && posts[1].n > 500 && /label=Corner%201/.test(posts[1].q),
+    'the post, then its clip with the corner\'s label: ' + JSON.stringify(order) + ' ' + posts[1].q);
+  check(body.title === 'Filmed road' && /^\d{4}-\d\d-\d\d$/.test(body.driven_on) && body.length_m === 1495, 'the post is the drive\'s: ' + JSON.stringify({ ...body, line: !!body.line }));
+  check(!(await page.evaluate(() => document.getElementById('logFrame').hidden)), 'and the Log is back');
+  check(/Posted to your friends\./.test(await fr.textContent('#dvDashcam .dc-clip-note')), 'the Log says where it went');
 });
 
 flow('side by side: a corner filmed on this drive and on your best pass plays as one clip, both from the same point, the gap counting (big bet 5)', async (page, base) => {

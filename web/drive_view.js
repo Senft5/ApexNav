@@ -649,6 +649,19 @@
         let ok = false;
         try { ok = await run(); } catch (_) { ok = false; }
         b.disabled = false; b.textContent = ok ? 'Clip made \u00b7 make another' : 'Couldn\u2019t make the clip';
+        // made: the clip to your friends or a crew too, one tap (o.postClip: drive_posts.js through the map page)
+        const had = b.parentNode && b.parentNode.querySelector('.dv-post');
+        if (had) had.remove();
+        if (ok && o.canPostClip && o.canPostClip() && o.postClip) {
+          const p = el('button', 'btn dv-post', 'Post this clip'); p.type = 'button';
+          p.onclick = async (ev) => {
+            ev.stopPropagation(); p.disabled = true;
+            let r = null;
+            try { r = await o.postClip(); } catch (_) { r = null; }
+            if (r && r.posted) p.textContent = r.said || 'Posted'; else { p.disabled = false; if (r && r.said) p.textContent = r.said; }
+          };
+          b.after(p);
+        }
       };
       return b;
     };
