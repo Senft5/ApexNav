@@ -200,11 +200,43 @@
     return out;
   }
 
-  /** OSM geometry for the given way ids, in node order (Overpass). */
-  async function fetchWays(ids, fetchFn = fetch) {
-    const ways = {};
-    for (let s = 0; s < ids.length; s += 40) {
-      const q = `[out:json][timeout:25];way(id:${ids.slice(s, s + 40).join(',')});out geom;`;
+  // Our weekly build first (backend/src/osm_relay.ts wayShapes, Ohio, Kentucky and Indiana): the whole geometry of the
+  // ways from the 0.05 degree tiles the matched samples fall in. Overpass (one public server, often refusing since
+  // 2026-11-12) only for a way the build doesn't have. The server already gets these way ids with the contribution.
+  const WAYS_PATH = '/api/ctx/ways', OSM_TILE = 0.05;
+  /** The built tiles ("i_j") the matched samples of a drive fall in. */
+  function wayTiles(drive, match) {
+    const out = new Set();
+    for (let i = 0; i < (match || []).length; i++) {
+      if (!match[i] || !finite(drive.lat[i]) || !finite(drive.lon[i])) continue;
+      out.add(`${Math.floor(drive.lat[i] / OSM_TILE)}_${Math.floor(drive.lon[i] / OSM_TILE)}`);
+    }
+    return [...out].sort();
+  }
+  async function builtWays(ids, tiles) {
+    const api = root.ApexSync && typeof root.ApexSync.apiFetch === 'function' ? root.ApexSync.apiFetch : null, ways = {};
+    if (!api || !ids.length || !tiles.length) return ways;
+    for (let t = 0; t < tiles.length; t += 40) {
+      const left = ids.filter((id) => !ways[id]);
+      for (let s = 0; s < left.length; s += 200) {
+        try {
+          const r = await api(`${WAYS_PATH}?tiles=${tiles.slice(t, t + 40).join(',')}&ids=${left.slice(s, s + 200).join(',')}`, { method: 'GET' });
+          const j = r && r.ok ? await r.json() : null;
+          for (const [id, g] of Object.entries((j && j.ways) || {})) {
+            const pts = Array.isArray(g) ? g.filter((p) => Array.isArray(p) && finite(p[0]) && finite(p[1])).map((p) => [p[0], p[1]]) : [];
+            if (pts.length >= 2) ways[id] = pts;
+          }
+        } catch (_) { /* this batch from Overpass */ }
+      }
+    }
+    return ways;
+  }
+  /** OSM geometry for the given way ids, in node order: our build's (near: { drive, match }), then Overpass for the rest. */
+  async function fetchWays(ids, fetchFn = fetch, near = null) {
+    const ways = near ? await builtWays(ids, wayTiles(near.drive, near.match)) : {};
+    const rest = ids.filter((id) => !ways[id]);
+    for (let s = 0; s < rest.length; s += 40) {
+      const q = `[out:json][timeout:25];way(id:${rest.slice(s, s + 40).join(',')});out geom;`;
       const r = await fetchFn(OVERPASS, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'content-type': 'application/x-www-form-urlencoded' } });
       if (!r.ok) throw new Error(`way lookup failed (${r.status})`);
       for (const el of (await r.json()).elements || []) if (el.type === 'way' && el.geometry) ways[el.id] = el.geometry.map((g) => [g.lat, g.lon]);
@@ -291,7 +323,7 @@
           const end = final ? to : lo + settledEnd(match, from - lo, to - lo);
           for (let i = 0; i < match.length; i++) if (i < from - lo || i >= end - lo) match[i] = null;     // context only helps the matcher
           const need = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))].filter((id) => !wayCache[id]);
-          if (need.length) Object.assign(wayCache, await fetchWays(need, fetchFn));
+          if (need.length) Object.assign(wayCache, await fetchWays(need, fetchFn, { drive: slice, match }));
           pending = buildContributions({ drive: slice, match, ways: wayCache, drivenOn, driveId, trimM: 0, Core });
           done = end;
         }
@@ -397,7 +429,7 @@
     if (!eligible(drive, opts.now)) return { built: 0, sent: 0, skipped: 'drive is too old or lacks roughness data' };
     const match = await matchDrive(drive, opts.fetch);
     const ids = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))];
-    const ways = await fetchWays(ids, opts.fetch);
+    const ways = await fetchWays(ids, opts.fetch, { drive, match });
     const list = buildContributions({ drive, match, ways, drivenOn: drive.date.slice(0, 10), driveId: driveIdFor(drive), trimM: opts.trimM ?? privateEdge() * BIN_M });
     let sent = 0;
     for (const c of list) {
@@ -423,7 +455,7 @@
     const match = await matchDrive(route, opts.fetch);
     const ids = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))].slice(0, MAX_LOOKUP_WAYS);
     if (!ids.length) return null;
-    const [ways, roads] = await Promise.all([fetchWays(ids, opts.fetch), lookupAll(ids, lookup)]);
+    const [ways, roads] = await Promise.all([fetchWays(ids, opts.fetch, { drive: route, match }), lookupAll(ids, lookup)]);
     if (!roads) return null;
     const runs = locate({ drive: route, match, ways }), s = seriesFrom(runs, roads, route.lat.length);
     // the driven curvature along it (IDEAS Q-04), per sample, for correcting the map's corners
@@ -496,7 +528,7 @@
     const match = await matchDrive(route, opts.fetch);
     const ids = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))].slice(0, MAX_LOOKUP_WAYS);
     if (!ids.length) return null;
-    const [ways, roads] = await Promise.all([fetchWays(ids, opts.fetch), lookupAll(ids, lookup)]);
+    const [ways, roads] = await Promise.all([fetchWays(ids, opts.fetch, { drive: route, match }), lookupAll(ids, lookup)]);
     return roads ? seriesFrom(locate({ drive: route, match, ways }), roads, route.lat.length) : null;
   }
   function summarize(runs, roads, total) {
@@ -560,6 +592,6 @@
     return Math.round(100 * (1 - Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30))));
   }
 
-  const api = { CAM_V, binFlow, bumpEvidence, binBump, bumpEvents, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { CAM_V, binFlow, bumpEvidence, binBump, bumpEvents, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, wayTiles, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);

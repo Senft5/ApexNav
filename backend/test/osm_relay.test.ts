@@ -188,6 +188,17 @@ describe("OSM relay (/api/ctx/osm)", () => {
       await DATA.delete("osm/v2/lines/78_-170.json"); resetLinesForTest();
     });
 
+    it("hands a drive's ways their whole geometry from the built tiles, leaving out a way it doesn't have", async () => {
+      await put();
+      const r = await api(null, "GET", "/api/ctx/ways?tiles=700_-1599,700_-1600,701_-1600&ids=7,8");
+      expect(r.status).toBe(200);
+      expect(await r.json()).toEqual({ ways: { "7": [[35, -80], [35.01, -80]] } });
+      expect((await api(null, "GET", "/api/ctx/ways?tiles=700_-1600")).status).toBe(400);
+      expect((await api(null, "GET", "/api/ctx/ways?tiles=700_-1600&ids=7x")).status).toBe(400);
+      expect((await api(null, "GET", "/api/ctx/ways?ids=7")).status).toBe(400);
+      await DATA.delete("osm/v2/140_-320.bin"); resetBuiltForTest();
+    });
+
     it("a tile its bundle leaves out (across the border) or with no bundle goes to Overpass", async () => {
       await put();
       const seen = stub(ok);
