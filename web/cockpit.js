@@ -4613,6 +4613,7 @@
       setTimeout(async () => {
         if (track !== t) return;                                        // another route (or none) by then
         if (net) await ApexGraphTiles.keepAlong(t.lat, t.lon).then((k) => { if (window.apexDebug) window.apexDebug.keptAlong = k; }).catch(() => {});
+        if (map && track === t && NATIVE_SHELL && ApexOfflineTiles.setCarAhead) ApexOfflineTiles.setCarAhead(t.lat, t.lon);   // the car's map too
         if (map && track === t) await ApexOfflineTiles.keepAhead({ lat: t.lat, lon: t.lon, styleUrl: MAP_STYLE })
           .then((k) => { if (window.apexDebug) window.apexDebug.mapAhead = k; }).catch(() => {});
       }, 5000);

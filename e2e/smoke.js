@@ -6600,6 +6600,8 @@ flow('drive posts: Drive it on a friend\'s post lays a route along their line, t
   const pts = Array.from({ length: 200 }, (_, i) => [35.3 + i * 0.001, -84.1 + Math.sin(i / 6) * 0.004]);
   const bobPost = { id: 'P1AAAAAAAAAAAAAA', handle: 'bob', photo_id: null, mine: false, crew: null, title: 'Cherohala Skyway', caption: '', driven_on: '2026-11-12',
     length_m: 22000, score: 812, roads: [], stages: [], line: enc(pts), created_at: new Date(Date.now() - 2 * 3600e3).toISOString().slice(0, 19).replace('T', ' '), kudos: 0, my_kudos: false, comments: 0 };
+  // a stage on the line (its ends kept by the server), and one whose ends the server dropped
+  bobPost.stages = [{ name: 'Skyway summit', score: 801, ends: [pts[40][0], pts[40][1], pts[120][0], pts[120][1]] }, { name: 'Tellico descent', score: null }];
   const noLine = { ...bobPost, id: 'P2AAAAAAAAAAAAAA', title: 'Short hop', line: null };
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
@@ -6625,6 +6627,20 @@ flow('drive posts: Drive it on a friend\'s post lays a route along their line, t
     && locs.every((l) => pts.some((p) => near(l, p))), 'the route goes through stops on bob\'s line, end to end: ' + JSON.stringify(locs.map((l) => [l.lat, l.lon])));
   const after = await page.evaluate(() => ({ name: apexDebug.track.name, toast: document.getElementById('toast').textContent, feed: !!document.querySelector('.feed-sheet'), view: document.body.dataset.view || '' }));
   check(after.name === 'Cherohala Skyway' && /Cherohala Skyway, @bob's line: [\d.]+ (mi|km)/.test(after.toast) && !after.feed, 'the route is named for the drive and says whose line: ' + JSON.stringify(after));
+  // a stage row with its ends is a key of its own: just that stretch of bob's line
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card .feed-stage', { timeout: 15000 });
+  const rows = await page.evaluate(() => [...document.querySelectorAll('#accountBody .feed-card')][0].querySelectorAll('.feed-stages > *').length
+    && [...[...document.querySelectorAll('#accountBody .feed-card')][0].querySelectorAll('.feed-stages > :not(small)')].map((r) => ({ tag: r.tagName, label: r.getAttribute('aria-label'), text: r.textContent })));
+  check(rows.length === 2 && rows[0].tag === 'BUTTON' && rows[0].label === 'Drive Skyway summit, @bob\'s Score 801' && rows[0].text === 'Skyway summit801' && rows[1].tag === 'DIV',
+    'the stage with its ends is a key, the other a plain row: ' + JSON.stringify(rows));
+  asked.length = 0;
+  await page.click('#accountBody .feed-card .feed-stage');
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.id === 'post_P1AAAAAAAAAAAAAA_s0', null, { timeout: 20000 });
+  const part = asked.find((l) => Array.isArray(l) && l.length > 2) || [];
+  check(part.length >= 3 && part.length <= 6 && near(part[0], pts[40]) && near(part[part.length - 1], pts[120]) && part.every((l) => pts.slice(40, 121).some((p) => near(l, p))),
+    'the stage is routed through its own stretch of the line: ' + JSON.stringify(part.map((l) => [l.lat, l.lon])));
+  check(await page.evaluate(() => apexDebug.track.name) === 'Skyway summit', 'named for the stage');
 });
 
 flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew with its ends cut; the Feed on People shows friends\' posts with kudos and comments one tap in (Worker stubbed, docs/SOCIAL.md 2.13)', async (page, base) => {
@@ -6721,7 +6737,7 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   await page.click('#endPost');
   await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Posted to friends');
   const one = JSON.parse(sent.filter((x) => x.p === '/api/posts').pop().b);
-  check(one.crew_id === null && one.score === 790 && one.title === 'Cherohala Skyway' && JSON.stringify(one.stages) === JSON.stringify([{ name: 'Tellico climb', score: null }]) && !(await page.$('.post-sheet')), 'one tap posts the drive to your friends, no sheet: ' + JSON.stringify({ ...one, line: one.line && one.line.length }));
+  check(one.crew_id === null && one.score === 790 && one.title === 'Cherohala Skyway' && JSON.stringify(one.stages) === JSON.stringify([{ name: 'Tellico climb', score: null, ends: [35.36226, -84.29, 35.37809, -84.29] }]) && !(await page.$('.post-sheet')), 'one tap posts the drive to your friends, no sheet: ' + JSON.stringify({ ...one, line: one.line && one.line.length }));
   await page.click('#toast .toast-key:text-is("Undo")');
   await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Post to friends' && !document.getElementById('endPost').disabled);
   check(sent.some((x) => x.m === 'DELETE' && x.p === '/api/posts/C2AAAAAAAAAAAAAA'), 'Undo takes the post back');
