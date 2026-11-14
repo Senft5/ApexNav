@@ -117,6 +117,28 @@ def test_provider_ev_without_key_and_petrol_from_cache_never_block():
     assert out["slow"] in ("partial", "unavailable") and out["ms"] < 3000
 
 
+def test_fuel_from_our_build_inside_the_region_overpass_only_outside():
+    """Inside the region the plan waits for our weekly build (GET /api/ctx/points, cell ids only) and plans with it at once;
+    only a tile it doesn't cover goes to Overpass, in the background as before; the server down changes nothing."""
+    js = """(async () => {
+      const t = corridor(40), keys = C.tilesOf([t]), asked = [], over = [];
+      const cells = Object.fromEntries(keys.map((k) => [k, { fuel: k === keys[0] ? [[at(5).lat, at(5).lon]] : [], schools: [], worship: [] }]));
+      const apiGet = async (p) => { asked.push(p); return { cells }; };
+      const fetch = async (u, init) => { over.push(init.body); return { ok: true, status: 200, json: async () => ({ elements: [] }) }; };
+      const all = await C.provider.fetch([t], { car: { fuel: 'petrol', range_km: 600 }, storage: mem(), apiGet, fetch });
+      await new Promise((r) => setTimeout(r, 50)); const overAll = over.length;
+      const half = { ...cells }; half[keys[keys.length - 1]] = null;
+      const st2 = mem(), part = await C.provider.fetch([corridor(40, 'c2')], { car: { fuel: 'petrol', range_km: 600 }, storage: st2, apiGet: async () => ({ cells: half }), fetch });
+      await new Promise((r) => setTimeout(r, 50));
+      const left = decodeURIComponent(over[over.length - 1] || '');
+      return { keys: keys.length, asked: asked[0], all: [all.c1.status, overAll === 0 || 'overpass asked'], part: part.c2.status,
+               overOnce: new Set(over).size, leftHasLast: keys.length > 1 && left.includes(C.fuelQuery([keys[keys.length - 1]]).split('(')[2].split(')')[0]),
+               leftHasFirst: left.includes(C.fuelQuery([keys[0]]).split('(')[2].split(')')[0]) };
+    })()"""
+    out = run(js)
+    assert out["asked"].startswith("/api/ctx/points?cells=") and out["keys"] >= 1
+    assert out["all"] == ["ok", True]                                 # every tile ours: no Overpass at all
+    assert out["overOnce"] == 1 and out["leftHasLast"] and not out["leftHasFirst"]
 def test_chargers_through_the_apps_api_which_answers_json():
     """The app's apiGet (cockpit.js routeCtxOpts) answers the parsed JSON or null, never a Response: chargers came back
     unknown on every plan because car.js read it as a Response. Both shapes work; null is unknown, never "no chargers"."""

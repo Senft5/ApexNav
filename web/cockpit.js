@@ -630,6 +630,17 @@
       }
       src.setData(fc || emptyFC());
       if (window.apexDebug) window.apexDebug.turnArrow = fc ? { step: i, m: st.m } : null;
+      carArrow(show ? st : null, show ? `${track.id}:${i}` : '');
+    }
+    // The car's map has the same arrow (CarPlay/ApexCarMap.swift, web/carmap.js), sized in metres for its street zoom; sent
+    // when the turn changes, empty for none.
+    const CAR_ARROW = { before: 70, after: 45, head: 22, halfW: 16 };
+    let carArrowKey = null;
+    function carArrow(st, key) {
+      if (key === carArrowKey || !window.ApexCarPlay || !ApexCarPlay.arrowMessage) return;
+      carArrowKey = key;
+      if (!driveActive && key) return;
+      carPost(ApexCarPlay.arrowMessage(st ? ApexTurnArrow.arrow(track, st, CAR_ARROW) : null));
     }
     // the kinds of place drawn (OpenMapTiles poi classes): what a driver stops for
     const PLACE_CLASSES = ['restaurant', 'fast_food', 'cafe', 'bar', 'beer', 'ice_cream', 'bakery', 'fuel', 'grocery', 'lodging', 'car', 'attraction', 'museum'];

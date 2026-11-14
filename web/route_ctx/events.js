@@ -17,7 +17,8 @@
 //    Louisville (data.louisvilleky.gov) "Right of Way Permits (Historical)", last updated 2024; Lexington (data.lexingtonky.gov)
 //    none. Closures that do get published reach us as WZDx work zones (hazards_live.js).
 //  - Places of worship and schools: OpenStreetMap (ODbL), from the OSM provider via opts.places.worship / opts.places.schools
-//    ([{lat, lon, name?}]), else one Overpass query per 0.25° tile (kept 30 days), the public servers raced (web/cameras.js).
+//    ([{lat, lon, name?}]), else our weekly build's 0.25° cells (GET /api/ctx/points, Ohio, Kentucky and Indiana, since
+//    2026-11-14), else one Overpass query per 0.25° tile left (kept 30 days), the public servers raced (web/cameras.js).
 //  - Bell times and calendars (heuristic, labelled as such): NCES National Teacher and Principal Survey 2017-18 (average public
 //    high school start 8:00 a.m.; elementary later, ~8:30-9:00) and state school-year law/practice: OH, IN, KY, TN, WV start
 //    early-to-mid August; NC (G.S. 115C-84.2: the Monday nearest Aug 26) and VA late August; all end late May / early June.
@@ -189,8 +190,17 @@
     return out;
   }
   async function loadPlaces(corridors, e) {
-    const tiles = U.cellsAlong(corridors, TILE, 0.005, 4), have = { schools: [], worship: [] }, missing = [];
+    const tiles = U.cellsAlong(corridors, TILE, 0.005, 4), have = { schools: [], worship: [] };
+    let missing = [];
     for (const k of tiles) { const c = U.cacheGet(e.storage, 'pl.' + k, PLACE_TTL, e.now); if (c) { have.schools.push(...c.schools); have.worship.push(...c.worship); } else missing.push(k); }
+    if (!missing.length) return have;
+    // our weekly build first (Ohio, Kentucky, Indiana; U.builtPoints): only the cells it doesn't cover go to Overpass
+    const ours = await U.builtPoints(e.apiGet, missing);
+    for (const [k, c] of ours) {
+      const v = { schools: c.schools, worship: c.worship };
+      U.cachePut(e.storage, 'pl.' + k, v, e.now); have.schools.push(...v.schools); have.worship.push(...v.worship);
+    }
+    missing = missing.filter((k) => !ours.has(k));
     if (!missing.length) return have;
     if (missing.length > 24) return null;                                    // a cross-state plan: leave it to the OSM provider
     const body = 'data=' + encodeURIComponent(placesQuery(missing));
@@ -282,7 +292,7 @@
       return ev.filter(inBox);
     })());
     const placesIn = opts.places && (opts.places.schools || opts.places.worship) ? { schools: opts.places.schools || null, worship: opts.places.worship || null } : null;
-    jobs.push(placesIn ? Promise.resolve(placesIn) : loadPlaces(corridors, e).catch(() => null));
+    jobs.push(placesIn ? Promise.resolve(placesIn) : loadPlaces(corridors, { ...e, apiGet: opts.apiGet }).catch(() => null));
     const [mlb, sg, places] = await Promise.all(jobs);
     const events = mlb === null && !sg ? null : dedupe([...(mlb || []), ...(sg || [])]);
     return { events, places, noKey: !sgKey, mlbFailed: mlb === null };

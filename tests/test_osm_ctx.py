@@ -109,7 +109,7 @@ def test_kept_in_step_with_the_relay():
     drivable = re.search(r'export const DRIVABLE = "(.+?)";', src).group(1)
     assert drivable == B.DRIVABLE.pattern
     assert "export const BUNDLE = 5," in src and B.BUNDLE == 5 and B.TILE == 0.05
-    assert 'osm\\/v2\\/(index\\.json|falls\\.json|closures\\.json|-?\\d{1,4}_-?\\d{1,4}\\.bin|places\\/-?\\d{1,4}_-?\\d{1,4}\\.json)' in open(os.path.join(ROOT, "backend", "src", "data_store.ts")).read()
+    assert 'osm\\/v2\\/(index\\.json|falls\\.json|closures\\.json|-?\\d{1,4}_-?\\d{1,4}\\.bin|(places|points)\\/-?\\d{1,4}_-?\\d{1,4}\\.json)' in open(os.path.join(ROOT, "backend", "src", "data_store.ts")).read()
     assert f"HEAD = {B.HEAD}," in src and 'BUILT = "osm/v2"' in src
 
 
@@ -190,3 +190,23 @@ def test_the_regions_places_with_hours(tmp_path):
     assert [(n, t) for _, _, n, t in got] == [("Bean", {"opening_hours": "Mo-Fr 07:00-15:00", "phone": "+1 513 555 0100"}), ("Garage Diner", {"website": "diner.example"})]
     by = F.places_by_cell(got, [[156, -339], [156, -338]])
     assert [len(by[(156, -339)]), len(by[(156, -338)])] == [2, 0]
+
+
+def test_the_regions_fuel_schools_and_worship_points(tmp_path):
+    """tools/osm_ctx/region.py points: fuel stations (route_ctx/car.js), schools and places of worship (route_ctx/events.js)
+    as positions only, a node or a way's centre, one file per covered cell with every list, empty ones too."""
+    from tools.osm_ctx import region as F
+    assert "amenity=fuel,school,place_of_worship" in open(os.path.join(ROOT, ".github", "workflows", "osm-ctx.yml")).read()
+    la = 39.12
+    nodes = {1: (la, -84.54, {"amenity": "fuel", "name": "Gas"}), 2: (la, -84.53, {"amenity": "place_of_worship"}),
+             3: (la, -84.52, {"amenity": "cafe"}),                                   # not a point we keep
+             4: (la + 0.01, -84.54, {}), 5: (la + 0.01, -84.53, {}), 6: (la + 0.02, -84.53, {})}
+    ways = {30: ([4, 5, 6], {"amenity": "school", "name": "Elm Elementary"}), 31: ([4, 5], {"amenity": "fuel"})}
+    p = tmp_path / "p.osm.pbf"
+    write_osm(p, nodes, ways)
+    got = F.read_points([str(p)])
+    assert sorted(k for k, _, _ in got) == ["fuel", "fuel", "schools", "worship"]
+    assert ("schools", 39.13333, -84.53333) in got and all(len(x) == 3 for x in got)
+    by = F.points_by_cell(got, [[156, -339], [156, -338]])
+    assert [len(by[(156, -339)]["fuel"]), len(by[(156, -339)]["schools"]), len(by[(156, -339)]["worship"])] == [2, 1, 1]
+    assert by[(156, -338)] == {"fuel": [], "schools": [], "worship": []}
