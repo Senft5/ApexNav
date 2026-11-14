@@ -262,12 +262,15 @@ const b = fs.readFileSync(ROOT + '/web/data/graph/v1/381_516.vgr');
 const v = R.view([T.decode(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength))]);
 let real = null;
 for (let e = 0; e < v.len.length && !real; e++) {
-  if (v.cls[e] !== 3 || !(v.flags[e] & v.bits.speedEst) || v.len[e] < 800) continue;
+  // a long secondary edge, scored as if unsigned (rec has no speed_limit_kph): every one the inventory covers here has an
+  // OSM sign too, and the four the tile estimates have no inventory (2026-11-14), so the edge is picked by its estimate
+  if (v.cls[e] !== 3 || v.len[e] < 800) continue;
   const g = R.geom(v, e), c = []; for (let i = 0; i + 1 < g.length; i += 2) c.push([g[i + 1], g[i]]);
   const cor = Ctx.corridor('t', c, { departAt: Date.UTC(2026, 5, 10, 16) }); if (!cor) continue;
   const lim = Grid.sampleCorridor(grid, cor).channels.hpms_speed_limit, vals = [...new Set([...lim].filter(Number.isFinite))];
-  if (vals.length !== 1 || [...lim].filter(Number.isFinite).length < 0.9 * lim.length || Math.abs(vals[0] * 1.609344 - v.speed[e]) < 12) continue;
+  if (vals.length !== 1 || [...lim].filter(Number.isFinite).length < 0.9 * lim.length) continue;
   const rec = { k: 0, c, ch: { road_class: 3, road_use: 0 }, smp: {} };
+  if (Math.abs(vals[0] * 1.609344 - S.score(rec, { dem: null, grid: new Map() }).v) < 12) continue;
   real = { mph: vals[0], tileKph: v.speed[e], withGrid: S.score(rec, { dem: null, grid }), without: S.score(rec, { dem: null, grid: new Map() }),
     ramp: S.score({ ...rec, ch: { road_class: 3, road_use: 1 } }, { dem: null, grid }), signed: S.score({ ...rec, ch: { road_class: 3, road_use: 0, speed_limit_kph: 72 } }, { dem: null, grid }) };
 }
