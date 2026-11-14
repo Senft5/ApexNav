@@ -24,6 +24,22 @@
     return out.filter((p) => { const k = norm(p.label); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, max);
   }
 
+  /**
+   * With no signal (IDEAS F-02): towns and places from the map tiles kept on the phone ({ name, lat, lon, kind }) whose name
+   * holds every word typed, one row per name within 1 km (the nearest), nearest `near` first: [{ label, lat, lon, kind, km }].
+   */
+  function mapMatches(q, feats, near, max = 5) {
+    const words = norm(q).split(' ').filter(Boolean);
+    if (!words.length || norm(q).length < 2 || !near || !Number.isFinite(near.lat) || !Number.isFinite(near.lon)) return [];
+    const cos = Math.cos(near.lat * Math.PI / 180), km = (a, b) => Math.hypot((a.lat - b.lat) * 111.2, (a.lon - b.lon) * 111.32 * cos);
+    const hits = (feats || []).filter((f) => f && f.name && Number.isFinite(f.lat) && Number.isFinite(f.lon) && words.every((w) => norm(f.name).includes(w)))
+      .map((f) => ({ label: f.name, lat: f.lat, lon: f.lon, kind: f.kind || '', km: km(f, near) }))
+      .sort((a, b) => a.km - b.km);
+    const out = [];
+    for (const h of hits) if (!out.some((o) => norm(o.label) === norm(h.label) && km(o, h) < 1)) out.push(h);
+    return out.slice(0, max);
+  }
+
   /** Map search features you can drive to: not a cycleway, path, footway... (Photon's osm_key/osm_value). */
   const drivable = (feature) => {
     const p = (feature && feature.properties) || {};
@@ -40,6 +56,6 @@
     return kept.slice(0, 2).join(', ');
   }
 
-  const api = { localMatches, drivable, norm, shortAddress };
+  const api = { localMatches, mapMatches, drivable, norm, shortAddress };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexPlaceSearch = api;
 })(typeof window !== 'undefined' ? window : globalThis);

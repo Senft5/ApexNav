@@ -3551,7 +3551,12 @@
       if (m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]), label: `Pin ${parseFloat(m[1]).toFixed(3)}, ${parseFloat(m[2]).toFixed(3)}` };
       let items;
       try { items = await RouteLoading.json(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`, {}, 10000); }
-      catch (_) { throw new Error('Search is offline. Tap the map instead.'); }
+      catch (_) {
+        // no signal: the nearest match on the map kept on the phone (mapSuggest), else the map is the way
+        const kept = await mapSuggest(q).catch(() => []);
+        if (kept.length) return { lat: kept[0].lat, lon: kept[0].lon, label: kept[0].label };
+        throw new Error('Search is offline. Tap the map instead.');
+      }
       if (!items.length) throw new Error(`No match for "${q}"`);
       return { lat: parseFloat(items[0].lat), lon: parseFloat(items[0].lon), label: items[0].display_name.split(',')[0] };
     }
@@ -5627,6 +5632,27 @@
     // Nominatim forbids it, and stays for the final geocode). Offline: no list; typing and Go still work.
     // Near first: Photon's lat/lon is only a soft bias (it happily returns Malaysia), so ask inside a box about 150 km
     // around you (the phone's position, else the map's centre); only when nothing is there, ask everywhere. Nearest first.
+    // No signal (IDEAS F-02): towns within about 25 km and places within about 4 km, from the map tiles kept on the phone
+    // (a saved area or route, or tiles the map showed lately; stages.js reads them offline). A tile that isn't kept is
+    // simply not searched; nothing leaves the phone.
+    const KEPT_KIND = { city: 'City', town: 'Town', village: 'Village' };
+    async function mapSuggest(q) {
+      if (!window.ApexStages || !ApexStages.places || !ApexStages.poisAll) return [];
+      const c0 = map.getCenter(), near = state.lastPosition || { lat: c0.lat, lon: c0.lng };
+      const grid = (radiusKm, stepKm) => {
+        const out = [], dLat = stepKm / 110.54, dLon = stepKm / (111.32 * Math.cos(near.lat * Math.PI / 180)), n = Math.round(radiusKm / stepKm);
+        for (let i = -n; i <= n; i++) for (let j = -n; j <= n; j++) if (Math.hypot(i, j) * stepKm <= radiusKm + stepKm / 2) out.push({ lat: near.lat + i * dLat, lon: near.lon + j * dLon });
+        return out;
+      };
+      const settled = async (pts, f) => (await Promise.allSettled(pts.map((p) => f([p])))).flatMap((r) => (r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : []));
+      // a weak signal (a tile not kept, asked of the network) gets 6 s; kept tiles answer at once
+      const got = await Promise.race([Promise.all([settled(grid(24, 8), ApexStages.places), settled(grid(4, 1.5), ApexStages.poisAll)]), new Promise((r) => setTimeout(() => r(null), 6000))]);
+      if (!got) return [];
+      const [towns, spots] = got;
+      const word = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ') : '');
+      return ApexPlaceSearch.mapMatches(q, [...towns.map((t) => ({ name: t.name, lat: t.lat, lon: t.lon, kind: KEPT_KIND[t.cls] || 'Place' })),
+        ...spots.map((p) => ({ name: p.name, lat: p.lat, lon: p.lon, kind: word(p.sub || p.cls) || 'Place' }))], near, 5);
+    }
     async function photonSuggest(q) {
       const c0 = map.getCenter(), near = state.lastPosition || { lat: c0.lat, lon: c0.lng };
       const ask = async (extra) => (await RouteLoading.json(`https://photon.komoot.io/api/?limit=10&lang=en&q=${encodeURIComponent(q)}`
@@ -5822,7 +5848,11 @@
         let done;
         placesAsk = { q, p: new Promise((r) => { done = r; }) };
         try {
-          try { rows = (IN_APP_SHELL && await appleSuggest(q)) || await photonSuggest(q); } catch (_) { rows = []; if (!mine.length) empty = (navigator.onLine === false ? 'No suggestions offline.' : 'Suggestions didn\'t load.') + ' Press Search to try.'; }
+          try { rows = (IN_APP_SHELL && await appleSuggest(q)) || await photonSuggest(q); } catch (_) {
+            // no signal: the map kept on the phone has the towns and places round you (mapSuggest)
+            rows = navigator.onLine === false ? await mapSuggest(q).catch(() => []) : [];
+            if (!mine.length && !rows.length) empty = navigator.onLine === false ? 'No signal, and no match on the map kept on this phone.' : 'Suggestions didn\'t load. Press Search to try.';
+          }
           if (seq !== suggestSeq) return;                                // a newer keystroke won
           rows = [...mine, ...rows.filter((r) => !mine.some((m) => ApexPlaceSearch.norm(m.label) === ApexPlaceSearch.norm(r.label)))];
           if (!rows.length && !empty) empty = 'No matches nearby. Press Search to look everywhere.';
