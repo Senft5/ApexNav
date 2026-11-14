@@ -570,11 +570,23 @@
       driving.pending = key;
       ApexAnalysis.job('profile', { plan }).then((r) => {
         if (driving.pending !== key) return;                             // the library changed meanwhile: a newer run answers
+        syncDna(r.profile || null);
         driving.key = key; driving.pending = null; driving.p = r.profile || null; driving.pr = r.practice || null; driving.best = r.best || null; driving.records = r.records || null;
         renderRecords();                                                  // records by kind of corner come from the same kept observations
         if (plan && driving.pr) ApexDriverProfile.savePlan(localStorage, { ...plan, before: driving.pr.before });
         driving.wait.forEach((f) => f(driving.p, driving.pr));
       }).catch(() => { if (driving.pending === key) driving.pending = null; });
+    }
+    // Your driving DNA to your friends (dna_card.js wireOf, PUT /api/me/dna): members, sent when it changed since last sent
+    async function syncDna(p) {
+      const wire = window.ApexDnaCard ? ApexDnaCard.wireOf(ApexDnaCard.dnaModel(p)) : null, body = wire && JSON.stringify(wire);
+      if (!body || !window.ApexSync) return;
+      try { if (localStorage.getItem('vetta.dnaSent') === body) return; } catch (_) {}
+      try {
+        if (!(await ApexSync.member())) return;
+        const r = await ApexSync.apiFetch('/api/me/dna', { method: 'PUT', headers: { 'content-type': 'application/json' }, body });
+        if (r && r.ok) localStorage.setItem('vetta.dnaSent', body);
+      } catch (_) {}
     }
     function renderDrivingCard() {
       const card = $('drivingCard'); if (!card) return;
