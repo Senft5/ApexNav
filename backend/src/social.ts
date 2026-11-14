@@ -87,6 +87,24 @@ export async function friendSuggestions(env: Env, v: Viewer) {
   return rows.map((r) => ({ handle: r.handle, photo_id: r.photo_id, crew: r.crew, mutual: r.mutual }));
 }
 
+/** GET /api/users/search?q=: members whose handle starts with q (2 to 20 of a-z, 0-9, _), the exact one first, then your
+ *  friends, eight at most, each with where you stand ('friend', 'sent', 'asked' or null). Handles are seen by any member
+ *  already; never you, someone blocked either way, or someone three reports hid. */
+export async function userSearch(env: Env, v: Viewer, url: URL) {
+  const q = (url.searchParams.get("q") || "").trim().replace(/^@/, "").toLowerCase();
+  if (!/^[a-z0-9_]{2,20}$/.test(q)) return [];
+  const rows = await all<{ handle: string; photo_id: string | null; status: string | null; by_me: number }>(env,
+    `SELECT u.handle, u.photo_id, f.status, f.requested_by = ?1 AS by_me
+       FROM users u JOIN members mb ON mb.user_id = u.id
+       LEFT JOIN friendships f ON f.user_a = MIN(u.id, ?1) AND f.user_b = MAX(u.id, ?1)
+      WHERE u.handle LIKE ?2 ESCAPE '\\' AND u.id != ?1
+        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = u.id) OR (b.blocker = u.id AND b.blocked = ?1))
+        AND NOT ${reportedSql("user", "u.id")}
+      ORDER BY u.handle = ?3 DESC, COALESCE(f.status = 'accepted', 0) DESC, u.handle LIMIT 8`, v.id, `${q.replace(/_/g, "\\_")}%`, q);
+  return rows.map((r) => ({ handle: r.handle, photo_id: r.photo_id,
+    you: r.status === "accepted" ? "friend" : r.status === "pending" ? (r.by_me ? "sent" : "asked") : null }));
+}
+
 /** Cancel a request you sent, by handle. Answers the same whether or not there was one (or such a member). */
 export async function friendRequestCancel(env: Env, v: Viewer, req: Request): Promise<void> {
   const { handle } = await body<{ handle?: string }>(req);

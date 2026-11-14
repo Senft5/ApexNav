@@ -22,3 +22,19 @@ describe("people you may know", () => {
     expect((await api(null, "GET", "/api/friends/suggested")).status).toBe(401);
   });
 });
+
+describe("find people by handle", () => {
+  it("handles starting with what you type, the exact one first then friends, with where you stand; never you or someone blocked", async () => {
+    const [a] = await Promise.all(["sam", "samuel", "sam_r", "samx", "salt", "samuel2", "sam_r2", "samx2"].map((h) => makeUser(h)));
+    const me = await makeUser("me_too");
+    await befriend(me, a);                                                   // sam is a friend
+    await ok(api(me, "POST", "/api/friends/request", { handle: "samx" }));  // a request sent
+    const q = async (s: string) => (await json(api(me, "GET", `/api/users/search?q=${encodeURIComponent(s)}`))).map((r: any) => [r.handle, r.you]);
+    expect(await q("@Sam")).toEqual([["sam", "friend"], ["sam_r", null], ["sam_r2", null], ["samuel", null], ["samuel2", null], ["samx", "sent"], ["samx2", null]]);
+    expect(await q("sam_")).toEqual([["sam_r", null], ["sam_r2", null]]);  // "_" is a letter here, not a wildcard
+    expect(await q("s")).toEqual([]);                                         // two characters at least
+    expect(await q("me")).toEqual([]);                                        // never you
+    await ok(api(a, "POST", "/api/blocks", { handle: "me_too" }));
+    expect((await q("sam")).map((r: any[]) => r[0])).not.toContain("sam");
+  });
+});
