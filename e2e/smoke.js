@@ -6627,6 +6627,12 @@ flow('drive posts: Drive it on a friend\'s post lays a route along their line, t
     return b ? { label: b.getAttribute('aria-label'), text: b.textContent, h: Math.round(b.getBoundingClientRect().height) } : null; }));
   check(keys.length === 2 && keys[0] && keys[0].label === 'Drive @bob\'s Cherohala Skyway' && keys[0].text === 'Drive it' && keys[0].h >= 40 && keys[1] === null,
     'Drive it on a post with a line, none on one without: ' + JSON.stringify(keys));
+  // on its side (a phone in a landscape mount), the line stays at most half the screen's height (2026-11-14: it filled it)
+  const vp = page.viewportSize();
+  await page.setViewportSize({ width: 844, height: 390 });
+  const side = await page.evaluate(() => { const r = document.querySelector('#accountBody .feed-card .feed-line').getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), vh: innerHeight }; });
+  check(side.h <= side.vh / 2 + 1 && side.w >= 2 * side.h - 2, 'a post\'s line on a phone on its side is half the screen at most, its shape kept: ' + JSON.stringify(side));
+  await page.setViewportSize(vp);
   await page.click('#accountBody .feed-card .feed-drive');
   await page.waitForFunction(() => window.apexDebug && apexDebug.track && apexDebug.track.id === 'post_P1AAAAAAAAAAAAAA', null, { timeout: 20000 });
   const locs = asked.find((l) => Array.isArray(l) && l.length > 2) || [];
@@ -10504,8 +10510,20 @@ flow('find nearby: Where to? has Gas, Coffee and Food; a key, or "gas near me" t
     const els = [...q.matchAll(/around:60,(-?[\d.]+),(-?[\d.]+)\)\["name"="([^"]+)"\]/g)].filter((m) => m[3] === 'Bean There Coffee')
       .map((m, i) => ({ type: 'node', id: i + 1, lat: +m[1], lon: +m[2], tags: { name: m[3], opening_hours: '24/7' } }));
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: els }) }); });
+  // and a street photo of each beside its name (place_photo.js): the small one, of the photo facing it
+  await page.route('**/api/ctx/keys', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ keys: { mapillaryToken: 'MLY|test' } }) }));
+  await page.route('https://graph.mapillary.com/**', (route) => { const b = new URL(route.request().url()).searchParams.get('bbox').split(',').map(Number), lon = (b[0] + b[2]) / 2, lat = (b[1] + b[3]) / 2;
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [{ id: '8', thumb_1024_url: 'https://scontent.test.fbcdn.net/big.jpg', thumb_256_url: 'https://scontent.test.fbcdn.net/small.jpg',
+      computed_compass_angle: 0, captured_at: Date.UTC(2024, 0, 1), computed_geometry: { coordinates: [lon, lat - 30 / 111320] }, creator: { username: 'roadie' } }] }) }); });
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+  await page.route('https://scontent.test.fbcdn.net/**', (route) => route.fulfill({ contentType: 'image/png', body: PNG }));
   await tap('#nearbyKeys .chip:nth-child(2)', 'Coffee');
   await page.waitForFunction(() => document.querySelectorAll('#placeList .place').length >= 2, null, { timeout: 5000 });
+  await page.waitForFunction(() => document.querySelectorAll('#placeList .place.has-thumb').length === 2, null, { timeout: 5000 })
+    .catch(async () => { throw new Error('no photos in the list: ' + await page.evaluate(() => document.getElementById('placeList').innerHTML)); });
+  const thumb = await page.evaluate(() => { const b = document.querySelector('#placeList .place'), img = b.querySelector('.place-thumb'), r = img.getBoundingClientRect(), n = b.querySelector('b').getBoundingClientRect();
+    return { src: img.getAttribute('src'), left: r.right <= n.left, size: [Math.round(r.width), Math.round(r.height)], row: Math.round(b.getBoundingClientRect().height) }; });
+  check(thumb.src === 'https://scontent.test.fbcdn.net/small.jpg' && thumb.left && thumb.size.join() === '48,48' && thumb.row <= 72, 'each row has its small street photo left of its name: ' + JSON.stringify(thumb));
   await page.waitForFunction(() => { const s = document.querySelector('#placeList .place small'); return s && s.textContent === 'Open 24 hours'; }, null, { timeout: 5000 })
     .catch(async () => { throw new Error('the café says it is open: ' + JSON.stringify({ overpass, list: await page.textContent('#placeList') })); });
   check(new Set(overpass).size === 1 && !/no name/.test(overpass[0]), 'one query for the list (raced over the servers, as cameras.js), named places only: ' + JSON.stringify(overpass));
