@@ -334,13 +334,13 @@ def test_a_long_descent_is_said_once_near_its_top_and_never_off_its_road():
     assert r["far"] is None and r["near"] == 2000 and r["down"] == 2000      # 500 m ahead of the top to 300 m down it
     assert r["deep"] is None and r["none"] is None and r["noList"] is None
     assert r["again"] is None and r["second"] == 12000                         # once each
-    assert r["text"] == "Long descent ahead: 3.7 miles at 8 percent. A lower gear saves the brakes."
+    assert r["text"] == "Long descent ahead. A lower gear saves the brakes."   # one clip in every pack
     assert r["bad"] is None
 
 
 def test_the_cockpit_says_the_descent_through_the_quiet_slot_on_the_planned_route_only():
     src = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
     assert "if (live && !offRoute && !brakeSay && track === plannedRoute && Array.isArray(track.descents)" in src
-    assert "ApexBrakeHeat.descentCall(d, ApexUnits.spokenShort)" in src
+    assert "ApexBrakeHeat.descentCall(d)" in src
     i = src.index("ApexBrakeHeat.descentAhead(track.descents"); j = src.index("const quiet = limitSay || briefSay || cornersSay || alongSay || brakeSay || sunSay || breakSay || flowSay;")
     assert i < j                                                               # queued before the gate reads the slot

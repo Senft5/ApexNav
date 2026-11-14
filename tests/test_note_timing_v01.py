@@ -118,7 +118,7 @@ def test_the_guided_drive_plays_its_asides():
 def test_the_page_says_advice_in_the_call():
     html = cockpit_source()
     assert "const aside = voiced && !startCall ? packAside(call, e, ev, d, vMps, apexMps, reactS) : null;" in html
-    assert "chainedCall(e, ev, spirited || first, careRun.at(noteM(e), track.id), { vMps, advice })" in html
-    assert "aside: aside ? { ...aside, bare: call.bare } : null" in html
+    assert "chainedCall(e, ev, spirited || first, careRun.at(noteM(e), track.id), { vMps, advice, adviceToken })" in html
+    assert "aside: aside ? { ...aside, bare: call.bare, bareTokens: call.bareTokens } : null" in html
     # a call that waited past the advice's last start says the call alone
-    assert "queueCursor() > advice.dueByM) item = { ...item, text: advice.bare || item.text, aside: null };" in html
+    assert "queueCursor() > advice.dueByM) item = { ...item, text: advice.bare || item.text, aside: null, ...(item.chain ? {} : { tokens: advice.bareTokens || undefined }) };" in html

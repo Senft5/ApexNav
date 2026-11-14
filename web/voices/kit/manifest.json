@@ -4743,6 +4743,3730 @@
    "text": "Crest. Light hands.",
    "heard": 1.0,
    "voice": "bm_fable"
+  },
+  "mark:stop": {
+   "file": "mark_stop.m4a",
+   "dur": 0.802,
+   "text": "Stop sign",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "mark:level_crossing": {
+   "file": "mark_level_crossing.m4a",
+   "dur": 1.276,
+   "text": "Railway crossing",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "mark:one_lane_bridge": {
+   "file": "mark_one_lane_bridge.m4a",
+   "dur": 1.042,
+   "text": "One-lane bridge",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "mark:calming": {
+   "file": "mark_calming.m4a",
+   "dur": 0.938,
+   "text": "Speed bump",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "mark:calming_many": {
+   "file": "mark_calming_many.m4a",
+   "dur": 1.009,
+   "text": "Speed bumps",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "mark:deer": {
+   "file": "mark_deer.m4a",
+   "dur": 1.044,
+   "text": "Deer crossing",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "mark:horse": {
+   "file": "mark_horse.m4a",
+   "dur": 1.094,
+   "text": "Horse crossing",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "mark:cattle": {
+   "file": "mark_cattle.m4a",
+   "dur": 1.027,
+   "text": "Cattle crossing",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "mark:animal": {
+   "file": "mark_animal.m4a",
+   "dur": 1.14,
+   "text": "Animal crossing",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "mark:buggy": {
+   "file": "mark_buggy.m4a",
+   "dur": 1.219,
+   "text": "Horse-drawn buggies",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "mark:covered_bridge": {
+   "file": "mark_covered_bridge.m4a",
+   "dur": 1.022,
+   "text": "Covered bridge",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "mark:ford": {
+   "file": "mark_ford.m4a",
+   "dur": 1.105,
+   "text": "Water crossing",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "mark:unpaved": {
+   "file": "mark_unpaved.m4a",
+   "dur": 1.099,
+   "text": "Unpaved road",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "mark:rough": {
+   "file": "mark_rough.m4a",
+   "dur": 0.891,
+   "text": "Rough road",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:sun_ahead": {
+   "file": "line_sun_ahead.m4a",
+   "dur": 1.647,
+   "text": "Sun in your eyes ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:brakes_hot": {
+   "file": "line_brakes_hot.m4a",
+   "dur": 3.122,
+   "text": "Brakes are getting hot. Use a lower gear and ease off.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:descent": {
+   "file": "line_descent.m4a",
+   "dur": 3.248,
+   "text": "Long descent ahead. A lower gear saves the brakes.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "dot:crash": {
+   "file": "dot_crash.m4a",
+   "dur": 1.086,
+   "text": "Crash ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "dot:lane": {
+   "file": "dot_lane.m4a",
+   "dur": 1.572,
+   "text": "Lane closed ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "dot:ramp": {
+   "file": "dot_ramp.m4a",
+   "dur": 1.547,
+   "text": "Ramp closed ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "dot:closure": {
+   "file": "dot_closure.m4a",
+   "dur": 1.515,
+   "text": "Road closed ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "dot:roadwork": {
+   "file": "dot_roadwork.m4a",
+   "dur": 1.337,
+   "text": "Roadwork ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "dot:obstruction": {
+   "file": "dot_obstruction.m4a",
+   "dur": 1.439,
+   "text": "Obstruction ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "dot:slow": {
+   "file": "dot_slow.m4a",
+   "dur": 1.669,
+   "text": "Slow traffic ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "dot:stop_go": {
+   "file": "dot_stop_go.m4a",
+   "dur": 1.37,
+   "text": "Stop and go ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "dot:weather": {
+   "file": "dot_weather.m4a",
+   "dur": 1.043,
+   "text": "Weather ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "dot:alert": {
+   "file": "dot_alert.m4a",
+   "dur": 1.425,
+   "text": "Traffic alert ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "dot:closed_north": {
+   "file": "dot_closed_north.m4a",
+   "dur": 1.843,
+   "text": "Closed northbound ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "dot:closed_south": {
+   "file": "dot_closed_south.m4a",
+   "dur": 1.894,
+   "text": "Closed southbound ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "dot:closed_east": {
+   "file": "dot_closed_east.m4a",
+   "dur": 1.87,
+   "text": "Closed eastbound ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "dot:closed_west": {
+   "file": "dot_closed_west.m4a",
+   "dur": 1.891,
+   "text": "Closed westbound ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:10": {
+   "file": "lim_10.m4a",
+   "dur": 1.487,
+   "text": "Limit 10 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:15": {
+   "file": "lim_15.m4a",
+   "dur": 1.777,
+   "text": "Limit 15 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:20": {
+   "file": "lim_20.m4a",
+   "dur": 1.597,
+   "text": "Limit 20 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:25": {
+   "file": "lim_25.m4a",
+   "dur": 1.85,
+   "text": "Limit 25 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:30": {
+   "file": "lim_30.m4a",
+   "dur": 1.628,
+   "text": "Limit 30 ahead.",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "lim:35": {
+   "file": "lim_35.m4a",
+   "dur": 1.898,
+   "text": "Limit 35 ahead.",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "lim:40": {
+   "file": "lim_40.m4a",
+   "dur": 1.54,
+   "text": "Limit 40 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:45": {
+   "file": "lim_45.m4a",
+   "dur": 1.869,
+   "text": "Limit 45 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:50": {
+   "file": "lim_50.m4a",
+   "dur": 1.617,
+   "text": "Limit 50 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:55": {
+   "file": "lim_55.m4a",
+   "dur": 1.877,
+   "text": "Limit 55 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:60": {
+   "file": "lim_60.m4a",
+   "dur": 1.525,
+   "text": "Limit 60 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:65": {
+   "file": "lim_65.m4a",
+   "dur": 1.923,
+   "text": "Limit 65 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:70": {
+   "file": "lim_70.m4a",
+   "dur": 1.65,
+   "text": "Limit 70 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:75": {
+   "file": "lim_75.m4a",
+   "dur": 1.968,
+   "text": "Limit 75 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:80": {
+   "file": "lim_80.m4a",
+   "dur": 1.561,
+   "text": "Limit 80 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:85": {
+   "file": "lim_85.m4a",
+   "dur": 1.868,
+   "text": "Limit 85 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:90": {
+   "file": "lim_90.m4a",
+   "dur": 1.517,
+   "text": "Limit 90 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:95": {
+   "file": "lim_95.m4a",
+   "dur": 1.812,
+   "text": "Limit 95 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:100": {
+   "file": "lim_100.m4a",
+   "dur": 1.903,
+   "text": "Limit 100 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:105": {
+   "file": "lim_105.m4a",
+   "dur": 2.074,
+   "text": "Limit 105 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:110": {
+   "file": "lim_110.m4a",
+   "dur": 2.028,
+   "text": "Limit 110 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:115": {
+   "file": "lim_115.m4a",
+   "dur": 2.241,
+   "text": "Limit 115 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:120": {
+   "file": "lim_120.m4a",
+   "dur": 2.041,
+   "text": "Limit 120 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:125": {
+   "file": "lim_125.m4a",
+   "dur": 2.197,
+   "text": "Limit 125 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lim:130": {
+   "file": "lim_130.m4a",
+   "dur": 2.164,
+   "text": "Limit 130 ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "flow:5": {
+   "file": "flow_5.m4a",
+   "dur": 1.67,
+   "text": "Five clean in a row.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "flow:10": {
+   "file": "flow_10.m4a",
+   "dur": 1.567,
+   "text": "Ten clean in a row.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "flow:20": {
+   "file": "flow_20.m4a",
+   "dur": 1.664,
+   "text": "Twenty clean in a row.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "flow:30": {
+   "file": "flow_30.m4a",
+   "dur": 1.668,
+   "text": "Thirty clean in a row.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "flow:40": {
+   "file": "flow_40.m4a",
+   "dur": 1.688,
+   "text": "Forty clean in a row.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "flow:50": {
+   "file": "flow_50.m4a",
+   "dur": 1.735,
+   "text": "Fifty clean in a row.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "flow:60": {
+   "file": "flow_60.m4a",
+   "dur": 1.768,
+   "text": "Sixty clean in a row.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "flow:70": {
+   "file": "flow_70.m4a",
+   "dur": 1.812,
+   "text": "Seventy clean in a row.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "flow:80": {
+   "file": "flow_80.m4a",
+   "dur": 1.664,
+   "text": "Eighty clean in a row.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "flow:90": {
+   "file": "flow_90.m4a",
+   "dur": 1.723,
+   "text": "Ninety clean in a row.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:clean_best": {
+   "file": "frag_clean_best.m4a",
+   "dur": 2.376,
+   "text": "clean in a row, your best this month.",
+   "heard": 0.82,
+   "voice": "bm_fable"
+  },
+  "frag:miles_c": {
+   "file": "frag_miles_c.m4a",
+   "dur": 0.763,
+   "text": "miles,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:kilometres_c": {
+   "file": "frag_kilometres_c.m4a",
+   "dur": 0.968,
+   "text": "kilometres,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:corners_c": {
+   "file": "frag_corners_c.m4a",
+   "dur": 0.736,
+   "text": "corners,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:corners": {
+   "file": "frag_corners.m4a",
+   "dur": 0.803,
+   "text": "corners.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:hairpin": {
+   "file": "frag_hairpin.m4a",
+   "dur": 0.773,
+   "text": "hairpin.",
+   "heard": 0.0,
+   "voice": "bm_fable"
+  },
+  "frag:hairpins": {
+   "file": "frag_hairpins.m4a",
+   "dur": 0.924,
+   "text": "hairpins.",
+   "heard": 0.0,
+   "voice": "bm_fable"
+  },
+  "frag:twisty": {
+   "file": "frag_twisty.m4a",
+   "dur": 1.595,
+   "text": "Twisty section ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:half a mile": {
+   "file": "span_half_a_mile.m4a",
+   "dur": 1.07,
+   "text": "half a mile.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:three quarters of a mile": {
+   "file": "span_three_quarters_of_a_mile.m4a",
+   "dur": 1.723,
+   "text": "three quarters of a mile.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:a mile": {
+   "file": "span_a_mile.m4a",
+   "dur": 0.791,
+   "text": "a mile.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:one and a half miles": {
+   "file": "span_one_and_a_half_miles.m4a",
+   "dur": 1.672,
+   "text": "one and a half miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:two miles": {
+   "file": "span_two_miles.m4a",
+   "dur": 0.996,
+   "text": "two miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:two and a half miles": {
+   "file": "span_two_and_a_half_miles.m4a",
+   "dur": 1.696,
+   "text": "two and a half miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:three miles": {
+   "file": "span_three_miles.m4a",
+   "dur": 1.038,
+   "text": "three miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:three and a half miles": {
+   "file": "span_three_and_a_half_miles.m4a",
+   "dur": 1.772,
+   "text": "three and a half miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:four miles": {
+   "file": "span_four_miles.m4a",
+   "dur": 1.039,
+   "text": "four miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:four and a half miles": {
+   "file": "span_four_and_a_half_miles.m4a",
+   "dur": 1.771,
+   "text": "four and a half miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:five miles": {
+   "file": "span_five_miles.m4a",
+   "dur": 1.111,
+   "text": "five miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:five and a half miles": {
+   "file": "span_five_and_a_half_miles.m4a",
+   "dur": 1.841,
+   "text": "five and a half miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:six miles": {
+   "file": "span_six_miles.m4a",
+   "dur": 1.1,
+   "text": "six miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:six and a half miles": {
+   "file": "span_six_and_a_half_miles.m4a",
+   "dur": 1.861,
+   "text": "six and a half miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:seven miles": {
+   "file": "span_seven_miles.m4a",
+   "dur": 1.147,
+   "text": "seven miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:seven and a half miles": {
+   "file": "span_seven_and_a_half_miles.m4a",
+   "dur": 1.893,
+   "text": "seven and a half miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:eight miles": {
+   "file": "span_eight_miles.m4a",
+   "dur": 0.998,
+   "text": "eight miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:eight and a half miles": {
+   "file": "span_eight_and_a_half_miles.m4a",
+   "dur": 1.747,
+   "text": "eight and a half miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:nine miles": {
+   "file": "span_nine_miles.m4a",
+   "dur": 1.057,
+   "text": "nine miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:nine and a half miles": {
+   "file": "span_nine_and_a_half_miles.m4a",
+   "dur": 1.893,
+   "text": "nine and a half miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:ten miles": {
+   "file": "span_ten_miles.m4a",
+   "dur": 1.028,
+   "text": "ten miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:ten and a half miles": {
+   "file": "span_ten_and_a_half_miles.m4a",
+   "dur": 1.781,
+   "text": "ten and a half miles.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:eight hundred metres": {
+   "file": "span_eight_hundred_metres.m4a",
+   "dur": 1.61,
+   "text": "eight hundred metres.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:a kilometre": {
+   "file": "span_a_kilometre.m4a",
+   "dur": 1.103,
+   "text": "a kilometre.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:one and a half kilometres": {
+   "file": "span_one_and_a_half_kilometres.m4a",
+   "dur": 2.02,
+   "text": "one and a half kilometres.",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "span:two kilometres": {
+   "file": "span_two_kilometres.m4a",
+   "dur": 1.24,
+   "text": "two kilometres.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:two and a half kilometres": {
+   "file": "span_two_and_a_half_kilometres.m4a",
+   "dur": 1.986,
+   "text": "two and a half kilometres.",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "span:three kilometres": {
+   "file": "span_three_kilometres.m4a",
+   "dur": 1.494,
+   "text": "three kilometres.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:three and a half kilometres": {
+   "file": "span_three_and_a_half_kilometres.m4a",
+   "dur": 2.089,
+   "text": "three and a half kilometres.",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "span:four kilometres": {
+   "file": "span_four_kilometres.m4a",
+   "dur": 1.26,
+   "text": "four kilometres.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:four and a half kilometres": {
+   "file": "span_four_and_a_half_kilometres.m4a",
+   "dur": 2.044,
+   "text": "four and a half kilometres.",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "span:five kilometres": {
+   "file": "span_five_kilometres.m4a",
+   "dur": 1.493,
+   "text": "five kilometres.",
+   "heard": 0.5,
+   "voice": "bm_fable"
+  },
+  "span:five and a half kilometres": {
+   "file": "span_five_and_a_half_kilometres.m4a",
+   "dur": 2.111,
+   "text": "five and a half kilometres.",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "span:six kilometres": {
+   "file": "span_six_kilometres.m4a",
+   "dur": 1.308,
+   "text": "six kilometres.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:six and a half kilometres": {
+   "file": "span_six_and_a_half_kilometres.m4a",
+   "dur": 2.14,
+   "text": "six and a half kilometres.",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "span:seven kilometres": {
+   "file": "span_seven_kilometres.m4a",
+   "dur": 1.624,
+   "text": "seven kilometres.",
+   "heard": 0.5,
+   "voice": "bm_fable"
+  },
+  "span:seven and a half kilometres": {
+   "file": "span_seven_and_a_half_kilometres.m4a",
+   "dur": 2.183,
+   "text": "seven and a half kilometres.",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "span:eight kilometres": {
+   "file": "span_eight_kilometres.m4a",
+   "dur": 1.305,
+   "text": "eight kilometres.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:eight and a half kilometres": {
+   "file": "span_eight_and_a_half_kilometres.m4a",
+   "dur": 2.091,
+   "text": "eight and a half kilometres.",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "span:nine kilometres": {
+   "file": "span_nine_kilometres.m4a",
+   "dur": 1.511,
+   "text": "nine kilometres.",
+   "heard": 0.5,
+   "voice": "bm_fable"
+  },
+  "span:nine and a half kilometres": {
+   "file": "span_nine_and_a_half_kilometres.m4a",
+   "dur": 2.141,
+   "text": "nine and a half kilometres.",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "span:ten kilometres": {
+   "file": "span_ten_kilometres.m4a",
+   "dur": 1.292,
+   "text": "ten kilometres.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "span:ten and a half kilometres": {
+   "file": "span_ten_and_a_half_kilometres.m4a",
+   "dur": 2.092,
+   "text": "ten and a half kilometres.",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "pl:c1": {
+   "file": "pl_c1.m4a",
+   "dur": 0.737,
+   "text": "Careful",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:tc1": {
+   "file": "pl_tc1.m4a",
+   "dur": 1.024,
+   "text": "then careful",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c2": {
+   "file": "pl_c2.m4a",
+   "dur": 0.866,
+   "text": "Slow down",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:tc2": {
+   "file": "pl_tc2.m4a",
+   "dur": 1.198,
+   "text": "then slow down",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c3": {
+   "file": "pl_c3.m4a",
+   "dur": 1.172,
+   "text": "Slow right down",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:tc3": {
+   "file": "pl_tc3.m4a",
+   "dur": 1.499,
+   "text": "then slow right down",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c4": {
+   "file": "pl_c4.m4a",
+   "dur": 0.921,
+   "text": "Very slow",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:tc4": {
+   "file": "pl_tc4.m4a",
+   "dur": 1.123,
+   "text": "then very slow",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:tightL": {
+   "file": "pl_h_tightL.m4a",
+   "dur": 0.844,
+   "text": "Tight left",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:th:tightL": {
+   "file": "pl_th_tightL.m4a",
+   "dur": 1.088,
+   "text": "then tight left",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:tightR": {
+   "file": "pl_h_tightR.m4a",
+   "dur": 0.793,
+   "text": "Tight right",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:th:tightR": {
+   "file": "pl_th_tightR.m4a",
+   "dur": 1.066,
+   "text": "then tight right",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:mediumL": {
+   "file": "pl_h_mediumL.m4a",
+   "dur": 0.987,
+   "text": "Medium left",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:th:mediumL": {
+   "file": "pl_th_mediumL.m4a",
+   "dur": 1.194,
+   "text": "then medium left",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:mediumR": {
+   "file": "pl_h_mediumR.m4a",
+   "dur": 1.014,
+   "text": "Medium right",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:th:mediumR": {
+   "file": "pl_th_mediumR.m4a",
+   "dur": 1.164,
+   "text": "then medium right",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:openL": {
+   "file": "pl_h_openL.m4a",
+   "dur": 0.887,
+   "text": "Open left",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:th:openL": {
+   "file": "pl_th_openL.m4a",
+   "dur": 1.17,
+   "text": "then open left",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:openR": {
+   "file": "pl_h_openR.m4a",
+   "dur": 0.863,
+   "text": "Open right",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:th:openR": {
+   "file": "pl_th_openR.m4a",
+   "dur": 1.05,
+   "text": "then open right",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:easyL": {
+   "file": "pl_h_easyL.m4a",
+   "dur": 0.864,
+   "text": "Easy left",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:th:easyL": {
+   "file": "pl_th_easyL.m4a",
+   "dur": 1.159,
+   "text": "then easy left",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:easyR": {
+   "file": "pl_h_easyR.m4a",
+   "dur": 0.89,
+   "text": "Easy right",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:th:easyR": {
+   "file": "pl_th_easyR.m4a",
+   "dur": 1.14,
+   "text": "then easy right",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:slightL": {
+   "file": "pl_h_slightL.m4a",
+   "dur": 0.929,
+   "text": "Slight left",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:th:slightL": {
+   "file": "pl_th_slightL.m4a",
+   "dur": 1.221,
+   "text": "then slight left",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:slightR": {
+   "file": "pl_h_slightR.m4a",
+   "dur": 0.857,
+   "text": "Slight right",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:th:slightR": {
+   "file": "pl_th_slightR.m4a",
+   "dur": 1.188,
+   "text": "then slight right",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:hairpinL": {
+   "file": "pl_h_hairpinL.m4a",
+   "dur": 1.096,
+   "text": "Hairpin left",
+   "heard": 0.5,
+   "voice": "bm_fable"
+  },
+  "pl:th:hairpinL": {
+   "file": "pl_th_hairpinL.m4a",
+   "dur": 1.131,
+   "text": "then hairpin left",
+   "heard": 0.57,
+   "voice": "bm_fable"
+  },
+  "pl:h:hairpinR": {
+   "file": "pl_h_hairpinR.m4a",
+   "dur": 0.937,
+   "text": "Hairpin right",
+   "heard": 0.5,
+   "voice": "bm_fable"
+  },
+  "pl:th:hairpinR": {
+   "file": "pl_th_hairpinR.m4a",
+   "dur": 1.106,
+   "text": "then hairpin right",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "pl:h:squareL": {
+   "file": "pl_h_squareL.m4a",
+   "dur": 0.819,
+   "text": "Square left",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:th:squareL": {
+   "file": "pl_th_squareL.m4a",
+   "dur": 1.092,
+   "text": "then square left",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:squareR": {
+   "file": "pl_h_squareR.m4a",
+   "dur": 0.77,
+   "text": "Square right",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:th:squareR": {
+   "file": "pl_th_squareR.m4a",
+   "dur": 1.067,
+   "text": "then square right",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:m:tightens": {
+   "file": "pl_m_tightens.m4a",
+   "dur": 0.765,
+   "text": "tightens",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:m:opens": {
+   "file": "pl_m_opens.m4a",
+   "dur": 0.684,
+   "text": "opens",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:m:long": {
+   "file": "pl_m_long.m4a",
+   "dur": 0.616,
+   "text": "long",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:m:off-camber": {
+   "file": "pl_m_off_camber.m4a",
+   "dur": 0.979,
+   "text": "slopes away",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:m:over-crest": {
+   "file": "pl_m_over_crest.m4a",
+   "dur": 1.1,
+   "text": "over a crest",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:m:banked": {
+   "file": "pl_m_banked.m4a",
+   "dur": 0.651,
+   "text": "banked",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:m:short": {
+   "file": "pl_m_short.m4a",
+   "dur": 0.545,
+   "text": "short",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:then": {
+   "file": "pl_then.m4a",
+   "dur": 0.567,
+   "text": "then",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:50 feet": {
+   "file": "pl_in_50_feet.m4a",
+   "dur": 1.188,
+   "text": "in 50 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:100 feet": {
+   "file": "pl_in_100_feet.m4a",
+   "dur": 1.494,
+   "text": "in 100 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:150 feet": {
+   "file": "pl_in_150_feet.m4a",
+   "dur": 1.745,
+   "text": "in 150 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:200 feet": {
+   "file": "pl_in_200_feet.m4a",
+   "dur": 1.413,
+   "text": "in 200 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:250 feet": {
+   "file": "pl_in_250_feet.m4a",
+   "dur": 1.821,
+   "text": "in 250 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:300 feet": {
+   "file": "pl_in_300_feet.m4a",
+   "dur": 1.451,
+   "text": "in 300 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:350 feet": {
+   "file": "pl_in_350_feet.m4a",
+   "dur": 1.871,
+   "text": "in 350 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:400 feet": {
+   "file": "pl_in_400_feet.m4a",
+   "dur": 1.498,
+   "text": "in 400 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:450 feet": {
+   "file": "pl_in_450_feet.m4a",
+   "dur": 1.895,
+   "text": "in 450 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:500 feet": {
+   "file": "pl_in_500_feet.m4a",
+   "dur": 1.516,
+   "text": "in 500 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:550 feet": {
+   "file": "pl_in_550_feet.m4a",
+   "dur": 1.918,
+   "text": "in 550 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:600 feet": {
+   "file": "pl_in_600_feet.m4a",
+   "dur": 1.498,
+   "text": "in 600 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:650 feet": {
+   "file": "pl_in_650_feet.m4a",
+   "dur": 1.966,
+   "text": "in 650 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:700 feet": {
+   "file": "pl_in_700_feet.m4a",
+   "dur": 1.616,
+   "text": "in 700 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:750 feet": {
+   "file": "pl_in_750_feet.m4a",
+   "dur": 1.993,
+   "text": "in 750 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:800 feet": {
+   "file": "pl_in_800_feet.m4a",
+   "dur": 1.495,
+   "text": "in 800 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:850 feet": {
+   "file": "pl_in_850_feet.m4a",
+   "dur": 1.892,
+   "text": "in 850 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:900 feet": {
+   "file": "pl_in_900_feet.m4a",
+   "dur": 1.546,
+   "text": "in 900 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:950 feet": {
+   "file": "pl_in_950_feet.m4a",
+   "dur": 1.942,
+   "text": "in 950 feet",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c1+pl:h:tightL": {
+   "file": "p_ea6b9cd71978.m4a",
+   "dur": 1.688,
+   "text": "Careful, Tight left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c1+pl:h:tightR": {
+   "file": "p_ed5404b5f817.m4a",
+   "dur": 1.643,
+   "text": "Careful, Tight right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c1+pl:h:mediumL": {
+   "file": "p_6d43103212dd.m4a",
+   "dur": 1.675,
+   "text": "Careful, Medium left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c1+pl:h:mediumR": {
+   "file": "p_4521c1393944.m4a",
+   "dur": 1.727,
+   "text": "Careful, Medium right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c1+pl:h:openL": {
+   "file": "p_1a438f6bf092.m4a",
+   "dur": 1.718,
+   "text": "Careful, Open left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c1+pl:h:openR": {
+   "file": "p_3ba6eb45ce76.m4a",
+   "dur": 1.652,
+   "text": "Careful, Open right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c1+pl:h:easyL": {
+   "file": "p_cfafe17f5b36.m4a",
+   "dur": 1.514,
+   "text": "Careful, Easy left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c1+pl:h:easyR": {
+   "file": "p_21d93213a468.m4a",
+   "dur": 1.586,
+   "text": "Careful, Easy right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c1+pl:h:slightL": {
+   "file": "p_b1abf96a4839.m4a",
+   "dur": 1.744,
+   "text": "Careful, Slight left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c1+pl:h:slightR": {
+   "file": "p_66c6ec602962.m4a",
+   "dur": 1.718,
+   "text": "Careful, Slight right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c1+pl:h:hairpinL": {
+   "file": "p_7c719e99acfa.m4a",
+   "dur": 1.893,
+   "text": "Careful, Hairpin left.",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "pl:c1+pl:h:hairpinR": {
+   "file": "p_eddc1af093e2.m4a",
+   "dur": 1.719,
+   "text": "Careful, Hairpin right.",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "pl:c1+pl:h:squareL": {
+   "file": "p_2af8c9532224.m4a",
+   "dur": 1.669,
+   "text": "Careful, Square left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c1+pl:h:squareR": {
+   "file": "p_84f10c9fe99b.m4a",
+   "dur": 1.643,
+   "text": "Careful, Square right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c2+pl:h:tightL": {
+   "file": "p_810dc4b61acb.m4a",
+   "dur": 1.916,
+   "text": "Slow down, Tight left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c2+pl:h:tightR": {
+   "file": "p_be0b4335969d.m4a",
+   "dur": 1.841,
+   "text": "Slow down, Tight right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c2+pl:h:mediumL": {
+   "file": "p_e7a71217e871.m4a",
+   "dur": 1.938,
+   "text": "Slow down, Medium left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c2+pl:h:mediumR": {
+   "file": "p_c83f2e03cb5d.m4a",
+   "dur": 1.946,
+   "text": "Slow down, Medium right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c2+pl:h:openL": {
+   "file": "p_a21362ecde8a.m4a",
+   "dur": 1.889,
+   "text": "Slow down, Open left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c2+pl:h:openR": {
+   "file": "p_25ea21621982.m4a",
+   "dur": 1.864,
+   "text": "Slow down, Open right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c2+pl:h:easyL": {
+   "file": "p_fe7cfd85ca5c.m4a",
+   "dur": 1.864,
+   "text": "Slow down, Easy left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c2+pl:h:easyR": {
+   "file": "p_dfcde4d481b6.m4a",
+   "dur": 1.767,
+   "text": "Slow down, Easy right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c2+pl:h:slightL": {
+   "file": "p_1f4712d10b1a.m4a",
+   "dur": 1.995,
+   "text": "Slow down, Slight left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c2+pl:h:slightR": {
+   "file": "p_821967b7e631.m4a",
+   "dur": 1.914,
+   "text": "Slow down, Slight right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c2+pl:h:hairpinL": {
+   "file": "p_4e2479d63ea3.m4a",
+   "dur": 1.916,
+   "text": "Slow down, Hairpin left.",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "pl:c2+pl:h:hairpinR": {
+   "file": "p_74f96b0b3fd4.m4a",
+   "dur": 1.889,
+   "text": "Slow down, Hairpin right.",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "pl:c2+pl:h:squareL": {
+   "file": "p_126c56deef29.m4a",
+   "dur": 1.866,
+   "text": "Slow down, Square left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c2+pl:h:squareR": {
+   "file": "p_5e16feb72122.m4a",
+   "dur": 1.838,
+   "text": "Slow down, Square right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c3+pl:h:tightL": {
+   "file": "p_99584313951e.m4a",
+   "dur": 2.143,
+   "text": "Slow right down, Tight left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c3+pl:h:tightR": {
+   "file": "p_9a00bb0f1b1e.m4a",
+   "dur": 2.096,
+   "text": "Slow right down, Tight right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c3+pl:h:mediumL": {
+   "file": "p_711d09f4cbab.m4a",
+   "dur": 2.286,
+   "text": "Slow right down, Medium left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c3+pl:h:mediumR": {
+   "file": "p_778ec7c91317.m4a",
+   "dur": 2.247,
+   "text": "Slow right down, Medium right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c3+pl:h:openL": {
+   "file": "p_f6d6854cfa44.m4a",
+   "dur": 2.213,
+   "text": "Slow right down, Open left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c3+pl:h:openR": {
+   "file": "p_4c185e59db2a.m4a",
+   "dur": 2.175,
+   "text": "Slow right down, Open right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c3+pl:h:easyL": {
+   "file": "p_0e9fdfe87c19.m4a",
+   "dur": 2.153,
+   "text": "Slow right down, Easy left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c3+pl:h:easyR": {
+   "file": "p_c774a4b2610b.m4a",
+   "dur": 2.09,
+   "text": "Slow right down, Easy right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c3+pl:h:slightL": {
+   "file": "p_d7f14583c15d.m4a",
+   "dur": 2.213,
+   "text": "Slow right down, Slight left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c3+pl:h:slightR": {
+   "file": "p_36430f23bf11.m4a",
+   "dur": 2.14,
+   "text": "Slow right down, Slight right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c3+pl:h:hairpinL": {
+   "file": "p_ae98302b2e5c.m4a",
+   "dur": 2.276,
+   "text": "Slow right down, Hairpin left.",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "pl:c3+pl:h:hairpinR": {
+   "file": "p_1fbd98db06c7.m4a",
+   "dur": 2.148,
+   "text": "Slow right down, Hairpin right.",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "pl:c3+pl:h:squareL": {
+   "file": "p_c1f625805609.m4a",
+   "dur": 2.132,
+   "text": "Slow right down, Square left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c3+pl:h:squareR": {
+   "file": "p_90d9c92ace7f.m4a",
+   "dur": 2.032,
+   "text": "Slow right down, Square right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c4+pl:h:tightL": {
+   "file": "p_26d37d79ac15.m4a",
+   "dur": 1.97,
+   "text": "Very slow, Tight left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c4+pl:h:tightR": {
+   "file": "p_428c9e125a43.m4a",
+   "dur": 1.918,
+   "text": "Very slow, Tight right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c4+pl:h:mediumL": {
+   "file": "p_21208edeab30.m4a",
+   "dur": 1.905,
+   "text": "Very slow, Medium left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c4+pl:h:mediumR": {
+   "file": "p_7ff062ab318d.m4a",
+   "dur": 1.972,
+   "text": "Very slow, Medium right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c4+pl:h:openL": {
+   "file": "p_cd6e2fa9af33.m4a",
+   "dur": 1.943,
+   "text": "Very slow, Open left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c4+pl:h:openR": {
+   "file": "p_26c768d650f5.m4a",
+   "dur": 1.944,
+   "text": "Very slow, Open right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c4+pl:h:easyL": {
+   "file": "p_e988b9457616.m4a",
+   "dur": 1.814,
+   "text": "Very slow, Easy left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c4+pl:h:easyR": {
+   "file": "p_08d13553d5bb.m4a",
+   "dur": 1.831,
+   "text": "Very slow, Easy right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c4+pl:h:slightL": {
+   "file": "p_a4c8049c28c2.m4a",
+   "dur": 2.022,
+   "text": "Very slow, Slight left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c4+pl:h:slightR": {
+   "file": "p_15608ec3be51.m4a",
+   "dur": 1.991,
+   "text": "Very slow, Slight right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c4+pl:h:hairpinL": {
+   "file": "p_3e37a4201d63.m4a",
+   "dur": 1.946,
+   "text": "Very slow, Hairpin left.",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "pl:c4+pl:h:hairpinR": {
+   "file": "p_2ad64409a1cb.m4a",
+   "dur": 1.968,
+   "text": "Very slow, Hairpin right.",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "pl:c4+pl:h:squareL": {
+   "file": "p_b4f05461ca20.m4a",
+   "dur": 1.9,
+   "text": "Very slow, Square left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:c4+pl:h:squareR": {
+   "file": "p_6964f7c1e752.m4a",
+   "dur": 1.87,
+   "text": "Very slow, Square right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:tightL+pl:m:tightens": {
+   "file": "p_527b477fd7e9.m4a",
+   "dur": 1.815,
+   "text": "Tight left, tightens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:tightL+pl:m:opens": {
+   "file": "p_8d2e56ce924e.m4a",
+   "dur": 1.771,
+   "text": "Tight left, opens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:tightL+pl:m:long": {
+   "file": "p_bcfa98700623.m4a",
+   "dur": 1.578,
+   "text": "Tight left, long.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:tightL+pl:m:off-camber": {
+   "file": "p_3fb2797f0def.m4a",
+   "dur": 2.035,
+   "text": "Tight left, slopes away.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:tightL+pl:m:over-crest": {
+   "file": "p_3f594e705da7.m4a",
+   "dur": 1.981,
+   "text": "Tight left, over a crest.",
+   "heard": 0.89,
+   "voice": "bm_fable"
+  },
+  "pl:h:tightL+pl:m:banked": {
+   "file": "p_7ef64cc46d8c.m4a",
+   "dur": 1.608,
+   "text": "Tight left, banked.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:tightL+pl:m:short": {
+   "file": "p_ca9cbeb6df29.m4a",
+   "dur": 1.574,
+   "text": "Tight left, short.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:tightR+pl:m:tightens": {
+   "file": "p_8fdf0a4af6de.m4a",
+   "dur": 1.739,
+   "text": "Tight right, tightens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:tightR+pl:m:opens": {
+   "file": "p_d19521f56b8e.m4a",
+   "dur": 1.761,
+   "text": "Tight right, opens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:tightR+pl:m:long": {
+   "file": "p_689632aa49f3.m4a",
+   "dur": 1.506,
+   "text": "Tight right, long.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:tightR+pl:m:off-camber": {
+   "file": "p_dd7be82e969c.m4a",
+   "dur": 1.886,
+   "text": "Tight right, slopes away.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:tightR+pl:m:over-crest": {
+   "file": "p_b3fe4ca8a1cf.m4a",
+   "dur": 1.916,
+   "text": "Tight right, over a crest.",
+   "heard": 0.89,
+   "voice": "bm_fable"
+  },
+  "pl:h:tightR+pl:m:banked": {
+   "file": "p_62fd22c61708.m4a",
+   "dur": 1.545,
+   "text": "Tight right, banked.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:tightR+pl:m:short": {
+   "file": "p_9553e4b9c45b.m4a",
+   "dur": 1.55,
+   "text": "Tight right, short.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:mediumL+pl:m:tightens": {
+   "file": "p_bfeb0884f2a3.m4a",
+   "dur": 1.921,
+   "text": "Medium left, tightens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:mediumL+pl:m:opens": {
+   "file": "p_8d370af5c694.m4a",
+   "dur": 1.954,
+   "text": "Medium left, opens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:mediumL+pl:m:long": {
+   "file": "p_f2a58b6359b6.m4a",
+   "dur": 1.745,
+   "text": "Medium left, long.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:mediumL+pl:m:off-camber": {
+   "file": "p_9062dc417ec4.m4a",
+   "dur": 2.13,
+   "text": "Medium left, slopes away.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:mediumL+pl:m:over-crest": {
+   "file": "p_dc650f8c1993.m4a",
+   "dur": 2.079,
+   "text": "Medium left, over a crest.",
+   "heard": 0.89,
+   "voice": "bm_fable"
+  },
+  "pl:h:mediumL+pl:m:banked": {
+   "file": "p_6a06f94e7e03.m4a",
+   "dur": 1.766,
+   "text": "Medium left, banked.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:mediumL+pl:m:short": {
+   "file": "p_9d146bcf016e.m4a",
+   "dur": 1.721,
+   "text": "Medium left, short.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:mediumR+pl:m:tightens": {
+   "file": "p_0b08665f311d.m4a",
+   "dur": 1.911,
+   "text": "Medium right, tightens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:mediumR+pl:m:opens": {
+   "file": "p_9f5a8bb168d6.m4a",
+   "dur": 1.947,
+   "text": "Medium right, opens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:mediumR+pl:m:long": {
+   "file": "p_cf3b62c66a63.m4a",
+   "dur": 1.765,
+   "text": "Medium right, long.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:mediumR+pl:m:off-camber": {
+   "file": "p_00aedb14478b.m4a",
+   "dur": 2.109,
+   "text": "Medium right, slopes away.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:mediumR+pl:m:over-crest": {
+   "file": "p_a1556a771c96.m4a",
+   "dur": 2.112,
+   "text": "Medium right, over a crest.",
+   "heard": 0.89,
+   "voice": "bm_fable"
+  },
+  "pl:h:mediumR+pl:m:banked": {
+   "file": "p_e86ba44d26bf.m4a",
+   "dur": 1.74,
+   "text": "Medium right, banked.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:mediumR+pl:m:short": {
+   "file": "p_292a74ab7456.m4a",
+   "dur": 1.747,
+   "text": "Medium right, short.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:openL+pl:m:tightens": {
+   "file": "p_d6314245ec25.m4a",
+   "dur": 1.843,
+   "text": "Open left, tightens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:openL+pl:m:opens": {
+   "file": "p_8df5c3d35a65.m4a",
+   "dur": 1.846,
+   "text": "Open left, opens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:openL+pl:m:long": {
+   "file": "p_45c557a9c5ea.m4a",
+   "dur": 1.647,
+   "text": "Open left, long.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:openL+pl:m:off-camber": {
+   "file": "p_3d52ed13b195.m4a",
+   "dur": 2.126,
+   "text": "Open left, slopes away.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:openL+pl:m:over-crest": {
+   "file": "p_8df6c62d689b.m4a",
+   "dur": 1.984,
+   "text": "Open left, over a crest.",
+   "heard": 0.89,
+   "voice": "bm_fable"
+  },
+  "pl:h:openL+pl:m:banked": {
+   "file": "p_cffd1beae0ff.m4a",
+   "dur": 1.637,
+   "text": "Open left, banked.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:openL+pl:m:short": {
+   "file": "p_b7b8167b2767.m4a",
+   "dur": 1.654,
+   "text": "Open left, short.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:openR+pl:m:tightens": {
+   "file": "p_7351c54d8c71.m4a",
+   "dur": 1.801,
+   "text": "Open right, tightens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:openR+pl:m:opens": {
+   "file": "p_4581e4cb50ff.m4a",
+   "dur": 1.823,
+   "text": "Open right, opens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:openR+pl:m:long": {
+   "file": "p_4c8313598df1.m4a",
+   "dur": 1.651,
+   "text": "Open right, long.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:openR+pl:m:off-camber": {
+   "file": "p_1d839f29ce85.m4a",
+   "dur": 2.006,
+   "text": "Open right, slopes away.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:openR+pl:m:over-crest": {
+   "file": "p_36f6889d765e.m4a",
+   "dur": 2.058,
+   "text": "Open right, over a crest.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:openR+pl:m:banked": {
+   "file": "p_90b53cd22828.m4a",
+   "dur": 1.641,
+   "text": "Open right, banked.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:openR+pl:m:short": {
+   "file": "p_7e1e191a6c5b.m4a",
+   "dur": 1.619,
+   "text": "Open right, short.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:easyL+pl:m:tightens": {
+   "file": "p_79b8bb257bc3.m4a",
+   "dur": 1.772,
+   "text": "Easy left, tightens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:easyL+pl:m:opens": {
+   "file": "p_e24b675b74d2.m4a",
+   "dur": 1.772,
+   "text": "Easy left, opens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:easyL+pl:m:long": {
+   "file": "p_cb3307d3850e.m4a",
+   "dur": 1.481,
+   "text": "Easy left, long.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:easyL+pl:m:off-camber": {
+   "file": "p_25cb007773b2.m4a",
+   "dur": 2.001,
+   "text": "Easy left, slopes away.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:easyL+pl:m:over-crest": {
+   "file": "p_44cc3d6c70e6.m4a",
+   "dur": 1.988,
+   "text": "Easy left, over a crest.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:easyL+pl:m:banked": {
+   "file": "p_e1a1b19cb3a8.m4a",
+   "dur": 1.527,
+   "text": "Easy left, banked.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:easyL+pl:m:short": {
+   "file": "p_6768f8484b97.m4a",
+   "dur": 1.596,
+   "text": "Easy left, short.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:easyR+pl:m:tightens": {
+   "file": "p_eac62d2ae9f1.m4a",
+   "dur": 1.786,
+   "text": "Easy right, tightens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:easyR+pl:m:opens": {
+   "file": "p_a99f35e0f382.m4a",
+   "dur": 1.768,
+   "text": "Easy right, opens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:easyR+pl:m:long": {
+   "file": "p_925b95b74f31.m4a",
+   "dur": 1.568,
+   "text": "Easy right, long.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:easyR+pl:m:off-camber": {
+   "file": "p_b0dbbcd357a0.m4a",
+   "dur": 1.876,
+   "text": "Easy right, slopes away.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:easyR+pl:m:over-crest": {
+   "file": "p_cb3c9af2c479.m4a",
+   "dur": 1.965,
+   "text": "Easy right, over a crest.",
+   "heard": 0.89,
+   "voice": "bm_fable"
+  },
+  "pl:h:easyR+pl:m:banked": {
+   "file": "p_4cd06de99a9a.m4a",
+   "dur": 1.432,
+   "text": "Easy right, banked.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:easyR+pl:m:short": {
+   "file": "p_5a11abd7fead.m4a",
+   "dur": 1.547,
+   "text": "Easy right, short.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:slightL+pl:m:tightens": {
+   "file": "p_7244bad44f0c.m4a",
+   "dur": 1.836,
+   "text": "Slight left, tightens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:slightL+pl:m:opens": {
+   "file": "p_009e61f5eebe.m4a",
+   "dur": 1.833,
+   "text": "Slight left, opens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:slightL+pl:m:long": {
+   "file": "p_ff55e306b980.m4a",
+   "dur": 1.622,
+   "text": "Slight left, long.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:slightL+pl:m:off-camber": {
+   "file": "p_6d940174f3a2.m4a",
+   "dur": 2.001,
+   "text": "Slight left, slopes away.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:slightL+pl:m:over-crest": {
+   "file": "p_bd6da58e7d67.m4a",
+   "dur": 2.03,
+   "text": "Slight left, over a crest.",
+   "heard": 0.89,
+   "voice": "bm_fable"
+  },
+  "pl:h:slightL+pl:m:banked": {
+   "file": "p_6ee1cf5c130f.m4a",
+   "dur": 1.572,
+   "text": "Slight left, banked.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:slightL+pl:m:short": {
+   "file": "p_2767ffd917cb.m4a",
+   "dur": 1.62,
+   "text": "Slight left, short.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:slightR+pl:m:tightens": {
+   "file": "p_ef5f18ec82e9.m4a",
+   "dur": 1.807,
+   "text": "Slight right, tightens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:slightR+pl:m:opens": {
+   "file": "p_993fc37f3cab.m4a",
+   "dur": 1.835,
+   "text": "Slight right, opens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:slightR+pl:m:long": {
+   "file": "p_af78b2668834.m4a",
+   "dur": 1.645,
+   "text": "Slight right, long.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:slightR+pl:m:off-camber": {
+   "file": "p_56a7a996295f.m4a",
+   "dur": 1.954,
+   "text": "Slight right, slopes away.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:slightR+pl:m:over-crest": {
+   "file": "p_b8afea29e10f.m4a",
+   "dur": 1.962,
+   "text": "Slight right, over a crest.",
+   "heard": 0.89,
+   "voice": "bm_fable"
+  },
+  "pl:h:slightR+pl:m:banked": {
+   "file": "p_8558b1cedbff.m4a",
+   "dur": 1.586,
+   "text": "Slight right, banked.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:slightR+pl:m:short": {
+   "file": "p_da64c297a29e.m4a",
+   "dur": 1.598,
+   "text": "Slight right, short.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:hairpinL+pl:m:tightens": {
+   "file": "p_1a96e63abe3b.m4a",
+   "dur": 2.168,
+   "text": "Hairpin left, tightens.",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "pl:h:hairpinL+pl:m:opens": {
+   "file": "p_bb7c868f56c8.m4a",
+   "dur": 1.951,
+   "text": "Hairpin left, opens.",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "pl:h:hairpinL+pl:m:long": {
+   "file": "p_e4ef11e69e3b.m4a",
+   "dur": 1.714,
+   "text": "Hairpin left, long.",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "pl:h:hairpinL+pl:m:off-camber": {
+   "file": "p_2d140b85b0f0.m4a",
+   "dur": 2.12,
+   "text": "Hairpin left, slopes away.",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "pl:h:hairpinL+pl:m:over-crest": {
+   "file": "p_7d2aaa6b8cfa.m4a",
+   "dur": 2.086,
+   "text": "Hairpin left, over a crest.",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "pl:h:hairpinL+pl:m:banked": {
+   "file": "p_7ed1d0778a4e.m4a",
+   "dur": 1.921,
+   "text": "Hairpin left, banked.",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "pl:h:hairpinL+pl:m:short": {
+   "file": "p_6e7735c5d2ed.m4a",
+   "dur": 1.748,
+   "text": "Hairpin left, short.",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "pl:h:hairpinR+pl:m:tightens": {
+   "file": "p_ceacef0f53cc.m4a",
+   "dur": 1.889,
+   "text": "Hairpin right, tightens.",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "pl:h:hairpinR+pl:m:opens": {
+   "file": "p_946dbd954494.m4a",
+   "dur": 1.936,
+   "text": "Hairpin right, opens.",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "pl:h:hairpinR+pl:m:long": {
+   "file": "p_2a42f0a92135.m4a",
+   "dur": 1.738,
+   "text": "Hairpin right, long.",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "pl:h:hairpinR+pl:m:off-camber": {
+   "file": "p_da0d39322952.m4a",
+   "dur": 2.327,
+   "text": "Hairpin right, slopes away.",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "pl:h:hairpinR+pl:m:over-crest": {
+   "file": "p_6c9c5a1cadd4.m4a",
+   "dur": 2.087,
+   "text": "Hairpin right, over a crest.",
+   "heard": 0.6,
+   "voice": "bm_fable"
+  },
+  "pl:h:hairpinR+pl:m:banked": {
+   "file": "p_9de598a78b07.m4a",
+   "dur": 1.691,
+   "text": "Hairpin right, banked.",
+   "heard": 0.57,
+   "voice": "bm_fable"
+  },
+  "pl:h:hairpinR+pl:m:short": {
+   "file": "p_db929506f293.m4a",
+   "dur": 1.699,
+   "text": "Hairpin right, short.",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "pl:h:squareL+pl:m:tightens": {
+   "file": "p_90ce47b23c94.m4a",
+   "dur": 1.815,
+   "text": "Square left, tightens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:squareL+pl:m:opens": {
+   "file": "p_9f3e96200092.m4a",
+   "dur": 1.838,
+   "text": "Square left, opens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:squareL+pl:m:long": {
+   "file": "p_aa949b494272.m4a",
+   "dur": 1.527,
+   "text": "Square left, long.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:squareL+pl:m:off-camber": {
+   "file": "p_3ae53574dd39.m4a",
+   "dur": 2.004,
+   "text": "Square left, slopes away.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:squareL+pl:m:over-crest": {
+   "file": "p_9cf872b988d5.m4a",
+   "dur": 1.981,
+   "text": "Square left, over a crest.",
+   "heard": 0.89,
+   "voice": "bm_fable"
+  },
+  "pl:h:squareL+pl:m:banked": {
+   "file": "p_fd50ce3cbf98.m4a",
+   "dur": 1.544,
+   "text": "Square left, banked.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:squareL+pl:m:short": {
+   "file": "p_e81647bde24b.m4a",
+   "dur": 1.544,
+   "text": "Square left, short.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:squareR+pl:m:tightens": {
+   "file": "p_bb9bdcf9967d.m4a",
+   "dur": 1.74,
+   "text": "Square right, tightens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:squareR+pl:m:opens": {
+   "file": "p_dac0526e9f7d.m4a",
+   "dur": 1.787,
+   "text": "Square right, opens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:squareR+pl:m:long": {
+   "file": "p_56e6c5e69f5a.m4a",
+   "dur": 1.558,
+   "text": "Square right, long.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:squareR+pl:m:off-camber": {
+   "file": "p_aa4e9c4d90dd.m4a",
+   "dur": 1.934,
+   "text": "Square right, slopes away.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:squareR+pl:m:over-crest": {
+   "file": "p_624399e5e573.m4a",
+   "dur": 1.914,
+   "text": "Square right, over a crest.",
+   "heard": 0.89,
+   "voice": "bm_fable"
+  },
+  "pl:h:squareR+pl:m:banked": {
+   "file": "p_17f3bf5cbf00.m4a",
+   "dur": 1.437,
+   "text": "Square right, banked.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:h:squareR+pl:m:short": {
+   "file": "p_bbf402c7bbe8.m4a",
+   "dur": 1.495,
+   "text": "Square right, short.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:pass_best": {
+   "file": "line_pass_best.m4a",
+   "dur": 1.491,
+   "text": "Best yet through there.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:pass_smooth": {
+   "file": "line_pass_smooth.m4a",
+   "dur": 1.447,
+   "text": "Smoother on your best.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:pass_brake": {
+   "file": "line_pass_brake.m4a",
+   "dur": 1.961,
+   "text": "Brakes were cleaner on your best.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:pass_stretch_best": {
+   "file": "line_pass_stretch_best.m4a",
+   "dur": 1.283,
+   "text": "Best stretch yet.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:pass_level": {
+   "file": "line_pass_level.m4a",
+   "dur": 1.357,
+   "text": "Level with your best.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:pass_brake_later": {
+   "file": "line_pass_brake_later.m4a",
+   "dur": 1.018,
+   "text": "Brake later.",
+   "heard": 0.5,
+   "voice": "bm_fable"
+  },
+  "line:pass_brake_here": {
+   "file": "line_pass_brake_here.m4a",
+   "dur": 1.517,
+   "text": "Brake later here.",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "frag:clean": {
+   "file": "frag_clean.m4a",
+   "dur": 1.171,
+   "text": "clean in a row.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:a quarter mile": {
+   "file": "pl_in_a_quarter_mile.m4a",
+   "dur": 0.919,
+   "text": "in a quarter mile",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:10 metres": {
+   "file": "pl_in_10_metres.m4a",
+   "dur": 1.108,
+   "text": "in 10 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:20 metres": {
+   "file": "pl_in_20_metres.m4a",
+   "dur": 1.154,
+   "text": "in 20 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:30 metres": {
+   "file": "pl_in_30_metres.m4a",
+   "dur": 1.218,
+   "text": "in 30 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:40 metres": {
+   "file": "pl_in_40_metres.m4a",
+   "dur": 1.22,
+   "text": "in 40 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:50 metres": {
+   "file": "pl_in_50_metres.m4a",
+   "dur": 1.241,
+   "text": "in 50 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:60 metres": {
+   "file": "pl_in_60_metres.m4a",
+   "dur": 1.266,
+   "text": "in 60 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:70 metres": {
+   "file": "pl_in_70_metres.m4a",
+   "dur": 1.294,
+   "text": "in 70 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:80 metres": {
+   "file": "pl_in_80_metres.m4a",
+   "dur": 1.193,
+   "text": "in 80 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:90 metres": {
+   "file": "pl_in_90_metres.m4a",
+   "dur": 1.228,
+   "text": "in 90 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:100 metres": {
+   "file": "pl_in_100_metres.m4a",
+   "dur": 1.621,
+   "text": "in 100 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:110 metres": {
+   "file": "pl_in_110_metres.m4a",
+   "dur": 1.962,
+   "text": "in 110 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:120 metres": {
+   "file": "pl_in_120_metres.m4a",
+   "dur": 2.019,
+   "text": "in 120 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:130 metres": {
+   "file": "pl_in_130_metres.m4a",
+   "dur": 1.915,
+   "text": "in 130 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:140 metres": {
+   "file": "pl_in_140_metres.m4a",
+   "dur": 1.911,
+   "text": "in 140 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:150 metres": {
+   "file": "pl_in_150_metres.m4a",
+   "dur": 1.839,
+   "text": "in 150 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:160 metres": {
+   "file": "pl_in_160_metres.m4a",
+   "dur": 1.945,
+   "text": "in 160 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:170 metres": {
+   "file": "pl_in_170_metres.m4a",
+   "dur": 1.985,
+   "text": "in 170 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:180 metres": {
+   "file": "pl_in_180_metres.m4a",
+   "dur": 1.742,
+   "text": "in 180 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:190 metres": {
+   "file": "pl_in_190_metres.m4a",
+   "dur": 1.915,
+   "text": "in 190 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:200 metres": {
+   "file": "pl_in_200_metres.m4a",
+   "dur": 1.548,
+   "text": "in 200 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:210 metres": {
+   "file": "pl_in_210_metres.m4a",
+   "dur": 2.064,
+   "text": "in 210 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:220 metres": {
+   "file": "pl_in_220_metres.m4a",
+   "dur": 2.062,
+   "text": "in 220 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:230 metres": {
+   "file": "pl_in_230_metres.m4a",
+   "dur": 2.036,
+   "text": "in 230 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:240 metres": {
+   "file": "pl_in_240_metres.m4a",
+   "dur": 2.037,
+   "text": "in 240 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:250 metres": {
+   "file": "pl_in_250_metres.m4a",
+   "dur": 2.013,
+   "text": "in 250 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:260 metres": {
+   "file": "pl_in_260_metres.m4a",
+   "dur": 2.013,
+   "text": "in 260 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:270 metres": {
+   "file": "pl_in_270_metres.m4a",
+   "dur": 2.115,
+   "text": "in 270 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:280 metres": {
+   "file": "pl_in_280_metres.m4a",
+   "dur": 1.821,
+   "text": "in 280 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:290 metres": {
+   "file": "pl_in_290_metres.m4a",
+   "dur": 2.021,
+   "text": "in 290 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:300 metres": {
+   "file": "pl_in_300_metres.m4a",
+   "dur": 1.603,
+   "text": "in 300 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:310 metres": {
+   "file": "pl_in_310_metres.m4a",
+   "dur": 2.119,
+   "text": "in 310 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:320 metres": {
+   "file": "pl_in_320_metres.m4a",
+   "dur": 2.09,
+   "text": "in 320 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:330 metres": {
+   "file": "pl_in_330_metres.m4a",
+   "dur": 2.066,
+   "text": "in 330 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:340 metres": {
+   "file": "pl_in_340_metres.m4a",
+   "dur": 2.063,
+   "text": "in 340 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:350 metres": {
+   "file": "pl_in_350_metres.m4a",
+   "dur": 1.991,
+   "text": "in 350 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:360 metres": {
+   "file": "pl_in_360_metres.m4a",
+   "dur": 2.064,
+   "text": "in 360 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:370 metres": {
+   "file": "pl_in_370_metres.m4a",
+   "dur": 2.216,
+   "text": "in 370 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:380 metres": {
+   "file": "pl_in_380_metres.m4a",
+   "dur": 1.992,
+   "text": "in 380 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:390 metres": {
+   "file": "pl_in_390_metres.m4a",
+   "dur": 2.113,
+   "text": "in 390 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:400 metres": {
+   "file": "pl_in_400_metres.m4a",
+   "dur": 1.568,
+   "text": "in 400 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:410 metres": {
+   "file": "pl_in_410_metres.m4a",
+   "dur": 1.966,
+   "text": "in 410 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:420 metres": {
+   "file": "pl_in_420_metres.m4a",
+   "dur": 2.063,
+   "text": "in 420 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:half a mile": {
+   "file": "pl_in_half_a_mile.m4a",
+   "dur": 1.088,
+   "text": "in half a mile",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:three quarters of a mile": {
+   "file": "pl_in_three_quarters_of_a_mile.m4a",
+   "dur": 1.672,
+   "text": "in three quarters of a mile",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:a mile": {
+   "file": "pl_in_a_mile.m4a",
+   "dur": 0.816,
+   "text": "in a mile",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:1.1 miles": {
+   "file": "pl_in_1_1_miles.m4a",
+   "dur": 1.644,
+   "text": "in 1.1 miles",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:a kilometre": {
+   "file": "pl_in_a_kilometre.m4a",
+   "dur": 1.101,
+   "text": "in a kilometre",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:430 metres": {
+   "file": "pl_in_430_metres.m4a",
+   "dur": 1.991,
+   "text": "in 430 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:440 metres": {
+   "file": "pl_in_440_metres.m4a",
+   "dur": 1.99,
+   "text": "in 440 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:450 metres": {
+   "file": "pl_in_450_metres.m4a",
+   "dur": 1.967,
+   "text": "in 450 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:460 metres": {
+   "file": "pl_in_460_metres.m4a",
+   "dur": 2.067,
+   "text": "in 460 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:470 metres": {
+   "file": "pl_in_470_metres.m4a",
+   "dur": 2.066,
+   "text": "in 470 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:480 metres": {
+   "file": "pl_in_480_metres.m4a",
+   "dur": 1.815,
+   "text": "in 480 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:490 metres": {
+   "file": "pl_in_490_metres.m4a",
+   "dur": 1.991,
+   "text": "in 490 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:500 metres": {
+   "file": "pl_in_500_metres.m4a",
+   "dur": 1.699,
+   "text": "in 500 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:510 metres": {
+   "file": "pl_in_510_metres.m4a",
+   "dur": 2.238,
+   "text": "in 510 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:520 metres": {
+   "file": "pl_in_520_metres.m4a",
+   "dur": 2.164,
+   "text": "in 520 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:530 metres": {
+   "file": "pl_in_530_metres.m4a",
+   "dur": 2.14,
+   "text": "in 530 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:540 metres": {
+   "file": "pl_in_540_metres.m4a",
+   "dur": 2.091,
+   "text": "in 540 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:550 metres": {
+   "file": "pl_in_550_metres.m4a",
+   "dur": 2.114,
+   "text": "in 550 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:560 metres": {
+   "file": "pl_in_560_metres.m4a",
+   "dur": 2.165,
+   "text": "in 560 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:570 metres": {
+   "file": "pl_in_570_metres.m4a",
+   "dur": 2.191,
+   "text": "in 570 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:580 metres": {
+   "file": "pl_in_580_metres.m4a",
+   "dur": 1.94,
+   "text": "in 580 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:590 metres": {
+   "file": "pl_in_590_metres.m4a",
+   "dur": 2.148,
+   "text": "in 590 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:600 metres": {
+   "file": "pl_in_600_metres.m4a",
+   "dur": 1.716,
+   "text": "in 600 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:610 metres": {
+   "file": "pl_in_610_metres.m4a",
+   "dur": 2.119,
+   "text": "in 610 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:620 metres": {
+   "file": "pl_in_620_metres.m4a",
+   "dur": 2.161,
+   "text": "in 620 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:630 metres": {
+   "file": "pl_in_630_metres.m4a",
+   "dur": 2.089,
+   "text": "in 630 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:640 metres": {
+   "file": "pl_in_640_metres.m4a",
+   "dur": 2.114,
+   "text": "in 640 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:650 metres": {
+   "file": "pl_in_650_metres.m4a",
+   "dur": 2.114,
+   "text": "in 650 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:660 metres": {
+   "file": "pl_in_660_metres.m4a",
+   "dur": 2.163,
+   "text": "in 660 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:670 metres": {
+   "file": "pl_in_670_metres.m4a",
+   "dur": 2.24,
+   "text": "in 670 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:680 metres": {
+   "file": "pl_in_680_metres.m4a",
+   "dur": 2.04,
+   "text": "in 680 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:690 metres": {
+   "file": "pl_in_690_metres.m4a",
+   "dur": 2.163,
+   "text": "in 690 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:700 metres": {
+   "file": "pl_in_700_metres.m4a",
+   "dur": 1.772,
+   "text": "in 700 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:710 metres": {
+   "file": "pl_in_710_metres.m4a",
+   "dur": 2.186,
+   "text": "in 710 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:720 metres": {
+   "file": "pl_in_720_metres.m4a",
+   "dur": 2.245,
+   "text": "in 720 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:730 metres": {
+   "file": "pl_in_730_metres.m4a",
+   "dur": 2.21,
+   "text": "in 730 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:740 metres": {
+   "file": "pl_in_740_metres.m4a",
+   "dur": 2.162,
+   "text": "in 740 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:750 metres": {
+   "file": "pl_in_750_metres.m4a",
+   "dur": 2.16,
+   "text": "in 750 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:760 metres": {
+   "file": "pl_in_760_metres.m4a",
+   "dur": 2.262,
+   "text": "in 760 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:770 metres": {
+   "file": "pl_in_770_metres.m4a",
+   "dur": 2.259,
+   "text": "in 770 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:780 metres": {
+   "file": "pl_in_780_metres.m4a",
+   "dur": 2.085,
+   "text": "in 780 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:790 metres": {
+   "file": "pl_in_790_metres.m4a",
+   "dur": 2.26,
+   "text": "in 790 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:800 metres": {
+   "file": "pl_in_800_metres.m4a",
+   "dur": 1.664,
+   "text": "in 800 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:810 metres": {
+   "file": "pl_in_810_metres.m4a",
+   "dur": 2.041,
+   "text": "in 810 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:820 metres": {
+   "file": "pl_in_820_metres.m4a",
+   "dur": 2.112,
+   "text": "in 820 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:830 metres": {
+   "file": "pl_in_830_metres.m4a",
+   "dur": 2.139,
+   "text": "in 830 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:840 metres": {
+   "file": "pl_in_840_metres.m4a",
+   "dur": 1.996,
+   "text": "in 840 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:850 metres": {
+   "file": "pl_in_850_metres.m4a",
+   "dur": 2.089,
+   "text": "in 850 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:860 metres": {
+   "file": "pl_in_860_metres.m4a",
+   "dur": 2.065,
+   "text": "in 860 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:870 metres": {
+   "file": "pl_in_870_metres.m4a",
+   "dur": 2.139,
+   "text": "in 870 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:880 metres": {
+   "file": "pl_in_880_metres.m4a",
+   "dur": 1.916,
+   "text": "in 880 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:890 metres": {
+   "file": "pl_in_890_metres.m4a",
+   "dur": 2.114,
+   "text": "in 890 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:900 metres": {
+   "file": "pl_in_900_metres.m4a",
+   "dur": 1.668,
+   "text": "in 900 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:910 metres": {
+   "file": "pl_in_910_metres.m4a",
+   "dur": 2.186,
+   "text": "in 910 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:920 metres": {
+   "file": "pl_in_920_metres.m4a",
+   "dur": 2.149,
+   "text": "in 920 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:930 metres": {
+   "file": "pl_in_930_metres.m4a",
+   "dur": 2.098,
+   "text": "in 930 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:940 metres": {
+   "file": "pl_in_940_metres.m4a",
+   "dur": 2.124,
+   "text": "in 940 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:950 metres": {
+   "file": "pl_in_950_metres.m4a",
+   "dur": 2.089,
+   "text": "in 950 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:960 metres": {
+   "file": "pl_in_960_metres.m4a",
+   "dur": 2.187,
+   "text": "in 960 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:970 metres": {
+   "file": "pl_in_970_metres.m4a",
+   "dur": 2.172,
+   "text": "in 970 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:980 metres": {
+   "file": "pl_in_980_metres.m4a",
+   "dur": 1.945,
+   "text": "in 980 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:990 metres": {
+   "file": "pl_in_990_metres.m4a",
+   "dur": 2.148,
+   "text": "in 990 metres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:1.1 kilometres": {
+   "file": "pl_in_1_1_kilometres.m4a",
+   "dur": 2.251,
+   "text": "in 1.1 kilometres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:1.2 kilometres": {
+   "file": "pl_in_1_2_kilometres.m4a",
+   "dur": 2.224,
+   "text": "in 1.2 kilometres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:1.3 kilometres": {
+   "file": "pl_in_1_3_kilometres.m4a",
+   "dur": 2.244,
+   "text": "in 1.3 kilometres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:1.4 kilometres": {
+   "file": "pl_in_1_4_kilometres.m4a",
+   "dur": 2.271,
+   "text": "in 1.4 kilometres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:1.5 kilometres": {
+   "file": "pl_in_1_5_kilometres.m4a",
+   "dur": 2.304,
+   "text": "in 1.5 kilometres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:1.6 kilometres": {
+   "file": "pl_in_1_6_kilometres.m4a",
+   "dur": 2.222,
+   "text": "in 1.6 kilometres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:1.7 kilometres": {
+   "file": "pl_in_1_7_kilometres.m4a",
+   "dur": 2.378,
+   "text": "in 1.7 kilometres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:1.8 kilometres": {
+   "file": "pl_in_1_8_kilometres.m4a",
+   "dur": 2.176,
+   "text": "in 1.8 kilometres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "pl:in:1.9 kilometres": {
+   "file": "pl_in_1_9_kilometres.m4a",
+   "dur": 2.304,
+   "text": "in 1.9 kilometres",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:last_fuel_for": {
+   "file": "frag_last_fuel_for.m4a",
+   "dur": 1.294,
+   "text": "Last fuel for",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:last_charger_for": {
+   "file": "frag_last_charger_for.m4a",
+   "dur": 1.392,
+   "text": "Last charger for",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:last_fuel_route": {
+   "file": "frag_last_fuel_route.m4a",
+   "dur": 1.644,
+   "text": "Last fuel of the route,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:last_charger_route": {
+   "file": "frag_last_charger_route.m4a",
+   "dur": 1.846,
+   "text": "Last charger of the route,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:on_left": {
+   "file": "frag_on_left.m4a",
+   "dur": 0.948,
+   "text": "on the left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:on_right": {
+   "file": "frag_on_right.m4a",
+   "dur": 0.926,
+   "text": "on the right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:on_left_c": {
+   "file": "frag_on_left_c.m4a",
+   "dur": 0.948,
+   "text": "on the left,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:on_right_c": {
+   "file": "frag_on_right_c.m4a",
+   "dur": 0.926,
+   "text": "on the right,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:viewpoint": {
+   "file": "frag_viewpoint.m4a",
+   "dur": 0.799,
+   "text": "A viewpoint",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:waterfall": {
+   "file": "frag_waterfall.m4a",
+   "dur": 0.913,
+   "text": "A waterfall",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:best_yet": {
+   "file": "frag_best_yet.m4a",
+   "dur": 0.92,
+   "text": "Best yet.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:up": {
+   "file": "frag_up.m4a",
+   "dur": 0.544,
+   "text": "up.",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "frag:down": {
+   "file": "frag_down.m4a",
+   "dur": 0.639,
+   "text": "down.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:that_stretch": {
+   "file": "frag_that_stretch.m4a",
+   "dur": 1.017,
+   "text": "That stretch:",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:down_best": {
+   "file": "frag_down_best.m4a",
+   "dur": 1.239,
+   "text": "down on your best.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:t1": {
+   "file": "gap_t1.m4a",
+   "dur": 0.964,
+   "text": "One tenth",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:t2": {
+   "file": "gap_t2.m4a",
+   "dur": 0.939,
+   "text": "Two tenths",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:t3": {
+   "file": "gap_t3.m4a",
+   "dur": 1.114,
+   "text": "Three tenths",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:t4": {
+   "file": "gap_t4.m4a",
+   "dur": 0.988,
+   "text": "Four tenths",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:t5": {
+   "file": "gap_t5.m4a",
+   "dur": 0.968,
+   "text": "Five tenths",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:t6": {
+   "file": "gap_t6.m4a",
+   "dur": 1.029,
+   "text": "Six tenths",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:t7": {
+   "file": "gap_t7.m4a",
+   "dur": 1.053,
+   "text": "Seven tenths",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:t8": {
+   "file": "gap_t8.m4a",
+   "dur": 0.903,
+   "text": "Eight tenths",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:t9": {
+   "file": "gap_t9.m4a",
+   "dur": 0.971,
+   "text": "Nine tenths",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s1.0": {
+   "file": "gap_s1_0.m4a",
+   "dur": 1.063,
+   "text": "1.0 seconds",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "gap:s1.1": {
+   "file": "gap_s1_1.m4a",
+   "dur": 1.789,
+   "text": "1.1 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s1.2": {
+   "file": "gap_s1_2.m4a",
+   "dur": 1.865,
+   "text": "1.2 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s1.3": {
+   "file": "gap_s1_3.m4a",
+   "dur": 1.887,
+   "text": "1.3 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s1.4": {
+   "file": "gap_s1_4.m4a",
+   "dur": 1.9,
+   "text": "1.4 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s1.5": {
+   "file": "gap_s1_5.m4a",
+   "dur": 1.945,
+   "text": "1.5 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s1.6": {
+   "file": "gap_s1_6.m4a",
+   "dur": 1.906,
+   "text": "1.6 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s1.7": {
+   "file": "gap_s1_7.m4a",
+   "dur": 2.021,
+   "text": "1.7 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s1.8": {
+   "file": "gap_s1_8.m4a",
+   "dur": 1.818,
+   "text": "1.8 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s1.9": {
+   "file": "gap_s1_9.m4a",
+   "dur": 1.967,
+   "text": "1.9 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s2.0": {
+   "file": "gap_s2_0.m4a",
+   "dur": 1.047,
+   "text": "2.0 seconds",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "gap:s2.1": {
+   "file": "gap_s2_1.m4a",
+   "dur": 1.848,
+   "text": "2.1 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s2.2": {
+   "file": "gap_s2_2.m4a",
+   "dur": 1.774,
+   "text": "2.2 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s2.3": {
+   "file": "gap_s2_3.m4a",
+   "dur": 1.774,
+   "text": "2.3 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s2.4": {
+   "file": "gap_s2_4.m4a",
+   "dur": 1.873,
+   "text": "2.4 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s2.5": {
+   "file": "gap_s2_5.m4a",
+   "dur": 1.9,
+   "text": "2.5 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s2.6": {
+   "file": "gap_s2_6.m4a",
+   "dur": 1.826,
+   "text": "2.6 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s2.7": {
+   "file": "gap_s2_7.m4a",
+   "dur": 1.997,
+   "text": "2.7 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s2.8": {
+   "file": "gap_s2_8.m4a",
+   "dur": 1.75,
+   "text": "2.8 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s2.9": {
+   "file": "gap_s2_9.m4a",
+   "dur": 1.902,
+   "text": "2.9 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s3.0": {
+   "file": "gap_s3_0.m4a",
+   "dur": 1.064,
+   "text": "3.0 seconds",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "gap:s3.1": {
+   "file": "gap_s3_1.m4a",
+   "dur": 1.909,
+   "text": "3.1 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s3.2": {
+   "file": "gap_s3_2.m4a",
+   "dur": 1.898,
+   "text": "3.2 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s3.3": {
+   "file": "gap_s3_3.m4a",
+   "dur": 1.948,
+   "text": "3.3 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s3.4": {
+   "file": "gap_s3_4.m4a",
+   "dur": 1.974,
+   "text": "3.4 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s3.5": {
+   "file": "gap_s3_5.m4a",
+   "dur": 1.965,
+   "text": "3.5 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s3.6": {
+   "file": "gap_s3_6.m4a",
+   "dur": 1.945,
+   "text": "3.6 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s3.7": {
+   "file": "gap_s3_7.m4a",
+   "dur": 2.048,
+   "text": "3.7 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s3.8": {
+   "file": "gap_s3_8.m4a",
+   "dur": 1.861,
+   "text": "3.8 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s3.9": {
+   "file": "gap_s3_9.m4a",
+   "dur": 1.949,
+   "text": "3.9 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s4.0": {
+   "file": "gap_s4_0.m4a",
+   "dur": 1.113,
+   "text": "4.0 seconds",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "gap:s4.1": {
+   "file": "gap_s4_1.m4a",
+   "dur": 1.878,
+   "text": "4.1 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s4.2": {
+   "file": "gap_s4_2.m4a",
+   "dur": 1.837,
+   "text": "4.2 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s4.3": {
+   "file": "gap_s4_3.m4a",
+   "dur": 1.912,
+   "text": "4.3 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s4.4": {
+   "file": "gap_s4_4.m4a",
+   "dur": 1.904,
+   "text": "4.4 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s4.5": {
+   "file": "gap_s4_5.m4a",
+   "dur": 1.903,
+   "text": "4.5 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s4.6": {
+   "file": "gap_s4_6.m4a",
+   "dur": 1.876,
+   "text": "4.6 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s4.7": {
+   "file": "gap_s4_7.m4a",
+   "dur": 2.002,
+   "text": "4.7 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s4.8": {
+   "file": "gap_s4_8.m4a",
+   "dur": 1.778,
+   "text": "4.8 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s4.9": {
+   "file": "gap_s4_9.m4a",
+   "dur": 1.913,
+   "text": "4.9 seconds",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "gap:s5.0": {
+   "file": "gap_s5_0.m4a",
+   "dur": 1.181,
+   "text": "5.0 seconds",
+   "heard": 0.8,
+   "voice": "bm_fable"
+  },
+  "sys:quiet_for": {
+   "file": "sys_quiet_for.m4a",
+   "dur": 0.915,
+   "text": "Nothing for",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:wet": {
+   "file": "line_wet.m4a",
+   "dur": 2.191,
+   "text": "Wet roads. Notes come earlier.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:ice": {
+   "file": "line_ice.m4a",
+   "dur": 2.806,
+   "text": "Ice risk. Notes come earlier. Go gently.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:cold_summer": {
+   "file": "line_cold_summer.m4a",
+   "dur": 2.849,
+   "text": "Cold out. Summer tyres grip less in the cold.",
+   "heard": 0.89,
+   "voice": "bm_fable"
+  },
+  "line:cold_any": {
+   "file": "line_cold_any.m4a",
+   "dur": 2.647,
+   "text": "Cold out. Tyres grip less until they warm.",
+   "heard": 0.88,
+   "voice": "bm_fable"
+  },
+  "line:stage_level": {
+   "file": "line_stage_level.m4a",
+   "dur": 2.196,
+   "text": "That stage: level with your best.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:that_stage": {
+   "file": "frag_that_stage.m4a",
+   "dur": 0.943,
+   "text": "That stage:",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:pts_up": {
+   "file": "frag_pts_up.m4a",
+   "dur": 1.414,
+   "text": "points up on your best.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "frag:pts_down": {
+   "file": "frag_pts_down.m4a",
+   "dur": 1.571,
+   "text": "points down on your best.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:pass_wet_today": {
+   "file": "line_pass_wet_today.m4a",
+   "dur": 2.373,
+   "text": "Wet today. Your best here was dry.",
+   "heard": 0.86,
+   "voice": "bm_fable"
+  },
+  "line:pass_icy_today": {
+   "file": "line_pass_icy_today.m4a",
+   "dur": 3.465,
+   "text": "Icy today. Your best here was dry. Go gently.",
+   "heard": 0.84,
+   "voice": "bm_fable"
   }
  }
 }

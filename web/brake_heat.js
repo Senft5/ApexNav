@@ -125,11 +125,13 @@
     return list.find((d) => d && finite(d.start_m) && atM >= d.start_m - AHEAD_M && atM <= d.start_m + PAST_M
       && !(said && said.has(d.start_m))) || null;
   }
-  /** What the co-driver says at the top: spoken(m) gives a distance as it is said ("3.7 miles"); percent in words. */
-  function descentCall(d, spoken) {
-    if (!d || !finite(d.grade) || typeof spoken !== 'function') return null;
-    return `Long descent ahead: ${spoken(d.end_m - d.start_m)} at ${Math.round(d.grade * 100)} percent. A lower gear saves the brakes.`;
+  /** What the co-driver says at the top: short, one clip in every pack (voice_lines.js line:descent); the drive page has
+   *  the length and the grade. */
+  function descentCall(d) {
+    if (!d || !finite(d.grade)) return null;
+    return DESCENT_TEXT;
   }
+  const DESCENT_TEXT = 'Long descent ahead. A lower gear saves the brakes.';
 
   /** What the co-driver says when the brakes get hot. */
   const CALL_TEXT = 'Brakes are getting hot. Use a lower gear and ease off.';
