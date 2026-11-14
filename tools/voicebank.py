@@ -137,8 +137,8 @@ def phrase_text(tokens, vocab) -> str:
         w = vocab[t]
         if not out:
             out = w
-        elif t.startswith(("caution:", "dist:")):
-            out += ", " + w
+        elif t.startswith(("caution:", "dist:")) or (t.startswith("pl:") and not t.startswith("pl:in:")):
+            out += ", " + w      # plain words: each part after a comma, as plain_notes.js plainChain says them
         else:
             out += " " + w
     return out[0].upper() + out[1:] + "."
@@ -158,6 +158,8 @@ def tts_text(tokens, vocab) -> str:
             out += " ..... " + w
         elif t.startswith("dist:"):
             out += " ... " + w
+        elif t.startswith("pl:") and not t.startswith("pl:in:"):
+            out += ", " + w
         else:
             out += " " + w
     return out[0].upper() + out[1:] + "."
@@ -364,7 +366,7 @@ def build_phrases(voice_id: str, ref: str = None, tier: str = "calls", recorded:
         print(f"  {voice_id}: [{n}/{len(todo)}] {text}", flush=True)
 
 
-TOKEN_START = re.compile(r"\+(?=(?:head|mod|caution|link|dist|hazard|n|end|sys|nav|navd|lane|line):)")
+TOKEN_START = re.compile(r"\+(?=(?:head|mod|caution|link|dist|hazard|n|end|sys|nav|navd|lane|line|pl|mark|dot|lim|flow|frag|span):)")
 
 
 def split_key(key: str) -> list[str]:

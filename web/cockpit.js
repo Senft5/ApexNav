@@ -1586,7 +1586,8 @@
       saidLog(text);
       if (force) { speech.queue.clear(); speech.followUp = null; stopSpeaking(); opts = { duck: true, ...opts }; }   // a line you asked for is heard
       // a fixed line ("Rerouting", "Bump ahead") is in every voice pack (web/voice_lines.js): the pack says it, not the phone
-      if (!chain && !sysToken && !opts.tokens && window.ApexVoiceLines) { const t = ApexVoiceLines.forText(text); if (t) opts = { ...opts, tokens: t }; }
+      // and a line built with numbers or a label ("Limit 35 ahead.", "12 miles, 48 corners.", "Lane closed ahead") from its clips
+      if (!chain && !sysToken && !opts.tokens && window.ApexVoiceLines) { const t = ApexVoiceLines.forText(text) || ApexVoiceLines.compose(text); if (t) opts = { ...opts, tokens: t }; }
       speech.queue.push({ text, chain, sysToken, ...opts }, performance.now());
       if (!force) preemptForHazard();
       pumpSpeech(force);
@@ -1651,7 +1652,7 @@
       }
       // MA-3: advice rides in its call; a call that waited in the queue past the advice's last start says the call alone
       const advice = item.aside && item.aside.kind === 'advice' ? item.aside : null;
-      if (advice && typeof advice.dueByM === 'number' && queueCursor() != null && queueCursor() > advice.dueByM) item = { ...item, text: advice.bare || item.text, aside: null };
+      if (advice && typeof advice.dueByM === 'number' && queueCursor() != null && queueCursor() > advice.dueByM) item = { ...item, text: advice.bare || item.text, aside: null, ...(item.chain ? {} : { tokens: advice.bareTokens || undefined }) };
       speech.followUp = item.aside && item.aside.kind !== 'advice' ? item.aside : null;   // colour: its own clip, after the call
       if (item.key === 'aside') { state.lastSaid = item.text; saidLog(item.text); }
       if (item.kind === 'hazard' || item.chain || item.haptic) haptic(item.kind === 'hazard' ? 'hazard' : 'note');
@@ -1758,7 +1759,11 @@
       const card = !!(window.ApexVoiceLines && ApexVoiceLines.PACKS[state.voiceId] && ApexVoiceLines.PACKS[state.voiceId].card);   // Hale reads a card (U-113)
       if (state.noteWords === 'plain') {   // in the driver's units (U-93)
         const bare = ApexPlainNotes.plainChain(voiced, ApexUnits, { next, card, reachM: reach });
-        return { text: opt.advice ? ApexPlainNotes.plainChain(voiced, ApexUnits, { next, card, reachM: reach, advice: opt.advice }) : bare, bare, chain: null, keys, voiced };
+        // the pack's own clips for the same words (plain_notes.js plainTokens); null: the phone's voice says the text
+        const pt = (o) => (ApexPlainNotes.plainTokens ? ApexPlainNotes.plainTokens(voiced, ApexUnits, { next, card, reachM: reach, ...o }) : null);
+        const bareTokens = pt({});
+        return { text: opt.advice ? ApexPlainNotes.plainChain(voiced, ApexUnits, { next, card, reachM: reach, advice: opt.advice }) : bare, bare, chain: null, keys, voiced,
+          tokens: opt.advice ? pt({ advice: opt.advice, adviceToken: opt.adviceToken }) : bareTokens, bareTokens };
       }
       return { text: opt.advice ? ApexNoteTiming.withAdvice(text, opt.advice) : text, bare: text, chain: voiced, keys, voiced };
     }
@@ -1896,8 +1901,10 @@
         if (t === 'off') {
           careRun.reset();   // the run of corners is over: the next one's "care" is said (§4)
           state.wakeCue = false;
-          const line = window.ApexVoiceLines ? ApexVoiceLines.quietLine(state.voiceId, quietSaid()) : null;
-          if (line) say(line, false, null, null, { key: 'wake:off', cue: 'sleep', duck: true }); else chime('sleep');
+          const span = quietSaid(), line = window.ApexVoiceLines ? ApexVoiceLines.quietLine(state.voiceId, span) : null;
+          const qt = line && ApexVoiceLines.quietTokens ? ApexVoiceLines.quietTokens(state.voiceId, span) : null;
+          // past ten miles the packs have no clip for the span: the chime alone, never the phone's voice for one line
+          if (line && (qt || state.voiceId === 'device')) say(line, false, null, null, { key: 'wake:off', cue: 'sleep', duck: true, ...(qt ? { tokens: qt } : {}) }); else chime('sleep');
         }
       } else wakeVoice.reset();
       // U-58: a drive's first note is its first corner, when one is within the wake window as the drive begins (a drive that
@@ -1979,7 +1986,9 @@
         state.openerDue = false;
         const span = !spirited && state.notesMode === 'auto' ? quietSaid() : null;
         const line = road && window.ApexVoiceLines ? ApexVoiceLines.openerLine(state.voiceId, { road, awake: spirited, span }) : null;
-        if (line) say(line, false, null, null, { key: 'opener', duck: true });
+        // the mode from the pack's clips; the road's name stays on the screen (the website's live voice says it whole)
+        const ot = line && ApexVoiceLines.openerTokens ? ApexVoiceLines.openerTokens(state.voiceId, { awake: spirited, span }) : null;
+        if (line) say(line, false, null, null, { key: 'opener', duck: true, ...(ot ? { tokens: ot, named: true } : {}) });
       };
       openNotes(false);
       // How far ahead to read a note (note_timing.js, IDEAS V-01): time to say it, your reaction (learned), and braking from
@@ -2017,14 +2026,15 @@
         // (a first note read at the start may be under the car already: it is not stale for that)
         // dueByM: a call that waits in the queue (behind a quiet line, a direction) is dropped once it would be late (U-96)
         const advice = aside && aside.kind === 'advice' ? aside.text : null;
-        if (e.type === 'corner' && !e.recce) call = chainedCall(e, ev, spirited || first, careRun.at(noteM(e), track.id), { vMps, advice });   // "care" once a run (§4)
-        else if (advice) call = chainedCall(e, ev, spirited || first, null, { vMps, advice });
+        const adviceToken = advice ? aside.token : null;
+        if (e.type === 'corner' && !e.recce) call = chainedCall(e, ev, spirited || first, careRun.at(noteM(e), track.id), { vMps, advice, adviceToken });   // "care" once a run (§4)
+        else if (advice) call = chainedCall(e, ev, spirited || first, null, { vMps, advice, adviceToken });
         openNotes(true);   // DA-3: the drive's opener goes first
         // LA-4 / MA-1: the first corner call after the notes wake carries the rising chime
         const cue = e.type === 'corner' && state.wakeCue ? 'wake' : undefined;   // until the notes go quiet again
         if (cue) state.wakeCue = false;
         say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e), duck: true, kitFor: call.keys,
-          aside: aside ? { ...aside, bare: call.bare } : null, cue,
+          aside: aside ? { ...aside, bare: call.bare, bareTokens: call.bareTokens } : null, cue, ...(call.tokens ? { tokens: call.tokens } : {}),
           ...(e.type === 'corner' && !startCall ? { dueByM: noteM(e) - lastM } : {}), ...(startCall ? { atM: null } : {}) });
         if (live) reaction.called(performance.now(), call.text, ApexNoteTiming.needsBrake(vMps, apexMps));
       }
@@ -2067,7 +2077,7 @@
       if (live && !offRoute && !brakeSay && track === plannedRoute && Array.isArray(track.descents) && window.ApexBrakeHeat) {
         const said = drive.descentSaid || (drive.descentSaid = new Set());
         const d = ApexBrakeHeat.descentAhead(track.descents, state.cursorM, said);
-        if (d) { said.add(d.start_m); brakeSay = { text: ApexBrakeHeat.descentCall(d, ApexUnits.spokenShort), until: performance.now() + 60000 }; }
+        if (d) { said.add(d.start_m); brakeSay = { text: ApexBrakeHeat.descentCall(d), until: performance.now() + 60000 }; }
       }
       // A low sun the road turns into (sun_ahead.js): on the road being followed, live, once every 5 minutes at most, not under
       // a sky the place plate knows is overcast or wet. Its own slot after brake heat, kept 15 s (then the stretch is near).
@@ -2092,7 +2102,7 @@
       // notes. 30 s to find a quiet moment, then the start is behind you and it is dropped.
       if (live && !offRoute && driveActive && !drive.briefed && track && track === plannedRoute && window.ApexBriefing && state.notesMode !== 'quiet') {
         drive.briefed = true;
-        const text = ApexBriefing.line(track, state.cursorM, ApexUnits.spokenShort);
+        const text = ApexBriefing.line(track, state.cursorM, ApexUnits);
         if (text) briefSay = { text, until: performance.now() + 30000 };
       }
       // A twisty section after a long quiet stretch of the planned route (corners_ahead.js): said once, about 30 s out; not
@@ -2100,7 +2110,7 @@
       if (live && !offRoute && !cornersSay && track && track === plannedRoute && window.ApexCornersAhead && state.notesMode !== 'quiet' && vMps != null) {
         if (track.sectionsFor !== track.events) { track.sectionsFor = track.events; track.sections = ApexCornersAhead.sections(track.events); }
         const said = drive.sectionsSaid || (drive.sectionsSaid = new Set()), sec = ApexCornersAhead.next(track.sections, state.cursorM, said);
-        if (sec && ApexCornersAhead.due(sec, state.cursorM, vMps)) { said.add(sec.startM); cornersSay = { text: ApexCornersAhead.text(sec, state.cursorM, ApexUnits.spokenShort), until: performance.now() + 15000 }; }
+        if (sec && ApexCornersAhead.due(sec, state.cursorM, vMps)) { said.add(sec.startM); cornersSay = { text: ApexCornersAhead.text(sec), until: performance.now() + 15000 }; }
       }
       if (cornersSay && (performance.now() > cornersSay.until || state.notesMode === 'quiet')) cornersSay = null;
       if (briefSay && performance.now() > briefSay.until) briefSay = null;
@@ -8520,7 +8530,10 @@
     document.querySelectorAll('#noteWordsList [data-words]').forEach(b => b.addEventListener('click', () => {
       state.noteWords = b.dataset.words; savePrefs(); renderNoteWords(); renderThemePicker(); render(true);
       if (track && track.kind === 'route' && car.route) carRoute(track);   // M-3: the car's plates in the new words
-      say((window.ApexVocabulary && ApexVocabulary.sampleCall(state.noteWords, vocabDeps())) || '', true);   // the example, said
+      const sample = (window.ApexVocabulary && ApexVocabulary.sampleCall(state.noteWords, vocabDeps())) || '';
+      const [sa, sb] = window.ApexVocabulary ? ApexVocabulary.SAMPLE : [];
+      if (state.noteWords === 'plain') say(sample, true, null, null, (sa && ApexPlainNotes.plainTokens && ApexPlainNotes.plainTokens([sa], ApexUnits, { next: sb })) ? { tokens: ApexPlainNotes.plainTokens([sa], ApexUnits, { next: sb }) } : {});
+      else say(sample, true, sa ? [sa] : null);   // the example, said in the pack's voice
     }));
     renderNoteWords();
     $('hlOpenBtn').addEventListener('click', async () => {
@@ -9650,7 +9663,8 @@
       const next = ApexHazardReports.nextAhead(reported.list, me, Math.max(150, Math.min(600, v * 8)), reported.said);
       paintHazardPlate(ApexHazardReports.nextAhead(reported.list, me, HZ_PLATE_M, null));
       if (next) { reported.said.add(next.id); say(next.text, false, null, null, { kind: 'hazard', key: `rep:${next.id}`, repeatMs: 10 * 60000, alert: true,
-        tokens: [!next.label && ApexVoiceLines.TEXT[`line:rep_${next.kind}`] ? `line:rep_${next.kind}` : 'line:rep_hazard'], named: !!next.label }); }
+        ...((ApexVoiceLines.compose && ApexVoiceLines.compose(next.text)) ? { tokens: ApexVoiceLines.compose(next.text) }
+          : { tokens: [!next.label && ApexVoiceLines.TEXT[`line:rep_${next.kind}`] ? `line:rep_${next.kind}` : 'line:rep_hazard'], named: !!next.label }) }); }
       try { policeAheadTick(me); } catch (_) { /* never in the way of the drive */ }
       try { closedAheadTick(me); } catch (_) { /* never in the way of the drive */ }
       const passed = reported.watch.update(reported.list, me, reported.mine);
