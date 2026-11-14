@@ -99,6 +99,7 @@
   <script src="route_thumb.js" defer></script>
   <script src="outbox.js" defer></script>
   <script src="stage_delta.js" defer></script>
+  <script src="pass_coach.js" defer></script>
   <script src="lanes.js" defer></script>
   <script src="voice_lines.js" defer></script>
   <script src="vocabulary.js" defer></script>
@@ -2371,6 +2372,7 @@
         <div class="end-portrait" id="endPortrait" aria-hidden="true" hidden></div>
       </div>
       <div class="stage-bar" id="stageBar" role="status" aria-live="polite" hidden><span id="stageName"></span><b id="stageDelta">--</b><small id="stageCount"></small></div>
+      <div class="stage-bar" id="coachBar" role="status" hidden><span>This stretch</span><b id="coachDelta">--</b><small id="coachCount"></small></div>
       <div class="stage-bar" id="lapBar" role="status" aria-live="polite" hidden><span id="lapName">Track</span><b id="lapTime">--</b><small id="lapInfo"></small><button class="key" id="lapSetBtn" hidden>Start/finish here</button></div>
       <div class="hz-ask" id="hzAsk" role="alertdialog" aria-live="assertive" hidden><span id="hzAskText"></span><button class="key" id="hzStill">Still there</button><button class="key" id="hzGone">Gone</button></div>
       <!-- panel round 2 (PR-1, SO-4): what an instrument means and how it is measured, behind a tap on it, parked or in a
