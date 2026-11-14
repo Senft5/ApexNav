@@ -2097,8 +2097,9 @@
     [data-theme="roadbook"] :is(.map-key, .edge-tab, .gear-key) { box-shadow: var(--elev-1); border: 0; }
 
     /* the three route levels: three raised tiles with a gap, the picked one solid ink */
-    [data-theme="roadbook"] .rc-levels { gap: 8px; }
-    [data-theme="roadbook"] .rc-levels > button { border: 0; border-radius: var(--r-card); background: var(--raised); }
+    [data-theme="roadbook"] .rc-levels { gap: 6px; }
+    /* the tiles' inner pad 8, not 10: the gaps take 12 px of the row, and "Long way" fits a mini on its side (CI 2026-11-14: 88/86) */
+    [data-theme="roadbook"] .rc-levels > button { border: 0; border-radius: var(--r-card); background: var(--raised); padding-left: 8px; padding-right: 8px; }
     [data-theme="roadbook"] .rc-levels > button + button { margin-left: 0; }
     [data-theme="roadbook"] .rc-levels > button.on { background: var(--panel-ink); }
 
