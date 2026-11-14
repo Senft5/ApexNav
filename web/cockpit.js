@@ -2563,6 +2563,7 @@
       if (track === t) {
         loadTrackOnMap(); render(false);
         const lpr = t.alpr.filter((c) => c.kind !== 'speed').length, spd = t.alpr.length - lpr;
+        carHazards();
         toast([`${lpr} plate-reading camera${lpr === 1 ? '' : 's'}`, spd ? `${spd} speed camera${spd === 1 ? '' : 's'}` : null].filter(Boolean).join(' and ') + ' on this route');
       }
     }
@@ -9705,7 +9706,9 @@
         attacks = car.attacks.map((c) => ({ id: c.segment_id, name: c.name,
           detail: [c.featured ? 'Featured' : '', Number.isFinite(c.length_m) ? ApexUnits.long(c.length_m, 1) : ''].filter(Boolean).join(' · ') }));
       } catch (_) {}
-      return ApexCarPlay.placesMessage(recentPlaces(), pinned, saved, (m) => ApexUnits.long(m), attacks);
+      // Nearby first (Apple Maps' Gas, Coffee and Food on the car): the phone's Find nearby kinds, an electric car's Chargers
+      const nearby = window.ApexNearby ? ApexCarPlay.nearbyKeys(ApexNearby.keys(isElectric()), ApexNearby.CATS) : [];
+      return { ...ApexCarPlay.placesMessage(recentPlaces(), pinned, saved, (m) => ApexUnits.long(m), attacks), nearby };
     }
     // Time attack's Drive it (time_attack.js, the phone's or the car's): the loop itself is the route, as a roadbook road is
     async function driveAttack(c, g) {
@@ -9731,6 +9734,7 @@
         o ? o.picked : 0, (m) => ApexUnits.long(m, 1)));
       carPost(ApexCarPlay.cornersMessage(t, (m) => sample(t, m), state.noteWords));        // the road book on the car's map (web/carmap.js)
       car.along = ''; carAlong(t);                                       // the car forgets the last route's places with it
+      carHazards();                                                      // and its cameras
     }
     // The cafés and fuel along the route by name on the car's route preview (the owner, 2026-11-11). t.scenic comes later
     // than the route (attachScenic): it is sent then, and again with every route the car is sent.
@@ -9750,8 +9754,11 @@
       car.look = key;
       carPost(msg);
     }
+    // with the planned route's speed cameras (and plate readers) as plates, as Waze shows them on the car: the same switch as
+    // the phone's camera notes (toggles.lpr), from map data (web/cameras.js), never a camera we weren't told of
     function carHazards() {
-      const msg = ApexCarPlay.hazardsMessage(reported.list, ApexHazardReports.LABEL), key = msg.list.map((h) => h.id).join(',');
+      const t = plannedRoute && car.route && Array.isArray(plannedRoute.alpr) && state.toggles.lpr ? plannedRoute : null;
+      const msg = ApexCarPlay.hazardsMessage(reported.list, ApexHazardReports.LABEL, t ? t.alpr : null), key = msg.list.map((h) => h.id).join(',');
       if (key === car.hazards) return;
       car.hazards = key;
       carPost(msg);
@@ -9830,6 +9837,10 @@
     }
     function carGuide() {
       if (!driveActive) return;
+      // off the route: the status line's words as the car's paused trip ("Rerouting…"), never the old turn frozen; back on it
+      // (or on the new route) the key differs, so the next maneuver goes out at once
+      const off = track && track.kind === 'route' && state.mode === 'live' && state.cursorIdx < 0 ? ApexCarPlay.pausedMessage(offRouteText()) : null;
+      if (off) { if (off.key !== car.guideKey) { car.guideKey = off.key; car.guideAt = performance.now(); carPost(off); } return; }
       // U-59: a drive with no route (or on the road ahead) is still a drive on the car: the record card and the distance driven
       const now = performance.now(), g = !track || track.kind !== 'route'
         ? ApexCarPlay.recordingMessage(drive.rec ? drive.rec.km * 1000 : null, (m) => ApexUnits.long(m, 1))
@@ -10515,6 +10526,11 @@
       else if (m.action === 'offer' && car.offer && m.id === car.offer.id && performance.now() < car.offer.until) car.offer.run();
       else if (m.action === 'disconnect') keepCar(false, m.t);      // Round 3: the car switched off; the drive ends once it stays put
       else if (m.action === 'places') carPost(carPlaces());
+      else if (m.action === 'nearby' && window.ApexNearby && ApexNearby.CATS[m.cat]) {     // a kind from the car's Places: the phone's Find nearby list
+        const cat = m.cat;
+        nearbyFor(cat).then(({ rows, failed }) => carPost(ApexCarPlay.nearbyMessage(cat, ApexNearby.CATS[cat].label, rows, (d) => ApexUnits.long(d),
+          ApexNearby.emptyLine(cat, failed, 8, (d) => ApexUnits.long(d))))).catch(() => carPost(ApexCarPlay.nearbyMessage(cat, ApexNearby.CATS[cat].label, [], null, ApexNearby.emptyLine(cat, true))));
+      }
       else if (m.action === 'attack' && !driveActive) {                  // a time attack you've entered, from the car's Places
         const c = car.attacks.find((x) => String(x.segment_id) === String(m.id));
         let g = [];
@@ -10525,6 +10541,13 @@
         const p = ApexSavedRoutes.list(localStorage).find((q) => q.id === m.id);
         if (p) openSaved(p).catch(() => {});
       }
+      // Add a stop from the car: the list of what's ahead, then the one picked, only one that list had (the route's own places)
+      else if (m.action === 'stops') carPost(ApexCarPlay.stopsMessage(track && track === plannedRoute && track.kind === 'route' ? track.scenic : null,
+        state.mode === 'live' ? routeWatch.bestM : state.cursorM, (d) => ApexUnits.long(d, 1, true)));
+      else if (m.action === 'stop' && Number.isFinite(m.lat) && Number.isFinite(m.lon) && track && track === plannedRoute) {
+        const p = (track.scenic || []).find((x) => Math.abs(x.lat - m.lat) < 1e-6 && Math.abs(x.lon - m.lon) < 1e-6);
+        if (p) carAsked(() => addViaAt({ lat: p.lat, lon: p.lon, label: (p.name || '').trim() || String(m.name || 'Stop').slice(0, 40) }, p.m));
+      }
       else if (m.action === 'loop' && LOOP_MINUTES.includes(m.minutes) && !driveActive) carAsked(() => loop({ minutes: m.minutes }));
       // a distance from the car's Loops list: only one the dial has (miles, or kilometres kept as miles)
       else if (m.action === 'loop' && Number.isFinite(m.miles) && !driveActive
@@ -10532,7 +10555,7 @@
       else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) carAsked(() => reportHazard(m.kind, null, true));
       else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
-      else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = ''; car.limitKey = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
+      else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = null; car.limitKey = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
         carPost(carPlaces());                   // a car screen that just connected gets everything again
         carPost(ApexCarPlay.loopsMessage(loopBy, ApexUnits.metric()));   // and the loop dial's lengths for its Loops
         peekTimeAttack();                                                // and this week's loop for its Places, if you've entered it

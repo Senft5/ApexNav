@@ -350,6 +350,13 @@ final class ApexNativeCarMap: UIView {
         cam = nil
     }
 
+    /// Overview while guiding (Apple Maps' and Waze's): the whole route, until Recentre, a pan or a new mode.
+    func overview() {
+        guard route.count >= 2 else { return }
+        follow = false
+        fitRoute(animated: true)
+    }
+
     func recentre() {
         follow = true
         if mode == "preview" { mode = "idle" }

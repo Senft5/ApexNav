@@ -248,6 +248,36 @@
   }
 
   /**
+   * Add a stop from the car (Apple Maps' and Waze's "Add stop" while guiding): the fuel, chargers and cafés still ahead on
+   * the route (scenic.js along(): { kind, name, lat, lon, m }), nearest first, at most 8, none closer than 150 m (too late
+   * to turn in). { kind:'stops', list:[{ name, at, m, detail }] }: the name on the map, else the kind ("Fuel"); the detail
+   * says the kind and how far ahead. An empty list when there are none (the car says so).
+   */
+  const STOP_KINDS = { fuel: 'Fuel', charge: 'Charger', cafe: 'Café' }, STOPS_MAX = 8;
+  function stopsMessage(list, atM, fmtDist) {
+    const at = finite(atM) ? atM : 0, fmt = typeof fmtDist === 'function' ? fmtDist : (m) => `${(m / 1000).toFixed(1)} km`;
+    const rows = (Array.isArray(list) ? list : []).filter((p) => p && STOP_KINDS[p.kind] && finite(p.m) && p.m > at + 150 && finite(p.lat) && finite(p.lon))
+      .sort((a, b) => a.m - b.m).slice(0, STOPS_MAX).map((p) => {
+        const name = typeof p.name === 'string' ? p.name.trim().slice(0, 40) : '', word = STOP_KINDS[p.kind];
+        return { name: name || word, at: [p.lat, p.lon], m: Math.round(p.m), detail: [name ? word : '', `${fmt(p.m - at)} ahead`].filter(Boolean).join(' · ') };
+      });
+    return { kind: 'stops', list: rows };
+  }
+
+  /**
+   * Off the route in a live drive: the car's card says what the phone's status line says (cockpit.js offRouteText), as
+   * CarPlay's own paused trip, never the last turn with its distance frozen while the car drives away from it (Apple Maps
+   * and Waze show "Rerouting" there). `words` null: on route, no message. { kind:'paused', key, reason, text }, `reason`
+   * 'rerouting' while a new route is coming, else 'proceed' (Off route, Wrong way, no signal): CPTripPauseReason.
+   */
+  function pausedMessage(words) {
+    const w = String(words || '').trim();
+    if (!w) return null;
+    const text = clip(w);
+    return { kind: 'paused', key: `off:${text}`, reason: /^Rerouting/.test(w) ? 'rerouting' : 'proceed', text };
+  }
+
+  /**
    * The car's Loops list as the phone's loop dial (cockpit.js labelLoops): `by` 'time' gives its five times, otherwise its
    * five distances in the driver's units (`metric`), so the car never offers lengths the phone's dial doesn't.
    * { kind:'loops', list:[{ name, minutes }] | [{ name, miles }] }, the miles kept as the dial keeps them.
@@ -291,6 +321,23 @@
   }
 
   /**
+   * Nearby on the car (Apple Maps' Gas, Coffee and Food in CarPlay): the phone's Find nearby list (nearby.js list rows
+   * { label, lat, lon, m }) for one kind, nearest first by name and distance (`fmtDist`), at most 12; `empty` the phone's own
+   * line when there are none. { kind:'nearby', cat, title, list:[{ name, detail, at }], empty }. `keys` the kinds as rows
+   * for the car's Places: nearbyKeys(['gas','coffee','food'], CATS) -> [{ cat, name }].
+   */
+  const NEARBY_MAX = 12;
+  function nearbyMessage(cat, title, rows, fmtDist, empty) {
+    const list = (Array.isArray(rows) ? rows : []).filter((r) => r && finite(r.lat) && finite(r.lon) && typeof r.label === 'string' && r.label.trim())
+      .slice(0, NEARBY_MAX).map((r) => ({ name: r.label.trim().slice(0, 60), detail: finite(r.m) && typeof fmtDist === 'function' ? String(fmtDist(r.m)) : '',
+        at: [+r.lat.toFixed(6), +r.lon.toFixed(6)] }));
+    return { kind: 'nearby', cat: String(cat || ''), title: String(title || 'Nearby').slice(0, 40), list, empty: list.length ? '' : String(empty || '').slice(0, 80) };
+  }
+  function nearbyKeys(keys, cats) {
+    return (Array.isArray(keys) ? keys : []).filter((k) => cats && cats[k] && cats[k].label).map((k) => ({ cat: k, name: cats[k].label }));
+  }
+
+  /**
    * The road book on the car's map (web/carmap.js): every corner's rating at its apex, { kind:'corners', list:[{ at, text,
    * tight }] }. `at(m)` places an event that carries no position of its own (a planned route's corners have dist_m only).
    * Panel round 1 M-3: `words` ('plain' | 'rally') is the driver's notation, the strip's next cells' (plain_notes.js
@@ -311,10 +358,23 @@
     return { kind: 'corners', list };
   }
 
-  /** Reported hazards for the car's map: { kind:'hazards', list:[{ id, at, title }] }, at most 40. */
-  function hazardsMessage(reports, labels) {
-    const list = (Array.isArray(reports) ? reports : []).filter((h) => h && finite(h.lat) && finite(h.lon)).slice(0, 40)
-      .map((h) => ({ id: String(h.id || ''), at: [+h.lat.toFixed(6), +h.lon.toFixed(6)], title: h.label || (labels && labels[h.kind]) || 'Hazard' }));
+  /**
+   * Reported hazards for the car's map: { kind:'hazards', list:[{ id, at, title }] }, at most 40. `cameras` (the planned
+   * route's t.alpr, cockpit.js attachAlpr) add the speed cameras first, then the plate readers, after the reports, as
+   * "Speed camera" / "Camera" plates (Waze shows them on the car).
+   */
+  const HAZARDS_MAX = 40;
+  function hazardsMessage(reports, labels, cameras) {
+    const at = (h) => [+h.lat.toFixed(6), +h.lon.toFixed(6)];
+    const list = (Array.isArray(reports) ? reports : []).filter((h) => h && finite(h.lat) && finite(h.lon)).slice(0, HAZARDS_MAX)
+      .map((h) => ({ id: String(h.id || ''), at: at(h), title: h.label || (labels && labels[h.kind]) || 'Hazard' }));
+    const cams = (Array.isArray(cameras) ? cameras : []).filter((c) => c && finite(c.lat) && finite(c.lon))
+      .sort((a, b) => (a.kind === 'speed' ? 0 : 1) - (b.kind === 'speed' ? 0 : 1));
+    for (const c of cams) {
+      if (list.length >= HAZARDS_MAX) break;
+      const p = at(c);
+      list.push({ id: `cam:${p[0]},${p[1]}`, at: p, title: c.kind === 'speed' ? 'Speed camera' : 'Camera' });
+    }
     return { kind: 'hazards', list };
   }
 
@@ -565,7 +625,7 @@
     return { step, reset };
   }
 
-  const api = { sightMessage, limitMessage, line, routeMessage, loopsMessage, laneGlyphs, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
+  const api = { sightMessage, limitMessage, stopsMessage, pausedMessage, nearbyMessage, nearbyKeys, line, routeMessage, loopsMessage, laneGlyphs, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
                 recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
   api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
   api.sightTag = sightTag;                                             // panel round 2, TH-2
