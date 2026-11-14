@@ -30,6 +30,7 @@ console.log(JSON.stringify({
   mentions: [D.mentionParts('@sam nice, and you@bob? @cara!'), D.mentionParts('no one here'), D.mentionParts('@ab @toolonghandle_toolong x')],
   at: [D.mentionAt('hey @Sa', 7), D.mentionAt('hey @', 5), D.mentionAt('mail x@y', 8), D.mentionAt('@sam done', 9), D.mentionAt('@bo and', 3)],
   sug: [D.suggest('c', ['cara', 'Cara', 'carl', 'me', 'cy', 'ce', 'cz'], 'me'), D.suggest('', ['bob', 'me', null], 'me')],
+  kl: [D.kudosLine(['bob'], 1), D.kudosLine(['bob', 'cara'], 2), D.kudosLine(['bob', 'cara', 'dan'], 5), D.kudosLine(['bob', 'cara', 'dan'], 3), D.kudosLine([], 4)],
   ago: [D.ago('2026-11-13 12:00:00', Date.parse('2026-11-13T12:01:00Z')), D.ago('2026-11-13 12:00:00', Date.parse('2026-11-13T15:00:00Z'))],
 }));
 """
@@ -67,3 +68,7 @@ def test_mention_suggestions():
     r = run()
     assert r["at"] == [{"start": 4, "q": "sa"}, {"start": 4, "q": ""}, None, None, {"start": 0, "q": "bo"}]
     assert r["sug"] == [["cara", "carl", "cy", "ce"], ["bob"]]
+
+
+def test_kudos_line():
+    assert run()["kl"] == ["Kudos from @bob", "Kudos from @bob and @cara", "Kudos from @bob, @cara and 3 others", "Kudos from @bob, @cara and 1 other", ""]

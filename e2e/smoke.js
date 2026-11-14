@@ -6645,7 +6645,8 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
     if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
     if (u.pathname === '/api/crews') return json([{ id: 'k1', name: 'Ridge Runners', role: 'member', visibility: 'private', members: 3 }]);
     if (u.pathname === '/api/feed') return json([bobPost]);
-    if (u.pathname === '/api/posts/P1AAAAAAAAAAAAAA') return json({ ...bobPost, comment_list: [{ id: 'C1AAAAAAAAAAAAAA', body: 'Was that you at the overlook?', created_at: bobPost.created_at, handle: 'cara', photo_id: null, mine: false, can_delete: false }] });
+    if (u.pathname === '/api/posts/P1AAAAAAAAAAAAAA') return json({ ...bobPost, comment_list: [{ id: 'C1AAAAAAAAAAAAAA', body: 'Was that you at the overlook?', created_at: bobPost.created_at, handle: 'cara', photo_id: null, mine: false, can_delete: false }],
+      kudos_from: [{ handle: 'cara', photo_id: null }, { handle: 'dan', photo_id: null }] });
     return json([]);
   });
   await page.goto(base + '/index.html?view=friends');
@@ -6676,6 +6677,13 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   await page.click('#accountBody .feed-card .feed-acts button[aria-label="1 comments"]');
   await page.waitForSelector('.feed-sheet .feed-comment');
   check(/Was that you at the overlook\?/.test(await page.textContent('.feed-sheet .feed-comments')), 'the comments, under the post');
+  // (2026-11-14) who gave kudos, under the post; a tap lists them
+  check(await page.textContent('.feed-sheet .feed-kudos-from > span:last-child') === 'Kudos from @cara and @dan' && await page.$$eval('.feed-sheet .feed-kudos-from .feed-faces > *', (l) => l.length) === 2,
+    'who gave kudos, with their faces: ' + await page.textContent('.feed-sheet .feed-kudos-from'));
+  await page.click('.feed-sheet .feed-kudos-from');
+  await page.waitForSelector('.feed-kudos-sheet .feed-kudos-row:has-text("@dan")');
+  await page.click('.feed-kudos-sheet button:has-text("Done")');
+  await page.waitForSelector('.feed-kudos-sheet', { state: 'detached' });
   // (2026-11-14) typing @ suggests who to mention: the post's people, then friends
   await page.locator('.feed-sheet .feed-say .field').pressSequentially('@ca');
   await page.waitForSelector('.feed-sheet .feed-tags:not([hidden]) button:has-text("@cara")');

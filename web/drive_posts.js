@@ -24,6 +24,13 @@
     }
     return out;
   }
+  /** "Kudos from @bob", "@bob and @cara", "@bob, @cara and 3 others" (n: the post's count, which may hold more). */
+  function kudosLine(handles, n) {
+    const h = handles.slice(0, 2).map((x) => `@${x}`), rest = Math.max((n || 0), handles.length) - h.length;
+    if (!h.length) return '';
+    const names = rest > 0 ? `${h.join(', ')} and ${rest === 1 ? '1 other' : `${rest} others`}` : h.join(' and ');
+    return `Kudos from ${names}`;
+  }
   function mentionParts(text) {
     const out = []; let last = 0;
     for (const m of String(text || '').matchAll(MENTION)) {
@@ -163,6 +170,9 @@
     .feed-comment { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: start; }
     .feed-comment p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
     .feed-comment small { color: var(--panel-dim); font-size: 12px; }
+    .feed-kudos-from { display: flex; align-items: center; gap: 8px; min-height: 44px; background: none; border: 0; padding: 0; color: var(--panel-ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+    .feed-faces { display: inline-flex; } .feed-faces > * + * { margin-left: -8px; }
+    .feed-kudos-row { display: flex; align-items: center; gap: 12px; min-height: 48px; width: 100%; background: none; border: 0; padding: 0; color: var(--panel-ink); font: inherit; text-align: left; cursor: pointer; }
     .feed-tags { display: flex; flex-wrap: wrap; gap: 8px; }
     .feed-tags .feed-tag { min-height: 44px; }
     .feed-comment .feed-more { width: 44px; height: 44px; display: grid; place-items: center; text-decoration: none; font-size: 20px; color: var(--panel-ink); }
@@ -327,6 +337,23 @@
     }
 
     /** A post on its own, with its comments and a line to add one. */
+    /** "Kudos from @bob, @cara and 3 others" under a post, with their faces; a tap lists everyone (null: nobody yet). */
+    function kudosFrom(p) {
+      const who = Array.isArray(p.kudos_from) ? p.kudos_from : [];
+      if (!who.length) return el('span', { hidden: true });
+      const b = el('button', { type: 'button', className: 'feed-kudos-from' },
+        el('span', { className: 'feed-faces' }, ...who.slice(0, 3).map((k) => face(k, 24))), el('span', { textContent: kudosLine(who.map((k) => k.handle), p.kudos) }));
+      b.addEventListener('click', () => {
+        const s = sheet('Kudos', 'feed-sheet feed-kudos-sheet');
+        s.box.append(el('h3', { textContent: 'Kudos' }), ...who.map((k) => {
+          const row = el('button', { type: 'button', className: 'feed-kudos-row' }, face(k, 36), el('b', { textContent: `@${k.handle}` }));
+          row.addEventListener('click', () => { s.close(); if (page.openFriend) page.openFriend(k.handle); });
+          return row;
+        }), el('div', { className: 'row' }, btn('Done', s.close, 'linkbtn')));
+      });
+      return b;
+    }
+
     async function open(id, o = {}) {
       const s = sheet('Drive post', 'feed-sheet');
       s.box.append(el('p', { className: 'note', textContent: 'Loading…' }));
@@ -381,7 +408,7 @@
           friendHandles = Array.isArray(l) ? l.filter((f) => f.status === 'accepted' && f.handle).map((f) => f.handle) : []; paint(); }).catch(() => {}); }
       };
       field.addEventListener('input', paint);
-      s.box.replaceChildren(card(p, { full: true, after: o.after, gone: s.close }), list, tags, el('div', { className: 'feed-say' }, field, send), el('div', { className: 'row' }, btn('Done', s.close, 'linkbtn')));
+      s.box.replaceChildren(card(p, { full: true, after: o.after, gone: s.close }), kudosFrom(p), list, tags, el('div', { className: 'feed-say' }, field, send), el('div', { className: 'row' }, btn('Done', s.close, 'linkbtn')));
       if (o.focus) field.focus();
     }
 
@@ -537,6 +564,6 @@
     return { section, full, open, compose, post, remove, card, drivesOf };
   }
 
-  const api = { trimLine, encode, decode, throughPoints, lineSvg, ago, facts, mentionParts, mentionAt, suggest, mount, CUT_M, MAX_POINTS };
+  const api = { trimLine, encode, decode, throughPoints, lineSvg, ago, facts, mentionParts, mentionAt, suggest, kudosLine, mount, CUT_M, MAX_POINTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDrivePosts = api;
 })(typeof window !== 'undefined' ? window : globalThis);
