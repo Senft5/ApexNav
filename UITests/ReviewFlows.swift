@@ -301,7 +301,7 @@ final class ReviewFlows: XCTestCase {
             XCTAssertTrue(until(60) { bar.exists }, "the review route never resolved")
             pause(3)                                               // its card has opened itself (U-70) by now
         }
-        let use = "Use \(name)", back = web.buttons["Use Roadbook"], gone = web.buttons[use]
+        let use = "Use \(name)", back = web.buttons["Use Vetta"], gone = web.buttons[use]
         let took = { back.exists && !gone.exists }
         for _ in 0..<2 where !took() {
             try tab("Garage")
