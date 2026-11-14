@@ -156,6 +156,20 @@ export async function feed(env: Env, v: Viewer, url: URL) {
   return rows.map((r) => shape(r, v.id));
 }
 
+/** GET /api/feed/week: this week (from Monday) on the Feed, per driver: drives posted, how far, the best Score; you and
+ *  whoever's posts you can see (POST_SEEN), most distance first, ten at most. A drive posted to friends and a crew counts once. */
+export async function feedWeek(env: Env, v: Viewer) {
+  return (await env.DB.prepare(
+    `SELECT u.handle, u.photo_id, d.author = ?1 AS you, COUNT(*) AS drives, COALESCE(SUM(d.length_m), 0) AS length_m, MAX(d.score) AS best
+       FROM (SELECT DISTINCT p.author, p.title, p.driven_on, p.length_m, p.score FROM drive_posts p
+              WHERE p.driven_on >= date('now', '-6 days', 'weekday 1') AND ${POST_SEEN("p")}) d
+       JOIN users u ON u.id = d.author
+      WHERE u.handle IS NOT NULL
+      GROUP BY d.author ORDER BY length_m DESC, drives DESC, u.handle LIMIT 10`).bind(v.id)
+    .all<{ handle: string; photo_id: string | null; you: number; drives: number; length_m: number; best: number | null }>()).results
+    .map((r) => ({ ...r, you: !!r.you }));
+}
+
 async function seenPost(env: Env, v: Viewer, id: string): Promise<Row> {
   if (!ID_RE.test(id)) throw new HttpError(404, "no_post");
   const r = await env.DB.prepare(`${SELECT} WHERE p.id = ?2 AND ${POST_SEEN("p")}`).bind(v.id, id).first<Row>();

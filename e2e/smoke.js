@@ -6705,6 +6705,7 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
     if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
     if (u.pathname === '/api/crews') return json([{ id: 'k1', name: 'Ridge Runners', role: 'member', visibility: 'private', members: 3 }]);
     if (u.pathname === '/api/feed') return json([bobPost]);
+    if (u.pathname === '/api/feed/week') return json([{ handle: 'bob', photo_id: null, you: false, drives: 2, length_m: 48280, best: 812 }, { handle: 'me', photo_id: null, you: true, drives: 1, length_m: 16093, best: null }]);
     if (u.pathname === '/api/posts/P1AAAAAAAAAAAAAA') return json({ ...bobPost, comment_list: [{ id: 'C1AAAAAAAAAAAAAA', body: 'Was that you at the overlook?', created_at: bobPost.created_at, handle: 'cara', photo_id: null, mine: false, can_delete: false }],
       kudos_from: [{ handle: 'cara', photo_id: null }, { handle: 'dan', photo_id: null }] });
     return json([]);
@@ -6716,6 +6717,13 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
       kudos: k.querySelector('.feed-acts button').getAttribute('aria-label'), wide: k.scrollWidth - k.clientWidth }; });
   check(/@bob/.test(c.text) && /Cherohala Skyway/.test(c.text) && /812/.test(c.text) && /Fog on top/.test(c.text) && /Cherohala Skyway, TN-165 \+1/.test(c.text) && c.path > 100 && c.wide <= 1,
     'a friend\'s post: who, the drive, its Score, its line, the roads and what they said: ' + JSON.stringify(c));
+  // (2026-11-14) This week above the Feed: who posted, how far, how many, the best Score; a friend's card opens their profile
+  await page.waitForSelector('#accountBody .feed-week:not([hidden]) .week-card');
+  const wk = await page.$$eval('#accountBody .feed-week .week-card', (l) => l.map((b) => [b.tagName, b.querySelector('.week-who').textContent, b.querySelector('small').textContent]));
+  check(JSON.stringify(wk) === JSON.stringify([['BUTTON', '1  @bob', '30.0 mi · 2 drives · best 812'], ['DIV', '2  You', '10.0 mi · 1 drive']]), 'this week, most distance first: ' + JSON.stringify(wk));
+  await page.click('#accountBody .feed-week button.week-card');
+  await page.waitForSelector('.profile-view .profile-drives:not([hidden]) .feed-card', { timeout: 10000 });
+  await page.click('.profile-view .side-pop-head button');
   // the post reads like Strava's: its numbers in one row, the road wide below them, ringed start and red finish, no box around it
   const look = await page.evaluate(() => { const k = document.querySelector('#accountBody .feed-card'), s = k.querySelector('.feed-stats'), l = k.querySelector('.feed-line'), r = (e) => e.getBoundingClientRect();
     return { stats: [...s.children].map((d) => d.textContent), wide: Math.round(r(l).width - r(k).width), below: r(l).top >= r(s).bottom, go: !!l.querySelector('circle.go'), end: !!l.querySelector('circle.end'),
