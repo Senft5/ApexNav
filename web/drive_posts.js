@@ -163,7 +163,8 @@
     .feed-stats small { color: var(--panel-dim); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
     .feed-stats b { font-family: var(--font-num); font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
     .feed-stats b span { font-family: inherit; font-size: 15px; font-weight: 600; color: var(--panel-dim); margin-left: 3px; }
-    .feed-line { width: 100%; height: auto; aspect-ratio: 2 / 1; display: block; background: var(--well, rgba(0,0,0,0.05)); }
+    .feed-line { width: 100%; max-width: 90vh; height: auto; aspect-ratio: 2 / 1; display: block; background: var(--well, rgba(0,0,0,0.05)); }
+    /* a phone on its side: the line at most half the screen's height, so the post's words and keys stay in view */
     .feed-line path { fill: none; stroke: var(--accent); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
     .feed-line .casing { display: none; }
     .feed-line.on-map { background-size: 100% 100%; background-position: center; }
