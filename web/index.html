@@ -8,7 +8,7 @@
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
        first paint is the launch screen: its ink and its lockup at 184 x 50, centred. The cover (#boot) then draws the same in
        the theme's colours once the body exists. -->
-  <style>html { min-height: 100%; background: #151310 url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 372 100'><defs><clipPath id='c'><rect x='0' y='26' width='372' height='48'/></clipPath></defs><circle cx='34' cy='84' r='8' fill='%23EDE4D3'/><path d='M34 84 V52 Q34 26 62 21.5' fill='none' stroke='%23EDE4D3' stroke-width='9'/><path d='M60 9 L88 18 L63 34 Z' fill='%23EDE4D3'/><circle cx='51' cy='43' r='6.5' fill='%23C8102E'/><g clip-path='url%28%23c%29' fill='none' stroke='%23EDE4D3' stroke-linejoin='miter' stroke-miterlimit='10' stroke-width='8.5'><path d='M118 22 L135 78 L152 22'/><path d='M196 30 H170.25 V70 H196 M170.25 50 H190'/><path d='M208 30 H244 M226 30 V80'/><path d='M254 30 H290 M272 30 V80'/><path d='M300 78 L317 22 L334 78 M306 59 H328'/></g></svg>") no-repeat center / 184px 50px fixed; }</style>
+  <style>html { min-height: 100%; background: #111214 url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 372 100'><defs><clipPath id='c'><rect x='0' y='26' width='372' height='48'/></clipPath></defs><circle cx='34' cy='84' r='8' fill='%23EDE4D3'/><path d='M34 84 V52 Q34 26 62 21.5' fill='none' stroke='%23EDE4D3' stroke-width='9'/><path d='M60 9 L88 18 L63 34 Z' fill='%23EDE4D3'/><circle cx='51' cy='43' r='6.5' fill='%23C8102E'/><g clip-path='url%28%23c%29' fill='none' stroke='%23EDE4D3' stroke-linejoin='miter' stroke-miterlimit='10' stroke-width='8.5'><path d='M118 22 L135 78 L152 22'/><path d='M196 30 H170.25 V70 H196 M170.25 50 H190'/><path d='M208 30 H244 M226 30 V80'/><path d='M254 30 H290 M272 30 V80'/><path d='M300 78 L317 22 L334 78 M306 59 H328'/></g></svg>") no-repeat center / 184px 50px fixed; }</style>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#1b1914" />
@@ -2064,61 +2064,15 @@
     @keyframes hud-head { from, 70% { opacity: 0; } }
 
     /* The opening cover (web/boot.js): the theme's panel and the mark until the page has drawn. */
-    #boot { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; background: var(--panel, #151310); transition: opacity 0.2s ease-out; }
+    #boot { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; background: var(--panel, #111214); transition: opacity 0.2s ease-out; }
     #boot { color: var(--panel-ink, #EDE4D3); }
     #boot svg { display: block; width: 184px; height: 50px; }
     #boot.gone { opacity: 0; pointer-events: none; }
     @media (prefers-reduced-motion: reduce) { #boot { transition: none; } }
-    /* ============ THE VETTA DESIGN SYSTEM (the main theme, 2026-11-14) ============
-       The owner: Roadbook was "flat, boring, uninspired and low contrast", tuned screen by screen. The main theme is now one
-       system: colour from themes.js (graphite and white, one red), and shape and depth as tokens here, applied to every
-       control by kind, so a new screen is right by construction. Other themes keep their own look (the tokens default flat).
-       Keys and fields: --r-key. Cards and panels in a page: --r-card on the raised fill. Sheets: --r-sheet on their top
-       corners, lifted by --elev-2. Floating things over the map: --elev-1. Lines between rows: the hair, never ink. */
-    :root { --r-key: 0px; --r-card: 0px; --r-sheet: 0px; --elev-1: none; --elev-2: none; }
-    [data-theme="roadbook"] { --r-key: 12px; --r-card: 16px; --r-sheet: 22px; --r-chip: 999px;
-      --elev-1: 0 1px 2px rgb(16 18 24 / 0.08), 0 8px 24px -10px rgb(16 18 24 / 0.28);
-      --elev-2: 0 -1px 0 rgb(16 18 24 / 0.05), 0 -14px 36px -16px rgb(16 18 24 / 0.32); }
-    [data-theme="roadbook"][data-mode="night"] { --elev-1: 0 0 0 1px rgb(255 255 255 / 0.07), 0 10px 26px -10px rgb(0 0 0 / 0.85);
-      --elev-2: 0 0 0 1px rgb(255 255 255 / 0.06), 0 -18px 40px -14px rgb(0 0 0 / 0.9); }
-
-    /* keys: rounded, filled; the one solid ink key and the red record key keep their fills, the rest sit on the raised grey */
-    [data-theme="roadbook"] :is(.key, .ink-btn, .rec-key, .btn-start, .gear-key, .map-key, .edge-tab, label.plan-search, .switch, .detents, .chip,
-      input[type="search"], input[type="text"], input[type="email"], input[type="number"], textarea, select) { border-radius: var(--r-key); }
-    /* the outline key (ink-btn, the secondary) becomes a raised fill; a key with a fill of its own (solid, on, pressed, the
-       hazard plate's) keeps it */
-    [data-theme="roadbook"] .ink-btn:not(.solid):not(.on):not(.hz-btn):not([aria-pressed="true"]):not([aria-checked="true"]):not(.danger) { border-color: transparent; background: var(--raised); }
-    [data-theme="roadbook"] :is(.switch, .detents) > :is(button, [role="radio"]) { border-radius: calc(var(--r-key) - 3px); }
-    [data-theme="roadbook"] .chip:not(.on):not([aria-pressed="true"]):not([aria-checked="true"]) { border-color: transparent; background: var(--raised); }
-    [data-theme="roadbook"] #startDrive { border-radius: var(--r-key) 0 0 var(--r-key); }
-    [data-theme="roadbook"] #startMore { border-radius: 0 var(--r-key) var(--r-key) 0; }
-    [data-theme="roadbook"] :is(.btn-start, .rec-key) { box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--accent) 70%, transparent); }
-    [data-theme="roadbook"] #startMore { box-shadow: inset 1.5px 0 0 rgb(0 0 0 / 0.18); }
-    [data-theme="roadbook"] :is(.map-key, .edge-tab, .gear-key) { box-shadow: var(--elev-1); border: 0; }
-
-    /* the three route levels: three raised tiles with a gap, the picked one solid ink */
-    [data-theme="roadbook"] .rc-levels { gap: 6px; }
-    /* the tiles' inner pad 8, not 10: the gaps take 12 px of the row, and "Long way" fits a mini on its side (CI 2026-11-14: 88/86) */
-    [data-theme="roadbook"] .rc-levels > button { border: 0; border-radius: var(--r-card); background: var(--raised); padding-left: 8px; padding-right: 8px; }
-    [data-theme="roadbook"] .rc-levels > button + button { margin-left: 0; }
-    [data-theme="roadbook"] .rc-levels > button.on { background: var(--panel-ink); }
-
-    /* cards: the raised fill, rounded, no outline */
-    [data-theme="roadbook"] #app :is(.theme-card, .loop-suggest, .nearby-chip, .feed-card, .people-sample-body, .nav-rows) { border-color: transparent; border-radius: var(--r-card); background: var(--raised); }
-    [data-theme="roadbook"] #app :is(.plan-chips, .deck-chips) .chip:not(.on):not([aria-pressed="true"]) { border-color: transparent; background: var(--raised); border-radius: var(--r-chip); }
-    [data-theme="roadbook"] .loop-suggest svg { border: 0; border-radius: 10px; background: var(--panel); }
-    [data-theme="roadbook"] .theme-card { overflow: hidden; }
-    [data-theme="roadbook"] .theme-card.in-use { box-shadow: 0 0 0 2px var(--panel-ink); }
-    [data-theme="roadbook"] .edge-panel { border: 0; border-radius: var(--r-card); box-shadow: var(--elev-1); }
-
-    /* sheets: rounded top corners, lifted off the map; their edges are depth, not a rule */
-    [data-theme="roadbook"] :is(.plan, .plan.routed) { border-top: 0; border-radius: var(--r-sheet) var(--r-sheet) 0 0; box-shadow: var(--elev-2); }
-    [data-theme="roadbook"] .tabbar { border-top: 1px solid var(--hair); }
-    [data-theme="roadbook"] .plan-foot { border-top-color: var(--hair); }
-
 </style>
   <link rel="stylesheet" href="controls.css" />
   <link rel="stylesheet" href="signature.css" />
+  <link rel="stylesheet" href="system.css" />   <!-- the main look's shape and depth (web/system.css), last: it outranks the per-screen rules -->
 </head>
 <body>
   <!-- U-80: the launch screen's lockup (Assets.xcassets/LaunchLogo, 184 x 50 pt, centred) drawn again at the same size and

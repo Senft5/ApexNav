@@ -349,7 +349,7 @@
     @media (max-width: 760px) { .wide { display: none; } .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid2 { grid-template-columns: 1fr; } }
   
     /* The opening cover (web/boot.js): the theme's panel and the mark until the page has drawn. */
-    #boot { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; background: var(--panel, #151310); transition: opacity 0.2s ease-out; }
+    #boot { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; background: var(--panel, #111214); transition: opacity 0.2s ease-out; }
     #boot img { width: 56px; height: 56px; opacity: 0.9; }
     #boot.gone { opacity: 0; pointer-events: none; }
     .in-log-frame #boot img { display: none; }   /* in the map page's Log frame (web/page_return.js): a plain panel while it draws, not a relaunch */
@@ -357,6 +357,7 @@
 </style>
   <link rel="stylesheet" href="controls.css" />
   <link rel="stylesheet" href="signature.css" />   <!-- Vetta Line (docs/design/SIGNATURE.md): the Log's part is under body.log-page -->
+  <link rel="stylesheet" href="system.css" />   <!-- the main look's shape and depth, as on the map page -->
 </head>
 <body class="log-page">
   <div id="boot" aria-hidden="true"><img src="brand/mark.svg" alt="" /></div>

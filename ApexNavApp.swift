@@ -2113,9 +2113,9 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 }
 
 extension UIColor {
-    /// The night panel colour (#151310): the launch screen (Assets LaunchBackground), the shell behind the web view and the
+    /// The night panel colour (#111214, the main look since 2026-11-14): the launch screen (Assets LaunchBackground), the shell behind the web view and the
     /// page's opening cover all match, so opening the app never flashes another colour.
-    static let launchPanel = UIColor(red: 0x15 / 255.0, green: 0x13 / 255.0, blue: 0x10 / 255.0, alpha: 1)
+    static let launchPanel = UIColor(red: 0x11 / 255.0, green: 0x12 / 255.0, blue: 0x14 / 255.0, alpha: 1)
 }
 
 extension WKWebView {
