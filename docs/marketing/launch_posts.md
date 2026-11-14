@@ -33,7 +33,7 @@ No ads, no tracking, free to drive. {Pro sentence once it ships: Pro is looks on
 **Name:** Vetta
 **Tagline (60):** A co-driver that reads the road ahead out loud
 **Description (260):** Vetta calls every corner before you reach it, finds the twisty roads near you, and scores
-how smoothly you used each corner's grip, never your top speed. Members' phones measure how roads feel, so the good
+how much of each corner's grip you used, and how smoothly. Members' phones measure how roads feel, so the good
 ones rise. Free to drive, no ads, no tracking.
 **First comment:** the Show HN text, shortened to its first paragraph and the list of what it does.
 **Gallery:** the six press kit images, then the road of the week flyover.
@@ -79,8 +79,8 @@ Held until Apple approves the CarPlay entitlement.
 
 ## Reply bank (for the questions that always come)
 
-- **"Isn't this for speeding?"** No. There's no speed or time on any leaderboard, and the score rewards smooth
-  inputs and braking before the corner. It's the same skill an HPDE instructor teaches.
+- **"Isn't this for speeding?"** No. The score rewards using a corner's grip with smooth inputs and braking before
+  the corner, never top speed, and it marks you down past the limit. It's the same skill an HPDE instructor teaches.
 - **"What do you do with my location?"** Drives stay on your phone. With road data on, only road measurements are
   sent, never your position, path, times or speeds, and not the first and last km of any trip. {privacy link}
 - **"Android?"** Later. iPhone first because it's one person building it.

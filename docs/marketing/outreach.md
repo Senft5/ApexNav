@@ -51,7 +51,7 @@ launches {date}. Two things might interest your readers:
 
 - Drivers' phones measure the road itself (banking, crests, rough surface) in 5-metre sections, shared only once two
   people have driven a road, never with anyone's position or speed.
-- There are no speed or time leaderboards in the app.
+- The score rewards how cleanly you use each corner's grip, corner by corner, not top speed.
 
 It's free to drive, with no ads. A press kit and screenshots are at {site}/press.html, and I can send a
 promo code or TestFlight access today. Embargo until {date} {time} ET if you'd like one.
