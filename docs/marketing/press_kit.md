@@ -10,20 +10,20 @@ twisty roads near you, and learns how each road actually feels from the phones o
 Vetta turns a phone on the dashboard into a rally co-driver. It calls each corner before you reach it, timed to
 your speed and working with no signal; builds loops from the best driving roads nearby; and gives every
 drive a Vetta Score. Members' phones measure how roads feel (banking, crests, rough surface) so
-good roads rise and broken ones sink. No ads, no tracking, free to drive. Vetta is made in {city, state: OWNER}
+good roads rise and broken ones sink. No ads, no tracking, free to drive. Vetta is made in the Cincinnati, Ohio area
 by {name: OWNER}.
 
 ## Fact sheet
 
 | | |
 |---|---|
-| Platform | iPhone (iOS {min version}); CarPlay after Apple's approval; Android later |
+| Platform | iPhone (iOS 17 or later); CarPlay after Apple's approval; Android later |
 | Price | free forever; Vetta Pro monthly, yearly or lifetime (only once Pro ships) |
 | Launch | {date} |
-| Region | United States |
-| Developer | {name, city: OWNER} |
-| Contact | {press@domain: OWNER} |
-| Links | {App Store link}, {site}/about.html, {site}/roads/ |
+| Region | United States; road coverage deepest in Ohio, Kentucky and Indiana |
+| Developer | {name: OWNER}, Cincinnati, Ohio area |
+| Contact | press@vettadrive.com (once Email Routing is on) |
+| Links | {App Store link}, https://vettadrive.com, https://vettadrive.app |
 
 ## What's new about it (for journalists)
 
@@ -34,8 +34,12 @@ by {name: OWNER}.
 2. **A co-driver, not a sat-nav.** Pace notes in rally style ("left 4 tightens") or plain words, spoken on the phone
    with no network, timed so the call lands at the corner entry.
 3. **A score for every drive.** The Vetta Score, corner by corner, and how you improve on the roads you drive
-   most. There are no speed or time leaderboards anywhere in the app, by design.
+   most. Friends and crews can also run curated time attacks on a few chosen roads per area; the score itself is
+   smoothness, never top speed.
 4. **Free to drive.** Driving, notes, routes, safety and your own drives never need a subscription; Pro is looks only.
+
+5. **Corner clips.** The phone films the drive from its mount and cuts the best corner into a vertical clip with its
+   pace note on it, so a drive turns into a post without editing.
 
 ## Founder quote
 

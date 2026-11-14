@@ -102,3 +102,18 @@ def test_a_new_best_run_this_month():
     assert "ApexEndLine.bestRunMonth(me, all, ApexAnalysis.monthOf)" in page
     assert "$('endRun').textContent = ''; $('endRun').hidden = true;" in page                 # each card starts without it
     assert 'id="endRun" hidden' in (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+
+
+@needs_node
+def test_the_rating_ask_waits_for_a_good_drive_parked_once_per_version():
+    ok = "{app: true, score: 760, best: false, drives: 5, speedMps: 0.2, version: '1.4', askedFor: null}"
+    assert run(f"E.askReview({ok})") is True
+    assert run(f"E.askReview(Object.assign({ok}, {{score: 640}}))") is False, "an ordinary drive: no"
+    assert run(f"E.askReview(Object.assign({ok}, {{score: 640, best: true}}))") is True, "your best on this road: yes"
+    assert run(f"E.askReview(Object.assign({ok}, {{speedMps: 4}}))") is False, "never while moving"
+    assert run(f"E.askReview(Object.assign({ok}, {{speedMps: null}}))") is False, "speed unknown: not known to be parked"
+    assert run(f"E.askReview(Object.assign({ok}, {{askedFor: '1.4'}}))") is False, "once per version"
+    assert run(f"E.askReview(Object.assign({ok}, {{askedFor: '1.3'}}))") is True, "a new version may ask again"
+    assert run(f"E.askReview(Object.assign({ok}, {{drives: 2}}))") is False, "not before the third drive"
+    assert run(f"E.askReview(Object.assign({ok}, {{app: false}}))") is False, "the website never asks"
+    assert run(f"E.askReview(Object.assign({ok}, {{score: null}}))") is False, "no score: no"

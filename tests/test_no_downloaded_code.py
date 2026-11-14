@@ -48,7 +48,8 @@ def test_licences_page_ships_every_vendored_notice():
 
 def test_landing_page_links_and_shots_exist():
     page = read("web", "about.html")
-    for href in re.findall(r'(?:href|src)="([^"#?:]+)', page):
+    for href in re.findall(r'(?:href|src)="(?![a-z]+:)([^"#?:]+)', page):
         assert os.path.exists(os.path.join(WEB, href)), href                     # every local link and image is there
+    assert 'href="https://vettadrive.app/"' in page                             # on vettadrive.com it is the front page: the app is on .app
     for claim in ("never your top speed", "Free to drive", "not a racing app"):
         assert claim in page

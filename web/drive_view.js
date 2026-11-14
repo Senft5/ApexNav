@@ -14,6 +14,9 @@
   const SPD = () => (U() ? U().speedU() : 'mph');
   const SPD_WORDS = () => (U() && U().metric() ? 'kilometres per hour' : 'miles per hour');
   const DIST = (m, digits = 2) => (U() ? U().long(m, digits) : `${(m / 1609.344).toFixed(digits)} mi`);
+  // the elevation lane's range in the driver's units (it said ft to everyone), one height when the road is flat: "820 ft", not "820-820 ft"
+  const elevSpan = (lo, hi) => { const m = U() && U().metric(), k = m ? 1 : 3.28084, a = Math.round(lo * k), b = Math.round(hi * k), u = m ? 'm' : 'ft';
+    return a === b ? `${a} ${u}` : `${a}–${b} ${u}`; };
   const DIST_WORDS = (m) => (U() && U().metric() ? `${(m / 1000).toFixed(2)} kilometres` : `${(m / 1609.344).toFixed(2)} miles`);
 
   /** Summary numbers for the header strip; null where the drive has no such data. */
@@ -299,8 +302,11 @@
     const tired = Core.fatigue ? fatigueText(Core.fatigue(d.speed_mps, d.lon_g, d.lat_g, d.corners, d.g_known || null)) : null;   // unmeasured g is left out
     const mi = finite(S.km) ? DIST(S.km * 1000, 1) : '--';
     const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
-    head.innerHTML = `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`
+    // a drive with no Score says why in the score's place, as the end card does (D-6 / R-5), not "--" over four empty bars
+    const scored = !!(ds && finite(ds.score)), nCorners = Array.isArray(d.corners) ? d.corners.length : null;
+    head.innerHTML = (scored ? `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`
       + `<div class="bars">${bar('pace', 'Pace')}${bar('smoothness', 'Smooth')}${bar('braking', 'Brakes')}${bar('consistency', 'Rhythm')}</div>`
+      : `<div class="dv-score no-score"><b class="score">${nCorners ? 'Too few clean corners to score' : 'No corners to score'}</b></div>`)
       // RA-3 (panel round 2): the end card's line, from the one helper (format.js factsLine): same distance, time and corners
       + `<div class="dv-meta">${root.ApexFormat ? root.ApexFormat.factsLine({ len_m: finite(S.km) ? S.km * 1000 : null, secs: S.duration_s, corners: d.corners }) : `${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners`}</div>`
       // lap times from track mode (a circuit only, IDEAS D-15): best marked, sectors when the first lap set their lines
@@ -526,7 +532,7 @@
       if (hasElev) {                                                       // faint elevation profile along the bottom
         let lo = Infinity, hi = -Infinity; for (const v of d.elev) if (finite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
         const top = yTop + LH, h = 40, span = Math.max(10, hi - lo);
-        svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Elevation</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${Math.round(lo * 3.28084)}-${Math.round(hi * 3.28084)} ft</text>`;
+        svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Elevation</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${elevSpan(lo, hi)}</text>`;
         // one filled shape per measured stretch: unknown elevation is a gap, never a dive to the bottom
         let p = '', run = null;
         const close = (a, b) => { if (a != null) p += ` L${X(b).toFixed(1)} ${top + h} L${X(a).toFixed(1)} ${top + h} Z`; };
@@ -646,6 +652,19 @@
         let ok = false;
         try { ok = await run(); } catch (_) { ok = false; }
         b.disabled = false; b.textContent = ok ? 'Clip made \u00b7 make another' : 'Couldn\u2019t make the clip';
+        // made: the clip to your friends or a crew too, one tap (o.postClip: drive_posts.js through the map page)
+        const had = b.parentNode && b.parentNode.querySelector('.dv-post');
+        if (had) had.remove();
+        if (ok && o.canPostClip && o.canPostClip() && o.postClip) {
+          const p = el('button', 'btn dv-post', 'Post this clip'); p.type = 'button';
+          p.onclick = async (ev) => {
+            ev.stopPropagation(); p.disabled = true;
+            let r = null;
+            try { r = await o.postClip(); } catch (_) { r = null; }
+            if (r && r.posted) p.textContent = r.said || 'Posted'; else { p.disabled = false; if (r && r.said) p.textContent = r.said; }
+          };
+          b.after(p);
+        }
       };
       return b;
     };
