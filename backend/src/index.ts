@@ -43,7 +43,7 @@ import { pointsFor } from "./points";
 import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
 import { ctxKeys, workzones } from "./route_feeds";
-import { fallsList, osmTile } from "./osm_relay";
+import { osmTile, regionList } from "./osm_relay";
 import { traceTile } from "./trace_relay";
 import { grantedThemes } from "./themes";
 import { isDeveloper } from "./developers";
@@ -184,8 +184,9 @@ on("GET", "/api/ctx/osm", async (req, env, _m, ctx) => {
   if (url.searchParams.get("diag") === "1" && !isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
   return osmTile(url, env, ctx);
 });
-// The region's waterfalls, built weekly with the OSM tiles (osm_relay.ts fallsList; web/scenic.js fallsInRegion)
-on("GET", "/api/ctx/falls.json", async (_req, env) => fallsList(env.DATA));
+// The region's waterfalls and roads with conditional access, built weekly with the OSM tiles (osm_relay.ts regionList)
+on("GET", "/api/ctx/falls.json", async (_req, env) => regionList(env.DATA, "falls.json"));
+on("GET", "/api/ctx/closures.json", async (_req, env) => regionList(env.DATA, "closures.json"));
 // The router's edges for a stage cut from the map tiles (trace_relay.ts; route_ctx/router_edges.js), kept 3 days per shape
 on("GET", "/api/ctx/trace", async (req) => traceTile(new URL(req.url)));
 on("GET", "/api/shop", async (req, env) => json(await shop(env, await requireMember(req, env))));

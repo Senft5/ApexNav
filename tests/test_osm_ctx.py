@@ -109,7 +109,7 @@ def test_kept_in_step_with_the_relay():
     drivable = re.search(r'export const DRIVABLE = "(.+?)";', src).group(1)
     assert drivable == B.DRIVABLE.pattern
     assert "export const BUNDLE = 5," in src and B.BUNDLE == 5 and B.TILE == 0.05
-    assert 'osm\\/v2\\/(index\\.json|falls\\.json|-?\\d{1,4}_-?\\d{1,4}\\.bin)' in open(os.path.join(ROOT, "backend", "src", "data_store.ts")).read()
+    assert 'osm\\/v2\\/(index\\.json|falls\\.json|closures\\.json|-?\\d{1,4}_-?\\d{1,4}\\.bin)' in open(os.path.join(ROOT, "backend", "src", "data_store.ts")).read()
     assert f"HEAD = {B.HEAD}," in src and 'BUILT = "osm/v2"' in src
 
 
@@ -133,9 +133,9 @@ def test_the_phone_reads_a_built_tile(tmp_path):
 
 
 def test_the_regions_waterfalls(tmp_path):
-    """tools/osm_ctx/falls.py: natural=waterfall or waterway=waterfall, a node or a way at the mean of its nodes, one per
+    """tools/osm_ctx/region.py: natural=waterfall or waterway=waterfall, a node or a way at the mean of its nodes, one per
     place, kept only in the 0.25 degree cells wholly inside the .poly, which the file lists so the phone knows where it ends."""
-    from tools.osm_ctx import falls as F
+    from tools.osm_ctx import region as F
     la = 39.12
     nodes = {1: (la, -84.54, {"natural": "waterfall", "name": " Shaker Run Falls "}), 2: (la, -84.54, {"waterway": "waterfall"}),
              3: (la + 0.01, -84.52, {}), 4: (la + 0.01, -84.50, {}), 5: (la + 0.5, -84.54, {"natural": "waterfall", "name": "Outside"}),
@@ -150,3 +150,23 @@ def test_the_regions_waterfalls(tmp_path):
     d = F.doc(got, B.read_poly(str(poly)), built="2026-11-14")
     assert d["bundle"] == 0.25 and sorted(map(tuple, d["cells"])) == [(156, -339), (156, -338)]
     assert [f[2] for f in d["falls"]] == ["Shaker Run Falls", None], "a waterfall outside the covered cells is left out"
+
+
+def test_the_regions_roads_with_conditional_access(tmp_path):
+    """tools/osm_ctx/region.py closures: a highway way with a conditional access key (conditional_closures.js KEYS), at the
+    mean of its nodes, with those keys and its name and ref only; a non-road with the key is left out."""
+    from tools.osm_ctx import region as F
+    js = open(os.path.join(ROOT, "web", "conditional_closures.js")).read()
+    assert set(re.search(r"const KEYS = \[(.+?)\];", js).group(1).replace("'", "").replace(" ", "").split(",")) == set(F.CKEYS)
+    la = 39.12
+    nodes = {1: (la, -84.54, {}), 2: (la, -84.52, {}), 3: (la + 0.01, -84.54, {}), 4: (la + 0.01, -84.52, {})}
+    ways = {20: ([1, 2], {"highway": "tertiary", "name": "Gate Rd", "access:conditional": "no @ (19:00-07:00)", "surface": "asphalt"}),
+            21: ([3, 4], {"leisure": "park", "access:conditional": "no @ (dusk-dawn)"})}
+    p = tmp_path / "c.osm.pbf"
+    write_osm(p, nodes, ways)
+    got = F.read_closures([str(p)])
+    assert got == [(39.12, -84.53, {"access:conditional": "no @ (19:00-07:00)", "name": "Gate Rd"})]
+    poly = tmp_path / "x.poly"
+    poly.write_text("x\n1\n  -84.80 38.95\n  -84.20 38.95\n  -84.20 39.30\n  -84.80 39.30\nEND\nEND\n")
+    d = F.closures_doc(got, B.read_poly(str(poly)), built="2026-11-14")
+    assert d["ways"] == [[39.12, -84.53, {"access:conditional": "no @ (19:00-07:00)", "name": "Gate Rd"}]] and len(d["cells"]) == 2

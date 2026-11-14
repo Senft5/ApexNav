@@ -144,14 +144,15 @@ jobs:
         with:
           name: osm-polys
           path: polys
-      - name: The region's waterfalls (web/scenic.js, IDEAS R-24)
+      - name: The region's waterfalls and roads with conditional access (web/scenic.js R-24, conditional_closures.js R-22)
         run: |
           args=""
           for s in $STATES; do
-            osmium tags-filter --overwrite -o "falls-$s.osm.pbf" ".graph_cache/osm/$s.osm.pbf" nwr/natural=waterfall nwr/waterway=waterfall
+            osmium tags-filter --overwrite -o "falls-$s.osm.pbf" ".graph_cache/osm/$s.osm.pbf" nwr/natural=waterfall nwr/waterway=waterfall \
+              w/motor_vehicle:conditional w/motorcar:conditional w/vehicle:conditional w/access:conditional
             args="$args --pbf falls-$s.osm.pbf --poly polys/$s.poly"
           done
-          python -m tools.osm_ctx.falls $args --out out | tee -a "$GITHUB_STEP_SUMMARY"
+          python -m tools.osm_ctx.region $args --out out | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: osm-falls

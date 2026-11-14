@@ -93,6 +93,26 @@
 
   const query = (s, w, n, e) => `[out:json][timeout:25];(${KEYS.map((k) => `way["highway"]["${k}"](${[s, w, n, e].map((v) => v.toFixed(4)).join(',')});`).join('')});out tags center;`;
 
-  const api = { closingRules, closedAt, check, summary, query, KEYS };
+  /**
+   * The roads with conditional access in a box from the region's built list (GET /api/ctx/closures.json,
+   * tools/osm_ctx/region.py), shaped as the Overpass answer to query() ({ elements: [{ center, tags }] }); null when the
+   * list doesn't cover the whole box (near or past the region's border: ask Overpass instead).
+   */
+  function inRegion(doc, s, w, n, e) {
+    const fin = Number.isFinite;
+    if (!doc || !Array.isArray(doc.cells) || !Array.isArray(doc.ways) || !(doc.bundle > 0)) return null;
+    if (![s, w, n, e].every(fin) || s > n || w > e) return null;
+    const step = doc.bundle, have = new Set(doc.cells.map((c) => `${c[0]}_${c[1]}`));
+    for (let bi = Math.floor(s / step); bi <= Math.floor(n / step); bi++) {
+      for (let bj = Math.floor(w / step); bj <= Math.floor(e / step); bj++) if (!have.has(`${bi}_${bj}`)) return null;
+    }
+    const elements = [];
+    for (const x of doc.ways) {
+      const [lat, lon, tags] = x || [];
+      if (fin(lat) && fin(lon) && tags && lat >= s && lat <= n && lon >= w && lon <= e) elements.push({ type: 'way', center: { lat, lon }, tags });
+    }
+    return { elements };
+  }
+  const api = { closingRules, closedAt, check, summary, query, inRegion, KEYS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexConditional = api;
 })(typeof window !== 'undefined' ? window : globalThis);
