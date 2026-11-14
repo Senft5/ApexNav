@@ -54,7 +54,7 @@ Re-enable it there ("Status" → Enable workflow). Any commit also resets the 60
    restored from before 0055, say) passes until its first run.
 5. **Only API errors fails** (the issue is titled "ApexNav: a route keeps failing", the app is up): one route throws on
    every call, usually a deploy that broke it or a migration it needs that isn't applied. `curl
-   https://apexnav.senftns.workers.dev/api/health` names the route in `failing_routes`; Crew → error counts (or
+   https://vettadrive.app/api/health` names the route in `failing_routes`; Crew → error counts (or
    `GET /api/ops/errors`) has its message and stack. Roll the Worker back (dashboard → Workers → apexnav → Deployments) or
    fix forward; the issue closes itself on the first check after the errors stop for 30 minutes.
 6. Workers Logs (dashboard → Workers → apexnav → Logs) show the Worker's errors and the apps' `client_error` reports (Y-02).

@@ -28,7 +28,7 @@ import numpy as np
 
 from . import grid, transforms
 
-UA = "Vetta-context-grid/1 (+https://apexnav.senftns.workers.dev)"
+UA = "Vetta-context-grid/1 (+https://vettadrive.com/about)"
 _locks = {}
 _locks_guard = threading.Lock()
 # rasterio.features.rasterize builds its in-memory raster before applying the transform it is given, and says so; the
