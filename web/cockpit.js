@@ -596,7 +596,7 @@
         paint: { 'line-color': ['get', 'c'], 'line-width': width(4, 9) } });
       // the arrow at the next turn of a route being driven (turn_arrow.js), over the route line: the theme's paper inside the
       // route's ink, the head a filled triangle. Its size is in pixels (paintTurnArrow builds it for the zoom it is seen at).
-      map.addSource('apex-turnarrow-src', { type: 'geojson', data: emptyFC() }); turnArrowKey = null;
+      map.addSource('apex-turnarrow-src', { type: 'geojson', data: emptyFC() }); turnArrowKey = null; behindKey = '';
       const isShaft = ['==', ['get', 'part'], 'shaft'], isHead = ['==', ['get', 'part'], 'head'], AC = look.colors || {};
       map.addLayer({ id: 'apex-turnarrow-casing', type: 'line', source: 'apex-turnarrow-src', filter: isShaft, layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': AC.route || '#1C1A17', 'line-width': TURN_ARROW_PX.shaft + 2 * TURN_ARROW_PX.edge } });
@@ -618,7 +618,7 @@
       if (!src) return;
       const st = steps && i >= 0 ? steps[i] : null, ahead = st ? st.m - state.cursorM : NaN;
       const z = map.getZoom(), lat = map.getCenter().lat, zk = Math.round(z * 4) / 4;
-      const show = !!(st && window.ApexTurnArrow && window.ApexGpsHalo && track && ahead <= TURN_ARROW_AHEAD_M && zk >= 13);
+      const show = !!(st && (driveActive || state.playing) && window.ApexTurnArrow && window.ApexGpsHalo && track && ahead <= TURN_ARROW_AHEAD_M && zk >= 13);
       const key = show ? `${track.id}:${i}:${zk}` : 'none';
       if (key === turnArrowKey) return;
       turnArrowKey = key;
@@ -1605,10 +1605,27 @@
     // line-color rules again.
     const PEN_LAYERS = ['apex-route-casing', 'apex-route'];
     let pen = null, penCarry = false;
+    // A route being driven: the part behind you faint (route_reveal.js behind), as Apple and Google Maps draw it, so the line
+    // on the map is the way still to go. A gradient on the same layers as the pen's, which never runs in a drive.
+    let behindKey = '';
+    function paintBehind() {
+      if (!mapReady || pen) return;
+      const T = totalM(), on = driveActive && state.mode === 'live' && track && track.kind === 'route' && !track.sectors && state.cursorIdx >= 0 && T > 0;
+      const p = on ? Math.round(1000 * Math.max(0, Math.min(T, state.cursorM)) / T) / 1000 : null, C = look.colors;
+      const key = on ? `${p}:${C.route}:${C.routeCasing}` : '';
+      if (key === behindKey) return;
+      behindKey = key;
+      const cols = { 'apex-route-casing': C.routeCasing, 'apex-route': C.route };
+      try {
+        for (const id of PEN_LAYERS) if (map.getLayer(id)) map.setPaintProperty(id, 'line-gradient', on && window.ApexReveal && ApexReveal.behind ? ApexReveal.behind(cols[id], p) || undefined : undefined);
+      } catch (_) { behindKey = ''; }
+      if (window.apexDebug) window.apexDebug.behind = on ? p : null;
+    }
     function penStop() {
       if (!pen) return;
       cancelAnimationFrame(pen.raf); clearTimeout(pen.timer); pen = null;
       try { for (const id of PEN_LAYERS) if (map.getLayer(id)) map.setPaintProperty(id, 'line-gradient', undefined); } catch (_) { /* the map went (a lost context): nothing to tidy */ }
+      behindKey = '';
     }
     function penDraw(t, ms) {
       if (pen && pen.t === t && !(ms > 0)) return;                      // the same route sent again mid-stroke: the stroke carries on
@@ -2063,6 +2080,7 @@
       }
       paintTurnArrow(steps, pend);
       paintOverviewKey();
+      paintBehind();
       const moving = !!(state.playing || live) && vMps != null, now = performance.now();
       const reactS = reaction.reactionS;
       // U-58: Auto reads the road ahead. A corner within two leads (at least 800 m) that is tight or needs braking keeps
@@ -11253,7 +11271,7 @@
     // ended: why a drive ended itself ('car', 'parked'; drive_keep.js EndWatch), or nothing for End
     async function leaveDrive(save, ended) {
       if (pendingEnd) { clearTimeout(pendingEnd.timer); pendingEnd = null; paintEndUndo(); }   // I-3: any other way out ends it now
-      driveActive = false; driveCam(false); pushQuiet(false); soundtrackStop(); drive.wet = null; if (ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null);   // the dry road back
+      driveActive = false; paintBehind(); paintOverviewKey(); paintTurnArrow(null, -1); driveCam(false); pushQuiet(false); soundtrackStop(); drive.wet = null; if (ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null);   // the dry road back
       const kept = keepStop();                                         // Round 3: no more checkpoints; dropped once saved
       stageWatch = null; $('stageBar').hidden = true; coachWatch = null; $('coachBar').hidden = true;
       const laps = circuit.timer ? circuit.timer.state(Date.now()).laps : [];
