@@ -402,13 +402,15 @@
    * The pieces of route still to ask for: runs of samples whose cell isn't covered, joined across short covered gaps
    * (< 300 m), simplified, within the MAX_VERTS / MAX_PIECES budget. Returns { pieces: [[[lat, lon]]], asked: [[ci, from, to]] }.
    */
-  // the tiles a plan still needs (those its uncovered samples lie in), most-used first, at most MAX_TILES a plan; the rest
-  // stay unknown this time and come from the cache on a later plan
-  const MAX_TILES = 12;
-  function planTiles(corridors, covered) {
+  // the tiles a plan still needs (those its uncovered samples lie in), most-used first, at most MAX_TILES a plan from
+  // Overpass and RELAY_MAX_TILES from our relay (built tiles, 2026-11-14: about 0.5 s each cold, asked in parallel; a
+  // median tile is 40 KB on the wire, 220 KB of JSON, so 36 is a few MB at most); the rest stay unknown this time and
+  // come from the cache on a later plan
+  const MAX_TILES = 12, RELAY_MAX_TILES = 36;
+  function planTiles(corridors, covered, max = MAX_TILES) {
     const count = new Map();
     corridors.forEach((c, ci) => { for (let i = 0; i < c.lat.length; i++) if (!covered[ci][i]) { const k = tileKey(c.lat[i], c.lon[i]); count.set(k, (count.get(k) || 0) + 1); } });
-    return [...count.entries()].sort((a, b) => b[1] - a[1]).slice(0, MAX_TILES).map(([k]) => k);
+    return [...count.entries()].sort((a, b) => b[1] - a[1]).slice(0, max).map(([k]) => k);
   }
   function planPieces(corridors, covered) {
     const runs = [];
@@ -522,13 +524,13 @@
         }
         return k;
       });
-      let want = planTiles(corridors, covered);
+      const viaRelay = opts.osmRelay === true && typeof opts.apiGet === 'function' && !stubOf(opts);
+      let want = planTiles(corridors, covered, viaRelay ? RELAY_MAX_TILES : MAX_TILES);
       // our Worker's relay first (backend/src/osm_relay.ts, GET /api/ctx/osm?bbox= one tile box): Overpass server-side, where
       // CORS doesn't matter; on the plan's clock. Since 2026-11-14 it answers from tiles built weekly from the Geofabrik
       // extracts (tools/osm_ctx/build.py) and asks Overpass only for a border tile. A tile it doesn't have (504, or any
       // failure) goes the way it went before the relay: the phone's own query, off the plan's clock, kept for the next plan.
       // only while the server's flag osm_relay is on (on since 2026-11-14, backend/src/flags.ts); off, as before the relay
-      const viaRelay = opts.osmRelay === true && typeof opts.apiGet === 'function' && !stubOf(opts);
       if (want.length && viaRelay) {
         const got = await relayTiles(want, opts);
         if (got.size) {
@@ -537,7 +539,7 @@
           storeElements(storage, new Map([...got.keys()].map((k) => [k, new Set(['*'])])), fresh, now);
           corridors.forEach((c, ci) => { for (let i = 0; i < c.lat.length; i++) if (got.has(tileKey(c.lat[i], c.lon[i]))) covered[ci][i] = 1; });
         }
-        want = want.filter((k) => !got.has(k));
+        want = want.filter((k) => !got.has(k)).slice(0, MAX_TILES);   // what the relay didn't have: Overpass's own cap
       }
       if (want.length) {
         // off the critical path: the query runs on its own clock (live, the public servers answered 502 or 504 on every
@@ -559,7 +561,7 @@
   }
 
   const provider = { id: 'osm_overpass', version: 1, channels: CHANNELS, needs: { network: true }, budgetMs: 15000, fetch: fetchCtx };
-  const api = { provider, WAIT_MS, RELAY, relayTiles, CHANNELS, SERVERS, KEEP, TILE, COV, MAX_TILES, speedKph, metresOf, tonnesOf, planTiles, paved, hgvLevel, accessLevel, hazardOf, bywayLevel, simplify, query, parse,
+  const api = { provider, WAIT_MS, RELAY, relayTiles, CHANNELS, SERVERS, KEEP, TILE, COV, MAX_TILES, RELAY_MAX_TILES, speedKph, metresOf, tonnesOf, planTiles, paved, hgvLevel, accessLevel, hazardOf, bywayLevel, simplify, query, parse,
     aggregate, planPieces, piecesCells, tileKey, covKey, readTile, storeElements, _reset: () => { downUntil = 0; inflight.clear(); } };
   root.ApexOsmOverpass = api;
   if (Ctx && Ctx.register) Ctx.register(provider);
