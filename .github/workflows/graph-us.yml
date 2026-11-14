@@ -45,7 +45,7 @@ concurrency:
 jobs:
   plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30          # Geofabrik's index tried for up to 25 min: it refuses a runner that long at times
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       states: ${{ steps.plan.outputs.states }}
@@ -71,7 +71,18 @@ jobs:
             live=$(sed -n 's/^live=//p' tools/graph_etl/US_BUILD | head -1)
           fi
           [ -z "$only" ] && live=true
-          curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o index-v1.json https://download.geofabrik.de/index-v1.json
+          case "$IN_BANDS" in ""|*[!0-9]*) [ -z "$IN_BANDS" ] || { echo "::error::bands_from is a run id"; exit 1; } ;; esac
+          echo "reuse=$IN_BANDS" >> "$GITHUB_OUTPUT"
+          echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+          echo "only=$only" >> "$GITHUB_OUTPUT"
+          echo "live=${live:-false}" >> "$GITHUB_OUTPUT"
+          if [ -n "$IN_BANDS" ]; then
+            # publishing an earlier run's bands: no Geofabrik (it refused this runner once, 2026-11-14), no matrix
+            none='{"include":[{"job":"none","state":"none"}]}'
+            echo "matrix=$none" >> "$GITHUB_OUTPUT"; echo "states=$none" >> "$GITHUB_OUTPUT"
+            echo "bands from run $IN_BANDS" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          curl -fsSL --retry 20 --retry-delay 60 --retry-max-time 1500 --retry-all-errors -o index-v1.json https://download.geofabrik.de/index-v1.json
           python3 -c "import json; f=json.load(open('index-v1.json'))['features']; print(len(f), 'extracts;', [x['properties'].get('id') for x in f if 'ohio' in str(x['properties'].get('id'))])"
           python -m tools.graph_etl.us_plan matrix --index index-v1.json --only "$only" > matrix.json
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
@@ -83,11 +94,6 @@ jobs:
           print("matrix=" + json.dumps(m, separators=(",", ":")))
           print("states=" + json.dumps({"include": [{"state": s, "url": ix[s]} for s in states]}, separators=(",", ":")))
           PY
-          echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
-          echo "only=$only" >> "$GITHUB_OUTPUT"
-          echo "live=${live:-false}" >> "$GITHUB_OUTPUT"
-          case "$IN_BANDS" in ""|*[!0-9]*) [ -z "$IN_BANDS" ] || { echo "::error::bands_from is a run id"; exit 1; } ;; esac
-          echo "reuse=$IN_BANDS" >> "$GITHUB_OUTPUT"
           python3 -c "import json; m=json.load(open('matrix.json')); print(len(m['include']), 'jobs')" | tee -a "$GITHUB_STEP_SUMMARY"
           python3 -c "import json,sys; sys.exit(0 if json.load(open('matrix.json'))['include'] else 'no jobs: the plan found no state')"
 
