@@ -335,6 +335,15 @@ def test_a_gravel_road_is_no_stage_when_unpaved_is_avoided():
     assert r == {"avoided": ["Paved Road"], "allowed": ["Gravel Road", "Paved Road"]}, r
 
 
+def test_loops_keep_off_unpaved_road_when_it_is_avoided():
+    """2026-11-14 (a survey of rider towns): with unpaved avoided (the app's default) Sturgis loops drove 15 to 31 km of
+    gravel and Stowe's 20 km. A loop leg first keeps off unpaved road entirely, and a loop with more than LOOP_DIRT_KM
+    of it goes when others need none."""
+    r = case("loopsDirt")
+    assert r["avoided"] and all(x <= 2 for x in r["avoided"]) and sum(r["avoided"]) < 1.5, r
+    assert sum(r["allowed"]) > 10, r
+
+
 def test_a_two_lane_trunk_that_bends_is_a_riders_road():
     """2026-11-14 (tools/famous_roads.js): OSM tags many mountain US routes trunk, and Fun never drove The Snake (US 421,
     4.4 corner points a km). A two-way trunk whose road bends (TRUNK_FUN_KM) is not a highway; a straight one (Cincinnati's
