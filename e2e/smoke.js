@@ -6627,6 +6627,12 @@ flow('drive posts: Drive it on a friend\'s post lays a route along their line, t
     return b ? { label: b.getAttribute('aria-label'), text: b.textContent, h: Math.round(b.getBoundingClientRect().height) } : null; }));
   check(keys.length === 2 && keys[0] && keys[0].label === 'Drive @bob\'s Cherohala Skyway' && keys[0].text === 'Drive it' && keys[0].h >= 40 && keys[1] === null,
     'Drive it on a post with a line, none on one without: ' + JSON.stringify(keys));
+  // on its side (a phone in a landscape mount), the line stays at most half the screen's height (2026-11-14: it filled it)
+  const vp = page.viewportSize();
+  await page.setViewportSize({ width: 844, height: 390 });
+  const side = await page.evaluate(() => { const r = document.querySelector('#accountBody .feed-card .feed-line').getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), vh: innerHeight }; });
+  check(side.h <= side.vh / 2 + 1 && side.w >= 2 * side.h - 2, 'a post\'s line on a phone on its side is half the screen at most, its shape kept: ' + JSON.stringify(side));
+  await page.setViewportSize(vp);
   await page.click('#accountBody .feed-card .feed-drive');
   await page.waitForFunction(() => window.apexDebug && apexDebug.track && apexDebug.track.id === 'post_P1AAAAAAAAAAAAAA', null, { timeout: 20000 });
   const locs = asked.find((l) => Array.isArray(l) && l.length > 2) || [];
