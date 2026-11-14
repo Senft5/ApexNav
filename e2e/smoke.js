@@ -6107,7 +6107,7 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   });
   check(dt.has && dt.lines.length === 0, 'a drive with g kept once a second has no touch of its own: ' + JSON.stringify(dt.lines));
   // and its corners against your records by kind (the record of each kind is held by the first drive to reach it)
-  check(dt.best.length >= 2 && /^Cleanest tight corner: \d{1,3}( · your best of \d+| · level with your best(, .+)?| · your best \d{1,3}(, .+)?)?$/.test(dt.best[0]), 'a drive against your records: ' + JSON.stringify(dt.best));
+  check(dt.best.length >= 2 && /^Cleanest tight corner: \d{1,3}( · your best of \d+ tight corners| · level with your best(, .+)?| · your best \d{1,3}(, .+)?)?$/.test(dt.best[0]), 'a drive against your records: ' + JSON.stringify(dt.best));
   // corner by corner on its road: these three drives are on three roads, so no corner has been driven three times
   check(dt.road && dt.road.corners === 0 && dt.road.best === 0, 'no corner of this road driven three times yet: ' + JSON.stringify(dt.road));
   check(dt.say.join(' | ') === 'Brakes on: 1.1 g a second · usually 0.8 | Turn-in: one quick movement · usually 0.9', 'a drive\'s touch in words: ' + dt.say);
