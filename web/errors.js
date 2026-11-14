@@ -53,7 +53,7 @@
     // U-94: the review recording's errors go to its app-log (the shell logs the page's console), not the owner's error counts
     try { if (root.APEX_REVIEW || (root.parent && root.parent !== root && root.parent.APEX_REVIEW)) { root.console.error('APEX-REVIEW page error', JSON.stringify(report)); return; } } catch (_) {}
     const inApp = root.location && root.location.protocol === 'apexnav:';
-    const base = inApp ? 'https://apexnav.senftns.workers.dev' : '';
+    const base = inApp ? 'https://vettadrive.app' : '';
     try {
       fetch(base + '/api/errors', { method: 'POST', keepalive: true, credentials: 'omit',
         headers: { 'content-type': 'application/json', 'x-apexnav': '1' }, body: JSON.stringify(report) }).catch(() => {});

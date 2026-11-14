@@ -17,7 +17,7 @@ const LAT = 35.6, LON = -83.9, KX = 111320 * Math.cos(LAT * Math.PI / 180);
 const P = (x, y) => [LON + x / KX, LAT + y / 110540];                 // metres east, north from (0, 0)
 const me = (h, x = 0, y = 0) => ({ lat: LAT + y / 110540, lon: LON + x / KX, heading: h });
 const north = (y0, y1, step = 20) => { const c = []; for (let y = y0; y <= y1; y += step) c.push(P(0, y)); return c; };
-const summary = (r) => r && { m: r.m, end: r.end, last: [Math.round((r.coords[r.coords.length - 1][0] - LON) * KX), Math.round((r.coords[r.coords.length - 1][1] - LAT) * 110540)] };
+const summary = (r) => r && { m: r.m, end: r.end, tee: r.tee, last: [Math.round((r.coords[r.coords.length - 1][0] - LON) * KX), Math.round((r.coords[r.coords.length - 1][1] - LAT) * 110540)] };
 const out = {};
 // a plain road north, split into two tile pieces at y = 400
 out.plain = summary(H.ahead([{ coords: north(-100, 400), cls: 'secondary' }, { coords: north(400, 3000), cls: 'secondary' }], me(5)));
@@ -51,7 +51,7 @@ def out():
 
 def test_follows_the_road_across_tile_pieces_either_way(out):
     assert out["plain"]["m"] == 2000 and out["plain"]["end"] == "length" and out["plain"]["last"] == [0, 2000]
-    assert out["back"] == {"m": 1000, "end": "dead end", "last": [0, -1000]}
+    assert out["back"] == {"m": 1000, "end": "dead end", "tee": False, "last": [0, -1000]}
 
 
 def test_carries_on_past_a_side_road_and_round_a_bend(out):
@@ -62,6 +62,7 @@ def test_carries_on_past_a_side_road_and_round_a_bend(out):
 def test_stops_at_a_t_or_a_fork(out):
     assert out["tee"]["end"] == "junction" and out["tee"]["last"] == [0, 600]
     assert out["fork"]["end"] == "junction" and out["fork"]["last"] == [0, 300]
+    assert out["tee"]["tee"] is True and out["fork"]["tee"] is False      # a T: the road ends; a fork carries on either way
 
 
 def test_nothing_when_not_on_a_road_going_along_it(out):
