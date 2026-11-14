@@ -5446,6 +5446,9 @@ flow('no signal: a hazard report waits on the phone and goes when the connection
   // fresh fix within before Debris was tapped, and nothing was saved (CI 2026-11-11; as "review mode (U-94)")
   await page.evaluate(() => { const fix = () => window.apex.live({ lat: 35.6, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 90, has_fix: true }); fix(); window.__fixes = setInterval(fix, 500); });
   await page.click('#hzReportBtn');
+  // the sheet slides up (sheet-up, 0.2 s): on a loaded runner a tap mid-slide missed the key and nothing was reported, so tap
+  // once it has settled, as a driver does (CI 2026-11-14, shard 1 and 2)
+  await page.waitForFunction(() => { const o = document.getElementById('hzOverlay'); return o.classList.contains('show') && o.getAnimations({ subtree: true }).length === 0; });
   await page.click('#hzKinds button:has-text("Debris")');
   // CI 2026-11-14: twice this wait ran out on shard 2 and never locally; on a timeout, say what the page shows instead
   await saidOn(page, /Debris saved/, { timeout: 15000 }).catch(async (e) => {
