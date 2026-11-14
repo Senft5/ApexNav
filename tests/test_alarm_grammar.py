@@ -46,7 +46,7 @@ console.log(JSON.stringify({
   themes: Object.fromEntries(Object.entries(T).map(([k, t]) => [k, { check: K.check(t), day: t.day, night: t.night }])),
   redRoute: K.check({ ...rb, day: { ...rb.day, route: rb.day.signal } }),
   faintSignal: K.check({ ...rb, day: { ...rb.day, signal: '#E8DCC8' } }),
-  oldFaceDim: K.check({ ...rb, day: { ...rb.day, faceDim: '#736A5A' } }),
+  oldFaceDim: K.check({ ...rb, day: { ...rb.day, faceDim: '#8E929B' } }),   // 3.2:1 on the white panel
   accents: Object.fromEntries(Object.entries(root.ApexThemes.ACCENTS).map(([k, a]) => [k, ['day', 'night'].map((m) => K.apart(a[m].route, rb[m].signal))])),
   apart: K.APART, floor: K.SIGNAL_FLOOR, alarm: K.ALARM,
 }));
@@ -109,7 +109,7 @@ def test_no_reading_wears_the_warning_colour(out):
     assert any("route is the warning's colour" in m for m in out["redRoute"])
     assert any("signal on panel" in m for m in out["faintSignal"])
     assert any("faceDim on panel" in m for m in out["oldFaceDim"])
-    assert out["themes"]["roadbook"]["day"]["faceDim"] == "#665E51"
+    assert out["themes"]["roadbook"]["day"]["faceDim"] == "#5B5F68"
     assert all(min(v) >= out["apart"] for v in out["accents"].values()), out["accents"]   # a cosmetic accent is never the alarm
     assert out["floor"] == 3 and out["alarm"]["channels"] == ["colour", "shape", "word"]
 

@@ -15,6 +15,10 @@ name: Graph US (own routing, the lower 48)
 # Triggers: a manual run (once on main), or a push to claude/project-thread-39xbx9 changing tools/graph_etl/US_BUILD
 # (its `only=` and `live=` lines), the way to run it before it is on main.
 on:
+  # monthly, the 1st at 03:23 UTC (the whole lower 48 goes live): roads change slowly, and each build asks Geofabrik for
+  # all 49 extracts (~10 GB)
+  schedule:
+    - cron: "23 3 1 * *"
   workflow_dispatch:
     inputs:
       only:
@@ -25,6 +29,10 @@ on:
         description: "Point the Worker at this build even if it is a pilot"
         type: boolean
         default: false
+      bands_from:
+        description: "Publish the bands an earlier run built (its run id; band artifacts keep 3 days): no download, no band"
+        required: false
+        default: ""
   push:
     branches: [claude/project-thread-39xbx9]
     paths:
@@ -41,13 +49,14 @@ concurrency:
 jobs:
   plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30          # Geofabrik's index tried for up to 25 min: it refuses a runner that long at times
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       states: ${{ steps.plan.outputs.states }}
       week: ${{ steps.plan.outputs.week }}
       only: ${{ steps.plan.outputs.only }}
       live: ${{ steps.plan.outputs.live }}
+      reuse: ${{ steps.plan.outputs.reuse }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -58,6 +67,7 @@ jobs:
         env:
           IN_ONLY: ${{ inputs.only }}
           IN_LIVE: ${{ inputs.live }}
+          IN_BANDS: ${{ inputs.bands_from }}
         run: |
           only="$IN_ONLY"; live="$IN_LIVE"
           if [ "${{ github.event_name }}" = "push" ]; then
@@ -65,7 +75,18 @@ jobs:
             live=$(sed -n 's/^live=//p' tools/graph_etl/US_BUILD | head -1)
           fi
           [ -z "$only" ] && live=true
-          curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o index-v1.json https://download.geofabrik.de/index-v1.json
+          case "$IN_BANDS" in ""|*[!0-9]*) [ -z "$IN_BANDS" ] || { echo "::error::bands_from is a run id"; exit 1; } ;; esac
+          echo "reuse=$IN_BANDS" >> "$GITHUB_OUTPUT"
+          echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+          echo "only=$only" >> "$GITHUB_OUTPUT"
+          echo "live=${live:-false}" >> "$GITHUB_OUTPUT"
+          if [ -n "$IN_BANDS" ]; then
+            # publishing an earlier run's bands: no Geofabrik (it refused this runner once, 2026-11-14), no matrix
+            none='{"include":[{"job":"none","state":"none"}]}'
+            echo "matrix=$none" >> "$GITHUB_OUTPUT"; echo "states=$none" >> "$GITHUB_OUTPUT"
+            echo "bands from run $IN_BANDS" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          curl -fsSL --retry 20 --retry-delay 60 --retry-max-time 1500 --retry-all-errors -o index-v1.json https://download.geofabrik.de/index-v1.json
           python3 -c "import json; f=json.load(open('index-v1.json'))['features']; print(len(f), 'extracts;', [x['properties'].get('id') for x in f if 'ohio' in str(x['properties'].get('id'))])"
           python -m tools.graph_etl.us_plan matrix --index index-v1.json --only "$only" > matrix.json
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
@@ -77,14 +98,12 @@ jobs:
           print("matrix=" + json.dumps(m, separators=(",", ":")))
           print("states=" + json.dumps({"include": [{"state": s, "url": ix[s]} for s in states]}, separators=(",", ":")))
           PY
-          echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
-          echo "only=$only" >> "$GITHUB_OUTPUT"
-          echo "live=${live:-false}" >> "$GITHUB_OUTPUT"
           python3 -c "import json; m=json.load(open('matrix.json')); print(len(m['include']), 'jobs')" | tee -a "$GITHUB_STEP_SUMMARY"
           python3 -c "import json,sys; sys.exit(0 if json.load(open('matrix.json'))['include'] else 'no jobs: the plan found no state')"
 
   osm:
     needs: plan
+    if: needs.plan.outputs.reuse == ''
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -120,6 +139,7 @@ jobs:
   # on a fresh runner, one at a time
   osm-again:
     needs: [plan, osm]
+    if: needs.plan.outputs.reuse == ''
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -155,6 +175,7 @@ jobs:
 
   band:
     needs: [plan, osm, osm-again]
+    if: needs.plan.outputs.reuse == ''
     runs-on: ubuntu-latest
     timeout-minutes: 345
     strategy:
@@ -237,6 +258,8 @@ jobs:
 
   publish:
     needs: [plan, band]
+    # a whole build, or (bands_from) an earlier run's: 2026-11-14 the publish runner died after 141 bands had built
+    if: always() && needs.plan.result == 'success' && (needs.band.result == 'success' || (needs.plan.outputs.reuse != '' && needs.band.result == 'skipped'))
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -253,15 +276,37 @@ jobs:
         with:
           python-version: "3.12"
       - uses: actions/download-artifact@v4
+        if: needs.plan.outputs.reuse == ''
         with:
           pattern: graph-us-*
           path: bands
           merge-multiple: true
+      # another run's bands: download-artifact lists only the first 100 of another run's artifacts (2026-11-14: 100 of
+      # 141 bands published, the rest of the country left out), so each is fetched by id from a paginated listing
+      - name: The bands of run ${{ needs.plan.outputs.reuse }}
+        if: needs.plan.outputs.reuse != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ needs.plan.outputs.reuse }}
+        run: |
+          set -o pipefail
+          mkdir -p bands
+          gh api --paginate "repos/${{ github.repository }}/actions/runs/$RUN/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.name | startswith("graph-us-")) | select(.expired | not) | "\(.id) \(.name)"' > arts.txt
+          bands=$(gh api --paginate "repos/${{ github.repository }}/actions/runs/$RUN/jobs?per_page=100" --jq '.jobs[] | select(.name | startswith("band")) | .name' | wc -l)
+          echo "$(wc -l < arts.txt) band artifacts for $bands bands in run $RUN" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$(wc -l < arts.txt)" -eq "$bands" ] && [ "$bands" -gt 0 ] || { echo "::error::not every band of run $RUN has its artifact"; exit 1; }
+          while read -r id name; do
+            for k in 1 2 3 4 5; do gh api "repos/${{ github.repository }}/actions/artifacts/$id/zip" > a.zip && break; echo "retry $name"; sleep $((k * 10)); done
+            unzip -q -o a.zip -d bands && rm a.zip
+          done < arts.txt
+          ls bands | wc -l
       - name: Merge and pack
         run: |
           python -m tools.graph_etl.merge_index merged/v1 bands/*/v1 | tee -a "$GITHUB_STEP_SUMMARY"
           rm -rf bands
-          python -m tools.graph_etl.check merged/v1 | tail -12 | tee -a "$GITHUB_STEP_SUMMARY" || true
+          # no tools.graph_etl.check here: its spot roads are Cincinnati's, checked by graph-region.yml on the same build,
+          # and 62 million edges through it took the runner down (2026-11-14)
           python -m tools.graph_etl.pack merged/v1 packs | tee -a "$GITHUB_STEP_SUMMARY"
           # the tiles stay for the R2 upload, beside the slim index the Worker serves (a pack's tiles, byte for byte)
           rm -f merged/v1/index.json && cp packs/index.json merged/v1/index.json

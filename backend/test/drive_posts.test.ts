@@ -31,6 +31,19 @@ describe("drive posts", () => {
     expect((await api(c, "GET", `/api/posts/${id}`)).status).toBe(404);
   });
 
+  it("a stage keeps its ends only where both lie on the line as kept: never in the cut ends, never off the line", async () => {
+    const [a, b] = [await makeUser("alice"), await makeUser("bob")];
+    await befriend(a, b);
+    await post(a, { stages: [
+      { name: "Middle", score: 800, ends: [35.02, -84, 35.05, -84.0003] },          // on the line, 30 m off at the end: kept
+      { name: "From home", score: 790, ends: [35.0005, -84, 35.03, -84] },          // starts inside the first 500 m: dropped
+      { name: "Elsewhere", score: null, ends: [35.02, -84.01, 35.05, -84.01] }] });   // 900 m off the line: dropped
+    const [p] = await feedOf(b);
+    expect(p.stages).toEqual([{ name: "Middle", score: 800, ends: [35.02, -84, 35.05, -84.0003] }, { name: "From home", score: 790 },
+      { name: "Elsewhere", score: null }]);
+    expect((await api(a, "POST", "/api/posts", { ...POST, stages: [{ name: "x", score: 1, ends: "35,-84" }] })).status).toBe(201);   // odd ends: no ends, still posted
+  });
+
   it("a friend's profile lists only their posts you can see (?author=), never a crew post from a crew you're not in", async () => {
     const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara")];
     await befriend(a, b); await befriend(b, c);
@@ -106,6 +119,11 @@ describe("drive posts", () => {
     await ok(api(b, "POST", "/api/blocks", { handle: "cara" }));
     const seen = await json(api(b, "GET", `/api/posts/${id}`));
     expect([seen.comments, seen.comment_list.length]).toEqual([0, 0]);      // cara's comment is gone for bob
+    await ok(api(c, "POST", `/api/posts/${id}/kudos`));
+    await env.DB.prepare("UPDATE drive_post_kudos SET created_at = datetime('now', '-1 minute')").run();   // cara's came first
+    await ok(api(b, "POST", `/api/posts/${id}/kudos`));
+    expect((await json(api(a, "GET", `/api/posts/${id}`))).kudos_from.map((k: any) => k.handle)).toEqual(["bob", "cara"]);   // newest first
+    expect((await json(api(b, "GET", `/api/posts/${id}`))).kudos_from.map((k: any) => k.handle)).toEqual(["bob"]);           // never someone blocked
     const { id: mine } = await post(c);
     expect((await feedOf(b)).map((p) => p.id)).toEqual([id]);                  // and cara's post
     expect((await api(b, "POST", "/api/reports", { kind: "drive", target: id, reason: "spam" })).status).toBe(204);
@@ -142,5 +160,57 @@ describe("drive posts", () => {
     await ok(api(a, "DELETE", "/api/me", { confirm: "DELETE" }));
     const left = await env.DB.prepare("SELECT (SELECT COUNT(*) FROM drive_posts) + (SELECT COUNT(*) FROM drive_comments) AS n").first<{ n: number }>();
     expect(left!.n).toBe(0);
+  });
+});
+
+describe("this week on the Feed", () => {
+  it("each driver's drives, distance and best Score since Monday, most distance first; a drive posted twice counts once; never a stranger or someone blocked", async () => {
+    const [a, b, c, d] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara"), await makeUser("dan")];
+    await befriend(a, b); await befriend(a, c);
+    const crew = (await json(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).id;
+    const t = (await json(api(a, "POST", `/api/crews/${crew}/invite`))).token;
+    await ok(api(b, "POST", "/api/crews/join", { token: t }));
+    await post(a, { length_m: 20000, score: 700 });
+    await post(b, { length_m: 30000, score: 650 });
+    await post(b, { length_m: 30000, score: 650, crew_id: crew });          // the same drive to the crew: once
+    await post(b, { title: "Tail of the Dragon", length_m: 15000, score: 790 });
+    await post(c, { length_m: 5000, score: null });
+    await post(d, { length_m: 99000 });                                      // a stranger
+    const old = new Date(Date.now() - 10 * 86400_000).toISOString().slice(0, 10);
+    await post(c, { title: "Old one", driven_on: old, length_m: 90000 });  // before this week
+    const week = await json(api(a, "GET", "/api/feed/week"));
+    expect(week.map((r: any) => [r.handle, r.you, r.drives, r.length_m, r.best])).toEqual([
+      ["bob", false, 2, 45000, 790], ["alice", true, 1, 20000, 700], ["cara", false, 1, 5000, null]]);
+    await ok(api(a, "POST", "/api/blocks", { handle: "bob" }));
+    expect((await json(api(a, "GET", "/api/feed/week"))).map((r: any) => r.handle)).toEqual(["alice", "cara"]);
+  });
+});
+
+describe("a crew's posted drives", () => {
+  it("?crew= lists only the posts to that crew, and only for its members", async () => {
+    const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara")];
+    await befriend(a, b); await befriend(a, c);
+    const crew = (await json(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).id;
+    const t = (await json(api(a, "POST", `/api/crews/${crew}/invite`))).token;
+    await ok(api(b, "POST", "/api/crews/join", { token: t }));
+    await post(a, { title: "To friends" });
+    await post(a, { title: "To the crew", crew_id: crew });
+    await post(b, { title: "Bob to the crew", crew_id: crew });
+    expect((await json(api(b, "GET", `/api/feed?crew=${crew}`))).map((p: any) => p.title)).toEqual(["Bob to the crew", "To the crew"]);
+    expect(await json(api(c, "GET", `/api/feed?crew=${crew}`))).toEqual([]);      // not a member
+    expect((await api(b, "GET", "/api/feed?crew=bad%20id")).status).toBe(400);
+  });
+});
+
+describe("editing a post", () => {
+  it("the author changes the name and what they said; nobody else can; a name can't go empty", async () => {
+    const [a, b] = [await makeUser("alice"), await makeUser("bob")];
+    await befriend(a, b);
+    const { id } = await post(a);
+    expect(await json(api(a, "PUT", `/api/posts/${id}`, { caption: "Dry all the way, actually." }))).toEqual({ title: "Cherohala Skyway", caption: "Dry all the way, actually." });
+    expect(await json(api(a, "PUT", `/api/posts/${id}`, { title: "Skyway at dawn", caption: "" }))).toEqual({ title: "Skyway at dawn", caption: null });
+    expect((await api(a, "PUT", `/api/posts/${id}`, { title: "" })).status).toBe(400);
+    expect((await api(b, "PUT", `/api/posts/${id}`, { caption: "mine now" })).status).toBe(404);
+    expect((await feedOf(b))[0]).toMatchObject({ title: "Skyway at dawn", caption: null });
   });
 });

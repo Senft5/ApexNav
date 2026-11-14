@@ -4,6 +4,7 @@ import { routeHost } from "./hosts";
 import {
   APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, invitePreview, logout, redeemInvite, requireMember, requireUser, sessionCookie, sessionHash, viewer,
 } from "./auth";
+import { voiceAnswer, voicePull, voiceStart, voiceStop } from "./convoy_voice";
 import { convoyAccept, convoyCode, convoyCodeJoin, convoyCodePreview, convoyConnect, convoyCreate, convoyDismiss, convoyInvitePeople, convoyInvites, convoyJoin, convoyPreview, convoyRoom, unwrap } from "./convoy_routes";
 import { Env, HttpError, body, json, str } from "./util";
 import { rateCheck } from "./ratelimit";
@@ -15,19 +16,19 @@ import { cronHealth, runCron } from "./cron_runs";
 import { appleSignIn } from "./apple";
 import { crewHazardKinds, hazardsNear, reportHazard, voteHazard } from "./hazards";
 import { routeDelete, routeGet, routesSharedWithMe, shareRoute } from "./routes_shared";
-import { bookCreate, bookDelete, bookFollow, bookGet, bookUpdate, booksMine, booksNear, roadAdd, roadRemove, roadStamp, roadUpdate } from "./roadbooks";
+import { bookCreate, bookDelete, bookFollow, bookGet, bookUpdate, booksFriends, booksMine, booksNear, roadAdd, roadRemove, roadStamp, roadUpdate } from "./roadbooks";
 import { duelAccept, duelCreate, duelEnd, duelList } from "./duels";
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
 import {
-  boardActivity, boardFor, crewCreate, crewDiscover, crewInvite, crewInvitePreview, crewInvitesBy, crewInvitesRevoke, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest, friendRequestCancel,
+  boardActivity, boardFor, crewCreate, crewDiscover, crewInvite, crewInvitePreview, crewInvitesBy, crewInvitesRevoke, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendSuggestions, userSearch, friendRequest, friendRequestCancel,
   ghosts, myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
 import { itemsDelete, itemsGet, itemsPut } from "./member_items";
 import * as drivePosts from "./drive_posts";
 import { mediaGet, mediaPut } from "./post_media";
-import { afterCrewDrive, afterDuel, afterFriend, afterKudos, afterPostComment, afterPostKudos, pushForget, pushQuiet, pushRegister } from "./push";
+import { afterCrewDrive, afterDuel, afterFriend, afterKudos, afterPassed, afterTopped, bestBefore, afterPostComment, afterPostKudos, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewBadge, crewFeed, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
 import { decalsPlace } from "./livery";
@@ -43,7 +44,7 @@ import { pointsFor } from "./points";
 import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
 import { ctxKeys, workzones } from "./route_feeds";
-import { osmTile } from "./osm_relay";
+import { lineTiles, osmTile, placeTags, pointCells, regionList, wayShapes } from "./osm_relay";
 import { traceTile } from "./trace_relay";
 import { grantedThemes } from "./themes";
 import { isDeveloper } from "./developers";
@@ -184,6 +185,17 @@ on("GET", "/api/ctx/osm", async (req, env, _m, ctx) => {
   if (url.searchParams.get("diag") === "1" && !isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
   return osmTile(url, env, ctx);
 });
+// The region's waterfalls and roads with conditional access, built weekly with the OSM tiles (osm_relay.ts regionList)
+on("GET", "/api/ctx/falls.json", async (_req, env) => regionList(env.DATA, "falls.json"));
+on("GET", "/api/ctx/closures.json", async (_req, env) => regionList(env.DATA, "closures.json"));
+// A place card's hours, phone and website from the same build (osm_relay.ts placeTags; web/place_info.js)
+on("GET", "/api/ctx/places", async (req, env) => placeTags(new URL(req.url), env.DATA));
+// Fuel stations, schools and places of worship by 0.25 degree cell for a plan (osm_relay.ts pointCells; route_ctx car.js, events.js)
+on("GET", "/api/ctx/points", async (req, env) => pointCells(new URL(req.url), env.DATA));
+// Lit roads, tunnels and cycle routes by 0.1 degree tile for a plan (osm_relay.ts lineTiles; route_ctx/driver.js)
+on("GET", "/api/ctx/lines", async (req, env) => lineTiles(new URL(req.url), env.DATA));
+// A drive's ways' whole geometry from the built tiles, for road data (osm_relay.ts wayShapes; web/contributor.js)
+on("GET", "/api/ctx/ways", async (req, env) => wayShapes(new URL(req.url), env.DATA));
 // The router's edges for a stage cut from the map tiles (trace_relay.ts; route_ctx/router_edges.js), kept 3 days per shape
 on("GET", "/api/ctx/trace", async (req) => traceTile(new URL(req.url)));
 on("GET", "/api/shop", async (req, env) => json(await shop(env, await requireMember(req, env))));
@@ -196,6 +208,8 @@ on("POST", "/api/friends/request", async (req, env, _m, ctx) => {
 });
 on("POST", "/api/friends/request/cancel", async (req, env) => { await friendRequestCancel(env, await requireMember(req, env), req); return noContent(); });
 on("GET", "/api/friends", async (req, env) => json(await friendList(env, await requireMember(req, env))));
+on("GET", "/api/friends/suggested", async (req, env) => json(await friendSuggestions(env, await requireMember(req, env))));
+on("GET", "/api/users/search", async (req, env) => json(await userSearch(env, await requireMember(req, env), new URL(req.url))));
 on("POST", "/api/friends/accept", async (req, env, _m, ctx) => {
   const v = await requireMember(req, env), other = await friendAccept(env, v, req);
   await later(ctx, afterFriend(env, v, other, true));
@@ -233,7 +247,12 @@ on("GET", "/api/ta", async (req, env) => json(await fixedArea(env, await require
 on("GET", "/api/ta/entered", async (req, env) => json(await fixedEntered(env, await requireMember(req, env))));
 on("POST", "/api/ta/circuit", async (req, env) => json(await fixedMake(env, await requireMember(req, env), req)));
 on("POST", "/api/ta/enter", async (req, env) => json(await fixedEnter(env, await requireMember(req, env), req)));
-on("POST", "/api/ta/runs", async (req, env) => json(await fixedRuns(env, await requireMember(req, env), req)));
+on("POST", "/api/ta/runs", async (req, env, _m, ctx) => {
+  const v = await requireMember(req, env), beat: { id: string; name: string; was: number | null }[] = [];
+  const out = await fixedRuns(env, v, req, beat);
+  await later(ctx, afterPassed(env, v, beat));
+  return json(out);
+});
 on("DELETE", "/api/ta/entry", async (req, env) => { await fixedLeave(env, await requireMember(req, env), new URL(req.url)); return noContent(); });
 on("GET", "/api/events/near", async (req, env) => json(await eventsNear(env, await requireMember(req, env), new URL(req.url))));
 on("GET", "/api/events", async (req, env) => json(await eventsList(env, await requireMember(req, env), null)));
@@ -342,6 +361,7 @@ on("GET", "/api/routes/:id", async (req, env, m) => json(await routeGet(env, awa
 on("DELETE", "/api/routes/:id", async (req, env, m) => json(await routeDelete(env, await requireMember(req, env), m.groups!.id)));
 // Roadbooks (src/roadbooks.ts): collections of great roads. A public one opens by its link with no account; the rest need a member.
 on("GET", "/api/roadbooks/near", async (req, env) => json(await booksNear(env, await viewer(req, env), new URL(req.url))));
+on("GET", "/api/roadbooks/friends", async (req, env) => json(await booksFriends(env, await requireMember(req, env))));
 on("GET", "/api/roadbooks", async (req, env) => json(await booksMine(env, await requireMember(req, env))));
 on("POST", "/api/roadbooks", async (req, env) => json(await bookCreate(env, await requireMember(req, env), req), 201));
 on("PUT", "/api/roadbooks/roads/:rid/stamp", async (req, env, m) => json(await roadStamp(env, await requireMember(req, env), m.groups!.rid, true)));
@@ -381,12 +401,21 @@ on("POST", "/api/duels/:id/accept", async (req, env, m, ctx) => {
   return json(d);
 });
 on("DELETE", "/api/duels/:id", async (req, env, m) => json(await duelEnd(env, await requireMember(req, env), m.groups!.id)));
-on("POST", "/api/board", async (req, env) => json(await publish(env, await requireMember(req, env), req)));
+on("POST", "/api/board", async (req, env, _m, ctx) => {
+  const v = await requireMember(req, env);
+  const peek = (await req.clone().json().catch(() => ({}))) as { segment_id?: unknown };
+  const before = await bestBefore(env, v, peek && peek.segment_id);   // null unless pushes can send
+  const out = await publish(env, v, req);
+  if (out.published) await later(ctx, afterTopped(env, v, before));
+  return json(out);
+});
 // Kudos (IDEAS S-07): a tap of thanks on a friend's run you can see; no text.
 // drive posts and the friends feed (src/drive_posts.ts)
+on("GET", "/api/feed/week", async (req, env) => json(await drivePosts.feedWeek(env, await requireMember(req, env))));
 on("GET", "/api/feed", async (req, env) => json(await drivePosts.feed(env, await requireMember(req, env), new URL(req.url))));
 on("POST", "/api/posts", async (req, env) => json(await drivePosts.postCreate(env, await requireMember(req, env), req), 201));
 on("GET", "/api/posts/:id", async (req, env, m) => json(await drivePosts.postGet(env, await requireMember(req, env), m.groups!.id)));
+on("PUT", "/api/posts/:id", async (req, env, m) => json(await drivePosts.postEdit(env, await requireMember(req, env), m.groups!.id, req)));
 on("DELETE", "/api/posts/:id", async (req, env, m) => { await drivePosts.postDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 on("POST", "/api/posts/:id/kudos", async (req, env, m, ctx) => {
   const v = await requireMember(req, env), k = await drivePosts.postKudos(env, v, m.groups!.id, true);
@@ -396,7 +425,7 @@ on("POST", "/api/posts/:id/kudos", async (req, env, m, ctx) => {
 on("DELETE", "/api/posts/:id/kudos", async (req, env, m) => { await drivePosts.postKudos(env, await requireMember(req, env), m.groups!.id, false); return noContent(); });
 on("POST", "/api/posts/:id/comments", async (req, env, m, ctx) => {
   const v = await requireMember(req, env), c = await drivePosts.commentCreate(env, v, m.groups!.id, req);
-  await later(ctx, afterPostComment(env, v, m.groups!.id, c.author, c.title));
+  await later(ctx, afterPostComment(env, v, m.groups!.id, c.author, c.title, c.mentions));
   return json({ id: c.id }, 201);
 });
 on("PUT", "/api/posts/:id/media", async (req, env, m) => json(await mediaPut(env, await requireMember(req, env), m.groups!.id, req)));
@@ -409,6 +438,8 @@ on("POST", "/api/kudos", async (req, env, _m, ctx) => {
 });
 // push notifications (src/push.ts): this phone's APNs token, kept while signed in
 on("POST", "/api/push/token", async (req, env) => json(await pushRegister(env, await requireUser(req, env), req)));
+on("GET", "/api/push/kinds", async (req, env) => json(await pushKindsGet(env, await requireUser(req, env))));
+on("PUT", "/api/push/kinds", async (req, env) => json(await pushKindsPut(env, await requireUser(req, env), req)));
 on("PUT", "/api/push/quiet", async (req, env) => { await pushQuiet(env, await requireMember(req, env), req); return noContent(); });
 on("DELETE", "/api/push/token", async (req, env) => { const v = await requireUser(req, env); const b = (await req.json().catch(() => ({}))) as { token?: unknown }; await pushForget(env, v.id, b.token); return noContent(); });
 on("DELETE", "/api/kudos", async (req, env) => { await kudosTake(env, await requireMember(req, env), req); return noContent(); });
@@ -444,6 +475,11 @@ on("POST", "/api/convoy/:id/remove", async (req, env, m) => {
   return noContent();
 });
 // No sign-in check here on purpose: the socket's first frame carries a single-use ticket minted by POST .../ticket.
+// Convoy voice (src/convoy_voice.ts): an open channel for the people in a convoy, carried by Cloudflare Realtime
+on("POST", "/api/convoy/:id/voice", async (req, env, m) => json(await voiceStart(env, await requireMember(req, env), m.groups!.id, req)));
+on("POST", "/api/convoy/:id/voice/pull", async (req, env, m) => json(await voicePull(env, await requireMember(req, env), m.groups!.id, req)));
+on("PUT", "/api/convoy/:id/voice/answer", async (req, env, m) => json(await voiceAnswer(env, await requireMember(req, env), m.groups!.id, req)));
+on("DELETE", "/api/convoy/:id/voice", async (req, env, m) => json(await voiceStop(env, await requireMember(req, env), m.groups!.id)));
 on("GET", "/api/convoy/:id/connect", async (req, env, m) => convoyConnect(req, env, m.groups!.id));
 
 // CORS for the iOS shell only (pages at apexnav://app call this Worker cross-origin with a bearer token).

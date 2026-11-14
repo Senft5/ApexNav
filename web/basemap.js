@@ -52,8 +52,22 @@
       put('apex-hillshade', 'hillshade-exaggeration', 0.36);
     }
     if (has('apex-contours')) put('apex-contours', 'line-color', P.contour);
+    if (has('apex-buildings')) put('apex-buildings', 'fill-extrusion-color', buildingColour(P));
     if (has('apex-contour-labels')) { put('apex-contour-labels', 'text-color', P.contour); put('apex-contour-labels', 'text-halo-color', P.bg); }
   }
 
-  root.ApexBasemap = { restyle };
+  // The town's buildings, raised (the cockpit's apex-buildings, as Apple and Google Maps draw a town): the land, a seventh
+  // of the way to the road casing's ink, so a block reads as a block on every theme (paper on the road book, a dim glow on
+  // Tapedeck) and never louder than a road. Pure (tests/test_basemap.py).
+  const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  function mix(a, b, t) {
+    if (!/^#[0-9a-f]{6}$/i.test(a || '') || !/^#[0-9a-f]{6}$/i.test(b || '')) return a || b;
+    const x = hex(a), y = hex(b);
+    return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('');
+  }
+  const buildingColour = (P) => mix(P.land, P.casing, 0.14);
+
+  const api = { restyle, buildingColour, mix };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.ApexBasemap = api;
 })(typeof window !== 'undefined' ? window : globalThis);

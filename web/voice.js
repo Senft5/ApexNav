@@ -70,6 +70,8 @@
       if (e.caution) t.push(`caution:${e.caution}`);
       return t;
     }
+    // a road mark ("Stop sign", "Railway crossing", road_marks.js) by its own clip (voice_lines.js "mark:"), never "hazard:mark"
+    if (e.type === 'mark') { const P = root.ApexPlainNotes, t = P && P.hazardToken ? P.hazardToken(e) : null; return [t || `hazard:mark:${e.call}`]; }
     return [`hazard:${e.type}`];
   }
   // chain: [note, next, ...] where each but the last links with "into"/"and"; last may carry a distance.

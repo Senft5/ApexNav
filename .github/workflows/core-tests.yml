@@ -24,7 +24,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: pip install -r requirements.txt
+      # the graph ETL's too (pyosmium, shapely): without them tests/test_graph_etl.py skipped whole, and a test that broke
+      # there went unseen (the road inventory's posted limit, found 2026-11-14)
+      - run: pip install -r requirements.txt -r tools/graph_etl/requirements.txt
       - name: Invariants, road DNA, and JS/Python parity
         run: python -m pytest tests -v
 

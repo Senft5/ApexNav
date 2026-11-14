@@ -3,7 +3,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { api, freshDb, makeUser } from "./helpers";
-import { dailyServerCheck, parseReport, serverSide } from "../src/service_check";
+import { dailyServerCheck, parseReport, serverResults, serverSide } from "../src/service_check";
 
 beforeEach(freshDb);
 
@@ -55,6 +55,17 @@ describe("service check", () => {
     expect(s.overpass.find((o) => o.host === "overpass.kumi.systems")).toMatchObject({ http: 429, elements: null });
     expect(s.overpass.find((o) => o.host === "overpass-api.de")).toMatchObject({ http: 200, elements: 3 });
     expect(seen).toContain("raw.githubusercontent.com");
+    expect(s.config.realtime).toBe(true);                                          // the test Worker has the two secrets
+    expect(s.realtime).toMatchObject({ ok: false });                               // the fake answers no sessionId
+    const live = await serverSide(env as never, (async (u: string | URL | Request, o?: RequestInit) => {
+      const url = String(u instanceof Request ? u.url : u);
+      if (url.startsWith("https://rtc.live.cloudflare.com/v1/apps/test-app/sessions/new")) {
+        return new Response(JSON.stringify(new Headers(o?.headers).get("authorization") === "Bearer test-token" ? { sessionId: "s1" } : { errorCode: "auth" }));
+      }
+      return fake(u);
+    }) as typeof fetch);
+    expect(live.realtime).toMatchObject({ http: 200, ok: true });
+    expect(serverResults(live).find((x) => x.id === "srv_realtime")).toMatchObject({ state: "up", detail: "convoy voice" });
   });
 
   it("the daily cron keeps the Worker's own side as source 'server', with the phone's ids for the same servers", async () => {

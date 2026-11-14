@@ -7,6 +7,40 @@
 (function (root) {
   'use strict';
   const CUT_M = 500, MAX_POINTS = 600, PREVIEW = 3;
+  /** A comment's text with each @handle in bold (the server tells whoever it names, if they can see the post). */
+  const MENTION = /(^|[^A-Za-z0-9_@])(@[A-Za-z0-9_]{3,20})(?![A-Za-z0-9_])/g;
+  /** The @handle being typed just before the caret: { start, q } (q may be empty), or null when none is. */
+  function mentionAt(text, caret) {
+    const m = String(text || '').slice(0, caret).match(/(^|[^A-Za-z0-9_@])@([A-Za-z0-9_]{0,20})$/);
+    return m ? { start: caret - m[2].length - 1, q: m[2].toLowerCase() } : null;
+  }
+  /** Up to `max` handles starting with q, each once, in the order given (the post's people first, then friends). */
+  function suggest(q, handles, own, max = 4) {
+    const out = [];
+    for (const h of handles) {
+      const k = String(h || '').toLowerCase();
+      if (k && k !== own && k.startsWith(q) && !out.includes(k)) out.push(k);
+      if (out.length >= max) break;
+    }
+    return out;
+  }
+  /** "Kudos from @bob", "@bob and @cara", "@bob, @cara and 3 others" (n: the post's count, which may hold more). */
+  function kudosLine(handles, n) {
+    const h = handles.slice(0, 2).map((x) => `@${x}`), rest = Math.max((n || 0), handles.length) - h.length;
+    if (!h.length) return '';
+    const names = rest > 0 ? `${h.join(', ')} and ${rest === 1 ? '1 other' : `${rest} others`}` : h.join(' and ');
+    return `Kudos from ${names}`;
+  }
+  function mentionParts(text) {
+    const out = []; let last = 0;
+    for (const m of String(text || '').matchAll(MENTION)) {
+      const start = m.index + m[1].length;
+      if (start > last) out.push([false, text.slice(last, start)]);
+      out.push([true, m[2]]); last = start + m[2].length;
+    }
+    if (last < String(text || '').length) out.push([false, text.slice(last)]);
+    return out;
+  }
 
   const metres = (a, b) => {
     const R = 6371000, r = Math.PI / 180, dLat = (b[0] - a[0]) * r, dLon = (b[1] - a[1]) * r;
@@ -61,6 +95,55 @@
     }
     return out.map(([lat, lon]) => ({ lat, lon }));
   }
+  /** The stretch of a post's line from the point nearest a stage's start to the one nearest its end ([lat0, lon0, lat1,
+   *  lon1]), in the order driven; null when the ends aren't on the line (over 150 m off) or it's under two points. */
+  function stretch(pts, ends) {
+    if (!Array.isArray(pts) || pts.length < 2 || !Array.isArray(ends) || ends.length !== 4 || !ends.every(Number.isFinite)) return null;
+    const nearest = (la, lo) => { let best = -1, bd = Infinity; const k = Math.cos(la * Math.PI / 180);
+      pts.forEach(([a, b], i) => { const d = Math.hypot((a - la) * 111320, (b - lo) * 111320 * k); if (d < bd) { bd = d; best = i; } }); return bd <= 150 ? best : -1; };
+    const i = nearest(ends[0], ends[1]), j = nearest(ends[2], ends[3]);
+    if (i < 0 || j < 0 || j - i < 1) return null;
+    return pts.slice(i, j + 1);
+  }
+  /** The posted stages Drive it can compare you on afterwards: those with ends and a Score, [{ name, ends, score }]; with
+   *  `only` (a stage's index), that one alone. Each with its length along their line, [{ name, ends, length_m, score }]. */
+  function rivalsOf(p, only = null) {
+    const pts = p && typeof p.line === 'string' ? decode(p.line) : [];
+    return (p && Array.isArray(p.stages) ? p.stages : []).map((x, i) => {
+      if (!x || !x.name || !Number.isFinite(x.score) || (only != null && i !== only)) return null;
+      const part = stretch(pts, x.ends);                           // its length along their line: a pass is matched by length
+      if (!part) return null;
+      let m = 0;
+      for (let k = 1; k < part.length; k++) m += Math.hypot((part[k][0] - part[k - 1][0]) * 110540, (part[k][1] - part[k - 1][1]) * 111320 * Math.cos(part[k][0] * Math.PI / 180));
+      return m >= 200 ? { name: String(x.name).slice(0, 60), ends: x.ends.slice(), length_m: Math.round(m), score: x.score, i } : null;
+    }).filter(Boolean);
+  }
+  /** After you drove a posted line, your Score on its stages against theirs: "Gilmore Rd: 812, 34 under @bob's 846." One
+   *  sentence a stage, at most two; rows [{ name, you, them }] with `you` a number (a stage you didn't score is left out). */
+  function rivalLine(rows, who) {
+    const whoseOf = (w) => (w && w.mine ? 'your posted' : `@${(w && w.handle) || '?'}'s`);
+    return (Array.isArray(rows) ? rows : []).filter((r) => r && Number.isFinite(r.you) && Number.isFinite(r.them)).slice(0, 2).map((r) => {
+      const d = Math.round(r.you) - Math.round(r.them), whose = whoseOf(r.who || who);   // a row may name its own friend
+      return `${r.name}: ${Math.round(r.you)}, ${d === 0 ? 'level with' : `${Math.abs(d)} ${d > 0 ? 'over' : 'under'}`} ${whose} ${Math.round(r.them)}.`;
+    }).join(' ');
+  }
+  /** The friends' posted stages the Feed has shown you, kept on the phone so a drive over one is compared afterwards even
+   *  without Drive it: `kept` merged with the posts in `rows` (your own left out), newest first, at most KEEP_STAGES, none
+   *  older than KEEP_DAYS. [{ key, name, ends, length_m, score, handle, at }] */
+  const KEEP_STAGES = 40, KEEP_DAYS = 21;
+  function keepStages(kept, rows, now) {
+    const fresh = [];
+    for (const p of Array.isArray(rows) ? rows : []) {
+      if (!p || p.mine || !p.id) continue;
+      for (const r of rivalsOf(p)) fresh.push({ key: `${p.id}_${r.i}`, name: r.name, ends: r.ends, length_m: r.length_m, score: r.score, handle: String(p.handle || ''), at: now });
+    }
+    const seen = new Set(), out = [];
+    for (const x of [...fresh, ...(Array.isArray(kept) ? kept : [])]) {
+      if (!x || !x.key || seen.has(x.key) || !(now - x.at < KEEP_DAYS * 864e5)) continue;
+      seen.add(x.key); out.push(x);
+    }
+    return out.slice(0, KEEP_STAGES);
+  }
   /** An SVG path for the line in a w×h box, north up, its shape kept (longitude scaled by the latitude), with a margin. */
   function lineSvg(pts, w, h, pad = 8) {
     if (!Array.isArray(pts) || pts.length < 2) return '';
@@ -84,6 +167,13 @@
     if (h < 48) return 'yesterday';
     return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   }
+  /** This week's line under a driver (GET /api/feed/week): how far, how many drives, and the best Score when there is one. */
+  function weekLine(r, fmtLen) {
+    const n = r && r.drives | 0, len = r && Number.isFinite(r.length_m) && r.length_m > 0 ? fmtLen(r.length_m) : '';
+    return [len, n === 1 ? '1 drive' : `${n} drives`, r && Number.isFinite(r.best) ? `best ${r.best}` : ''].filter(Boolean).join(' · ');
+  }
+  /** The board is worth showing once someone besides you posted this week. */
+  const weekShown = (rows) => Array.isArray(rows) && rows.some((r) => r && !r.you);
   /** The card's facts, in the order a driver reads them: length, then the roads (two named, the rest counted). */
   function facts(p, fmtLen) {
     const roads = Array.isArray(p.roads) ? p.roads : [];
@@ -92,6 +182,13 @@
   }
 
   const STYLE = `
+    .week-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+    .week-card { flex: 0 0 auto; display: grid; grid-template-columns: auto auto; align-items: center; gap: 2px 8px; min-height: 48px; padding: 6px 12px 6px 6px;
+      background: none; border: 1px solid var(--rule); color: inherit; font: inherit; text-align: left; }
+    button.week-card { cursor: pointer; }
+    .week-card > :first-child { grid-row: span 2; }
+    .week-card .week-who { font-size: 14px; white-space: nowrap; }
+    .week-card small { font-size: 12px; color: var(--panel-dim); white-space: nowrap; }
     .feed-media { position: relative; background: #000; min-height: 120px; }
     .feed-media video, .feed-media img { display: block; width: 100%; max-height: 440px; object-fit: contain; }
     .feed-media-label { position: absolute; left: 8px; top: 8px; background: var(--panel); color: var(--panel-ink); padding: 2px 8px; font-weight: 700; font-size: 13px; }
@@ -101,6 +198,8 @@
     .feed-stages { display: grid; gap: 4px; }
     .feed-stages small { color: var(--panel-dim); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
     .feed-stages div { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--rule); padding-top: 4px; }
+    .feed-stages button.feed-stage { display: flex; justify-content: space-between; gap: 12px; width: 100%; border: 0; border-top: 1px solid var(--rule); background: none; color: inherit; font: inherit; text-align: left; padding: 4px 0 0; min-height: 40px; align-items: center; cursor: pointer; }
+    .feed-stages button.feed-stage span { text-decoration: underline; text-underline-offset: 3px; }
     .feed-stages span { overflow-wrap: anywhere; min-width: 0; }
     .feed-stages b { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
     .feed-card { border-top: 1px solid var(--rule); color: var(--panel-ink); display: grid; gap: 10px; padding: 14px 0 4px; }
@@ -117,7 +216,8 @@
     .feed-stats small { color: var(--panel-dim); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
     .feed-stats b { font-family: var(--font-num); font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
     .feed-stats b span { font-family: inherit; font-size: 15px; font-weight: 600; color: var(--panel-dim); margin-left: 3px; }
-    .feed-line { width: 100%; height: auto; aspect-ratio: 2 / 1; display: block; background: var(--well, rgba(0,0,0,0.05)); }
+    .feed-line { width: 100%; max-width: 90vh; height: auto; aspect-ratio: 2 / 1; display: block; background: var(--well, rgba(0,0,0,0.05)); }
+    /* a phone on its side: the line at most half the screen's height, so the post's words and keys stay in view */
     .feed-line path { fill: none; stroke: var(--accent); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
     .feed-line .casing { display: none; }
     .feed-line.on-map { background-size: 100% 100%; background-position: center; }
@@ -136,6 +236,12 @@
     .feed-comment { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: start; }
     .feed-comment p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
     .feed-comment small { color: var(--panel-dim); font-size: 12px; }
+    .feed-kudos-from { display: flex; align-items: center; gap: 8px; min-height: 44px; background: none; border: 0; padding: 0; color: var(--panel-ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+    .feed-faces { display: inline-flex; } .feed-faces > * + * { margin-left: -8px; }
+    .feed-kudos-row { display: flex; align-items: center; gap: 12px; min-height: 48px; width: 100%; background: none; border: 0; padding: 0; color: var(--panel-ink); font: inherit; text-align: left; cursor: pointer; }
+    .feed-comment .feed-reply { display: inline-block; min-height: 32px; padding: 6px 0; font-size: 13px; color: var(--panel-dim); }
+    .feed-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .feed-tags .feed-tag { min-height: 44px; }
     .feed-comment .feed-more { width: 44px; height: 44px; display: grid; place-items: center; text-decoration: none; font-size: 20px; color: var(--panel-ink); }
     .feed-say { display: flex; gap: 8px; }
     .feed-say .field { flex: 1; min-width: 0; }
@@ -148,12 +254,18 @@
   };
 
   /**
-   * page: el, btn, toast, apiCall, jsonOf, avatar(photo_id, handle, px), fmtLen(m), report({kind,target,label,who}),
+   * page: el, btn, toast, apiCall, jsonOf, avatar(photo_id, handle, px), fmtLen(m), report({kind,target,label,who}), keepRoad(name, pts) (Keep in a roadbook on ···),
    * block(handle), crews() → a promise of [{id, name}], inZone(lat, lon) (your privacy zones), openFriend(handle) (their profile),
    * driveLine(stops, post) (Drive it: a route through stops along the post's line).
    */
   function mount(page) {
+    // friends' posted stages the Feed showed (keepStages), for the end card after a drive over one (friendStages)
+    const KEEP_KEY = 'apex.friendStages';   // an apex.* key: Erase everything takes it too
+    const kept = () => { try { const v = JSON.parse(localStorage.getItem(KEEP_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (_) { return []; } };
+    const keep = (rows) => { try { localStorage.setItem(KEEP_KEY, JSON.stringify(keepStages(kept(), rows, Date.now()))); } catch (_) {} };
     const { el, btn, toast, apiCall, jsonOf } = page;
+    let friendHandles = null;   // your friends' handles, asked once the first time you type @ in a comment
+    const withMentions = (text) => el('p', {}, ...mentionParts(text).map(([at, t]) => (at ? el('b', { textContent: t }) : root.document.createTextNode(t))));
     const doc = root.document;
     if (doc && !doc.getElementById('drivePostsStyle')) doc.head.append(el('style', { id: 'drivePostsStyle', textContent: STYLE }));
     const face = (p, px) => (page.avatar ? page.avatar(p.photo_id || null, p.handle, px) : el('span'));
@@ -250,7 +362,16 @@
       if (p.media) box.append(mediaBox(p));
       if (Array.isArray(p.stages) && p.stages.length) {                // the saved stages it went over, each with its Score
         box.append(el('div', { className: 'feed-stages' }, el('small', { textContent: p.stages.length === 1 ? 'Stage' : 'Stages' }),
-          ...p.stages.map((x) => el('div', {}, el('span', { textContent: x.name }), el('b', { textContent: x.score == null ? '--' : String(x.score) })))));
+          ...p.stages.map((x, si) => {
+            const row = el('div', {}, el('span', { textContent: x.name }), el('b', { textContent: x.score == null ? '--' : String(x.score) }));
+            const part = page.driveLine && Array.isArray(x.ends) ? stretch(pts, x.ends) : null;
+            if (!part) return row;
+            // a stage the server kept the ends of (on the line): a tap drives just that stretch of their line
+            const b = el('button', { type: 'button', className: 'feed-stage' }, ...row.childNodes);
+            b.setAttribute('aria-label', `Drive ${x.name}${x.score == null ? '' : `, ${p.mine ? 'your' : `@${p.handle || '?'}'s`} Score ${x.score}`}`);
+            b.addEventListener('click', () => { doc.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); page.driveLine(throughPoints(part, 6), { ...p, id: `${p.id}_s${si}`, title: x.name, rivals: rivalsOf(p, si) }); });
+            return b;
+          })));
       }
       const f = facts({ roads: p.roads }, fmtLen);
       if (f) box.append(el('p', { className: 'feed-facts', textContent: f }));
@@ -266,7 +387,7 @@
       if (pts.length > 1 && page.driveLine) {
         const d = el('button', { type: 'button', className: 'feed-drive' }); d.innerHTML = ICON.drive; d.append(el('span', { textContent: 'Drive it' }));
         d.setAttribute('aria-label', p.mine ? `Drive ${p.title} again` : `Drive @${p.handle || '?'}'s ${p.title}`);
-        d.addEventListener('click', () => { doc.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); page.driveLine(throughPoints(pts), p); });
+        d.addEventListener('click', () => { doc.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); page.driveLine(throughPoints(pts), { ...p, rivals: rivalsOf(p) }); });
         acts.append(d);
       }
       box.append(acts);
@@ -280,6 +401,10 @@
         e.stopPropagation();
         const s = sheet('This post', 'feed-menu');
         const keys = el('div', { className: 'row', style: 'flex-wrap:wrap' });
+        // the road it drew, into one of your roadbooks (roadbooks.js keep): a friend's road, or your own drive's
+        const line = page.keepRoad && typeof p.line === 'string' ? decode(p.line) : [];
+        if (line.length > 1) keys.append(btn('Keep in a roadbook', () => { s.close(); page.keepRoad(p.title || 'Road', line); }, 'ink-btn'));
+        if (p.mine) keys.append(btn('Edit', () => { s.close(); edit(p, o, b.closest('.feed-card')); }, 'ink-btn'));
         if (p.mine) keys.append(btn('Delete post', async () => {
           s.close();
           const r = await apiCall('DELETE', `/api/posts/${encodeURIComponent(p.id)}`).catch(() => null);
@@ -295,7 +420,46 @@
       return b;
     }
 
+    // Edit (your own post, behind ···): its name and what you said, nothing else; Save redraws where it was
+    function edit(p, o, node) {
+      const s = sheet('Edit post', 'feed-edit');
+      const name = el('input', { className: 'field', maxLength: 60, value: p.title || '', 'aria-label': 'Drive name' });
+      const say = el('textarea', { className: 'field', maxLength: 280, placeholder: 'How was it? (optional)', 'aria-label': 'Caption' });
+      say.value = p.caption || '';
+      const save = btn('Save', async () => {
+        const title = name.value.trim();
+        if (!title) { name.focus(); return; }
+        save.disabled = true;
+        const r = await apiCall('PUT', `/api/posts/${encodeURIComponent(p.id)}`, { title, caption: say.value.trim() }).catch(() => null);
+        const j = r && r.ok ? await jsonOf(r) : null;
+        if (!j) { save.disabled = false; toast('Couldn’t save it. Check signal.'); return; }
+        p.title = j.title; p.caption = j.caption;
+        s.close(); toast('Saved.');
+        if (node && node.isConnected) node.replaceChildren(...card(p, o).childNodes);   // this card at once, then the list it sits in
+        if (o && o.after) o.after();
+      }, 'ink-btn solid');
+      s.box.append(el('div', { className: 'stack-12' }, el('h3', { textContent: 'Edit post' }), name, say, el('div', { className: 'row' }, save, btn('Cancel', s.close, 'linkbtn'))));
+      name.focus();
+    }
+
     /** A post on its own, with its comments and a line to add one. */
+    /** "Kudos from @bob, @cara and 3 others" under a post, with their faces; a tap lists everyone (null: nobody yet). */
+    function kudosFrom(p) {
+      const who = Array.isArray(p.kudos_from) ? p.kudos_from : [];
+      if (!who.length) return el('span', { hidden: true });
+      const b = el('button', { type: 'button', className: 'feed-kudos-from' },
+        el('span', { className: 'feed-faces' }, ...who.slice(0, 3).map((k) => face(k, 24))), el('span', { textContent: kudosLine(who.map((k) => k.handle), p.kudos) }));
+      b.addEventListener('click', () => {
+        const s = sheet('Kudos', 'feed-sheet feed-kudos-sheet');
+        s.box.append(el('h3', { textContent: 'Kudos' }), ...who.map((k) => {
+          const row = el('button', { type: 'button', className: 'feed-kudos-row' }, face(k, 36), el('b', { textContent: `@${k.handle}` }));
+          row.addEventListener('click', () => { s.close(); if (page.openFriend) page.openFriend(k.handle); });
+          return row;
+        }), el('div', { className: 'row' }, btn('Done', s.close, 'linkbtn')));
+      });
+      return b;
+    }
+
     async function open(id, o = {}) {
       const s = sheet('Drive post', 'feed-sheet');
       s.box.append(el('p', { className: 'note', textContent: 'Loading…' }));
@@ -304,7 +468,11 @@
       const list = el('div', { className: 'feed-comments' });
       const draw = () => list.replaceChildren(...p.comment_list.map((c) => {
         const row = el('div', { className: 'feed-comment' }, face(c, 30),
-          el('div', {}, el('b', { textContent: c.mine ? 'You' : `@${c.handle || '?'}` }), el('small', { textContent: ` ${ago(c.created_at, Date.now())}` }), el('p', { textContent: c.body })));
+          el('div', {}, el('b', { textContent: c.mine ? 'You' : `@${c.handle || '?'}` }), el('small', { textContent: ` ${ago(c.created_at, Date.now())}` }), withMentions(c.body),
+            ...(c.mine || !c.handle ? [] : [btn('Reply', () => {   // as on any social app: their handle in the box, ready to write
+              const at = `@${c.handle} `; if (!field.value.startsWith(at)) field.value = (at + field.value).slice(0, 280);
+              field.focus(); try { field.setSelectionRange(field.value.length, field.value.length); } catch (_) {}
+            }, 'linkbtn feed-reply')])));
         const k = el('button', { type: 'button', className: 'linkbtn feed-more', textContent: '···' }); k.setAttribute('aria-label', 'More for this comment');
         k.addEventListener('click', () => {
           const m = sheet('This comment', 'feed-menu'); const keys = el('div', { className: 'row', style: 'flex-wrap:wrap' });
@@ -332,7 +500,25 @@
         field.value = ''; draw(); if (o.after) o.after();
       }, 'ink-btn solid');
       field.addEventListener('keydown', (e) => { if (e.key === 'Enter') send.click(); });
-      s.box.replaceChildren(card(p, { full: true, after: o.after, gone: s.close }), list, el('div', { className: 'feed-say' }, field, send), el('div', { className: 'row' }, btn('Done', s.close, 'linkbtn')));
+      // @ suggests who to mention: the post's driver, who commented, then your friends (one ask, the first time)
+      const tags = el('div', { className: 'feed-tags', role: 'list' }); tags.hidden = true;
+      const paint = () => {
+        const at = mentionAt(field.value, field.selectionStart == null ? field.value.length : field.selectionStart);
+        const own = page.myHandle ? page.myHandle() : null;
+        const names = at ? suggest(at.q, [p.handle, ...p.comment_list.map((c) => c.handle), ...(friendHandles || [])], own) : [];
+        tags.replaceChildren(...names.map((h) => btn(`@${h}`, () => {
+          const end = at.start + 1 + at.q.length, v = field.value;
+          field.value = `${v.slice(0, at.start)}@${h} ${v.slice(end)}`.slice(0, 280);
+          const c = Math.min(at.start + h.length + 2, field.value.length);
+          field.focus(); try { field.setSelectionRange(c, c); } catch (_) {}
+          paint();
+        }, 'ink-btn feed-tag')));
+        tags.hidden = !names.length;
+        if (at && friendHandles === null) { friendHandles = []; apiCall('GET', '/api/friends').then(jsonOf).then((l) => {
+          friendHandles = Array.isArray(l) ? l.filter((f) => f.status === 'accepted' && f.handle).map((f) => f.handle) : []; paint(); }).catch(() => {}); }
+      };
+      field.addEventListener('input', paint);
+      s.box.replaceChildren(card(p, { full: true, after: o.after, gone: s.close }), kudosFrom(p), list, tags, el('div', { className: 'feed-say' }, field, send), el('div', { className: 'row' }, btn('Done', s.close, 'linkbtn')));
       if (o.focus) field.focus();
     }
 
@@ -341,25 +527,48 @@
       const box = el('section', { className: 'stack-8 feed-sec' }); box.hidden = true;
       const list = el('div', { className: 'feed' });
       const all = btn('See all', () => onAll && onAll(), 'linkbtn');
-      box.append(el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Feed' }), all), list);
+      // this week, a weekly board in a row: who posted, how far, best Score; a friend's card opens their profile
+      const week = el('div', { className: 'stack-8 feed-week' }); week.hidden = true;
+      const wrow = el('div', { className: 'week-row', role: 'group', 'aria-label': 'This week' });
+      week.append(el('b', { textContent: 'This week' }), wrow);
+      const fmtLen = page.fmtLen || ((m) => `${(m / 1000).toFixed(1)} km`);
+      apiCall('GET', '/api/feed/week').then(jsonOf).then((rows) => {
+        if (!weekShown(rows)) return;
+        wrow.replaceChildren(...rows.map((r, i) => {
+          const tap = !r.you && page.openFriend;   // your own card is a plain card, a friend's opens their profile
+          const c = el(tap ? 'button' : 'div', { ...(tap ? { type: 'button' } : {}), className: 'week-card', 'aria-label': `${i + 1}. ${r.you ? 'You' : '@' + r.handle}, ${weekLine(r, fmtLen)}` },
+            face(r, 32), el('b', { className: 'week-who', textContent: `${i + 1}  ${r.you ? 'You' : '@' + r.handle}` }), el('small', { textContent: weekLine(r, fmtLen) }));
+          if (tap) c.addEventListener('click', () => page.openFriend(r.handle));
+          return c;
+        }));
+        week.hidden = false; box.hidden = false;
+      }).catch(() => {});
+      box.append(el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Feed' }), all), week, list);
       const redo = () => apiCall('GET', '/api/feed').then(jsonOf).then((rows) => {
         if (!Array.isArray(rows)) return;
+        keep(rows);
         list.replaceChildren(...rows.slice(0, PREVIEW).map((p) => card(p, { after: redo })));
         all.hidden = rows.length <= PREVIEW;
-        box.hidden = !rows.length;
+        box.hidden = !rows.length && week.hidden;
       }).catch(() => {});
       redo();
       return box;
     }
     /** A friend's drives on their profile (author: their user id): their newest posts you can see, as cards. Hidden while
      *  there is none, or with no signal (the profile says that itself). */
-    function drivesOf(author) {
-      const box = el('section', { className: 'stack-8 feed-sec profile-drives' }); box.hidden = true;
+    function drivesOf(author) { return listOf(`author=${encodeURIComponent(author)}`, 'profile-drives', el('b', { textContent: 'Drives' })); }
+    /** A crew's page: the drives its members posted to the crew, newest first (Drives tab). Hidden while there is none. */
+    function crewDrives(crewId) { return listOf(`crew=${encodeURIComponent(crewId)}`, 'crew-drives', el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Posted to the crew' }))); }
+    function listOf(query, cls, head) {
+      const box = el('section', { className: `stack-8 feed-sec ${cls}` }); box.hidden = true;
       const list = el('div', { className: 'feed' });
-      box.append(el('b', { textContent: 'Drives' }), list);
-      const redo = () => apiCall('GET', `/api/feed?author=${encodeURIComponent(author)}`).then(jsonOf).then((rows) => {
+      box.append(head, list);
+      let all = false;   // See all: every post the Feed gives (its latest page), in place
+      const redo = () => apiCall('GET', `/api/feed?${query}`).then(jsonOf).then((rows) => {
         if (!Array.isArray(rows)) return;
-        list.replaceChildren(...rows.slice(0, PREVIEW).map((p) => card(p, { after: redo })));
+        const more = !all && rows.length > PREVIEW;
+        list.replaceChildren(...(all ? rows : rows.slice(0, PREVIEW)).map((p) => card(p, { after: redo })),
+          ...(more ? [btn('See all', () => { all = true; redo(); }, 'linkbtn feed-all')] : []));
         box.hidden = !rows.length;
       }).catch(() => {});
       redo();
@@ -372,6 +581,7 @@
       const load = () => apiCall('GET', `/api/feed${last ? `?before=${encodeURIComponent(last)}` : ''}`).then(jsonOf).then((rows) => {
         if (!Array.isArray(rows)) return;
         list.append(...rows.map((p) => card(p, {})));
+        keep(rows);
         last = rows.length ? rows[rows.length - 1].created_at : last;
         more.hidden = rows.length < 30;
         if (!list.childElementCount) list.append(el('p', { className: 'note', textContent: 'No drives posted yet. Post yours from the card after a drive.' }));
@@ -385,7 +595,8 @@
       const line = trimLine(d.lat, d.lon, page.inZone || (() => false));
       return { title: String(d.name || 'Drive').slice(0, 60), caption: caption || null, driven_on: d.driven_on, length_m: Number.isFinite(d.len_m) ? Math.round(d.len_m) : null,
         score: Number.isFinite(d.score) ? Math.round(d.score) : null, roads: (d.roads || []).slice(0, 8), line: line ? encode(line) : null, crew_id: to || null,
-        stages: (d.stages || []).filter((x) => x && x.name).slice(0, 3).map((x) => ({ name: String(x.name).slice(0, 60), score: Number.isFinite(x.score) ? Math.round(x.score) : null })) };
+        stages: (d.stages || []).filter((x) => x && x.name).slice(0, 3).map((x) => ({ name: String(x.name).slice(0, 60), score: Number.isFinite(x.score) ? Math.round(x.score) : null,
+          ...(Array.isArray(x.ends) && x.ends.length === 4 && x.ends.every(Number.isFinite) ? { ends: x.ends } : {}) })) };
     }
     /** One tap (2026-11-14, the drive's card): the drive to your friends, no sheet. Resolves its id, or null (said in a toast). */
     async function post(d) {
@@ -482,9 +693,9 @@
       });
     }
 
-    return { section, full, open, compose, post, remove, card, drivesOf };
+    return { section, full, open, compose, post, remove, card, drivesOf, crewDrives, friendStages: () => keepStages(kept(), [], Date.now()) };
   }
 
-  const api = { trimLine, encode, decode, throughPoints, lineSvg, ago, facts, mount, CUT_M, MAX_POINTS };
+  const api = { trimLine, encode, decode, throughPoints, stretch, rivalsOf, rivalLine, keepStages, lineSvg, ago, facts, weekLine, weekShown, mentionParts, mentionAt, suggest, kudosLine, mount, CUT_M, MAX_POINTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDrivePosts = api;
 })(typeof window !== 'undefined' ? window : globalThis);

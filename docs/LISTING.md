@@ -20,7 +20,7 @@ Co-driver & rally pace notes
 
 ## Promotional text (170)
 
-Find the twisty roads near you, hear every corner called before you reach it, and see how cleanly you drove it. Share the best corner with your friends.
+Find the twisty roads near you, hear every corner called before you reach it, and see how your drive stacks up against your friends'.
 
 ## Keywords (100, comma separated, no spaces)
 
@@ -40,7 +40,7 @@ TURN-BY-TURN NAVIGATION
 Search for any address or place, choose between routes, and get spoken turn-by-turn directions ("In 0.3 miles, turn left onto Deals Gap Road") with the next turn on screen, distance and time left, and arrival time. Miss a turn and the route is rebuilt. Directions and notes keep working with the screen off and play over your music, which dips while a prompt plays.
 
 A SCORE FOR EVERY DRIVE
-Every drive gets a Vetta Score. The Log shows your drives on the map, corner by corner, and how you are improving on the roads you drive most. Share a drive card with the road's outline and your score.
+Every drive gets a Vetta Score, corner by corner: how much of each corner's grip you used, and how smoothly. On a road you have driven before, the co-driver tells you live how you are doing against your own best. The Log shows your drives on the map and how you are improving on the roads you drive most. Your Scores and stage times go to your friends and crews, and a drive card shares the road's outline and your score.
 
 FILM YOUR BEST CORNER
 Mount the phone and Vetta films the drive with the back camera, then cuts your best corner into a vertical clip with its call and the grip you used drawn on it, ready for your friends' feed or a Reel.
@@ -48,8 +48,8 @@ Mount the phone and Vetta films the drive with the back camera, then cuts your b
 DRIVE TOGETHER
 Start a convoy with friends and see each other on the map while you drive. Share planned routes with friends and crews, and report hazards (gravel, debris, an animal on the road, a police car) so the drivers behind you hear about them.
 
-YOUR DATA, YOUR SWITCHES
-Drives are kept on your phone. Friends and your private crews see what you share with them, and each kind of sharing has its own switch. Privacy zones keep home and work out of everything. Unknown values show as unknown, never guessed. Settings → Your data downloads your drives as GPX or erases them.
+YOUR SWITCHES
+Friends and your private crews see your Scores and times from the start, each with its own switch. Privacy zones keep home and work out of everything you share. Settings → Your data downloads your drives as GPX or erases them.
 
 SAFETY
 Typing is locked while you move. A crash check asks if you are OK after a hard impact and helps you call or text for help; it is a backup to your phone's own crash detection, not a replacement. Always drive within the law and the conditions, and keep your eyes on the road.

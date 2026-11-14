@@ -16,6 +16,12 @@ const CASES = {
   colerain: { from: { lat: 39.2300, lon: -84.5600 }, to: { lat: 39.2800, lon: -84.6500 } },
   harrison: { from: { lat: 39.2620, lon: -84.6000 }, to: { lat: 39.2966, lon: -84.7958 } },
 };
+let KEYS = null;
+if (process.env.KEYS === '1') {
+  // the production Worker's (a preview has no CTX_KEYS secret of its own)
+  const j = JSON.parse(require('child_process').execFileSync('curl', ['-sS', '-H', 'x-apexnav: 1', 'https://apexnav.senftns.workers.dev/api/ctx/keys'], { encoding: 'utf8' }));
+  KEYS = JSON.stringify(j.keys || {});
+}
 const runs = process.argv.slice(2).length ? process.argv.slice(2) : ['subdivision:fun', 'northgate:fun', 'colerain:fun', 'harrison:fun', 'colerain:quick', 'colerain:max'];
 
 async function one(browser, key) {
@@ -32,6 +38,10 @@ async function one(browser, key) {
     window.fetch = async (u, o) => { const t = performance.now(), url = String(u && u.url || u); let st = 'ERR';
       try { const r = await of(u, o); st = r.status; return r; } finally { window.__fetchLog.push({ url: url.slice(0, 120), t: Math.round(t), ms: Math.round(performance.now() - t), st }); } };
   });
+  // KEYS=1: route context's client keys from the Worker on the page first, as cockpit.js loadKeys puts them; KEYS=0: none
+  // (the Worker's answer blocked). 2026-11-14: the engine's picks with and without Mapillary signs, SeatGeek, OHGO, NASS
+  if (process.env.KEYS === '0') await page.route('**/api/ctx/keys', (r) => r.fulfill({ status: 404, body: '' }));
+  if (KEYS) await page.addInitScript((k) => { try { localStorage.setItem('apex.keys', k); localStorage.setItem('apex.keys.at', String(Date.now())); } catch (_) {} }, KEYS);
   await page.addInitScript((lv) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.funLevel', lv); } catch (_) {} }, level);
   await page.goto(BASE, { timeout: 60000 });
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteCtx && window.ApexRouteEngine, null, { timeout: 60000 });

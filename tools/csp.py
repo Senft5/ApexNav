@@ -56,7 +56,7 @@ def policy(html):
         "child-src 'self' %s blob:" % APP,
         "style-src 'self' %s 'unsafe-inline'" % APP,
         "font-src 'self' %s data:" % APP,
-        "img-src 'self' %s data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov https://itscameras.dot.state.oh.us https://www.trimarc.org" % APP,   # Road cameras: ODOT's and TRIMARC's pictures (road_cams.js)
+        "img-src 'self' %s data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov https://itscameras.dot.state.oh.us https://www.trimarc.org https://*.fbcdn.net" % APP,   # Road cameras: ODOT's and TRIMARC's pictures (road_cams.js); a place's Mapillary photo (place_photo.js)
         "media-src 'self' %s data: blob:" % APP,
         "connect-src 'self' %s data: blob: " % APP + " ".join(CONNECT),
         "object-src 'none'",

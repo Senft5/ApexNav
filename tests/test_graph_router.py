@@ -33,6 +33,15 @@ def test_astar_matches_brute_force_dijkstra():
     assert r["found"] > 600 and r["restricted"] > 100, r
 
 
+def test_a_gate_on_a_through_road_is_open():
+    """2026-11-14 (tools/famous_roads.js): the Blue Ridge Parkway's winter gates (16 between Blowing Rock and Linville
+    Falls), Beartooth's and Angeles Crest's each cost the private-road toll, so Fun and Long way went round them. A gate
+    on tertiary and up is open; on a residential street, or with access private, it still blocks."""
+    r = case("gates")
+    assert r["secondary"] == ["Gated"] and r["tertiary"] == ["Gated"], r
+    assert "Detour" in r["residential"] and r["privateSecondary"] == ["Detour"], r
+
+
 def test_restrictions_oneways_and_uturns():
     r = case("rules")
     assert r["free"] == ["South", "West"], r                         # the left at C
@@ -294,6 +303,22 @@ def test_fun_and_long_way_never_take_the_highway():
         assert x["quickestHwyM"] == 0 and x["throughHwyM"] == 0, x
         assert x["hasQuick"] and x["quickHwyM"] > 9000, "the highway quickest stays in the pool: Quick's card, the level's measure"
         assert x["limitS"] >= x["timeS"], "the budget never shuts out the highway-free way"
+
+
+def test_avoided_unpaved_roads_are_never_the_pick():
+    """2026-11-14 (tools/famous_roads.js): with unpaved roads avoided (the app's default) Fun still left Back of the Dragon
+    for 18 km of Nat'l Forest Road 614: its corners outweighed the search's cost. The pick drives no more unpaved road than
+    the level's quickest (UNPAVED_FREE_KM aside); with unpaved allowed, the forest road may win."""
+    r = case("unpavedPick")
+    assert r["avoided"] == ["Paved"] and "Forest Road" in r["allowed"], r
+
+
+def test_a_two_lane_trunk_that_bends_is_a_riders_road():
+    """2026-11-14 (tools/famous_roads.js): OSM tags many mountain US routes trunk, and Fun never drove The Snake (US 421,
+    4.4 corner points a km). A two-way trunk whose road bends (TRUNK_FUN_KM) is not a highway; a straight one (Cincinnati's
+    US 127, the AA Highway) or a divided one still is."""
+    r = case("riderTrunk")
+    assert r == {"bends": ["US 421"], "straight": ["Back Road"], "divided": ["Back Road"]}, r
 
 
 def test_the_highway_exception_takes_the_shortest_link_and_says_why():

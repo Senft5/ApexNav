@@ -11,10 +11,12 @@
     charge: { label: 'Chargers', noun: 'EV charger', stamp: 'CHARGE', match: (p) => p.cls === 'fuel' && p.sub === 'charging_station' },
     coffee: { label: 'Coffee', noun: 'Café', stamp: 'CAFÉ', match: (p) => p.cls === 'cafe' },
     food: { label: 'Food', noun: 'Restaurant', stamp: 'FOOD', match: (p) => p.cls === 'restaurant' || p.cls === 'fast_food' },
+    // where to leave the car when you get there (Apple Maps' Parking key): lots and garages, never bike stands
+    parking: { label: 'Parking', noun: 'Parking', unnamed: 'Parking lot', stamp: 'PARK', match: (p) => p.cls === 'parking' },
   };
 
   /** The keys Where to? shows, in order: an electric car's "Gas" is its chargers. */
-  function keys(electric) { return [electric ? 'charge' : 'gas', 'coffee', 'food']; }
+  function keys(electric) { return [electric ? 'charge' : 'gas', 'coffee', 'food', 'parking']; }
 
   // what's typed that means a kind ("gas", "gas station", "coffee near me", "food")
   const WORDS = [
@@ -22,6 +24,7 @@
     [/^(charger|chargers|charging|charging station|ev charger|ev chargers)$/, 'charge'],
     [/^(coffee|cafe|cafes|café|cafés|coffee shop|coffee shops)$/, 'coffee'],
     [/^(food|restaurant|restaurants|eat|lunch|dinner|breakfast|fast food)$/, 'food'],
+    [/^(parking|parking lot|parking lots|parking garage|parking garages|car park|car parks)$/, 'parking'],   // never "park": a park is a place
   ];
   /** The kind a typed query asks for, or null. An electric car asking for gas gets its chargers. */
   function categoryOf(q, electric) {
@@ -50,7 +53,7 @@
   /**
    * The places of kind `cat` in `pois` ([{ cls, sub, name, lat, lon }]) within `km` of `here`, nearest first: at most
    * `max`, one per place (a station drawn twice in neighbouring tiles, or as a building and a point, is one). A place with
-   * no name on the map says what it is, never a made-up name. Rows: { label, named, lat, lon, m, kind: cat }.
+   * no name on the map says what it is (a car park: "Parking lot", as most are), never a made-up name. Rows: { label, named, lat, lon, m, kind: cat }.
    */
   function list(pois, here, cat, opts = {}) {
     const c = CATS[cat], km = opts.km || 8, max = opts.max || 8;
@@ -65,7 +68,7 @@
       rows.push({ name, lat: p.lat, lon: p.lon, m });
     }
     rows.sort((a, b) => a.m - b.m);
-    return rows.slice(0, max).map((r) => ({ label: r.name || `${c.noun}, no name on the map`, named: !!r.name, lat: r.lat, lon: r.lon, m: Math.round(r.m), kind: cat }));
+    return rows.slice(0, max).map((r) => ({ label: r.name || c.unnamed || `${c.noun}, no name on the map`, named: !!r.name, lat: r.lat, lon: r.lon, m: Math.round(r.m), kind: cat }));
   }
 
   /** What the list says when it is empty: none within reach, or the map's places couldn't be read. */

@@ -103,13 +103,67 @@ export async function diag(tile: string, fetcher: typeof fetch = fetch, ms = MIR
 }
 const cacheKey = (tile: string) => new Request(`https://apexnav.cache/osm/v1/${tile}`);
 
+// Built tiles (tools/osm_ctx/build.py, .github/workflows/osm-ctx.yml, 2026-11-14): the same elements built each week from
+// the Geofabrik extracts and kept in R2 (DATA), read before Overpass, which timed out or refused on nearly every service
+// check from 2026-11-12. A tile outside the built region, or across its border (not in its bundle), still goes to Overpass.
+// One 0.25° bundle of 25 tiles per object, osm/v2/<bi>_<bj>.bin: a HEAD-byte JSON header, space padded,
+// {"t": {"<tile>": [offset, length]}}, then each tile's compact JSON as its own gzip member. A tile is two ranged reads
+// (the header, kept per isolate, then its member), so a city bundle (5 MB) is never read whole: v1 streamed the whole
+// bundle and took up to 7 s for the first tile of a bundle on prod.
+export const BUNDLE = 5, HEAD = 4096, BUILT = "osm/v2";
+export const bundleKey = (tile: string) => { const [i, j] = tile.split("_").map(Number); return `${BUILT}/${Math.floor(i / BUNDLE)}_${Math.floor(j / BUNDLE)}.bin`; };
+type R2Range = { offset: number; length: number };
+type R2Get = { get(k: string, o?: { range?: R2Range }): Promise<{ body: ReadableStream } | null>; head?(k: string): Promise<unknown> };
+type Header = Record<string, [number, number]>;
+const HEADERS_MAX = 400;
+const heads = new Map<string, { at: number; t: Header | null }>();
+
+// whether a build is in R2 at all (osm/v2/index.json), asked at most every 10 minutes per isolate: with one, a tile it
+// doesn't hold (outside the three states, or across their border) answers 504 at once instead of holding the plan while
+// Overpass is tried (still tried in the background and kept, for the next plan there)
+let builtIndex: { at: number; on: boolean } | null = null;
+export async function hasBuild(data: { head?(k: string): Promise<unknown> } | undefined, now = Date.now()): Promise<boolean> {
+  if (!data || typeof data.head !== "function") return false;
+  if (builtIndex && now - builtIndex.at < 600_000) return builtIndex.on;
+  let on = false;
+  try { on = !!(await data.head(`${BUILT}/index.json`)); } catch { on = false; }
+  builtIndex = { at: now, on };
+  return on;
+}
+export function resetBuiltForTest(): void { heads.clear(); builtIndex = null; }
+
+async function header(data: R2Get, key: string, now = Date.now()): Promise<Header | null> {
+  const had = heads.get(key);
+  if (had && now - had.at < 600_000) return had.t;   // a new build replaces the bundles weekly; ten minutes is plenty
+  const o = await data.get(key, { range: { offset: 0, length: HEAD } });
+  let t: Header | null = null;
+  if (o) { const j = JSON.parse((await new Response(o.body).text()).trim()) as { t?: Header }; t = j && j.t ? j.t : null; }
+  if (heads.size >= HEADERS_MAX) heads.delete(heads.keys().next().value as string);
+  heads.set(key, { at: now, t });
+  return t;
+}
+
+/** The tile's built elements (compact JSON text), or null when it wasn't built (Overpass then). */
+export async function builtTile(data: R2Get | undefined, tile: string): Promise<string | null> {
+  if (!data) return null;
+  const key = bundleKey(tile);
+  try {
+    const t = await header(data, key);
+    const at = t && t[tile];
+    if (!at) return null;
+    const o = await data.get(key, { range: { offset: at[0], length: at[1] } });
+    if (!o) return null;
+    return await new Response(o.body.pipeThrough(new DecompressionStream("gzip"))).text();
+  } catch { return null; }   // R2 or the member failed: Overpass, as for a tile not built
+}
+
 const inflight = new Map<string, Promise<string | null>>();
 /**
  * GET /api/ctx/osm?bbox=: the tile's compact elements from the cache, else from the mirrors (then kept). `waiter` keeps a
  * miss running past the response; `waitMs` is how long the response waits for a miss before answering 504 (still
  * finishing and keeping it).
  */
-export async function osmTile(url: URL, env: { OSM?: Kv }, waiter?: Waiter, fetcher: typeof fetch = fetch, waitMs = WAIT_MS): Promise<Response> {
+export async function osmTile(url: URL, env: { OSM?: Kv; DATA?: R2Get }, waiter?: Waiter, fetcher: typeof fetch = fetch, waitMs = WAIT_MS): Promise<Response> {
   const tile = tileOf(url.searchParams.get("bbox"));
   const headers = { "content-type": "application/json", "cache-control": `public, max-age=${KEEP_S}`, "x-content-type-options": "nosniff" };
   if (!tile) return new Response(JSON.stringify({ error: "bad_bbox" }), { status: 400, headers: { "content-type": "application/json" } });
@@ -122,6 +176,11 @@ export async function osmTile(url: URL, env: { OSM?: Kv }, waiter?: Waiter, fetc
     const kv = env.OSM ? await env.OSM.get(kvKey, "text") : null;
     if (kv) { if (cache) await cache.put(key, new Response(kv, { headers })); return new Response(kv, { headers: { ...headers, "x-cache": "kv" } }); }
   } catch { /* the cache is a speed-up, never a failure */ }
+  const built = await builtTile(env.DATA, tile);
+  if (built != null) {
+    try { if (cache) await cache.put(key, new Response(built, { headers })); } catch { /* the cache is a speed-up */ }
+    return new Response(built, { headers: { ...headers, "x-cache": "built" } });
+  }
   let job = inflight.get(tile);
   if (!job) {
     job = (async () => {
@@ -135,8 +194,166 @@ export async function osmTile(url: URL, env: { OSM?: Kv }, waiter?: Waiter, fetc
     inflight.set(tile, job);
     if (waiter) waiter.waitUntil(job);
   }
-  const body = await Promise.race([job, new Promise<"late">((r) => setTimeout(() => r("late"), waitMs))]);
+  const wait = (await hasBuild(env.DATA)) ? 0 : waitMs;   // built region: an unbuilt tile isn't worth the plan's wait
+  const body = await Promise.race([job, new Promise<"late">((r) => setTimeout(() => r("late"), wait))]);
   if (body === "late") return new Response(JSON.stringify({ error: "still_fetching" }), { status: 504, headers: { "content-type": "application/json", "retry-after": "10" } });
   if (!body) return new Response(JSON.stringify({ error: "overpass_unavailable" }), { status: 502, headers: { "content-type": "application/json" } });
   return new Response(body, { headers: { ...headers, "x-cache": "miss" } });
+}
+
+/**
+ * GET /api/ctx/falls.json and /api/ctx/closures.json: the region's waterfalls and roads with conditional access
+ * (tools/osm_ctx/region.py, R2 osm/v2/<name>; web/scenic.js fallsInRegion, conditional_closures.js inRegion). 404 before
+ * the first build: the phone then asks Overpass as before. Public OSM data, no sign-in, the whole region (no box asked).
+ */
+export const REGION_LISTS = ["falls.json", "closures.json"] as const;
+export async function regionList(data: R2Get | undefined, name: (typeof REGION_LISTS)[number]): Promise<Response> {
+  const none = () => new Response(JSON.stringify({ error: "not_built" }), { status: 404, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+  if (!data) return none();
+  try {
+    const o = await data.get(`${BUILT}/${name}`);
+    if (!o) return none();
+    return new Response(o.body, { headers: { "content-type": "application/json", "cache-control": "public, max-age=21600", "x-content-type-options": "nosniff", "x-cache": "built" } });
+  } catch { return none(); }
+}
+
+/**
+ * GET /api/ctx/places?p=<lat>,<lon>,<name>[&p=...] (up to 10): each place's OSM hours and contact tags from the region's
+ * built cells (tools/osm_ctx/region.py, R2 osm/v2/places/<bi>_<bj>.json; web/place_info.js), as place_info.js match()
+ * reads Overpass: the nearest element of that name within about 150 m, else null. 404 when a place's cell isn't built
+ * (outside Ohio, Kentucky and Indiana, or before the first build): the phone then asks Overpass as before. The server
+ * sees the places' names and positions, as Overpass did; nothing is kept or logged.
+ */
+type PlaceRow = [number, number, string, Record<string, string>];
+const PLACE_STEP = 0.25, PLACE_NEAR = 0.0015, PLACES_MAX = 10;
+const placeCells = new Map<string, { at: number; rows: PlaceRow[] | null }>();
+async function placeCell(data: R2Get, key: string, now = Date.now()): Promise<PlaceRow[] | null> {
+  const had = placeCells.get(key);
+  if (had && now - had.at < 600_000) return had.rows;
+  const o = await data.get(`${BUILT}/places/${key}.json`);
+  const rows = o ? (JSON.parse(await new Response(o.body).text()) as PlaceRow[]) : null;
+  if (placeCells.size >= 64) placeCells.delete(placeCells.keys().next().value as string);
+  placeCells.set(key, { at: now, rows });
+  return rows;
+}
+export function resetPlacesForTest(): void { placeCells.clear(); }
+export async function placeTags(url: URL, data: R2Get | undefined): Promise<Response> {
+  const bad = (status: number, error: string) => new Response(JSON.stringify({ error }), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+  const asked = url.searchParams.getAll("p").slice(0, PLACES_MAX).map((p) => {
+    const m = /^(-?\d{1,2}(?:\.\d{1,7})?),(-?\d{1,3}(?:\.\d{1,7})?),(.{1,120})$/s.exec(p);
+    return m ? { lat: Number(m[1]), lon: Number(m[2]), name: m[3] } : null;
+  });
+  if (!asked.length || asked.some((x) => !x || Math.abs(x.lat) > 90 || Math.abs(x.lon) > 180)) return bad(400, "bad_place");
+  if (!data) return bad(404, "not_built");
+  try {
+    const tags: (Record<string, string> | null)[] = [];
+    for (const q of asked as { lat: number; lon: number; name: string }[]) {
+      // the place's cell, and its neighbour when it lies within the match distance of a cell edge
+      const keys = new Set<string>();
+      for (const dl of [-PLACE_NEAR, 0, PLACE_NEAR]) for (const dn of [-PLACE_NEAR, 0, PLACE_NEAR]) keys.add(`${Math.floor((q.lat + dl) / PLACE_STEP)}_${Math.floor((q.lon + dn) / PLACE_STEP)}`);
+      let best: Record<string, string> | null = null, bd = Infinity;
+      for (const k of keys) {
+        const rows = await placeCell(data, k);
+        if (!rows) return bad(404, "not_built");
+        for (const [la, lo, nm, t] of rows) {
+          if (nm !== q.name) continue;
+          const d = Math.hypot(la - q.lat, (lo - q.lon) * Math.cos(q.lat * Math.PI / 180));
+          if (d < bd && d < PLACE_NEAR) { bd = d; best = { name: nm, ...t }; }
+        }
+      }
+      tags.push(best);
+    }
+    return new Response(JSON.stringify({ tags }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=21600", "x-content-type-options": "nosniff", "x-cache": "built" } });
+  } catch { return bad(404, "not_built"); }
+}
+
+/**
+ * GET /api/ctx/points?cells=<bi>_<bj>[,...] (0.25 degree cells, up to 40): each cell's fuel stations, schools and places of
+ * worship from the weekly build (tools/osm_ctx/region.py, R2 osm/v2/points/<bi>_<bj>.json) for route_ctx/car.js and
+ * route_ctx/events.js, as {cells: {"<bi>_<bj>": {fuel, schools, worship} | null}}: null for a cell the build doesn't
+ * cover (outside Ohio, Kentucky and Indiana), which the phone then asks Overpass for. Cell ids only; nothing kept or logged.
+ */
+const POINT_CELLS_MAX = 40, CELL_ID = /^-?\d{1,4}_-?\d{1,4}$/;
+const pointCache = new Map<string, { at: number; body: unknown }>();
+export function resetPointsForTest(): void { pointCache.clear(); }
+async function pointCell(data: R2Get, key: string, now = Date.now()): Promise<unknown> {
+  const had = pointCache.get(key);
+  if (had && now - had.at < 600_000) return had.body;
+  const o = await data.get(`${BUILT}/points/${key}.json`);
+  const body = o ? JSON.parse(await new Response(o.body).text()) : null;
+  if (pointCache.size >= 128) pointCache.delete(pointCache.keys().next().value as string);
+  pointCache.set(key, { at: now, body });
+  return body;
+}
+export async function pointCells(url: URL, data: R2Get | undefined): Promise<Response> {
+  const json = (status: number, body: unknown, cache = "no-store") => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": cache, "x-content-type-options": "nosniff" } });
+  const keys = [...new Set((url.searchParams.get("cells") || "").split(",").filter(Boolean))];
+  if (!keys.length || keys.length > POINT_CELLS_MAX || keys.some((k) => !CELL_ID.test(k))) return json(400, { error: "bad_cells" });
+  if (!data) return json(404, { error: "not_built" });
+  try {
+    const got = await Promise.all(keys.map((k) => pointCell(data, k)));
+    return json(200, { cells: Object.fromEntries(keys.map((k, i) => [k, got[i]])) }, "public, max-age=21600");
+  } catch { return json(404, { error: "not_built" }); }
+}
+
+/**
+ * GET /api/ctx/lines?tiles=<i>_<j>[,...] (0.1 degree tiles, up to 40): each tile's lit roads, road tunnels and bicycle
+ * route roads from the weekly build (tools/osm_ctx/region.py, R2 osm/v2/lines/<bi>_<bj>.json, 5 x 5 tiles a bundle) for
+ * route_ctx/driver.js, as {tiles: {"<i>_<j>": {lit, tunnel, cycle} | null}}: null for a tile the build doesn't cover,
+ * which the phone then asks Overpass for. Tile ids only; nothing kept or logged.
+ */
+const LINE_BUNDLE = 5;
+const lineCache = new Map<string, { at: number; t: Record<string, unknown> | null }>();
+export function resetLinesForTest(): void { lineCache.clear(); }
+async function lineBundle(data: R2Get, key: string, now = Date.now()): Promise<Record<string, unknown> | null> {
+  const had = lineCache.get(key);
+  if (had && now - had.at < 600_000) return had.t;
+  const o = await data.get(`${BUILT}/lines/${key}.json`);
+  const t = o ? ((JSON.parse(await new Response(o.body).text()) as { t?: Record<string, unknown> }).t ?? null) : null;
+  if (lineCache.size >= 24) lineCache.delete(lineCache.keys().next().value as string);
+  lineCache.set(key, { at: now, t });
+  return t;
+}
+export async function lineTiles(url: URL, data: R2Get | undefined): Promise<Response> {
+  const json = (status: number, body: unknown, cache = "no-store") => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": cache, "x-content-type-options": "nosniff" } });
+  const keys = [...new Set((url.searchParams.get("tiles") || "").split(",").filter(Boolean))];
+  if (!keys.length || keys.length > POINT_CELLS_MAX || keys.some((k) => !CELL_ID.test(k))) return json(400, { error: "bad_tiles" });
+  if (!data) return json(404, { error: "not_built" });
+  try {
+    const bundleOf = (k: string) => { const [i, j] = k.split("_").map(Number); return `${Math.floor(i / LINE_BUNDLE)}_${Math.floor(j / LINE_BUNDLE)}`; };
+    const names = [...new Set(keys.map(bundleOf))];
+    const got = new Map(await Promise.all(names.map(async (b) => [b, await lineBundle(data, b)] as const)));
+    return json(200, { tiles: Object.fromEntries(keys.map((k) => [k, got.get(bundleOf(k))?.[k] ?? null])) }, "public, max-age=21600");
+  } catch { return json(404, { error: "not_built" }); }
+}
+
+/**
+ * GET /api/ctx/ways?tiles=<i>_<j>[,...]&ids=<way id>[,...] (0.05 degree tiles up to 40, ways up to 200): the whole OSM
+ * geometry of those drivable ways, read from the weekly build's tiles they cross (builtTile), for web/contributor.js,
+ * which bins a drive's road data along each way from its first node. {ways: {"<id>": [[lat, lon], ...]}}; a way in no
+ * built tile is left out and the phone asks Overpass for it. The server already receives these way ids with the
+ * contribution itself; the tiles say no more than the ways do. Nothing kept or logged.
+ */
+const WAY_TILES_MAX = 40, WAY_IDS_MAX = 200;
+export async function wayShapes(url: URL, data: R2Get | undefined): Promise<Response> {
+  const json = (status: number, body: unknown, cache = "no-store") => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": cache, "x-content-type-options": "nosniff" } });
+  const tiles = [...new Set((url.searchParams.get("tiles") || "").split(",").filter(Boolean))];
+  const ids = [...new Set((url.searchParams.get("ids") || "").split(",").filter(Boolean))];
+  if (!tiles.length || tiles.length > WAY_TILES_MAX || tiles.some((k) => !CELL_ID.test(k))) return json(400, { error: "bad_tiles" });
+  if (!ids.length || ids.length > WAY_IDS_MAX || ids.some((x) => !/^\d{1,12}$/.test(x))) return json(400, { error: "bad_ids" });
+  if (!data) return json(404, { error: "not_built" });
+  const want = new Set(ids.map(Number)), ways: Record<string, [number, number][]> = {};
+  for (const t of tiles) {
+    if (!want.size) break;
+    const text = await builtTile(data, t);
+    if (!text) continue;
+    let els: { type?: string; id?: number; geometry?: { lat: number; lon: number }[] }[] = [];
+    try { els = (JSON.parse(text) as { elements?: typeof els }).elements ?? []; } catch { continue; }
+    for (const el of els) {
+      if (el.type !== "way" || typeof el.id !== "number" || !want.has(el.id) || !Array.isArray(el.geometry)) continue;
+      ways[String(el.id)] = el.geometry.map((g) => [g.lat, g.lon]);
+      want.delete(el.id);
+    }
+  }
+  return json(200, { ways }, "public, max-age=21600");
 }

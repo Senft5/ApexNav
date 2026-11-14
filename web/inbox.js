@@ -1,7 +1,7 @@
 // For you (docs/SOCIAL.md 2.10; backend/src/inbox.ts): one list of what happened to you socially, newest first: a friend
 // topping your best Score on one of your stages, someone passing your time in this week's time attack, kudos, a duel
 // accepted or decided, new followers of a roadbook, a crew drive you haven't answered, kudos and comments on your drive
-// posts (and new comments on a post you commented on). Each row says it in a sentence and
+// posts (and new comments on a post you commented on, or one that @mentions you). Each row says it in a sentence and
 // has at most one key that takes you there. What you have seen is kept on this phone (`apex.inboxSeen`, the server's own
 // clock), so the People tab's badge counts only what is new, plus what waits on you (friend requests, duels asked).
 // line(), fresh(), ago() are pure (tests/test_inbox.py); mount() draws the section on People → Friends.
@@ -52,10 +52,12 @@
         return r ? { kicker: i.result === 'won' ? 'Duel won' : 'Duel over', text: r, key: null } : null;
       }
       case 'follows': return { kicker: 'Roadbook', text: i.n === 1 ? `Someone new follows ${i.book}.` : `${i.n} new people follow ${i.book}.`, key: { label: 'Open', act: 'book' } };
+      case 'book_roads': return { kicker: 'Roadbook', text: i.n === 1 && i.road ? `${who} added ${i.road} to ${i.book}.` : `${who} added ${i.n} roads to ${i.book}.`, key: { label: 'Open', act: 'book' } };
       case 'crew_drive': { const d = when(i.starts_at); return { kicker: 'Crew drive', text: `${i.crew}: ${i.title}${d ? `, ${d}` : ''}. Are you going?`, key: { label: 'Answer', act: 'crews' } }; }
       case 'post_kudos': return { kicker: 'Kudos', text: `${who}${others(i.others)} gave kudos to ${i.title || 'your drive'}.`, key: { label: 'Open', act: 'post' } };
       case 'post_comment': return { kicker: 'Comment', text: i.yours ? `${who}${others(i.others)} commented on ${i.title || 'your drive'}.`
         : `${who}${others(i.others)} also commented on ${i.owner ? `@${i.owner}’s` : 'a'} ${i.title || 'drive'}.`, key: { label: 'Open', act: 'post' } };
+      case 'post_mention': return { kicker: 'Mention', text: `${who}${others(i.others)} mentioned you on ${i.owner ? `@${i.owner}’s` : 'a'} ${i.title || 'drive'}.`, key: { label: 'Open', act: 'post' } };
       case 'request': return { kicker: 'Friend request', text: `${who} wants to be your friend.`, key: null };
       case 'duel_ask': return { kicker: 'Duel', text: `${who} challenged you on ${stage}.`, key: null };
       default: return null;

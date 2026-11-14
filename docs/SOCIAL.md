@@ -105,9 +105,12 @@ and in random batches so a trace cannot be re-assembled.
 - One list on People → Friends of what happened to you, newest first, each a sentence with at most one key: a friend or
   crew-mate topped your best Score on one of your stages this week (Drive it), someone went quicker than you in this
   week's time attack (See the board), kudos on your runs, a duel accepted or decided, new followers of your roadbooks
-  (counted, never named: a public book's followers may be strangers), a crew drive you haven't answered (Answer), and
+  (counted, never named: a public book's followers may be strangers), new roads in a roadbook you follow, added after
+  you followed it, while you may still open it (Open; 2026-11-14), a crew drive you haven't answered (Answer), and
   kudos and comments on your drive posts, or a new comment after yours on someone else's post, one row per post with the
-  newest name and how many others (Open: the post and its comments; 2026-11-14).
+  newest name and how many others (Open: the post and its comments; 2026-11-14). A comment that @mentions you on a post
+  you can see shows as a Mention instead. Typing @ in a comment suggests the post's driver, who commented, then your
+  friends; a tap puts the handle in. Reply under someone's comment starts yours with their handle.
 - The People tab's badge counts what is new since you last had People → Friends on screen, plus what waits on you
   (friend requests, duels asked of you, a crew link, convoy invites). Asked when the app opens, comes to the front, and
   every five minutes while it is in front, never while driving.
@@ -129,17 +132,21 @@ and in random batches so a trace cannot be re-assembled.
 ### 2.12 Push notifications (built 2026-11-13; sends once APNs is on the owner's key)
 - What For you says, told to the phone the moment it happens: a friend request, a new friend, kudos on a run (once
   per run), kudos and comments on your drive post (and a new comment on a post you commented on, to the earlier
-  commenters who can still see it and aren't blocked either way, 2026-11-14), a duel asked of you or taken, a crew drive planned in your crew.
+  commenters who can still see it and aren't blocked either way, 2026-11-14; and "@bob mentioned you" to whoever a
+  comment @mentions, if they can see the post, five handles at most, one push per person), a duel asked of you or taken, a crew drive planned in your crew, and "Topped" when a friend's or crew-mate's run goes
+  over your best Score on a stage you both have, or a time attack entrant goes quicker than you this week (2026-11-14; told
+  once, as they go past you, only if the run is published to you; never the time or the gap).
   Never to or from someone blocked; the words are the server's own (a handle, a stage or crew name, a drive's title),
   never a comment's text. A tap opens what it is about: the post with its comments, the friend, or People.
-- Garage → Settings → **Notifications**: one switch, off until turned on, and only then does iOS ask. In the
+- Garage → Settings → **Notifications**: one switch, off until turned on, and only then does iOS ask. While it is on,
+  one switch per kind under it (Friend requests, Kudos, Comments and mentions, Duels, Someone beat you, Crew drives), all on at first;
+  which are off is kept in KV `pushoff/<user id>` (`GET/PUT /api/push/kinds`), erased with the account (2026-11-14). In the
   foreground a push goes to the list only (the page is open). Nothing while you drive: the page turns
   `PUT /api/push/quiet` on at a drive's start (three hours at most) and off at its end. After your first post, one offer.
 - `backend/src/push.ts` (who is told what, the tokens) on `backend/src/apns.ts` (the send path): `POST/DELETE
   /api/push/token`; tokens in KV `push/<user id>` (no table, so no migration and nothing in backups), at most three
   phones, a sandbox flag for builds from Xcode; a token Apple calls gone is dropped. Sent in `waitUntil` after the write,
   so a push never slows or fails the request. `ApexPush.swift`: the token, the tap. Shell: `aps-environment`.
-- Next: a switch per kind, if anyone asks for one.
 
 ### 2.13 Drive posts and the Feed (built 2026-11-13; big bet #4)
 - After a drive with a Score, a member taps **Post** on the drive's card (the solid key; Share card, the picture for
@@ -159,9 +166,32 @@ and in random batches so a trace cannot be re-assembled.
 - Stages on a post (built 2026-11-14): the stages you saved in the Log that the drive went over (at most three, in the
   order driven) go on its post, each with its Vetta Score there (`--` when too few clean corners); never a time.
 - A friend's drives on their profile (built 2026-11-14): their newest posts you can see (`GET /api/feed?author=`, the
-  Feed's own rules), with kudos and comments, between what to do with them and what they see of you.
+  Feed's own rules), with kudos and comments, between what to do with them and what they see of you. Your own posts
+  sit under You in the Garage the same way, each with ··· to edit its name and caption or delete it (2026-11-14; `PUT /api/posts/:id`). Three show, then See all.
+- Who gave kudos (2026-11-14): under a post, "Kudos from @bob, @cara and 3 others" with their faces; a tap lists them
+  all (newest first, 50 at most, never someone blocked either way) and a name opens their profile. `kudos_from` on
+  `GET /api/posts/:id`.
+- A crew's posted drives (2026-11-14): on the crew page's Drives tab, after Members, "Posted to the crew" lists what
+  members posted to that crew (`GET /api/feed?crew=`, the Feed's own rules, so members only). Three show, then See all.
+- This week (2026-11-14): above the Feed, a row of who posted since Monday (you and whoever's posts you can see), most
+  distance first: "1 @bob · 30.0 mi · 2 drives · best 812". A friend's card opens their profile. It shows only once someone
+  besides you posted. A drive posted to friends and to a crew counts once. `GET /api/feed/week` (`feedWeek`). No table.
 - Next: "Post to crew" from a corner clip on the drive's page (analysis thread adds the key, `page.post(blob, meta)`).
   Kudos and comments push (2.12).
+
+### 2.14 People you may know (members; built 2026-11-14)
+- On People → Friends, under the list once there is anyone: up to 8 cards of a member who shares a crew with you ("In
+  Ridge Runners") or who is friends with two or more of your friends ("2 friends in common", counted, never named), each
+  with Add (the same request the Invite sheet sends) and × (hidden on this phone, `apex.suggestHidden`).
+- Never a friend, a request either way, someone blocked either way, or someone three reports hid. Crew-mates come first.
+- `GET /api/friends/suggested` (`friendSuggestions` in `backend/src/social.ts`), `web/people_suggest.js`. No table.
+- Find people (2026-11-14): typing in the Invite sheet's handle field lists the members whose handle starts with it
+  (two characters at least, eight at most, the exact one first, then friends), each with Add, Accept (they asked you) or
+  where you stand. Never you, someone blocked either way, or someone three reports hid. `GET /api/users/search`
+  (`userSearch`), `finder` in `web/people_suggest.js`.
+- Show my code (2026-11-14): on the Invite sheet, a friend link as a QR code for a meet. Their phone camera opens it, they
+  tap Accept and you're friends. It's the same one-use link Send a friend link makes (10 open at most), so New code makes
+  the next one. Drawn on a canvas by `vendor/qrcode.js`, which loads only when it's asked for.
 
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.

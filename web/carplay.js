@@ -565,6 +565,19 @@
    * where Apple Maps and Waze show it): { kind:'limit', value, unit, round } in the driver's units, `round` for the
    * km/h sign (the red ring) and false for the US "SPEED LIMIT" one. value null: unknown, no sign (the map never guesses).
    */
+  /**
+   * The next turn's arrow on the car's map (turn_arrow.js arrow, CarPlay/ApexCarMap.swift and web/carmap.js draw it):
+   * { kind:'arrow', shaft:[[lat,lon]…], head:[[lat,lon]×3] }, or empty lists for none (no turn ahead, off the route).
+   */
+  function arrowMessage(fc) {
+    const feats = fc && Array.isArray(fc.features) ? fc.features : [];
+    const geom = (part) => { const f = feats.find((x) => x && x.properties && x.properties.part === part); return f && f.geometry ? f.geometry.coordinates : null; };
+    const ll = (c) => (Array.isArray(c) && finite(c[0]) && finite(c[1]) ? [Math.round(c[1] * 1e6) / 1e6, Math.round(c[0] * 1e6) / 1e6] : null);
+    const shaft = (geom('shaft') || []).map(ll), ring = geom('head'), head = (Array.isArray(ring) && Array.isArray(ring[0]) ? ring[0].slice(0, 3) : []).map(ll);
+    if (shaft.length < 2 || head.length !== 3 || shaft.includes(null) || head.includes(null)) return { kind: 'arrow', shaft: [], head: [] };
+    return { kind: 'arrow', shaft: shaft.slice(0, 200), head };
+  }
+
   function limitMessage(limit, unit) {
     const u = String(unit || '').toUpperCase(), km = /^KM/.test(u);
     if (!finite(limit) || limit <= 0 || limit > 200) return { kind: 'limit', value: null, unit: '', round: false };
@@ -633,7 +646,7 @@
     return { step, reset };
   }
 
-  const api = { sightMessage, limitMessage, stopsMessage, pausedMessage, arrivedMessage, nearbyMessage, nearbyKeys, line, routeMessage, loopsMessage, laneGlyphs, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
+  const api = { sightMessage, limitMessage, arrowMessage, stopsMessage, pausedMessage, arrivedMessage, nearbyMessage, nearbyKeys, line, routeMessage, loopsMessage, laneGlyphs, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
                 recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
   api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
   api.sightTag = sightTag;                                             // panel round 2, TH-2

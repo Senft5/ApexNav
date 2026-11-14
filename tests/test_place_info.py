@@ -27,6 +27,10 @@ console.log(JSON.stringify({
   contact: P.contact({ phone: '+1 513-555-0101;+1 513 555 0199', website: 'www.skylinechili.com/menu' }, at(0, 9)),
   noContact: P.contact({ phone: 'call us', website: 'javascript:alert(1)' }, at(0, 9)),
   query: P.query('Joe\'s "Best" Diner', 39.1, -84.5),
+  many: P.queryMany([{ name: 'A', lat: 39, lon: -84 }, { name: 'B "2"', lat: 39.1, lon: -84.1 }]),
+  match: P.match([{ name: 'X', lat: 39, lon: -84 }, null, { name: 'Y', lat: 39, lon: -84 }, { name: 'Z', lat: 39, lon: -84 }],
+    [{ tags: { name: 'X', k: 'far' }, lat: 39.0010, lon: -84 }, { tags: { name: 'X', k: 'near' }, lat: 39.0002, lon: -84 },
+     { tags: { name: 'Y' }, lat: 39.01, lon: -84 }, { tags: { name: 'Z', k: 'way' }, center: { lat: 39.0001, lon: -84.0001 } }]),
 }));
 """
 
@@ -74,3 +78,35 @@ def test_phone_and_website_keys():
     assert r["contact"]["hours"] is None
     assert r["noContact"]["phone"] is None and r["noContact"]["web"] is None
     assert '["name"="Joe\'s \\"Best\\" Diner"]' in r["query"] and "around:60,39.100000,-84.500000" in r["query"]
+
+
+def test_a_list_in_one_query_each_to_its_own():
+    r = run()
+    assert r["many"].count("nwr(around:60,") == 2 and '["name"="B \\"2\\""]' in r["many"] and r["many"].endswith("out tags center;")
+    # the nearer of two by the name; a namesake 1 km off is not it; a way by its centre; a row with no name stays null
+    assert r["match"] == [{"name": "X", "k": "near"}, None, None, {"name": "Z", "k": "way"}]
+
+
+def test_our_server_first_then_overpass():
+    """Inside the region a place's tags come from our server (GET /api/ctx/places, the weekly OSM build), one request for
+    a list; a 404 (outside the region, not built) or no app API goes to Overpass exactly as before."""
+    src = r"""
+const P = require(process.argv[1] + '/web/place_info.js');
+const asked = [], over = [];
+globalThis.ApexCameras = { SERVERS: ['x'], fetchFirst: async (f, body) => { over.push(body); return { elements: [{ tags: { name: 'Far Cafe', opening_hours: '24/7' }, lat: 40, lon: -100 }] }; } };
+(async () => {
+  globalThis.ApexSync = { apiFetch: async (path) => { asked.push(path); return /Far/.test(decodeURIComponent(path)) ? { ok: false, status: 404 } : { ok: true, json: async () => ({ tags: decodeURIComponent(path).split('&').map((x) => (/Bean/.test(x) ? { name: 'Bean', phone: '+1 513 555 0100' } : null)) }) }; } };
+  const one = await P.lookup('Bean', 39.1, -84.5, () => null);
+  const many = await P.lookupMany([{ name: 'Bean', lat: 39.1, lon: -84.5 }, null, { name: 'Nope', lat: 39.11, lon: -84.5 }], () => null);
+  const far = await P.lookup('Far Cafe', 40, -100, () => null);
+  delete globalThis.ApexSync;
+  const noApi = await P.lookupMany([{ name: 'Far Cafe', lat: 40, lon: -100 }], () => null);
+  console.log(JSON.stringify({ one, many, far, noApi, asked, over: over.length, path: P.placesPath([{ name: 'A & B', lat: 39.1, lon: -84.5 }]) }));
+})();
+"""
+    r = json.loads(subprocess.run([NODE, "-e", src, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["one"] == {"name": "Bean", "phone": "+1 513 555 0100"}
+    assert r["many"] == [{"name": "Bean", "phone": "+1 513 555 0100"}, None, None], "in the places' order, the null kept"
+    assert len(r["asked"]) == 3 and r["asked"][1].count("p=") == 2, "one request for the list"
+    assert r["far"]["opening_hours"] == "24/7" and r["noApi"][0]["opening_hours"] == "24/7" and r["over"] == 2, "outside: Overpass as before"
+    assert r["path"] == "/api/ctx/places?p=39.100000%2C-84.500000%2CA%20%26%20B"

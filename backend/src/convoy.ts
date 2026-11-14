@@ -71,6 +71,9 @@ export class ConvoyRoom extends DurableObject<Env> {
   private lastPosAt = new Map<string, number>();     // member key -> when their last fix was taken (per member, not per socket)
   private route: { name: string; polyline: string; version: number } | null = null;
   private regroup: { lat: number; lon: number; note: string | null; at: number } | null = null;
+  // Convoy voice (docs/CONVOY_VOICE.md): member key -> their Realtime SFU session, memory only. The SFU carries the audio;
+  // the room only says who is on the channel and hands out session ids to members, never to anyone else.
+  private voice = new Map<string, { sessionId: string; muted: boolean }>();
   private seq = 0;
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
   private lock: Promise<unknown> = Promise.resolve();
@@ -321,6 +324,7 @@ export class ConvoyRoom extends DurableObject<Env> {
       case "publish": return leader ? this.publish(conn, msg, now) : this.send(conn, { type: "error", error: "leader_only" });
       case "route": return leader ? this.setRoute(conn, msg) : this.send(conn, { type: "error", error: "leader_only" });
       case "regroup": return leader ? this.setRegroup(conn, msg, now) : this.send(conn, { type: "error", error: "leader_only" });
+      case "voice": return this.voiceMute(conn, msg);
       default: return this.send(conn, { type: "error", error: "unknown_type" });
     }
   }
@@ -424,6 +428,48 @@ export class ConvoyRoom extends DurableObject<Env> {
     this.broadcast({ type: "regroup", regroup: this.regroup });
   }
 
+  // ---- voice (docs/CONVOY_VOICE.md): the Worker talks to the SFU, the room decides who may -------------------------
+  /** May this member go on the channel? A member with the convoy open (a live socket), in a live convoy, with voice set up. */
+  async voiceCheck(userId: string): Promise<Result<{ key: string }>> {
+    const room = await this.live(), me = room && this.members[userId];
+    if (!me) return fail(404, "no_convoy");
+    if (!this.env.REALTIME_APP_ID || !this.env.REALTIME_APP_TOKEN) return fail(503, "voice_not_set_up");
+    if (!this.online(me.key)) return fail(409, "connect_first");
+    return okR({ key: me.key });
+  }
+  /** They are on the channel with this SFU session: everyone is told, and they learn who else is on to listen to. */
+  async voiceOn(userId: string, sessionId: string): Promise<Result<{ voice: { key: string; muted: boolean }[] }>> {
+    const room = await this.live(), me = room && this.members[userId];
+    if (!me) return fail(404, "no_convoy");
+    if (!this.online(me.key)) return fail(409, "connect_first");     // left the convoy's link while the SFU answered
+    this.voice.set(me.key, { sessionId, muted: false });
+    this.broadcast({ type: "voice", key: me.key, on: true, muted: false, joined: true });   // joined: a new session, listen again
+    return okR({ voice: this.voicePub().filter((v) => v.key !== me.key) });
+  }
+  /** Their own SFU session, and the sessions of the members they asked to hear who are on the channel now. */
+  async voiceLookup(userId: string, keys: string[]): Promise<Result<{ sessionId: string; remotes: { key: string; sessionId: string }[] }>> {
+    const room = await this.live(), me = room && this.members[userId];
+    if (!me) return fail(404, "no_convoy");
+    const mine = this.voice.get(me.key);
+    if (!mine) return fail(409, "voice_off");
+    const remotes = [...new Set(keys)].filter((k) => k !== me.key && this.voice.has(k)).map((k) => ({ key: k, sessionId: this.voice.get(k)!.sessionId }));
+    return okR({ sessionId: mine.sessionId, remotes });
+  }
+  /** Off the channel. Idempotent. */
+  async voiceOff(userId: string): Promise<Result<{ ok: true }>> {
+    const me = this.room && this.members[userId];
+    if (me && this.voice.delete(me.key)) this.broadcast({ type: "voice", key: me.key, on: false, muted: false });
+    return okR({ ok: true as const });
+  }
+  private voiceMute(conn: Conn, msg: Record<string, unknown>): void {
+    if (!onlyKeys(msg, ["type", "muted"]) || typeof msg.muted !== "boolean") return this.send(conn, { type: "error", error: "bad_voice" });
+    const v = this.voice.get(conn.key!);
+    if (!v || v.muted === msg.muted) return;
+    v.muted = msg.muted;
+    this.broadcast({ type: "voice", key: conn.key, on: true, muted: v.muted });
+  }
+  private voicePub() { return [...this.voice].map(([key, v]) => ({ key, muted: v.muted })); }
+
   // ---- helpers ----------------------------------------------------------------------------------
   private async context(userId: string) {
     await this.loadNames();
@@ -432,6 +478,8 @@ export class ConvoyRoom extends DurableObject<Env> {
       sessionId: room.id, name: room.name, leaderEpoch: room.epoch, role: me.role, you: me.key, expiresAtMs: room.expiresAt, seq: this.seq,
       maxExpiresAtMs: room.createdAt + LIMITS.roomMaxMs, keepWindowMs: LIMITS.keepWindowMs,   // keepGoing: how late it can run, and from when the leader may ask
       leaderKey: this.members[room.leaderId].key,
+      voiceReady: !!(this.env.REALTIME_APP_ID && this.env.REALTIME_APP_TOKEN),   // the owner set up Realtime: voice can be offered
+      voice: this.voicePub(),
       members: Object.keys(this.members).map((id) => ({ ...this.pub(id), online: this.online(this.members[id].key) })),
     };
   }
@@ -479,6 +527,7 @@ export class ConvoyRoom extends DurableObject<Env> {
     for (const [h, t] of this.tickets) if (t.userId === userId) this.tickets.delete(h);
     this.positions.delete(key);
     this.lastPosAt.delete(key);
+    this.voice.delete(key);
     for (const c of [...this.conns]) if (c.userId === userId) this.close(c, 4403, reason === "blocked" ? "removed" : reason);   // never tell anyone they were blocked
     this.broadcast({ type: "member", action: reason === "blocked" ? "removed" : reason, member: { key } });
   }
@@ -492,7 +541,7 @@ export class ConvoyRoom extends DurableObject<Env> {
     for (const c of [...this.conns]) this.close(c, 4000, reason);
     this.members = {}; this.revoked = {}; this.banned = {}; this.names.clear();
     this.tickets.clear(); this.events.clear(); this.positions.clear(); this.lastPosAt.clear();
-    this.route = null; this.regroup = null;
+    this.route = null; this.regroup = null; this.voice.clear();
     this.idleCheck();
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
@@ -568,6 +617,8 @@ export class ConvoyRoom extends DurableObject<Env> {
     try { conn.ws.close(code, reason); } catch { /* already closed */ }
     if (wasOpen && conn.key && this.room && this.members[conn.userId!] && !this.online(conn.key)) {
       this.broadcast({ type: "presence", key: conn.key, online: false });
+      // gone from the convoy's link: gone from its channel too (they come back on with a new session when they reconnect)
+      if (this.voice.delete(conn.key)) this.broadcast({ type: "voice", key: conn.key, on: false, muted: false });
     }
     this.idleCheck();
   }

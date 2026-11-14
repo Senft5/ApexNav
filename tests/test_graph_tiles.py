@@ -257,6 +257,10 @@ const write = (f, j) => fs.writeFileSync(path.join(dir, f), JSON.stringify(j));
   const lat = [], lon = []; for (let k = 0; k < 2000; k++) { lat.push(39.1 + k * 5 / 110540 * 0.2); lon.push(-84.42 + k * 5 / 86000 * 0.2); }
   out.along = await G.prefetchAlong(lat, lon, { fetchFn });
   out.alongAsked = asked.filter((u) => u.endsWith('.vgr'));
+  // a drive on a planned route keeps the same tiles' bytes as it starts (keepAlong), never decoding them
+  G._mem.clear(); asked.length = 0;
+  out.keepAlong = await G.keepAlong(lat, lon, { fetchFn });
+  out.keepAsked = asked.filter((u) => u.endsWith('.vgr'));
   out.tilesAlong = G.tilesAlong([39.1, 39.1], [-84.501, -84.499]).map((t) => `${t.i}_${t.j}`).sort();
   out.none = G.tilesAlong(null, null);
   console.log(JSON.stringify(out));
@@ -271,6 +275,7 @@ const write = (f, j) => fs.writeFileSync(path.join(dir, f), JSON.stringify(j));
     assert r["along"] == {"tiles": 1, "kept": 1} and r["alongAsked"] == ["/api/graph/v1/382_516.vgr"], "a route's own tiles only"
     assert r["tilesAlong"] == ["381_516", "382_516"], "a line by a tile edge takes the tiles within 2 km on both sides"
     assert r["none"] == []
+    assert r["keepAlong"]["tiles"] == 1 and r["keepAsked"] == ["/api/graph/v1/382_516.vgr"], "a drive's route: the same tiles, bytes only"
 
 
 @needs_node

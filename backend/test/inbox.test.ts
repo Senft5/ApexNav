@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { api, befriend, freshDb, makeSegment, makeUser, ok, type TestUser } from "./helpers";
 import { duelOutcome, perPost } from "../src/inbox";
-import { encodeLine } from "../src/drive_posts";
+import { encodeLine, mentionsOf } from "../src/drive_posts";
 
 beforeEach(freshDb);
 type Msg = Record<string, any>;
@@ -77,6 +77,19 @@ describe("For you", () => {
     const f = (await inbox(a)).items.find((i) => i.kind === "follows")!;
     expect(f).toMatchObject({ book_id: book, book: "Smokies classics", n: 2 });
     expect(JSON.stringify(f)).not.toMatch(/bob|outsider/);
+    // a road added to a book you follow, after you followed it: one row for the book, the owner named; none for its owner
+    expect(kinds(await inbox(b))).not.toContain("book_roads");    // the road before the follow isn't news
+    await env.DB.prepare("UPDATE roadbook_roads SET created_at = datetime('now', '-2 hours')").run();      // The Dragon, then the follows
+    await env.DB.prepare("UPDATE roadbook_follows SET created_at = datetime('now', '-1 hour')").run();
+    await ok(api(a, "POST", `/api/roadbooks/${book}/roads`, { name: "Cherohala Skyway", geom: road() }));
+    expect((await inbox(b)).items.find((i) => i.kind === "book_roads")).toMatchObject({ book_id: book, book: "Smokies classics", handle: "alice", n: 1, road: "Cherohala Skyway" });
+    expect(kinds(await inbox(a))).not.toContain("book_roads");
+    await ok(api(a, "POST", `/api/roadbooks/${book}/roads`, { name: "Tellico Plains run", geom: road() }));
+    expect((await inbox(out)).items.find((i) => i.kind === "book_roads")).toMatchObject({ n: 2, road: null });
+    // made private again: the book is closed to its followers, and so is the news
+    await ok(api(a, "PUT", `/api/roadbooks/${book}`, { visibility: "private" }));
+    expect(kinds(await inbox(b))).not.toContain("book_roads");
+    await ok(api(a, "PUT", `/api/roadbooks/${book}`, { visibility: "public" }));
     // time attack: bob goes quicker than alice after her time went up
     const week = (await env.DB.prepare("SELECT date('now', '-6 days', 'weekday 1') AS w").first<{ w: string }>())!.w;
     // (the week's loop is named on its row, migration 0054, and has no stage of its own)
@@ -110,6 +123,22 @@ describe("For you", () => {
     expect((await inbox(b)).items.filter((i) => i.kind.startsWith("post_"))).toEqual([]);
     await ok(api(a, "POST", "/api/blocks", { handle: "cara" }));
     expect((await inbox(a)).items.find((i) => i.kind === "post_comment")).toMatchObject({ handle: "bob", others: 0 });
+  });
+
+  it("an @mention on a friend's post you can see; reads only real mentions; your own posts' comments stay comments", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob"), c = await makeUser("cara");
+    await befriend(a, b); await befriend(a, c);
+    const line = encodeLine(Array.from({ length: 91 }, (_, i) => [35 + i * 0.001, -84] as [number, number]));
+    const { id } = await json(api(a, "POST", "/api/posts", { title: "Cherohala Skyway", driven_on: today, length_m: 10000, line }));
+    await ok(api(c, "POST", `/api/posts/${id}/comments`, { body: "first" }));
+    await env.DB.prepare("UPDATE drive_comments SET created_at = datetime('now', '-1 minute')").run();
+    await ok(api(b, "POST", `/api/posts/${id}/comments`, { body: "@cara look, and @alice" }));
+    await ok(api(b, "POST", `/api/posts/${id}/comments`, { body: "mail me at x@carab.com" }));
+    const cs = (await inbox(c)).items.filter((i) => i.kind.startsWith("post_"));
+    expect(cs).toEqual([expect.objectContaining({ kind: "post_mention", post_id: id, handle: "bob", owner: "alice", others: 0 })]);   // not "also commented" too
+    expect(cs[0].body).toBeUndefined();
+    expect((await inbox(a)).items.filter((i) => i.kind.startsWith("post_")).map((i) => i.kind)).toEqual(["post_comment"]);
+    expect(mentionsOf("@Sam hi @sam, @al @bob_1 x@y.com @me", "me")).toEqual(["sam", "bob_1"]);
   });
 
   it("groups a post's rows: the newest person, how many others, at most ten posts", () => {

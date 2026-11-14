@@ -124,9 +124,10 @@
     for (const seg of segs) {
       if (!seg || !seg.name || ![seg.lat0, seg.lon0, seg.lat1, seg.lon1].every(Number.isFinite)) continue;
       const p = Core.segmentPass(seg, d);
-      if (p) out.push({ lo: p.lo, name: String(seg.name).slice(0, 60), score: Number.isFinite(p.score) ? Math.max(0, Math.min(1000, Math.round(p.score))) : null });
+      if (p) out.push({ lo: p.lo, name: String(seg.name).slice(0, 60), score: Number.isFinite(p.score) ? Math.max(0, Math.min(1000, Math.round(p.score))) : null,
+        ends: [seg.lat0, seg.lon0, seg.lat1, seg.lon1].map((v) => Math.round(v * 1e5) / 1e5) });   // where it starts and ends, for Drive it on the post
     }
-    return out.sort((a, b) => a.lo - b.lo).slice(0, 3).map(({ name, score }) => ({ name, score }));
+    return out.sort((a, b) => a.lo - b.lo).slice(0, 3).map(({ name, score, ends }) => ({ name, score, ends }));
   }
   const memo = { key: null, out: null };                         // the cockpit's road memory, until the library changes
   const fullAll = async (sums) => (await Promise.all(sums.map((s) => full(s.id, s)))).filter(Boolean);

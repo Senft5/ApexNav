@@ -85,6 +85,10 @@ final class ApexCar {
     private(set) var routeJSON = "[]"
     private(set) var cornersJSON = "[]"
     private(set) var hazardsJSON = "[]"
+    /// The next turn's arrow on the map (web/carplay.js arrowMessage): the shaft along the route and the head's three corners,
+    /// both empty for none; as JSON for web/carmap.js.
+    private(set) var arrow: (shaft: [CLLocationCoordinate2D], head: [CLLocationCoordinate2D]) = ([], [])
+    private(set) var arrowJSON = "null"
     /// The sight-line speed under the car's arrow (web/carplay.js sightMessage), null when unknown or not driving.
     private(set) var sightJSON = "null"
     /// The posted speed limit's sign on the car's map (web/carplay.js limitMessage), nil when unknown or not driving.
@@ -261,9 +265,16 @@ final class ApexCar {
             let v = Self.num(dict["value"]).map { Int($0.rounded()) }
             limit = v.flatMap { $0 > 0 && $0 <= 200 ? ApexCarLimit(value: $0, round: (dict["round"] as? Bool) ?? false) : nil }
             eachMap { $0.showLimit() }
+        case "arrow":
+            let shaft = ((dict["shaft"] as? [Any]) ?? []).prefix(200).compactMap(Self.coord), head = ((dict["head"] as? [Any]) ?? []).prefix(3).compactMap(Self.coord)
+            arrow = shaft.count >= 2 && head.count == 3 ? (shaft, head) : ([], [])
+            arrowJSON = arrow.shaft.isEmpty ? "null" : Self.json(["shaft": arrow.shaft.map { [$0.latitude, $0.longitude] }, "head": arrow.head.map { [$0.latitude, $0.longitude] }])
+            eachMap { $0.showArrow() }
         case "end":
             driving = false
             guide = nil
+            arrow = ([], []); arrowJSON = "null"
+            eachMap { $0.showArrow() }
             sightJSON = "null"
             sight = nil
             limit = nil
@@ -1057,7 +1068,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
         }
         view.addSubview(m)
         native = m
-        showLook(); showRoute(); showCorners(); showHazards(); showPlaces(); setMode(); showPosition(); showSight(); showLimit()
+        showLook(); showRoute(); showCorners(); showHazards(); showArrow(); showPlaces(); setMode(); showPosition(); showSight(); showLimit()
     }
 
     @MainActor private func fallBackToWeb() {
@@ -1094,7 +1105,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
         loaded = true
         sentMode = ""
         MainActor.assumeIsolated {
-            fitViewport(); showLook(); showRoute(); showCorners(); showHazards(); showPlaces(); setMode(); showPosition(); showSight(); showLimit()
+            fitViewport(); showLook(); showRoute(); showCorners(); showHazards(); showArrow(); showPlaces(); setMode(); showPosition(); showSight(); showLimit()
         }
     }
 
@@ -1145,6 +1156,10 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
     }
     @MainActor func showPlaces() {
         if let native { native.setPlaces(ApexCar.shared.placePlates) } else { js("car.places(\(ApexCar.shared.placesJSON))") }
+    }
+    @MainActor func showArrow() {
+        let a = ApexCar.shared.arrow
+        if let native { native.setTurnArrow(shaft: a.shaft, head: a.head) } else { js("car.arrow(\(ApexCar.shared.arrowJSON))") }
     }
     @MainActor func showHazards() {
         if let native { native.setHazards(ApexCar.shared.hazardPlates) } else { js("car.hazards(\(ApexCar.shared.hazardsJSON))") }

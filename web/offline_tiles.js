@@ -113,7 +113,7 @@
       return true;
     } catch (_) { return false; }   // a full phone (QuotaExceededError) or no IndexedDB: the caller says so
   }
-  async function clear() { try { await tx('readwrite', (s) => s.clear()); } catch (_) {} try { root.localStorage.removeItem(AREAS); } catch (_) {} tellShell(); }
+  async function clear() { try { await tx('readwrite', (s) => s.clear()); } catch (_) {} try { root.localStorage.removeItem(AREAS); root.localStorage.removeItem(CAR_AHEAD); } catch (_) {} tellShell(); }
 
   function areas() { try { const v = JSON.parse(root.localStorage.getItem(AREAS) || '[]'); return Array.isArray(v) ? v : []; } catch (_) { return []; } }
   function saveAreas(list) { try { root.localStorage.setItem(AREAS, JSON.stringify(list)); } catch (_) {} tellShell(); }
@@ -168,6 +168,29 @@
       const drop = overflow(recs);
       if (drop.length) await tx('readwrite', (s) => { for (const u of drop) s.delete(u); });
     } catch (_) {}
+  }
+
+  /**
+   * The map ahead of a drive on a planned route (IDEAS F-03): its tiles z8-14 within bufferKm of the route kept as recent
+   * ones, so a dead zone on the way, a route not saved for offline, still has its map (only the tiles once looked at were
+   * kept). Narrow and capped (~4 MB per 100 km); held ones skipped; one at a time. Resolves { tiles, fetched, missing }.
+   */
+  const AHEAD_KM = 0.3, AHEAD_MAX = 400;
+  async function keepAhead({ lat, lon, styleUrl, bufferKm = AHEAD_KM, max = AHEAD_MAX, fetchFn = (u) => fetch(u) }) {
+    const json = async (url) => { const kept = await get(url); if (kept) return JSON.parse(new TextDecoder().decode(kept));
+      const r = await fetchFn(url); if (!r.ok) throw new Error(`HTTP ${r.status}`); const b = await r.arrayBuffer(); put(url, b); return JSON.parse(new TextDecoder().decode(b)); };
+    const style = await json(styleUrl);
+    const src = Object.values(style.sources || {}).find((x) => x.type === 'vector' && x.url);
+    const template = src ? ((await json(src.url)).tiles || [])[0] : null;
+    if (!template) throw new Error('no map tiles');
+    const list = tilesAlong(lat, lon, bufferKm, 8, 14).slice(0, max), now = Date.now();
+    let fetched = 0, missing = 0, miss = 0;
+    for (const [z, x, y] of list) {
+      const url = template.replace('{z}', z).replace('{x}', x).replace('{y}', y);
+      if (servable(await getRec(url), now)) continue;
+      try { const r = await fetchFn(url); if (!r.ok) continue; await keepRecent(url, await r.arrayBuffer()); fetched++; miss = 0; } catch (_) { missing++; if (++miss >= 5) break; }   // the signal's gone: stop
+    }
+    return { tiles: list.length, fetched, missing };
   }
 
   const KEEP = new Set(['Style', 'Source', 'Glyphs']);   // small, needed to open the map offline: kept as they arrive
@@ -287,11 +310,26 @@
     if (Array.isArray(a.box) && a.box.length === 4 && a.box.every(Number.isFinite)) return { id: a.id, at, bounds: a.box.slice() };
     return null;
   }
-  /** What the car's map should keep: one pack per saved area that describes itself. */
-  const packs = () => areas().map(packOf).filter(Boolean);
+  /**
+   * The car's copy of the map ahead (keepAhead's, for CarPlay's MapLibre Native map, which can't read IndexedDB): the last
+   * planned route driven, as a corridor pack, kept until the next drive's replaces it (or Delete offline data). Its id is
+   * the route's box, so the same route driven again isn't fetched again.
+   */
+  const CAR_AHEAD = 'apex.carAhead';
+  function setCarAhead(lat, lon) {
+    const line = lineOf(lat, lon, LINE_TOL_KM), b = line && boxOf(lat, lon);
+    if (!line || !b) return null;
+    const rec = { id: `drive_${b.join(',')}`, at: '', alongKm: AHEAD_KM, line };
+    try { root.localStorage.setItem(CAR_AHEAD, JSON.stringify(rec)); } catch (_) {}
+    tellShell();
+    return rec.id;
+  }
+  function carAhead() { try { return packOf(JSON.parse(root.localStorage.getItem(CAR_AHEAD) || 'null')); } catch (_) { return null; } }
+  /** What the car's map should keep: one pack per saved area that describes itself, and the last drive's corridor. */
+  const packs = () => { const list = areas().map(packOf).filter(Boolean), d = carAhead(); return d ? [...list, d] : list; };
   /** Bytes saved, from the areas list. */
   const bytesSaved = () => areas().reduce((s, a) => s + (a.bytes || 0), 0);
 
-  const api = { tilesFor, plan, tilesAlong, planAlong, boxOf, lineOf, areasOf, servable, overflow, RECENT_MAX, RECENT_DAYS, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, ageOf, keptShare, packOf, packs, tellShell, STALE_DAYS, MAX_TILES, PROTO, DEM };
+  const api = { tilesFor, plan, tilesAlong, planAlong, boxOf, lineOf, areasOf, servable, overflow, RECENT_MAX, keepAhead, AHEAD_KM, AHEAD_MAX, RECENT_DAYS, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, ageOf, keptShare, packOf, packs, tellShell, setCarAhead, STALE_DAYS, MAX_TILES, PROTO, DEM };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexOfflineTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);

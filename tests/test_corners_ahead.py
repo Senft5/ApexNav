@@ -51,7 +51,7 @@ def test_said_once_about_30_seconds_out(out):
 
 
 def test_the_line(out):
-    assert out["text"] == "Twisty section in half a mile. 3.2 miles, 18 corners."
+    assert out["text"] == "Twisty section ahead. 18 corners."     # short, from the voice pack's own clips
 
 
 def test_wired_through_the_quiet_gate_on_the_planned_route():
