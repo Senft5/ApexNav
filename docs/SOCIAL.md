@@ -150,8 +150,13 @@ and in random batches so a trace cannot be re-assembled.
   the post's author deletes a comment. Blocks hide both ways; three established reports hide; the owner's queue removes.
 - `backend/src/drive_posts.ts` (migration 0059: `drive_posts`, `drive_post_kudos`, `drive_comments`), `web/drive_posts.js`.
   10 posts a day, 30 comments an hour, 200 comments a post. In Download my data; gone with the account.
-- Next: photos on a post (the photos table's kind CHECK needs a rebuild), stages on the card. Kudos and comments push
-  (2.12).
+- A clip or a photo on a post (built 2026-11-13, `backend/src/post_media.ts`, migration 0061): Add a photo on the Post
+  sheet (redrawn as a JPEG on the phone, so no EXIF), or the corner clip a drive's page hands over; in R2 (`MEDIA`,
+  `post/<id>`), seen by exactly who sees the post, gone with it. In the Feed a clip plays muted and looping, a tap stops it.
+- Stages on a post (built 2026-11-14): the stages you saved in the Log that the drive went over (at most three, in the
+  order driven) go on its post, each with its Vetta Score there (`--` when too few clean corners); never a time.
+- Next: "Post to crew" from a corner clip on the drive's page (analysis thread adds the key, `page.post(blob, meta)`).
+  Kudos and comments push (2.12).
 
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.

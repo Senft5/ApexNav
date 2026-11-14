@@ -301,7 +301,7 @@
       const x = dr[z];
       if (!x || x.level === null) continue;
       const r = x.record, head = `Cleanest ${z} corner: ${x.level}`;
-      if (r && r.id === id) out.push(`${head} · your best of ${r.n}`);
+      if (r && r.id === id) out.push(`${head} · your best of ${r.n} ${z} corners`);   // "of 12" alone read as a riddle: 12 what? (free roamer B, 2026-11-14)
       else if (r && x.level >= r.level) out.push(`${head} · level with your best${r.at ? `, ${day(r.at)}` : ''}`);
       else if (r) out.push(`${head} · your best ${r.level}${r.at ? `, ${day(r.at)}` : ''}`);
       else out.push(head);

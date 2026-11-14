@@ -10,7 +10,7 @@
 (function (root) {
   'use strict';
   const TILE = 0.25;                                   // degrees: about 28 x 20 km in the US, a few per drive
-  const KEEP_MS = 7 * 864e5, PREFIX = 'apex.cam.', MAX_TILES = 400, TIMEOUT_MS = 12000;
+  const KEEP_MS = 7 * 864e5, OLD_MS = 90 * 864e5, PREFIX = 'apex.cam.', MAX_TILES = 400, TIMEOUT_MS = 12000;
   const SERVERS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter',
     'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
   const REGION_PATH = '/api/cameras/v1/region.json', WORKER = 'https://apexnav.senftns.workers.dev', REGION_WAIT_MS = 8000, REGION_RETRY_MS = 10 * 60000;
@@ -76,9 +76,10 @@
     } catch (_) { return null; }
   }
 
-  function readTile(storage, k, now) {
-    try { const c = JSON.parse(storage.getItem(PREFIX + k) || 'null'); return c && now - c.at < KEEP_MS && Array.isArray(c.cams) ? c.cams : null; } catch (_) { return null; }
+  function readTile(storage, k, now, maxMs = KEEP_MS) {
+    try { const c = JSON.parse(storage.getItem(PREFIX + k) || 'null'); return c && now - c.at < maxMs && Array.isArray(c.cams) ? c.cams : null; } catch (_) { return null; }
   }
+  const keptAtOf = (storage, k) => { try { const c = JSON.parse(storage.getItem(PREFIX + k) || 'null'); return c && Number.isFinite(c.at) ? c.at : null; } catch (_) { return null; } };
   function writeTiles(storage, tiles, now) {
     for (const [k, cams] of tiles) { try { storage.setItem(PREFIX + k, JSON.stringify({ at: now, cams })); } catch (_) {} }
     try {                                                              // keep the newest MAX_TILES tiles
@@ -125,6 +126,8 @@
   /**
    * The cameras on these tiles: kept ones at once, then the ones our region file covers, the rest in one query raced
    * against every Overpass server. Returns [{ id, lat, lon, kind }], or null when some tiles were wanted and no source had them.
+   * No source answering (no signal) but every wanted tile kept within OLD_MS: the kept ones, the list marked `keptAt` (the
+   * oldest tile's time) so the page can say how old. Cameras are fixed hardware: a month-old list beats none on a dead road.
    * `region`: our file's URL (null: don't ask it; tests).
    */
   async function load(tiles, { fetchFn = root.fetch && root.fetch.bind(root), storage = root.localStorage, now = Date.now(), region: regionUrl } = {}) {
@@ -142,7 +145,13 @@
       if (!missing.length) return have;
     }
     const json = await fetchFirst(fetchFn, 'data=' + encodeURIComponent(query(missing)));
-    if (!json) return null;
+    if (!json) {
+      const old = storage ? missing.map((k) => readTile(storage, k, now, OLD_MS)) : [];
+      if (!old.length || old.some((c) => !c)) return null;
+      const out = have.concat(...old);
+      out.keptAt = Math.min(...missing.map((k) => keptAtOf(storage, k)));
+      return out;
+    }
     const cams = (json.elements || []).map(classify).filter(Boolean);
     const split = byTile(missing, cams);
     if (storage) writeTiles(storage, split, now);

@@ -100,6 +100,19 @@
     return `Your best run this month: ${n(me)} corners in a row, smooth and settled.`;
   }
 
-  const api = { scoreTokens, endLine, pickSignOff, bestOnRoad, usual, bestRunMonth, under100, WORDS, USUAL_N, USUAL_MIN, USUAL_NEAR };
+  /**
+   * Ask for an App Store rating on this end card? Only in the app, after a good drive (your best on this road, or 700 and
+   * up), from your third stored drive on, with the phone known to be parked (under 1.5 m/s), and once per app version
+   * (Apple shows it at most three times a year anyway; guideline 5.6.1, docs/APP_REVIEW.md). Unknown speed: no.
+   * o: { app, score, best, drives, speedMps, version, askedFor }
+   */
+  const REVIEW_SCORE = 700, REVIEW_DRIVES = 3, PARKED_MPS = 1.5;
+  function askReview(o) {
+    if (!o || !o.app || !Number.isFinite(o.score) || !o.version || o.askedFor === o.version) return false;
+    if (!(Number.isFinite(o.speedMps) && o.speedMps >= 0 && o.speedMps < PARKED_MPS)) return false;
+    if (!(Number.isFinite(o.drives) && o.drives >= REVIEW_DRIVES)) return false;
+    return !!o.best || o.score >= REVIEW_SCORE;
+  }
+  const api = { scoreTokens, endLine, pickSignOff, bestOnRoad, usual, bestRunMonth, under100, askReview, WORDS, USUAL_N, USUAL_MIN, USUAL_NEAR };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexEndLine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

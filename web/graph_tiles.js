@@ -287,7 +287,29 @@
    */
   async function prefetchArea(bbox, o = {}) {
     const [s, w, n, e] = Array.isArray(bbox) ? bbox : [bbox.s, bbox.w, bbox.n, bbox.e];
-    const src = await sources(o), want = tilesIn(s, w, n, e).map(({ i, j }) => `${i}_${j}`).filter((k) => has(src.b, k) || has(src.r, k));
+    return prefetchTiles(tilesIn(s, w, n, e), o);
+  }
+  /**
+   * A route saved for offline (IDEAS F-03/F-04): the tiles within padKm of its line (sampled every ~500 m), kept the same
+   * way, so a reroute in a dead zone on the way has our network to route on. Resolves { tiles, kept }.
+   */
+  function prefetchAlong(lat, lon, o = {}) { return prefetchTiles(tilesAlong(lat, lon, o.padKm), o); }
+  function tilesAlong(lat, lon, padKm = 2) {
+    const seen = new Map();
+    if (!Array.isArray(lat) || !Array.isArray(lon) || !lat.length) return [];
+    const step = 100;                                             // a track's points are 5 m apart: every 500 m
+    const at = (k) => {
+      const la = lat[k], lo = lon[k];
+      if (!Number.isFinite(la) || !Number.isFinite(lo)) return;
+      const dLat = padKm / 110.54, dLon = padKm / (111.32 * Math.cos(la * Math.PI / 180));
+      for (const a of [-dLat, 0, dLat]) for (const b of [-dLon, 0, dLon]) { const t = tileOf(la + a, lo + b); seen.set(`${t.i}_${t.j}`, t); }
+    };
+    for (let k = 0; k < lat.length; k += step) at(k);
+    at(lat.length - 1);
+    return [...seen.values()];
+  }
+  async function prefetchTiles(tiles, o = {}) {
+    const src = await sources(o), want = tiles.map(({ i, j }) => `${i}_${j}`).filter((k) => has(src.b, k) || has(src.r, k));
     let kept = 0, k = 0;
     await Promise.all(Array.from({ length: Math.min(4, want.length) }, async () => {
       while (k < want.length) { const [i, j] = want[k++].split('_').map(Number); if (await load(i, j, o)) kept++; }
@@ -320,7 +342,7 @@
     return out;
   }
 
-  const api = { VERSION, READS, CHANNELS, BASE, TILE_DEG, FLAGS, NODE_FLAGS, CLASS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, tileOf, keyOf, unkey, origin, unq8, funPts, decode, index, load, prefetchArea, keepArea, tilesIn, _mem: mem, _indexes: indexes };
+  const api = { VERSION, READS, CHANNELS, BASE, TILE_DEG, FLAGS, NODE_FLAGS, CLASS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, tileOf, keyOf, unkey, origin, unq8, funPts, decode, index, load, prefetchArea, prefetchAlong, tilesAlong, keepArea, tilesIn, _mem: mem, _indexes: indexes };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);

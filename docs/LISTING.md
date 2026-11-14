@@ -4,21 +4,27 @@ Drafted from what the app does today (no CarPlay, no Android, no feature that is
 The owner pastes it into App Store Connect → Vetta → 1.0. `tests/test_listing.py` keeps every field inside Apple's
 limits and away from speed claims (guideline 1.4, IDEAS guardrails). Change the text here first, then paste.
 
+**ASO pass (2026-11-14, launch marketing thread).** The name field carries the two search words people type ("twisty
+roads") because Apple weights the name most; the app still shows as Vetta under its icon (`CFBundleDisplayName`).
+Keywords never repeat a word from the name or subtitle (Apple already indexes those), and drop "navigation" (the
+category) and "pace notes" (in the subtitle). If Apple says the name is taken, use "Vetta Drive: Twisty Roads" (25).
+Promotional text can be changed any time without a review: refresh it monthly with what's new.
+
 ## Name (30)
 
-Vetta
+Vetta: Twisty Roads & Drives
 
 ## Subtitle (30)
 
-Navigation for back roads
+Co-driver & rally pace notes
 
 ## Promotional text (170)
 
-A co-driver for the long way home: pace notes for every corner, routes over the twistiest roads nearby, turn-by-turn directions and a score for smooth driving.
+Find the twisty roads near you, hear every corner called before you reach it, and see how cleanly you drove it. Share the best corner with your friends.
 
 ## Keywords (100, comma separated, no spaces)
 
-navigation,gps,pace notes,co-driver,twisty roads,scenic drive,back roads,road trip,convoy,car club
+scenic,route,planner,curvy,backroads,car,club,meet,crew,convoy,dashcam,clip,windy,road,trip,map,gps
 
 ## Description (4000)
 
@@ -36,11 +42,14 @@ Search for any address or place, choose between routes, and get spoken turn-by-t
 A SCORE FOR EVERY DRIVE
 Every drive gets a Vetta Score. The Log shows your drives on the map, corner by corner, and how you are improving on the roads you drive most. Share a drive card with the road's outline and your score.
 
+FILM YOUR BEST CORNER
+Mount the phone and Vetta films the drive with the back camera, then cuts your best corner into a vertical clip with its call and the grip you used drawn on it, ready for your friends' feed or a Reel.
+
 DRIVE TOGETHER
 Start a convoy with friends and see each other on the map while you drive. Share planned routes with friends and crews, and report hazards (gravel, debris, an animal on the road, a police car) so the drivers behind you hear about them.
 
-YOUR DATA STAYS YOURS
-Drives are kept on your phone. Nothing is shared until you share it. Privacy zones keep home and work out of everything. Unknown values show as unknown, never guessed. Settings → Your data downloads your drives as GPX or erases them.
+YOUR DATA, YOUR SWITCHES
+Drives are kept on your phone. Friends and your private crews see what you share with them, and each kind of sharing has its own switch. Privacy zones keep home and work out of everything. Unknown values show as unknown, never guessed. Settings → Your data downloads your drives as GPX or erases them.
 
 SAFETY
 Typing is locked while you move. A crash check asks if you are OK after a hard impact and helps you call or text for help; it is a backup to your phone's own crash detection, not a replacement. Always drive within the law and the conditions, and keep your eyes on the road.
@@ -51,9 +60,13 @@ Anyone can make an account (Sign in with Apple or Google) to add friends and joi
 
 | field | value |
 |---|---|
-| Support URL | https://apexnav.senftns.workers.dev/about.html (the landing page; its footer needs the owner's contact address, O-11) |
-| Marketing URL | https://apexnav.senftns.workers.dev/about.html |
-| Privacy policy URL | https://apexnav.senftns.workers.dev/privacy.html (after the owner approves it: O-11) |
+| Support URL | https://vettadrive.com (the info page, with the contact address hello@vettadrive.com once Email Routing is on) |
+| Marketing URL | https://vettadrive.com |
+| Privacy policy URL | https://vettadrive.app/privacy.html |
+
+The domains are Nate's (Cloudflare Registrar, 2026-11-14): vettadrive.com is the info page, vettadrive.app the web app and
+API. Until the round-two thread has pointed them at the Worker, the same pages answer at apexnav.senftns.workers.dev; paste
+the vettadrive URLs only once they load.
 
 ## Category
 

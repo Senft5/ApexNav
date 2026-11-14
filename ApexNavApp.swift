@@ -12,6 +12,7 @@ import UserNotifications
 import ApexKit
 import EventKit
 import MediaPlayer
+import StoreKit
 
 // =====================================================================================
 // APEX NAV — iOS THIN SHELL
@@ -1107,10 +1108,21 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             webVoiceActive = false
             endVoiceIfIdle()
             return
+        case "askReview":                                     // the end card after a good drive, parked (end_line.js askReview)
+            requestAppReview()
+            return
         default:
             break
         }
         pushLiveFrame()
+    }
+
+    /// The App Store rating sheet (guideline 5.6.1: only Apple's own prompt, no custom one). iOS decides whether it shows
+    /// (at most three times a year, never in TestFlight); the page asks once per app version, after a good drive, parked.
+    private func requestAppReview() {
+        guard let scene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else { return }
+        AppStore.requestReview(in: scene)
     }
 
     private func startPushTimer() {

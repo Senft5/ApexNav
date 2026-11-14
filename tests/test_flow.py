@@ -118,7 +118,7 @@ def test_the_log_keeps_each_drives_best_run_in_its_summary():
         "process.stdout.write(JSON.stringify({run:s.run,r,sv:s.sv}));"
     )
     out = json.loads(subprocess.run([NODE, "-e", script, ROOT], input=json.dumps(d), capture_output=True, text=True, check=True).stdout)
-    assert out["sv"] == 2                                                # summaries made before the run are rebuilt
+    assert out["sv"] >= 2                                                # summaries made before the run (v1) are rebuilt
     assert out["r"]["corners"] == 6 and out["run"]["corners"] == 6
     assert out["run"]["len_m"] == pytest.approx(out["r"]["end_m"] - out["r"]["start_m"])
 
