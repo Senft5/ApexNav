@@ -3053,10 +3053,11 @@ flow('turn by turn in road order: exit 19, then the sharp right a mile on, on th
     + JSON.stringify(guides.map((g) => [g.instruction, Math.round(g.at)])));
 });
 
-flow('the turn arrow and route overview: the next turn of a route being driven has an arrow on the map, gone once taken; one key shows the rest of the route; the route behind you fades', async (page, base) => {
+flow('the turn arrow and route overview: the next turn of a route being driven has an arrow on the map, gone once taken; one key shows the rest of the route; the route behind you fades; the car gets the arrow too', async (page, base) => {
   // a road north 1.2 km, then right onto Main St for 600 m to the destination (turn_arrow.js)
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
-    window.APEX_REVIEW = true; window.webkit = { messageHandlers: { apex: { postMessage() {} } } }; });
+    window.APEX_REVIEW = true; window.__arrows = [];
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car' && m.kind === 'arrow') window.__arrows.push(m); } } } }; });
   const KY = 110540, KX = 111320 * Math.cos(35.5 * Math.PI / 180), P = [];
   for (let y = 0; y <= 1200; y += 10) P.push([y, 0]);
   const TURN = P.length - 1;
@@ -3090,6 +3091,8 @@ flow('the turn arrow and route overview: the next turn of a route being driven h
   const drawn = await page.evaluate(() => { const m = window.apexDebug.map;
     return { shaft: m.queryRenderedFeatures({ layers: ['apex-turnarrow'] }).length, head: m.queryRenderedFeatures({ layers: ['apex-turnarrow-head'] }).length }; });
   check(drawn.shaft > 0 && drawn.head > 0, 'the arrow is drawn on the map, shaft and head: ' + JSON.stringify(drawn));
+  const carGot = await page.evaluate(() => window.__arrows.slice());
+  check(carGot.length === 1 && carGot[0].shaft.length >= 2 && carGot[0].head.length === 3, 'the car is sent the arrow once: ' + JSON.stringify(carGot).slice(0, 300));
   // the route behind you is faint: the route line's gradient steps up to the route's ink where the car is
   const behind = await page.evaluate(() => ({ p: window.apexDebug.behind, at: window.apexDebug.state.cursorM / window.apexDebug.track.dist[window.apexDebug.track.dist.length - 1],
     g: window.apexDebug.map.getPaintProperty('apex-route', 'line-gradient') }));
@@ -3109,6 +3112,8 @@ flow('the turn arrow and route overview: the next turn of a route being driven h
   for (let m = turnM + 20; m <= turnM + 200; m += 40) { await driveTo(m); await page.waitForTimeout(80); }
   await page.waitForFunction(() => !window.apexDebug.turnArrow, null, { timeout: 5000 })
     .catch(() => check(false, 'past the turn the arrow goes (the next step is the arrival): ' + JSON.stringify(turnM)));
+  const carLast = await page.evaluate(() => window.__arrows[window.__arrows.length - 1]);
+  check(carLast && carLast.shaft.length === 0, 'and the car\'s goes too: ' + JSON.stringify(carLast));
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'end' }));
   await page.waitForFunction(() => !window.apexDebug.driveActive, null, { timeout: 5000 }).catch(() => {});
   const after = await page.evaluate(() => ({ behind: window.apexDebug.behind, g: window.apexDebug.map.getPaintProperty('apex-route', 'line-gradient') || null, key: getComputedStyle(document.getElementById('overviewBtn')).display }));
@@ -3163,6 +3168,12 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   check(!l2.hidden && l2.text === '80' && l2.round && l2.left === 324, 'km/h: the red ring, past Apple\'s card: ' + JSON.stringify(l2));
   await page.evaluate(() => { car.limit(null); car.inset(0); });
   check((await lim()).hidden, 'the limit gone: the sign goes');
+  // the next turn's arrow (web/carplay.js arrowMessage): drawn over the route, gone when the page sends none
+  const arrowN = () => page.evaluate(() => { const d = car.map.getSource('car-arrow-src').serialize().data; return d && d.features ? d.features.map((f) => f.geometry.type) : []; });
+  await page.evaluate(() => car.arrow({ shaft: [[35.4, -84.1], [35.401, -84.1], [35.401, -84.099]], head: [[35.4012, -84.099], [35.401, -84.0985], [35.4008, -84.099]] }));
+  check(JSON.stringify(await arrowN()) === '["LineString","Polygon"]', 'the car map draws the turn arrow: ' + JSON.stringify(await arrowN()));
+  await page.evaluate(() => car.arrow({ shaft: [], head: [] }));
+  check((await arrowN()).length === 0, 'and none when the page sends none');
   await page.evaluate(() => car.sight({ text: '43', unit: 'MPH', short: true }));
   // plates never pile up: three corners on one spot show one plate, the tight one when there is no car to measure from
   await page.evaluate(() => { car.mode('preview'); car.corners([{ at: [35.41, -84.1], text: 'R4', tight: false }, { at: [35.41, -84.1], text: 'L2', tight: true }, { at: [35.41001, -84.1], text: 'R3', tight: false }]); });
