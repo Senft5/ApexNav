@@ -66,10 +66,15 @@ export async function itemsPut(env: Env, v: Viewer, req: Request) {
   }
   for (const kind of KINDS) if ([...live].filter((k) => k.startsWith(kind + "\u0000")).length > LIVE_MAX[kind]) throw new HttpError(409, "too_many");
   if (!items.length) return { taken: 0 };
-  const res = await env.DB.batch(items.map((it) => env.DB.prepare(
-    `INSERT INTO member_items (user_id, kind, item_id, body, at, seen) VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT (user_id, kind, item_id) DO UPDATE SET body = excluded.body, at = excluded.at, seen = excluded.seen
-       WHERE excluded.at > member_items.at`).bind(v.id, it.kind, it.id, it.body, it.at, now)));
+  // a removal only marks a row that is here: one of an item the account never had keeps nothing (else made-up ids would
+  // pile up as removals, uncapped, until the sweep)
+  const res = await env.DB.batch(items.map((it) => it.body === null
+    ? env.DB.prepare("UPDATE member_items SET body = NULL, at = ?4, seen = ?5 WHERE user_id = ?1 AND kind = ?2 AND item_id = ?3 AND ?4 > at")
+      .bind(v.id, it.kind, it.id, it.at, now)
+    : env.DB.prepare(
+      `INSERT INTO member_items (user_id, kind, item_id, body, at, seen) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (user_id, kind, item_id) DO UPDATE SET body = excluded.body, at = excluded.at, seen = excluded.seen
+         WHERE excluded.at > member_items.at`).bind(v.id, it.kind, it.id, it.body, it.at, now)));
   return { taken: res.reduce((n, r) => n + (r.meta.changes || 0), 0) };
 }
 
