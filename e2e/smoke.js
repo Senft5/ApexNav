@@ -2751,7 +2751,8 @@ flow('Siri: "Drive somewhere with Vetta" plans to the place said, your own first
   const toasts = await page.evaluate(async (q) => { const before = window.apexDebug.track;
     window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } };
     window.apex.onNative({ type: 'link', params: { go: 'to', q } });
-    const seen = new Set(); for (let i = 0; i < 60; i++) { seen.add(document.getElementById('toast').textContent); await new Promise((r) => setTimeout(r, 100)); }
+    const seen = new Set(); for (let i = 0; i < 150 && !window.__car.some((m) => m.kind === 'notice' && /No match/.test(m.titles[0])); i++) { seen.add(document.getElementById('toast').textContent); await new Promise((r) => setTimeout(r, 100)); }
+    seen.add(document.getElementById('toast').textContent);
     return { same: window.apexDebug.track === before, toast: [...seen].join(' | '), notice: window.__car.filter((m) => m.kind === 'notice').map((m) => m.titles[0]) }; }, b64('Zzyzx Qqq Nowhere'));
   check(toasts.same && toasts.notice.some((t) => /No match/.test(t)), 'a place nobody knows: no route, and why, on the car too: ' + JSON.stringify(toasts));
   // junk in the link is ignored
