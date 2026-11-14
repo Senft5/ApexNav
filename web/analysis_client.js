@@ -376,7 +376,13 @@
         for (const s of sums) {
           if (!holds(s.bbox, seg.lat0, seg.lon0) || !holds(s.bbox, seg.lat1, seg.lon1)) continue;
           const d = await full(s.id, s), p = d && Core.segmentPass(seg, d);
-          if (p) out[seg.id].push({ id: s.id, p });
+          if (p) {
+            // its splits (ghost_duel.js) and the road it was on, for a friend's live ghost duel against it (sent with the time only)
+            // cut at its corners' apexes only (ghost_duel.js cutsOf): never a straight's own speed
+            try { const G = root.ApexGhostDuel; p.splits = G ? G.splitsOf(Core, d, p.lo, p.hi, G.cutsOf(p.lo, p.hi, (d.corners || []).map((c) => c && c.apex))) : null; } catch (_) { p.splits = null; }
+            p.surface = d.surface === 'dry' || d.surface === 'wet' || d.surface === 'ice' ? d.surface : null;
+            out[seg.id].push({ id: s.id, p });
+          }
         }
       }
       release();

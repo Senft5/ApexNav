@@ -691,12 +691,12 @@
       await stagePasses();
       for (const s of segs.filter(x => x.synced)) {
         const best = passesFor(s).filter(x => x.p.score != null && /^\d{4}-\d{2}-\d{2}/.test(x.d.date)).sort((p, q) => q.p.score - p.p.score)[0];
-        if (best) await ApexSync.publishScore(s.id, best.p.score, best.p.time_s, best.d.date.slice(0, 10), best.p.components ? best.p.components.smoothness : null);
+        if (best) await ApexSync.publishScore(s.id, best.p.score, best.p.time_s, best.d.date.slice(0, 10), best.p.components ? best.p.components.smoothness : null, { splits: best.p.splits, surface: best.p.surface });
         // each recent day's best too, once, so the board can count days for its local legend (IDEAS S-08)
         let sent = {};
         try { sent = JSON.parse(localStorage.getItem('apex.publishedDays') || '{}') || {}; } catch (_) {}
         for (const b of ApexLegends.toPublish(s.id, ApexLegends.dayBests(passesFor(s)), sent)) {
-          if (await ApexSync.publishScore(s.id, b.score, b.time_s, b.day, b.smoothness)) sent[`${s.id}|${b.day}`] = b.score;
+          if (await ApexSync.publishScore(s.id, b.score, b.time_s, b.day, b.smoothness, { splits: b.splits, surface: b.surface })) sent[`${s.id}|${b.day}`] = b.score;
         }
         try { localStorage.setItem('apex.publishedDays', JSON.stringify(sent)); } catch (_) {}
       }

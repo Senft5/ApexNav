@@ -367,7 +367,7 @@
     });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), horizonFrom: async (coords) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; useHorizon(t); return t.id; } };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, get ghostRuns() { return drive.ghosts || null; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), horizonFrom: async (coords) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; useHorizon(t); return t.id; } };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -10257,7 +10257,7 @@
       const r = w.tracker.update(rows);
       const bar = $('stageBar');
       if (!r) { bar.hidden = true; return; }
-      bar.hidden = r.state === 'done';
+      bar.hidden = r.state === 'done' || !$('ghostBar').hidden;      // a friend's ghost on this stage takes the bar
       $('stageName').textContent = r.name;
       $('stageDelta').textContent = ApexStageDelta.label(r.delta);
       $('stageCount').textContent = `${r.done}/${r.of} corners`;
@@ -10266,6 +10266,57 @@
       const line = r.delta == null ? `${r.name} done.` : r.delta === 0 ? `${r.name}: level with your best.` : `${r.name}: ${Math.abs(r.delta)} points ${r.delta > 0 ? 'up on' : 'down on'} your best.`;
       toast(line);
       if (r.delta != null) sayQuietLine(line);   // the co-driver says how the stage went, once it's over (technique, never time)
+    }
+    // ---- live ghost duels (web/ghost_duel.js, IDEAS D-04; the owner: time duels, live time gaps) -------------------------
+    // On one of your stages a friend has driven, their quickest run as they shared it (its splits, only where their times
+    // reach you, on a road like today's) is a ghost: the bar shows "+0.3 s vs @sam" and gives way to nothing else on a
+    // stage; the co-driver says how you stand half way, and at the finish (full notes only,
+    // in the quiet slot). Members only; offline or with no friend's run there, nothing shows.
+    let ghostWatch = null;
+    async function startGhostWatch(surface = null) {
+      ghostWatch = null; $('ghostBar').hidden = true;
+      if (!window.ApexGhostDuel || !window.ApexSync) return;
+      let segs = [];
+      try { segs = JSON.parse(localStorage.getItem('apex.segments') || '[]'); } catch (_) {}
+      segs = (Array.isArray(segs) ? segs : []).filter((x) => x && x.synced && Number.isFinite(x.lat0) && Number.isFinite(x.length_m));
+      if (!segs.length) return;
+      try { if (!(await ApexSync.member())) return; } catch (_) { return; }
+      const canon = (x) => x.origin || x.id;
+      let rows = [];
+      try {
+        const r = await ApexSync.apiFetch(`/api/board/ghosts?canons=${encodeURIComponent(segs.slice(0, 20).map(canon).join(','))}${surface ? `&surface=${surface}` : ''}`);
+        rows = r.ok ? await r.json() : [];
+      } catch (_) { rows = []; }
+      if (!driveActive || !Array.isArray(rows) || !rows.length) return;
+      const geom = (x) => { try { const g = typeof x.geom === 'string' ? JSON.parse(x.geom) : x.geom; return Array.isArray(g) && g.length > 1 ? g : null; } catch (_) { return null; } };
+      const ghosts = rows.map((g) => { const st = segs.find((x) => canon(x) === g.canon_id);
+        return st ? { stage: { id: st.id, name: st.name || 'Stage', start: [st.lat0, st.lon0], end: [st.lat1, st.lon1], length_m: st.length_m, geom: geom(st) },
+                       who: g.handle || g.name || 'friend', name: g.name || g.handle || 'your friend', splits: g.splits, time_s: g.time_s, surface: g.surface || null } : null; }).filter(Boolean);
+      if (ghosts.length) ghostWatch = { tracker: ApexGhostDuel.createTracker(ghosts), ghosts, at: 0, surface };
+    }
+    function feedGhost() {
+      const w = ghostWatch, rows = drive.rec && drive.rec.rows;
+      if (!w || !rows || performance.now() - w.at < 1000) return;
+      w.at = performance.now();
+      // the road turned wet or icy since: your friend's dry run is no ghost for it (road_surface.js, like with like)
+      const st = drive.wet && drive.wet.state, slick = st === 'wet' || st === 'ice' ? st : null;
+      if (slick !== w.surface && !w.refetching) { w.refetching = true; startGhostWatch(slick); return; }
+      const r = w.tracker.update(rows), bar = $('ghostBar');
+      if (!r) { bar.hidden = true; return; }
+      const g = w.ghosts.find((x) => x.stage.id === r.stageId), name = g ? String(g.name).split(' ')[0] : r.who;
+      bar.hidden = r.state === 'done';
+      $('ghostName').textContent = r.name;
+      $('ghostGap').textContent = ApexGhostDuel.label(r.gap, r.who);
+      bar.classList.toggle('ahead', Number.isFinite(r.gap) && r.gap < -0.05); bar.classList.toggle('behind', Number.isFinite(r.gap) && r.gap > 0.05);
+      if (!bar.hidden) { $('stageBar').hidden = true; $('coachBar').hidden = true; }
+      const words = (x) => (window.ApexPassCoach && ApexPassCoach.spoken ? ApexPassCoach.spoken(x) : `${x.toFixed(1)} seconds`);
+      if (r.state === 'done') {
+        const line = Number.isFinite(r.gap) ? `${r.name} done. ${ApexGhostDuel.spoken(r.gap, name, words)}` : `${r.name} done.`;
+        toast(line); if (isSpirited()) sayQuietLine(line);
+        (drive.ghosts || (drive.ghosts = [])).push({ stage: r.name, who: r.who, gap_s: Number.isFinite(r.gap) ? Math.round(r.gap * 10) / 10 : null });
+        return;
+      }
+      if (r.say && isSpirited() && Number.isFinite(r.gap)) sayQuietLine(ApexGhostDuel.spoken(r.gap, name, words));
     }
     // ---- live coaching against your best pass, on any road driven before (web/pass_coach.js) ---------------------------
     // Each remembered corner you finish is set against its fastest pass (the time gap, owner 2026-11-14) and its best
@@ -10289,7 +10340,7 @@
         w.saidAt = performance.now(); sayQuietLine(ev.say);
       }
       const v = r.view;
-      bar.hidden = !v || (v.delta == null && v.gap == null) || !$('stageBar').hidden;
+      bar.hidden = !v || (v.delta == null && v.gap == null) || !$('stageBar').hidden || !$('ghostBar').hidden;
       if (bar.hidden) return;
       $('coachDelta').textContent = ApexPassCoach.label(v.delta, v.gap);
       $('coachCount').textContent = `${v.n} corner${v.n === 1 ? '' : 's'}`;
@@ -10383,7 +10434,7 @@
       carPost({ kind: 'start', title: track && track.kind === 'route' ? String(track.name || 'Route').slice(0, 80) : 'Drive' });
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0; drive.battery = null;
-      startStageWatch(); startCoach();
+      startStageWatch(); startCoach(); drive.ghosts = null; startGhostWatch(null);
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
       drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); drive.surface = window.ApexRoadSurface ? ApexRoadSurface.createLog() : null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
@@ -10414,7 +10465,7 @@
             paintPerms();
             paintDriveStat();
           },
-          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.status.webMount = fr.web_mount || null; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); noteBrakes(fr); noteWet(); noteFlow(); feedStage(); feedCoach(); feedTrack(fr);
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.status.webMount = fr.web_mount || null; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); noteBrakes(fr); noteWet(); noteFlow(); feedStage(); feedGhost(); feedCoach(); feedTrack(fr);
             if (window.ApexBattery && webBattery) drive.battery = ApexBattery.feed(drive.battery, webBattery.level, webBattery.charging, Date.now());
             window.apex.live(fr); paintDriveStat(); },
         });
@@ -10796,7 +10847,7 @@
       if (pendingEnd) { clearTimeout(pendingEnd.timer); pendingEnd = null; paintEndUndo(); }   // I-3: any other way out ends it now
       driveActive = false; driveCam(false); pushQuiet(false); soundtrackStop(); drive.wet = null; if (ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null);   // the dry road back
       const kept = keepStop();                                         // Round 3: no more checkpoints; dropped once saved
-      stageWatch = null; $('stageBar').hidden = true; coachWatch = null; $('coachBar').hidden = true;
+      stageWatch = null; $('stageBar').hidden = true; coachWatch = null; $('coachBar').hidden = true; ghostWatch = null; $('ghostBar').hidden = true;
       const laps = circuit.timer ? circuit.timer.state(Date.now()).laps : [];
       const battery = window.ApexBattery ? ApexBattery.summary(drive.battery) : null; drive.battery = null;
       resetCircuit();
@@ -11430,7 +11481,7 @@
         feedReported(frame); feedReaction(frame); feedCrash(frame);
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec && !(Number.isFinite(frame.seq) && keep.seq != null && frame.seq <= keep.seq)) {   // (taken in a backlog)
-          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); noteBrakes(frame); noteWet(); noteFlow(); feedStage(); feedCoach(); feedTrack(frame);
+          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); noteBrakes(frame); noteWet(); noteFlow(); feedStage(); feedGhost(); feedCoach(); feedTrack(frame);
           if (window.ApexBattery) drive.battery = ApexBattery.feed(drive.battery, frame.battery, frame.charging === true, Date.now());
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;
