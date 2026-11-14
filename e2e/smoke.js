@@ -352,6 +352,11 @@ flow('startup budget: the map page is ready within its script bytes, script coun
       top: js.sort((a, b) => b.decodedBodySize - a.decodedBodySize).slice(0, 3).map((e) => `${e.name.split('/').pop()} ${Math.round(e.decodedBodySize / 1024)} KB`) }; }, base);
   const got = { ...r, cpuS: +m.ScriptDuration.toFixed(2), layoutS: +m.LayoutDuration.toFixed(2), styleS: +m.RecalcStyleDuration.toFixed(2) };
   console.log('     startup: ' + JSON.stringify(got));
+  // and the launch is timed for the anonymous app health counts (IDEAS P-06): page ready, then the map's first draw
+  await page.waitForFunction(() => window.apexDebug.boot, null, { timeout: 15000 });
+  const boot = await page.evaluate(() => ({ ...window.apexDebug.boot, counts: JSON.parse(localStorage.getItem('apex.health') || '{}') }));
+  const today = Object.values(boot.counts)[0] || {};
+  check(boot.readyMs > 0 && boot.mapMs >= 0 && today.boot_n === 1 && today.boot_map_cs >= 1 && today.boot_ready_cs >= 1, 'the launch is timed and counted: ' + JSON.stringify(boot));
   check(r.bytes > 1e6 && r.bytes <= BOOT.scriptBytes, `script bytes before ready ${r.bytes} (budget ${BOOT.scriptBytes}): ` + JSON.stringify(got));
   check(r.count <= BOOT.scriptCount, `scripts before ready ${r.count} (budget ${BOOT.scriptCount}): ` + JSON.stringify(got));
   check(got.cpuS <= BOOT.cpuS && r.long <= BOOT.longTaskMs, `CPU before ready ${got.cpuS} s (budget ${BOOT.cpuS}), longest task ${r.long} ms (budget ${BOOT.longTaskMs}): ` + JSON.stringify(got));
@@ -2762,9 +2767,12 @@ flow('Siri: "Drive somewhere with Vetta" plans to the place said, your own first
   check(Math.abs(to.lat - 35.61) < 0.01 && Math.abs(to.lon + 84.11) < 0.01 && to.typed === 'Home', 'the place said is your pinned Home: ' + JSON.stringify(to));
   // a place with no match says so, and nothing else is planned
   const toasts = await page.evaluate(async (q) => { const before = window.apexDebug.track;
-    window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } };
+    const fix = () => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true });
+    fix(); window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } };
     window.apex.onNative({ type: 'link', params: { go: 'to', q } });
-    const seen = new Set(); for (let i = 0; i < 150 && !window.__car.some((m) => m.kind === 'notice' && /No match/.test(m.titles[0])); i++) { seen.add(document.getElementById('toast').textContent); await new Promise((r) => setTimeout(r, 100)); }
+    // The phone's GPS keeps reporting while it waits (the flow gave one fix at the start: 5 s on, the page rightly said "GPS
+    // lost" and went to the replay, and an ask still in flight then was dropped, failing this flow on a slow runner).
+    const seen = new Set(); for (let i = 0; i < 150 && !window.__car.some((m) => m.kind === 'notice' && /No match/.test(m.titles[0])); i++) { if (i % 10 === 0) fix(); seen.add(document.getElementById('toast').textContent); await new Promise((r) => setTimeout(r, 100)); }
     seen.add(document.getElementById('toast').textContent);
     return { same: window.apexDebug.track === before, toast: [...seen].join(' | '), notice: window.__car.filter((m) => m.kind === 'notice').map((m) => m.titles[0]) }; }, b64('Zzyzx Qqq Nowhere'));
   check(toasts.same && toasts.notice.some((t) => /No match/.test(t)), 'a place nobody knows: no route, and why, on the car too: ' + JSON.stringify(toasts));

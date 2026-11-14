@@ -412,6 +412,21 @@
     setInterval(() => { try { if (state.lastPosition) localStorage.setItem(LAST_POS, JSON.stringify(state.lastPosition)); } catch (_) {} }, 30000);
     // On the web the idle map follows the browser's GPS (the app's shell pushes its own frames instead). The browser asks once
     // and remembers the answer for the site; denied or unavailable leaves the map where it is.
+    // IDEAS P-06: how long a launch takes on the phones it runs on, in the anonymous app health counts (health.js): the time
+    // from the page's start to the page being ready (window.apex) and to the map's first full draw, in centiseconds, and how
+    // many launches took over 2 s to the map. Only a launch seen from start to map (a page opened in the background, by
+    // CarPlay with the phone locked, would count the time it sat unseen). Read as means in Crew's App health.
+    const boot = { ready: null, map: null, seen: document.visibilityState === 'visible' };
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') boot.seen = false; });
+    function bootCount() {
+      if (boot.ready == null || boot.map == null || !boot.seen || boot.counted || window.APEX_REVIEW) return;
+      boot.counted = true;
+      if (window.apexDebug) window.apexDebug.boot = { readyMs: Math.round(boot.ready), mapMs: Math.round(boot.map) };
+      if (boot.map > 60000) return;                                    // not a launch anyone waited through
+      health.bump('boot_n'); health.bump('boot_ready_cs', Math.max(1, boot.ready / 10)); health.bump('boot_map_cs', Math.max(1, boot.map / 10));
+      if (boot.map > 2000) health.bump('boot_slow');
+    }
+    map.once('load', () => { boot.map = performance.now(); bootCount(); });
     map.once('load', () => {
       if (IN_APP_SHELL || !navigator.geolocation) return;
       navigator.geolocation.watchPosition((p) => {
@@ -503,6 +518,14 @@
           layout: { 'symbol-placement': 'line', 'text-size': 9, 'text-field': ['concat', ['number-format', ['get', 'ele'], {}], "'"], 'text-font': ['Noto Sans Regular'] },
           paint: { 'text-halo-width': 1.2 } });
       }
+      // A town's buildings stand up from zoom 15 (the map is tilted at 45 degrees from launch), as Apple and Google Maps draw
+      // them: OSM's own heights from the base map's tiles (render_height; nothing more is fetched), rising from flat as you
+      // zoom in, in the theme's land (basemap.js buildingColour). Under the labels and every line of ours; the low-power map
+      // drops them (HEAVY_LAYERS), and so does satellite.
+      if (map.getSource('openmaptiles')) map.addLayer({ id: 'apex-buildings', type: 'fill-extrusion', source: 'openmaptiles', 'source-layer': 'building', minzoom: 15,
+        paint: { 'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15, 0, 16, ['coalesce', ['get', 'render_height'], 6]],
+          'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 15, 0, 16, ['coalesce', ['get', 'render_min_height'], 0]],
+          'fill-extrusion-opacity': 0.88, 'fill-extrusion-vertical-gradient': true } }, firstSymbol);
       map.addSource('apex-route-src', { type: 'geojson', data: emptyFC(), lineMetrics: true });   // lineMetrics: the reveal draws the line by its progress (penDraw)
       const width = (a, b) => ['interpolate', ['linear'], ['zoom'], 10, a, 16, b];
       // Twisty roads (map shape, not measured): under every route line. t = 2 very twisty, 1 twisty.
@@ -585,6 +608,8 @@
           attribution: 'Imagery: <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map">USGS The National Map</a> (USDA NAIP), public domain' });
         map.addLayer({ id: 'apex-satellite', type: 'raster', source: 'apex-satellite-src', paint: { 'raster-fade-duration': 150 } }, map.getLayer('apex-twisty') ? 'apex-twisty' : undefined);
       } else if (!on && map.getLayer('apex-satellite')) { map.removeLayer('apex-satellite'); map.removeSource('apex-satellite-src'); }
+      // the photo shows the roofs: no paper blocks over it
+      if (map.getLayer('apex-buildings')) map.setPaintProperty('apex-buildings', 'fill-extrusion-opacity', on ? 0 : 0.88);
     }
     // /api/me's word on developer tools: only a fresh answer counts (none at start, offline keeps none)
     function applyDevFlags(me) {
@@ -1017,7 +1042,7 @@
     // Low-power cockpit (web/power.js, IDEAS P-02): a hot phone, Low Power Mode or a low battery drops this loop to 30 fps
     // without shake, the map to 2x pixels, and hides hillshade and contours. Everything else (notes, recording) is unchanged.
     const power = new ApexPower.PowerSaver();
-    const HEAVY_LAYERS = ['apex-hillshade', 'apex-contours', 'apex-contour-labels'];
+    const HEAVY_LAYERS = ['apex-hillshade', 'apex-contours', 'apex-contour-labels', 'apex-buildings'];
     // F-05 (REVIEW_FEEL.md, the owner's call 2026-10-30): a drive draws less. Its cost is the map's drawing, not script, so
     // in a drive the canvas is capped at 2x pixels (the car already is: no sharper a glance at road speed), and at speed
     // the contour lines and their labels go (hillshade stays: the relief still reads) with the labels no one reads at a
@@ -6534,7 +6559,8 @@
             `routing failed ${pct(get(app, 'route_fail'), routes)} of ${routes}`, `fallback router ${get(app, 'route_fallback')}×`,
             `road uploads failed ${pct(get(app, 'road_upload_fail'), uploads)} of ${uploads}`,
             `mount set in ${locks ? Math.round(get(app, 'calib_lock_s') / locks) + ' s' : '--'} on average`,
-            `${get(app, 'hazard_queued')} reports queued with no signal`, `${get(app, 'crash_asked')} crash checks`].join(' · ') }));
+            `${get(app, 'hazard_queued')} reports queued with no signal`, `${get(app, 'crash_asked')} crash checks`,
+            ...(get(app, 'boot_n') ? [`launch: ready in ${(get(app, 'boot_ready_cs') / get(app, 'boot_n') / 100).toFixed(1)} s, map in ${(get(app, 'boot_map_cs') / get(app, 'boot_n') / 100).toFixed(1)} s on average, over 2 s ${pct(get(app, 'boot_slow'), get(app, 'boot_n'))} of ${get(app, 'boot_n')}`] : [])].join(' · ') }));
         }
       }).catch(() => sec.append(el('p', { className: 'note', textContent: 'Couldn\'t load the counts.' })));
       return sec;
@@ -11581,6 +11607,7 @@
         if (msg && msg.type === 'signInFailed' && msg.reason !== 'cancelled') toast('Couldn\'t sign in. Check signal and try again.');
       }
     };
+    boot.ready = performance.now(); bootCount();                         // IDEAS P-06: the page is ready
     let idleSnapped = false;
     function showIdleFix(frame) {
       refreshAutoNight();
