@@ -4433,7 +4433,7 @@ flow('surfaces: Home by is the app\'s stepper, the replay has a Done key, the fi
   // U-80: before any stylesheet or script, the page's first paint is the launch screen's ink and lockup
   const first = await page.evaluate(() => { const st = document.head.querySelector('style'), firstScript = document.head.querySelector('script, link[rel=stylesheet]');
     return { before: !!(st && firstScript && (st.compareDocumentPosition(firstScript) & Node.DOCUMENT_POSITION_FOLLOWING)), css: st ? st.textContent : '' }; });
-  check(first.before && /#151310/.test(first.css) && /svg\+xml/.test(first.css) && /184px 50px/.test(first.css), 'the first paint is the launch screen: ' + JSON.stringify({ before: first.before }));
+  check(first.before && /#111214/.test(first.css) && /svg\+xml/.test(first.css) && /184px 50px/.test(first.css), 'the first paint is the launch screen: ' + JSON.stringify({ before: first.before }));
   // U-98: a loop's Home by is a stepper in the theme, "--:--" until a key sets a time
   const pts = Array.from({ length: 300 }, (_, i) => `<trkpt lat="${(35.5 + i * 1e-4).toFixed(6)}" lon="-83.9"/>`).join('');
   await page.setInputFiles('#gpxFile', { name: 'loop.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Loop</name><trkseg>${pts}</trkseg></trk></gpx>`) });
