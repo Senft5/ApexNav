@@ -6507,6 +6507,10 @@ flow('For you: the People badge counts what is new and what waits; People lists 
   check(rows.length === 3, 'the request is a card above, not a row: ' + JSON.stringify(rows));
   check(rows[0][0] && rows[0][1] === 'Topped · 20 min ago' && rows[0][2] === '@bob scored 850 on Dry Ridge climb, over your best of 800.', 'topped, new, in a sentence: ' + JSON.stringify(rows[0]));
   check(/^Kudos · 2 h ago$/.test(rows[1][1]) && /^Ridge Runners: Cherohala Saturday, .+\. Are you going\?$/.test(rows[2][2]), 'kudos and the crew drive: ' + JSON.stringify(rows));
+  // (free roamer B, 2026-11-14) a rule closes For you before your friends, so they don't read as its fourth and fifth rows
+  const closed = await page.evaluate(() => { const y = document.querySelector('#accountBody > .you-row'), last = [...document.querySelectorAll('#accountBody .inbox-row')].pop();
+    return { rule: parseFloat(getComputedStyle(y).borderTopWidth), below: y.getBoundingClientRect().top >= last.getBoundingClientRect().bottom - 1 }; });
+  check(closed.rule === 1 && closed.below, 'one rule between For you and your friends: ' + JSON.stringify(closed));
   check(await page.isVisible('#accountBody .request-card:has-text("@dan")'), 'the request stays a card with its keys');
   // a row with no key (kudos): its sentence sits under the kicker, the full width, not squeezed beside it
   const kudos = await page.$eval('#accountBody .inbox-row:has-text("Kudos")', (r) => { const k = r.querySelector('.inbox-kick').getBoundingClientRect(), t = r.querySelector('.inbox-text').getBoundingClientRect();
