@@ -10504,8 +10504,20 @@ flow('find nearby: Where to? has Gas, Coffee and Food; a key, or "gas near me" t
     const els = [...q.matchAll(/around:60,(-?[\d.]+),(-?[\d.]+)\)\["name"="([^"]+)"\]/g)].filter((m) => m[3] === 'Bean There Coffee')
       .map((m, i) => ({ type: 'node', id: i + 1, lat: +m[1], lon: +m[2], tags: { name: m[3], opening_hours: '24/7' } }));
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: els }) }); });
+  // and a street photo of each beside its name (place_photo.js): the small one, of the photo facing it
+  await page.route('**/api/ctx/keys', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ keys: { mapillaryToken: 'MLY|test' } }) }));
+  await page.route('https://graph.mapillary.com/**', (route) => { const b = new URL(route.request().url()).searchParams.get('bbox').split(',').map(Number), lon = (b[0] + b[2]) / 2, lat = (b[1] + b[3]) / 2;
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [{ id: '8', thumb_1024_url: 'https://scontent.test.fbcdn.net/big.jpg', thumb_256_url: 'https://scontent.test.fbcdn.net/small.jpg',
+      computed_compass_angle: 0, captured_at: Date.UTC(2024, 0, 1), computed_geometry: { coordinates: [lon, lat - 30 / 111320] }, creator: { username: 'roadie' } }] }) }); });
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+  await page.route('https://scontent.test.fbcdn.net/**', (route) => route.fulfill({ contentType: 'image/png', body: PNG }));
   await tap('#nearbyKeys .chip:nth-child(2)', 'Coffee');
   await page.waitForFunction(() => document.querySelectorAll('#placeList .place').length >= 2, null, { timeout: 5000 });
+  await page.waitForFunction(() => document.querySelectorAll('#placeList .place.has-thumb').length === 2, null, { timeout: 5000 })
+    .catch(async () => { throw new Error('no photos in the list: ' + await page.evaluate(() => document.getElementById('placeList').innerHTML)); });
+  const thumb = await page.evaluate(() => { const b = document.querySelector('#placeList .place'), img = b.querySelector('.place-thumb'), r = img.getBoundingClientRect(), n = b.querySelector('b').getBoundingClientRect();
+    return { src: img.getAttribute('src'), left: r.right <= n.left, size: [Math.round(r.width), Math.round(r.height)], row: Math.round(b.getBoundingClientRect().height) }; });
+  check(thumb.src === 'https://scontent.test.fbcdn.net/small.jpg' && thumb.left && thumb.size.join() === '48,48' && thumb.row <= 72, 'each row has its small street photo left of its name: ' + JSON.stringify(thumb));
   await page.waitForFunction(() => { const s = document.querySelector('#placeList .place small'); return s && s.textContent === 'Open 24 hours'; }, null, { timeout: 5000 })
     .catch(async () => { throw new Error('the café says it is open: ' + JSON.stringify({ overpass, list: await page.textContent('#placeList') })); });
   check(new Set(overpass).size === 1 && !/no name/.test(overpass[0]), 'one query for the list (raced over the servers, as cameras.js), named places only: ' + JSON.stringify(overpass));

@@ -35,6 +35,7 @@ console.log(JSON.stringify({
   credit: [P.credit({ by: 'roadie', year: 2023 }), P.credit({ by: null, year: null })],
   page: P.page({ id: '123' }),
   url: P.url(LAT, LON, 'MLY|tok'),
+  thumbs: [P.pick([{ ...im('n', 30, 0, 0), thumb_256_url: 'https://scontent.example.fbcdn.net/n256' }], LAT, LON).thumb, P.pick([im('o', 30, 0, 0)], LAT, LON).thumb],
 }));
 """
 
@@ -75,3 +76,8 @@ def test_the_query_is_a_small_square_with_the_token_escaped(got):
     bbox = [float(v) for v in u.split("bbox=")[1].split("&")[0].split(",")]
     assert bbox[0] < -84.5 < bbox[2] and bbox[1] < 39.1 < bbox[3]
     assert (bbox[3] - bbox[1]) < 0.0015 and (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]) < 0.01
+
+
+def test_a_list_gets_the_small_picture_or_the_big_one(got):
+    assert got["thumbs"] == ["https://scontent.example.fbcdn.net/n256", "https://scontent.example.fbcdn.net/o"]
+    assert "thumb_256_url" in got["url"]
