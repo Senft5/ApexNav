@@ -3093,7 +3093,8 @@ flow('the turn arrow and route overview: the next turn of a route being driven h
   // the route behind you is faint: the route line's gradient steps up to the route's ink where the car is
   const behind = await page.evaluate(() => ({ p: window.apexDebug.behind, at: window.apexDebug.state.cursorM / window.apexDebug.track.dist[window.apexDebug.track.dist.length - 1],
     g: window.apexDebug.map.getPaintProperty('apex-route', 'line-gradient') }));
-  check(behind.p > 0.3 && Math.abs(behind.p - behind.at) < 0.01 && JSON.stringify(behind.g).includes('line-progress'), 'the route behind you fades: ' + JSON.stringify(behind));
+  // within one fix (40 m of 1.8 km): the notes, which paint it, can run a frame behind the cursor
+  check(behind.p > 0.3 && Math.abs(behind.p - behind.at) < 0.04 && JSON.stringify(behind.g).includes('line-progress'), 'the route behind you fades where the car is: ' + JSON.stringify(behind));
   // the route overview key: the rest of the route in view, north up and flat; Recenter takes its place and comes back at once
   check(await page.isVisible('#overviewBtn'), 'a route being driven has the overview key');
   await page.click('#overviewBtn');
