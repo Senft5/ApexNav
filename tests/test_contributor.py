@@ -504,3 +504,29 @@ def test_crowd_bumps_on_a_route(result):
     assert b["events"][0][2] == 0.86
     assert b["besideOwn"] == 1                                       # one already on the track 10 m from the third
     assert b["bad"] == 0 and b["none"] == 0
+
+
+def test_way_geometry_from_our_build_first_overpass_only_for_the_rest():
+    """A drive's ways come from our weekly build (GET /api/ctx/ways, the 0.05 degree tiles its matched samples fall in and
+    the way ids, which the contribution sends anyway); only a way the build doesn't have goes to Overpass, and with the
+    server down every way does, as before."""
+    js = r"""
+const C = require(process.argv[1] + '/web/contributor.js');
+(async () => {
+  const drive = { lat: [39.101, 39.102, 39.149], lon: [-84.51, -84.51, -84.51] };
+  const match = [{ way: 7 }, { way: 7 }, { way: 9 }];
+  const asked = [], over = [];
+  globalThis.ApexSync = { apiFetch: async (p) => { asked.push(p); return { ok: true, json: async () => ({ ways: { 7: [[39.1, -84.51], [39.11, -84.51]] } }) }; } };
+  const fetch = async (u, init) => { over.push(decodeURIComponent(init.body)); return { ok: true, json: async () => ({ elements: [{ type: 'way', id: 9, geometry: [{ lat: 39.14, lon: -84.51 }, { lat: 39.15, lon: -84.51 }] }] }) }; };
+  const got = await C.fetchWays([7, 9], fetch, { drive, match });
+  globalThis.ApexSync = { apiFetch: async () => { throw new Error('offline'); } };
+  const over0 = over.length, down = await C.fetchWays([7, 9], fetch, { drive, match });
+  console.log(JSON.stringify({ tiles: C.wayTiles(drive, match), asked, got: Object.keys(got).sort(), over: over.slice(0, over0), downOver: over.slice(over0) }));
+})();
+"""
+    root = str(__import__("pathlib").Path(__file__).resolve().parents[1])
+    o = json.loads(subprocess.run([NODE, "-e", js, root], capture_output=True, text=True, check=True).stdout)
+    assert o["tiles"] == ["782_-1691"]                                # one 0.05 degree tile holds all three samples
+    assert o["asked"] == [f"/api/ctx/ways?tiles={','.join(o['tiles'])}&ids=7,9"]
+    assert o["got"] == ["7", "9"] and len(o["over"]) == 1 and "way(id:9)" in o["over"][0]
+    assert len(o["downOver"]) == 1 and "way(id:7,9)" in o["downOver"][0]

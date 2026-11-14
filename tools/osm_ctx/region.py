@@ -26,6 +26,7 @@ inside the extracts' .poly: the phone uses the file only for a route whose box l
 otherwise, so a border route never reads "no waterfalls" where the file simply doesn't reach.
 
     python -m tools.osm_ctx.region --pbf a.osm.pbf [--pbf b.osm.pbf] --poly a.poly [--poly b.poly] --out OUT
+        [--box w,s,e,n --no-lists]   (the lower 48, .github/workflows/osm-ctx-us.yml: one job's chunk, per-cell files only)
 """
 from __future__ import annotations
 
@@ -258,15 +259,25 @@ def main(argv=None):
     ap.add_argument("--pbf", action="append", required=True)
     ap.add_argument("--poly", action="append", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--box", help="w,s,e,n on the 0.5 degree grid: only the cells inside it (a lower-48 job's chunk)")
+    ap.add_argument("--no-lists", action="store_true", help="the per-cell files only, no falls.json or closures.json")
     a = ap.parse_args(argv)
     from shapely.ops import unary_union
     cover = unary_union([read_poly(p) for p in a.poly])
-    cs = cells(cover)
-    d, c = doc(read(a.pbf), cover, cs=cs), closures_doc(read_closures(a.pbf), cover, cs=cs)
+    if a.box:
+        from shapely.geometry import box as sbox
+        cover = cover.intersection(sbox(*map(float, a.box.split(","))))
+    cs = cells(cover) if not cover.is_empty else []
+    if not cs:
+        print(f"{a.box or 'the outlines'}: no cell inside the coverage")
+        return
     os.makedirs(os.path.join(a.out, "osm", "v2"), exist_ok=True)
-    for name, body in (("falls.json", d), ("closures.json", c)):
-        with open(os.path.join(a.out, "osm", "v2", name), "w") as f:
-            json.dump(body, f, separators=(",", ":"), ensure_ascii=False)
+    d = c = None
+    if not a.no_lists:
+        d, c = doc(read(a.pbf), cover, cs=cs), closures_doc(read_closures(a.pbf), cover, cs=cs)
+        for name, body in (("falls.json", d), ("closures.json", c)):
+            with open(os.path.join(a.out, "osm", "v2", name), "w") as f:
+                json.dump(body, f, separators=(",", ":"), ensure_ascii=False)
     by = places_by_cell(read_places(a.pbf), cs)
     os.makedirs(os.path.join(a.out, "osm", "v2", "places"), exist_ok=True)
     for (bi, bj), rows in by.items():
@@ -287,7 +298,8 @@ def main(argv=None):
     nl = {k: sum(len(t[k]) for b in lb.values() for t in b["t"].values()) for k in ("lit", "tunnel", "cycle")}
     big = max((os.path.getsize(os.path.join(a.out, "osm", "v2", "lines", f"{bi}_{bj}.json")) for bi, bj in lb), default=0)
     print(f"lines: lit {nl['lit']}, tunnel {nl['tunnel']}, cycle {nl['cycle']} (per tile) in {len(lb)} bundles, largest {big} bytes")
-    print(f"falls: {len(d['falls'])}, roads with conditional access: {len(c['ways'])}, places with hours or contact: {n}, "
+    lists = f"falls: {len(d['falls'])}, roads with conditional access: {len(c['ways'])}, " if d else ""
+    print(f"{lists}places with hours or contact: {n}, "
           f"fuel {m['fuel']}, schools {m['schools']}, worship {m['worship']}, in {len(cs)} cells")
 
 

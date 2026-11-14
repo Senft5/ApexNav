@@ -326,3 +326,34 @@ export async function lineTiles(url: URL, data: R2Get | undefined): Promise<Resp
     return json(200, { tiles: Object.fromEntries(keys.map((k) => [k, got.get(bundleOf(k))?.[k] ?? null])) }, "public, max-age=21600");
   } catch { return json(404, { error: "not_built" }); }
 }
+
+/**
+ * GET /api/ctx/ways?tiles=<i>_<j>[,...]&ids=<way id>[,...] (0.05 degree tiles up to 40, ways up to 200): the whole OSM
+ * geometry of those drivable ways, read from the weekly build's tiles they cross (builtTile), for web/contributor.js,
+ * which bins a drive's road data along each way from its first node. {ways: {"<id>": [[lat, lon], ...]}}; a way in no
+ * built tile is left out and the phone asks Overpass for it. The server already receives these way ids with the
+ * contribution itself; the tiles say no more than the ways do. Nothing kept or logged.
+ */
+const WAY_TILES_MAX = 40, WAY_IDS_MAX = 200;
+export async function wayShapes(url: URL, data: R2Get | undefined): Promise<Response> {
+  const json = (status: number, body: unknown, cache = "no-store") => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": cache, "x-content-type-options": "nosniff" } });
+  const tiles = [...new Set((url.searchParams.get("tiles") || "").split(",").filter(Boolean))];
+  const ids = [...new Set((url.searchParams.get("ids") || "").split(",").filter(Boolean))];
+  if (!tiles.length || tiles.length > WAY_TILES_MAX || tiles.some((k) => !CELL_ID.test(k))) return json(400, { error: "bad_tiles" });
+  if (!ids.length || ids.length > WAY_IDS_MAX || ids.some((x) => !/^\d{1,12}$/.test(x))) return json(400, { error: "bad_ids" });
+  if (!data) return json(404, { error: "not_built" });
+  const want = new Set(ids.map(Number)), ways: Record<string, [number, number][]> = {};
+  for (const t of tiles) {
+    if (!want.size) break;
+    const text = await builtTile(data, t);
+    if (!text) continue;
+    let els: { type?: string; id?: number; geometry?: { lat: number; lon: number }[] }[] = [];
+    try { els = (JSON.parse(text) as { elements?: typeof els }).elements ?? []; } catch { continue; }
+    for (const el of els) {
+      if (el.type !== "way" || typeof el.id !== "number" || !want.has(el.id) || !Array.isArray(el.geometry)) continue;
+      ways[String(el.id)] = el.geometry.map((g) => [g.lat, g.lon]);
+      want.delete(el.id);
+    }
+  }
+  return json(200, { ways }, "public, max-age=21600");
+}

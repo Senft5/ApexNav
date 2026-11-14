@@ -55,7 +55,8 @@ if [ -d "$dir/ctx/v1" ]; then
 fi
 if [ -d "$dir/osm/v2" ]; then   # the OSM route context bundles (.github/workflows/osm-ctx.yml), the index last
   echo "osm route context:"
-  ( cd "$dir/osm/v2" && ls *.bin falls.json closures.json 2>/dev/null | sed "s|.*|$dir/osm/v2/& osm/v2/&|" ) | upload || fail=1
+  # the lower-48 build (osm-ctx-us.yml) has no falls.json or closures.json: only the files that are there
+  ( cd "$dir/osm/v2" && find . -maxdepth 1 \( -name '*.bin' -o -name falls.json -o -name closures.json \) | sed 's|^\./||' | sort | sed "s|.*|$dir/osm/v2/& osm/v2/&|" ) | upload || fail=1
   [ -d "$dir/osm/v2/places" ] && { ( cd "$dir/osm/v2" && ls places/*.json | sed "s|.*|$dir/osm/v2/& osm/v2/&|" ) | upload || fail=1; }
   [ -d "$dir/osm/v2/points" ] && { ( cd "$dir/osm/v2" && ls points/*.json | sed "s|.*|$dir/osm/v2/& osm/v2/&|" ) | upload || fail=1; }
   [ -d "$dir/osm/v2/lines" ] && { ( cd "$dir/osm/v2" && ls lines/*.json | sed "s|.*|$dir/osm/v2/& osm/v2/&|" ) | upload || fail=1; }

@@ -27,6 +27,16 @@ CHUNK_DEG = 15.0
 # east of DENSE_WEST the chunks are DENSE_CHUNK_DEG wide: the -95..-80 chunks took up to 4 h 17 min of the runner's 5 h 45 min
 # (Chicago, Detroit and Cleveland: bands 41 to 43, 2026-11-14), the West's under 2 h 15 min
 DENSE_WEST, DENSE_CHUNK_DEG = -100.0, 8.0   # whole degrees: the blocks stay on the 1 degree grid
+# and the Great Lakes belt (Chicago, Milwaukee, Detroit, Cleveland: bands 40 to 44, -92 to -76) in 4 degree chunks: 42_-92
+# at 8 degrees ran past 3 h 45 min (2026-11-14), the slowest of any job
+HEAVY, HEAVY_CHUNK_DEG = (-92.0, 40.0, -76.0, 45.0), 4.0
+
+
+def chunk_deg(band, lo):
+    w, s, e, n = HEAVY
+    if s - 1e-9 <= band < n - 1e-9 and w - 1e-9 <= lo < e - 1e-9:
+        return HEAVY_CHUNK_DEG
+    return DENSE_CHUNK_DEG if lo >= DENSE_WEST - 1e-9 else CHUNK_DEG
 
 
 def _ring_box(coords, box):
@@ -84,7 +94,7 @@ def jobs(st, only=None):
     while band < n - 1e-9:
         lo = w
         while lo < e - 1e-9:
-            hi = min(e, lo + (DENSE_CHUNK_DEG if lo >= DENSE_WEST - 1e-9 else CHUNK_DEG), DENSE_WEST if lo < DENSE_WEST - 1e-9 else e)
+            hi = min(e, lo + chunk_deg(band, lo), DENSE_WEST if lo < DENSE_WEST - 1e-9 else e)
             bl, need = [], set()
             x = lo
             while x < hi - 1e-9:
