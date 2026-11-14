@@ -6481,6 +6481,11 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
     'a post: Score and Distance in a row, the line full width under them with its start and finish: ' + JSON.stringify(look));
   const st = await page.evaluate(() => [...document.querySelectorAll('#accountBody .feed-card .feed-stages > div')].map((d) => d.textContent));
   check(JSON.stringify(st) === JSON.stringify(['Skyway summit801', 'Tellico descent--']), 'the stages it went over, each with its Score (unknown stays --): ' + JSON.stringify(st));
+  // a tap on bob's name opens his profile, with his drives on it (?author=, his id)
+  await page.click('#accountBody .feed-card .feed-head .who');
+  await page.waitForSelector('.profile-view .profile-drives:not([hidden]) .feed-card', { timeout: 10000 });
+  check(/Cherohala Skyway/.test(await page.textContent('.profile-view .profile-drives')), 'a friend\'s profile shows their drives');
+  await page.click('.profile-view .side-pop-head button');
   // kudos: one tap, at once
   await page.click('#accountBody .feed-card .feed-acts button[aria-label^="Kudos"]');
   await page.waitForFunction(() => document.querySelector('#accountBody .feed-card .feed-acts button[aria-pressed="true"]'));

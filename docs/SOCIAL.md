@@ -155,6 +155,8 @@ and in random batches so a trace cannot be re-assembled.
   `post/<id>`), seen by exactly who sees the post, gone with it. In the Feed a clip plays muted and looping, a tap stops it.
 - Stages on a post (built 2026-11-14): the stages you saved in the Log that the drive went over (at most three, in the
   order driven) go on its post, each with its Vetta Score there (`--` when too few clean corners); never a time.
+- A friend's drives on their profile (built 2026-11-14): their newest posts you can see (`GET /api/feed?author=`, the
+  Feed's own rules), with kudos and comments, between what to do with them and what they see of you.
 - Next: "Post to crew" from a corner clip on the drive's page (analysis thread adds the key, `page.post(blob, meta)`).
   Kudos and comments push (2.12).
 
