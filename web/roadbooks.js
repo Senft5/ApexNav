@@ -395,6 +395,8 @@
         box.append(title, el('p', { className: 'note', textContent: facts }));
         if (road.note) box.append(el('p', { className: 'note', style: 'grid-column:2;color:var(--panel-ink)', textContent: road.note }));
         const acts = el('div', { className: 'rb-acts' }, btn('Drive it', () => { s.close(); page.driveRoad(road, book); }, 'ink-btn solid'));
+        // a crew's book: drive the road together, a crew drive with it as the route
+        if (book.crew && book.can_add && page.planCrewDrive) { const pc = btn('Crew drive', () => { s.close(); page.planCrewDrive(road, book.crew); }, 'linkbtn'); pc.setAttribute('aria-label', `Plan a crew drive on ${road.name}`); acts.append(pc); }
         const removeKey = () => {
           const rm = btn('Remove', async () => {
             const r = await call('DELETE', `/api/roadbooks/${encodeURIComponent(book.id)}/roads/${encodeURIComponent(road.id)}`);

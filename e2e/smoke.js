@@ -5662,6 +5662,11 @@ flow('roadbooks: a crew\'s roadbook: the crew page lists it and starts one; a me
   await page.click('.rb-pop.open button[aria-label="Remove Tellico run"]');
   await page.waitForFunction(() => /Tellico run is out of Crew favourites/.test(document.getElementById('toast').textContent));
   check(sent.some((x) => x.m === 'DELETE' && x.p === '/api/roadbooks/CCCCCCCCCCCCCCCC/roads/r2'), 'Remove takes your road out');
+  // Crew drive on a road: the crew page's plan form opens, named after the road, with the road as its route
+  await page.click('.rb-pop.open button[aria-label="Plan a crew drive on Cherohala Skyway"]');
+  await page.waitForSelector('.crew-page .plan-drive');
+  const form = await page.evaluate(() => { const f = document.querySelector('.crew-page .plan-drive'); return { title: f.querySelector('input.field').value, route: f.textContent.includes('Add the road (Cherohala Skyway)'), pops: document.querySelectorAll('.rb-pop.open').length }; });
+  check(form.title === 'Cherohala Skyway' && form.route && form.pops === 0, 'Crew drive opens the crew\'s plan form with the road: ' + JSON.stringify(form));
   // your own book: Edit has a Crew choice; picking the crew sends it and says what that means
   await page.evaluate(() => document.querySelectorAll('.rb-pop').forEach((p) => p.remove()));
   await page.goto(base + '/index.html?roadbook=MMMMMMMMMMMMMMMM');
