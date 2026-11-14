@@ -1338,11 +1338,30 @@
         const asked = droppedPin;
         ApexPlacePhoto.lookup(point.lat, point.lon).then((p) => { if (droppedPin === asked && p) placePhoto(p); }).catch(() => {});
       }
+      pinDriveTime(point);
       if (!place) reversePin(point);
       else if (window.ApexPlaceInfo) {                                  // hours, phone and site, once known (place_info.js)
         const asked = droppedPin;
         ApexPlaceInfo.lookup(place.name, point.lat, point.lon).then((tags) => { if (droppedPin === asked && tags) placeInfo(ApexPlaceInfo.contact(tags, new Date())); }).catch(() => {});
       }
+    }
+    // How long the drive there takes, on the Go key ("Go here · 12 min"), as Apple and Google Maps' place cards say it: the
+    // quick router's time from where you are (Valhalla's sources_to_targets, the Quick route's own router). Unknown (no fix,
+    // no answer, under 150 m or over 300 km) leaves the key as it is.
+    let pinTimeAsk = 0;
+    async function pinDriveTime(point) {
+      const go = $('pinGoBtn'), ask = ++pinTimeAsk, here = state.lastPosition;
+      go.textContent = 'Go here'; go.removeAttribute('aria-label');
+      if (!here || !window.ApexRouteCallouts || !Number.isFinite(here.lat) || !Number.isFinite(here.lon)) return;
+      const km = FunRoute.kmBetween(here, point);
+      if (!(km >= 0.15 && km <= 300)) return;
+      try {
+        const m = await valhallaMatrix([here], [point]);
+        const t = ApexRouteCallouts.time(m.times[0] && m.times[0][0]);
+        if (ask !== pinTimeAsk || droppedPin !== point || !t) return;
+        go.textContent = `Go here \u00b7 ${t}`;
+        go.setAttribute('aria-label', `Go here, a ${t} drive`);
+      } catch (_) { /* no answer: the key without a time */ }
     }
     // the card's photo, shown once it has loaded (a broken one never shows); null clears it
     function placePhoto(p) {
@@ -8134,6 +8153,7 @@
     const clearCrowd = () => {
       try { if (window.ApexOwnRouting && ApexOwnRouting.clearCrowd) ApexOwnRouting.clearCrowd(); } catch (_) {}
       try { if (window.ApexRouteFeel) localStorage.removeItem(ApexRouteFeel.KEY); } catch (_) {}   // and kept with saved routes
+      try { localStorage.removeItem('apex.friendStages'); } catch (_) {}   // friends' posted stages the Feed showed (drive_posts.js)
     };
     const clearCarry = () => { try { localStorage.removeItem('apex.roadShare'); } catch (_) {} try { if (window.ApexRoadCarry && ApexRoadCarry.clear) ApexRoadCarry.clear(); } catch (_) {} };
     if (window.ApexRoadCarry && ApexRoadCarry.flush) {
@@ -10022,13 +10042,21 @@
       $('routeCardAlong').hidden = true; $('routeAlongPanel').hidden = true; $('routeAlongPanel').replaceChildren();
       $('routeAlongLine').setAttribute('aria-expanded', 'false');
     }
-    // IDEAS R-24: waterfalls near the route, from OpenStreetMap through Overpass (the map's tiles have none). A trip over 1°
-    // across, the servers down or offline: none, and the Along line says what the tiles gave.
+    // IDEAS R-24: waterfalls near the route, from OpenStreetMap (the map's tiles have none): inside Ohio, Kentucky and
+    // Indiana from the list built weekly with the OSM tiles (GET /api/ctx/falls.json, asked once a session), elsewhere
+    // through Overpass. A trip over 1° across, the servers down or offline: none, and the Along line says what the tiles gave.
+    let fallsRegion = null;
     async function fallsNear(t) {
       if (!window.ApexCameras || !ApexScenic.fallsQuery) return [];
       let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
       for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
       if (n - s > 1 || e - w > 1) return [];
+      if (ApexScenic.fallsInRegion) {
+        if (!fallsRegion) fallsRegion = apiCall('GET', '/api/ctx/falls.json').then((r) => (r && r.ok ? r.json() : null)).catch(() => null)
+          .then((d) => { if (!d) setTimeout(() => { fallsRegion = null; }, 10 * 60000); return d; });
+        const got = ApexScenic.fallsInRegion(await fallsRegion, s - 0.005, w - 0.005, n + 0.005, e + 0.005);
+        if (got) return got;
+      }
       try {
         const json = await ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexScenic.fallsQuery(s - 0.005, w - 0.005, n + 0.005, e + 0.005)));
         return ApexScenic.fallsFrom(json);
@@ -10871,16 +10899,20 @@
       endLinesCap();
       // Drive it on a friend's post: your Score on their stages against theirs, from this drive's own passes of those stretches
       // (segmentPass, the same that scored theirs). Said once; kept for 12 h until a drive goes over one of them.
-      const rv = postRival;
-      if (rv && Date.now() - rv.at > 12 * 3600e3) postRival = null;
-      else if (rv && window.ApexAnalysis && window.ApexDrivePosts) (async () => {
-        const segs = rv.rivals.map((r) => ({ name: r.name, lat0: r.ends[0], lon0: r.ends[1], lat1: r.ends[2], lon1: r.ends[3], length_m: r.length_m }));
+      // Without Drive it, the same for any friend's posted stage the Feed has shown you that this drive went over.
+      let rv = postRival;
+      if (rv && Date.now() - rv.at > 12 * 3600e3) { postRival = null; rv = null; }
+      const theirs = !rv && drivePosts && drivePosts.friendStages ? drivePosts.friendStages() : [];
+      const pool = rv ? rv.rivals.map((r) => ({ ...r, who: rv })) : theirs.map((r) => ({ ...r, who: { handle: r.handle } }));
+      if (pool.length && window.ApexAnalysis && window.ApexDrivePosts) (async () => {
+        // each by its place in the pool, so two friends' passes of one stage are told apart
+        const segs = pool.map((r, i) => ({ name: `k${i}`, lat0: r.ends[0], lon0: r.ends[1], lat1: r.ends[2], lon1: r.ends[3], length_m: r.length_m }));
         let got = [];
         try { got = (await ApexAnalysis.job('stagesOf', { id: c.id, segs })).stages || []; } catch (_) { got = []; }
         if (!got.length || !endDrive || endDrive.id !== c.id) return;
-        if (postRival === rv) postRival = null;
-        const rows = got.map((g) => { const r = rv.rivals.find((x) => x.name === g.name); return { name: g.name, you: g.score, them: r ? r.score : null }; });
-        const line = ApexDrivePosts.rivalLine(rows, rv);
+        if (rv && postRival === rv) postRival = null;
+        const rows = got.map((g) => { const r = pool[Number(String(g.name).slice(1))]; return r ? { name: r.name, you: g.score, them: r.score, who: r.who } : null; }).filter(Boolean);
+        const line = ApexDrivePosts.rivalLine(rows, null);
         if (!line) return;
         $('endRival').textContent = line; endLinesCap();
         const sheet = $('endCard').querySelector('.card-sheet');      // a taller card: the drive is fitted again above it

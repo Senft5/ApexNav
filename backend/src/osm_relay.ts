@@ -200,3 +200,17 @@ export async function osmTile(url: URL, env: { OSM?: Kv; DATA?: R2Get }, waiter?
   if (!body) return new Response(JSON.stringify({ error: "overpass_unavailable" }), { status: 502, headers: { "content-type": "application/json" } });
   return new Response(body, { headers: { ...headers, "x-cache": "miss" } });
 }
+
+/**
+ * GET /api/ctx/falls.json: the region's waterfalls (tools/osm_ctx/falls.py, R2 osm/v2/falls.json; web/scenic.js
+ * fallsInRegion). 404 before the first build: the phone then asks Overpass as before. Public OSM data, no sign-in.
+ */
+export async function fallsList(data: R2Get | undefined): Promise<Response> {
+  const none = () => new Response(JSON.stringify({ error: "not_built" }), { status: 404, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+  if (!data) return none();
+  try {
+    const o = await data.get(`${BUILT}/falls.json`);
+    if (!o) return none();
+    return new Response(o.body, { headers: { "content-type": "application/json", "cache-control": "public, max-age=21600", "x-content-type-options": "nosniff", "x-cache": "built" } });
+  } catch { return none(); }
+}

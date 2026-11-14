@@ -59,6 +59,20 @@ const kinds = (pts) => { const o = {}; for (const p of pts) o[p.kind] = (o[p.kin
   out.relayOff = offAsked.length;
   out.relay = { status: viaRelay.dr.status, asked: relayAsked.length, paths: relayAsked.every((p) => /^\/api\/ctx\/osm\?bbox=-?\d+\.\d{4},-?\d+\.\d{4},-?\d+\.\d{4},-?\d+\.\d{4}$/.test(p)),
     same: JSON.stringify([...viaRelay.dr.channels.side_roads_per_km]) === JSON.stringify([...first.dr.channels.side_roads_per_km]), direct: direct.length, miss: relayMiss.dr.status };
+  // a long plan (2.5 degrees of longitude, 50 tiles): the relay is asked for up to RELAY_MAX_TILES, Overpass for at most
+  // MAX_TILES of what it didn't have
+  const long = corridor([[39.12, -85.0], [39.12, -82.51]]); long.id = 'long';
+  O._reset();
+  const longAsked = [], longBodies = [];
+  await O.provider.fetch([long], { osmRelay: true, apiGet: async (path) => { longAsked.push(path); return null; },
+    fetchFn: (u, o) => { longBodies.push(decodeURIComponent(String(o.body).slice(5))); throw new Error('no'); }, storage: mem(), now: 1000 });
+  O._reset();
+  const offBodies = [];
+  await O.provider.fetch([long], { fetchFn: (u, o) => { offBodies.push(decodeURIComponent(String(o.body).slice(5))); throw new Error('no'); }, storage: mem(), now: 1000 });
+  const tilesIn = (q) => new Set(q.match(/\(-?\d+\.\d{4},-?\d+\.\d{4},-?\d+\.\d{4},-?\d+\.\d{4}\)/g) || []).size;
+  out.long = { relay: longAsked.length, relayMax: O.RELAY_MAX_TILES, max: O.MAX_TILES, overpassTiles: longBodies.length ? Math.max(...longBodies.map(tilesIn)) : 0,
+    offTiles: offBodies.length ? Math.max(...offBodies.map(tilesIn)) : 0, q: offBodies[0] || '' };
+  O._reset();
   // a reversed copy of the route reuses the kept stretch (no second query)
   const rev = { id: 'rev', lat: Float64Array.from(c.lat).reverse(), lon: Float64Array.from(c.lon).reverse(), distM: c.distM };
   let asked = 0;
@@ -243,6 +257,15 @@ def test_through_the_relay(out):
     assert x["status"] == "ok" and x["asked"] >= 1 and x["paths"] and x["same"], x
     assert x["miss"] == "unavailable", x
     assert x["direct"] == 4, "a tile the relay hasn't got goes the way it did before: the phone's own query, off the plan's clock"
+
+
+def test_a_long_plan_asks_the_relay_for_more_tiles(out):
+    """The relay answers built tiles fast and in parallel, so a plan asks it for up to RELAY_MAX_TILES (36); what it
+    doesn't have goes to Overpass under that path's own cap (12), as without the relay."""
+    x = out["long"]
+    assert x["relayMax"] == 36 and x["max"] == 12
+    assert x["relay"] == 36, x
+    assert x["overpassTiles"] == 12 and x["offTiles"] == 12, x
 
 
 def test_relay_off_by_default(out):

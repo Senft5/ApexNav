@@ -432,8 +432,12 @@
     .pin-hours.closed { color: var(--panel-dim); }   /* closed is not a warning: the signal colour stays for hazards */
     .pin-contact { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 2px; }
     .pin-contact a { flex: 1 1 0; min-width: 0; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pin-actions { display: grid; gap: 8px; }
-    .pin-actions .ink-btn { width: 100%; text-align: left; }
+    /* Go across the card, the rest one row of short keys under it, as Apple Maps' place card sets them (not a wall of
+       full-width rows); a larger text size wraps them two to a row */
+    .pin-actions { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
+    .pin-actions .ink-btn { width: 100%; min-height: 48px; padding: 8px 6px; text-align: center; line-height: 1.2; white-space: normal; }
+    .pin-actions #pinGoBtn, .pin-actions .linkbtn { grid-column: 1 / -1; }
+    .pin-actions #pinGoBtn { text-align: left; padding: 14px 18px; }
     .spot-chips, .spot-stars { display: flex; flex-wrap: wrap; gap: 6px; }
     .spot-chips button { min-height: 44px; padding: 0 12px; border: 1.5px solid var(--panel-ink); font-size: 15px; font-weight: 600; }
     .spot-chips button.on { background: var(--panel-ink); color: var(--panel); }

@@ -115,17 +115,34 @@
       if (!part) return null;
       let m = 0;
       for (let k = 1; k < part.length; k++) m += Math.hypot((part[k][0] - part[k - 1][0]) * 110540, (part[k][1] - part[k - 1][1]) * 111320 * Math.cos(part[k][0] * Math.PI / 180));
-      return m >= 200 ? { name: String(x.name).slice(0, 60), ends: x.ends.slice(), length_m: Math.round(m), score: x.score } : null;
+      return m >= 200 ? { name: String(x.name).slice(0, 60), ends: x.ends.slice(), length_m: Math.round(m), score: x.score, i } : null;
     }).filter(Boolean);
   }
   /** After you drove a posted line, your Score on its stages against theirs: "Gilmore Rd: 812, 34 under @bob's 846." One
    *  sentence a stage, at most two; rows [{ name, you, them }] with `you` a number (a stage you didn't score is left out). */
   function rivalLine(rows, who) {
-    const whose = who && who.mine ? 'your posted' : `@${(who && who.handle) || '?'}'s`;
+    const whoseOf = (w) => (w && w.mine ? 'your posted' : `@${(w && w.handle) || '?'}'s`);
     return (Array.isArray(rows) ? rows : []).filter((r) => r && Number.isFinite(r.you) && Number.isFinite(r.them)).slice(0, 2).map((r) => {
-      const d = Math.round(r.you) - Math.round(r.them);
+      const d = Math.round(r.you) - Math.round(r.them), whose = whoseOf(r.who || who);   // a row may name its own friend
       return `${r.name}: ${Math.round(r.you)}, ${d === 0 ? 'level with' : `${Math.abs(d)} ${d > 0 ? 'over' : 'under'}`} ${whose} ${Math.round(r.them)}.`;
     }).join(' ');
+  }
+  /** The friends' posted stages the Feed has shown you, kept on the phone so a drive over one is compared afterwards even
+   *  without Drive it: `kept` merged with the posts in `rows` (your own left out), newest first, at most KEEP_STAGES, none
+   *  older than KEEP_DAYS. [{ key, name, ends, length_m, score, handle, at }] */
+  const KEEP_STAGES = 40, KEEP_DAYS = 21;
+  function keepStages(kept, rows, now) {
+    const fresh = [];
+    for (const p of Array.isArray(rows) ? rows : []) {
+      if (!p || p.mine || !p.id) continue;
+      for (const r of rivalsOf(p)) fresh.push({ key: `${p.id}_${r.i}`, name: r.name, ends: r.ends, length_m: r.length_m, score: r.score, handle: String(p.handle || ''), at: now });
+    }
+    const seen = new Set(), out = [];
+    for (const x of [...fresh, ...(Array.isArray(kept) ? kept : [])]) {
+      if (!x || !x.key || seen.has(x.key) || !(now - x.at < KEEP_DAYS * 864e5)) continue;
+      seen.add(x.key); out.push(x);
+    }
+    return out.slice(0, KEEP_STAGES);
   }
   /** An SVG path for the line in a w×h box, north up, its shape kept (longitude scaled by the latitude), with a margin. */
   function lineSvg(pts, w, h, pad = 8) {
@@ -245,6 +262,10 @@
    * driveLine(stops, post) (Drive it: a route through stops along the post's line).
    */
   function mount(page) {
+    // friends' posted stages the Feed showed (keepStages), for the end card after a drive over one (friendStages)
+    const KEEP_KEY = 'apex.friendStages';   // an apex.* key: Erase everything takes it too
+    const kept = () => { try { const v = JSON.parse(localStorage.getItem(KEEP_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (_) { return []; } };
+    const keep = (rows) => { try { localStorage.setItem(KEEP_KEY, JSON.stringify(keepStages(kept(), rows, Date.now()))); } catch (_) {} };
     const { el, btn, toast, apiCall, jsonOf } = page;
     let friendHandles = null;   // your friends' handles, asked once the first time you type @ in a comment
     const withMentions = (text) => el('p', {}, ...mentionParts(text).map(([at, t]) => (at ? el('b', { textContent: t }) : root.document.createTextNode(t))));
@@ -540,6 +561,7 @@
       const redo = () => apiCall('GET', '/api/feed').then(jsonOf).then((got) => {
         const rows = unmuted(got, muted);
         if (!Array.isArray(rows)) return;
+        keep(got);
         list.replaceChildren(...rows.slice(0, PREVIEW).map((p) => card(p, { after: redo, mute })));
         all.hidden = rows.length <= PREVIEW;
         box.hidden = !rows.length && week.hidden;
@@ -579,6 +601,7 @@
         const g = gen, q = [only, last ? `before=${encodeURIComponent(last)}` : ''].filter(Boolean).join('&');
         return apiCall('GET', `/api/feed${q ? `?${q}` : ''}`).then(jsonOf).then((rows) => {
           if (g !== gen || !Array.isArray(rows)) return;   // a newer pick is loading
+          keep(rows);
           list.append(...unmuted(rows, muted).map((p) => card(p, { mute })));
           last = rows.length ? rows[rows.length - 1].created_at : last;
           more.hidden = rows.length < 30;
@@ -713,9 +736,9 @@
       });
     }
 
-    return { section, full, open, compose, post, remove, card, drivesOf, crewDrives };
+    return { section, full, open, compose, post, remove, card, drivesOf, crewDrives, friendStages: () => keepStages(kept(), [], Date.now()) };
   }
 
-  const api = { unmuted, trimLine, encode, decode, throughPoints, stretch, rivalsOf, rivalLine, lineSvg, ago, facts, weekLine, weekShown, mentionParts, mentionAt, suggest, kudosLine, mount, CUT_M, MAX_POINTS };
+  const api = { unmuted, trimLine, encode, decode, throughPoints, stretch, rivalsOf, rivalLine, keepStages, lineSvg, ago, facts, weekLine, weekShown, mentionParts, mentionAt, suggest, kudosLine, mount, CUT_M, MAX_POINTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDrivePosts = api;
 })(typeof window !== 'undefined' ? window : globalThis);
