@@ -6149,9 +6149,17 @@ flow('a drive posted with no signal waits on the phone and goes up once there is
     await ApexRecording.store(d);
     apexDebug.showEndCard(d, Date.now() - 30 * 60000, { quiet: true });
   });
-  await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !b.hidden && !b.getAttribute('aria-disabled'); }, null, { timeout: 15000 });
+  await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !b.hidden && !b.getAttribute('aria-disabled') && window.ApexDrivePosts; }, null, { timeout: 15000 });
   down = true;
+  // the one-tap key: the post waits too
   await page.click('#endPost');
+  await page.waitForFunction(() => /goes up when you have one/.test(document.getElementById('toast').textContent), null, { timeout: 10000 });
+  const one = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.outbox') || '[]'));
+  check(one.length === 1 && one[0].path === '/api/posts' && one[0].body.caption === null && one[0].capped === true, 'one tap with no signal: the post waits on the phone: ' + JSON.stringify(one).slice(0, 300));
+  await page.evaluate(() => { localStorage.removeItem('apex.outbox'); document.getElementById('toast').textContent = '';
+    const k = document.getElementById('endPost'); k.disabled = false; k.textContent = 'Post to friends'; document.getElementById('endPostMore').hidden = false; });
+  // the sheet (a caption): the same
+  await page.click('#endPostMore');
   await page.waitForSelector('.post-sheet textarea');
   await page.fill('.post-sheet textarea', 'No bars up top.');
   await page.click('.post-sheet button:text-is("Post")');

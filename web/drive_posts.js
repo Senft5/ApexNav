@@ -281,7 +281,9 @@
     }
     /** One tap (2026-11-14, the drive's card): the drive to your friends, no sheet. Resolves its id, or null (said in a toast). */
     async function post(d) {
-      const r = await apiCall('POST', '/api/posts', bodyOf(d, null, null)).catch(() => null);
+      const body = bodyOf(d, null, null), r = await apiCall('POST', '/api/posts', body).catch(() => null);
+      // no signal (IDEAS F-05): it waits on the phone and goes when there is one (outbox.js), as from the sheet
+      if ((!r || r.status >= 500) && page.later) { page.later('/api/posts', body); toast('No signal. Your post goes up when you have one.'); return true; }
       if (!r || !r.ok) { toast(r && r.status === 429 ? 'That’s ten posts today.' : 'Couldn’t post it. Check signal.'); return null; }
       const j = await Promise.resolve().then(() => jsonOf(r)).catch(() => null);
       return (j && j.id) || true;
