@@ -5868,6 +5868,22 @@ flow('Stages: Share older drives shows only when it holds something, so a signed
   check(!out && inn, 'Share older drives: hidden signed out, shown to a member: ' + JSON.stringify({ out, inn }));
 });
 
+flow('a drive\'s elevation lane gives its range in your units, and one height on a flat road (free roamer B, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  // the profile drive is level at 250 m (820 ft)
+  await page.evaluate(async (src) => { const gen = eval(src); await ApexRecording.store(ApexRecording.parse(ApexCore, gen('saw', 0), 'E0.csv', { id: 'E0', name: 'Dry Ridge Rd', date: '2026-07-01T09:00', source: 'web-gps' })); }, PROFILE_CSV);
+  const label = async (units) => {
+    await page.evaluate((u) => localStorage.setItem('apex.units', u), units);
+    await page.goto(base + '/analysis.html?drive=E0');
+    await page.waitForFunction(() => [...document.querySelectorAll('svg text')].some((t) => t.textContent === 'Elevation'), null, { timeout: 20000 });
+    return page.evaluate(() => { const t = [...document.querySelectorAll('svg text')], i = t.findIndex((x) => x.textContent === 'Elevation'); return t[i + 1].textContent; });
+  };
+  const ft = await label('imperial'), m = await label('metric');
+  check(ft === '820 ft' && m === '250 m', 'the flat lane: one height, in your units: ' + JSON.stringify({ ft, m }));
+});
+
 flow('the Log draws one rule between the drive list and Score over time, not two (free roamer B, 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/analysis.html');

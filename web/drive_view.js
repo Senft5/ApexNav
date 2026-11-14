@@ -14,6 +14,9 @@
   const SPD = () => (U() ? U().speedU() : 'mph');
   const SPD_WORDS = () => (U() && U().metric() ? 'kilometres per hour' : 'miles per hour');
   const DIST = (m, digits = 2) => (U() ? U().long(m, digits) : `${(m / 1609.344).toFixed(digits)} mi`);
+  // the elevation lane's range in the driver's units (it said ft to everyone), one height when the road is flat: "820 ft", not "820-820 ft"
+  const elevSpan = (lo, hi) => { const m = U() && U().metric(), k = m ? 1 : 3.28084, a = Math.round(lo * k), b = Math.round(hi * k), u = m ? 'm' : 'ft';
+    return a === b ? `${a} ${u}` : `${a}–${b} ${u}`; };
   const DIST_WORDS = (m) => (U() && U().metric() ? `${(m / 1000).toFixed(2)} kilometres` : `${(m / 1609.344).toFixed(2)} miles`);
 
   /** Summary numbers for the header strip; null where the drive has no such data. */
@@ -526,7 +529,7 @@
       if (hasElev) {                                                       // faint elevation profile along the bottom
         let lo = Infinity, hi = -Infinity; for (const v of d.elev) if (finite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
         const top = yTop + LH, h = 40, span = Math.max(10, hi - lo);
-        svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Elevation</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${Math.round(lo * 3.28084)}-${Math.round(hi * 3.28084)} ft</text>`;
+        svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Elevation</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${elevSpan(lo, hi)}</text>`;
         // one filled shape per measured stretch: unknown elevation is a gap, never a dive to the bottom
         let p = '', run = null;
         const close = (a, b) => { if (a != null) p += ` L${X(b).toFixed(1)} ${top + h} L${X(a).toFixed(1)} ${top + h} Z`; };
