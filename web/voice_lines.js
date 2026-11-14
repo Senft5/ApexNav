@@ -12,7 +12,7 @@
     "nav:ramp": "Take the ramp.", "nav:ramp_right": "Take the ramp on the right.", "nav:ramp_left": "Take the ramp on the left.",
     "nav:exit_right": "Take the exit on the right.", "nav:exit_left": "Take the exit on the left.",
     "nav:keep_right": "Keep right.", "nav:keep_left": "Keep left.", "nav:merge": "Merge.", "nav:merge_right": "Merge right.", "nav:merge_left": "Merge left.",
-    "nav:arrive": "Arriving at your destination.",
+    "nav:arrive": "Arriving at your destination.", "nav:arrive_right": "Your destination is on the right.", "nav:arrive_left": "Your destination is on the left.",
     "nav:rb1": "At the roundabout, take the first exit.", "nav:rb2": "At the roundabout, take the second exit.",
     "nav:rb3": "At the roundabout, take the third exit.", "nav:rb4": "At the roundabout, take the fourth exit.",
     "nav:rb5": "At the roundabout, take the fifth exit.", "nav:rb6": "At the roundabout, take the sixth exit.",
@@ -154,6 +154,10 @@
   function maneuver(s) {
     if (!s) return null;
     if (s.type === 26) return [Number.isInteger(s.exits) && s.exits >= 1 && s.exits <= 6 ? `nav:rb${s.exits}` : 'nav:rbnext'];
+    if (s.type === 4 || s.type === 5 || s.type === 6) {               // the side as directions.js sideOf says it: the router's 5/6, else s.side
+      const side = s.type === 5 ? 'right' : s.type === 6 ? 'left' : s.side === 'left' || s.side === 'right' ? s.side : null;
+      return [side ? `nav:arrive_${side}` : 'nav:arrive'];
+    }
     return VERB[s.type] ? [VERB[s.type]] : null;
   }
   /** distWords() text -> its lead-in token ("half a mile" -> navd:0.5mi), or null. */
