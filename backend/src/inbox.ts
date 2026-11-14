@@ -1,7 +1,7 @@
 // For you (docs/SOCIAL.md 2.10): one list of what happened to you socially, newest first, made only from what each part
 // already shows you elsewhere (no new table, nothing new shared). A friend topping your best Score on one of your stages,
 // someone passing your time in this week's time attack, kudos on your runs, a duel decided or accepted, new followers
-// of your roadbooks, a crew drive you haven't answered, kudos and comments on your drive posts (and new comments on a post
+// of your roadbooks, new roads in roadbooks you follow, a crew drive you haven't answered, kudos and comments on your drive posts (and new comments on a post
 // you commented on); and what waits on you (friend requests, duels asked of you).
 // What has been seen is kept on the phone (web/inbox.js), so this needs no write and no migration.
 import type { Viewer } from "./auth";
@@ -11,6 +11,7 @@ import { kudosReceived } from "./kudos";
 import { duelList } from "./duels";
 import { POST_SEEN, mentionsOf } from "./drive_posts";
 import { reportedSql } from "./reports_sql";
+import { CAN_SEE as BOOK_SEEN } from "./roadbooks";
 
 export const DAYS = 14, TOPPED_DAYS = 7, MAX_ITEMS = 40;
 const all = async <T>(env: Env, sql: string, ...a: unknown[]) => (await env.DB.prepare(sql).bind(...a).all<T>()).results;
@@ -45,7 +46,7 @@ export function duelOutcome(d: { kind: string; you: { score: number; time_s: num
 
 export async function inbox(env: Env, v: Viewer) {
   const me = v.id;
-  const [requests, topped, passed, passedFixed, kudos, duels, follows, drives, postKudos, postComments, mentioned] = await Promise.all([
+  const [requests, topped, passed, passedFixed, kudos, duels, follows, drives, postKudos, postComments, mentioned, bookRoads] = await Promise.all([
     // a friend request waiting on you (the list shows it as a card; here it counts as waiting)
     all<{ handle: string; at: string }>(env,
       `SELECT u.handle, f.created_at AS at FROM friendships f JOIN users u ON u.id = f.requested_by
@@ -113,6 +114,12 @@ export async function inbox(env: Env, v: Viewer) {
         WHERE c.author != ?1 AND p.author != ?1 AND u.handle IS NOT NULL AND c.created_at > datetime('now', '-${DAYS} days') AND c.body LIKE ?2
           AND ${NO_BLOCK("c.author", "?1")} AND NOT ${reportedSql("comment", "c.id")} AND ${POST_SEEN("p")}
         ORDER BY c.created_at DESC LIMIT 50`, me, `%@${v.handle}%`) : Promise.resolve([]),
+    // new roads in a roadbook you follow, added after you followed it, while you may still open it (one row a book)
+    all<{ book_id: string; book: string; by: string | null; n: number; road: string; at: string }>(env,
+      `SELECT b.id AS book_id, b.name AS book, u.handle AS by, COUNT(*) AS n, MAX(r.name) AS road, MAX(r.created_at) AS at
+         FROM roadbook_follows f JOIN roadbooks b ON b.id = f.book_id JOIN roadbook_roads r ON r.book_id = b.id JOIN users u ON u.id = b.owner
+        WHERE f.user_id = ?1 AND b.owner != ?1 AND r.created_at > f.created_at AND r.created_at > datetime('now', '-${DAYS} days') AND ${BOOK_SEEN}
+        GROUP BY b.id ORDER BY at DESC LIMIT 10`, me),
   ]);
   const items: Item[] = [];
   for (const r of requests) items.push({ kind: "request", at: r.at, handle: r.handle, waiting: true });
@@ -132,6 +139,7 @@ export async function inbox(env: Env, v: Viewer) {
       items.push({ kind: "duel_over", at: `${d.ends_on} 23:59:59`, handle: d.with, stage: d.stage, duel_kind: d.kind, result: duelOutcome(d) });
   }
   for (const f of follows) items.push({ kind: "follows", at: f.at, book_id: f.book_id, book: f.book, n: f.n });
+  for (const r of bookRoads) items.push({ kind: "book_roads", at: r.at, book_id: r.book_id, book: r.book, handle: r.by, n: r.n, road: r.n === 1 ? r.road : null });
   for (const e of drives) items.push({ kind: "crew_drive", at: e.at, event_id: e.event_id, title: e.title, starts_at: e.starts_at, crew: e.crew, crew_id: e.crew_id });
   // a mention says more than "also commented": one row per post, the mention's
   const mentions = perPost(mentioned.filter((r) => mentionsOf(r.body, null).includes(v.handle!)).map(({ body: _b, ...r }) => r)), mPosts = new Set(mentions.map((g) => g.post_id));

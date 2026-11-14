@@ -20,7 +20,7 @@ const who = (v: Viewer | null) => v?.id ?? "";
 
 /** Who may open book `b`, for viewer ?1 ('' when signed out): its owner; anyone for a public one that reports haven't taken
  *  down; an accepted friend for a friends one. Never across a block. */
-const CAN_SEE = `(b.owner = ?1 OR ((
+export const CAN_SEE = `(b.owner = ?1 OR ((
      (b.visibility = 'public' AND NOT ${reportedSql("roadbook", "b.id")})
      OR (b.visibility = 'friends' AND EXISTS (SELECT 1 FROM friendships f WHERE f.status = 'accepted' AND f.user_a = MIN(b.owner, ?1) AND f.user_b = MAX(b.owner, ?1))))
    AND NOT EXISTS (SELECT 1 FROM blocks k WHERE (k.blocker = ?1 AND k.blocked = b.owner) OR (k.blocker = b.owner AND k.blocked = ?1))))`;
