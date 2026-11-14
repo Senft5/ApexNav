@@ -216,3 +216,53 @@ export async function regionList(data: R2Get | undefined, name: (typeof REGION_L
     return new Response(o.body, { headers: { "content-type": "application/json", "cache-control": "public, max-age=21600", "x-content-type-options": "nosniff", "x-cache": "built" } });
   } catch { return none(); }
 }
+
+/**
+ * GET /api/ctx/places?p=<lat>,<lon>,<name>[&p=...] (up to 10): each place's OSM hours and contact tags from the region's
+ * built cells (tools/osm_ctx/region.py, R2 osm/v2/places/<bi>_<bj>.json; web/place_info.js), as place_info.js match()
+ * reads Overpass: the nearest element of that name within about 150 m, else null. 404 when a place's cell isn't built
+ * (outside Ohio, Kentucky and Indiana, or before the first build): the phone then asks Overpass as before. The server
+ * sees the places' names and positions, as Overpass did; nothing is kept or logged.
+ */
+type PlaceRow = [number, number, string, Record<string, string>];
+const PLACE_STEP = 0.25, PLACE_NEAR = 0.0015, PLACES_MAX = 10;
+const placeCells = new Map<string, { at: number; rows: PlaceRow[] | null }>();
+async function placeCell(data: R2Get, key: string, now = Date.now()): Promise<PlaceRow[] | null> {
+  const had = placeCells.get(key);
+  if (had && now - had.at < 600_000) return had.rows;
+  const o = await data.get(`${BUILT}/places/${key}.json`);
+  const rows = o ? (JSON.parse(await new Response(o.body).text()) as PlaceRow[]) : null;
+  if (placeCells.size >= 64) placeCells.delete(placeCells.keys().next().value as string);
+  placeCells.set(key, { at: now, rows });
+  return rows;
+}
+export function resetPlacesForTest(): void { placeCells.clear(); }
+export async function placeTags(url: URL, data: R2Get | undefined): Promise<Response> {
+  const bad = (status: number, error: string) => new Response(JSON.stringify({ error }), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+  const asked = url.searchParams.getAll("p").slice(0, PLACES_MAX).map((p) => {
+    const m = /^(-?\d{1,2}(?:\.\d{1,7})?),(-?\d{1,3}(?:\.\d{1,7})?),(.{1,120})$/s.exec(p);
+    return m ? { lat: Number(m[1]), lon: Number(m[2]), name: m[3] } : null;
+  });
+  if (!asked.length || asked.some((x) => !x || Math.abs(x.lat) > 90 || Math.abs(x.lon) > 180)) return bad(400, "bad_place");
+  if (!data) return bad(404, "not_built");
+  try {
+    const tags: (Record<string, string> | null)[] = [];
+    for (const q of asked as { lat: number; lon: number; name: string }[]) {
+      // the place's cell, and its neighbour when it lies within the match distance of a cell edge
+      const keys = new Set<string>();
+      for (const dl of [-PLACE_NEAR, 0, PLACE_NEAR]) for (const dn of [-PLACE_NEAR, 0, PLACE_NEAR]) keys.add(`${Math.floor((q.lat + dl) / PLACE_STEP)}_${Math.floor((q.lon + dn) / PLACE_STEP)}`);
+      let best: Record<string, string> | null = null, bd = Infinity;
+      for (const k of keys) {
+        const rows = await placeCell(data, k);
+        if (!rows) return bad(404, "not_built");
+        for (const [la, lo, nm, t] of rows) {
+          if (nm !== q.name) continue;
+          const d = Math.hypot(la - q.lat, (lo - q.lon) * Math.cos(q.lat * Math.PI / 180));
+          if (d < bd && d < PLACE_NEAR) { bd = d; best = { name: nm, ...t }; }
+        }
+      }
+      tags.push(best);
+    }
+    return new Response(JSON.stringify({ tags }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=21600", "x-content-type-options": "nosniff", "x-cache": "built" } });
+  } catch { return bad(404, "not_built"); }
+}

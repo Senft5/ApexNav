@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { api } from "./helpers";
 import { env } from "cloudflare:workers";
-import { builtTile, bundleKey, compact, HEAD, KEEP, MIRRORS, osmTile, query, resetBuiltForTest, tileOf } from "../src/osm_relay";
+import { builtTile, bundleKey, compact, HEAD, KEEP, MIRRORS, osmTile, query, resetBuiltForTest, resetPlacesForTest, tileOf } from "../src/osm_relay";
 import fx from "./fixtures/overpass_tile.json";
 
 // A real Overpass answer's elements (Dry Ridge Road, Colerain Township; OSM ODbL) with two tags the phone never reads.
@@ -147,6 +147,20 @@ describe("OSM relay (/api/ctx/osm)", () => {
       await DATA.put("osm/v2/closures.json", JSON.stringify({ built: "2026-11-14", bundle: 0.25, cells: [], ways: [] }));
       expect(((await (await api(null, "GET", "/api/ctx/closures.json")).json()) as { ways: unknown[] }).ways).toEqual([]);
       await DATA.delete("osm/v2/closures.json");
+    });
+
+    it("finds a place's hours and contact by its name in the built cells, 404 outside them", async () => {
+      resetPlacesForTest();
+      await DATA.put("osm/v2/places/156_-339.json", JSON.stringify([[39.1, -84.6, "Bean", { opening_hours: "24/7", phone: "+1 513 555 0100" }], [39.2, -84.7, "Bean", { phone: "far" }]]));
+      const q = (ps: string[]) => api(null, "GET", "/api/ctx/places?" + ps.map((p) => "p=" + encodeURIComponent(p)).join("&"));
+      const r = await q(["39.1005,-84.6005,Bean", "39.1,-84.6,Nope"]);
+      expect(r.status).toBe(200);
+      expect(await r.json()).toEqual({ tags: [{ name: "Bean", opening_hours: "24/7", phone: "+1 513 555 0100" }, null] });
+      expect((await q(["39.249,-84.6,Bean"])).status).toBe(404);           // near the cell's north edge: the next cell isn't built
+      expect((await q(["40.5,-84.6,Bean"])).status).toBe(404);
+      expect((await q(["not,a,place"])).status).toBe(400);
+      expect((await api(null, "GET", "/api/ctx/places")).status).toBe(400);
+      await DATA.delete("osm/v2/places/156_-339.json"); resetPlacesForTest();
     });
 
     it("a tile its bundle leaves out (across the border) or with no bundle goes to Overpass", async () => {
