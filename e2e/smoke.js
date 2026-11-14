@@ -8542,12 +8542,12 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
     tab.click(); return out; });
   check(!legend.bare.length && !legend.keyOff.length && legend.words === 'Smooth,Fair,Rough' && legend.last === 'friends' && legend.who === 'friendsSheetBtn' && legend.box[0] >= 48 && legend.box[1] <= legend.w,
     'Layers is a legend: a key and a line for every layer, Who sees me under Friends, whole on screen: ' + JSON.stringify(legend));
-  // Plan sheet (the plan flow): the loop dial (five detents in one unit), Best roads nearby and Options as two chips (with
-  // what is on beside them), no level switch (its home is the route card) and no More
+  // Plan sheet (the plan flow): the loop dial (five detents in one unit), Best roads nearby first in the row of keys, Options
+  // a row of the list with its count (IA pass 2026-11-13), no level switch (its home is the route card) and no More
   await page.click('#destInput');
   const plan = await page.evaluate(() => ({ detents: [...document.querySelectorAll('#loopDetents button')].map((b) => b.textContent), more: !!document.getElementById('planMore'),
     level: [...document.querySelectorAll('#planBody .plan-search-section [data-fun]')].length,
-    chips: [...document.querySelectorAll('#planChips > *')].filter((c) => c.offsetParent).map((c) => c.textContent) }));
+    chips: [...document.querySelectorAll('#planChips > *, .plan-opt > *')].filter((c) => c.offsetParent).map((c) => c.textContent) }));
   check(plan.detents.length === 5 && plan.detents.every((d) => / mi$/.test(d)) && !plan.more && plan.level === 0 && JSON.stringify(plan.chips) === '["Best roads nearby","Options · 1 on"]'
     , 'Plan sheet: ' + JSON.stringify(plan));
   // Route bar: no toast repeating it; Route card: three numbers, four dials with unknowns as --, Start and Fly-through, the rest text links
@@ -8783,6 +8783,44 @@ flow('REVIEW5 §2: the Garage leads with you, your cars, Look and voice and the 
   await page.waitForSelector('#crewsBody .people-sample');
   check((await page.textContent('#crewsBody .people-sample figcaption')) === 'Example: what a crew looks like here', 'Crews sample');
 });
+
+// The tab bar is one bar: its keys sit at the same place on Map, People, Garage and the Log (the Log is its own page in
+// a frame; its keys sat 8 pt lower, so the bar jumped each time you opened it, 2026-11-14)
+flow('the tab bar stays put: Map, People, Garage and the Log put their keys at the same place', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && !document.getElementById('boot'), null, { timeout: 20000 });
+  const keys = (root) => [...root.querySelectorAll('.tabbar a, .tabbar .tab')].filter((k) => k.offsetParent).map((k) => { const r = k.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)].join(','); }).join(' ');
+  const at = {};
+  for (const v of ['map', 'people', 'garage']) {
+    await page.click(`#tabbar .tab[data-view="${v}"]`); await page.waitForTimeout(400);
+    at[v] = await page.evaluate(`(${keys})(document)`);
+  }
+  await page.click('#tabbar .tab[data-view="log"]');
+  await page.waitForFunction(() => document.documentElement.classList.contains('log-open'));
+  const log = page.frameLocator('#logFrame');
+  await log.locator('nav.tabbar a:has-text("Garage")').waitFor();
+  await page.waitForTimeout(400);
+  const fr = await page.evaluate(() => { const r = document.getElementById('logFrame').getBoundingClientRect(); return [r.left, r.top]; });
+  at.log = await page.frames().find((f) => f.url().includes('analysis.html')).evaluate(`(${keys})(document)`);
+  check(fr[0] === 0 && fr[1] === 0, 'the Log fills the screen from its corner: ' + fr);
+  check(at.map && at.map === at.people && at.people === at.garage && at.garage === at.log, 'one place for the keys: ' + JSON.stringify(at));
+}, { viewport: { width: 393, height: 852 }, hasTouch: true });
+
+// The website with no signal: the Log isn't warmed while it can't be fetched (a half-loaded Log, no ApexCore, was the one
+// kept: CI 2026-11-14, "Cannot read properties of undefined (reading 'MPS_TO_MPH')"); it warms once back online
+flow('the Log warms only when it can be fetched: no signal, no frame; back online, the frame', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && !document.getElementById('boot'), null, { timeout: 20000 });
+  check(!(await page.$('#logFrame')), 'not warmed yet at the first frame');
+  await page.context().setOffline(true);
+  await page.waitForTimeout(8000);
+  check(!(await page.$('#logFrame')), 'no signal: the Log is not loaded half');
+  await page.context().setOffline(false);
+  await page.waitForSelector('#logFrame', { state: 'attached', timeout: 15000 });
+  await page.waitForFunction(() => { try { return !!document.getElementById('logFrame').contentWindow.ApexCore; } catch (_) { return false; } }, null, { timeout: 15000 });
+}, { viewport: { width: 393, height: 852 } });
 
 // Safe areas (iPhone 15 Pro): nothing you read or tap sits under the Dynamic Island, the home indicator or the rounded
 // display corners, upright or on its side. The map and panel backgrounds run edge to edge; text and controls don't.
@@ -9793,7 +9831,12 @@ flow('a loop by time: the dial turns to Time (half an hour to three hours), Find
   await funTiles(page);                                       // (loops and Fun are our router's only, the owner 2026-11-11)
   await planPage(page, base);
   await page.click('#destInput');
-  await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('open') && document.getElementById('loopBy').getClientRects().length > 0);
+  // the dial is folded to its row (2026-11-13 IA pass): the row says the length, a tap opens the dial
+  await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('open'));
+  check(await page.evaluate(() => document.getElementById('loopBy').getClientRects().length === 0 && /^Loop from here\s*45 mi$/.test(document.getElementById('loopRow').textContent.trim())), 'the loop dial folded to one row, its length on it');
+  await page.evaluate(() => document.activeElement && document.activeElement.blur());
+  await page.click('#loopRow');
+  await page.waitForFunction(() => document.getElementById('loopBy').getClientRects().length > 0);
   await page.evaluate(() => { document.activeElement && document.activeElement.blur(); const st = document.querySelector('.stage'); if (st) st.scrollLeft = 0; });
   const dial = () => page.evaluate(() => ({ by: [...document.querySelectorAll('#loopBy [aria-checked="true"]')].map((b) => b.textContent), keys: [...document.querySelectorAll('#loopDetents button')].map((b) => b.textContent),
     on: (document.querySelector('#loopDetents [aria-pressed="true"]') || {}).textContent, face: document.getElementById('loopDialVal').textContent + ' ' + document.getElementById('loopDialUnit').textContent,

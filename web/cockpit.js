@@ -5398,6 +5398,9 @@
       // frame loaded 1.5 s into a plan): again once the plan is over
       const planAt = window.apexDebug && window.apexDebug.planStartAt, busy = $('planPanel').classList.contains('busy');
       if (busy || (planAt != null && performance.now() - planAt < 4000)) { setTimeout(() => idle(prewarmLog), 3000); return; }
+      // the website with no signal: its scripts can't be fetched, and a Log loaded half (no ApexCore) would be the one kept;
+      // again once back online (the app's own files are on the phone: it warms either way)
+      if (/^https?:$/.test(location.protocol) && navigator.onLine === false) { window.addEventListener('online', () => idle(prewarmLog), { once: true }); return; }
       logFrameEl('analysis.html?tab=log');
     }
     window.addEventListener('resize', () => { if (logFrame.el && !logFrame.el.hidden) logInsets(); });
@@ -5670,6 +5673,10 @@
     // to?, and "gas", "coffee near me" or "food" typed lists the nearest by name from the map's own tiles (stages.js
     // poisAll, kept on the phone: works with no signal where the map was seen), the same places the car's Places name.
     const isElectric = () => { const c = routingCar(); return !!(c && c.fuel === 'electric'); };
+    // the keys' glyphs (24 px grid, BRAND.md Icons): a pump, a bolt, a cup, a fork and knife
+    const NEARBY_GLYPH = { gas: 'M5 21V5.5A1.5 1.5 0 0 1 6.5 4h6A1.5 1.5 0 0 1 14 5.5V21M3.5 21h12M7.5 9h4M14 10h1.5a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 0 3 0V8.5L17.5 6',
+      charge: 'M13 3 6 13.5h5L10 21l7-10.5h-5z', coffee: 'M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 11h1.5a2.5 2.5 0 0 1 0 5H16M9 3.5v2.5M12.5 3.5v2.5',
+      food: 'M7 3v7M5 3v5a2 2 0 0 0 4 0V3M7 10v11M17 21V3c-2 1.5-3 4.5-3 9h3' };
     function paintNearbyKeys() {
       const box = $('nearbyKeys');
       if (!window.ApexNearby) { box.hidden = true; return; }
@@ -5678,7 +5685,9 @@
         box.dataset.keys = want;
         box.replaceChildren(...ApexNearby.keys(isElectric()).map((k) => {
           const b = document.createElement('button'), c = ApexNearby.CATS[k];
-          b.className = 'chip'; b.textContent = c.label; b.setAttribute('aria-label', `${c.label} nearby`);
+          b.className = 'chip rkey'; b.setAttribute('aria-label', `${c.label} nearby`);
+          const i = document.createElement('i'); i.setAttribute('aria-hidden', 'true'); i.innerHTML = `<svg viewBox="0 0 24 24"><path d="${NEARBY_GLYPH[k]}"/></svg>`;
+          b.append(i, c.label);
           b.addEventListener('click', () => { $('destInput').value = c.label; clearTimeout(suggestTimer); renderPlaces(); paintTask(); });
           return b;
         }));
@@ -6017,10 +6026,14 @@
       $('loopDialMark').style.transform = `rotate(${-120 + 240 * i / Math.max(1, all.length - 1)}deg)`;
       document.querySelectorAll('#loopTicks line').forEach((l, k) => l.classList.toggle('on', k === i));
       try { localStorage.setItem(LOOP_PICK, String(i)); } catch (_) {}
+      $('loopRowLen').textContent = b.textContent.trim();
       // the idle map's "Loop from here · 45 mi" is this dial's loop: it says the length now picked, not the one at launch
       try { paintLoopSuggest(); } catch (_) { /* at launch the deck isn't set up yet; it paints itself */ }
     }
     document.querySelectorAll('#loopDetents button').forEach(b => b.addEventListener('click', () => pickLoop(b)));
+    // the folded dial (2026-11-13 IA pass): one row with the length; a tap opens the dial under it
+    function openLoopDial(open) { $('loopBody').hidden = !open; $('loopRow').setAttribute('aria-expanded', String(open)); }
+    $('loopRow').addEventListener('click', () => openLoopDial($('loopBody').hidden));
     // the ticks on the dial's rim, and turning it: drag round the dial and it clicks to the nearest length
     $('loopTicks').innerHTML = [-120, -60, 0, 60, 120].map((a) => { const r = (a * Math.PI) / 180, s = Math.sin(r), c = Math.cos(r);
       return `<line x1="${(60 + 50 * s).toFixed(1)}" y1="${(60 - 50 * c).toFixed(1)}" x2="${(60 + 58 * s).toFixed(1)}" y2="${(60 - 58 * c).toFixed(1)}"/>`; }).join('');
