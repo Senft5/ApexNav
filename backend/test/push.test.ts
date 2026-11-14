@@ -124,6 +124,25 @@ describe("push notifications", () => {
     expect(calls).toEqual([]);
   });
 
+  it("an @mention tells a friend of the poster who can see the post, once, and never a stranger or someone blocked", async () => {
+    await configure();
+    const [a, b, c, d] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara"), await makeUser("dave")];
+    await befriend(a, b); await befriend(a, c);
+    await phone(b, 2); await phone(c, 3); await phone(d, 4);
+    const line = encodeLine(Array.from({ length: 91 }, (_, i) => [35 + i * 0.001, -84] as [number, number]));
+    const { id } = await json(api(a, "POST", "/api/posts", { title: "Cherohala Skyway", driven_on: today, length_m: 10000, line }));
+    await ok(api(c, "POST", `/api/posts/${id}/comments`, { body: "Was here" }));
+    await settle(0); calls.length = 0;
+    await ok(api(b, "POST", `/api/posts/${id}/comments`, { body: "@CARA @dave @bob you have to see this" }));   // dave can't see it; bob is the writer
+    await settle(1);
+    expect(calls.map((x) => [x.token, x.body.aps.alert.body])).toEqual([[tok(3), "@bob mentioned you on @alice's drive."]]);   // not also "also commented"
+    calls.length = 0;
+    await ok(api(c, "POST", "/api/blocks", { handle: "bob" }));
+    await ok(api(b, "POST", `/api/posts/${id}/comments`, { body: "@cara?" }));
+    await settle(1);
+    expect(calls).toEqual([]);
+  });
+
   it("a token Apple calls gone is dropped; sign-out drops this phone; Delete account drops them all; bad tokens are refused", async () => {
     await configure();
     const [a, b] = [await makeUser("alice"), await makeUser("bob")];

@@ -9,7 +9,7 @@ import type { Env } from "./util";
 import { VISIBLE_FROM_OTHERS } from "./social";
 import { kudosReceived } from "./kudos";
 import { duelList } from "./duels";
-import { POST_SEEN } from "./drive_posts";
+import { POST_SEEN, mentionsOf } from "./drive_posts";
 import { reportedSql } from "./reports_sql";
 
 export const DAYS = 14, TOPPED_DAYS = 7, MAX_ITEMS = 40;
@@ -45,7 +45,7 @@ export function duelOutcome(d: { kind: string; you: { score: number; time_s: num
 
 export async function inbox(env: Env, v: Viewer) {
   const me = v.id;
-  const [requests, topped, passed, passedFixed, kudos, duels, follows, drives, postKudos, postComments] = await Promise.all([
+  const [requests, topped, passed, passedFixed, kudos, duels, follows, drives, postKudos, postComments, mentioned] = await Promise.all([
     // a friend request waiting on you (the list shows it as a card; here it counts as waiting)
     all<{ handle: string; at: string }>(env,
       `SELECT u.handle, f.created_at AS at FROM friendships f JOIN users u ON u.id = f.requested_by
@@ -106,6 +106,13 @@ export async function inbox(env: Env, v: Viewer) {
           AND ${NO_BLOCK("c.author", "?1")} AND NOT ${reportedSql("comment", "c.id")}
           AND (p.author = ?1 OR (c.created_at > (SELECT MAX(m.created_at) FROM drive_comments m WHERE m.post_id = p.id AND m.author = ?1) AND ${POST_SEEN("p")}))
         ORDER BY c.created_at DESC LIMIT 200`, me),
+    // a comment that @mentions you on someone else's post you can see (your own posts' comments are the rows above)
+    v.handle ? all<PostRow & { body: string }>(env,
+      `SELECT p.id AS post_id, p.title, u.handle, c.created_at AS at, 0 AS yours, ou.handle AS owner, c.body
+         FROM drive_comments c JOIN drive_posts p ON p.id = c.post_id JOIN users u ON u.id = c.author JOIN users ou ON ou.id = p.author
+        WHERE c.author != ?1 AND p.author != ?1 AND u.handle IS NOT NULL AND c.created_at > datetime('now', '-${DAYS} days') AND c.body LIKE ?2
+          AND ${NO_BLOCK("c.author", "?1")} AND NOT ${reportedSql("comment", "c.id")} AND ${POST_SEEN("p")}
+        ORDER BY c.created_at DESC LIMIT 50`, me, `%@${v.handle}%`) : Promise.resolve([]),
   ]);
   const items: Item[] = [];
   for (const r of requests) items.push({ kind: "request", at: r.at, handle: r.handle, waiting: true });
@@ -126,7 +133,11 @@ export async function inbox(env: Env, v: Viewer) {
   }
   for (const f of follows) items.push({ kind: "follows", at: f.at, book_id: f.book_id, book: f.book, n: f.n });
   for (const e of drives) items.push({ kind: "crew_drive", at: e.at, event_id: e.event_id, title: e.title, starts_at: e.starts_at, crew: e.crew, crew_id: e.crew_id });
-  for (const [kind, rows] of [["post_kudos", postKudos], ["post_comment", postComments]] as const) for (const g of perPost(rows)) items.push({ kind, ...g });
+  // a mention says more than "also commented": one row per post, the mention's
+  const mentions = perPost(mentioned.filter((r) => mentionsOf(r.body, null).includes(v.handle!)).map(({ body: _b, ...r }) => r)), mPosts = new Set(mentions.map((g) => g.post_id));
+  for (const g of mentions) items.push({ kind: "post_mention", ...g });
+  for (const g of perPost(postKudos)) items.push({ kind: "post_kudos", ...g });
+  for (const g of perPost(postComments)) if (g.yours || !mPosts.has(g.post_id)) items.push({ kind: "post_comment", ...g });
   items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
   const list = items.slice(0, MAX_ITEMS);
   return { items: list, waiting: list.filter((i) => i.waiting).length, now: new Date().toISOString().replace("T", " ").slice(0, 19) };

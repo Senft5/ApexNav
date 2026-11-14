@@ -7000,7 +7000,7 @@ flow('For you: the People badge counts what is new and what waits; People lists 
     if (u.pathname === '/api/segments') return json([{ id: 'MY1', origin_id: null, name: 'Dry Ridge climb', geom, start_lat: 35.6, start_lon: -83.9 }]);
     if (u.pathname === '/api/points') return json({ total: 0 });
     if (u.pathname === '/api/posts/P1') return json({ id: 'P1', author_handle: 'me', mine: true, title: 'Tellico climb', driven_on: '2026-11-13', length_m: 30000, score: 812, roads: [], stages: [], line: null,
-      created_at: at(500), kudos: 2, my_kudos: false, comments: 2, comment_list: [{ id: 'K1', body: 'That fog!', created_at: at(400), handle: 'cara', mine: false, can_delete: true }] });
+      created_at: at(500), kudos: 2, my_kudos: false, comments: 2, comment_list: [{ id: 'K1', body: 'That fog! @bob was there', created_at: at(400), handle: 'cara', mine: false, can_delete: true }] });
     return json([]);
   });
   await page.goto(base + '/index.html');
@@ -7046,6 +7046,7 @@ flow('For you: the People badge counts what is new and what waits; People lists 
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
   await page.click('#accountBody .inbox-row:has-text("Tellico climb") button:has-text("Open")');
   await page.waitForSelector('.feed-sheet .feed-comment:has-text("That fog!")', { timeout: 8000 });
+  check(await page.textContent('.feed-sheet .feed-comment p b') === '@bob', 'an @mention in a comment is in bold');
 });
 
 flow('Billet: a primary key is light metal with dark ink, not dark on dark (REVIEW_PEOPLE.md P-01)', async (page, base) => {
