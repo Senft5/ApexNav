@@ -503,8 +503,8 @@ gets its context; capping each family's swing tighter would be a different model
 ### Overpass off the critical path: what a first plan in an area doesn't have
 
 **Built tiles (2026-11-14):** the same tiles are now built each week from the Geofabrik extracts of Ohio, Kentucky and
-Indiana (tools/osm_ctx/build.py, .github/workflows/osm-ctx.yml) into R2 (`osm/v1/<bi>_<bj>.txt.gz`, 0.25° bundles of
-twenty-five 0.05° tiles, a line each), and `/api/ctx/osm` answers a built tile first (`x-cache: built`), Overpass only for
+Indiana (tools/osm_ctx/build.py, .github/workflows/osm-ctx.yml) into R2 (`osm/v2/<bi>_<bj>.bin`, 0.25° bundles of
+twenty-five 0.05° tiles: a 4 KB header of offsets, then a gzip member per tile, so a tile is two ranged reads), and `/api/ctx/osm` answers a built tile first (`x-cache: built`), Overpass only for
 a tile outside the three states or across their border (at once a 504 there once a build exists, Overpass still asked in
 the background). The live service checks of 11-12 to 11-14 had all four mirrors timing out or refusing on every run. The
 phone asks the relay only while the server flag `osm_relay` is on; it goes on once the first build is in R2.

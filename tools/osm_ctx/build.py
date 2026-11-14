@@ -7,11 +7,12 @@ crossings, calming and fords on them; hazard and traffic signs within 40 m of th
 historic places and fuel in the tile; the bicycle and scenic road routes over them, each followed by its member ways
 that are in the tile. web/route_ctx/osm_overpass.js parse() reads it unchanged.
 
-Output: one gzip file per 0.25 degree bundle, OUT/osm/v1/<bi>_<bj>.txt.gz, a line per 0.05 degree tile:
-"<i>_<j>\\t<compact json>\\n" (i = floor(south / 0.05), j = floor(west / 0.05); bi = floor(i / 5), bj = floor(j / 5)).
+Output: one file per 0.25 degree bundle, OUT/osm/v2/<bi>_<bj>.bin: a HEAD-byte JSON header padded with spaces,
+{"t": {"<i>_<j>": [offset, length]}}, then each tile's compact JSON as its own gzip member at that offset
+(i = floor(south / 0.05), j = floor(west / 0.05); bi = floor(i / 5), bj = floor(j / 5)).
 Only tiles wholly inside the coverage polygons (the extracts' Geofabrik .poly) are written, an empty one as
 {"elements":[]}; a tile across the border is left out, so the Worker asks Overpass for it instead of passing half a
-tile off as all of it. The Worker (osm_relay.ts builtTile) finds a tile's line without parsing the rest.
+tile off as all of it. The Worker (osm_relay.ts builtTile) reads the header, then only the tile's member (two ranged R2 reads).
 
     python -m tools.osm_ctx.build --pbf block.osm.pbf --box=w,s,e,n --poly ohio.poly --poly kentucky.poly --out OUT
 
@@ -275,18 +276,40 @@ def wanted(box, cover) -> set:
     return out
 
 
+HEAD = 4096   # backend/src/osm_relay.ts HEAD
+
+
+def pack(items) -> bytes:
+    """A bundle's bytes: the header, then a gzip member per tile, in tile order."""
+    members, t, off = [], {}, HEAD
+    for (i, j), v in sorted(items):
+        m = gzip.compress(json.dumps(v, separators=(",", ":"), ensure_ascii=False).encode("utf-8"), compresslevel=9, mtime=0)
+        t[tile_name(i, j)] = [off, len(m)]
+        members.append(m)
+        off += len(m)
+    head = json.dumps({"t": t}, separators=(",", ":")).encode("ascii")
+    if len(head) > HEAD:
+        raise ValueError(f"bundle header {len(head)} bytes, more than {HEAD}")
+    return head.ljust(HEAD, b" ") + b"".join(members)
+
+
+def unpack(blob: bytes, tile: str):
+    """One tile's elements from a bundle, as the Worker reads them (None: not in it)."""
+    at = json.loads(blob[:HEAD].decode("ascii"))["t"].get(tile)
+    return None if at is None else json.loads(gzip.decompress(blob[at[0]:at[0] + at[1]]))
+
+
 def write(out_dir: str, built: dict) -> list[str]:
-    """One .txt.gz per bundle, its tiles' lines sorted; returns the files written."""
+    """One .bin per bundle; returns the files written."""
     by = defaultdict(list)
     for (i, j), v in built.items():
         by[bundle_of(i, j)].append(((i, j), v))
-    os.makedirs(os.path.join(out_dir, "osm", "v1"), exist_ok=True)
+    os.makedirs(os.path.join(out_dir, "osm", "v2"), exist_ok=True)
     files = []
     for (bi, bj), items in sorted(by.items()):
-        path = os.path.join(out_dir, "osm", "v1", f"{bi}_{bj}.txt.gz")
-        with gzip.open(path, "wt", encoding="utf-8", compresslevel=9) as f:
-            for (i, j), v in sorted(items):
-                f.write(f"{tile_name(i, j)}\t{json.dumps(v, separators=(',', ':'), ensure_ascii=False)}\n")
+        path = os.path.join(out_dir, "osm", "v2", f"{bi}_{bj}.bin")
+        with open(path, "wb") as f:
+            f.write(pack(items))
         files.append(path)
     return files
 

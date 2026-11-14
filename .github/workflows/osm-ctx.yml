@@ -112,8 +112,8 @@ jobs:
             echo "::endgroup::"
           done
           rm -f "$WORK/region.osm.pbf"
-          mkdir -p out/osm/v1
-          echo "band $b: $(ls out/osm/v1 | wc -l) bundles, $(du -sh out/osm/v1 | cut -f1)" | tee -a "$GITHUB_STEP_SUMMARY"
+          mkdir -p out/osm/v2
+          echo "band $b: $(ls out/osm/v2 | wc -l) bundles, $(du -sh out/osm/v2 | cut -f1)" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: osm-band-${{ matrix.band }}
@@ -135,15 +135,15 @@ jobs:
           merge-multiple: true
       - name: Index
         run: |
-          n=$(ls built/osm/v1/*.txt.gz | wc -l)
+          n=$(ls built/osm/v2/*.bin | wc -l)
           [ "$n" -gt 100 ] || { echo "::error::only $n bundles built"; exit 1; }
           python3 -c "
           import json, os, sys
-          d = 'built/osm/v1'; files = sorted(f for f in os.listdir(d) if f.endswith('.txt.gz'))
+          d = 'built/osm/v2'; files = sorted(f for f in os.listdir(d) if f.endswith('.bin'))
           json.dump({'built': '$(date -u +%F)', 'extract_week': '${{ needs.download.outputs.week }}', 'bundles': len(files),
                      'bytes': sum(os.path.getsize(os.path.join(d, f)) for f in files), 'source': 'Geofabrik ohio, kentucky, indiana'},
                     open(os.path.join(d, 'index.json'), 'w'))"
-          cat built/osm/v1/index.json | tee -a "$GITHUB_STEP_SUMMARY"
+          cat built/osm/v2/index.json | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Upload to R2
         shell: bash   # -o pipefail: a refused upload fails the run, not only the script behind the tee
         run: tools/graph_etl/upload_r2.sh built | tee -a "$GITHUB_STEP_SUMMARY"

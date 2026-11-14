@@ -1,5 +1,5 @@
 """OSM route context tiles built from an extract (tools/osm_ctx/build.py): what Overpass would answer for a 0.05 degree
-tile (backend/src/osm_relay.ts query()), in the relay's compact shape, in 0.25 degree gzip bundles the Worker reads."""
+tile (backend/src/osm_relay.ts query()), in the relay's compact shape, in 0.25 degree bundles the Worker reads a tile of with two ranged reads."""
 import gzip
 import json
 import os
@@ -79,13 +79,27 @@ def test_bundles_and_coverage(tmp_path):
     poly.write_text("x\n1\n  -84.60 39.05\n  -84.45 39.05\n  -84.45 39.20\n  -84.60 39.20\nEND\nEND\n")
     want = B.wanted((-84.75, 39.0, -84.25, 39.25), B.read_poly(str(poly)))
     assert (782, -1691) in want and (781, -1692) in want and (780, -1692) not in want and (782, -1689) not in want
-    files = B.write(str(tmp_path / "out"), B.tiles(raw, want))
-    assert sorted(os.path.basename(f) for f in files) == ["156_-338.txt.gz", "156_-339.txt.gz"], "0.25 degree bundles: j -1690 starts the next"
-    lines = [x for f in files for x in gzip.open(f, "rt").read().splitlines()]
-    assert len(lines) == len(want)
-    t, body = lines[0].split("\t", 1)
-    assert re.match(r"^\d+_-\d+$", t) and json.loads(body)["elements"] is not None
-    assert all(B.bundle_of(*map(int, x.split("\t")[0].split("_"))) in {(156, -339), (156, -338)} for x in lines)
+    built = B.tiles(raw, want)
+    files = B.write(str(tmp_path / "out"), built)
+    assert sorted(os.path.basename(f) for f in files) == ["156_-338.bin", "156_-339.bin"], "0.25 degree bundles: j -1690 starts the next"
+    names = []
+    for f in files:
+        blob = open(f, "rb").read()
+        head = json.loads(blob[:B.HEAD].decode("ascii"))["t"]
+        assert all(B.bundle_of(*map(int, t.split("_"))) == tuple(map(int, os.path.basename(f)[:-4].split("_"))) for t in head)
+        for t, (off, n) in head.items():
+            assert off >= B.HEAD and gzip.decompress(blob[off:off + n])   # each member stands alone: one ranged read
+            i, j = map(int, t.split("_"))
+            assert B.unpack(blob, t) == built[(i, j)]
+        assert B.unpack(blob, "1_1") is None
+        names += head
+    assert sorted(names) == sorted(B.tile_name(i, j) for i, j in want)
+
+
+def test_a_dense_bundle_header_still_fits():
+    """25 tiles with offsets in the hundreds of millions still leave room in the header."""
+    t = {B.tile_name(9999, -9999 + k): [10 ** 9, 10 ** 8] for k in range(25)}
+    assert len(json.dumps({"t": t}, separators=(",", ":"))) < B.HEAD / 3
 
 
 def test_kept_in_step_with_the_relay():
@@ -94,8 +108,9 @@ def test_kept_in_step_with_the_relay():
     assert keep == B.KEEP
     drivable = re.search(r'export const DRIVABLE = "(.+?)";', src).group(1)
     assert drivable == B.DRIVABLE.pattern
-    assert "export const BUNDLE = 5;" in src and B.BUNDLE == 5 and B.TILE == 0.05
-    assert 'osm\\/v1\\/(index\\.json|-?\\d{1,4}_-?\\d{1,4}\\.txt\\.gz)' in open(os.path.join(ROOT, "backend", "src", "data_store.ts")).read()
+    assert "export const BUNDLE = 5," in src and B.BUNDLE == 5 and B.TILE == 0.05
+    assert 'osm\\/v2\\/(index\\.json|-?\\d{1,4}_-?\\d{1,4}\\.bin)' in open(os.path.join(ROOT, "backend", "src", "data_store.ts")).read()
+    assert f"HEAD = {B.HEAD}," in src and 'BUILT = "osm/v2"' in src
 
 
 PARSE = r"""
