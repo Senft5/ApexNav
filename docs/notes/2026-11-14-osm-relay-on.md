@@ -1,6 +1,7 @@
 # STATE
 ## Session 2026-11-14 (OSM relay on): the phone asks the relay first (claude/roam-c-osm-relay-on)
 - The `osm_relay` flag now defaults on (backend/src/flags.ts). The relay answers from the weekly Geofabrik build (#799, R2 `osm/v1/`) and asks Overpass only for a border tile, so a plan's road details (limits, signals, signs, guard rails, viewpoints, fuel, routes) arrive on the plan's clock again.
+- Live on prod 2026-11-14 (run 43586533422, 562 bundles in R2): a tile kept at the edge answers in 0.17 s (`x-cache: hit`); the first tile of a bundle not yet read in that place takes 0.6 to 6.8 s (`x-cache: built`), and the rest of that bundle then comes from the cache.
 - Next: watch `osm_relay` in the service check and the relay's `x-cache: built` share; a dense downtown tile is about 2.8 MB of JSON (Cloudflare compresses it on the wire), the same as the phone's own Overpass answer was.
 
 # CALL SHEET
