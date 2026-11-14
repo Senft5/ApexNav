@@ -728,7 +728,9 @@ flow('the co-driver reads the road: the first note is called before the car move
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     // as in the app (the shell feeds GPS); APEX_REVIEW: every line said is posted, as the review recording logs it
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport && window.apex && window.apex.live);
   // a tight right 30 m from the start, then 3 km straight east, then a tight left: a GPX route, followed as drawn
@@ -792,7 +794,9 @@ flow('the co-driver reads the road: the first note is called before the car move
 flow('a route that doubles back on its own road: no "Wrong way", no "Back on route", the cursor follows it past the turnaround (REVIEW4 U-90)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport && window.apex && window.apex.live);
   // the review drive's shape: 1.5 km east, a V turnaround, 1.2 km back west along the same road (6 m over), then a left
@@ -2746,7 +2750,9 @@ flow('Siri: "Drive somewhere with Vetta" plans to the place said, your own first
   });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function' && window.apexDebug);
-  await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }));
+  // the phone keeps sending fixes, as a phone does: with one fix only, a loaded CI runner lost GPS ("GPS lost. Back to the
+  // replay.") before the second ask, and its plan waited on a fix past the check's window (CI 2026-11-14)
+  await page.evaluate(() => { const fix = () => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }); fix(); window.__fixes = setInterval(fix, 500); });
   // the words come as base64url UTF-8 (ApexIntents.swift linkWords): "home" said to Siri is your pinned Home
   const b64 = (t) => Buffer.from(t, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   await page.evaluate((q) => window.apex.onNative({ type: 'link', params: { go: 'to', q } }), b64('home'));
@@ -2758,7 +2764,8 @@ flow('Siri: "Drive somewhere with Vetta" plans to the place said, your own first
   const toasts = await page.evaluate(async (q) => { const before = window.apexDebug.track;
     window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } };
     window.apex.onNative({ type: 'link', params: { go: 'to', q } });
-    const seen = new Set(); for (let i = 0; i < 60; i++) { seen.add(document.getElementById('toast').textContent); await new Promise((r) => setTimeout(r, 100)); }
+    const seen = new Set(); for (let i = 0; i < 150 && !window.__car.some((m) => m.kind === 'notice' && /No match/.test(m.titles[0])); i++) { seen.add(document.getElementById('toast').textContent); await new Promise((r) => setTimeout(r, 100)); }
+    seen.add(document.getElementById('toast').textContent);
     return { same: window.apexDebug.track === before, toast: [...seen].join(' | '), notice: window.__car.filter((m) => m.kind === 'notice').map((m) => m.titles[0]) }; }, b64('Zzyzx Qqq Nowhere'));
   check(toasts.same && toasts.notice.some((t) => /No match/.test(t)), 'a place nobody knows: no route, and why, on the car too: ' + JSON.stringify(toasts));
   // junk in the link is ignored
@@ -5449,7 +5456,9 @@ flow('no signal: a hazard report waits on the phone and goes when the connection
 flow('a saved stage: the live delta shows while you drive it and the result at the end, said by the co-driver (native frames, IDEAS D-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && window.ApexStageDelta && window.ApexRecording);
@@ -5510,7 +5519,9 @@ flow('a saved stage: the live delta shows while you drive it and the result at t
 flow('your best pass: on a road driven before (no stage saved) the bar shows the time gap and the co-driver sums the stretch up (pass_coach.js, owner 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.goto(base + '/index.html?notes=full');
   await page.waitForFunction(() => window.apex && window.ApexPassCoach && window.ApexRecording && window.apexDebug);
@@ -5570,7 +5581,8 @@ flow('your best pass: on a road driven before (no stage saved) the bar shows the
 flow('your best pass on a wet road: an ODOT sensor reads the road wet, so your dry best is no time to chase: said once, no gap, no "brake later" (pass_coach.js setSurface)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   await page.route('**/api.open-meteo.com/**', (route) => route.fulfill({ status: 404, body: '' }));
   await page.route('**/api.weather.gov/**', (route) => route.fulfill({ status: 404, body: '' }));
   await page.route('**/nominatim.openstreetmap.org/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
@@ -5620,7 +5632,9 @@ flow('your best pass on a wet road: an ODOT sensor reads the road wet, so your d
 flow('wet roads: rain where you are (the place plate\'s weather) brings the notes earlier and is said once (wet_roads.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   const asked = [];
   await page.route('**/api.open-meteo.com/**', (route) => { asked.push(route.request().url());
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ current: { temperature_2m: 11, precipitation: 0.6, weather_code: 63 }, hourly: { time: [], precipitation: [] } }) }); });
@@ -5651,7 +5665,8 @@ flow('wet roads: rain where you are (the place plate\'s weather) brings the note
 flow('a wet road from ODOT\'s sensor: dry weather, a wet sensor near you: the road reads wet, it is said once, and the drive is kept as a wet one (road_surface.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   await page.route('**/api.open-meteo.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json',
     body: JSON.stringify({ current: { temperature_2m: 14, precipitation: 0, weather_code: 1 }, hourly: { time: [new Date(Date.now() - 3600e3).toISOString().slice(0, 16)], precipitation: [0] } }) }));
   await page.route('**/api.weather.gov/**', (route) => route.fulfill({ status: 404, body: '' }));
@@ -5677,7 +5692,9 @@ flow('a wet road from ODOT\'s sensor: dry weather, a wet sensor near you: the ro
 flow('cold tyres: a dry road at 4 degrees is said once, and not again on the next drive the same day (wet_roads.js coldLine)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   await page.route('**/api.open-meteo.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json',
     body: JSON.stringify({ current: { temperature_2m: 4, precipitation: 0, weather_code: 1 },   // dry: the last hours known and dry
       hourly: { time: [new Date(Date.now() - 3600e3).toISOString().slice(0, 16)], precipitation: [0] } }) }));
@@ -10826,7 +10843,9 @@ flow('the route card says a long descent before you set off, from the terrain, i
 flow('the co-driver says a long descent once as the car nears its top, from the route\'s terrain (brake_heat.js descentAhead, IDEAS V-12)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport && window.apex && window.apex.live && window.ApexStages);
   // terrain: a gentle climb to the top at 1.5 km, then 8 % down for 4 km (the DEM is stubbed: no tiles here)
@@ -10849,7 +10868,7 @@ flow('the co-driver says a long descent once as the car nears its top, from the 
   // into the last 500 m and over the top: said once, in words
   for (let i = 200; i <= 420; i += 3) { await at(i, 20); await page.waitForTimeout(60); }
   const said = await calls();
-  check(said.length === 1 && /^Long descent ahead: [\d.]+ miles at 8 percent\. A lower gear saves the brakes\.$/.test(said[0]), 'said once near the top: ' + JSON.stringify(said));
+  check(said.length === 1 && /^Long descent ahead\. A lower gear saves the brakes\.$/.test(said[0]), 'said once near the top: ' + JSON.stringify(said));
   for (let i = 420; i <= 500; i += 3) { await at(i, 20); await page.waitForTimeout(40); }
   check((await calls()).length === 1, 'and not again on the way down: ' + JSON.stringify(await calls()));
 });
@@ -10859,7 +10878,9 @@ flow('the co-driver says a low sun once when the route turns into it, and not ag
   await page.clock.setFixedTime(dusk);                       // the sun 0-15 degrees up in the west-northwest
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport && window.apex && window.apex.live && window.ApexSunAhead);
   // north for 1 km (the sun off to the left), then 1 km straight at it
@@ -10888,10 +10909,12 @@ flow('the co-driver says a low sun once when the route turns into it, and not ag
   check((await calls()).length === 1, 'not again with the sun in view: ' + JSON.stringify(await calls()));
 });
 
-flow('the stage briefing: a drive on a planned route starts with how far, how many corners and the first marks, once (briefing.js)', async (page, base) => {
+flow('the stage briefing: a drive on a planned route starts with how far and how many corners, once, from the voice pack (briefing.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexBriefing);
   // a winding road north, 6 km: a bend every 200 m either way
@@ -10913,7 +10936,7 @@ flow('the stage briefing: a drive on a planned route starts with how far, how ma
     await page.waitForTimeout(150);
   }
   const said = await brief();
-  check(said.length === 1 && new RegExp(`^\\d+(\\.\\d)? miles, ${corners} corners\\. Stop sign in 1\\.9 miles\\.$`).test(said[0]), 'the briefing: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  check(said.length === 1 && new RegExp(`^\\d+ miles, ${corners} corners\\.$`).test(said[0]), 'the briefing: ' + JSON.stringify(await page.evaluate(() => window.__said)));
   for (let k = 0; k < 8; k++) { await page.evaluate(() => { const t = apexDebug.track;
     window.apex.live({ lat: t.lat[2], lon: t.lon[2], accuracy_m: 5, speed_mps: 3, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }); await page.waitForTimeout(100); }
   check((await brief()).length === 1, 'once: ' + JSON.stringify(await brief()));
@@ -10922,7 +10945,9 @@ flow('the stage briefing: a drive on a planned route starts with how far, how ma
 flow('corners ahead: after a long straight on the planned route, the co-driver says when the twisty section starts, once (corners_ahead.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexCornersAhead);
   // 4 km straight north, then 4 km winding: a bend every 200 m either way
@@ -10941,7 +10966,7 @@ flow('corners ahead: after a long straight on the planned route, the co-driver s
   check((await twisty()).length === 0, 'not yet: ' + JSON.stringify(await page.evaluate(() => window.__said)));
   for (let i = 640; i <= 760 && !(await twisty()).length; i += 2) { await at(i); await page.waitForTimeout(80); }
   const said = await twisty();
-  check(said.length === 1 && /^Twisty section in (half a mile|three quarters of a mile|\d+ feet)\. 2\.\d miles, \d+ corners\.$/.test(said[0]), 'the call: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  check(said.length === 1 && /^Twisty section ahead\. \d+ corners\.$/.test(said[0]), 'the call: ' + JSON.stringify(await page.evaluate(() => window.__said)));
   for (let i = 760; i <= 800; i += 2) { await at(i); await page.waitForTimeout(40); }
   check((await twisty()).length === 1, 'once: ' + JSON.stringify(await twisty()));
 });
@@ -10949,7 +10974,9 @@ flow('corners ahead: after a long straight on the planned route, the co-driver s
 flow('along the way: a viewpoint on the planned route is said by name and side as it comes up, once (along_ahead.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexAlongAhead);
   const KY = 110540, kx = 111320 * Math.cos(35.5 * Math.PI / 180), gpx = [];
@@ -10978,7 +11005,9 @@ for (const [when, iso, expect] of [['at dusk', '2026-06-21T00:30:00Z', 1], ['at 
     await page.clock.setFixedTime(new Date(iso));
     await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
       window.__said = []; window.APEX_REVIEW = true;
-      window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+      // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
     await page.goto(base + '/index.html');
     await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
     const lat = (m) => 35.5 + m / 110540, gpx = [];
@@ -11010,7 +11039,9 @@ for (const [when, iso, expect] of [['at dusk', '2026-06-21T00:30:00Z', 1], ['at 
 flow('the co-driver says a speed limit that drops ahead once, before the sign, early enough to slow (limit_ahead.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexLimitAhead);
   // a straight road north, 3 km: 55 mph, then 35 mph from 1.5 km (into a town)
@@ -11044,7 +11075,9 @@ flow('the co-driver says a speed limit that drops ahead once, before the sign, e
 flow('road marks: a stop sign and a railway crossing from the map are pinned on the route and called with the notes, the stop early enough to brake (road_marks.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   // a straight road north, 3 km; the map has a stop sign at 1.5 km (the route is the minor road at a junction) and a level crossing at 2.2 km
   const KY = 110540, lat = (m) => 35.5 + m / KY, LON = -83.9, kx = 111320 * Math.cos(35.5 * Math.PI / 180);
   const g = (m, dx = 0) => ({ lat: lat(m), lon: LON + dx / kx });
@@ -11085,7 +11118,9 @@ flow('road marks: a stop sign and a railway crossing from the map are pinned on 
 flow('road marks on the road ahead: a free drive with no route still hears the stop sign from the map, once (attachHorizonMarks)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   const KY = 110540, lat = (m) => 35.5 + m / KY, LON = -83.9, kx = 111320 * Math.cos(35.5 * Math.PI / 180);
   const g = (m, dx = 0) => ({ lat: lat(m), lon: LON + dx / kx });
   const ids = []; for (let m = 0; m <= 3000; m += 100) ids.push(1000 + m / 100);
@@ -11162,7 +11197,9 @@ flow('road marks on a route set during a drive: the map is asked for this route 
 flow('the co-driver counts clean corners in a row live and says five, then ten, and passing the month\'s best once, never in Quiet notes (flow_live.js, IDEAS D-30)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
-    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+    // the shell plays the pack's clips and answers when they end (ApexNavApp.swift ApexClipPlayer), as the app does
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text);
+      if (m && m.cmd === 'clips') setTimeout(() => window.ApexVoice && window.ApexVoice.nativeDone(m.id, true), 200 * m.files.length); } } } }; });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apex && window.apex.live && window.ApexFlowLive && window.ApexRecording);
   // the Log: a run of 7 earlier this month (and a longer one last month, which never counts)
