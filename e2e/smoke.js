@@ -8553,6 +8553,9 @@ flow('offline area: Save the map here keeps the map, labels and terrain; with no
   check(area.tiles > 500 && area.tiles <= 2500 && Math.abs(area.lat - 35.6) < 0.01, 'an area of tiles round the map: ' + JSON.stringify(area));
   check(tiles > 400, 'the tiles were fetched: ' + tiles);
   await page.waitForFunction(() => /1 map area/.test(document.getElementById('myOfflineNote').textContent), null, { timeout: 5000 });
+  // in the app the shell says what the car map's own copy holds (CarPlay/ApexCarOffline.swift): Your data counts it too
+  await page.evaluate(() => window.apex.onNative({ type: 'carOffline', bytes: 5 * 1048576, packs: 1, done: true }));
+  await page.waitForFunction(() => /the car map's copy 5\.0 MB/.test(document.getElementById('myOfflineNote').textContent), null, { timeout: 5000 });
   // no signal: the map opens from the saved style and tiles
   online = false;
   await page.reload();
