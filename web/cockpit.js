@@ -1290,7 +1290,22 @@
       $('pinViaBtn').hidden = !plannedRoute?.request;
       $('pinOverlay').classList.add('show');
       suppressMapClickUntil = Date.now() + 700;
+      placeInfo(null);
       if (!place) reversePin(point);
+      else if (window.ApexPlaceInfo) {                                  // hours, phone and site, once known (place_info.js)
+        const asked = droppedPin;
+        ApexPlaceInfo.lookup(place.name, point.lat, point.lon).then((tags) => { if (droppedPin === asked && tags) placeInfo(ApexPlaceInfo.contact(tags, new Date())); }).catch(() => {});
+      }
+    }
+    // the card's open-now line and Call / Website keys; null clears them (a dropped pin, or nothing known)
+    function placeInfo(c) {
+      const h = $('pinHours'), box = $('pinContact');
+      h.hidden = !(c && c.hours); h.className = 'pin-hours' + (c && c.hours ? (c.hours.open ? ' open' : ' closed') : '');
+      h.textContent = c && c.hours ? c.hours.text : '';
+      const keys = c ? [c.phone && ['Call', c.phone, `Call ${c.phone.text}`], c.web && ['Website', c.web, `Website, ${c.web.text}`]].filter(Boolean) : [];
+      box.replaceChildren(...keys.map(([label, x, aria]) => { const a = document.createElement('a'); a.className = 'ink-btn'; a.href = x.href; a.textContent = label;
+        a.setAttribute('aria-label', aria); if (/^https?:/.test(x.href)) { a.target = '_blank'; a.rel = 'noopener'; } return a; }));
+      box.hidden = !keys.length;
     }
     mapEl.addEventListener('pointerdown', (e) => {
       activeMapPointers.add(e.pointerId);
@@ -10436,7 +10451,9 @@
       $('endMeta').textContent = ApexFormat.factsLine(c);              // RA-3: the Log's numbers, from the one helper
       if (window.ApexEndReveal) ApexEndReveal.open(endEl(), { facts: ApexFormat.factsLine(c), runs: Array.isArray(c.lat) && Array.isArray(c.lon) ? endTrailRuns(c.lat, c.lon) : [] });
       const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(c) : null;   // Round 3: a drive that ended itself says how
-      $('endLine').textContent = ended ? ended + '.' : '';
+      // a wet or icy drive says so (road_surface.js label): its score and gaps are set against your wet passes, not your dry
+      const wetW = window.ApexRoadSurface ? ApexRoadSurface.label(c.surface) : '';
+      $('endLine').textContent = [ended, wetW].filter(Boolean).map((x) => x + '.').join(' ');
       // panel round 2 (HE-1): one measured road-feel line from this drive's own rows (road_feel.js); none for a drive whose
       // mount never calibrated, so nothing unmeasured is ever said
       const feel = window.ApexRoadFeel && c.feel ? ApexRoadFeel.endLine(c.feel, (m) => ApexUnits.long(m, 1)) : '';
@@ -10532,11 +10549,13 @@
       // U-111: one coaching sentence, the Log's (analysis_client.js coachLineOf, written in the job that scored the drive)
       const tip = none ? '' : typeof c.coach === 'string' ? c.coach : '';
       const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(c) : null;
+      const S = window.ApexRoadSurface, wetW = S ? S.label(c.surface) : '';   // "Wet road.": set against your wet passes only
       const tipLine = [ended ? ended + '.' : '', tip].filter(Boolean).join(' ');
       // your best on this road (REVIEW.md 4.4): against your earlier drives named after the same road; then the pack's closing line
       let best = false;
-      if (c.ds.score != null && window.ApexEndLine) { try { best = ApexEndLine.bestOnRoad({ id: c.id, name: c.name, score: c.ds.score }, others || []); } catch (_) { best = false; } }
-      $('endLine').textContent = best ? ['Your best on this road.', tipLine].filter(Boolean).join(' ') : tipLine;
+      if (c.ds.score != null && window.ApexEndLine) { try { best = ApexEndLine.bestOnRoad({ id: c.id, name: c.name, score: c.ds.score }, (others || []).filter((o) => !S || !o || S.alike(c.surface, o.surface))); } catch (_) { best = false; } }
+      const bestW = !best ? '' : wetW ? `Your best ${c.surface === 'ice' ? 'icy' : 'wet'} drive on this road.` : 'Your best on this road.';
+      $('endLine').textContent = [best ? bestW : wetW ? wetW + '.' : '', tipLine].filter(Boolean).join(' ');
       endReviewAsk(c, best);                                           // a good drive, parked: the App Store rating, once a version
       // IDEAS D-27: the skill Your driving is practicing, read on this drive alone (analysis_client.js practiceOf)
       const prLine = c.practice && typeof c.practice.line === 'string' ? c.practice.line : '';
@@ -10576,13 +10595,13 @@
       let secs = null;
       try { const T = Core.elapsedS(d.speed_mps), s = T[T.length - 1]; secs = Number.isFinite(s) ? s : null; } catch (_) { secs = null; }
       const c = { id: d.id, name: d.name, ended: d.ended, len_m: Array.isArray(d.dist) && d.dist.length ? d.dist[d.dist.length - 1] : null, secs,
-                  lat: d.lat, lon: d.lon, elev: d.elev, dist: d.dist, corners: null, ds: null, record: d,
+                  lat: d.lat, lon: d.lon, elev: d.elev, dist: d.dist, corners: null, ds: null, record: d, surface: d.surface,
                   feel: window.ApexRoadFeel ? ApexRoadFeel.summary({ dist: d.dist, camber: d.camber, rough: d.rough }) : null };
       endCardOpen(c);
       (async () => {
         let others = [];
         if (d.ds.score != null) try {
-          others = (await ApexRecording.summaries()).filter((o) => o.id !== d.id && o.name === d.name).map((o) => ({ id: o.id, name: o.name, score: o.ds && o.ds.score != null ? Math.round(o.ds.score) : null }));
+          others = (await ApexRecording.summaries()).filter((o) => o.id !== d.id && o.name === d.name).map((o) => ({ id: o.id, name: o.name, surface: o.surface || null, score: o.ds && o.ds.score != null ? Math.round(o.ds.score) : null }));
         } catch (_) { others = []; }
         let practice = null;                                           // IDEAS D-27: the practised skill, when the drive is stored
         const plan = practicePlan();
@@ -10815,6 +10834,7 @@
         const job = driveJob(rec, (when) => driveName(road, when));
         const card = endCardFacts(rec, job, extra);
         card.feel = window.ApexRoadFeel ? ApexRoadFeel.summary(ApexRoadFeel.columns(rec.rows)) : null;   // HE-1
+        card.surface = extra.surface || null;
         endCardOpen(card);
         try {
           const { rows: _, ...recState } = rec.snapshot(rec.samples);
