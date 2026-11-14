@@ -55,6 +55,9 @@
 [data-theme="roadbook"] .fp-ghost { border: 0; border-radius: var(--r-card); background: var(--raised); padding: 4px 16px 6px; }
 [data-theme="roadbook"] .fp-ghost .hero-score { border-bottom-color: var(--hair); }
 [data-theme="roadbook"] .fp-digits i, [data-theme="roadbook"] .fp-ghost .stamp-d { border-radius: 10px; border-color: color-mix(in srgb, var(--panel-dim) 60%, transparent); }
+/* the empty Log stands in the middle of the page (it hung at the top over a blank sheet), the head and line set big */
+[data-theme="roadbook"] .first-page { min-height: 64vh; align-content: center; }
+[data-theme="roadbook"] .fp-head { font-size: 30px; }
 [data-theme="roadbook"] a.btn.fp-go { box-shadow: 0 6px 16px -8px rgb(0 0 0 / 0.35); }
 
 /* the binnacle (instruments.js mountLine): the speed line a rounded track with the speed filled in ink, the minor ticks
