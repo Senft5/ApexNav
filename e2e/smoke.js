@@ -4814,7 +4814,12 @@ flow('no signal: a hazard report waits on the phone and goes when the connection
   await page.evaluate(() => { const fix = () => window.apex.live({ lat: 35.6, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 90, has_fix: true }); fix(); window.__fixes = setInterval(fix, 500); });
   await page.click('#hzReportBtn');
   await page.click('#hzKinds button:has-text("Debris")');
-  await saidOn(page, /Debris saved/);
+  // CI 2026-11-14: twice this wait ran out on shard 2 and never locally; on a timeout, say what the page shows instead
+  await saidOn(page, /Debris saved/, { timeout: 15000 }).catch(async (e) => {
+    const seen = await page.evaluate(() => ({ toast: document.getElementById('toast').textContent, note: (document.getElementById('dsNote') || { getAttribute: () => null }).getAttribute('aria-label'),
+      key: document.getElementById('hzReportBtn').textContent, sheet: document.getElementById('hzOverlay').classList.contains('show'), outbox: localStorage.getItem('apex.outbox'), online: navigator.onLine }));
+    throw new Error(`no "Debris saved" in 15 s: ${JSON.stringify(seen)} (${e.message.split('\n')[0]})`);
+  });
   check(await page.evaluate(() => JSON.parse(localStorage.getItem('apex.outbox')).length) === 1, 'kept on the phone');
   offline = false;
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
