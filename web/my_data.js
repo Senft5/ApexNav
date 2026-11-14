@@ -73,11 +73,13 @@
   /** One line for Settings. */
   function offlineText(o) {
     // U-126: no scoreboard of zeros: nothing saved for offline is one short line
-    if (!(o.routes > 0) && !(o.areas > 0) && !(o.voiceBytes > 0)) return 'Nothing saved for offline.';
+    if (!(o.routes > 0) && !(o.areas > 0) && !(o.voiceBytes > 0) && !(o.carBytes > 0)) return 'Nothing saved for offline.';
     const parts = [];
     if (o.routes > 0) parts.push(`${o.routes} saved route${o.routes === 1 ? '' : 's'} (${mb(o.routeBytes)})`);
     if (o.areas > 0) parts.push(`${o.areas} map area${o.areas === 1 ? '' : 's'} (${mb(o.areaBytes)})`);
     if (o.voiceBytes != null && o.voiceBytes > 0) parts.push(`downloaded voices ${mb(o.voiceBytes)}`);
+    // the car's map keeps its own copy of the saved areas (CarPlay/ApexCarOffline.swift), told by the shell
+    if (o.carBytes != null && o.carBytes > 0) parts.push(`the car map's copy ${mb(o.carBytes)}`);
     let s = `Offline data: ${parts.join(', ')}.`;
     if (o.usage != null) s += ` The app uses ${mb(o.usage)} on this phone in all${o.quota ? ` (of ${Math.round(o.quota / 1073741824 * 10) / 10} GB allowed)` : ''}.`;
     return s;
