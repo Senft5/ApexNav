@@ -10593,6 +10593,12 @@ for (const [when, iso, expect] of [['at dusk', '2026-06-21T00:30:00Z', 1], ['at 
         window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, [i]);
       await page.waitForTimeout(40);
     }
+    // the call's lead at 20 m/s is the last few fixes: the page may take a moment to read them and speak, so give it 2 s
+    // (each fix the same, at 20 m before the sign) before deciding
+    const deer = () => page.evaluate(() => window.__said.filter((s) => /Deer crossing/.test(s)).length);
+    for (let k = 0; k < 20 && (await deer()) < 1; k++) { await page.evaluate(([i]) => { const t = apexDebug.track;
+      window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, [await iAt(1180)]);
+      await page.waitForTimeout(100); }
     const said = await page.evaluate(() => window.__said.filter((s) => /Deer crossing/.test(s)));
     check(said.length === expect, `${when}: ${JSON.stringify(await page.evaluate(() => window.__said))}`);
   });
