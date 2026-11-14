@@ -2056,7 +2056,9 @@
       if (live && spirited && vMps >= 5 && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size
           && performance.now() > speech.talkingUntil
           && !ev.some(e => noteM(e) - state.cursorM < reach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`))) {
-        const memo = ApexRoadMemory.upcoming(roadMemory, state.live, reach, reach + 200, state.spoken);
+        // on a wet or icy road (noteWet) "brake later here", learnt on your dry passes, is not said: the grip isn't there
+        const slickNow = !!(drive.wet && (drive.wet.state === 'wet' || drive.wet.state === 'ice'));
+        const memo = ApexRoadMemory.upcoming(slickNow ? roadMemory.filter((n) => n.kind !== 'brake_later') : roadMemory, state.live, reach, reach + 200, state.spoken);
         if (memo) { state.spoken.add(memo.id); say(memo.text); }
       }
       // A break suggestion waits for the same quiet (any notes mode: tiredness matters on a commute too): a fresh fix, a free
@@ -10252,6 +10254,7 @@
       const w = coachWatch, rows = drive.rec && drive.rec.rows;
       if (!w || !rows || performance.now() - w.at < 1000) return;
       w.at = performance.now();
+      if (w.coach.setSurface) w.coach.setSurface(drive.wet && drive.wet.state);   // a wet road: your dry best is no time to chase
       const r = w.coach.update(rows), bar = $('coachBar');
       for (const ev of r.events) {
         if (!ev.say || !isSpirited()) continue;

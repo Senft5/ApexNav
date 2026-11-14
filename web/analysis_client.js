@@ -134,7 +134,8 @@
   // the corner coach for d against every other drive whose box overlaps it (Core.coach decides what is the same corner)
   async function coachOf(Core, d, sums) {
     const me = sums.find((s) => s.id === d.id), nearS = sums.filter((s) => s.id !== d.id && overlaps(s.bbox, me && me.bbox));
-    const near = await fullAll(nearS);
+    // like with like (road_surface.js alike): a wet pass only against your other wet ones, a dry one never against a wet
+    const S = root.ApexRoadSurface, near = (await fullAll(nearS)).filter((o) => !S || S.alike(d.surface, o.surface));
     return { co: { ...Core.coach(d, near), others: near.map((o) => ({ name: o.name, date: label(o) })), near: near.map(lite) }, near };
   }
   // U-111: the one coaching sentence a drive gets, the Log's (drive_view.js plainCoach over this drive's score and the coach's

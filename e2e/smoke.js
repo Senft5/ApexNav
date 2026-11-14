@@ -5513,6 +5513,56 @@ flow('your best pass: on a road driven before (no stage saved) the bar shows the
   check(!(await page.isVisible('#coachBar')), 'the bar goes when the stretch ends');
 });
 
+flow('your best pass on a wet road: an ODOT sensor reads the road wet, so your dry best is no time to chase: said once, no gap, no "brake later" (pass_coach.js setSurface)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.route('**/api.open-meteo.com/**', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.route('**/api.weather.gov/**', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.route('**/nominatim.openstreetmap.org/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html?notes=full');
+  await page.waitForFunction(() => window.apex && window.ApexPassCoach && window.ApexRecording && window.apexDebug && window.apexDebug.setRoadEvents && window.ApexRoadSurface);
+  await page.evaluate(async () => {
+    const Core = window.ApexCore, MPH = 2.2369362921, lat = [], lon = [];
+    let la = 35.6, lo = -83.9, h = 0;
+    for (let i = 0; i < 800; i++) { if (i > 100 && i < 700) h += 0.05 * Math.sin((i - 100) / 25);
+      la += 5 * Math.cos(h) / 110540; lo += 5 * Math.sin(h) / (111320 * Math.cos(35.6 * Math.PI / 180)); lat.push(la); lon.push(lo); }
+    const { kappa } = Core.computeCurvature(lat, lon);
+    const v = kappa.map((k) => Math.max(9, 22 - 300 * Math.abs(k))), latG = v.map((x, i) => x * x * kappa[i] / 9.80665);
+    const lonG = v.map((x, i) => (i ? (x * x - v[i - 1] ** 2) / 10 / 9.80665 : 0));
+    const prof = Core.profileRecording({ lat, lon, distance_m: lat.map((_, i) => i * 5), speed_mph: v.map((x) => x * MPH), lon_g: lonG, lat_g: latG });
+    await ApexRecording.store({ id: 'e2e_dry', name: 'Esses run', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: v, lon_g: lonG, lat_g: latG,
+      g_known: null, events: prof.events, elev: null, hz: 1 });
+    window.__road = { lat, lon, v, latG, lonG }; window.__clock = Date.now();
+    await window.apexDebug.refreshSavedDrives();
+    apexDebug.setRoadEvents({ events: [{ id: 'dot:OH:wx:9', kind: 'wet', label: 'Wet road', lat: lat[300], lon: lon[300], src: 'ODOT sensor' }] });
+  });
+  check(await page.evaluate(() => window.apexDebug.passRefs) >= 6, 'the earlier dry drive\'s corners are remembered');
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForTimeout(300);
+  if (await page.isVisible('#permSheet.show')) await page.click('#permGo');
+  let bars = [];
+  for (let burst = 0; burst < 10; burst++) {
+    await page.evaluate((burst) => {
+      const r = window.__road;
+      for (let j = burst * 160; j < Math.min(1600, (burst + 1) * 160); j++) {
+        const i = Math.min(799, Math.floor(j / 2)), f = (j % 2) / 2, k = Math.min(799, i + 1);
+        window.__clock += 2500 / (r.v[i] * 0.9);
+        window.apex.live({ lat: r.lat[i] + (r.lat[k] - r.lat[i]) * f, lon: r.lon[i] + (r.lon[k] - r.lon[i]) * f, accuracy_m: 4, speed_mps: r.v[i] * 0.9, course_deg: 0,
+          lat_g: r.latG[i] * 0.81, lon_g: r.lonG[i], has_fix: true, calibration: 'locked', at: window.__clock });
+      }
+    }, burst);
+    await page.waitForTimeout(1050);
+    if (await page.isVisible('#coachBar')) bars.push(await page.textContent('#coachBar'));
+  }
+  check(await page.evaluate(() => window.apexDebug.wetRoad) === 'wet', 'the sensor reads the road wet');
+  const said = await page.evaluate(() => window.__said);
+  check(said.filter((t) => t === 'Wet today. Your best here was dry.').length === 1, `the co-driver says the road is wet, once (${JSON.stringify(said)})`);
+  check(!said.some((t) => /Brake later|tenths? down|seconds? down/.test(t)), `no time chased on a wet road (${JSON.stringify(said)})`);
+  check(!bars.some((b) => / s vs best/.test(b)), `the bar shows no time gap (${JSON.stringify(bars)})`);
+});
+
 flow('wet roads: rain where you are (the place plate\'s weather) brings the notes earlier and is said once (wet_roads.js)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
