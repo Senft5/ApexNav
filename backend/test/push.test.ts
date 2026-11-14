@@ -148,7 +148,7 @@ describe("push notifications", () => {
     const [a, b] = [await makeUser("alice"), await makeUser("bob")];
     await befriend(a, b);
     await phone(a, 1);
-    expect(await json(api(a, "GET", "/api/push/kinds"))).toEqual({ off: [], kinds: ["friends", "kudos", "comments", "duels", "crews"] });
+    expect(await json(api(a, "GET", "/api/push/kinds"))).toEqual({ off: [], kinds: ["friends", "kudos", "comments", "duels", "beaten", "crews"] });
     expect(await json(api(a, "PUT", "/api/push/kinds", { off: ["duels", "kudos"] }))).toEqual({ off: ["kudos", "duels"] });
     expect((await api(a, "PUT", "/api/push/kinds", { off: ["everything"] })).status).toBe(400);
     const line = encodeLine(Array.from({ length: 91 }, (_, i) => [35 + i * 0.001, -84] as [number, number]));

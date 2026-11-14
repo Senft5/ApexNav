@@ -6055,6 +6055,13 @@
       paintPlaces(q, out, out.length ? '' : ApexNearby.emptyLine(cat, failed, 8, (m) => ApexUnits.long(m)), 0);
       paintNearbyPins(rows, cat, here, out);
       warmPlace(out[0]);
+      // a street photo of each beside its name (place_photo.js, Mapillary: the one facing it), the first eight
+      if (window.ApexPlacePhoto) out.slice(0, 8).forEach((r, i) => ApexPlacePhoto.lookup(r.lat, r.lon).then((p) => {
+        if (!p || seq !== suggestSeq) return;
+        r.photo = p.thumb;
+        const b = $('placeList').children[i];
+        if (b && b.classList.contains('place')) addThumb(b, p.thumb);
+      }).catch(() => {}));
       // then whether each is open, under its name (place_info.js, one request for the list); unknown says nothing
       if (window.ApexPlaceInfo && out.length) ApexPlaceInfo.lookupMany(rows.map((r) => (r.named ? { name: r.label, lat: r.lat, lon: r.lon } : null))).then((tags) => {
         if (seq !== suggestSeq || !tags) return;
@@ -6157,6 +6164,7 @@
         if (p.kind && !kind.textContent) b.setAttribute('aria-label', `${p.label}, ${p.kind}`);
         b.append(name, kind);
         if (p.sub && p.sub !== p.label) { const sub = document.createElement('small'); sub.textContent = p.sub; b.append(sub); }   // U-73
+        if (p.photo) addThumb(b, p.photo);
         b.addEventListener('click', () => (p.saved ? openSaved(p.saved) : routeToPlace(p)));
         if (!p.pinned) return b;
         // a pinned place (U-20): its own row with Unpin beside it
@@ -6172,6 +6180,13 @@
         box.append(all);
       }
       box.hidden = !rows.length;
+    }
+    // a row's street photo (Find nearby, place_photo.js), on its left once it has loaded, as Apple Maps' list shows them
+    function addThumb(b, src) {
+      if (b.querySelector('.place-thumb')) return;
+      const img = new Image(); img.className = 'place-thumb'; img.alt = ''; img.decoding = 'async';
+      img.onload = () => { if (!b.querySelector('.place-thumb')) { b.classList.add('has-thumb'); b.prepend(img); } };
+      img.src = src;
     }
     // The top suggestion's graph tile read into the routing worker while you choose (the region's fetched and kept): the
     // plan to it starts with its tiles in hand. Once per tile.
@@ -8531,7 +8546,7 @@
       paintPushKinds();
     }
     // each kind its own switch, under the main one while it is on (the server keeps which are off: GET/PUT /api/push/kinds)
-    const PUSH_KINDS = [['friends', 'Friend requests'], ['kudos', 'Kudos'], ['comments', 'Comments and mentions'], ['duels', 'Duels'], ['crews', 'Crew drives']];
+    const PUSH_KINDS = [['friends', 'Friend requests'], ['kudos', 'Kudos'], ['comments', 'Comments and mentions'], ['duels', 'Duels'], ['beaten', 'Someone beat you'], ['crews', 'Crew drives']];
     let pushOff = null;
     function paintPushKinds() {
       const box = $('pushKinds'); if (!box) return;

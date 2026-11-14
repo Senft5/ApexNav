@@ -362,6 +362,12 @@
     .place b { grid-column: 1; font-size: 15px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .place span { grid-column: 2; grid-row: 1; font-size: 12px; color: var(--panel-dim); white-space: nowrap; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; }
     .place span:empty { display: none; }
+    /* a row with its street photo (Find nearby): the picture on the left across both lines */
+    .place.has-thumb { grid-template-columns: 48px minmax(0, 1fr) auto; }
+    .place.has-thumb .place-thumb { grid-column: 1; grid-row: 1 / span 2; width: 48px; height: 48px; object-fit: cover; align-self: center; background: var(--hair); }
+    .place.has-thumb b { grid-column: 2; }
+    .place.has-thumb small { grid-column: 2 / -1; }
+    .place.has-thumb span { grid-column: 3; }
     .place small { grid-column: 1 / -1; font-size: 13px; color: var(--panel-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .place-list .note { margin: 8px 2px 0; }
     /* Watching a recorded drive or previewing a route (feedback 01): the gauges and scrubber own the bottom; Done or the plate's ×

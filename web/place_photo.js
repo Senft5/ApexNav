@@ -15,12 +15,12 @@
     const dLat = NEAR_M / M_PER_DEG, dLon = NEAR_M / (M_PER_DEG * Math.cos(lat * DEG));
     const b = [lon - dLon, lat - dLat, lon + dLon, lat + dLat].map((v) => v.toFixed(6)).join(',');
     return `https://graph.mapillary.com/images?access_token=${encodeURIComponent(token)}`
-      + `&fields=id,thumb_1024_url,computed_compass_angle,compass_angle,captured_at,computed_geometry,geometry,is_pano,creator&bbox=${b}&limit=100`;
+      + `&fields=id,thumb_1024_url,thumb_256_url,computed_compass_angle,compass_angle,captured_at,computed_geometry,geometry,is_pano,creator&bbox=${b}&limit=100`;
   }
 
   /**
    * The photo that shows the place (pure): taken within NEAR_M of it (but not on top of it) with the camera pointing at it
-   * (within FACING_DEG), not a panorama; the nearest and squarest, newer winning a close call. { src, id, by, year, m } or null.
+   * (within FACING_DEG), not a panorama; the nearest and squarest, newer winning a close call. { src, thumb (256 px, for a list), id, by, year, m } or null.
    */
   function pick(images, lat, lon) {
     let best = null, bestScore = Infinity;
@@ -41,7 +41,8 @@
       if (score < bestScore) {
         bestScore = score;
         const by = im.creator && typeof im.creator.username === 'string' ? im.creator.username.slice(0, 40) : null;
-        best = { src: im.thumb_1024_url, id: String(im.id), by, year, m: Math.round(m) };
+        const thumb = typeof im.thumb_256_url === 'string' && /^https:\/\//.test(im.thumb_256_url) ? im.thumb_256_url : im.thumb_1024_url;
+        best = { src: im.thumb_1024_url, thumb, id: String(im.id), by, year, m: Math.round(m) };
       }
     }
     return best;

@@ -11,6 +11,8 @@ import { Env, HttpError } from "./util";
 import { serverError } from "./errors";
 import { Viewer } from "./auth";
 import { POST_SEEN } from "./drive_posts";
+import { VISIBLE_FROM_OTHERS } from "./social";
+import { NO_BLOCK } from "./time_attack";
 import { apnsConfigured, sendAlert, TOKEN, type ApnsEnv } from "./apns";
 
 const MAX_TOKENS = 3;
@@ -65,7 +67,7 @@ export async function pushQuiet(env: Env, v: Viewer, req: Request): Promise<void
 
 /** The kinds a driver can each turn off (Garage → Settings → Notifications), and which pushes each holds. */
 export const PUSH_GROUPS: Record<string, string[]> = {
-  friends: ["request", "friend"], kudos: ["kudos", "post_kudos"], comments: ["post_comment"], duels: ["duel"], crews: ["crew_drive"],
+  friends: ["request", "friend"], kudos: ["kudos", "post_kudos"], comments: ["post_comment"], duels: ["duel"], beaten: ["topped", "passed"], crews: ["crew_drive"],
 };
 const offKey = (userId: string) => `pushoff/${userId}`;
 const groupOf = (kind: string) => Object.keys(PUSH_GROUPS).find((g) => PUSH_GROUPS[g].includes(kind)) || null;
@@ -129,6 +131,8 @@ export const PUSH = {
   postComment: (from: string | null, title: string, post: string): Push => ({ kind: "post_comment", title, body: `${at(from)} commented on your drive.`, link: `${LINK}?view=friends&post=${post}` }),
   postAlso: (from: string | null, owner: string | null, title: string, post: string): Push => ({ kind: "post_comment", title, body: `${at(from)} also commented on ${owner ? `@${owner}'s` : "a"} drive.`, link: `${LINK}?view=friends&post=${post}` }),
   postMention: (from: string | null, owner: string | null, title: string, post: string): Push => ({ kind: "post_comment", title, body: `${at(from)} mentioned you on ${owner ? `@${owner}'s` : "a"} drive.`, link: `${LINK}?view=friends&post=${post}` }),
+  topped: (from: string | null, stage: string, score: number, yours: number): Push => ({ kind: "topped", title: "Topped", body: `${at(from)} scored ${score} on ${stage}, over your best of ${yours}.`, link: `${LINK}?view=friends` }),
+  passed: (from: string | null, stage: string): Push => ({ kind: "passed", title: "Time attack", body: `${at(from)} went quicker than you on ${stage}.`, link: `${LINK}?view=friends` }),
   crewDrive: (crew: string, title: string, by: string | null): Push => ({ kind: "crew_drive", title: crew, body: `${at(by)} planned ${title}. Are you going?`, link: `${LINK}?view=crews` }),
 };
 
@@ -195,4 +199,42 @@ export async function afterPostComment(env: Env, v: Viewer, post: string, author
      LIMIT 20`).bind(null, post, v.id).all<{ id: string; owner: string | null }>();
   const rows = r.results.filter((x) => !told.has(x.id));
   if (rows.length) await notify(env, rows.map((x) => x.id), PUSH.postAlso(v.handle, rows[0].owner, title, post));
+}
+
+/** Before a run goes on the boards (POST /api/board): its stage, and your best Score there until now, for afterTopped. */
+export async function bestBefore(env: Env, v: Viewer, segId: unknown): Promise<{ canon: string; was: number | null } | null> {
+  if (!pushConfigured(env) || typeof segId !== "string") return null;
+  return await env.DB.prepare(`SELECT COALESCE(s.origin_id, s.id) AS canon,
+       (SELECT MAX(be.driver_score) FROM board_entries be WHERE be.user_id = ?2 AND be.canon_id = COALESCE(s.origin_id, s.id)) AS was
+     FROM segments s WHERE s.id = ?1 AND s.owner = ?2`).bind(segId, v.id).first<{ canon: string; was: number | null }>();
+}
+
+/** Your run just went over a friend's or crew-mate's best Score on a stage they have too (For you's "Topped"): told once, when
+ *  you cross them, only to whom the run is published (the board's own rules), never someone blocked. A Score, never a time. */
+export async function afterTopped(env: Env, v: Viewer, before: { canon: string; was: number | null } | null): Promise<void> {
+  if (!before) return;
+  const seen = VISIBLE_FROM_OTHERS.replaceAll("?1", "o.user_id");   // the run as each of them sees it
+  const r = await env.DB.prepare(`SELECT o.user_id AS id, o.best AS yours, n.best AS score,
+       (SELECT MIN(s.name) FROM segments s WHERE s.owner = o.user_id AND COALESCE(s.origin_id, s.id) = ?2) AS stage
+     FROM (SELECT user_id, MAX(driver_score) AS best FROM board_entries WHERE canon_id = ?2 AND user_id != ?1 GROUP BY user_id) o
+     JOIN (SELECT MAX(driver_score) AS best FROM board_entries WHERE canon_id = ?2 AND user_id = ?1) n
+    WHERE n.best > o.best AND (?3 IS NULL OR o.best >= ?3)
+      AND EXISTS (SELECT 1 FROM board_entries be WHERE be.user_id = ?1 AND be.canon_id = ?2 AND be.driver_score = n.best AND ${seen})
+    LIMIT 20`).bind(v.id, before.canon, before.was).all<{ id: string; yours: number; score: number; stage: string | null }>();
+  for (const x of r.results) if (x.stage) await notify(env, [x.id], PUSH.topped(v.handle, x.stage, x.score, x.yours));
+}
+
+/** Your time on a fixed time attack (ta_fixed.ts fixedRuns) just went under other entrants' quickest this week (For you's
+ *  "Time attack"): told once, when you go past them, never someone blocked, never the time. The board is the entrants' own, by handle. */
+export async function afterPassed(env: Env, v: Viewer, beat: { id: string; name: string; was: number | null }[]): Promise<void> {
+  if (!beat.length || !pushConfigured(env)) return;
+  const WEEK = "date('now', '-6 days', 'weekday 1')";
+  // never the gap or a time: a push is seen on a lock screen (For you, opened, shows the gap)
+  const res = await env.DB.batch<{ id: string }>(beat.slice(0, 5).map((b) => env.DB.prepare(
+    `SELECT o.user_id AS id
+       FROM (SELECT user_id, MIN(time_s) AS t FROM ta_times WHERE circuit_id = ?2 AND user_id != ?1 AND driven_on >= ${WEEK} GROUP BY user_id) o
+       JOIN (SELECT MIN(time_s) AS t FROM ta_times WHERE circuit_id = ?2 AND user_id = ?1 AND driven_on >= ${WEEK}) n
+      WHERE n.t < o.t AND (?3 IS NULL OR o.t <= ?3) AND ${NO_BLOCK("o.user_id", "?1")}
+      LIMIT 20`).bind(v.id, b.id, b.was)));
+  for (const [i, b] of beat.slice(0, 5).entries()) for (const x of res[i].results) await notify(env, [x.id], PUSH.passed(v.handle, b.name));
 }

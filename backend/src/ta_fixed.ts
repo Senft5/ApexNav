@@ -170,7 +170,7 @@ export async function fixedEntered(env: Env, v: Viewer) {
  * when its stage is (a copy of) a circuit you entered, driven this season, not before you entered, and not in the future; your
  * quickest each day stays. A run no road car could set is skipped. → { accepted, refused, places: your place this week }.
  */
-export async function fixedRuns(env: Env, v: Viewer, req: Request) {
+export async function fixedRuns(env: Env, v: Viewer, req: Request, beat?: { id: string; name: string; was: number | null }[]) {
   if (!v.handle) throw new HttpError(409, "handle_required");
   const b = await body<{ runs?: unknown }>(req);
   if (!Array.isArray(b.runs) || b.runs.length > 20) throw new HttpError(400, "bad_runs");
@@ -184,8 +184,9 @@ export async function fixedRuns(env: Env, v: Viewer, req: Request) {
     return { segId, time, score, day };
   });
   if (!want.length) return { accepted: 0, refused: 0, places: [] };
-  const found = await env.DB.batch<{ id: string; name: string; length_m: number }>(want.map((r) => env.DB.prepare(
-    `SELECT c.id, c.name, c.length_m FROM segments s JOIN ta_circuits c ON c.id = s.origin_id AND c.season = ${SEASON} AND c.removed = 0
+  const found = await env.DB.batch<{ id: string; name: string; length_m: number; was: number | null }>(want.map((r) => env.DB.prepare(
+    // `was`: your quickest this week before these runs (push.ts afterPassed tells whoever you just went past)
+    `SELECT c.id, c.name, c.length_m, (SELECT MIN(t.time_s) FROM ta_times t WHERE t.circuit_id = c.id AND t.user_id = ?2 AND t.driven_on >= ${WEEK}) AS was FROM segments s JOIN ta_circuits c ON c.id = s.origin_id AND c.season = ${SEASON} AND c.removed = 0
       JOIN ta_entered e ON e.circuit_id = c.id AND e.user_id = ?2
       WHERE s.id = ?1 AND s.owner = ?2 AND ?3 >= c.season AND ?3 >= date(e.created_at, '-1 day') AND ?3 <= date('now', '+1 day')`).bind(r.segId, v.id, r.day)));
   let accepted = 0, refused = 0;
@@ -199,6 +200,7 @@ export async function fixedRuns(env: Env, v: Viewer, req: Request) {
        ON CONFLICT (circuit_id, user_id, driven_on) DO UPDATE SET time_s = ?4, driver_score = ?5, updated_at = datetime('now') WHERE ?4 < ta_times.time_s`)
       .bind(c.id, v.id, r.day, r.time, r.score));
     accepted++;
+    if (beat && !hit.has(c.id)) beat.push({ id: c.id, name: c.name, was: c.was });
     hit.set(c.id, c.name);
   }
   if (stmts.length) await env.DB.batch(stmts);
