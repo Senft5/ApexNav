@@ -412,6 +412,21 @@
     setInterval(() => { try { if (state.lastPosition) localStorage.setItem(LAST_POS, JSON.stringify(state.lastPosition)); } catch (_) {} }, 30000);
     // On the web the idle map follows the browser's GPS (the app's shell pushes its own frames instead). The browser asks once
     // and remembers the answer for the site; denied or unavailable leaves the map where it is.
+    // IDEAS P-06: how long a launch takes on the phones it runs on, in the anonymous app health counts (health.js): the time
+    // from the page's start to the page being ready (window.apex) and to the map's first full draw, in centiseconds, and how
+    // many launches took over 2 s to the map. Only a launch seen from start to map (a page opened in the background, by
+    // CarPlay with the phone locked, would count the time it sat unseen). Read as means in Crew's App health.
+    const boot = { ready: null, map: null, seen: document.visibilityState === 'visible' };
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') boot.seen = false; });
+    function bootCount() {
+      if (boot.ready == null || boot.map == null || !boot.seen || boot.counted || window.APEX_REVIEW) return;
+      boot.counted = true;
+      if (window.apexDebug) window.apexDebug.boot = { readyMs: Math.round(boot.ready), mapMs: Math.round(boot.map) };
+      if (boot.map > 60000) return;                                    // not a launch anyone waited through
+      health.bump('boot_n'); health.bump('boot_ready_cs', Math.max(1, boot.ready / 10)); health.bump('boot_map_cs', Math.max(1, boot.map / 10));
+      if (boot.map > 2000) health.bump('boot_slow');
+    }
+    map.once('load', () => { boot.map = performance.now(); bootCount(); });
     map.once('load', () => {
       if (IN_APP_SHELL || !navigator.geolocation) return;
       navigator.geolocation.watchPosition((p) => {
@@ -6534,7 +6549,8 @@
             `routing failed ${pct(get(app, 'route_fail'), routes)} of ${routes}`, `fallback router ${get(app, 'route_fallback')}×`,
             `road uploads failed ${pct(get(app, 'road_upload_fail'), uploads)} of ${uploads}`,
             `mount set in ${locks ? Math.round(get(app, 'calib_lock_s') / locks) + ' s' : '--'} on average`,
-            `${get(app, 'hazard_queued')} reports queued with no signal`, `${get(app, 'crash_asked')} crash checks`].join(' · ') }));
+            `${get(app, 'hazard_queued')} reports queued with no signal`, `${get(app, 'crash_asked')} crash checks`,
+            ...(get(app, 'boot_n') ? [`launch: ready in ${(get(app, 'boot_ready_cs') / get(app, 'boot_n') / 100).toFixed(1)} s, map in ${(get(app, 'boot_map_cs') / get(app, 'boot_n') / 100).toFixed(1)} s on average, over 2 s ${pct(get(app, 'boot_slow'), get(app, 'boot_n'))} of ${get(app, 'boot_n')}`] : [])].join(' · ') }));
         }
       }).catch(() => sec.append(el('p', { className: 'note', textContent: 'Couldn\'t load the counts.' })));
       return sec;
@@ -11575,6 +11591,7 @@
         if (msg && msg.type === 'signInFailed' && msg.reason !== 'cancelled') toast('Couldn\'t sign in. Check signal and try again.');
       }
     };
+    boot.ready = performance.now(); bootCount();                         // IDEAS P-06: the page is ready
     let idleSnapped = false;
     function showIdleFix(frame) {
       refreshAutoNight();
