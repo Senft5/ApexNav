@@ -11314,6 +11314,20 @@ flow('route callouts: each route found is tagged on the map with its time and co
   check(on.length === 1 && on[0].cur === 'true' && first.every((g) => /^(\d+ min|\d+:\d\d h)$/.test(g.time) && /^\d+ corners?$/.test(g.corners)),
     'every route tagged with its time and corners, one filled: ' + JSON.stringify(first));
   check(on[0].label.startsWith('This route: ') && first.filter((g) => !g.on).every((g) => g.label.startsWith('Take this route: ')), 'the tags say what a tap does: ' + JSON.stringify(first));
+  // each tag sits just above its own point on the route (a CSS position on the tag once pushed every tag after the first down by
+  // the ones before it), and no map stamp is left showing under a tag
+  await page.waitForTimeout(400);
+  const placed = await page.evaluate(() => {
+    const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const tags = [...document.querySelectorAll('.route-callout')].map((b) => b.getBoundingClientRect());
+    const at = window.apexDebug.calloutAt(), els = [...document.querySelectorAll('.route-callout')];
+    const off = els.map((b, i) => { const t = b.getBoundingClientRect(); return Math.round(Math.abs(t.bottom + 6 - at[i][1]) + Math.abs((t.left + t.right) / 2 - at[i][0])); });
+    const stamps = [...document.querySelectorAll('.poi-pin')].filter((e) => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden')
+      .map((e) => e.getBoundingClientRect());
+    return { off, under: stamps.filter((s) => tags.some((t) => hit(s, t))).length, n: stamps.length };
+  });
+  check(placed.off.length >= 2 && placed.off.every((d) => d <= 2), 'each tag sits just above its own point, not pushed down by the tags before it: ' + JSON.stringify(placed));
+  check(placed.under === 0, 'no map stamp shows under a route tag: ' + JSON.stringify(placed));
   const pager = () => page.evaluate(() => document.getElementById('routeCardPager').getAttribute('aria-label') || '');
   check(new RegExp(`^Route ${on[0].i + 1} of `).test(await pager()), 'the filled tag is the card\'s route: ' + await pager());
   const other = first.find((g) => !g.on);
