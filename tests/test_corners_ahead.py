@@ -57,5 +57,5 @@ def test_the_line(out):
 def test_wired_through_the_quiet_gate_on_the_planned_route():
     js = open(os.path.join(ROOT, "web", "cockpit.js")).read()
     assert "track === plannedRoute && window.ApexCornersAhead && state.notesMode !== 'quiet'" in js
-    assert "const quiet = limitSay || briefSay || cornersSay || brakeSay" in js and "cornersSay = null; drive.sectionsSaid = null;" in js
+    assert "const quiet = limitSay || briefSay || cornersSay || alongSay || brakeSay" in js and "cornersSay = null; drive.sectionsSaid = null;" in js
     assert '<script src="corners_ahead.js" defer></script>' in open(os.path.join(ROOT, "web", "index.html")).read()
