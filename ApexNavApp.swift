@@ -334,6 +334,13 @@ struct ApexCockpitWebView: UIViewRepresentable {
             return true
         }
 
+        // Convoy voice (web/convoy_voice.js): the app's own page may use the microphone, which iOS still asks for once
+        // (NSMicrophoneUsageDescription); a page from anywhere else, or the camera, never.
+        func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo,
+                     type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+            decisionHandler(frame.isMainFrame && origin.protocol == ApexWebBundle.scheme && type == .microphone ? .grant : .deny)
+        }
+
         func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
                      initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
             let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
@@ -498,6 +505,12 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
         // session stays up, mixed with other apps, until the page says it stopped (cockpit.js soundtrackNative).
         if cmd == "soundtrack", let dict = body as? [String: Any] {
             shell?.setSoundtrack((dict["on"] as? Bool) ?? false)
+            return
+        }
+        // Convoy voice (web/convoy_voice.js): while the channel is on, the audio session is a call's (microphone in,
+        // speaker or Bluetooth out) so the co-driver's lines no longer switch it back to playback-only.
+        if cmd == "talk", let dict = body as? [String: Any] {
+            shell?.setTalk((dict["on"] as? Bool) ?? false)
             return
         }
         // While Vetta speaks (the map's Layers): "lower" ducks the music for each line, "pause" pauses it (cockpit.js sendMusicMode).
@@ -2009,7 +2022,33 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
+    // Convoy voice: an open channel needs the microphone, so the session is play-and-record for as long as it is on, with
+    // the voice processing of a call (echo cancelling), out of the speaker when nothing else is connected, and through
+    // Bluetooth car audio, AirPods or a headset when one is (its microphone too). Other apps' music mixes in, and is ducked
+    // for a co-driver line as before.
+    private var talkOn = false
+
+    func setTalk(_ on: Bool) {
+        guard on != talkOn else { return }
+        talkOn = on
+        if on {
+            configureTalkSession(duck: false)
+            try? AVAudioSession.sharedInstance().setActive(true)
+        } else if synth.isSpeaking || webVoiceActive {
+            configureVoiceSession()
+        } else {
+            releaseVoice()
+        }
+    }
+
+    private func configureTalkSession(duck: Bool) {
+        var options: AVAudioSession.CategoryOptions = [.allowBluetooth, .allowBluetoothA2DP, .defaultToSpeaker]   // .allowBluetooth: HFP, the name every SDK the CI builds with knows
+        options.insert(duck && !pauseMusic ? .duckOthers : .mixWithOthers)
+        try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: options)
+    }
+
     private func holdForSoundtrack() {
+        if talkOn { configureTalkSession(duck: false); try? AVAudioSession.sharedInstance().setActive(true); return }
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
         try? AVAudioSession.sharedInstance().setActive(true)
     }
@@ -2023,6 +2062,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     // ducking it; pace notes, hazards, directions and anything spirited duck. The page decides (ApexSpeechQueue.ducks).
     // Pause music overrides it: the driver asked for the music to stop for every line.
     private func configureVoiceSession(duck: Bool = true) {
+        if talkOn { configureTalkSession(duck: duck); return }   // convoy voice: keep the microphone open
         let options: AVAudioSession.CategoryOptions = pauseMusic ? [] : (duck ? [.duckOthers, .interruptSpokenAudioAndMixWithOthers] : [.mixWithOthers])
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: options)
     }
@@ -2083,6 +2123,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     /// Gives the audio back: ducked music comes back up, paused music is told it may play on.
     private func releaseVoice() {
+        if talkOn { configureTalkSession(duck: false); return }   // convoy voice keeps the session; ducked music comes back up
         if soundtrackOn { holdForSoundtrack(); return }        // the Soundtrack keeps the session; other apps come back up
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
