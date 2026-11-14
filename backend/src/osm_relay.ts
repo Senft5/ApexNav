@@ -266,3 +266,32 @@ export async function placeTags(url: URL, data: R2Get | undefined): Promise<Resp
     return new Response(JSON.stringify({ tags }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=21600", "x-content-type-options": "nosniff", "x-cache": "built" } });
   } catch { return bad(404, "not_built"); }
 }
+
+/**
+ * GET /api/ctx/points?cells=<bi>_<bj>[,...] (0.25 degree cells, up to 40): each cell's fuel stations, schools and places of
+ * worship from the weekly build (tools/osm_ctx/region.py, R2 osm/v2/points/<bi>_<bj>.json) for route_ctx/car.js and
+ * route_ctx/events.js, as {cells: {"<bi>_<bj>": {fuel, schools, worship} | null}}: null for a cell the build doesn't
+ * cover (outside Ohio, Kentucky and Indiana), which the phone then asks Overpass for. Cell ids only; nothing kept or logged.
+ */
+const POINT_CELLS_MAX = 40, CELL_ID = /^-?\d{1,4}_-?\d{1,4}$/;
+const pointCache = new Map<string, { at: number; body: unknown }>();
+export function resetPointsForTest(): void { pointCache.clear(); }
+async function pointCell(data: R2Get, key: string, now = Date.now()): Promise<unknown> {
+  const had = pointCache.get(key);
+  if (had && now - had.at < 600_000) return had.body;
+  const o = await data.get(`${BUILT}/points/${key}.json`);
+  const body = o ? JSON.parse(await new Response(o.body).text()) : null;
+  if (pointCache.size >= 128) pointCache.delete(pointCache.keys().next().value as string);
+  pointCache.set(key, { at: now, body });
+  return body;
+}
+export async function pointCells(url: URL, data: R2Get | undefined): Promise<Response> {
+  const json = (status: number, body: unknown, cache = "no-store") => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": cache, "x-content-type-options": "nosniff" } });
+  const keys = [...new Set((url.searchParams.get("cells") || "").split(",").filter(Boolean))];
+  if (!keys.length || keys.length > POINT_CELLS_MAX || keys.some((k) => !CELL_ID.test(k))) return json(400, { error: "bad_cells" });
+  if (!data) return json(404, { error: "not_built" });
+  try {
+    const got = await Promise.all(keys.map((k) => pointCell(data, k)));
+    return json(200, { cells: Object.fromEntries(keys.map((k, i) => [k, got[i]])) }, "public, max-age=21600");
+  } catch { return json(404, { error: "not_built" }); }
+}

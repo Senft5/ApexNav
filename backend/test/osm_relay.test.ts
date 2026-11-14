@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { api } from "./helpers";
 import { env } from "cloudflare:workers";
-import { builtTile, bundleKey, compact, HEAD, KEEP, MIRRORS, osmTile, query, resetBuiltForTest, resetPlacesForTest, tileOf } from "../src/osm_relay";
+import { builtTile, bundleKey, compact, HEAD, KEEP, MIRRORS, osmTile, query, resetBuiltForTest, resetPlacesForTest, resetPointsForTest, tileOf } from "../src/osm_relay";
 import fx from "./fixtures/overpass_tile.json";
 
 // A real Overpass answer's elements (Dry Ridge Road, Colerain Township; OSM ODbL) with two tags the phone never reads.
@@ -161,6 +161,19 @@ describe("OSM relay (/api/ctx/osm)", () => {
       expect((await q(["not,a,place"])).status).toBe(400);
       expect((await api(null, "GET", "/api/ctx/places")).status).toBe(400);
       await DATA.delete("osm/v2/places/156_-339.json"); resetPlacesForTest();
+    });
+
+    it("answers a plan's cells' fuel, schools and places of worship, null for a cell the build doesn't cover", async () => {
+      resetPointsForTest();
+      const cell = { fuel: [[39.1, -84.6]], schools: [[39.11, -84.61]], worship: [] };
+      await DATA.put("osm/v2/points/156_-339.json", JSON.stringify(cell));
+      const r = await api(null, "GET", "/api/ctx/points?cells=156_-339,160_-339");
+      expect(r.status).toBe(200);
+      expect(await r.json()).toEqual({ cells: { "156_-339": cell, "160_-339": null } });
+      expect((await api(null, "GET", "/api/ctx/points")).status).toBe(400);
+      expect((await api(null, "GET", "/api/ctx/points?cells=1.5_2")).status).toBe(400);
+      expect((await api(null, "GET", "/api/ctx/points?cells=" + Array.from({ length: 41 }, (_, i) => `1_${i}`).join(","))).status).toBe(400);
+      await DATA.delete("osm/v2/points/156_-339.json"); resetPointsForTest();
     });
 
     it("a tile its bundle leaves out (across the border) or with no bundle goes to Overpass", async () => {
