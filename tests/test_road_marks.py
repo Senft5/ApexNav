@@ -129,3 +129,21 @@ def test_the_road_ahead_gets_the_marks_too():
     js = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
     assert "attachHorizonMarks(t);" in js and "await contextOn([c], CTX_BUDGET_MS, 'ahead', ['osm_overpass']);" in js
     assert "free.marksSaid = [...(free.marksSaid || []), ...old.marks.filter(" in js
+
+
+def test_a_t_junction_where_the_road_ahead_ends():
+    """Free driving: where the road ahead ends at a T (horizon.js tee), a mark at its end; a stop sign there is the call."""
+    runner = r"""
+const M = require(process.argv[1] + '/web/road_marks.js');
+const t = { dist: [0, 500, 1000], lat: [35.5, 35.5045, 35.509], lon: [-83.9, -83.9, -83.9] };
+const tee = M.teeMark(t);
+console.log(JSON.stringify({ tee, none: M.teeMark({ dist: [0] }),
+  kept: M.noTeeAtStop([tee]).length, atStop: M.noTeeAtStop([{ kind: 'stop', code: 'STOP', dist_m: 985 }, tee]).map((m) => m.code),
+  farStop: M.noTeeAtStop([{ kind: 'stop', code: 'STOP', dist_m: 600 }, tee]).map((m) => m.code) }));
+"""
+    out = json.loads(subprocess.run([NODE, "-e", runner, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["tee"] == {"type": "mark", "kind": "tee", "code": "TJUNC", "call": "T-junction", "index": 2, "dist_m": 1000, "end_m": 1000, "lat": 35.509, "lon": -83.9}
+    assert out["none"] is None and out["kept"] == 1
+    assert out["atStop"] == ["STOP"] and out["farStop"] == ["STOP", "TJUNC"]
+    js = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert "if (h.tee && window.ApexRoadMarks && ApexRoadMarks.teeMark)" in js and "e.kind === 'tee' ? 4" in js

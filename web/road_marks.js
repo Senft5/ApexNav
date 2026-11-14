@@ -20,6 +20,7 @@
     ford: { code: 'FORD', call: 'Water crossing' },
     unpaved: { code: 'GRAVEL', call: 'Unpaved road' },
     rough: { code: 'ROUGH', call: 'Rough road' },
+    tee: { code: 'TJUNC', call: 'T-junction' },   // the road ahead ends (free driving: horizon.js tee), not from Overpass
   };
   // a mapped animal-crossing sign names its animal (osm_overpass.js hazardOf label); deer is the one on these roads
   const animalCall = (label) => { const a = String(label || 'animals').toLowerCase(); return a === 'deer' ? 'Deer crossing' : /^(horse|horses)$/.test(a) ? 'Horse crossing' : /^(cow|cows|cattle)$/.test(a) ? 'Cattle crossing' : 'Animal crossing'; };
@@ -142,6 +143,22 @@
   const DUSK_RAD = 6 * Math.PI / 180;
   const cruiseWorthy = (m, sunAltRad) => !!m && m.type === 'mark' && m.kind === 'animal_crossing' && finite(sunAltRad) && sunAltRad < DUSK_RAD;
 
-  const api = { marksOf, events, unfelt, union, mapAnswered, cruiseWorthy, placeAt, KINDS };
+  /**
+   * The T-junction where the road ahead ends (free driving: horizon.js says the road ends and every way on turns off), as
+   * a mark at the track's last sample, or null. From the map's road lines; a stop sign there says it instead (noTeeAtStop).
+   */
+  function teeMark(t) {
+    const n = t && Array.isArray(t.dist) ? t.dist.length : 0;
+    if (n < 2 || !finite(t.dist[n - 1])) return null;
+    return { type: 'mark', kind: 'tee', code: KINDS.tee.code, call: KINDS.tee.call, index: n - 1, dist_m: t.dist[n - 1], end_m: t.dist[n - 1], lat: t.lat[n - 1], lon: t.lon[n - 1] };
+  }
+  /** Marks less a T-junction with a stop sign within 40 m: the stop sign is the call there (it brakes to a stop). */
+  function noTeeAtStop(marks) {
+    if (!Array.isArray(marks)) return marks || [];
+    const stops = marks.filter((m) => m.kind === 'stop').map((m) => m.dist_m);
+    return marks.filter((m) => m.kind !== 'tee' || !stops.some((d) => Math.abs(d - m.dist_m) < SAME_M));
+  }
+
+  const api = { marksOf, events, unfelt, union, mapAnswered, cruiseWorthy, placeAt, teeMark, noTeeAtStop, KINDS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadMarks = api;
 })(typeof window !== 'undefined' ? window : globalThis);
