@@ -9526,9 +9526,13 @@ flow('road marks on a route set during a drive: the map is asked for this route 
     { type: 'way', id: 1, tags: { highway: 'tertiary', name: 'Straight Road' }, nodes: ids, geometry: ids.map((_, k) => g(k * 100)) },
     { type: 'node', id: 1012, ...g(1200), tags: { traffic_calming: 'hump' } },
   ];
-  let mapUp = false;                                         // the map's server is down while the route is planned
+  // the map's server doesn't answer while the route is planned: a hang the plan gives up on (an error the plan saw itself
+  // would back the map off for a minute, osm_overpass.js BACKOFF_MS, and whether the error or the plan's own deadline came
+  // first was a race: this flow failed one run in six)
+  let mapUp = false;
+  const hung = (route) => new Promise((r) => setTimeout(r, 30000)).then(() => route.abort().catch(() => {}));
   for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
-    await page.route(`https://${host}/**`, (route) => (mapUp ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }) : route.abort()));
+    await page.route(`https://${host}/**`, (route) => (mapUp ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }) : hung(route)));
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
   const gpx = []; for (let m = 0; m <= 3000; m += 5) gpx.push(`<trkpt lat="${lat(m).toFixed(7)}" lon="${LON.toFixed(7)}"/>`);

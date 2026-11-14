@@ -47,6 +47,18 @@ console.log(JSON.stringify({ ev: ev.map((e) => ({ type: e.type, kind: e.kind, co
   rural: M.events({ points: [{ kind: 'animal_crossing', atM: 200, label: 'deer' }, { kind: 'animal_crossing', atM: 220, label: 'deer' }, { kind: 'animal_crossing', atM: 600, label: 'cattle' },
     { kind: 'animal_crossing', atM: 900 }, { kind: 'buggy', atM: 1100, label: 'horse-drawn vehicles' }], spans: [{ kind: 'covered_bridge', fromM: 1500, toM: 1530 }, { kind: 'one_lane_bridge', fromM: 1500, toM: 1530 }] }, c, t, near)
     .map((e) => [e.code, e.call, e.dist_m]),
+  surface: (() => {
+    const N = (fill) => new Float32Array(n).fill(fill), un = N(NaN), sp = N(NaN), sm = N(NaN), un2 = N(NaN);
+    for (let i = 10; i <= 14; i++) un[i] = 1; un[15] = 0; for (let i = 20; i <= 22; i++) sp[i] = 0;   // 250-350 m tiles, 500-550 m Overpass: one stretch
+    for (let i = 40; i <= 41; i++) un[i] = 1;                                                          // 25 m of it: no call
+    for (let i = 60; i <= 66; i++) sm[i] = 4; sm[12] = 5;                                              // rough 1500-1650 m; rough gravel is gravel
+    for (let i = 0; i <= 5; i++) un2[i] = 1;                                                           // the route starts on it
+    return { marks: M.marksOf({ channels: { unpaved: un, surface_paved: sp, smoothness: sm } }, c),
+      ev: M.events({ channels: { unpaved: un, surface_paved: sp, smoothness: sm } }, c, t, near).map((e) => [e.code, e.call, e.dist_m]),
+      start: M.marksOf({ channels: { unpaved: un2 } }, c), noCorridor: M.marksOf({ channels: { unpaved: un } }) };
+  })(),
+  union: M.union([{ code: 'GRAVEL', dist_m: 250 }], [{ code: 'GRAVEL', dist_m: 260 }, { code: 'STOP', dist_m: 100 }]).map((m) => m.code + m.dist_m),
+  answered: [M.mapAnswered(ctx), M.mapAnswered({ channels: { side_roads_per_km: new Float32Array(3).fill(NaN) } }), M.mapAnswered(null)],
   feltSaved: M.unfelt([{ kind: 'calming', dist_m: 500 }], [{ type: 'bump', dist_m: 520 }]).length }));
 """
 
@@ -70,10 +82,10 @@ def test_nothing_invented_or_off_the_road(out):
 
 
 def test_each_mark_has_its_own_glyph_on_the_strip():
-    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'ANIMAL', 'BUGGY', 'COVERED', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
+    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'ANIMAL', 'BUGGY', 'COVERED', 'GRAVEL', 'ROUGH', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
     svgs = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
     assert "<polygon" in svgs[0] and "M58 32 L80 54" in svgs[1] and "M36 30" in svgs[2] and "Q50 34" in svgs[3]
-    assert len(set(svgs[:7])) == 7 and all(s.count("#f70") == 0 for s in svgs[7:])   # an unknown code: the bare hazard straight
+    assert len(set(svgs[:9])) == 9 and all(s.count("#f70") == 0 for s in svgs[9:])   # an unknown code: the bare hazard straight
 
 
 def test_rural_signs_deer_buggies_and_a_covered_bridge(out):
@@ -82,8 +94,20 @@ def test_rural_signs_deer_buggies_and_a_covered_bridge(out):
                             ["BUGGY", "Horse-drawn buggies", 1100], ["COVERED", "Covered bridge", 1500], ["BRIDGE", "One-lane bridge", 1500]]
 
 
+def test_where_the_road_turns_unpaved_or_rough(out):
+    s = out["surface"]
+    assert s["marks"] == [{"kind": "unpaved", "atM": 250, "endM": 550, "n": 1}, {"kind": "rough", "atM": 1500, "endM": 1650, "n": 1}]
+    assert s["ev"] == [["GRAVEL", "Unpaved road", 250], ["ROUGH", "Rough road", 1500]]
+    assert s["start"] == [] and s["noCorridor"] == []     # already on it: no call; no distances: nothing placed
+
+
 def test_a_mapped_hump_the_track_already_calls_is_one_call(out):
     # a bump felt inside the 750-800 m run (a member's or the crowd's) is the call; one 100 m past it is a different thing
     assert out["felt"] == ["STOP", "RAIL", "BRIDGE", "ANIMAL"]
     assert out["feltFar"] == ["STOP", "HUMP", "RAIL", "BRIDGE", "ANIMAL"]
     assert out["feltStop"] == 1 and out["feltSaved"] == 0     # only bumps go; a saved mark (no end) uses its start
+
+
+def test_a_later_answer_only_adds_and_the_map_answer_is_known(out):
+    assert out["union"] == ["STOP100", "GRAVEL250"]          # the tiles' gravel stays; the map's same gravel is not twice
+    assert out["answered"] == [True, False, False]          # an unavailable answer (all unknown) asks again
