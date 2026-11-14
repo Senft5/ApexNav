@@ -834,7 +834,9 @@
         b.className = 'seg' + (s.id === activeSeg ? ' on' : '');
         b.innerHTML = `<b></b><span class="score" style="font-size:20px">${best ?? UNK}</span><span></span><span>best</span>`;
         b.querySelector('b').textContent = s.name;
-        b.querySelectorAll('span')[1].textContent = `${ApexUnits.long(s.length_m, 1)} · ${passes.length} run${passes.length === 1 ? '' : 's'}`;   // a tenth, as everywhere else (it said 21.34 mi)
+        const sp = b.querySelectorAll('span');
+        sp[1].textContent = `${ApexUnits.long(s.length_m, 1)} · ${passes.length ? `${passes.length} run${passes.length === 1 ? '' : 's'}` : 'no runs yet'}`;   // a tenth, as everywhere else (it said 21.34 mi)
+        if (!passes.length) { sp[0].hidden = true; sp[2].hidden = true; sp[1].style.gridColumn = "1 / -1"; }   // no runs: no "-- best" beside it; the line under the name says so
         b.onclick = () => { activeSeg = activeSeg === s.id ? null : s.id; renderSegments().then(syncSegments); };
         list.appendChild(b);
       }
