@@ -3053,7 +3053,7 @@ flow('turn by turn in road order: exit 19, then the sharp right a mile on, on th
     + JSON.stringify(guides.map((g) => [g.instruction, Math.round(g.at)])));
 });
 
-flow('the turn arrow and route overview: the next turn of a route being driven has an arrow on the map, gone once taken; one key shows the rest of the route', async (page, base) => {
+flow('the turn arrow and route overview: the next turn of a route being driven has an arrow on the map, gone once taken; one key shows the rest of the route; the route behind you fades', async (page, base) => {
   // a road north 1.2 km, then right onto Main St for 600 m to the destination (turn_arrow.js)
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.APEX_REVIEW = true; window.webkit = { messageHandlers: { apex: { postMessage() {} } } }; });
@@ -3090,6 +3090,10 @@ flow('the turn arrow and route overview: the next turn of a route being driven h
   const drawn = await page.evaluate(() => { const m = window.apexDebug.map;
     return { shaft: m.queryRenderedFeatures({ layers: ['apex-turnarrow'] }).length, head: m.queryRenderedFeatures({ layers: ['apex-turnarrow-head'] }).length }; });
   check(drawn.shaft > 0 && drawn.head > 0, 'the arrow is drawn on the map, shaft and head: ' + JSON.stringify(drawn));
+  // the route behind you is faint: the route line's gradient steps up to the route's ink where the car is
+  const behind = await page.evaluate(() => ({ p: window.apexDebug.behind, at: window.apexDebug.state.cursorM / window.apexDebug.track.dist[window.apexDebug.track.dist.length - 1],
+    g: window.apexDebug.map.getPaintProperty('apex-route', 'line-gradient') }));
+  check(behind.p > 0.3 && Math.abs(behind.p - behind.at) < 0.01 && JSON.stringify(behind.g).includes('line-progress'), 'the route behind you fades: ' + JSON.stringify(behind));
   // the route overview key: the rest of the route in view, north up and flat; Recenter takes its place and comes back at once
   check(await page.isVisible('#overviewBtn'), 'a route being driven has the overview key');
   await page.click('#overviewBtn');
@@ -3104,6 +3108,10 @@ flow('the turn arrow and route overview: the next turn of a route being driven h
   for (let m = turnM + 20; m <= turnM + 200; m += 40) { await driveTo(m); await page.waitForTimeout(80); }
   await page.waitForFunction(() => !window.apexDebug.turnArrow, null, { timeout: 5000 })
     .catch(() => check(false, 'past the turn the arrow goes (the next step is the arrival): ' + JSON.stringify(turnM)));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'end' }));
+  await page.waitForFunction(() => !window.apexDebug.driveActive, null, { timeout: 5000 }).catch(() => {});
+  const after = await page.evaluate(() => ({ behind: window.apexDebug.behind, g: window.apexDebug.map.getPaintProperty('apex-route', 'line-gradient') || null, key: getComputedStyle(document.getElementById('overviewBtn')).display }));
+  check(after.behind === null && !after.g && after.key === 'none', 'the drive ended: the whole line again, no overview key: ' + JSON.stringify(after));
 });
 
 flow('the sight-line speed rides under the position arrow, on the phone and on the car map (the owner, 2026-10-29)', async (page, base) => {
