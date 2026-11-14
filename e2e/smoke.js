@@ -5309,6 +5309,10 @@ flow('shared routes: one a friend shared shows on People, Friends, under From fr
 
 flow('roadbooks: a planned road goes into a new roadbook from Share; People lists it; it is made public; one near you is followed; a road your Log covers is stamped; a link opens one signed out (Worker stubbed, SOCIAL 2.6)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  // the map's style, plain paper (no tiles here), so the book's map can be drawn on the real map (post_map.js)
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
   const geom = Array.from({ length: 240 }, (_, i) => [-83.9 + i * 4e-4 + Math.sin(i / 6) * 3e-4, 35.6 + i * 3e-4]);
   const other = Array.from({ length: 200 }, (_, i) => [-83.7 + i * 3e-4, 35.7 + Math.sin(i / 9) * 4e-4]);
   let signedIn = true, n = 0;
@@ -5372,7 +5376,12 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
   // your book's page: the map, the road with its thumbnail and Drive it; Edit makes it public
   await page.click('.side-pop.open .rb-row:has-text("Smokies classics")');
   await page.waitForSelector('.rb-pop.open .rb-road:has-text("Cherohala loop")');
-  check(await page.locator('.rb-pop.open .rb-map svg path').count() === 1 && await page.locator('.rb-pop.open .rb-road .rb-thumb svg').count() === 1, 'the book draws its road on a map, and the road has its thumbnail');
+  check(await page.locator('.rb-pop.open .rb-map svg path:not(.rb-casing)').count() === 1 && await page.locator('.rb-pop.open .rb-road .rb-thumb svg').count() === 1, 'the book draws its road on a map, and the road has its thumbnail');
+  // the streets under it: a still of the real map behind the line, and the line on its casing (free roamer B, 2026-11-14)
+  await page.waitForSelector('.rb-pop.open .rb-map.on-map', { timeout: 20000 }).catch(() => {});
+  const under = await page.evaluate(() => { const b = document.querySelector('.rb-pop.open .rb-map'); return b && { on: b.classList.contains('on-map'),
+    bg: getComputedStyle(b.querySelector('svg')).backgroundImage.slice(0, 9), casing: getComputedStyle(b.querySelector('.rb-casing')).display }; });
+  check(under && under.on && under.bg === 'url("blob' && under.casing === 'inline', 'the book\'s roads lie on the real map, each on its casing: ' + JSON.stringify(under));
   check(/0 of 1 driven/.test(await page.textContent('.rb-pop.open')) && !/Nothing to tap|is stamped when/.test(await page.textContent('.rb-pop.open')), 'progress starts at none driven, the meter alone (no how-to line)');
   check(await page.evaluate(() => [...document.querySelectorAll('.side-pop .people-lead')].every((p) => !/Your lists of great roads/.test(p.textContent) || p.hidden)), 'with a roadbook of your own, no line saying what a roadbook is');
   await page.click('.rb-pop.open button:has-text("Edit")');

@@ -7182,6 +7182,12 @@
         d.addEventListener('toggle', () => { if (!d.open) return; const sec = ta.section(); const h = sec.querySelector(':scope > h3'); if (h) h.remove(); $('planAttackBody').replaceChildren(sec); });
       }
     } catch (e) { console.error('time attack', e); } });
+    // the real map under a Feed post's line and a roadbook's roads (post_map.js), in the theme's palette; never while a drive is on
+    const mapUnder = (() => { let snap = null; return (id, pts, w, h, pad) => {
+        if (driveActive || !window.ApexPostMap || !window.maplibregl || !window.ApexBasemap) return null;
+        snap = snap || ApexPostMap.snapper({ gl: maplibregl, style: MAP_STYLE, palette: () => look.map, restyle: ApexBasemap.restyle,
+          transform: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
+        return snap.snap(`${look.map.bg}|${look.map.road}|${id}`, pts, w, h, pad); }; })();
     // Roadbooks (web/roadbooks.js, docs/SOCIAL.md 2.6): collections of great roads, yours, followed and public ones near you;
     // a road you drive is stamped from your own Log. In People (Friends), in Where to?, on a route card's Share, and by link.
     let roadbooks = null;
@@ -7189,7 +7195,7 @@
       me: () => accountMe, here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), mayLookUp: nearLookupOk,
       cellQuery: (lat, lon) => ApexPrivacyZones.cellQuery(lat, lon), fmtLen: (m) => ApexUnits.long(m, 1, true), origin: () => shareOrigin(),
       zones: () => privacyZones, planned: () => (plannedRoute && Array.isArray(plannedRoute.lat) && plannedRoute.lat.length > 1 ? plannedRoute : null),
-      report: (o) => safety && safety.report(o), changed: () => { if (booksRowCount) booksRowCount(); },
+      report: (o) => safety && safety.report(o), changed: () => { if (booksRowCount) booksRowCount(); }, mapUnder,
       driveRoad: async (road, book) => {
         closeSheet();
         // from where you are to the road's start, then the road as drawn (as Drive it on a post leads to their line); close
@@ -7299,12 +7305,7 @@
       inZone: (lat, lon) => { try { return !!(window.ApexPrivacyZones && ApexPrivacyZones.zoneAt(ApexPrivacyZones.load(localStorage), lat, lon)); } catch (_) { return false; } },
       myHandle: () => (accountMe && accountMe.handle) || null,
       upload: (path, blob, type) => ApexSync.apiFetch(path, { method: 'PUT', headers: { 'content-type': type }, body: blob }),
-      // the real map under each post's line (post_map.js), in the theme's palette; never while a drive is on
-      mapUnder: (() => { let snap = null; return (id, pts, w, h, pad) => {
-        if (driveActive || !window.ApexPostMap || !window.maplibregl || !window.ApexBasemap) return null;
-        snap = snap || ApexPostMap.snapper({ gl: maplibregl, style: MAP_STYLE, palette: () => look.map, restyle: ApexBasemap.restyle,
-          transform: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
-        return snap.snap(`${look.map.bg}|${look.map.road}|${id}`, pts, w, h, pad); }; })(),
+      mapUnder,
       openFriend: (h) => { document.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); if (window.apexOpenFriend) window.apexOpenFriend(String(h).toLowerCase()); },
       // Drive it on a post: a route through stops along its line, on real roads (the line is thinned, so it is not driven as drawn)
       driveLine: async (stops, p) => {

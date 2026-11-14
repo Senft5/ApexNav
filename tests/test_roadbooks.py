@@ -47,7 +47,7 @@ out.lines = [R.bookLine({ roads: 7, length_m: 212000, followers: 41 }), R.bookLi
 out.link = [R.link('https://vetta.example/', 'AbCdEfGhIjKlMnOp'), R.link('https://vetta.example', 'a b')];
 const svg = R.overview([{ geom: g, stamped: true }, { geom: g.map(([lo, la]) => [lo, la + 0.01]) }, { geom: [[1, 1]] }], { line: 'var(--panel-dim)', hi: 'var(--accent)' });
 out.esc = R.overview([{ geom: g }], { label: 'A "book" <img src=x onerror=1> & more' });
-out.svg = [(svg.match(/<path /g) || []).length, svg.indexOf('var(--panel-dim)') < svg.indexOf('var(--accent)'), /NaN|undefined/.test(svg), R.overview([]), R.overview([{ geom: [[1, 1]] }])];
+out.svg = [(svg.match(/<path d=/g) || []).length, svg.indexOf('var(--panel-dim)') < svg.indexOf('var(--accent)'), /NaN|undefined/.test(svg), R.overview([]), R.overview([{ geom: [[1, 1]] }])];
 // Drive them all: nearest first from here, each from its nearer end, a road out of reach left out, at most four
 const rd = (id, lat0, rev) => { const gg = Array.from({ length: 20 }, (_, i) => [-84, lat0 + i * 0.001]); return { id, geom: rev ? gg.reverse() : gg }; };
 const T = (here, roads, max) => R.tour(here, roads, max).map((l) => l.road.id + (l.fwd ? '>' : '<'));
@@ -104,3 +104,46 @@ def test_drive_them_all_goes_nearest_first(out):
     assert t["cap"] == ["a>", "b>", "c>", "d>"]       # four at most
     assert t["two"] == ["a>", "b>"]
     assert t["away"] == [] and t["none"] == []         # nothing within 150 km of here
+
+
+MAP_RUNNER = r"""
+const R = require(process.argv[1] + '/web/roadbooks.js'), M = require(process.argv[1] + '/web/post_map.js');
+const W = 320, H = 150, PAD = 12;
+// where Web Mercator at camera v puts [lat, lon] in a W×H box
+const px = (v, lat, lon) => {
+  const ws = 512 * 2 ** v.zoom, X = (lo) => (lo + 180) / 360 * ws;
+  const Y = (la) => (1 - Math.log(Math.tan(Math.PI / 4 + la * Math.PI / 360)) / Math.PI) / 2 * ws;
+  return [W / 2 + X(lon) - X(v.center[0]), H / 2 + Y(lat) - Y(v.center[1])];
+};
+// the drawn points of every line (casings skipped), against where the map at viewFor(overviewFrame) has them
+const worst = (roads) => {
+  const v = M.viewFor(R.overviewFrame(roads), W, H, PAD), svg = R.overview(roads, { w: W, h: H, pad: PAD });
+  const paths = [...svg.matchAll(/<path (class="rb-casing" )?d="([^"]+)"/g)].filter((m) => !m[1]).map((m) => m[2]);
+  let w = 0;
+  paths.forEach((d, k) => {
+    const g = roads[k].geom, step = Math.max(1, Math.floor(g.length / 160)), kept = g.filter((_, i) => i % step === 0 || i === g.length - 1);
+    const xy = d.match(/-?[\d.]+ -?[\d.]+/g).map((q) => q.split(' ').map(Number));
+    kept.forEach(([lo, la], i) => { const [x, y] = px(v, la, lo); w = Math.max(w, Math.hypot(x - xy[i][0], y - xy[i][1])); });
+  });
+  return w;
+};
+const line = (lat0, lon0, dlat, dlon, n = 120) => ({ geom: Array.from({ length: n }, (_, i) => [lon0 + i * dlon + Math.sin(i / 9) * dlon * 6, lat0 + i * dlat]) });
+const ohio = [line(39.10, -84.62, 0.0006, 0.0003), line(39.2, -84.4, -0.0002, 0.0009), line(38.95, -84.7, 0.0004, 0.0001)];    // three roads, ~40 km across
+const smoky = [line(35.45, -83.95, 0.0002, 0.001, 200), line(35.6, -83.5, -0.0005, -0.0002)];
+const norway = [line(60.1, 10.5, 0.002, 0.0002, 100)];
+console.log(JSON.stringify({ ohio: worst(ohio), smoky: worst(smoky), norway: worst(norway),
+  frame: R.overviewFrame(ohio).map((p) => p.map((x) => +x.toFixed(4))), none: [R.overviewFrame([]), R.overviewFrame([{ geom: [[1, 2]] }]), R.overviewFrame(null)],
+  casings: (R.overview(ohio).match(/class="rb-casing"/g) || []).length }));
+"""
+
+
+def test_the_real_map_lies_under_the_books_roads():
+    r = json.loads(subprocess.run([NODE, "-e", MAP_RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
+    # within a pixel of the drawn lines everywhere, from Ohio to Norway, so the roads sit on their streets
+    assert r["ohio"] < 1.0, r
+    assert r["smoky"] < 1.0, r
+    assert r["norway"] < 1.0, r
+    assert r["none"] == [None, None, None]
+    assert r["casings"] == 3            # one casing under each line, shown only on the map
+    cockpit = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert re.search(r"changed: \(\) => \{ if \(booksRowCount\) booksRowCount\(\); \}, mapUnder,", cockpit)
