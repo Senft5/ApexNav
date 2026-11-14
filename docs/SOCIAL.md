@@ -132,11 +132,13 @@ and in random batches so a trace cannot be re-assembled.
 - What For you says, told to the phone the moment it happens: a friend request, a new friend, kudos on a run (once
   per run), kudos and comments on your drive post (and a new comment on a post you commented on, to the earlier
   commenters who can still see it and aren't blocked either way, 2026-11-14; and "@bob mentioned you" to whoever a
-  comment @mentions, if they can see the post, five handles at most, one push per person), a duel asked of you or taken, a crew drive planned in your crew.
+  comment @mentions, if they can see the post, five handles at most, one push per person), a duel asked of you or taken, a crew drive planned in your crew, and "Topped" when a friend's or crew-mate's run goes
+  over your best Score on a stage you both have, or a time attack entrant goes quicker than you this week (2026-11-14; told
+  once, as they go past you, only if the run is published to you; never the time or the gap).
   Never to or from someone blocked; the words are the server's own (a handle, a stage or crew name, a drive's title),
   never a comment's text. A tap opens what it is about: the post with its comments, the friend, or People.
 - Garage → Settings → **Notifications**: one switch, off until turned on, and only then does iOS ask. While it is on,
-  one switch per kind under it (Friend requests, Kudos, Comments and mentions, Duels, Crew drives), all on at first;
+  one switch per kind under it (Friend requests, Kudos, Comments and mentions, Duels, Someone beat you, Crew drives), all on at first;
   which are off is kept in KV `pushoff/<user id>` (`GET/PUT /api/push/kinds`), erased with the account (2026-11-14). In the
   foreground a push goes to the list only (the page is open). Nothing while you drive: the page turns
   `PUT /api/push/quiet` on at a drive's start (three hours at most) and off at its end. After your first post, one offer.
@@ -144,7 +146,6 @@ and in random batches so a trace cannot be re-assembled.
   /api/push/token`; tokens in KV `push/<user id>` (no table, so no migration and nothing in backups), at most three
   phones, a sandbox flag for builds from Xcode; a token Apple calls gone is dropped. Sent in `waitUntil` after the write,
   so a push never slows or fails the request. `ApexPush.swift`: the token, the tap. Shell: `aps-environment`.
-- Next: a switch per kind, if anyone asks for one.
 
 ### 2.13 Drive posts and the Feed (built 2026-11-13; big bet #4)
 - After a drive with a Score, a member taps **Post** on the drive's card (the solid key; Share card, the picture for
