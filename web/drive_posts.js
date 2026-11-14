@@ -549,21 +549,37 @@
       redo();
       return box;
     }
-    /** Every post, newest first, More for older ones. For a side sheet of its own. */
+    /** Every post, newest first, More for older ones. For a side sheet of its own. Above it one pick of whose posts:
+     *  All, Friends (the ones posted to your friends) or one of your crews; shown once you are in a crew. */
     function full() {
       const list = el('div', { className: 'feed' }), more = btn('More', () => load(), 'linkbtn');
-      let last = null;
-      const load = () => apiCall('GET', `/api/feed${last ? `?before=${encodeURIComponent(last)}` : ''}`).then(jsonOf).then((rows) => {
-        if (!Array.isArray(rows)) return;
-        list.append(...rows.map((p) => card(p, {})));
-        last = rows.length ? rows[rows.length - 1].created_at : last;
-        more.hidden = rows.length < 30;
-        if (!list.childElementCount) list.append(el('p', { className: 'note', textContent: 'No drives posted yet. Post yours from the card after a drive.' }));
+      const pick = el('div', { className: 'switch feed-pick', role: 'radiogroup', 'aria-label': 'Show' }); pick.hidden = true;
+      let last = null, only = '', gen = 0;
+      const load = () => {
+        const g = gen, q = [only, last ? `before=${encodeURIComponent(last)}` : ''].filter(Boolean).join('&');
+        return apiCall('GET', `/api/feed${q ? `?${q}` : ''}`).then(jsonOf).then((rows) => {
+          if (g !== gen || !Array.isArray(rows)) return;   // a newer pick is loading
+          list.append(...rows.map((p) => card(p, {})));
+          last = rows.length ? rows[rows.length - 1].created_at : last;
+          more.hidden = rows.length < 30;
+          if (!list.childElementCount) list.append(el('p', { className: 'note', textContent: only ? 'Nothing posted here yet.' : 'No drives posted yet. Post yours from the card after a drive.' }));
+        }).catch(() => {});
+      };
+      const show = (q) => {
+        only = q; last = null; gen += 1; list.replaceChildren();
+        pick.querySelectorAll('button').forEach((b) => { const on = b.dataset.q === q; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+        load();
+      };
+      Promise.resolve(page.crews ? page.crews() : []).then((crews) => {
+        if (!Array.isArray(crews) || !crews.length) return;
+        const opts = [['', 'All'], ['friends=1', 'Friends'], ...crews.map((c) => [`crew=${encodeURIComponent(c.id)}`, c.name])];
+        if (opts.length > 3) pick.className = 'stamps feed-pick';
+        pick.replaceChildren(...opts.map(([q, label]) => { const b = btn(label, () => show(q), 'chip'); b.dataset.q = q; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(q === only)); b.classList.toggle('on', q === only); return b; }));
+        pick.hidden = false;
       }).catch(() => {});
       load();
-      return el('div', { className: 'stack-12' }, list, more);
+      return el('div', { className: 'stack-12' }, pick, list, more);
     }
-
     // a post's body: the drive's card, its line without its ends (trimLine), to a crew (to) or your friends (null)
     function bodyOf(d, to, caption) {
       const line = trimLine(d.lat, d.lon, page.inZone || (() => false));
