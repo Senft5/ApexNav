@@ -280,6 +280,7 @@
         if (n !== themeAfter) return;
         if (track && track.kind !== 'horizon') loadTrackOnMap();   // the road ahead is never drawn
         if (window.ApexLogHost) ApexLogHost.changed('theme');
+        try { if (themeCards.size) renderThemePicker(); } catch (_) { /* before the Garage was ever drawn */ }   // the looks' cards in the mode the page turned to
       });
     }
     function refreshAutoNight() {
@@ -367,7 +368,7 @@
     });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), horizonFrom: async (coords) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; useHorizon(t); return t.id; } };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), horizonFrom: async (coords, tee = false) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; if (tee) t.marks = [ApexRoadMarks.teeMark(t)]; useHorizon(t); return t.id; } };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -2016,7 +2017,7 @@
       if (learned != null) { try { localStorage.setItem(REACT_KEY, learned.toFixed(2)); } catch (_) {} }
     }
     const noteM = (e) => (Number.isFinite(e.start_m) && e.start_m <= e.dist_m ? e.start_m : e.dist_m);
-    const apexMpsOf = (e) => (e.type === 'corner' && Number.isFinite(e.apex_mph) ? e.apex_mph / 2.2369362921 : e.type === 'mark' && e.kind === 'stop' ? 0 : null);   // a stop sign: braking to a stop
+    const apexMpsOf = (e) => (e.type === 'corner' && Number.isFinite(e.apex_mph) ? e.apex_mph / 2.2369362921 : e.type === 'mark' && e.kind === 'stop' ? 0 : e.type === 'mark' && e.kind === 'tee' ? 4 : null);   // a stop sign: braking to a stop; a T: to a turn
     let lastNotes = [];
     // U-58: Auto says when it goes quiet and when the notes come back (ApexNoteTiming.createWakeVoice: once each way, never
     // within two minutes of the last, silent on a drive's first reading). The drive's first note is called whatever the
@@ -2723,6 +2724,8 @@
       const t = await trackFromPolyline(h.coords, 'horizon', 'The road ahead');
       if (!onFreeRoad()) return;
       t.kind = 'horizon'; t.subtitle = 'The road ahead, from the map'; t.horizonEnd = h.end;
+      // the road ahead ends at a T (horizon.js tee): a mark there, called like a stop sign (braking to a turn)
+      if (h.tee && window.ApexRoadMarks && ApexRoadMarks.teeMark) { const m = ApexRoadMarks.teeMark(t); if (m) t.marks = [m]; }
       useHorizon(t);
     }
     function useHorizon(t) {
@@ -2731,6 +2734,7 @@
       if (old && Array.isArray(old.marks)) free.marksSaid = [...(free.marksSaid || []), ...old.marks.filter(e => state.spoken.has(`${old.id}:${e.type}:${e.index}`))].slice(-30);
       track = t; state.cursorM = 0; state.spoken.clear();
       for (const e of t.events) if (said.some(k => k.type === e.type && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 25)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
+      for (const e of t.marks || []) if ((free.marksSaid || []).some(k => k.code === e.code && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 40)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
       if (mapReady) map.getSource('apex-route-src').setData({ type: 'FeatureCollection', features: [] });   // not a route: not drawn
       rebuildPins();
       render(false);
@@ -2748,6 +2752,7 @@
         await contextOn([c], CTX_BUDGET_MS, 'ahead', ['osm_overpass']);
         if (track !== t || !c.ctx || !c.corridor) return;
         t.marks = ApexRoadMarks.union(t.marks, ApexRoadMarks.events(c.ctx, c.corridor, t, (la, lo, lats, lons) => Core.nearestIndex(la, lo, lats, lons, -1)));
+        if (ApexRoadMarks.noTeeAtStop) t.marks = ApexRoadMarks.noTeeAtStop(t.marks);
         const cos = Math.cos(t.lat[0] * Math.PI / 180);
         for (const e of t.marks) if ((free.marksSaid || []).some(k => k.code === e.code && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 40)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
         if (t.marks.length) { rebuildPins(); render(false); }
@@ -8955,10 +8960,17 @@
       // asked for, from the plate's Watch a replay, never as part of trying the look
       paintTrial();
     }
+    // a look's card is drawn in the mode the page is in (2026-11-14, the main look's redesign: a day card glared white
+    // in the night Garage); refreshed when the mode turns (paintThemeCards)
+    function previewTokens(box, t) {
+      const m = cardMode(), c = t[m] || t.day;
+      for (const [k, v] of Object.entries(c)) box.style.setProperty(`--${k.replace(/[A-Z]/g, (x) => '-' + x.toLowerCase())}`, v);
+      box._tok = m;
+    }
     function themePreview(t) {
-      const c = t.day, box = document.createElement('div');
+      const box = document.createElement('div');
       box.className = `theme-preview tp-${t.id}`;
-      for (const [k, v] of Object.entries(c)) box.style.setProperty(`--${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}`, v);
+      previewTokens(box, t);
       box.style.setProperty('--font-ui', t.fonts.ui); box.style.setProperty('--font-num', t.fonts.num);
       fillPreview(box, t);
       return box;
@@ -8968,7 +8980,7 @@
     const vocabDeps = () => ({ plain: window.ApexPlainNotes, units: ApexUnits, paceNoteText: Core.paceNoteText, lockup: Inst.lockup, voiceLines: window.ApexVoiceLines });
     const cardMode = () => (document.documentElement.dataset.mode === 'night' ? 'night' : 'day');
     function fillPreview(box, t) {
-      const c = t.day, st = window.ApexVocabulary && ApexVocabulary.sampleStrip(state.noteWords, vocabDeps());
+      const c = t[cardMode()] || t.day, st = window.ApexVocabulary && ApexVocabulary.sampleStrip(state.noteWords, vocabDeps());
       box._words = state.noteWords;
       if (t.car && t.car.dial && t.car.meter) {
         // a car's own theme: its card is the car's cluster, parked (needles at rest: no reading is shown), and the car from
@@ -9028,7 +9040,9 @@
       }
       for (const { t, card, preview, key, inUseTag, ok, quote } of themeCards.values()) {
         const allowed = ok(), inUse = state.theme === t.id && !themeTrial;
-        if (preview._words !== state.noteWords || (t.car && preview._mode !== cardMode())) fillPreview(preview, t);   // the words changed: the strip head follows
+        const turned = preview._tok !== cardMode();
+        if (turned) previewTokens(preview, t);
+        if (turned || preview._words !== state.noteWords || (t.car && preview._mode !== cardMode())) fillPreview(preview, t);   // the words changed: the strip head follows
         const q = t.voice ? ' · suggested voice' : '';
         if (quote.data !== q) quote.data = q;
         card.classList.toggle('in-use', state.theme === t.id);
@@ -9776,6 +9790,23 @@
       }
       return regionLists[name];
     }
+    // The same lists for anywhere the lower-48 build covers (osm-ctx-us.yml): the waterfalls and closures in the points
+    // files of the 0.25° cells round the route (GET /api/ctx/points?cells=, cell ids only), one request shared by both;
+    // the answer as the region list's shape (scenic.js cellsDoc), or null, and the region's file or Overpass then.
+    const cellAnswers = new Map();
+    async function cellList(kind, s, w, n, e) {
+      if (!window.ApexScenic || !ApexScenic.cellsIn) return null;
+      const keys = ApexScenic.cellsIn(s, w, n, e);
+      if (!keys.length) return null;
+      const id = keys.join(',');
+      if (!cellAnswers.has(id)) {
+        if (cellAnswers.size > 8) cellAnswers.delete(cellAnswers.keys().next().value);
+        cellAnswers.set(id, apiCall('GET', `/api/ctx/points?cells=${id}`).then((r) => (r && r.ok ? r.json() : null)).catch(() => null));
+      }
+      const j = await cellAnswers.get(id);
+      if (!j) cellAnswers.delete(id);
+      return j && j.cells ? ApexScenic.cellsDoc(j.cells, kind) : null;
+    }
     // Seasonal and time-of-day closures (conditional_closures.js, IDEAS R-22): OSM conditional access tags on the roads the
     // route uses, read for when you'd get there. A trip over 1° across, or the map offline: nothing said.
     async function attachClosures(t) {
@@ -9784,10 +9815,11 @@
       let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
       for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
       if (n - s > 1 || e - w > 1) return;
-      // inside Ohio, Kentucky and Indiana from the list built weekly with the OSM tiles (GET /api/ctx/closures.json, asked
-      // once a session), elsewhere from Overpass, every server raced
+      // from the weekly OSM build: the cells round the route (lower 48), else the region's list (GET /api/ctx/closures.json,
+      // asked once a session); elsewhere from Overpass, every server raced
       const box = [s - 0.005, w - 0.005, n + 0.005, e + 0.005];
-      const json = (ApexConditional.inRegion && ApexConditional.inRegion(await regionList('closures'), ...box))
+      const json = (ApexConditional.inRegion && (ApexConditional.inRegion(await cellList('closures', ...box), ...box)
+          || ApexConditional.inRegion(await regionList('closures'), ...box)))
         || await ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexConditional.query(...box)));
       if (!json || plannedRoute !== t) return;
       const total = t.dist[t.dist.length - 1], now = leaveAt();
@@ -10207,8 +10239,8 @@
       $('routeCardAlong').hidden = true; $('routeAlongPanel').hidden = true; $('routeAlongPanel').replaceChildren();
       $('routeAlongLine').setAttribute('aria-expanded', 'false');
     }
-    // IDEAS R-24: waterfalls near the route, from OpenStreetMap (the map's tiles have none): inside Ohio, Kentucky and
-    // Indiana from the list built weekly with the OSM tiles (GET /api/ctx/falls.json, asked once a session), elsewhere
+    // IDEAS R-24: waterfalls near the route, from OpenStreetMap (the map's tiles have none): from the weekly OSM build (the
+    // cells round the route, lower 48; else the region's GET /api/ctx/falls.json, asked once a session), elsewhere
     // through Overpass. A trip over 1° across, the servers down or offline: none, and the Along line says what the tiles gave.
     async function fallsNear(t) {
       if (!window.ApexCameras || !ApexScenic.fallsQuery) return [];
@@ -10216,7 +10248,8 @@
       for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
       if (n - s > 1 || e - w > 1) return [];
       if (ApexScenic.fallsInRegion) {
-        const got = ApexScenic.fallsInRegion(await regionList('falls'), s - 0.005, w - 0.005, n + 0.005, e + 0.005);
+        const box = [s - 0.005, w - 0.005, n + 0.005, e + 0.005];
+        const got = ApexScenic.fallsInRegion(await cellList('falls', ...box), ...box) || ApexScenic.fallsInRegion(await regionList('falls'), ...box);
         if (got) return got;
       }
       try {

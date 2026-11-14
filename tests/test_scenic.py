@@ -171,3 +171,26 @@ def test_route_note_stamps_always_show_and_keep_pins_off(out):
     # a camera's stamp is a route note: never hidden by a café; the same word twice on one spot shows once; another word
     # (SPD) on top of it still shows; a café clear of them all stays
     assert out["notes"] == [True, False, False, True, True]
+
+
+def test_waterfalls_and_closures_from_the_cells_round_a_route():
+    """The lower-48 build has no single falls.json: the waterfalls and closures come in the points files of the 0.25 degree
+    cells round the route (GET /api/ctx/points, scenic.js cellsIn + cellsDoc), read as the region's list is. A cell the
+    answer lacks, or one built before the lists were added (no "falls" key), isn't covered, so the box goes to Overpass."""
+    src = r"""
+const S = require(process.argv[1] + '/web/scenic.js');
+const C = require(process.argv[1] + '/web/conditional_closures.js');
+const cells = { '156_-339': { fuel: [], falls: [[39.1, -84.6, 'Shaker Run Falls']], closures: [[39.12, -84.55, { 'access:conditional': 'no @ (Nov-Mar)' }]] },
+  '156_-338': { fuel: [], falls: [], closures: [] }, '157_-339': { fuel: [] }, '157_-338': null };
+const fd = S.cellsDoc(cells, 'falls'), cd = S.cellsDoc(cells, 'closures');
+console.log(JSON.stringify({ keys: S.cellsIn(39.0, -84.7, 39.3, -84.3), big: S.cellsIn(30, -90, 40, -80).length, bad: S.cellsIn(NaN, 0, 1, 1),
+  cells: fd.cells, in: S.fallsInRegion(fd, 39.0, -84.7, 39.24, -84.3), part: S.fallsInRegion(fd, 39.0, -84.7, 39.3, -84.3),
+  closures: C.inRegion(cd, 39.0, -84.7, 39.24, -84.3), none: S.cellsDoc({ '1_2': { fuel: [] } }, 'falls'), kind: S.cellsDoc(cells, 'fuel') }));
+"""
+    r = json.loads(subprocess.run([NODE, "-e", src, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["keys"] == ["156_-339", "156_-338", "157_-339", "157_-338"] and r["big"] == 0 and r["bad"] == []
+    assert r["cells"] == [[156, -339], [156, -338]], "only the cells whose file has the list"
+    assert r["in"] == [{"kind": "falls", "name": "Shaker Run Falls", "lat": 39.1, "lon": -84.6}]
+    assert r["part"] is None, "157_-339 has no falls list (built before it): Overpass"
+    assert r["closures"] == {"elements": [{"type": "way", "center": {"lat": 39.12, "lon": -84.55}, "tags": {"access:conditional": "no @ (Nov-Mar)"}}]}
+    assert r["none"] is None and r["kind"] is None

@@ -12,7 +12,7 @@ export const TILE = 0.05;
 export const KEEP_S = 7 * 86400;
 export const MIRROR_MS = 9000;
 // the Overpass usage policy asks for an identifying User-Agent with a way to reach the operator (no person's email)
-export const UA = "Vetta-route-context/1.0 (+https://apexnav.senftns.workers.dev/about.html)";
+export const UA = "Vetta-route-context/1.0 (+https://vettadrive.com/about)";
 export const WAIT_MS = 3500;   // a miss: the phone gets 504 after this (its plan has moved on) and the fetch finishes for the next one
 export const MIRRORS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter",
   "https://overpass.private.coffee/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
