@@ -86,6 +86,8 @@ export async function exportMyData(env: Env, v: Viewer): Promise<Record<string, 
     livery_grants: q("SELECT note, created_at FROM livery_grants WHERE user_id = ?"),
     build_chat: q("SELECT body, created_at FROM build_chat WHERE author = ?"),
     crew_chat: q("SELECT c.name AS crew, m.body, m.created_at FROM crew_chat m JOIN crews c ON c.id = m.crew_id WHERE m.author = ?"),
+    // messages you sent, and to whom (their words to you are theirs: like a comment, not in your export)
+    direct_messages: q("SELECT u.handle AS to_handle, m.body, m.created_at FROM direct_messages m JOIN users u ON u.id = m.recipient WHERE m.sender = ?"),
     cars: q("SELECT year, make, model, trim, nickname, color, power_hp, weight_kg, drivetrain, transmission, tyres, mods, clearance, width_cm, fuel, range_km, shared, is_primary, created_at FROM cars WHERE owner = ?"),
     highlights: q("SELECT id, name, category, note, lat, lon, status, created_at FROM highlights WHERE author_id = ?"),
     reports_you_made: q("SELECT kind, note, status, created_at FROM reports WHERE reporter = ?"),

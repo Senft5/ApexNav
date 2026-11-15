@@ -28,9 +28,10 @@ import { deleteAccount, exportMyData } from "./account";
 import { itemsDelete, itemsGet, itemsPut } from "./member_items";
 import { dnaPut } from "./dna";
 import * as drivePosts from "./drive_posts";
+import * as messages from "./messages";
 import { mediaGet, mediaPut } from "./post_media";
 import { devDriveGet, devDriveList, devDrivePut } from "./dev_drives";
-import { afterCrewDrive, afterDuel, afterFriend, afterKudos, afterPassed, afterTopped, bestBefore, afterPostComment, afterPostKudos, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
+import { afterCrewDrive, afterDuel, afterMessage, afterFriend, afterKudos, afterPassed, afterTopped, bestBefore, afterPostComment, afterPostKudos, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewBadge, crewFeed, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
 import { decalsPlace } from "./livery";
@@ -419,6 +420,17 @@ on("POST", "/api/board", async (req, env, _m, ctx) => {
 // Kudos (IDEAS S-07): a tap of thanks on a friend's run you can see; no text.
 // drive posts and the friends feed (src/drive_posts.ts)
 on("GET", "/api/feed/with", async (req, env) => json(await drivePosts.feedWith(env, await requireMember(req, env), new URL(req.url))));
+// direct messages between friends (messages.ts); /api/messages/m/:id before /:handle so an id is never read as a handle
+on("GET", "/api/messages", async (req, env) => json(await messages.dmList(env, await requireMember(req, env))));
+on("GET", "/api/me/messages/unread", async (req, env) => json(await messages.dmUnread(env, await requireMember(req, env))));
+on("DELETE", "/api/messages/m/:id", async (req, env, m) => { await messages.dmDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
+on("GET", "/api/messages/:handle", async (req, env, m) => json(await messages.dmThread(env, await requireMember(req, env), m.groups!.handle, new URL(req.url))));
+on("POST", "/api/messages/:handle", async (req, env, m, ctx) => {
+  const v = await requireMember(req, env);
+  const r = await messages.dmSend(env, v, m.groups!.handle, req);
+  await later(ctx, afterMessage(env, v, r.to));
+  return json({ id: r.id }, 201);
+});
 on("GET", "/api/feed/week", async (req, env) => json(await drivePosts.feedWeek(env, await requireMember(req, env))));
 on("GET", "/api/feed", async (req, env) => json(await drivePosts.feed(env, await requireMember(req, env), new URL(req.url))));
 on("POST", "/api/posts", async (req, env) => json(await drivePosts.postCreate(env, await requireMember(req, env), req), 201));
