@@ -246,7 +246,7 @@
     .first-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding-top: 2px; }
     /* large text: the pencil drawing keeps to its score boxes (a drawn row of the index was wider than the phone at 2x
        and pushed the empty Log's words and Start key off the right edge) */
-    html[data-type-size] .fp-ghost .fp-index { display: none; } html[data-type-size] .fp-digits i { width: 28px; height: 48px; }
+    html[data-type-size] :is(.fp-ghost .fp-index, .fp-ghost .fp-glyph) { display: none; } html[data-type-size] .fp-digits i { width: 28px; height: 48px; }
     .fp-ghost { color: var(--panel-dim); border-bottom: 1px solid var(--rule); margin-bottom: 16px; }
     .fp-ghost .hero-score { display: flex; align-items: flex-end; padding: 6px 0 14px; border-bottom: 1px solid var(--rule); }
     .fp-digits { display: inline-flex; gap: 6px; } .fp-digits i { width: 40px; height: 68px; border: 1.5px dashed var(--panel-dim); }   /* three places for the score's figures */
