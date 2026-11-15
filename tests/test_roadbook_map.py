@@ -47,3 +47,20 @@ def test_the_layer_is_wired_off_by_default_and_lazy():
     assert 'data-toggle="roadbooks"' in html and "roadbooks: false" in js
     assert "'roadbook_map.js'" in lazy and "<script src=\"roadbook_map.js\"" not in html   # with the social scripts, never at launch
     assert "ApexRoadbookMap.mount" in js and "roadbookMap.restyle()" in js
+
+
+def test_near_in_view_picks_public_books_round_the_view_nearest_first_and_skips_yours():
+    cards = [{"id": "P1", "lat": 35.50, "lon": -83.90}, {"id": "P2", "lat": 35.46, "lon": -83.93}, {"id": "P3", "lat": 36.5, "lon": -83.9},
+             {"id": "A", "lat": 35.46, "lon": -83.93}, {"id": "P4", "lat": None, "lon": -83.9}, {"id": "P5", "lat": 35.58, "lon": -83.93}]
+    view = [35.42, 35.50, -83.98, -83.88]       # grown by half each way: 35.38..35.54, -84.03..-83.83
+    assert run(f"M.nearInView({json.dumps(cards)}, {json.dumps(view)}, new Set(['A']))") == ["P2", "P1"]
+    assert run(f"M.nearInView({json.dumps(cards)}, null, null)") == []
+
+
+def test_features_mark_public_books_and_draw_a_shared_road_as_yours():
+    full = """new Map([
+      ['P', { road_list: [{ id: 'r1', name: 'The Dragon', geom: [[-83.9, 35.4], [-83.91, 35.41]] }, { id: 'r7', name: 'Parkway', geom: [[-83.8, 35.4], [-83.81, 35.41]] }] }],
+      ['A', { road_list: [{ id: 'r1', name: 'The Dragon', geom: [[-83.9, 35.4], [-83.91, 35.41]], stamped: true }] }]])"""
+    fc = run(f"M.features({full}, new Set(['P']))")
+    assert [(f["properties"]["book"], f["properties"]["name"], f["properties"]["d"], f["properties"]["p"]) for f in fc["features"]] == [
+        ("A", "The Dragon", 1, 0), ("P", "Parkway", 0, 1)]

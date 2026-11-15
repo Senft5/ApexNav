@@ -1407,15 +1407,26 @@
       if (pinMarker) { pinMarker.remove(); pinMarker = null; }
       droppedPin = null;
     }
+    // A position's place (a Nominatim-shaped reverse answer, or null): in the app Apple's geocoder (the shell's CLGeocoder,
+    // ApexPlacePlate.fromApple), since public Nominatim's usage policy doesn't allow an app's traffic; Nominatim on the
+    // website, or when Apple has nothing in 4 s. zoom: Nominatim's detail (18 a building, 12 a town).
+    async function reverseGeocode(lat, lon, zoom, timeoutMs) {
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      // a town's lookup is asked to about 1 km (2 decimals), of either service; only a dropped pin asks its exact spot
+      if (zoom < 18) { lat = Math.round(lat * 100) / 100; lon = Math.round(lon * 100) / 100; }
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex) {
+        const got = ApexPlacePlate.fromApple(await askNative({ cmd: 'placeReverse', lat, lon }, 4000));
+        if (got) return got;
+      }
+      const q = zoom >= 18 ? `lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}` : `lat=${lat.toFixed(2)}&lon=${lon.toFixed(2)}`;
+      try { return await RouteLoading.json(`https://nominatim.openstreetmap.org/reverse?format=json&${q}&zoom=${zoom}&addressdetails=1`, {}, timeoutMs); } catch (_) { return null; }
+    }
     async function reversePin(p) {
       const lookup = ++pinLookup;
       let name = '--';
       try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${encodeURIComponent(p.lat)}&lon=${encodeURIComponent(p.lon)}&zoom=18&addressdetails=1`);
-        if (response.ok) {
-          const place = await response.json();
-          name = place.name || place.address?.road || place.address?.hamlet || place.address?.village || place.address?.town || place.address?.city || place.display_name?.split(',')[0] || '--';
-        }
+        const place = await reverseGeocode(p.lat, p.lon, 18, 8000);
+        if (place) name = place.name || place.address?.road || place.address?.hamlet || place.address?.village || place.address?.town || place.address?.city || place.display_name?.split(',')[0] || '--';
       } catch (_) { /* An offline or unnamed place remains unknown. */ }
       if (lookup === pinLookup && droppedPin === p) $('pinPlace').textContent = name;
     }
@@ -1444,7 +1455,16 @@
       if (!place) reversePin(point);
       else if (window.ApexPlaceInfo) {                                  // hours, phone and site, once known (place_info.js)
         const asked = droppedPin;
-        ApexPlaceInfo.lookup(place.name, point.lat, point.lon).then((tags) => { if (droppedPin === asked && tags) placeInfo(ApexPlaceInfo.contact(tags, new Date())); }).catch(() => {});
+        const show = (tags) => { if (droppedPin === asked && tags) placeInfo(ApexPlaceInfo.contact(tags, new Date())); };
+        ApexPlaceInfo.lookup(place.name, point.lat, point.lon).then(async (tags) => {
+          show(tags);
+          // in the app, Apple's map fills a phone or website OpenStreetMap doesn't have (US businesses often lack them)
+          const t = tags || {};
+          if ((t.phone || t['contact:phone']) && (t.website || t['contact:website'])) return;
+          if (!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex)) return;
+          const more = ApexPlaceInfo.withApple(tags, await askNative({ cmd: 'placeContact', name: place.name, lat: point.lat, lon: point.lon }, 5000));
+          if (more && more !== tags) show(more);
+        }).catch(() => {});
       }
     }
     // How long the drive there takes, on the Go key ("Go here · 12 min"), as Apple and Google Maps' place cards say it: the
@@ -3925,6 +3945,12 @@
       }
       const m = q.match(COORDS);
       if (m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]), label: `Pin ${parseFloat(m[1]).toFixed(3)}, ${parseFloat(m[2]).toFixed(3)}` };
+      // in the app, Apple's search first (better for US addresses and businesses, no usage limits); Nominatim after
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex) {
+        const p = state.lastPosition;
+        const got = await askNative({ cmd: 'placeSearch', q: q.trim(), lat: p ? p.lat : undefined, lon: p ? p.lon : undefined }, 6000);
+        if (got && Number.isFinite(got.lat) && Number.isFinite(got.lon)) return { lat: got.lat, lon: got.lon, label: got.name || q.trim() };
+      }
       let items;
       try { items = await RouteLoading.json(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`, {}, 10000); }
       catch (_) {
@@ -4477,7 +4503,7 @@
         try { if (window.ApexErrors && ApexErrors.reporter) ApexErrors.reporter.route(level, own.reason, own.error); } catch (_) { /* a report is never in the way */ }
         if (early.shown) return true;                                       // (never: the early quickest is ours too)
         const what = FunRoute.LEVELS[level].label;
-        const msg = own.reason === 'out' ? `${what} routes use Vetta's own road map, which covers Ohio, Kentucky and Indiana so far. Quick works anywhere.`
+        const msg = own.reason === 'out' ? `${what} routes use Vetta's own road map, which covers the 48 mainland US states. Quick works anywhere.`
           : own.reason === 'off' ? `${what} routes need Vetta's own router, which is switched off. Quick still works.`
           : own.reason === 'index' ? `Couldn't load Vetta's road map for this trip. Check signal and try again, or use Quick.`
           : `Couldn't plan a ${what} route just now. Try again, or use Quick.`;
@@ -5319,9 +5345,12 @@
       try { if (window.ApexErrors && ApexErrors.reporter) ApexErrors.reporter.route('loop', why, failed ? `${asked}, ${failed}` : asked); } catch (_) { /* a report is never in the way */ }
       toast(!ownOn() ? 'Loops need Vetta\'s own router, which is switched off.'
         : here == null ? 'Couldn\'t load Vetta\'s road map here. Check signal and try again.'
-        : !here ? 'Loops use Vetta\'s own road map, which covers Ohio, Kentucky and Indiana so far.'
+        : !here ? 'Loops use Vetta\'s own road map, which covers the 48 mainland US states.'
         : failed ? `Vetta's router couldn't finish a ${asked} loop this time. Try again, or a shorter one.`
-        : `Couldn't find a ${asked} loop on Vetta's road map from here. Try another length.`);
+        : `Couldn't find a ${asked} loop on Vetta's road map from here. Try another length.`,
+        // no loop at all (Big Sur, Moab, the San Juans: the good roads there run out and back) still leaves the best roads in
+        // reach: the key opens Best roads nearby, which leads to one (not on the car, where the message is said instead)
+        why === 'none' && !(car.echo > 0) ? { label: 'Best roads', ms: 10000, onClick: () => openNearby() } : undefined);
     }
     const loopCircle = (L) => ({ kind: 'circle', pts: loopWaypoints(L.c, L.miles, Math.random() * 2 * Math.PI), through: true, extra: loopCosting() || {} });
     /** Loop jobs routed (ours come routed) and built into tracks: { t, job, route, km, score, ... } for those that worked. */
@@ -7497,13 +7526,18 @@
     onSocial(() => { try { meetsMap = window.ApexMeetsMap && crewEvents && crewEvents.meetCard ? ApexMeetsMap.mount({ el, btn, apiCall, jsonOf, map,
       mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; }, mayLookUp: nearLookupOk,
       card: (e, redo) => crewEvents.meetCard(e, redo) }) : null; } catch (e) { console.error('meets map', e); } });
-    // Roadbooks on the map (web/roadbook_map.js): the roads of your books, your crews' and the ones you follow; a tap opens
-    // the book. Only books with a road in view are opened, from the boxes the phone already holds.
+    // Roadbooks on the map (web/roadbook_map.js): the roads of your books, your crews' and the ones you follow, and public
+    // books round the view, quieter; a tap opens the book. Only books with a road in view are opened.
+    const booksNearAt = new Map();                                       // cell query → the public books there (a promise)
     onSocial(() => { try { roadbookMap = window.ApexRoadbookMap && roadbooks ? ApexRoadbookMap.mount({ map,
       call: async (m, p) => { const r = await apiCall(m, p); return { ok: r.ok, data: r.ok ? await jsonOf(r) : null }; },
       // your lists as last read, read once if this page hasn't yet; with no signal, what this phone kept of them
       books: async () => { const l = roadbooks.lists() || await roadbooks.reload().catch(() => null); if (l) return [...l.mine, ...(l.crews || []), ...l.following];
         try { const c = JSON.parse(localStorage.getItem('apex.roadbooks') || 'null'); return c && Array.isArray(c.books) ? c.books : []; } catch (_) { return []; } },
+      // public books round the map's centre: its coarse cell, never from inside a privacy zone, asked once a cell a page
+      near: (lat, lon) => { if (!nearLookupOk({ lat, lon })) return []; const q = ApexPrivacyZones.cellQuery(lat, lon);
+        if (!booksNearAt.has(q)) booksNearAt.set(q, apiCall('GET', `/api/roadbooks/near?${q}`).then(async (r) => { const d = r.ok ? await jsonOf(r) : null; if (!Array.isArray(d)) booksNearAt.delete(q); return Array.isArray(d) ? d : []; }).catch(() => { booksNearAt.delete(q); return []; }));
+        return booksNearAt.get(q); },
       colours: () => ({ ink: look.colors.ink, gain: look.colors.gain, casing: look.colors.routeCasing }),
       open: (id) => { if (roadbooks) roadbooks.open(id); }, blocked: () => state.tapToRoute || state.mode === 'live' || Date.now() < suppressMapClickUntil }) : null; } catch (e) { console.error('roadbook map', e); } });
     // Friends on the map (web/friends_map.js, REVIEW.md 5.4): the Friends layer and who sees you, sent only while you drive
@@ -8391,7 +8425,7 @@
       try {
         // a new area is named for its town (the map's reverse geocode, as the place plate asks it: to 0.01°), else its place
         let town = null;
-        if (!name) { try { town = ApexPlacePlate.town(await RouteLoading.json(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat.toFixed(2)}&lon=${lon.toFixed(2)}&zoom=12&addressdetails=1`, {}, 6000)); } catch (_) {} }
+        if (!name) { try { town = ApexPlacePlate.town(await reverseGeocode(lat, lon, 12, 6000)); } catch (_) {} }
         const a = await ApexOfflineTiles.download({ lat, lon, radiusKm, styleUrl: MAP_STYLE, id, name: name || (town ? `Around ${town}` : `Around ${lat.toFixed(2)}, ${lon.toFixed(2)}`),
           onProgress: (d, n) => { if (d % 25 === 0 || d === n) btn.textContent = `Saving the map… ${Math.round(100 * d / n)}%`; } });
         // members' road feel for the area too (signed in as a member): measured roads plan the same with no signal
@@ -8498,7 +8532,8 @@
       if (Date.now() - placeAsk.at < 20 * 60000 && moved < 5) return;
       placeAsk.at = Date.now(); placeAsk.lat = p.lat; placeAsk.lon = p.lon;
       const la = p.lat.toFixed(2), lo = p.lon.toFixed(2), d = {};
-      try { const r = await RouteLoading.json(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${la}&lon=${lo}&zoom=12&addressdetails=1`, {}, 6000); d.place = ApexPlacePlate.town(r); } catch (_) {}
+      // the town, beside the weather rather than before it: the sky (and the cold-tyres line) never waits on a slow geocoder
+      const town = reverseGeocode(Number(la), Number(lo), 12, 6000).then((r) => { d.place = ApexPlacePlate.town(r); }).catch(() => {});
       // the forecast's now and its last 3 hours of rain, and (US) the nearest NWS stations' latest observation, together
       const om = RouteLoading.json(`https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}&current=temperature_2m,weather_code,precipitation&hourly=precipitation&past_hours=3&forecast_hours=1&timezone=GMT`, {}, 6000)
         .then((w) => { if (w && w.current) { d.tempC = w.current.temperature_2m; d.code = w.current.weather_code; d.mmNow = w.current.precipitation; } d.mm3h = ApexPlacePlate.pastMm(w); }).catch(() => {});
@@ -8511,14 +8546,20 @@
         obs.sort((a, b) => a.ageMin - b.ageMin);                         // the freshest of the nearest three
         d.obs = obs[0] || null;
       })().catch(() => {});
-      await Promise.all([om, nws]);
-      placeAsk.data = d;
       // Vetta Line: a masthead, the place set large and the sky as its line under it. The separator between them stays in the
       // text (not shown), so the plate still reads "Tellico Plains · Dry · 61°" to a screen reader and to textContent.
-      { const pp = $('placePlate'), m = ApexPlacePlate.parts(d, ApexUnits.metric()), b = document.createElement('b');
+      const fill = () => {
+        const pp = $('placePlate'), m = ApexPlacePlate.parts(d, ApexUnits.metric()), b = document.createElement('b');
         b.textContent = m.head; pp.replaceChildren(...(m.head ? [b] : []));
-        if (m.rest) { const i = document.createElement('i'), sp = document.createElement('span'); i.textContent = ' · '; sp.textContent = m.rest; pp.append(i, sp); } }
-      paintPlacePlate();
+        if (m.rest) { const i = document.createElement('i'), sp = document.createElement('span'); i.textContent = ' · '; sp.textContent = m.rest; pp.append(i, sp); }
+        paintPlacePlate();
+      };
+      // the sky is used (wet roads, cold tyres) as soon as it is known; the town fills the plate when it comes
+      await Promise.all([om, nws]);
+      placeAsk.data = d;
+      fill();
+      await town;
+      fill();
     }
     setTimeout(refreshPlacePlate, 4000); setInterval(refreshPlacePlate, 60000);
     window.apexDebug.placePlate = () => { placeAsk.at = 0; return refreshPlacePlate(); };   // e2e: ask now (the first ask waits 4 s for a fix)
@@ -9037,6 +9078,7 @@
       const box = $('themeCards'); if (!box) return;
       if (themeCards.size !== Object.keys(Themes.THEMES).length) {
         themeCards.clear();
+        box._at = null;                                                  // new cards start the shelf at 0: turn it to the look in use again
         box.replaceChildren(...Object.values(Themes.THEMES).map((t) => {
           const card = el('div', { className: 'theme-card' });
           const ok = () => themeAllowed(t.id);
@@ -12103,7 +12145,7 @@
         if (msg && msg.type === 'driveCam') { driveCamSaid(msg.state); return; }
         if (msg && msg.type === 'carOffline') { carOfflineBytes = Number.isFinite(msg.bytes) ? msg.bytes : null; if (typeof renderOffline === 'function') renderOffline().catch(() => {}); return; }
         if (msg && msg.type === 'lifecycle') { if (driveActive) keepSave(); return; }   // going to the background: kept now
-        if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
+        if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'placeFound' || msg.type === 'placeContact' || msg.type === 'placeReversed' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'nudge') { nudgeAnswered(!!msg.granted); return; }
         if (msg && msg.type === 'push') { pushAnswered(!!msg.granted); return; }
         if (msg && msg.type === 'pushToken') { pushTokenIn(msg); return; }

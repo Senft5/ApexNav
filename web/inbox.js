@@ -59,6 +59,7 @@
       case 'post_comment': return { kicker: 'Comment', text: i.yours ? `${who}${others(i.others)} commented on ${i.title || 'your drive'}.`
         : `${who}${others(i.others)} also commented on ${i.owner ? `@${i.owner}’s` : 'a'} ${i.title || 'drive'}.`, key: { label: 'Open', act: 'post' } };
       case 'post_mention': return { kicker: 'Mention', text: `${who}${others(i.others)} mentioned you on ${i.owner ? `@${i.owner}’s` : 'a'} ${i.title || 'drive'}.`, key: { label: 'Open', act: 'post' } };
+      case 'post_with': return { kicker: 'Your drive', text: `${who} posted a drive you were on: ${i.title || 'a crew drive'}.`, key: { label: 'Open', act: 'post' } };
       case 'request': return { kicker: 'Friend request', text: `${who} wants to be your friend.`, key: null };
       case 'duel_ask': return { kicker: 'Duel', text: `${who} challenged you on ${stage}.`, key: null };
       default: return null;

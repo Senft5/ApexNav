@@ -4,6 +4,7 @@ import { revokeApple } from "./apple_revoke";
 import { pushForget } from "./push";
 import { photosEraseOwner } from "./photos";
 import { mediaErase, mediaOfAuthor } from "./post_media";
+import { booksOfOwner, cardErase } from "./roadbooks";
 import { Env, HttpError, body, cookie } from "./util";
 import { SESSION_COOKIE, type Viewer } from "./auth";
 import { convoysLeaveAll } from "./convoy";
@@ -116,6 +117,7 @@ export async function deleteAccount(env: Env, v: Viewer, req: Request): Promise<
   await revokeApple(env, v.id);                                      // App Review 5.1.1(v): their Sign in with Apple token, revoked with Apple
   await pushForget(env, v.id);                                       // the phones' push tokens (src/push.ts)
   await mediaErase(env, await mediaOfAuthor(env, v.id));             // their drive posts' clips and photos in R2 (post_media.ts)
+  await cardErase(env, await booksOfOwner(env, v.id));               // their public roadbooks' link pictures in R2 (roadbooks.ts)
   await photosEraseOwner(env, v.id);                                 // the JPEGs in KV, then their rows (REVIEW.md 5.2)
   const owned = (await all<{ id: string }>(env, "SELECT id FROM crews WHERE owner = ?", v.id)).map((c) => c.id);
   if (env.PHOTOS) for (const id of owned) for (const p of ["marguerite", "kit", "hale"]) await env.PHOTOS.delete(`cv/${id}/${p}`);   // crews' regroup clips

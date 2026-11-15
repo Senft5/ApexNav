@@ -92,6 +92,82 @@ const CASES = {
       return { routed: !!(r && r.routes.length), names: r && r.routes.length ? r.routes[0].names.map((x) => x.name) : [] };
     } finally { R.K.LIVE_NODES = keep; }
   },
+  async longTrip() {
+    // a 340 km trip on one long road, with a good road 160 km north of it: the plan loads a band round the quickest way
+    // (corridorOf), never the corridor ellipse's far tiles, and still routes
+    const nodes = [], edges = [];
+    for (let k = 0; k <= 80; k++) nodes.push(at(39.3, -86 + k * 0.05));
+    for (let k = 0; k < 80; k++) two(edges, k, k + 1, { quality: 0.5, cls: 3, name: 'Main Road', t: 200 });
+    const n0 = nodes.length;
+    for (let k = 0; k <= 40; k++) nodes.push(at(40.75, -85 + k * 0.05));
+    for (let k = 0; k < 40; k++) two(edges, n0 + k, n0 + k + 1, { quality: 0.9, cls: 4, name: 'Far Road', t: 150, fun: 40 });
+    const T = H.tiles(nodes, edges), asked = new Set();
+    const env = { load: (i, j) => { asked.add(`${i}_${j}`); return T.tiles.find((t) => t.tile.i === i && t.tile.j === j) || null; }, index: null };
+    const from = { lat: 39.3, lon: -85.99 }, to = { lat: 39.3, lon: -82.01 };
+    const out = {};
+    for (const level of ['fun', 'max']) {
+      asked.clear();
+      const m = await R.host(env).handle({ id: 1, type: 'plan', from, to, level, geometry: false });
+      const rows = [...asked].map((k) => +k.split('_')[1]);
+      out[level] = { routed: !!(m.result && m.result.routes.length), error: m.error || null, asked: asked.size, ellipse: R.tilesFor(from, to, level).length,
+        northmost: Math.max(...rows), farRow: R.tileOf(40.75, -85).j };
+    }
+    return out;
+  },
+  async tileCache() {
+    // one host plans a long trip at Fun, then Long way: the tiles the first ask decoded are kept (K.TILE_CACHE, least
+    // recently used out first), so the second decodes only what it adds. At a cache of 4 it decodes them all again
+    const nodes = [], edges = [];
+    for (let k = 0; k <= 80; k++) nodes.push(at(39.3, -86 + k * 0.05));
+    for (let k = 0; k < 80; k++) two(edges, k, k + 1, { quality: 0.5, cls: 3, name: 'Main Road', t: 200 });
+    const T = H.tiles(nodes, edges);
+    const from = { lat: 39.3, lon: -85.99 }, to = { lat: 39.3, lon: -82.01 };
+    const run = async (cache) => {
+      const keep = R.K.TILE_CACHE; R.K.TILE_CACHE = cache;
+      try {
+        let loads = 0;
+        const env = { load: (i, j) => { loads++; return T.tiles.find((t) => t.tile.i === i && t.tile.j === j) || null; }, index: null };
+        const h = R.host(env), out = [];
+        for (const level of ['fun', 'max']) {
+          loads = 0;
+          const m = await h.handle({ id: 1, type: 'plan', from, to, level, geometry: false });
+          out.push({ routed: !!(m.result && m.result.routes.length), loads, tiles: m.result ? m.result.tiles.length : 0 });
+        }
+        return out;
+      } finally { R.K.TILE_CACHE = keep; }
+    };
+    return { kept: await run(R.K.TILE_CACHE), tiny: await run(4) };
+  },
+  softBudget() {
+    // past K.PLAN_SOFT_MS a plan answers with what it has (two bisection steps), never nothing
+    const g = H.grid({ seed: 7, nx: 9, ny: 7, holes: 0.1, oneway: 0.1, signals: 0.1, lat0: 39.2, lon0: -84.52, stepDeg: 0.01 });
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles), keep = R.K.PLAN_SOFT_MS;
+    const from = { lat: g.nodes[0].lat + 0.001, lon: g.nodes[0].lon + 0.001 }, to = { lat: g.nodes[g.nodes.length - 1].lat - 0.001, lon: g.nodes[g.nodes.length - 1].lon - 0.001 };
+    const full = R.plan(v, { from, to, level: 'fun' });
+    R.K.PLAN_SOFT_MS = 0;
+    try {
+      const cut = R.plan(v, { from, to, level: 'fun' });
+      return { full: full.routes.length, cut: cut.routes.length, cutHasPick: !!cut.routes[0] };
+    } finally { R.K.PLAN_SOFT_MS = keep; }
+  },
+  longStage() {
+    // a 30 km good road across a tile's edge (-84.5) and a 6 km twistier lane: the road is one stage, its whole length up
+    // to K.STAGE_KM (a name's index is its tile's own, so the chain once broke at the edge, and stopped at 15 km), and
+    // with many short lanes about it still a stage (every seed is tried, not only the first few dozen chains)
+    const nodes = [], edges = [];
+    for (let k = 0; k <= 30; k++) nodes.push(at(39.3, -84.68 + k * 0.0116));
+    for (let k = 0; k < 30; k++) two(edges, k, k + 1, { quality: 0.85, cls: 3, name: 'Skyway', t: 50, fun: 2.5 });
+    for (let j = 0; j < 60; j++) {
+      const a = nodes.length;
+      for (let k = 0; k <= 3; k++) nodes.push(at(39.32 + 0.004 * j, -84.66 + k * 0.009));
+      for (let k = 0; k < 3; k++) two(edges, a + k, a + k + 1, { quality: 0.8, cls: 5, name: `Lane ${j}`, t: 70, fun: 9 });
+      two(edges, a, Math.min(30, j % 30), { quality: 0.5, cls: 5, name: `Link ${j}`, t: 200 });
+    }
+    const v = R.view(H.tiles(nodes, edges).tiles);
+    const st = R.explore(v, { start: { lat: 39.3, lon: -84.68 }, maxS: 7200, max: 12 }).stages;
+    const sky = st.filter((x) => x.name === 'Skyway');
+    return { skyway: sky.map((x) => +x.km.toFixed(1)), stages: st.length, tiles: new Set([...Array(v.E).keys()].map((e) => v.eTile[e])).size, cap: R.K.STAGE_KM };
+  },
   dirtStage() {
     // two good roads with corners, one of them gravel: with unpaved roads avoided (the app's default) the gravel road is
     // never a stage a loop is built round

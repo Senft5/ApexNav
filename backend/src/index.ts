@@ -16,7 +16,7 @@ import { cronHealth, runCron } from "./cron_runs";
 import { appleSignIn } from "./apple";
 import { crewHazardKinds, hazardsNear, reportHazard, voteHazard } from "./hazards";
 import { routeDelete, routeGet, routesSharedWithMe, shareRoute } from "./routes_shared";
-import { bookCreate, bookDelete, bookFollow, bookGet, bookUpdate, booksCrew, booksFriends, booksMine, booksNear, roadAdd, roadRemove, roadStamp, roadUpdate } from "./roadbooks";
+import { bookCreate, bookDelete, bookFollow, bookGet, bookUpdate, booksCrew, booksFriends, booksMine, booksNear, cardGet, cardPut, roadAdd, roadRemove, roadStamp, roadUpdate } from "./roadbooks";
 import { duelAccept, duelCreate, duelEnd, duelList } from "./duels";
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
@@ -368,6 +368,8 @@ on("GET", "/api/roadbooks", async (req, env) => json(await booksMine(env, await 
 on("POST", "/api/roadbooks", async (req, env) => json(await bookCreate(env, await requireMember(req, env), req), 201));
 on("PUT", "/api/roadbooks/roads/:rid/stamp", async (req, env, m) => json(await roadStamp(env, await requireMember(req, env), m.groups!.rid, true)));
 on("DELETE", "/api/roadbooks/roads/:rid/stamp", async (req, env, m) => json(await roadStamp(env, await requireMember(req, env), m.groups!.rid, false)));
+on("GET", "/api/roadbooks/:id/card.jpg", async (req, env, m) => cardGet(env, m.groups!.id));
+on("PUT", "/api/roadbooks/:id/card", async (req, env, m) => { await cardPut(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("GET", "/api/roadbooks/:id", async (req, env, m) => json(await bookGet(env, await viewer(req, env), m.groups!.id)));
 on("PUT", "/api/roadbooks/:id", async (req, env, m) => { await bookUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("DELETE", "/api/roadbooks/:id", async (req, env, m) => { await bookDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
@@ -413,6 +415,7 @@ on("POST", "/api/board", async (req, env, _m, ctx) => {
 });
 // Kudos (IDEAS S-07): a tap of thanks on a friend's run you can see; no text.
 // drive posts and the friends feed (src/drive_posts.ts)
+on("GET", "/api/feed/with", async (req, env) => json(await drivePosts.feedWith(env, await requireMember(req, env), new URL(req.url))));
 // direct messages between friends (messages.ts); /api/messages/m/:id before /:handle so an id is never read as a handle
 on("GET", "/api/messages", async (req, env) => json(await messages.dmList(env, await requireMember(req, env))));
 on("GET", "/api/me/messages/unread", async (req, env) => json(await messages.dmUnread(env, await requireMember(req, env))));

@@ -3954,10 +3954,15 @@ flow('roadbooks on the map: off by default; on, only the books with a road in vi
     road_list: [{ id: 'r1', name: 'The Dragon', geom: g1, length_m: 5000, stamps: 1, stamped: true }, { id: 'r2', name: 'Cherohala', geom: g2, length_m: 5000, stamps: 0, stamped: false }] };
   const away = { id: 'FARFARFARFARFARF', name: 'Ohio River', mine: false, visibility: 'public', by: 'sam', followers: 3, following: true, roads: 1, length_m: 5000,
     road_list: [{ id: 'r9', name: 'River Road', geom: far, length_m: 5000, stamps: 0, stamped: false }] };
-  const opened = [];
+  const g3 = line(35.43, -83.9);
+  const pubBook = { id: 'PUBPUBPUBPUBPUBP', name: 'Locals', mine: false, visibility: 'public', by: 'kim', followers: 9, roads: 1, length_m: 5000, lat: 35.43, lon: -83.88,
+    road_list: [{ id: 'r5', name: 'Foothills Parkway', geom: g3, length_m: 5000, stamps: 4, stamped: false }] };
+  const opened = [], nearAsked = [];
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url()), p = u.pathname, json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (p === '/api/roadbooks/near') { nearAsked.push(u.search); return json([{ ...pubBook, road_list: undefined, km: 3 }, { id: 'NEARNEARNEARNEAR', name: 'Smokies classics', lat: 35.46, lon: -83.95, km: 1 }]); }
+    if (p === '/api/roadbooks/PUBPUBPUBPUBPUBP') { opened.push('pub'); return json(pubBook); }
     if (p === '/api/roadbooks') return json({ mine: [{ ...near, road_list: near.road_list.map((r) => ({ id: r.id, name: r.name, box: box(r.geom), stamped: r.stamped })) }], crews: [],
       following: [{ ...away, road_list: away.road_list.map((r) => ({ id: r.id, name: r.name, box: box(r.geom), stamped: false })) }] });
     if (p === '/api/roadbooks/NEARNEARNEARNEAR/roads/r2' && route.request().method() === 'DELETE') { near.road_list = near.road_list.filter((r) => r.id !== 'r2'); return route.fulfill({ status: 204, body: '' }); }
@@ -3973,9 +3978,11 @@ flow('roadbooks on the map: off by default; on, only the books with a road in vi
   await page.click('#swTab');
   await page.click('[data-toggle="roadbooks"]');
   await page.waitForFunction(() => { const s = apexDebug.map.getSource('apex-books-src'); return s && apexDebug.map.getLayoutProperty('apex-books', 'visibility') === 'visible'; }, null, { timeout: 15000 });
-  await page.waitForFunction(() => { const d = apexDebug.map.getSource('apex-books-src').serialize().data; return d && d.features && d.features.length === 2; }, null, { timeout: 10000 });
-  const drawn = await page.evaluate(() => apexDebug.map.getSource('apex-books-src').serialize().data.features.map((f) => [f.properties.name, f.properties.d]));
-  check(JSON.stringify(drawn) === JSON.stringify([['The Dragon', 1], ['Cherohala', 0]]) && opened.length === 1 && opened[0] === 'near', 'the book in view is opened and drawn, the far one is not asked for: ' + JSON.stringify({ drawn, opened }));
+  await page.waitForFunction(() => { const d = apexDebug.map.getSource('apex-books-src').serialize().data; return d && d.features && d.features.length === 3; }, null, { timeout: 10000 });
+  const drawn = await page.evaluate(() => apexDebug.map.getSource('apex-books-src').serialize().data.features.map((f) => [f.properties.name, f.properties.d, f.properties.p]));
+  check(JSON.stringify(drawn) === JSON.stringify([['The Dragon', 1, 0], ['Cherohala', 0, 0], ['Foothills Parkway', 0, 1]]) && JSON.stringify(opened) === '["near","pub"]',
+    'your book in view and the public one round it are opened and drawn (yours as yours, though the near list names it too), the far one is not asked for: ' + JSON.stringify({ drawn, opened }));
+  check(nearAsked.length === 1 && !/35\.46|83\.93/.test(nearAsked[0]), 'the public books are asked for once, by the coarse cell only: ' + JSON.stringify(nearAsked));
   check(await page.evaluate(() => JSON.stringify(apexDebug.map.getPaintProperty('apex-books', 'line-dasharray')) === '[2,1.2]' && !apexDebug.map.getPaintProperty('apex-books-driven', 'line-dasharray')), 'to drive is dashed, driven is solid');
   // a tap on a road opens its book
   await page.click('#swTab').catch(() => {});
@@ -3986,8 +3993,40 @@ flow('roadbooks on the map: off by default; on, only the books with a road in vi
   check(/Smokies classics/.test(await page.textContent('.rb-pop.open h3')), 'the tap opened the road\'s roadbook');
   // a road taken out of the book leaves the map too (the book is read again after a write)
   await page.click('.rb-pop.open [aria-label="Remove Cherohala"]');
-  await page.waitForFunction(() => { const d = apexDebug.map.getSource('apex-books-src').serialize().data; return d.features.length === 1 && d.features[0].properties.name === 'The Dragon'; }, null, { timeout: 10000 });
+  await page.waitForFunction(() => { const d = apexDebug.map.getSource('apex-books-src').serialize().data; return d.features.length === 2 && d.features[0].properties.name === 'The Dragon'; }, null, { timeout: 10000 });
   check(opened.filter((o) => o === 'near').length === 3, 'the map, the book\'s page, then the map again after the edit: ' + JSON.stringify(opened));
+  check(await page.evaluate(() => apexDebug.map.getSource('apex-books-src').serialize().data.features.some((f) => f.properties.name === 'Foothills Parkway' && f.properties.p === 1)), 'the public book stays on the map after the edit');
+});
+
+flow('roadbooks: sharing your public roadbook sends its link card, its roads on the map as a 1200 x 630 JPEG, once until it changes (free roamer B, 2026-11-15)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    // the real map under the roads (post_map.js) needs tiles; here a plain picture stands in for it
+    const fake = () => { const c = document.createElement('canvas'); c.width = 8; c.height = 8; const g = c.getContext('2d'); g.fillStyle = '#ddd'; g.fillRect(0, 0, 8, 8); return c.toDataURL('image/jpeg'); };
+    Object.defineProperty(window, 'ApexPostMap', { configurable: true, set(v) { this._pm = v; }, get() { return this._pm && Object.assign({}, this._pm, { snapper: () => ({ snap: async () => fake() }) }); } });
+  });
+  const line = (lat, lon) => Array.from({ length: 30 }, (_, i) => [+(lon + i * 2e-3).toFixed(5), +(lat + Math.sin(i / 4) * 1e-3).toFixed(5)]);
+  const book = { id: 'CARDCARDCARDCARD', name: 'Smokies classics', mine: true, visibility: 'public', by: 'me', followers: 2, roads: 2, length_m: 10000, can_add: true,
+    road_list: [{ id: 'r1', name: 'The Dragon', geom: line(35.45, -83.98), length_m: 5000, stamps: 1, stamped: true }, { id: 'r2', name: 'Cherohala', geom: line(35.47, -83.94), length_m: 5000, stamps: 0, stamped: false }] };
+  const cards = [];
+  await page.route('**/api/**', (route) => {
+    const req = route.request(), p = new URL(req.url()).pathname, json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (p === '/api/roadbooks/CARDCARDCARDCARD/card' && req.method() === 'PUT') { const b = req.postDataBuffer(); cards.push({ type: req.headers()['content-type'], n: b ? b.length : 0, head: b ? [...b.slice(0, 3)] : [] }); return route.fulfill({ status: 204, body: '' }); }
+    if (p === '/api/roadbooks/CARDCARDCARDCARD') return json(book);
+    if (p === '/api/roadbooks') return json({ mine: [], following: [], crews: [] });
+    return json([]);
+  });
+  await page.goto(base + '/index.html?roadbook=CARDCARDCARDCARD');
+  await page.waitForSelector('.rb-pop.open .rb-road', { timeout: 15000 });
+  const share = page.locator('.rb-pop.open button', { hasText: /^Share$/ });
+  await share.click();
+  for (let i = 0; i < 40 && !cards.length; i++) await page.waitForTimeout(150);
+  check(cards.length === 1 && cards[0].type === 'image/jpeg' && cards[0].n > 2000 && JSON.stringify(cards[0].head) === '[255,216,255]', 'Share sent the link card as a JPEG: ' + JSON.stringify(cards));
+  const size = await page.evaluate(() => [ApexRoadbooks.CARD.w, ApexRoadbooks.CARD.h]);
+  check(JSON.stringify(size) === '[1200,630]', 'the card is the large preview size');
+  await share.click();
+  await page.waitForTimeout(1200);
+  check(cards.length === 1, 'the same book shared again sends nothing new: ' + cards.length);
 });
 
 flow('drive ended: your best on this road on the card, and the pack closes with the score from its own clips (REVIEW.md 4.4)', async (page, base) => {
@@ -7197,6 +7236,7 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
     if (u.pathname === '/api/crews') return json([{ id: 'k1', name: 'Ridge Runners', role: 'member', visibility: 'private', members: 3 }]);
     if (u.pathname === '/api/feed') return json([bobPost]);
     if (u.pathname === '/api/feed/week') return json([{ handle: 'bob', photo_id: null, you: false, drives: 2, length_m: 48280, best: 812 }, { handle: 'me', photo_id: null, you: true, drives: 1, length_m: 16093, best: null }]);
+    if (u.pathname === '/api/feed/with') return json([{ crew_id: 'k1', crew: 'Ridge Runners', title: 'Skyway run', with: ['bob'] }]);   // a crew drive you were at today
     if (u.pathname === '/api/posts/P1AAAAAAAAAAAAAA') return json({ ...bobPost, comment_list: [{ id: 'C1AAAAAAAAAAAAAA', body: 'Was that you at the overlook?', created_at: bobPost.created_at, handle: 'cara', photo_id: null, mine: false, can_delete: false }],
       kudos_from: [{ handle: 'cara', photo_id: null }, { handle: 'dan', photo_id: null }] });
     return json([]);
@@ -7288,6 +7328,12 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   // ··· beside it: the sheet, for a caption or a crew
   await page.click('#endPostMore');
   await page.waitForSelector('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")');
+  // (2026-11-15) you were at a Ridge Runners drive today: that crew is picked, and the sheet says who the post will name
+  await page.waitForSelector('.post-sheet .post-with:not([hidden])');
+  check(await page.getAttribute('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")', 'aria-checked') === 'true' && await page.textContent('.post-sheet .post-with') === 'With @bob',
+    'a crew drive today picks its crew and names who came');
+  await page.click('.post-sheet [role="radiogroup"] button:has-text("Friends")');
+  check(await page.$eval('.post-sheet .post-with', (n) => n.hidden), 'to friends: no names');
   await page.click('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")');
   await page.fill('.post-sheet textarea', 'First run with the crew.');
   await page.click('.post-sheet button:text-is("Post")');
@@ -12390,11 +12436,16 @@ flow('the Garage on a phone: the looks are a shelf turned sideways (one in view,
     .catch(async () => { throw new Error('a turn of the thumb brings the next look: ' + JSON.stringify(await shelf())); });
   await swipe(cdp, 80, y, 260, 4, 250);
   await page.waitForFunction(() => document.getElementById('themeCards').scrollLeft < 4, null, { timeout: 5000 });
+  // the shelf at rest first: the swipe's snap animation can still be running at 3 px, and a scroll it then lands
+  // overwrites the one set below (CI 2026-11-15: the chosen look's shelf back at 0 after Use, on a loaded runner)
+  await page.evaluate(() => new Promise((done) => { const c = document.getElementById('themeCards'); let last = -1, same = 0;
+    const tick = () => { if (c.scrollLeft === last) same++; else { same = 0; last = c.scrollLeft; } if (same >= 10) done(); else requestAnimationFrame(tick); }; tick(); }));
   check((await shelf()).open, 'turning the shelf back to the right does not close the Garage');
   // Use on the second look: it is in use, and the shelf stays where the thumb left it
   await page.evaluate(() => { const c = document.getElementById('themeCards'); c.scrollLeft = c.children[1].offsetLeft - c.children[0].offsetLeft; });
   await page.click('#themeCards .theme-card:nth-child(2) .tc-head .ink-btn');
   await page.waitForFunction(() => /tapedeck/.test(document.documentElement.dataset.theme || ''));
+  await page.waitForFunction(() => { const c = document.getElementById('themeCards'); return Math.abs(c.children[1].getBoundingClientRect().left - 16) <= 1; }, null, { timeout: 3000 }).catch(() => {});
   const s1 = await shelf();
   check(s1.cards[1].l === 16 && s1.left > 100, 'the look you chose stays in view: ' + JSON.stringify(s1.cards));
   // large text keeps the stack: every word of a card whole
