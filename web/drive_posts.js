@@ -31,6 +31,17 @@
     const names = rest > 0 ? `${h.join(', ')} and ${rest === 1 ? '1 other' : `${rest} others`}` : h.join(' and ');
     return `Kudos from ${names}`;
   }
+  /** Who came along, on a crew post (the crew drive's record): "With @bob and @cara", "With you, @bob and 2 others". '' with nobody. */
+  function withLine(handles, own) {
+    const hs = (Array.isArray(handles) ? handles : []).filter((h) => typeof h === 'string' && h);
+    if (!hs.length) return '';
+    const o = own ? String(own).toLowerCase() : null, me = o ? hs.filter((h) => h.toLowerCase() === o) : [];
+    const names = [...(me.length ? ['you'] : []), ...hs.filter((h) => !me.includes(h)).map((h) => `@${h}`)];
+    const shown = names.length > 3 ? names.slice(0, 2) : names, rest = names.length - shown.length;
+    const list = rest > 0 ? `${shown.join(', ')} and ${rest === 1 ? '1 other' : `${rest} others`}`
+      : shown.length > 1 ? `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}` : shown[0];
+    return `With ${list}`;
+  }
   function mentionParts(text) {
     const out = []; let last = 0;
     for (const m of String(text || '').matchAll(MENTION)) {
@@ -242,6 +253,7 @@
     .feed-kudos-from { display: flex; align-items: center; gap: 8px; min-height: 44px; background: none; border: 0; padding: 0; color: var(--panel-ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
     .feed-faces { display: inline-flex; } .feed-faces > * + * { margin-left: -8px; }
     .feed-kudos-row { display: flex; align-items: center; gap: 12px; min-height: 48px; width: 100%; background: none; border: 0; padding: 0; color: var(--panel-ink); font: inherit; text-align: left; cursor: pointer; }
+    .feed-with { margin: -2px 0 0; font-size: 13px; color: var(--panel-dim); }
     .feed-comment .feed-reply { display: inline-block; min-height: 32px; padding: 6px 0; font-size: 13px; color: var(--panel-dim); }
     .feed-tags { display: flex; flex-wrap: wrap; gap: 8px; }
     .feed-tags .feed-tag { min-height: 44px; }
@@ -347,6 +359,8 @@
       }
       head.append(moreKey(p, o));
       box.append(head, el('h3', { className: 'feed-title', textContent: p.title }));
+      const along = withLine(p.with, page.myHandle ? page.myHandle() : null);   // who came, from the crew drive's record
+      if (along) box.append(el('p', { className: 'feed-with', textContent: along }));
       if (p.caption) box.append(el('p', { className: 'feed-caption', textContent: p.caption }));
       // the numbers a driver reads first, Strava's row: Score, then the length (unknown stays --)
       const stat = (label, v, unit) => { const b = el('b', { textContent: v }); if (unit) b.append(el('span', { textContent: unit }));
@@ -742,6 +756,6 @@
     return { section, full, open, compose, post, remove, card, drivesOf, crewDrives, friendStages: () => keepStages(kept(), [], Date.now()) };
   }
 
-  const api = { unmuted, trimLine, encode, decode, throughPoints, stretch, rivalsOf, rivalLine, keepStages, lineSvg, ago, facts, weekLine, weekShown, mentionParts, mentionAt, suggest, kudosLine, mount, CUT_M, MAX_POINTS };
+  const api = { unmuted, trimLine, encode, decode, throughPoints, stretch, rivalsOf, rivalLine, keepStages, lineSvg, ago, facts, weekLine, weekShown, mentionParts, mentionAt, suggest, kudosLine, withLine, mount, CUT_M, MAX_POINTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDrivePosts = api;
 })(typeof window !== 'undefined' ? window : globalThis);

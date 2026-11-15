@@ -140,7 +140,7 @@
     // Your notes (recce.js, IDEAS V-09): keep a drive's calls as yours, edit them, forget them.
     // A ghost duel's result (ghost_duel.js): on one of your stages this drive covered, against the quickest run a friend
     // shared with you there on a road like this one (GET /api/board/ghosts), the gap at the finish and the corners that
-    // decided it. Members only, silent offline. #dvGhostActs is where "Challenge back" goes (the Social thread).
+    // decided it. Members only, silent offline. #dvGhostActs holds its one key, Challenge back (a time duel, POST /api/duels).
     async function renderGhost(d, run) {
       const panel = $('dvGhost'), G = window.ApexGhostDuel;
       panel.hidden = true;
@@ -172,6 +172,21 @@
         ? `<h3>${title}</h3><ol class="dv-time">${rows.map((x) => `<li><span>${escH(nameOf(x))}</span><em class="${x.gap_s > 0 ? 'loss' : 'gain'}">${fmt(x.gap_s)}</em></li>`).join('')}</ol>` : '';
       $('dvGhostRows').innerHTML = list(`Where ${escH(who)} was quicker`, st.lost) + list('Where you were quicker', st.gained);
       panel.dataset.stage = seg.id; panel.dataset.who = g.handle || ''; panel.dataset.gap = String(cs.total);
+      // one key: a 7-day time duel with them on this stage (none while you already have one open with them there)
+      const acts = $('dvGhostActs'), key = G.challengeKey(cs.total, g.handle, g.duel);
+      acts.replaceChildren();
+      if (key) {
+        const b = document.createElement('button'); b.className = 'btn'; b.textContent = key;
+        b.addEventListener('click', async () => {
+          b.disabled = true;
+          let st = 0;
+          try { st = (await ApexSync.apiFetch('/api/duels', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ handle: g.handle, segment_id: seg.id, days: 7, kind: 'time' }) })).status; } catch (_) {}
+          const p = document.createElement('p'); p.className = 'note'; p.setAttribute('role', 'status'); p.textContent = G.challengeSaid(st, g.handle, seg.name);
+          acts.replaceChildren(p);
+          if (st !== 201 && st !== 200 && st !== 409 && st !== 404 && st !== 429) { b.disabled = false; acts.append(b); }
+        });
+        acts.append(b);
+      }
       panel.hidden = false;
     }
     function renderRecce(d) {
@@ -596,6 +611,9 @@
       ApexDriverProfile.render($('drivingRoot'), drives.length ? null : { corners: 0 });
       if (drives.length) drivingProfile((p, pr) => {
         if (view !== 'driving') return;
+        // Share my DNA (dna_card.js): the six skills as one picture, offered once all six are measured
+        const dna = window.ApexDnaCard ? ApexDnaCard.dnaModel(p) : null, share = $('drivingShare');
+        if (share) { share.hidden = !dna; driving.dna = dna; }
         ApexDriverProfile.render($('drivingRoot'), p || { corners: 0 }, { plan: pr ? planNow() : null, practice: pr, onPlan: (plan) => {
           ApexDriverProfile.savePlan(localStorage, plan);
           driving.moved = true; renderDriving();                         // the Practicing box in the Work on box's place
@@ -1267,6 +1285,16 @@
       const out = await ApexDriveCard.shareCard(cv, `${(d.name || 'drive').replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'drive'}.png`);
       const b = $('dvCard');
       if (out === 'saved') { b.textContent = 'Card saved'; setTimeout(() => { b.textContent = 'Share card'; }, 2000); }
+    });
+    // Share my DNA (dna_card.js): Your driving's six skills as one picture, sent the way the drive card is
+    $('drivingShare').addEventListener('click', async () => {
+      if (!driving.dna) return;
+      const css = getComputedStyle(document.documentElement);
+      const cv = ApexDnaCard.drawDna(document.createElement('canvas'), driving.dna,
+        { ...C, fontNum: css.getPropertyValue('--font-num').trim(), fontUi: css.getPropertyValue('--font-ui').trim() });
+      const out = await ApexDriveCard.shareCard(cv, 'driving-dna.png');
+      const b = $('drivingShare');
+      if (out === 'saved') { b.textContent = 'Card saved'; setTimeout(() => { b.textContent = 'Share my DNA'; }, 2000); }
     });
     // Compare with…: this drive against the best other drive on the same road (the drive job's reference), else any other
     const bestOther = (d) => summaryOf(dvInfo && dvInfo.bestOther) || drives.find((x) => x.id !== d.id) || null;

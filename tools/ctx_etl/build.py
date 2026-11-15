@@ -37,6 +37,8 @@ PRESETS = {
     "launch": {"states": ["OH", "KY", "IN", "WV", "TN", "NC", "VA"], "bbox": None, "out": "ctx_out/v1"},
     # Ohio, Kentucky and Indiana: the region Vetta's own routing covers (served from the graph-data branch)
     "region": {"states": ["OH", "KY", "IN"], "bbox": None, "out": "ctx_out/v1"},
+    # The lower 48 and DC (.github/workflows/ctx-us.yml, in --chunk jobs, into R2), the graph-us build's area
+    "us": {"states": sources.LOWER48, "bbox": None, "out": "ctx_out/v1"},
 }
 RASTERS = ["night_lights", "impervious_pct", "canopy_pct", "noise_db", "housing_density", "population_density",
            "address_density", "median_year_built", "flood_zone", "cropland_class", "park_unit"]
@@ -148,14 +150,44 @@ def build(args):
         mine = sorted(bundles)[k::n]
         bundles = {b: bundles[b] for b in mine}
         ctx.log(f"shard {k}/{n}: {len(bundles)} bundles {sorted(bundles)}")
+    if args.chunk:
+        # one of n parallel jobs over the lower 48 (.github/workflows/ctx-us.yml): the k-th run of neighbouring bundles
+        # (west to east, then south to north), and only the states that reach into them, read only inside their box, so
+        # no job loads every state's census blocks
+        from shapely.geometry import box
+        k, n = (int(v) for v in args.chunk.split("/"))
+        order = sorted(bundles)
+        mine = order[k * len(order) // n:(k + 1) * len(order) // n]     # 8 or 9 each for 646 in 80
+        bundles = {b: bundles[b] for b in mine}
+        if not bundles:
+            ctx.log(f"chunk {k}/{n}: no bundles")
+            states = []
+        else:
+            bb = [grid.tile_bounds_lonlat(bx, by, grid.BUNDLE_Z) for bx, by in bundles]
+            cb = box(min(b[0] for b in bb) - 0.02, min(b[1] for b in bb) - 0.02, max(b[2] for b in bb) + 0.02, max(b[3] for b in bb) + 0.02)
+            shapes = sources.state_boundaries(ctx, states)
+            states = [st for st in states if shapes[st].intersects(cb)]
+            w, s_, e, n_ = cb.intersection(box(*rbox)).bounds
+            rbox = (w, s_, e, n_)
+            ctx.log(f"chunk {k}/{n}: {len(bundles)} bundles, states {states}, box {['%.3f' % v for v in rbox]}")
 
     # region-wide sources, loaded once
     counties = sources.county_boundaries(ctx, states)
     bset = set(bundles)
-    blocks = sources.Blocks(ctx, states, rbox, bset) if want("housing_density") or want("population_density") else None
-    yb = sources.YearBuilt(ctx, states, rbox, bset) if want("median_year_built") else None
-    addr = sources.Addresses(ctx, states, rbox, counties) if want("address_density") else None
-    parks = sources.Parks(ctx, rbox) if want("park_unit") else None
+
+    def opt(name, make):
+        """A region-wide source, or None when it can't be had (its channels are then left out, as one dataset down
+        never sinks the rest): over the lower 48 one state's download failing must not lose a whole chunk."""
+        try:
+            return make()
+        except Exception as e:  # noqa: BLE001
+            ctx.log(f"  ! {name} unavailable: {e}")
+            return None
+
+    blocks = opt("census blocks", lambda: sources.Blocks(ctx, states, rbox, bset)) if want("housing_density") or want("population_density") else None
+    yb = opt("block groups", lambda: sources.YearBuilt(ctx, states, rbox, bset)) if want("median_year_built") else None
+    addr = opt("addresses", lambda: sources.Addresses(ctx, states, rbox, counties)) if want("address_density") else None
+    parks = opt("parks", lambda: sources.Parks(ctx, rbox)) if want("park_unit") else None
     # the owner's Earthdata account (GitHub secret; sources.py): without it night lights are the 2016 image, as before
     night_src = "night_viirs" if want("night_lights") and sources.night_prepare(ctx, rbox) else "night"
     ctx.log(f"  night lights: {'NASA Black Marble VNP46A4 (Earthdata token)' if night_src == 'night_viirs' else 'Black Marble 2016 (GIBS)'}")
@@ -173,7 +205,9 @@ def build(args):
                 rows += sources.hpms_rows(ctx, st, part.bounds)
         return rows
 
-    fars = sources.fars_points(ctx, states, FARS_YEARS) if want("fars") else np.zeros((0, 5))
+    fars = (opt("FARS", lambda: sources.fars_points(ctx, states, FARS_YEARS)) if want("fars") else None)
+    if fars is None:
+        fars = np.zeros((0, 5))
     if want("fars"):
         ctx.log(f"  FARS {FARS_YEARS[0]}-{FARS_YEARS[-1]}: {len(fars)} fatal crashes in {states}")
 
@@ -204,8 +238,10 @@ def build(args):
         header = {"v": VERSION, "z": grid.BUNDLE_Z, "x": bx, "y": by, "tile_z": grid.TILE_Z, "built": index["built"],
                   "coverage": [list(t) for t in btiles], "states": states, "channels": {}, "sources": {}}
         w = vcg.Writer(header)
+        missing = {"housing_density": blocks is None, "population_density": blocks is None, "median_year_built": yb is None,
+                   "address_density": addr is None, "park_unit": parks is None}
         for name in RASTERS:
-            if not want(name):
+            if not want(name) or missing.get(name):
                 continue
             n, dtype, scale, offset, nodata, unit, _how, meaning = grid.CHANNELS[name]
             try:
@@ -284,6 +320,8 @@ def main(argv=None):
     ap.add_argument("--cache", default=os.environ.get("CTX_CACHE", ".ctx_cache"))
     ap.add_argument("--threads", type=int, default=8)
     ap.add_argument("--shard", help="k/n: build only every n-th bundle starting at k (parallel jobs; merge_index joins them)")
+    ap.add_argument("--chunk", help="k/n: build only the k-th of n runs of neighbouring bundles, with only the states in them "
+                                    "(the lower 48's parallel jobs; merge_index joins them)")
     ap.add_argument("--only", help="comma-separated channels (plus 'hpms', 'fars') to build, for testing")
     args = ap.parse_args(argv)
     if not args.preset and not args.states:
@@ -310,6 +348,11 @@ def merge_index(out_dir, shard_dirs):
             shutil.copyfile(os.path.join(d, str(grid.BUNDLE_Z), bx, f"{by}.vcg"), dst)
             ix["bundles"][key] = meta
             ix["bytes"] += meta["bytes"]
+        # chunks (--chunk) each name only their own states and box: the merged index names them all
+        ix["states"] = sorted(set(ix.get("states") or []) | set(j.get("states") or []))
+        if ix.get("bbox") and j.get("bbox"):
+            a, b = ix["bbox"], j["bbox"]
+            ix["bbox"] = [min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])]
         ix.setdefault("channels", {}).update(j.get("channels", {}))
         ix.setdefault("sources", {}).update(j.get("sources", {}))
     os.makedirs(out_dir, exist_ok=True)
