@@ -158,13 +158,14 @@
    * [{ fine, lo, hi, apexes }] (fine: 25 m splits; apexes: the drive's corner apexes, sample indices); the stretches are
    * cut at the quickest pass's corners (cutsOf), so a stretch always holds a corner. { time_s, best_s, stretches, runs,
    * most } or null under two passes with whole splits; most: the stretch where your best gave away the most to another
-   * run, { k, of, a, b, gain_s } (as worstOf's), null under IDEAL_MOST_S (splits are kept to a tenth).
+   * run, { k, of, a, b, gain_s } (as worstOf's), null under IDEAL_MOST_S (splits are kept to a tenth); splits / corners:
+   * the ideal as a ghost's [[q, t]], at your best's 25 m splits and at the cuts.
    */
   function idealOf(passes) {
     const ok = (passes || []).filter((p) => p && Array.isArray(p.fine) && p.fine.length && finite(timeAt(p.fine, 1)));
     if (ok.length < 2) return null;
     const best = ok.reduce((a, b) => (timeAt(b.fine, 1) < timeAt(a.fine, 1) ? b : a));
-    const cuts = cutsOf(best.lo, best.hi, best.apexes), used = new Set();
+    const cuts = cutsOf(best.lo, best.hi, best.apexes), used = new Set(), from = [];
     let sum = 0, q0 = 0, most = null;
     cuts.forEach((q, k) => {
       let m = Infinity, who = -1;
@@ -172,16 +173,22 @@
       if (!finite(m)) { sum = NaN; return; }
       const gain = timeAt(best.fine, q) - timeAt(best.fine, q0) - m;            // what your best gave away on this stretch
       if (gain >= IDEAL_MOST_S && (!most || gain > most.gain_s)) most = { k: k + 1, of: cuts.length, a: q0, b: q, gain_s: gain };
+      from.push({ q0, q, p: ok[who], t0: sum });
       sum += m; used.add(who); q0 = q;
     });
     if (!finite(sum)) return null;
     if (most) most.gain_s = r1(most.gain_s);
-    return { time_s: r1(sum), best_s: r1(timeAt(best.fine, 1)), stretches: cuts.length, runs: used.size, most };
+    // the ideal as a run to race: at each of your best's 25 m splits, the time of the quickest pass over that stretch, from
+    // where the stretch began (splits: 25 m; corners: at the cuts, for where a stage was lost)
+    const at = (q) => { const s = from.find((x) => q <= x.q + 1e-9) || from[from.length - 1]; return s.t0 + timeAt(s.p.fine, q) - timeAt(s.p.fine, s.q0); };
+    const splits = best.fine.map(([q]) => [q, r1(at(q))]).filter((x, k, a) => !k || (x[0] > a[k - 1][0] && x[1] >= a[k - 1][1]));
+    const corners = from.map((x) => [x.q, r1(x.t0 + timeAt(x.p.fine, x.q) - timeAt(x.p.fine, x.q0))]);
+    return { time_s: r1(sum), best_s: r1(timeAt(best.fine, 1)), stretches: cuts.length, runs: used.size, most, splits, corners };
   }
 
   /** "+0.3 vs @sam", "−1.2 vs @sam", "level with @sam" ("vs your best" for your own ghost, self); "--" when nothing compares yet. */
   function label(gap, who, self = false) {
-    const w = self ? 'your best' : who ? `@${String(who).replace(/^@/, '')}` : 'them';
+    const w = self ? (typeof self === 'string' ? self : 'your best') : who ? `@${String(who).replace(/^@/, '')}` : 'them';   // self: 'your ideal' names it
     if (!finite(gap)) return '--';
     if (Math.abs(gap) < 0.05) return `level with ${w}`;
     return `${gap > 0 ? '+' : '−'}${Math.abs(gap).toFixed(1)} s vs ${w}`;

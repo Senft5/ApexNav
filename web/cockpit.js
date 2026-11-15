@@ -11199,10 +11199,12 @@
       const geom = (x) => { try { const g = typeof x.geom === 'string' ? JSON.parse(x.geom) : x.geom; return Array.isArray(g) && g.length > 1 ? g : null; } catch (_) { return null; } };
       const stageOf = (st) => ({ id: st.id, name: st.name || 'Stage', start: [st.lat0, st.lon0], end: [st.lat1, st.lon1], length_m: st.length_m, geom: geom(st) });
       // your own quickest pass of each stage, read in the analysis worker (offline too, members or not)
-      let own = [];
-      try { own = (await ApexAnalysis.job('ownGhosts', { segs: segs.map(({ id, lat0, lon0, lat1, lon1, length_m }) => ({ id, lat0, lon0, lat1, lon1, length_m })), surface })).ghosts || []; } catch (_) { own = []; }
+      // (your ideal run instead where you chose to race it, Stage Runs "Race your ideal": apex.raceIdeal, stage ids)
+      let own = [], ideal = [];
+      try { const x = JSON.parse(localStorage.getItem('apex.raceIdeal') || '[]'); ideal = Array.isArray(x) ? x.filter((v) => typeof v === 'string') : []; } catch (_) { ideal = []; }
+      try { own = (await ApexAnalysis.job('ownGhosts', { segs: segs.map(({ id, lat0, lon0, lat1, lon1, length_m }) => ({ id, lat0, lon0, lat1, lon1, length_m })), surface, ideal })).ghosts || []; } catch (_) { own = []; }
       const mine = own.map((g) => { const st = segs.find((x) => x.id === g.id);
-        return st ? { stage: stageOf(st), who: 'you', name: 'your best', self: true, splits: g.splits, corners: g.corners || null, time_s: g.time_s, surface } : null; }).filter(Boolean);
+        return st ? { stage: stageOf(st), who: 'you', name: g.ideal ? 'your ideal' : 'your best', self: true, splits: g.splits, corners: g.corners || null, time_s: g.time_s, surface } : null; }).filter(Boolean);
       // a friend's run, where one reached you, comes first: it is the one the tracker picks on that stage
       const canon = (x) => x.origin || x.id, synced = segs.filter((x) => x.synced);
       let rows = [];
@@ -11235,7 +11237,7 @@
         ghostMk = { el, m: new maplibregl.Marker({ element: el }).setLngLat([p[1], p[0]]), on: false };
       }
       if (!ghostMk.on) { ghostMk.m.addTo(map); ghostMk.on = true; }
-      ghostMk.el.setAttribute('aria-label', v.self ? 'Ghost: your best' : `Ghost: ${v.who}`);   // after the Marker, which labels it "Map marker"
+      ghostMk.el.setAttribute('aria-label', v.self ? `Ghost: ${v.as || 'your best'}` : `Ghost: ${v.who}`);   // after the Marker, which labels it "Map marker"
       ghostMk.el.classList.toggle('self', !!v.self);
       ghostMk.el.textContent = v.self ? '' : String(v.who || '').replace(/^@/, '').charAt(0).toUpperCase();
       ghostMk.m.setLngLat([p[1], p[0]]);
@@ -11249,13 +11251,14 @@
       const st = drive.wet && drive.wet.state, slick = st === 'wet' || st === 'ice' ? st : null;
       if (slick !== w.surface && !w.refetching) { w.refetching = true; startGhostWatch(slick); return; }
       const r = w.tracker.update(rows), bar = $('ghostBar');
-      w.view = r && r.state === 'in' ? { elapsed_s: r.elapsed_s, wall: performance.now(), who: r.who, self: r.self } : null;
+      const g = r && w.ghosts.find((x) => x.stage.id === r.stageId && !!x.self === !!r.self), mineAs = r && r.self ? (g && g.name) || 'your best' : null;   // 'your ideal' when racing it
+      w.view = r && r.state === 'in' ? { elapsed_s: r.elapsed_s, wall: performance.now(), who: r.who, self: r.self, as: mineAs } : null;
       moveGhost();
       if (!r) { bar.hidden = true; return; }
-      const g = w.ghosts.find((x) => x.stage.id === r.stageId && !!x.self === !!r.self), name = r.self ? 'your best' : g ? String(g.name).split(' ')[0] : r.who;
+      const name = r.self ? mineAs : g ? String(g.name).split(' ')[0] : r.who;
       bar.hidden = r.state === 'done';
       $('ghostName').textContent = r.name;
-      $('ghostGap').textContent = ApexGhostDuel.label(r.gap, r.who, r.self);
+      $('ghostGap').textContent = ApexGhostDuel.label(r.gap, r.who, r.self ? mineAs : false);
       bar.classList.toggle('ahead', Number.isFinite(r.gap) && r.gap < -0.05); bar.classList.toggle('behind', Number.isFinite(r.gap) && r.gap > 0.05);
       if (!bar.hidden) { $('stageBar').hidden = true; $('coachBar').hidden = true; }
       const words = (x) => (window.ApexPassCoach && ApexPassCoach.spoken ? ApexPassCoach.spoken(x) : `${x.toFixed(1)} seconds`);

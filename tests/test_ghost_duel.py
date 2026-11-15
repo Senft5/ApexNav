@@ -237,3 +237,8 @@ def test_your_ideal_run_is_your_quickest_stretches_put_together():
     assert r["early"]["most"]["k"] == 1 and r["early"]["most"]["gain_s"] == pytest.approx(1, abs=0.2)
     assert r["where"] == ["in the run to the finish", "early on"]
     assert r["same"]["most"] is None                                       # nothing given away: nowhere to point
+    # the ideal as a ghost to race: its splits end on its time, never run backwards, and its corner cuts add up the same
+    assert two["splits"][-1] == [1, two["time_s"]] and two["corners"][-1] == [1, two["time_s"]]
+    assert all(b[0] > a[0] and b[1] >= a[1] for a, b in zip(two["splits"], two["splits"][1:]))
+    assert [q for q, _ in two["corners"]] == pytest.approx([0.15, 0.3, 0.55, 0.75, 1])
+    assert two["corners"][2][1] == pytest.approx(22.5, abs=0.2)           # quick early (a) to the middle, then b's quick late half
