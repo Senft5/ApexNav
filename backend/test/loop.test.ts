@@ -116,7 +116,7 @@ describe("road-data loop (IDEAS Q-07)", () => {
     await env.DB.prepare("UPDATE members SET contribute = 1 WHERE user_id = ?").bind(a.id).run();
     const { out, sent } = await viaSync(a, () => C.contributeDrive({ ...drive("a101", 101, 0.2), cam_v: C.CAM_V }, S.contribute, { fetch: mapStub, trimM: 0 }));
     expect(out.sent).toBe(1);
-    expect(sent[0]).toMatchObject({ way_id: 101, cls: "secondary", cam_v: 2 });
+    expect(sent[0]).toMatchObject({ way_id: 101, cls: "secondary", cam_v: 3 });
     expect(sent[0].shape.length).toBeGreaterThanOrEqual(2);
     expect(await env.DB.prepare("SELECT cls FROM road_ways WHERE way_id = 101").first()).toEqual({ cls: "secondary" });
     const cov = await (await api(reader, "GET", "/api/coverage?bbox=38.95,-84.05,39.05,-83.95")).json() as { ways: { way: number; conf: number[] }[] };

@@ -10,7 +10,7 @@
   // Camber from the fixed live pipeline (ApexKit IMUPipeline.camberVersion; frames and rows say camber_v, a drive cam_v).
   // Older builds decayed camber to a placeholder 0 on every straight: their camber is never shared (cam: null), and the
   // server ignores camber from any upload without cam_v (backend/src/contribute.ts). Roughness, crest and curvature still go.
-  const CAM_V = 2;
+  const CAM_V = 3;   // 3 since 2026-11-15: camber from the specific force (core/live_pipeline.py CAMBER_VERSION)
 
   /** Arc-length offset (m) of a point along a polyline [[lat,lon],...], plus its distance off the line. Local flat-earth projection. */
   function project(poly, lat, lon, cum) {
