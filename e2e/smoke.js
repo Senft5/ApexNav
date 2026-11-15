@@ -12631,6 +12631,38 @@ flow('a roundabout where the road ahead meets one: a free drive hears "Roundabou
   check((await rbs()).length === 1, 'once: ' + JSON.stringify(await rbs()));
 });
 
+flow('a viewpoint on the road ahead: a free drive hears "Lookout Rock on the right" once, and not again on the next road ahead (along_ahead.js, attachHorizonViews)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [] }) }));
+  const lat = (m) => 35.5 + m / 110540, LON = -83.9;
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexStages);
+  // the map tiles' places by the road: a named viewpoint 90 m east of it at 1200 m (the right, driving north), a café
+  await page.evaluate(([la, lo, la2]) => { ApexStages.pois = async () => [{ kind: 'view', name: 'Lookout Rock', lat: la, lon: lo }, { kind: 'cafe', name: 'Bean', lat: la2, lon: lo }]; }, [lat(1200), LON + 0.001, lat(600)]);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive && window.ApexAlongAhead && window.ApexScenic, null, { timeout: 15000 });
+  const coords = []; for (let m = 0; m <= 2000; m += 10) coords.push([LON, lat(m)]);
+  await page.evaluate((coords) => apexDebug.horizonFrom(coords), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon' && Array.isArray(apexDebug.track.scenic), null, { timeout: 15000 });
+  const sc = await page.evaluate(() => apexDebug.track.scenic.map((p) => [p.kind, p.name, Math.round(p.m)]));
+  check(sc.length === 1 && sc[0][0] === 'view' && sc[0][1] === 'Lookout Rock' && Math.abs(sc[0][2] - 1200) <= 10, 'the viewpoint along the road ahead, not the café: ' + JSON.stringify(sc));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const views = () => page.evaluate(() => window.__said.filter((s) => /Lookout Rock|A viewpoint/.test(s)));
+  for (let i = await iAt(700), end = await iAt(1150); i <= end && !(await views()).length; i += 2) { await at(i); await page.waitForTimeout(60); }
+  const heard = await views();
+  check(heard.length === 1 && /on the right/.test(heard[0]), 'said once, on its side: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  // the next road ahead overlaps this one: the viewpoint is not on its list again
+  await page.evaluate((coords) => apexDebug.horizonFrom(coords.slice(50)), coords);
+  await page.waitForFunction(() => Array.isArray(apexDebug.track.scenic) && apexDebug.track.alongSaid === undefined, null, { timeout: 15000 });
+  const again = await page.evaluate(() => apexDebug.track.scenic);
+  check(again.length === 0, 'not again on the next road ahead: ' + JSON.stringify(again));
+});
+
 flow('a limit that drops on the road ahead: a free drive with no route hears "Limit 35 ahead." from the map, once (limit_ahead.js fromCtx)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
