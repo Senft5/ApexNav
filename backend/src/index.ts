@@ -32,7 +32,7 @@ import * as messages from "./messages";
 import { mediaGet, mediaPut } from "./post_media";
 import { devDriveGet, devDriveList, devDrivePut } from "./dev_drives";
 import { anonDriveGet, anonDriveList, anonDrivePut } from "./anon_drives";
-import { afterCrewDrive, afterDuel, afterMessage, afterFriend, afterKudos, afterPassed, afterTopped, bestBefore, afterPostComment, afterPostKudos, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
+import { afterCrewDrive, afterDuel, afterMessage, afterFriend, afterKudos, afterPassed, afterTopped, bestBefore, afterPostComment, afterPostKudos, afterPostTag, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewBadge, crewFeed, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
 import { decalsPlace } from "./livery";
@@ -439,7 +439,11 @@ on("POST", "/api/messages/:handle", async (req, env, m, ctx) => {
 });
 on("GET", "/api/feed/week", async (req, env) => json(await drivePosts.feedWeek(env, await requireMember(req, env))));
 on("GET", "/api/feed", async (req, env) => json(await drivePosts.feed(env, await requireMember(req, env), new URL(req.url))));
-on("POST", "/api/posts", async (req, env) => json(await drivePosts.postCreate(env, await requireMember(req, env), req), 201));
+on("POST", "/api/posts", async (req, env, _m, ctx) => {
+  const v = await requireMember(req, env), made = await drivePosts.postCreate(env, v, req);
+  if (made.tagged) await later(ctx, afterPostTag(env, v, made.id));
+  return json({ id: made.id }, 201);
+});
 on("GET", "/api/posts/:id", async (req, env, m) => json(await drivePosts.postGet(env, await requireMember(req, env), m.groups!.id)));
 on("PUT", "/api/posts/:id", async (req, env, m) => json(await drivePosts.postEdit(env, await requireMember(req, env), m.groups!.id, req)));
 on("DELETE", "/api/posts/:id", async (req, env, m) => { await drivePosts.postDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });

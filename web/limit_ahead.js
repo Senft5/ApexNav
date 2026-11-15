@@ -51,6 +51,20 @@
     return n > 0 ? `Limit ${n} ahead.` : null;
   }
 
-  const api = { next, due, callM, text, DROP_MPS };
+  /**
+   * Posted limits per sample of a track from a route context (route_ctx: the map's maxspeed_kph per corridor sample,
+   * corridor.distM along the same line): m/s, null where the map has none. For the road ahead on a free drive, which has
+   * no router or tiles of its own to ask. Null when the context has no limits at all.
+   */
+  function fromCtx(ctx, corridor, dist) {
+    const v = ctx && ctx.channels && ctx.channels.maxspeed_kph, cd = corridor && corridor.distM;
+    if (!v || !cd || !cd.length || !Array.isArray(dist) || !Array.prototype.some.call(v, (x) => finite(x) && x > 0)) return null;
+    return dist.map((m) => { const j = Math.min(at(cd, m) < 0 ? cd.length - 1 : at(cd, m), v.length - 1); return finite(v[j]) && v[j] > 0 ? v[j] / 3.6 : null; });
+  }
+
+  /** Whether a drop at (lat, lon) was said already (said: [{ lat, lon }]): within 60 m, the same sign on an overlapping road ahead. */
+  const saidNear = (said, lat, lon) => (said || []).some((p) => Math.hypot((p.lat - lat) * 110540, (p.lon - lon) * 111320 * Math.cos(lat * Math.PI / 180)) < 60);
+
+  const api = { next, due, callM, text, fromCtx, saidNear, DROP_MPS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexLimitAhead = api;
 })(typeof window !== 'undefined' ? window : globalThis);
