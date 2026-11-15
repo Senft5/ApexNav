@@ -69,6 +69,40 @@
     return p0[1];
   }
 
+  /**
+   * Where the ghost is after elapsed_s, as a fraction of the stage (the inverse of timeAt): between two of its splits it
+   * goes at that stretch's even pace, so the map shows no more than the splits tell (how long corner to corner, never a
+   * speed down a straight). 0 before the start, 1 once its time is up; null without splits.
+   */
+  function qAt(splits, elapsed_s) {
+    if (!Array.isArray(splits) || !splits.length || !finite(elapsed_s)) return null;
+    if (elapsed_s <= 0) return 0;
+    let p0 = [0, 0];
+    for (const p of splits) {
+      if (!Array.isArray(p) || !finite(p[0]) || !finite(p[1])) return null;
+      if (elapsed_s <= p[1]) return p[1] > p0[1] ? p0[0] + (p[0] - p0[0]) * (elapsed_s - p0[1]) / (p[1] - p0[1]) : p[0];
+      p0 = p;
+    }
+    return 1;
+  }
+  /** The point a fraction q (0..1) of the way along a line [[lat, lon], ...], by length; null without a line. */
+  function pointAt(geom, q) {
+    if (!Array.isArray(geom) || geom.length < 2 || !finite(q)) return null;
+    let total = 0;
+    const seg = [];
+    for (let i = 1; i < geom.length; i++) { const m = metres(geom[i - 1], geom[i]); seg.push(m); total += m; }
+    if (!(total > 0)) return [geom[0][0], geom[0][1]];
+    let want = Math.max(0, Math.min(1, q)) * total;
+    for (let i = 0; i < seg.length; i++) {
+      if (want <= seg[i] || i === seg.length - 1) {
+        const f = seg[i] > 0 ? Math.min(1, want / seg[i]) : 0, a = geom[i], b = geom[i + 1];
+        return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+      }
+      want -= seg[i];
+    }
+    return [geom[geom.length - 1][0], geom[geom.length - 1][1]];
+  }
+
   /** Seconds you are behind the ghost (above 0) or ahead (below 0), at fraction q having taken elapsed_s. */
   function gapAt(splits, q, elapsed_s) {
     const g = timeAt(splits, q);
@@ -121,7 +155,8 @@
   const ENTRY_M = 30, HEADING_DEG = 60, NEAR_M = 25, PAST_M = 12, SAY_EVERY = 2;
   /**
    * Follows the live 5 m rows ({ lat, lon, t_s }) against ghosts [{ stage: { id, name, start, end, length_m, geom }, who,
-   * splits, time_s }]. update(rows) → null outside a stage, { state: 'in', name, who, gap, q } inside, and
+   * splits, time_s }]. update(rows) → null outside a stage, { state: 'in', name, who, gap, q, elapsed_s } inside (and
+   * ghostAt(elapsed_s) places the ghost on the map, D-04), and
    * { state: 'done', ..., gap, time_s } once on finishing. Time is the rows' own clock (t_s); without one nothing shows.
    * gap is as of the last of the ghost's splits passed (null before the first). say: true at the first split past half
    * way, and at the finish (the co-driver's moments: two lines a stage, no more).
@@ -179,7 +214,14 @@
           }
         }
         scanned = n;
-        return cur ? { state: 'in', name: cur.g.stage.name, who: cur.g.who, stageId: cur.g.stage.id, q: cur.q, gap: cur.gap, say } : null;
+        if (!cur) return null;
+        const last = rows[n - 1], el = last && finite(last.t_s) && finite(cur.t0) ? last.t_s - cur.t0 : null;
+        return { state: 'in', name: cur.g.stage.name, who: cur.g.who, stageId: cur.g.stage.id, q: cur.q, gap: cur.gap, say, elapsed_s: el };
+      },
+      /** Where the ghost of the stage you are on is after elapsed_s on its clock ([lat, lon]), or null off a stage. */
+      ghostAt(elapsed_s) {
+        if (!cur || !finite(elapsed_s)) return null;
+        return pointAt(cur.g.stage.geom, qAt(cur.g.splits, elapsed_s));
       },
     };
   }
@@ -204,6 +246,6 @@
     return 'Couldn\u2019t send it. Try again.';
   }
 
-  const api = { cutsOf, splitsOf, timeAt, gapAt, cornerSplits, standout, label, spoken, createTracker, countFor, MAX, challengeKey, challengeSaid };
+  const api = { cutsOf, splitsOf, timeAt, qAt, pointAt, gapAt, cornerSplits, standout, label, spoken, createTracker, countFor, MAX, challengeKey, challengeSaid };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexGhostDuel = api;
 })(typeof window !== 'undefined' ? window : globalThis);

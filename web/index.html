@@ -1825,6 +1825,10 @@
     .stage-bar b { font-family: var(--font-num, inherit); font-size: 22px; }
     .stage-bar small { color: var(--panel-dim); }
     .stage-bar.ahead { border-left-color: #2e9e5b; } .stage-bar.behind { border-left-color: #d0453a; }
+    /* The ghost on the map (IDEAS D-04): where your friend was at this moment of their run, a hollow marker that never hides the road */
+    .ghost-puck { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--accent, #e8b21a); background: color-mix(in srgb, var(--accent, #e8b21a) 25%, transparent);
+      box-shadow: 0 0 0 2px var(--panel, #111); display: grid; place-items: center; font: 800 10px var(--font-ui, sans-serif); color: var(--panel-ink, #fff); pointer-events: none; }
+    .ghost-puck[hidden] { display: none; }
     .hz-ask span { flex: 1; font-weight: 700; }
     .hz-ask .key { min-height: 56px; }
     .g-score { text-align: center; line-height: 1; margin-top: 2px; } .g-score b { display: block; font: 700 26px var(--font-num); color: var(--panel-ink); letter-spacing: 0.04em; } .g-score span { font-size: 13px; letter-spacing: 0.08em; color: var(--panel-dim); }

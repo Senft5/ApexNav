@@ -11183,7 +11183,7 @@
     // in the quiet slot). Members only; offline or with no friend's run there, nothing shows.
     let ghostWatch = null;
     async function startGhostWatch(surface = null) {
-      ghostWatch = null; $('ghostBar').hidden = true;
+      ghostWatch = null; $('ghostBar').hidden = true; moveGhost();
       if (!window.ApexGhostDuel || !window.ApexSync) return;
       let segs = [];
       try { segs = JSON.parse(localStorage.getItem('apex.segments') || '[]'); } catch (_) {}
@@ -11203,14 +11203,36 @@
                        who: g.handle || g.name || 'friend', name: g.name || g.handle || 'your friend', splits: g.splits, time_s: g.time_s, surface: g.surface || null } : null; }).filter(Boolean);
       if (ghosts.length) ghostWatch = { tracker: ApexGhostDuel.createTracker(ghosts), ghosts, at: 0, surface };
     }
+    // The ghost on the map (IDEAS D-04): a hollow marker where your friend was at this moment of their run, moved every
+    // frame between the tracker's 1 s looks (its clock runs on from the last row's, never more than 2 s past it, so a stop
+    // doesn't send it off alone). Phone only, never CarPlay; off a stage, gone.
+    let ghostMk = null;
+    function moveGhost() {
+      const w = ghostWatch, v = w && w.view;
+      if (!v || !Number.isFinite(v.elapsed_s)) { if (ghostMk && ghostMk.on) { ghostMk.m.remove(); ghostMk.on = false; } return; }
+      const p = w.tracker.ghostAt(v.elapsed_s + Math.min(2, (performance.now() - v.wall) / 1000));
+      if (!p) return;
+      if (!ghostMk) {
+        const el = document.createElement('div');
+        el.className = 'ghost-puck'; el.setAttribute('role', 'img');
+        ghostMk = { el, m: new maplibregl.Marker({ element: el }).setLngLat([p[1], p[0]]), on: false };
+      }
+      if (!ghostMk.on) { ghostMk.m.addTo(map); ghostMk.on = true; }
+      ghostMk.el.setAttribute('aria-label', `Ghost: ${v.who}`);            // after the Marker, which labels it "Map marker"
+      ghostMk.el.textContent = String(v.who || '').replace(/^@/, '').charAt(0).toUpperCase();
+      ghostMk.m.setLngLat([p[1], p[0]]);
+    }
     function feedGhost() {
       const w = ghostWatch, rows = drive.rec && drive.rec.rows;
+      moveGhost();
       if (!w || !rows || performance.now() - w.at < 1000) return;
       w.at = performance.now();
       // the road turned wet or icy since: your friend's dry run is no ghost for it (road_surface.js, like with like)
       const st = drive.wet && drive.wet.state, slick = st === 'wet' || st === 'ice' ? st : null;
       if (slick !== w.surface && !w.refetching) { w.refetching = true; startGhostWatch(slick); return; }
       const r = w.tracker.update(rows), bar = $('ghostBar');
+      w.view = r && r.state === 'in' ? { elapsed_s: r.elapsed_s, wall: performance.now(), who: r.who } : null;
+      moveGhost();
       if (!r) { bar.hidden = true; return; }
       const g = w.ghosts.find((x) => x.stage.id === r.stageId), name = g ? String(g.name).split(' ')[0] : r.who;
       bar.hidden = r.state === 'done';
@@ -11785,7 +11807,7 @@
       if (pendingEnd) { clearTimeout(pendingEnd.timer); pendingEnd = null; paintEndUndo(); }   // I-3: any other way out ends it now
       driveActive = false; paintBehind(); paintOverviewKey(); paintTurnArrow(null, -1); driveCam(false); pushQuiet(false); soundtrackStop(); drive.wet = null; if (ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null);   // the dry road back
       const kept = keepStop();                                         // Round 3: no more checkpoints; dropped once saved
-      stageWatch = null; $('stageBar').hidden = true; coachWatch = null; $('coachBar').hidden = true; ghostWatch = null; $('ghostBar').hidden = true;
+      stageWatch = null; $('stageBar').hidden = true; coachWatch = null; $('coachBar').hidden = true; ghostWatch = null; $('ghostBar').hidden = true; moveGhost();
       const laps = circuit.timer ? circuit.timer.state(Date.now()).laps : [];
       const battery = window.ApexBattery ? ApexBattery.summary(drive.battery) : null; drive.battery = null;
       resetCircuit();
