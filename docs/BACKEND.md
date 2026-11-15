@@ -44,6 +44,8 @@ Applied to both `apexnav-db` and `apexnav-preview-db`: **0001_init.sql**, **0002
 
 **Query budget:** Workers Free allows 50 D1 queries per request, and an `env.DB.batch` counts as one. Read or write per row in a batch (or fold the check into the SQL), never one query per row in a loop. `src/query_budget.ts` counts every request. The tests run with `QUERY_LIMIT` 50, so a route over it fails there as it would in production. In production, a request over 40 is counted in `error_counts` under kind `queries`, page = the route.
 
+**Query plans (2026-11-15):** `tests/test_query_plans.py` builds the schema from `migrations/` in a local SQLite and plans every `prepare(...)` in `src/`; a full table scan fails it unless that file and table are in its `ALLOWED` list with a reason (sweeps, account deletion, tiny tables). Add an index in a migration instead of a scan on anything that grows with users.
+
 | Group | Tables |
 |---|---|
 | Identity | `users` (Google sub, handle), `members` (everyone signed in and not banned, since 2026-10-30; kept for old app builds and the inviter link), `invites` (token hash only), `sessions` (token hash only; 30 days that slide: `viewer()` pushes a session in use back to 30 days at most once a day, and `/api/me` sets the website's cookie again) |
