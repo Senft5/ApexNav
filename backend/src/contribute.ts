@@ -156,7 +156,7 @@ function meanSql(mean: string, m2: string, k: string, x: string) {
 }
 
 /** Merges one bin into road_bins in a single atomic statement (computed from the old row). */
-function mergeBin(env: Env, wayId: number, dir: number, b: Bin, day: string): D1PreparedStatement {
+export function mergeBin(env: Env, wayId: number, dir: number, b: Bin, day: string): D1PreparedStatement {
   const smoother = `(n >= 3 AND rough_mean IS NOT NULL AND ?5 < rough_mean * ${FRESH.repaveRatio} AND rough_mean - ?5 > ${FRESH.repaveG})`;
   const reset = `(${smoother} AND smooth_run + 1 >= ${FRESH.repavePasses})`;
   const cam = meanSql("camber_mean", "camber_m2", "camber_n", "?4"), rough = meanSql("rough_mean", "rough_m2", "n", "?5");
