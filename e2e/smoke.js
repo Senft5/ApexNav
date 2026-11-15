@@ -12651,6 +12651,38 @@ flow('members\' road feel on the road ahead: a free drive hears the bump members
   check(asked.length === 1, 'the cell asked once: ' + JSON.stringify(asked));
 });
 
+flow('members\' camber on the road ahead: a free drive\'s bend members measured sloping away gets "off-camber" before it is said (horizonFeel, contributor.js camberMods)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
+    window.APEX_REVIEW = true; });
+  // north 1000 m, a 90 degree right-hander of 60 m radius, then east: one bend about 1050 m ahead
+  const KY = 110540, KX = 111320 * Math.cos(35.5 * Math.PI / 180), LAT0 = 35.5, LON0 = -83.9, pts = [];
+  for (let m = -20; m <= 1000; m += 5) pts.push([0, m]);
+  const R = 60; for (let a = 1; a <= 18; a++) { const th = a * Math.PI / 36; pts.push([R - R * Math.cos(th), 1000 + R * Math.sin(th)]); }
+  for (let m = 5; m <= 1400; m += 5) pts.push([R + m, 1000 + R]);
+  const ll = ([e, n]) => [LAT0 + n / KY, LON0 + e / KX];
+  const WAY = 4000000456;
+  const elements = [{ type: 'way', id: WAY, tags: { highway: 'tertiary', name: 'Bend Road' }, nodes: [1, 2], geometry: pts.map((p) => { const [la, lo] = ll(p); return { lat: la, lon: lo }; }) }];
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }));
+  // three members agree the whole road slopes away from the turn by 6 degrees (SD 0.5)
+  await page.route((u) => u.pathname === '/api/roads', (route) => {
+    const bins = Array.from({ length: 600 }, (_, b) => b);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ways: { [WAY]: { 0: { i: bins, cam: bins.map(() => -6), csd: bins.map(() => 0.5), rough: bins.map(() => 0.1), n: bins.map(() => 3), cn: bins.map(() => 3), crest: bins.map(() => null), crn: bins.map(() => 0), bp: [] } } },
+      lines: { [WAY]: pts.map(ll) } }) }); });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks && window.ApexContributor && window.ApexSync);
+  await page.evaluate(() => { ApexSync.signedIn = () => true; });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const coords = pts.filter((p) => p[1] >= 0 || p[0] > 0).map((p) => { const [la, lo] = ll(p); return [lo, la]; });
+  await page.evaluate((coords) => apexDebug.horizonFrom(coords), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon' && apexDebug.track.crowdBumps != null, null, { timeout: 30000 })
+    .catch(async () => { throw new Error('no members\' road feel on the road ahead: ' + JSON.stringify(await page.evaluate(() => [apexDebug.track && apexDebug.track.kind, apexDebug.lastCtx]))); });
+  const bends = await page.evaluate(() => apexDebug.track.events.filter((e) => e.type === 'corner').map((e) => ({ at: Math.round(e.dist_m), mods: e.mods, crowdCam: !!e.crowdCam, call: e.call })));
+  check(bends.length >= 1 && bends.every((b) => b.at > 900 && b.at < 1200), 'the one bend on the road ahead: ' + JSON.stringify(bends));
+  check(bends.some((b) => b.crowdCam && b.mods.includes('off-camber') && !b.mods.includes('banked')), 'members\' camber makes it off-camber: ' + JSON.stringify(bends));
+});
+
 flow('a T-junction where the road ahead ends: a free drive hears it before the end, early enough to slow for the turn, once (road_marks.js teeMark)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
