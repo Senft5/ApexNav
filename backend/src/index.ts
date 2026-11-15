@@ -42,6 +42,7 @@ import { photoDelete, photoList, photoServe, photoUpload, photoUse } from "./pho
 import { ctxServe } from "./context_grid";
 import { cameraList, graphIndex, graphTile } from "./graph";
 import { dataPut } from "./data_store";
+import { valhallaProxy, valhallaStatus } from "./valhalla";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
@@ -68,6 +69,7 @@ import { STATS_SAMPLE, recordStat, statsSummary } from "./stats";
 import { etaStart, etaUpdate, etaView } from "./eta_share";
 import { highlightCreate, highlightDelete, highlightList, highlightRate } from "./highlights";
 export { ConvoyIndex, ConvoyRoom } from "./convoy";
+export { ValhallaRouter, ValhallaTiles } from "./valhalla";
 import { crewHomeSet, crewMeetCells } from "./crew_meet";
 import { chargers } from "./chargers";
 import { camerasResponse, trafficResponse } from "./traffic";
@@ -353,6 +355,9 @@ on("GET", "/api/traffic/v1/cameras.json", (_req, env) => camerasResponse(env));
 on("GET", "/api/cameras/v1/region.json", (_req, env) => cameraList(fetch, env));
 // CI's upload of the map data into R2 (src/data_store.ts): a GitHub OIDC token of this repository's main branch, no secret
 on("PUT", "/api/ops/data", (req, env, _m, ctx) => dataPut(req, env, ctx));
+// our own Valhalla router (src/valhalla.ts): 503 means "ask the public server", which the phone then does
+on("GET", "/api/valhalla/status", (_req, env) => valhallaStatus(env));
+on("POST", "/api/valhalla/:action", (req, env, m) => valhallaProxy(req, env, m.groups!.action));
 // photos (src/photos.ts, REVIEW.md 5.2): JPEG in, metadata out; members only
 on("POST", "/api/photos", async (req, env) => json(await photoUpload(env, await requireMember(req, env), req), 201));
 on("GET", "/api/photos", async (req, env) => json(await photoList(env, await requireMember(req, env), new URL(req.url))));
@@ -525,7 +530,7 @@ on("GET", "/api/convoy/:id/connect", async (req, env, m) => convoyConnect(req, e
 // No credentials: cookies never cross; any other origin gets no CORS headers at all.
 const APP_CORS: Record<string, string> = {
   "access-control-allow-origin": APP_ORIGIN, "access-control-allow-methods": "GET, POST, PUT, DELETE",
-  "access-control-allow-headers": "authorization, content-type, x-apexnav", "access-control-max-age": "600", vary: "Origin",
+  "access-control-allow-headers": "authorization, content-type, x-apexnav", "access-control-expose-headers": "x-router", "access-control-max-age": "600", vary: "Origin",
 };
 function withAppCors(res: Response): Response {
   if (res.status === 101 || res.webSocket) return res;   // a socket upgrade: CORS does not apply, and a 101 cannot be rebuilt

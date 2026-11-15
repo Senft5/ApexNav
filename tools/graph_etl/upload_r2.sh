@@ -3,7 +3,8 @@
 # .github/workflows/data-mirror.yml. Auth is the run's GitHub OIDC token (audience vetta-data, `id-token: write`), asked
 # for again every BATCH files so it never expires mid-run. Graph tiles go up under their build first; the index last, so the
 # Worker switches to the new build only when all its tiles are there. Unchanged files are skipped by the Worker (same sha).
-#   tools/graph_etl/upload_r2.sh DATA_DIR [BASE_URL]   (DATA_DIR = a checkout of graph-data: v1/, ctx/v1/, cameras/v1/; or osm-ctx.yml's osm/v2/)
+#   tools/graph_etl/upload_r2.sh DATA_DIR [BASE_URL]   (DATA_DIR = a checkout of graph-data: v1/, ctx/v1/, cameras/v1/; or osm-ctx.yml's osm/v2/;
+#   or valhalla-tiles.yml's valhalla/v1/)
 set -euo pipefail
 dir=$(cd "$1" && pwd); base="${2:-https://apexnav.senftns.workers.dev}"
 BATCH=150; PAR=8
@@ -67,6 +68,13 @@ if [ -d "$dir/osm/v2" ]; then   # the OSM route context bundles (.github/workflo
   [ -d "$dir/osm/v2/points" ] && { ( cd "$dir/osm/v2" && ls points/*.json | sed "s|.*|$dir/osm/v2/& osm/v2/&|" ) | upload || fail=1; }
   [ -d "$dir/osm/v2/lines" ] && { ( cd "$dir/osm/v2" && ls lines/*.json | sed "s|.*|$dir/osm/v2/& osm/v2/&|" ) | upload || fail=1; }
   [ -f "$dir/osm/v2/index.json" ] && { echo "$dir/osm/v2/index.json osm/v2/index.json" | upload || fail=1; }
+fi
+if [ -f "$dir/valhalla/v1/index.json" ]; then   # our router's tile tar in parts (.github/workflows/valhalla-tiles.yml), the index last
+  vbuild=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["build"])' "$dir/valhalla/v1/index.json")
+  echo "valhalla tiles $vbuild:"
+  # one part at a time: the Worker holds a whole part (32 MB) in memory to check it, and parallel parts could share an isolate
+  ( cd "$dir/valhalla/v1/b/$vbuild" && ls part-* | sed "s|.*|$dir/valhalla/v1/b/$vbuild/& valhalla/v1/b/$vbuild/&|" ) | PAR=1 upload || fail=1
+  if [ "$fail" = 0 ]; then echo "$dir/valhalla/v1/index.json valhalla/v1/index.json" | upload || fail=1; fi
 fi
 if [ -f "$dir/cameras/v1/region.json" ]; then
   echo "cameras:"

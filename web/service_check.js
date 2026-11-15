@@ -60,6 +60,11 @@
     { id: 'router_fun', group: 'Our router', name: 'Fun plan', feeds: 'Fun routes', router: 'fun' },
     { id: 'router_long', group: 'Our router', name: 'Long way plan', feeds: 'Long way routes', router: 'max' },
     { id: 'router_loop', group: 'Our router', name: 'Loop plan', feeds: 'loops', router: 'loop' },
+    // our own Valhalla (backend/src/valhalla.ts): asking wakes it when it sleeps, so "starting" right after a quiet spell is normal
+    { id: 'valhalla_own', group: 'Vetta servers', name: 'Our Quick-route server (OH, KY, IN)', feeds: 'Quick routes, turn instructions (the public one stands in)',
+      worker: true, path: '/api/valhalla/status',
+      check: (j) => (!json(j) ? 'no answer' : j.own ? null : j.reason === 'starting' ? 'starting (asked again in a minute or two)' : `not answering (${String(j.reason || '?').slice(0, 40)})`),
+      note: (j) => (json(j) && j.own && j.version ? `Valhalla ${j.version}` : '') },
     { id: 'valhalla', group: 'Outside services', name: 'Valhalla', feeds: 'Quick routes, turn instructions', url: `${VALHALLA}/route`, method: 'POST',
       body: JSON.stringify({ locations: [AT, TO], costing: 'auto', directions_options: { units: 'kilometers' } }),
       check: (j) => (json(j) && j.trip && j.trip.status === 0 ? null : json(j) && j.error ? String(j.error).slice(0, 80) : 'no trip') },

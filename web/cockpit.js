@@ -3033,7 +3033,9 @@
     // =======================================================================
     // 9. ROUTING — Valhalla (highways de-prioritised) + posted limits; OSRM fallback
     // =======================================================================
-    const VALHALLA = 'https://valhalla1.openstreetmap.de';
+    // our own router first, the public server when ours can't answer (route_loading.js valhalla(), backend/src/valhalla.ts);
+    // the init's body is what is sent
+    const valhallaJson = (action, init, timeoutMs) => RouteLoading.valhalla(action, init.body, timeoutMs);
     function decodePolyline6(str) {
       const out = []; let i = 0, lat = 0, lon = 0;
       while (i < str.length) {
@@ -3360,7 +3362,7 @@
     async function valhallaRoutesExcluding(points, throughRoadsOnly, alternates, extra, excl) {
       // Loop waypoints snap only to through roads (tertiary..primary), never cul-de-sacs or motorways.
       const filter = { min_road_class: 'tertiary', max_road_class: 'primary', exclude_ramp: true };
-      const json = await RouteLoading.json(`${VALHALLA}/route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      const json = await valhallaJson('route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
         locations: points.map((p, i) => {
           const end = i === 0 || i === points.length - 1;
           if (!end && p.shaping) return { lat: p.lat, lon: p.lon, type: 'through', radius: 25 };   // stay on the stage
@@ -3381,7 +3383,7 @@
       const rows = Math.max(1, Math.floor(100 / targets.length)), parts = [];
       for (let i = 0; i < sources.length; i += rows) {
         const src = sources.slice(i, i + rows);
-        const json = await RouteLoading.json(`${VALHALLA}/sources_to_targets`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        const json = await valhallaJson('sources_to_targets', { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sources: src.map(p => ({ lat: p.lat, lon: p.lon })), targets: targets.map(p => ({ lat: p.lat, lon: p.lon })), ...(costing || FunRoute.costing(avoid, routingCar())) }) });
         if (!Array.isArray(json.sources_to_targets)) throw new Error(json.error || 'no matrix');
         parts.push(json.sources_to_targets);
@@ -3539,7 +3541,7 @@
       for (let i = 0; i < t.lat.length; i += stride) idx.push(i);
       if (idx[idx.length - 1] !== t.lat.length - 1) idx.push(t.lat.length - 1);
       try {
-        const json = await RouteLoading.json(`${VALHALLA}/trace_attributes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        const json = await valhallaJson('trace_attributes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
           shape: idx.map(i => ({ lat: t.lat[i], lon: t.lon[i] })), costing: 'auto', shape_match: 'map_snap',
           filters: { attributes: ['edge.speed_limit', 'matched.edge_index'], action: 'include' } }) });
         const edges = json.edges || [];
@@ -4853,7 +4855,7 @@
     function ownInstructions(c) {
       if (!c || c.kind !== 'own' || !window.ApexOwnRouting) return Promise.resolve(null);
       if (!ownInstructed.has(c.route)) ownInstructed.set(c.route, tlTime('valhalla: turn instructions (after the card)', ApexOwnRouting.instruct(c.route,
-        (body) => RouteLoading.json(`${VALHALLA}/trace_route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, OWN_INSTRUCT_MS),
+        (body) => valhallaJson('trace_route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, OWN_INSTRUCT_MS),
         routeOf, FunRoute.costing(avoid, routingCar()), OWN_INSTRUCT_MS).catch(() => 'own')));
       return ownInstructed.get(c.route);
     }

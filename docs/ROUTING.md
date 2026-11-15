@@ -36,6 +36,15 @@ key; if the map's index can't be loaded (8 s) it says to check signal; there and
 still gives our chosen line its spoken directions (trace_route), and Quick and a reroute to rejoin still use it. Loops
 likewise are our router's or nothing: off the map the loop card says so, no Valhalla stage loop or circle stands in.
 
+**Our own Valhalla (2026-11-15).** Every Valhalla call the page makes (Quick routes, the matrix, trace_attributes,
+trace_route) goes first to our own Valhalla in a Cloudflare Container (`POST /api/valhalla/<action>`,
+backend/src/valhalla.ts; tiles for Ohio, Kentucky and Indiana built weekly by .github/workflows/valhalla-tiles.yml), and
+to the public server (valhalla1.openstreetmap.de) when ours answers anything but 200: a point outside the three states'
+outlines, the container starting (it sleeps after 6 h without a request and takes a minute or two to fetch its tiles),
+or no container (previews, tests). After "starting" or no answer the page leaves ours alone for a minute
+(web/route_loading.js `valhalla()`). A matrix of ours with an empty pair is asked of the public server too (ours gives up
+on pairs 250+ km apart sooner, tools/valhalla/smoke.py). This changes where Valhalla runs, not what it is used for: still Quick only.
+
 Changing the level re-plans a destination route that is not being driven (not while one is being planned; a route with a stop you added keeps it and the level applies to the next route). Loops ignore the level, so their card hides it.
 
 ## Avoid

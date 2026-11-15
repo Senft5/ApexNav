@@ -2,6 +2,7 @@ export interface Env {
   DB: D1Database;
   CONVOY: DurableObjectNamespace<import("./convoy").ConvoyRoom>;
   CONVOY_INDEX: DurableObjectNamespace<import("./convoy").ConvoyIndex>;
+  VALHALLA?: DurableObjectNamespace<import("./valhalla").ValhallaRouter>;   // our own router's container (src/valhalla.ts); production only
   ASSETS?: Fetcher;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
