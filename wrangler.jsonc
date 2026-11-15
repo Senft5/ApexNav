@@ -44,7 +44,7 @@
   // ARCHIVE: the weekly database backup in R2 (Workers Paid, 2026-11-13); BACKUPS (KV) keeps its old copies and is used only without it.
   // DATA: the map data (graph tiles, context grid, cameras), uploaded by CI (backend/src/data_store.ts); public OSM-derived data.
   // MEDIA: clips and photos on drive posts (backend/src/post_media.ts)
-  "r2_buckets": [{ "binding": "ARCHIVE", "bucket_name": "apexnav-archive" }, { "binding": "DATA", "bucket_name": "apexnav-data" }, { "binding": "MEDIA", "bucket_name": "apexnav-media" }, { "binding": "DEV_DRIVES", "bucket_name": "apexnav-devdrives" }],
+  "r2_buckets": [{ "binding": "ARCHIVE", "bucket_name": "apexnav-archive" }, { "binding": "DATA", "bucket_name": "apexnav-data" }, { "binding": "MEDIA", "bucket_name": "apexnav-media" }, { "binding": "DEV_DRIVES", "bucket_name": "apexnav-devdrives" }, { "binding": "ANON_DRIVES", "bucket_name": "apexnav-anondrives" }],
   "d1_databases": [
     { "binding": "DB", "database_name": "apexnav-db", "database_id": "b0c559d5-48c2-462c-bd97-cf375233f7c1", "migrations_dir": "backend/migrations" }
   ],

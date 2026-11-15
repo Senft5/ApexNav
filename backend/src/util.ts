@@ -16,6 +16,7 @@ export interface Env {
   ARCHIVE?: R2Bucket;       // R2 (Workers Paid): weekly database copies (backup.ts); graph tiles later
   DATA?: R2Bucket;          // the map data (graph tiles, context grid, cameras) mirrored by CI (src/data_store.ts)
   DEV_DRIVES?: R2Bucket;    // developers' own drives for internal review (src/dev_drives.ts), key <user id>/<drive id>.json.gz
+  ANON_DRIVES?: R2Bucket;   // anonymous drive pieces for internal road and analysis work (src/anon_drives.ts); no account on any
   DEV_DRIVES_READ_HASH?: string;   // tests only: production uses the constant in dev_drives.ts
   MEDIA?: R2Bucket;         // clips and photos on drive posts, key post/<post id> (src/post_media.ts); none = posts carry none
   PHOTOS?: KVNamespace;     // photo bytes, key p/<id> (src/photos.ts); also siwa/<user id>, a Sign in with Apple refresh token (src/apple_revoke.ts)
