@@ -20,7 +20,7 @@ for (let i = 10; i < 30; i++) { K[i] = 0.0123456 + i * 1e-4; N[i] = 3; }    // a
 for (let i = 40; i < 44; i++) { K[i] = 0.02; N[i] = 4; }                     // 20 m: too short for blendCurvature, dropped
 for (let i = 60; i < 80; i++) { K[i] = 0.03; N[i] = 1; }                     // one pass: dropped
 const m = { km: 0.5, coveredKm: 0.1, coverage: 0.2, roughness: 0.123456, bankedKm: 0, avgPasses: 2.5, crowdK: K, crowdKn: N,
-            crowdBumps: [{ index: 50, p: 3 }, { index: 999, p: 2 }], crowdCrests: [{ index: 70, g: 0.2345678 }, { index: 999, g: 0.3 }], crowdRough: [{ index: 82, endIndex: 95 }, { index: 90, endIndex: 999 }], repavedOn: '2026-09' };
+            crowdBumps: [{ index: 50, p: 3 }, { index: 999, p: 2 }], crowdCrests: [{ index: 70, g: 0.2345678 }, { index: 999, g: 0.3 }], crowdRough: [{ index: 82, endIndex: 95 }, { index: 90, endIndex: 999 }], crowdCam: K.map((_, i) => (i >= 12 && i < 18 ? -4.26 : null)), repavedOn: '2026-09' };
 const S = mem(), t0 = Date.parse('2026-11-14T12:00:00Z');
 const saved = F.save(S, 'r1', m, dist, t0);
 const back = F.load(S, 'r1', dist.map((d) => d + 1));                          // a rebuilt track, a metre off
@@ -35,7 +35,7 @@ const tooBig = F.save(mem(), 'big', { ...m, crowdK: bigK, crowdKn: bigN, crowdBu
 const junk = mem(); junk.setItem(F.KEY, '[1]');
 console.log(JSON.stringify({ saved, keptAt: back.keptAt, sum: [back.km, back.coverage, back.roughness, back.avgPasses, back.located, back.repavedOn],
   replaced: [direct.replaced, kept.replaced], same: Array.from(direct.kappa).every((v, i) => Math.abs(v - kept.kappa[i]) < 1e-6),
-  bumps: back.crowdBumps, crests: back.crowdCrests, rough: back.crowdRough, noCrests: F.unpack(F.pack({ ...m, crowdCrests: [] }, dist, t0), dist).crowdCrests, short: [short.crowdK.length, short.crowdK.filter((v) => v != null).length], capped, firstGone, removed, tooBig,
+  bumps: back.crowdBumps, crests: back.crowdCrests, rough: back.crowdRough, cam: back.crowdCam.map((v, i) => [i, v]).filter((x) => x[1] != null), noCam: F.unpack(F.pack({ ...m, crowdCam: undefined }, dist, t0), dist).crowdCam === undefined, noCrests: F.unpack(F.pack({ ...m, crowdCrests: [] }, dist, t0), dist).crowdCrests, short: [short.crowdK.length, short.crowdK.filter((v) => v != null).length], capped, firstGone, removed, tooBig,
   junk: F.load(junk, 'r1', dist), none: F.save(mem(), 'n', null, dist, t0), noId: F.save(mem(), '', m, dist, t0) }));
 """
 
@@ -48,6 +48,7 @@ def test_route_feel():
     assert r["bumps"] == [{"index": 50, "p": 3}], "a bump off the route is not kept"
     assert r["crests"] == [{"index": 70, "g": 0.2346}] and r["noCrests"] == [], "the crests members felt, kept like the bumps"
     assert r["rough"] == [{"index": 82, "endIndex": 95}], "the rough stretch members measured, kept like the crests"
+    assert r["cam"] == [[i, -4.3] for i in range(12, 18)] and r["noCam"] is True, "the camber members agree on, to a tenth of a degree"
     assert r["short"] == [20, 10], "a copy longer than the track is cut to it"
     assert r["capped"] == 20 and r["firstGone"] is True, "the newest twenty routes"
     assert r["removed"] is True and r["tooBig"] is False and r["junk"] is None

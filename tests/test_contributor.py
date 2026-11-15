@@ -644,3 +644,19 @@ def test_rough_road_where_two_or_more_members_measured_broken_pavement():
     assert o["mapped"] == 0 and o["start"] == 1 and o["startMarks"] == 0
     js = open(os.path.join(root, "web", "cockpit.js")).read()
     assert "ApexContributor.roughMarks(t, m.crowdRough || [], t.marks)" in js
+
+
+CAM = r"""
+const C = require(process.argv[1] + '/web/contributor.js');
+console.log(JSON.stringify(C.camFrom([-5, -5, 4, 2.5, -6, 5, null, -4], [2, 3, 2, 3, 1, 2, 2, 2], [0.5, 1.4, 0.3, 0.1, null, 2.5, null, null])));
+"""
+
+
+def test_camber_members_agree_on():
+    """Members' camber steers the corners only where two or more passes agree (SD within 1.5 deg) and it leans 3 deg or more
+    either way: one pass, passes that disagree, an unknown spread or a flat road say nothing."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    o = json.loads(subprocess.run([NODE, "-e", CAM, root], capture_output=True, text=True, check=True).stdout)
+    assert o == [-5, -5, 4, None, None, None, None, None]
+    js = open(os.path.join(root, "web", "cockpit.js")).read()
+    assert "Core.detectCorners(kappa, ds, camberRad)" in js and "Core.brakingEnvelopeMps(kappa, ds, camberRad," in js
