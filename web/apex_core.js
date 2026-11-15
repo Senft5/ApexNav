@@ -1286,7 +1286,44 @@
     return { events, envMps: Array.from(env), sightM: Array.from(sight), n };
   }
 
+  // The motion sensors against GPS, per drive (Nate's drives, 2026-11-15): builds before Nov 14 placed the phone's g up to
+  // 10 m ahead of where GPS put the car (their g leads GPS's own speed change and turning by 2 bins), so braking read as done
+  // earlier than it was. The lag is read from the drive itself: the shift of a_lon against GPS dv/dt and of a_lat against
+  // v^2 kappa that agrees best, kept only when both agree well and it beats no shift. lat_g'[i] = lat_g[i + lag].
+  const IMU_LAG_MAX = 4, IMU_LAG_MIN_R = 0.5, IMU_LAG_GAIN = 0.03;
+  function imuLagBins(d) {
+    const v = d.speed_mps, lon = d.lon_g, lat = d.lat_g, n = v ? v.length : 0;
+    if (!n || !lon || !lat || !d.lat || !d.lon || n < 40) return 0;
+    const { kappa } = computeCurvature(d.lat, d.lon), num = (x) => typeof x === 'number' && Number.isFinite(x);
+    const r = (L) => {
+      let axy = 0, axx = 0, ayy = 0, bxy = 0, bxx = 0, byy = 0;
+      for (let i = 4; i < n - 4; i++) {
+        const j = i + L;
+        if (!(num(v[i]) && num(v[i - 2]) && num(v[i + 2]) && v[i] > 5 && v[i - 2] > 3 && v[i + 2] > 3) || j < 0 || j >= n) continue;
+        const a = (v[i + 2] - v[i - 2]) / (20 / v[i]) / G_STD, c = v[i] * v[i] * kappa[i] / G_STD;
+        if (num(lon[j])) { axy += a * lon[j]; axx += a * a; ayy += lon[j] * lon[j]; }
+        if (num(lat[j]) && Number.isFinite(c)) { bxy += c * lat[j]; bxx += c * c; byy += lat[j] * lat[j]; }
+      }
+      return [axx > 0 && ayy > 0 ? axy / Math.sqrt(axx * ayy) : 0, bxx > 0 && byy > 0 ? bxy / Math.sqrt(bxx * byy) : 0];
+    };
+    const at0 = r(0);
+    let best = 0, bestR = at0;
+    for (let L = -IMU_LAG_MAX; L <= IMU_LAG_MAX; L++) {
+      if (L === 0) continue;
+      const x = r(L);
+      if (x[0] + x[1] > bestR[0] + bestR[1]) { best = L; bestR = x; }
+    }
+    if (best === 0 || bestR[0] < IMU_LAG_MIN_R || bestR[1] < IMU_LAG_MIN_R || bestR[0] + bestR[1] - at0[0] - at0[1] < IMU_LAG_GAIN) return 0;
+    return best;
+  }
+  /** The drive with its g (lon_g, lat_g, g_known) moved by `lag` bins onto GPS's places; past the ends is unknown (null, 0). */
+  function alignImu(d, lag) {
+    if (!lag) return d;
+    const n = d.speed_mps.length, mv = (a, fill) => (Array.isArray(a) ? Array.from({ length: n }, (_, i) => (i + lag >= 0 && i + lag < a.length ? a[i + lag] : fill)) : a);
+    return { ...d, lon_g: mv(d.lon_g, null), lat_g: mv(d.lat_g, null), g_known: d.g_known ? mv(d.g_known, 0) : d.g_known };
+  }
   const api = {
+    imuLagBins, alignImu, IMU_LAG_MAX,
     profileRecording, spikeMask, referenceLap, windowFeatures, axisScores, archetype,
     driverScore, techniqueScore, cornerTechnique, carGrip, cornersForCar, fatigue, spreadBy, turnIn, segmentPass, segmentWindow, segmentWindows,
     removeSpurs, retracedShare,
