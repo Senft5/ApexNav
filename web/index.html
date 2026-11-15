@@ -1698,6 +1698,8 @@
     /* a long word ("Kilometres", "Steady") is a key's narrowest: at large text each key is at least that wide, the wider
        words take the room, and on a narrow phone the keys wrap to a second row rather than cut the word (320 pt, 2x) */
     html[data-type-size] .switch { flex-wrap: wrap; } html[data-type-size] .switch > button { flex: 1 1 auto; min-width: min-content; }
+    /* the same for a row of detents (Best roads nearby's "Within 15 min"): at 2x on a 320 pt phone its words ran over the next key */
+    html[data-type-size] .detents:not(.scroll):not(.tp-rate) > button { flex: 1 1 auto; min-width: min-content; white-space: normal; line-height: 1.15; }
     /* the level cards one a row once the text is larger: the level, its time and its corners on one line */
     html[data-type-size] .rc-levels { grid-template-columns: minmax(0, 1fr); }
     html[data-type-size] .rc-levels > button + button { margin-left: 0; margin-top: -1px; }   /* one a row: the hairlines shared top and bottom */
