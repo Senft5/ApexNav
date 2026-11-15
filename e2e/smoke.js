@@ -206,6 +206,30 @@ async function clippedText(page) {
   }).catch(() => []);
 }
 
+// A wall of text on every flow's last screen (2026-11-15, the owner 2026-11-12: "ai slop walls of text everywhere"): a
+// block of words in view (a paragraph, a list item, a cell) over WALL_WORDS words. The privacy policy and terms are
+// documents, read as such, and are not checked. WALL_LOG=1 lists instead of failing.
+const WALL_WORDS = 40;
+async function wallsOfText(page) {
+  return page.evaluate((max) => {
+    const where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.') : '');
+    if (/\/(privacy|terms|support)(\.html)?$/.test(location.pathname)) return [];
+    const W = innerWidth, H = innerHeight, hits = [];
+    const blocks = [...document.querySelectorAll('body p, body li, body dd, body td, body small, body span, body div, body label, body summary')];
+    for (const el of blocks) {
+      if (el.closest('svg, script, style, .maplibregl-ctrl-attrib, [hidden], [aria-hidden="true"], [inert]')) continue;
+      // a block: its own text is most of its words (a container of other blocks is counted by its children)
+      const own = [...el.childNodes].filter((n) => n.nodeType === 3 || (n.nodeType === 1 && getComputedStyle(n).display.startsWith('inline'))).map((n) => n.textContent).join(' ');
+      const words = own.trim().split(/\s+/).filter((w) => /[A-Za-z]/.test(w)).length;
+      if (words <= max) continue;
+      const r = el.getBoundingClientRect(); if (!r.width || !r.height || r.bottom < 0 || r.top > H || r.right < 0 || r.left > W) continue;
+      const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || +cs.opacity === 0 || cs.display === 'none') continue;
+      hits.push(`${where(el)} ${words} words: "${own.trim().replace(/\s+/g, ' ').slice(0, 70)}…"`);
+    }
+    return hits.slice(0, 8);
+  }, WALL_WORDS).catch(() => []);
+}
+
 // Text drawn over other text, on every flow's last screen (2026-11-15): two lines of words from different boxes that
 // cross by more than a third of the smaller one's height and a few px of width, both showing (nothing opaque between the
 // lower one and the eye). A badge on a label, a value over its caption, a stacked toast over a note. OVERLAP_LOG=1 lists.
@@ -14244,6 +14268,9 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
       const cut = await clippedText(page);
       if (process.env.CLIP_LOG) for (const h of cut) console.log(`CLIP ${name} | ${h}`);
       else check(!cut.length, `text in view cut off by its box or the screen's edge:\n  ${cut.join('\n  ')}`);
+      const walls = await wallsOfText(page);
+      if (process.env.WALL_LOG) for (const h of walls) console.log(`WALL ${name} | ${h}`);
+      else check(!walls.length, `a wall of text in view (over ${WALL_WORDS} words in one block; the owner's rule, 2026-11-12):\n  ${walls.join('\n  ')}`);
       const crossed = await overlappingText(page);
       if (process.env.OVERLAP_LOG) for (const h of crossed) console.log(`OVERLAP ${name} | ${h}`);
       else check(!crossed.length, `text in view drawn over other text:\n  ${crossed.join('\n  ')}`);
