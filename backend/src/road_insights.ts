@@ -12,7 +12,7 @@
 //  - a partner key (its sha256 in DATA_API_KEYS): only while the server flag `road_data_partners` is on (off by default).
 // Anyone else gets the public meta and the made-up sample (web/insights-sample.geojson), which says it is made up.
 import { serverFlag } from "./flags";
-import { FLOOR_CAP, OPEN_CLASSES, OPEN_UNCLASSIFIED_M, METHOD_VERSION } from "./roads";
+import { FLOOR_CAP, OPEN_CLASSES, OPEN_UNCLASSIFIED_M, METHOD_VERSION, shownSql } from "./roads";
 export { FLOOR_CAP };
 import { Env, HttpError, sha256hex } from "./util";
 
@@ -70,7 +70,8 @@ export async function release(v: number | null, metric: Metric, drivers: number,
 }
 
 /** Confidence as a band from the driver count, never the count: 10 to 19 "fair", 20 to 49 "good", 50 or more "high". */
-export const band = (drivers: number) => (drivers >= FLOOR_CAP ? "high" : drivers >= 20 ? "good" : "fair");
+/** "low" (under DATA_K) only ever appears in the internal app-floor view below. */
+export const band = (drivers: number) => (drivers >= FLOOR_CAP ? "high" : drivers >= 20 ? "good" : drivers >= DATA_K ? "fair" : "low");
 
 export function parseBox(url: URL): [number, number, number, number] {
   const box = (url.searchParams.get("bbox") ?? "").split(",").map(Number);
@@ -85,9 +86,17 @@ interface Row {
   rough: number | null; banked: number | null; off_camber: number | null; crests: number; flow: number | null; brake: number | null;
 }
 
-/** GET /api/data/v1/roads.geojson?bbox=s,w,n,e: one feature per released road+direction on its public map line. */
+/**
+ * GET /api/data/v1/roads.geojson?bbox=s,w,n,e: one feature per released road+direction on its public map line.
+ * `&floor=app` (an internal key only; ignored for a partner): the owner's review view, under the members' app rule instead of
+ * the ten-driver floor (roads.ts shownSql: through roads from their first pass, anything else once two drivers have), so he
+ * can see what the product will look like before roads reach ten drivers. Nothing more than members already see in the app.
+ */
 export async function insightRoads(env: Env, url: URL, access: Access) {
   const [s, w, n, e] = parseBox(url);
+  const appFloor = access === "internal" && url.searchParams.get("floor") === "app";
+  const where = appFloor ? "" : ` AND ${throughSql("rw.way_id")}`;
+  const having = appFloor ? shownSql("rw.way_id", "rb.dir") : `drivers >= ${DATA_K}`;
   const rows = (await env.DB.prepare(
     `SELECT rw.way_id, rw.shape, rw.cls, rb.dir, MAX(rb.last_on) AS last_on, COUNT(*) * 0.005 AS km, SUM(rb.n) AS passes,
             (SELECT COUNT(*) FROM road_floor rf WHERE rf.way_id = rw.way_id AND rf.dir = rb.dir) AS drivers,
@@ -98,9 +107,9 @@ export async function insightRoads(env: Env, url: URL, access: Access) {
             AVG(CASE WHEN rb.flow_n > 0 THEN rb.flow_mean END) AS flow,
             AVG(CASE WHEN rb.flow_n > 0 THEN rb.brake_mean END) AS brake
        FROM road_ways rw JOIN road_bins rb ON rb.way_id = rw.way_id
-      WHERE rw.s <= ?3 AND rw.n >= ?1 AND rw.w <= ?4 AND rw.e >= ?2 AND ${throughSql("rw.way_id")}
+      WHERE rw.s <= ?3 AND rw.n >= ?1 AND rw.w <= ?4 AND rw.e >= ?2${where}
       GROUP BY rw.way_id, rb.dir
-     HAVING drivers >= ${DATA_K}
+     HAVING ${having}
       ORDER BY rw.way_id, rb.dir LIMIT 5000`,
   ).bind(s, w, n, e).all<Row>()).results;
   const features = [];
@@ -119,7 +128,7 @@ export async function insightRoads(env: Env, url: URL, access: Access) {
       },
     });
   }
-  return { type: "FeatureCollection", sample: false, access, method_version: METHOD_VERSION, k: DATA_K, epsilon: EPSILON,
+  return { type: "FeatureCollection", sample: false, access, floor: appFloor ? "app" : "k", method_version: METHOD_VERSION, k: DATA_K, epsilon: EPSILON,
            attribution: "Road lines © OpenStreetMap contributors (ODbL). Measurements © Vetta.", features };
 }
 

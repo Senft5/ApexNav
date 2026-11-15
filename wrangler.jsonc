@@ -11,7 +11,10 @@
   "observability": { "enabled": true, "redact_query_string": true, "logs": { "invocation_logs": false } },
   // Not a secret: Google shows the client ID in the sign-in URL. The client SECRET, OWNER_EMAIL and PEPPER are dashboard secrets and never go in this file.
   "vars": {
-    "GOOGLE_CLIENT_ID": "299251127161-jj8nql86bqkr48pmidejbbrjaupns1om.apps.googleusercontent.com"
+    "GOOGLE_CLIENT_ID": "299251127161-jj8nql86bqkr48pmidejbbrjaupns1om.apps.googleusercontent.com",
+    // Road insights internal keys (backend/src/road_insights.ts): sha256 of each key, never the key (the owner's is in the
+    // project files). Not a secret: a sha256 of a random 256-bit key can't be turned back into the key. Remove one to revoke it.
+    "DATA_OWNER_KEYS": "0184e5e50127f792a32da04c389c4a776ff0281d7f677be17526df1b29dacf0a"
   },
   "assets": { "directory": "./web", "binding": "ASSETS", "run_worker_first": ["/api/*", "/", "/index.html", "/.well-known/*", "/apple-app-site-association"] },
   // The owner's domains (2026-11-14, backend/src/hosts.ts): vettadrive.app is the app, the API and shared links; vettadrive.com
