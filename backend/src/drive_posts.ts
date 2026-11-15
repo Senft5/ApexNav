@@ -6,7 +6,7 @@
 // and the owner's queue can remove it. The author deletes their post; a comment's author or the post's author deletes it.
 // Nothing is kept about a drive but what the card shows: no times along the line, no speeds.
 import type { Viewer } from "./auth";
-import { DATE_RE, Env, HttpError, body, randomToken } from "./util";
+import { DATE_RE, Env, HANDLE_RE, HttpError, body, randomToken } from "./util";
 import { cleanText } from "./convoy";
 import { isCrewMember } from "./social";
 import { reportedSql } from "./reports_sql";
@@ -53,6 +53,18 @@ export function cutLine(pts: [number, number][]): [number, number][] | null {
   return thin.slice(0, MAX_POINTS);
 }
 
+/** Whether (lat, lon) lies within ON_LINE_M of the polyline (each segment, in a flat frame about the point). */
+export const ON_LINE_M = 60;
+export function onLine(pts: [number, number][], lat: number, lon: number): boolean {
+  const k = Math.cos(lat * Math.PI / 180), xy = (p: [number, number]) => [(p[1] - lon) * 111320 * k, (p[0] - lat) * 111320];
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = xy(pts[i - 1]), [bx, by] = xy(pts[i]), dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
+    const t = L > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L)) : 0;
+    if (Math.hypot(ax + t * dx, ay + t * dy) <= ON_LINE_M) return true;
+  }
+  return false;
+}
+
 const NOT_BLOCKED = (who: string) => `NOT EXISTS (SELECT 1 FROM blocks bk WHERE (bk.blocker = ?1 AND bk.blocked = ${who}) OR (bk.blocker = ${who} AND bk.blocked = ?1))`;
 /** Who sees a post p (the viewer is ?1): its author; else, not across a block and not hidden by reports, the author's friends
  *  they share with (a post to friends: the per-friend Share switch, grants.share_scores, which a post's Score falls under)
@@ -91,10 +103,11 @@ export async function postCreate(env: Env, v: Viewer, req: Request): Promise<{ i
   const roads = names(b.roads, 8, "roads");
   if (b.stages !== undefined && b.stages !== null && (!Array.isArray(b.stages) || b.stages.length > 3)) throw new HttpError(400, "bad_stages");
   const stages = ((b.stages as unknown[]) || []).map((s) => {
-    const o = (s && typeof s === "object" ? s : {}) as { name?: unknown; score?: unknown };
+    const o = (s && typeof s === "object" ? s : {}) as { name?: unknown; score?: unknown; ends?: unknown };
     const n = cleanText(o.name, 60)?.trim(), sc = o.score === null || o.score === undefined ? null : Number(o.score);
     if (!n || (sc !== null && !(Number.isInteger(sc) && sc >= 0 && sc <= 1000))) throw new HttpError(400, "bad_stages");
-    return { name: n, score: sc };
+    const e = Array.isArray(o.ends) && o.ends.length === 4 && o.ends.every((x) => typeof x === "number" && Number.isFinite(x)) ? (o.ends as number[]).map((x) => Math.round(x * 1e5) / 1e5) : null;
+    return { name: n, score: sc, ends: e };
   });
   let line: string | null = null;
   if (b.line !== undefined && b.line !== null && b.line !== "") {
@@ -102,6 +115,9 @@ export async function postCreate(env: Env, v: Viewer, req: Request): Promise<{ i
     const cut = cutLine(decodeLine(b.line));
     line = cut ? encodeLine(cut) : null;
   }
+  // a stage's ends are kept only where both lie on the line as kept (its own ends cut): never a point the line hides
+  const kept = line ? decodeLine(line) : null;
+  const stagesOut = stages.map(({ name, score, ends }) => (ends && kept && onLine(kept, ends[0], ends[1]) && onLine(kept, ends[2], ends[3]) ? { name, score, ends } : { name, score }));
   const crew = b.crew_id === undefined || b.crew_id === null || b.crew_id === "" ? null : String(b.crew_id);
   if (crew && !(await isCrewMember(env, crew, v.id))) throw new HttpError(404, "no_crew");
   const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM drive_posts WHERE author = ? AND created_at > datetime('now', '-1 day')").bind(v.id).first<{ n: number }>();
@@ -109,33 +125,84 @@ export async function postCreate(env: Env, v: Viewer, req: Request): Promise<{ i
   const id = randomToken(12);
   await env.DB.prepare(`INSERT INTO drive_posts (id, author, crew_id, title, caption, driven_on, length_m, score, roads, stages, line) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(id, v.id, crew, title, caption, day, length === null ? null : Math.round(length), score, roads.length ? JSON.stringify(roads) : null,
-      stages.length ? JSON.stringify(stages) : null, line).run();
+      stagesOut.length ? JSON.stringify(stagesOut) : null, line).run();
   return { id };
 }
 
 type Row = { id: string; author: string; handle: string | null; photo_id: string | null; crew_id: string | null; crew_name: string | null; title: string; caption: string | null;
   driven_on: string; length_m: number | null; score: number | null; roads: string | null; stages: string | null; line: string | null; media: string | null; created_at: string;
-  kudos: number; my_kudos: number; comments: number };
+  kudos: number; my_kudos: number; comments: number; with_handles: string | null };
+/** Who came with the author (docs/SOCIAL.md 2.13): on a post to a crew, the others marked as there (crew_event_attendance,
+ *  the "I was there" / convoy record the crew already sees) at a crew drive of that crew the author was at too, on the post's
+ *  day (the phone's day, so within 14 h of the drive's UTC start). Never across a block with the viewer (?1); five at most. */
+export const WITH_N = 5;
+const WITH_SQL = `(SELECT group_concat(handle, ',') FROM (SELECT DISTINCT wu.handle FROM crew_events e
+      JOIN crew_event_attendance a1 ON a1.event_id = e.id AND a1.user_id = p.author
+      JOIN crew_event_attendance a2 ON a2.event_id = e.id AND a2.user_id <> p.author
+      JOIN users wu ON wu.id = a2.user_id
+     WHERE e.crew_id = p.crew_id AND e.cancelled = 0 AND wu.handle IS NOT NULL
+       AND p.driven_on BETWEEN date(e.starts_at, '-14 hours') AND date(e.starts_at, '+14 hours')
+       AND (a2.user_id = ?1 OR ${NOT_BLOCKED("a2.user_id")})
+     ORDER BY wu.handle LIMIT ${WITH_N}))`;
 const SELECT = `SELECT p.id, p.author, u.handle, u.photo_id, p.crew_id, c.name AS crew_name, p.title, p.caption, p.driven_on, p.length_m, p.score, p.roads,
     p.stages, p.line, p.media, p.created_at,
     (SELECT COUNT(*) FROM drive_post_kudos k WHERE k.post_id = p.id) AS kudos,
     EXISTS (SELECT 1 FROM drive_post_kudos k WHERE k.post_id = p.id AND k.user_id = ?1) AS my_kudos,
-    (SELECT COUNT(*) FROM drive_comments dc WHERE dc.post_id = p.id AND (dc.author = ?1 OR (${NOT_BLOCKED("dc.author")} AND NOT ${reportedSql("comment", "dc.id")}))) AS comments
+    (SELECT COUNT(*) FROM drive_comments dc WHERE dc.post_id = p.id AND (dc.author = ?1 OR (${NOT_BLOCKED("dc.author")} AND NOT ${reportedSql("comment", "dc.id")}))) AS comments,
+    CASE WHEN p.crew_id IS NULL THEN NULL ELSE ${WITH_SQL} END AS with_handles
   FROM drive_posts p JOIN users u ON u.id = p.author LEFT JOIN crews c ON c.id = p.crew_id`;
 const shape = (r: Row, me: string) => ({
   id: r.id, handle: r.handle, photo_id: r.photo_id, mine: r.author === me, crew: r.crew_id ? { id: r.crew_id, name: r.crew_name } : null,
   title: r.title, caption: r.caption, driven_on: r.driven_on, length_m: r.length_m, score: r.score,
-  roads: r.roads ? (JSON.parse(r.roads) as string[]) : [], stages: r.stages ? (JSON.parse(r.stages) as { name: string; score: number | null }[]) : [],
+  roads: r.roads ? (JSON.parse(r.roads) as string[]) : [], stages: r.stages ? (JSON.parse(r.stages) as { name: string; score: number | null; ends?: number[] }[]) : [],
   line: r.line, media: (() => { const m = mediaOf(r.media); return m ? { kind: m.kind, label: m.label } : null; })(), created_at: r.created_at, kudos: r.kudos, my_kudos: !!r.my_kudos, comments: r.comments,
+  with: r.with_handles ? r.with_handles.split(",").filter(Boolean) : [],
 });
 
-/** GET /api/feed?before=: the newest posts you can see (yours too), FEED_N at a time, older than `before` (a created_at). */
+/** GET /api/feed?before=&author=: the newest posts you can see (yours too), FEED_N at a time, older than `before` (a
+ *  created_at); with `author` (a user id: a friend's profile) only theirs, under the same rules as the Feed. */
 export async function feed(env: Env, v: Viewer, url: URL) {
-  const before = url.searchParams.get("before");
+  const before = url.searchParams.get("before"), author = url.searchParams.get("author"), crew = url.searchParams.get("crew");
   const cut = before && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(before) ? before : "9999-12-31 23:59:59";
-  const rows = (await env.DB.prepare(`${SELECT} WHERE p.created_at < ?2 AND ${POST_SEEN("p")} ORDER BY p.created_at DESC, p.rowid DESC LIMIT ${FEED_N}`)
-    .bind(v.id, cut).all<Row>()).results;
+  if (author !== null && !/^[A-Za-z0-9_-]{1,64}$/.test(author)) throw new HttpError(400, "bad_author");
+  if (crew !== null && !/^[A-Za-z0-9_-]{1,64}$/.test(crew)) throw new HttpError(400, "bad_crew");
+  // ?author= one driver's posts (their profile), ?crew= the posts to one crew (its page), ?friends=1 the posts to friends
+  // (the Feed's pick); either way only what you can see
+  const only = author ? " AND p.author = ?3" : crew ? " AND p.crew_id = ?3" : url.searchParams.get("friends") === "1" ? " AND p.crew_id IS NULL" : "";
+  const rows = (await env.DB.prepare(`${SELECT} WHERE p.created_at < ?2 AND ${POST_SEEN("p")}${only} ORDER BY p.created_at DESC, p.rowid DESC LIMIT ${FEED_N}`)
+    .bind(...(author || crew ? [v.id, cut, author || crew] : [v.id, cut])).all<Row>()).results;
   return rows.map((r) => shape(r, v.id));
+}
+
+/** GET /api/feed/with?day=YYYY-MM-DD (the Post sheet): the crew drives you were marked at on that day (the phone's, within
+ *  14 h of the drive's UTC start), each with its crew and who else was marked there (WITH_N at most, never across a block),
+ *  so the sheet can pick that crew and say who the post will name. Only crews you are still in; newest drive first. */
+export async function feedWith(env: Env, v: Viewer, url: URL) {
+  const day = url.searchParams.get("day") || "";
+  if (!DATE_RE.test(day)) throw new HttpError(400, "bad_day");
+  const rows = (await env.DB.prepare(
+    `SELECT e.crew_id, c.name AS crew, e.title,
+            (SELECT group_concat(handle, ',') FROM (SELECT wu.handle FROM crew_event_attendance a2 JOIN users wu ON wu.id = a2.user_id
+               WHERE a2.event_id = e.id AND a2.user_id <> ?1 AND wu.handle IS NOT NULL AND ${NOT_BLOCKED("a2.user_id")} ORDER BY wu.handle LIMIT ${WITH_N})) AS with_handles
+       FROM crew_events e JOIN crew_event_attendance a ON a.event_id = e.id AND a.user_id = ?1
+       JOIN crews c ON c.id = e.crew_id JOIN crew_members m ON m.crew_id = e.crew_id AND m.user_id = ?1
+      WHERE e.cancelled = 0 AND ?2 BETWEEN date(e.starts_at, '-14 hours') AND date(e.starts_at, '+14 hours')
+      ORDER BY e.starts_at DESC LIMIT 5`).bind(v.id, day).all<{ crew_id: string; crew: string; title: string; with_handles: string | null }>()).results;
+  return rows.map((r) => ({ crew_id: r.crew_id, crew: r.crew, title: r.title, with: r.with_handles ? r.with_handles.split(",").filter(Boolean) : [] }));
+}
+
+/** GET /api/feed/week: this week (from Monday) on the Feed, per driver: drives posted, how far, the best Score; you and
+ *  whoever's posts you can see (POST_SEEN), most distance first, ten at most. A drive posted to friends and a crew counts once. */
+export async function feedWeek(env: Env, v: Viewer) {
+  return (await env.DB.prepare(
+    `SELECT u.handle, u.photo_id, d.author = ?1 AS you, COUNT(*) AS drives, COALESCE(SUM(d.length_m), 0) AS length_m, MAX(d.score) AS best
+       FROM (SELECT DISTINCT p.author, p.title, p.driven_on, p.length_m, p.score FROM drive_posts p
+              WHERE p.driven_on >= date('now', '-6 days', 'weekday 1') AND ${POST_SEEN("p")}) d
+       JOIN users u ON u.id = d.author
+      WHERE u.handle IS NOT NULL
+      GROUP BY d.author ORDER BY length_m DESC, drives DESC, u.handle LIMIT 10`).bind(v.id)
+    .all<{ handle: string; photo_id: string | null; you: number; drives: number; length_m: number; best: number | null }>()).results
+    .map((r) => ({ ...r, you: !!r.you }));
 }
 
 async function seenPost(env: Env, v: Viewer, id: string): Promise<Row> {
@@ -145,17 +212,38 @@ async function seenPost(env: Env, v: Viewer, id: string): Promise<Row> {
   return r;
 }
 
-/** GET /api/posts/:id: the post and its comments, oldest first. */
+const KUDOS_SHOWN = 50;
+/** GET /api/posts/:id: the post, its comments oldest first, and who gave kudos (`kudos_from`, newest first). */
 export async function postGet(env: Env, v: Viewer, id: string) {
   const p = await seenPost(env, v, id);
-  const comments = (await env.DB.prepare(`SELECT dc.id, dc.body, dc.created_at, u.handle, u.photo_id, dc.author = ?1 AS mine
+  const [cs, ks] = await env.DB.batch([
+    env.DB.prepare(`SELECT dc.id, dc.body, dc.created_at, u.handle, u.photo_id, dc.author = ?1 AS mine
       FROM drive_comments dc JOIN users u ON u.id = dc.author
      WHERE dc.post_id = ?2 AND (dc.author = ?1 OR (${NOT_BLOCKED("dc.author")} AND NOT ${reportedSql("comment", "dc.id")}))
-     ORDER BY dc.created_at, dc.rowid LIMIT ${MAX_COMMENTS}`).bind(v.id, id).all<{ id: string; body: string; created_at: string; handle: string | null; photo_id: string | null; mine: number }>()).results;
-  return { ...shape(p, v.id), comment_list: comments.map((c) => ({ ...c, mine: !!c.mine, can_delete: !!c.mine || p.author === v.id })) };
+     ORDER BY dc.created_at, dc.rowid LIMIT ${MAX_COMMENTS}`).bind(v.id, id),
+    // who gave kudos, newest first (a handle and a face, as the post's comments show; never someone blocked either way)
+    env.DB.prepare(`SELECT u.handle, u.photo_id FROM drive_post_kudos k JOIN users u ON u.id = k.user_id
+     WHERE k.post_id = ?2 AND u.handle IS NOT NULL AND (k.user_id = ?1 OR ${NOT_BLOCKED("k.user_id")})
+     ORDER BY k.created_at DESC LIMIT ${KUDOS_SHOWN}`).bind(v.id, id),
+  ]);
+  const comments = cs.results as { id: string; body: string; created_at: string; handle: string | null; photo_id: string | null; mine: number }[];
+  return { ...shape(p, v.id), comment_list: comments.map((c) => ({ ...c, mine: !!c.mine, can_delete: !!c.mine || p.author === v.id })),
+    kudos_from: ks.results as { handle: string; photo_id: string | null }[] };
 }
 
 /** DELETE /api/posts/:id: yours only; its kudos and comments go with it. */
+/** PUT /api/posts/:id {title?, caption?}: the author changes the drive's name or what they said; nothing else. */
+export async function postEdit(env: Env, v: Viewer, id: string, req: Request): Promise<{ title: string; caption: string | null }> {
+  const b = await body<Record<string, unknown>>(req);
+  const old = await env.DB.prepare("SELECT title, caption FROM drive_posts WHERE id = ? AND author = ?").bind(id, v.id).first<{ title: string; caption: string | null }>();
+  if (!old) throw new HttpError(404, "no_post");
+  const title = b.title === undefined ? old.title : optText(b.title, 60, "title");
+  if (!title) throw new HttpError(400, "bad_title");
+  const caption = b.caption === undefined ? old.caption : optText(b.caption, 280, "caption");
+  await env.DB.prepare("UPDATE drive_posts SET title = ?, caption = ? WHERE id = ? AND author = ?").bind(title, caption, id, v.id).run();
+  return { title, caption };
+}
+
 export async function postDelete(env: Env, v: Viewer, id: string): Promise<void> {
   const r = await env.DB.prepare("DELETE FROM drive_posts WHERE id = ? AND author = ?").bind(id, v.id).run();
   if (!r.meta.changes) throw new HttpError(404, "no_post");
@@ -172,7 +260,7 @@ export async function postKudos(env: Env, v: Viewer, id: string, give: boolean):
 }
 
 /** POST /api/posts/:id/comments {body}: plain text, 280 characters at most, MAX_COMMENTS_HOUR an hour. → { id } and who to tell. */
-export async function commentCreate(env: Env, v: Viewer, id: string, req: Request): Promise<{ id: string; author: string; title: string }> {
+export async function commentCreate(env: Env, v: Viewer, id: string, req: Request): Promise<{ id: string; author: string; title: string; mentions: string[] }> {
   const p = await seenPost(env, v, id);
   const { body: text } = await body<{ body?: unknown }>(req);
   const t = cleanText(text, 280)?.trim();
@@ -185,7 +273,18 @@ export async function commentCreate(env: Env, v: Viewer, id: string, req: Reques
   if (total.results[0].n >= MAX_COMMENTS) throw new HttpError(409, "post_full");
   const cid = randomToken(12);
   await env.DB.prepare("INSERT INTO drive_comments (id, post_id, author, body) VALUES (?, ?, ?, ?)").bind(cid, id, v.id, t).run();
-  return { id: cid, author: p.author, title: p.title };
+  return { id: cid, author: p.author, title: p.title, mentions: mentionsOf(t, v.handle) };
+}
+
+/** The handles a comment @mentions (lower case, each once, five at most, never the writer's own). */
+export function mentionsOf(text: string, own: string | null): string[] {
+  const out = new Set<string>();
+  for (const m of text.matchAll(/(?:^|[^A-Za-z0-9_@])@([A-Za-z0-9_]{3,20})(?![A-Za-z0-9_])/g)) {
+    const h = m[1].toLowerCase();
+    if (HANDLE_RE.test(h) && h !== own) out.add(h);
+    if (out.size >= 5) break;
+  }
+  return [...out];
 }
 
 /** DELETE /api/comments/:id: the comment's author, or the post's author. */

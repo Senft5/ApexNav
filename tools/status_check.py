@@ -6,7 +6,7 @@ an "outage" issue and closes it once everything is back. Dependency checks are t
 (routing, map tiles, elevation, Overpass); they never open an issue, because nothing can be done about them from here, but
 their record in the run summary is the evidence for IDEAS Y-04 (our own router).
 
-    python tools/status_check.py [--base https://apexnav.senftns.workers.dev]
+    python tools/status_check.py [--base https://vettadrive.app]
 
 Prints a Markdown table (also appended to $GITHUB_STEP_SUMMARY), writes status.json ({core_ok, failing}) for the
 workflow, and exits 1 when a core check fails. A crash writes no status.json, so the workflow can't mistake it for an outage.
@@ -21,7 +21,7 @@ import time
 import urllib.error
 import urllib.request
 
-BASE = "https://apexnav.senftns.workers.dev"
+BASE = "https://vettadrive.app"
 UA = "ApexNav-status/1 (+https://github.com/Senft5/ApexNav)"
 # Two points on a Knoxville road: a route of a few hundred metres, cheap for the public routers.
 A, B = (35.9606, -83.9207), (35.9640, -83.9170)

@@ -47,6 +47,19 @@
   }
 
   /**
+   * In a drive, the route behind you faded (as Apple and Google Maps draw it): `color` from `p` (0..1 of the line driven) on,
+   * the same colour at `alpha` before it. A `#rgb`/`#rrggbb` colour; null for anything else or a `p` that isn't a number.
+   */
+  function behind(color, p, alpha = 0.3) {
+    const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(color || ''));
+    if (!m || !Number.isFinite(p)) return null;
+    const h = m[1].length === 3 ? m[1].replace(/./g, (c) => c + c) : m[1], n = parseInt(h, 16);
+    const faded = `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${alpha})`;
+    const at = Math.max(0.0001, Math.min(0.9999, p));
+    return ['step', ['line-progress'], faded, at, color];
+  }
+
+  /**
    * Count the numbers in `nodes` (each a text-only element, or one whose first child is its number's text node) up to what
    * they say, over `ms`. The final text is put back whatever happens (a timer backs the frames up), and a node redrawn
    * meanwhile is left alone. Returns a stop function.
@@ -74,6 +87,6 @@
     return finish;
   }
 
-  const api = { FULL_MS, SWAP_MS, COUNT_MS, ease, plan, countText, gradient, countUp };
+  const api = { FULL_MS, SWAP_MS, COUNT_MS, ease, plan, countText, gradient, behind, countUp };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexReveal = api;
 })(typeof window !== 'undefined' ? window : globalThis);

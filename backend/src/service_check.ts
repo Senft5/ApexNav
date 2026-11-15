@@ -65,6 +65,8 @@ export function serverResults(s: Awaited<ReturnType<typeof serverSide>>): CheckR
     { id: "srv_config", state: missing.length ? "down" : "up", http: null, ms: 0, detail: missing.length ? scrub(`not set: ${missing.join(", ")}`, 160) : "" },
     { id: "srv_graph_data", state: g.tiles ? (g.ms > 4000 ? "slow" : "up") : "down", http: g.http, ms: g.ms,
       detail: g.tiles ? `${g.tiles} tiles` : g.error || (g.http ? `HTTP ${g.http}` : "no answer") },
+    ...(s.realtime ? [{ id: "srv_realtime", state: s.realtime.ok ? (s.realtime.ms > 4000 ? "slow" : "up") : "down", http: s.realtime.http, ms: s.realtime.ms,
+      detail: s.realtime.ok ? "convoy voice" : s.realtime.error || (s.realtime.http ? `HTTP ${s.realtime.http}` : "no answer") }] : []),
     ...s.overpass.map((o) => ({ id: `srv_${HOST_ID[o.host] || o.host.replace(/[^a-z0-9]/g, "_")}`.slice(0, 32),
       state: o.elements != null ? (o.ms > 4000 ? "slow" : "up") : "down", http: o.http, ms: o.ms,
       detail: o.elements != null ? `${o.elements} features` : o.error || (o.http ? `HTTP ${o.http}` : "no answer") })),
@@ -94,6 +96,8 @@ export async function serviceHistory(env: Env, url: URL) {
   }) };
 }
 
+const sessionOf = (t: string) => { try { return typeof (JSON.parse(t) as { sessionId?: unknown }).sessionId === "string"; } catch { return false; } };
+
 async function timed(fn: () => Promise<Response>, ms: number) {
   const t0 = Date.now();
   try {
@@ -110,11 +114,17 @@ export async function serverSide(env: Env, fetcher: typeof fetch = fetch) {
     db: set(env.DB), owner_email: set(env.OWNER_EMAIL), pepper: set(env.PEPPER), google: set(env.GOOGLE_CLIENT_ID) && set(env.GOOGLE_CLIENT_SECRET),
     ctx_keys: set(env.CTX_KEYS), nrel_key: set(env.NREL_API_KEY), osm_kv: set(env.OSM), ctx_kv: set(env.CTX), photos_kv: set(env.PHOTOS),
     backups_kv: set(env.BACKUPS), archive_r2: set(env.ARCHIVE), data_r2: set(env.DATA), flags: set(env.FLAGS), write_limit: set(env.WRITE_LIMIT), convoy: set(env.CONVOY),
+    realtime: set(env.REALTIME_APP_ID) && set(env.REALTIME_APP_TOKEN),   // convoy voice (src/convoy_voice.ts)
   };
   let db = false;
   try { db = !!(await env.DB.prepare("SELECT 1 AS one").first()); } catch { db = false; }
   const q = osmQuery(["782_-1691"]);
-  const [graph, ...mirrors] = await Promise.all([
+  // convoy voice: the SFU takes the app's token (an empty session, which Realtime drops by itself, free)
+  const realtimeProbe = config.realtime
+    ? timed(() => fetcher(`https://rtc.live.cloudflare.com/v1/apps/${env.REALTIME_APP_ID}/sessions/new`, { method: "POST", headers: { authorization: `Bearer ${env.REALTIME_APP_TOKEN}` } }), 10_000)
+    : Promise.resolve(null);
+  const [rt, graph, ...mirrors] = await Promise.all([
+    realtimeProbe,
     timed(() => fetcher(RAW + "index.json"), 10_000),
     ...MIRRORS.map((url) => timed(() => fetcher(url, { method: "POST", body: "data=" + encodeURIComponent(q), headers: { "content-type": "application/x-www-form-urlencoded", "user-agent": UA } }), MIRROR_MS)),
   ]);
@@ -127,6 +137,7 @@ export async function serverSide(env: Env, fetcher: typeof fetch = fetch) {
   return {
     at: new Date().toISOString(), config, db, usage,
     graph_data: { http: graph.http, ms: graph.ms, tiles, ...(graph.error ? { error: graph.error } : {}) },
+    realtime: rt ? { http: rt.http, ms: rt.ms, ok: rt.ok && sessionOf(rt.text), ...(rt.error ? { error: rt.error } : {}) } : null,
     overpass: MIRRORS.map((url, i) => ({ host: new URL(url).host, http: mirrors[i].http, ms: mirrors[i].ms, elements: mirrors[i].ok ? elements(mirrors[i].text) : null,
       ...(mirrors[i].error ? { error: mirrors[i].error } : {}) })),
   };

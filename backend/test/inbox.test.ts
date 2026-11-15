@@ -2,7 +2,8 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { api, befriend, freshDb, makeSegment, makeUser, ok, type TestUser } from "./helpers";
-import { duelOutcome } from "../src/inbox";
+import { duelOutcome, perPost } from "../src/inbox";
+import { encodeLine, mentionsOf } from "../src/drive_posts";
 
 beforeEach(freshDb);
 type Msg = Record<string, any>;
@@ -76,6 +77,19 @@ describe("For you", () => {
     const f = (await inbox(a)).items.find((i) => i.kind === "follows")!;
     expect(f).toMatchObject({ book_id: book, book: "Smokies classics", n: 2 });
     expect(JSON.stringify(f)).not.toMatch(/bob|outsider/);
+    // a road added to a book you follow, after you followed it: one row for the book, the owner named; none for its owner
+    expect(kinds(await inbox(b))).not.toContain("book_roads");    // the road before the follow isn't news
+    await env.DB.prepare("UPDATE roadbook_roads SET created_at = datetime('now', '-2 hours')").run();      // The Dragon, then the follows
+    await env.DB.prepare("UPDATE roadbook_follows SET created_at = datetime('now', '-1 hour')").run();
+    await ok(api(a, "POST", `/api/roadbooks/${book}/roads`, { name: "Cherohala Skyway", geom: road() }));
+    expect((await inbox(b)).items.find((i) => i.kind === "book_roads")).toMatchObject({ book_id: book, book: "Smokies classics", handle: "alice", n: 1, road: "Cherohala Skyway" });
+    expect(kinds(await inbox(a))).not.toContain("book_roads");
+    await ok(api(a, "POST", `/api/roadbooks/${book}/roads`, { name: "Tellico Plains run", geom: road() }));
+    expect((await inbox(out)).items.find((i) => i.kind === "book_roads")).toMatchObject({ n: 2, road: null });
+    // made private again: the book is closed to its followers, and so is the news
+    await ok(api(a, "PUT", `/api/roadbooks/${book}`, { visibility: "private" }));
+    expect(kinds(await inbox(b))).not.toContain("book_roads");
+    await ok(api(a, "PUT", `/api/roadbooks/${book}`, { visibility: "public" }));
     // time attack: bob goes quicker than alice after her time went up
     const week = (await env.DB.prepare("SELECT date('now', '-6 days', 'weekday 1') AS w").first<{ w: string }>())!.w;
     // (the week's loop is named on its row, migration 0054, and has no stage of its own)
@@ -90,6 +104,65 @@ describe("For you", () => {
     await env.DB.prepare("UPDATE ta_weeks SET removed = 0").run();
   });
 
+  it("a road a crew-mate adds to your crew's roadbook is news to the crew and its keeper, not to who added it", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob"), c = await makeUser("cara"), s = await makeUser("stranger");
+    const crew = (await json(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).id as string;
+    for (const u of [b, c]) await env.DB.prepare("INSERT INTO crew_members (crew_id, user_id) VALUES (?, ?)").bind(crew, u.id).run();
+    const { id } = await json(api(a, "POST", "/api/roadbooks", { name: "Crew favourites", crew }));
+    await ok(api(b, "POST", `/api/roadbooks/${id}/roads`, { name: "Cherohala Skyway", geom: road() }));
+    for (const u of [a, c]) expect((await inbox(u)).items.find((i) => i.kind === "book_roads")).toMatchObject({ book_id: id, book: "Crew favourites", handle: "bob", n: 1, road: "Cherohala Skyway" });
+    for (const u of [b, s]) expect(kinds(await inbox(u))).not.toContain("book_roads");
+    // two members add: the count, with nobody named
+    await ok(api(c, "POST", `/api/roadbooks/${id}/roads`, { name: "Tellico Plains run", geom: road(35.3) }));
+    expect((await inbox(a)).items.find((i) => i.kind === "book_roads")).toMatchObject({ n: 2, handle: null, road: null });
+    expect((await inbox(b)).items.find((i) => i.kind === "book_roads")).toMatchObject({ n: 1, handle: "cara" });
+  });
+
+  it("kudos and comments on your drive post; a comment after yours on a friend's post; blocks hide them", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob"), c = await makeUser("cara");
+    await befriend(a, b); await befriend(a, c);
+    const line = encodeLine(Array.from({ length: 91 }, (_, i) => [35 + i * 0.001, -84] as [number, number]));
+    const { id } = await json(api(a, "POST", "/api/posts", { title: "Cherohala Skyway", driven_on: today, length_m: 10000, line }));
+    await ok(api(b, "POST", `/api/posts/${id}/kudos`));
+    await ok(api(b, "POST", `/api/posts/${id}/comments`, { body: "That fog!" }));
+    await env.DB.prepare("UPDATE drive_comments SET created_at = datetime('now', '-1 minute')").run();   // bob's comment came first
+    await ok(api(c, "POST", `/api/posts/${id}/kudos`));
+    await ok(api(c, "POST", `/api/posts/${id}/comments`, { body: "Next time I'm in" }));
+    const mine = (await inbox(a)).items;
+    expect(mine.find((i) => i.kind === "post_kudos")).toMatchObject({ post_id: id, title: "Cherohala Skyway", others: 1, yours: true });
+    expect(mine.find((i) => i.kind === "post_comment")).toMatchObject({ post_id: id, handle: "cara", others: 1, yours: true });
+    expect((await inbox(b)).items.filter((i) => i.kind.startsWith("post_"))).toEqual([expect.objectContaining({ kind: "post_comment", handle: "cara", owner: "alice", yours: false, others: 0 })]);
+    expect((await inbox(c)).items.filter((i) => i.kind.startsWith("post_"))).toEqual([]);   // nothing came after her comment
+    await ok(api(b, "POST", "/api/blocks", { handle: "cara" }));
+    expect((await inbox(b)).items.filter((i) => i.kind.startsWith("post_"))).toEqual([]);
+    await ok(api(a, "POST", "/api/blocks", { handle: "cara" }));
+    expect((await inbox(a)).items.find((i) => i.kind === "post_comment")).toMatchObject({ handle: "bob", others: 0 });
+  });
+
+  it("an @mention on a friend's post you can see; reads only real mentions; your own posts' comments stay comments", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob"), c = await makeUser("cara");
+    await befriend(a, b); await befriend(a, c);
+    const line = encodeLine(Array.from({ length: 91 }, (_, i) => [35 + i * 0.001, -84] as [number, number]));
+    const { id } = await json(api(a, "POST", "/api/posts", { title: "Cherohala Skyway", driven_on: today, length_m: 10000, line }));
+    await ok(api(c, "POST", `/api/posts/${id}/comments`, { body: "first" }));
+    await env.DB.prepare("UPDATE drive_comments SET created_at = datetime('now', '-1 minute')").run();
+    await ok(api(b, "POST", `/api/posts/${id}/comments`, { body: "@cara look, and @alice" }));
+    await ok(api(b, "POST", `/api/posts/${id}/comments`, { body: "mail me at x@carab.com" }));
+    const cs = (await inbox(c)).items.filter((i) => i.kind.startsWith("post_"));
+    expect(cs).toEqual([expect.objectContaining({ kind: "post_mention", post_id: id, handle: "bob", owner: "alice", others: 0 })]);   // not "also commented" too
+    expect(cs[0].body).toBeUndefined();
+    expect((await inbox(a)).items.filter((i) => i.kind.startsWith("post_")).map((i) => i.kind)).toEqual(["post_comment"]);
+    expect(mentionsOf("@Sam hi @sam, @al @bob_1 x@y.com @me", "me")).toEqual(["sam", "bob_1"]);
+  });
+
+  it("groups a post's rows: the newest person, how many others, at most ten posts", () => {
+    const r = (post_id: string, handle: string, at: string) => ({ post_id, title: post_id, handle, at, yours: 1, owner: null });
+    expect(perPost([r("p", "cara", "3"), r("p", "bob", "2"), r("p", "cara", "1"), r("q", "bob", "1")])).toEqual([
+      { post_id: "p", title: "p", handle: "cara", at: "3", yours: true, owner: null, others: 1 },
+      { post_id: "q", title: "q", handle: "bob", at: "1", yours: true, owner: null, others: 0 }]);
+    expect(perPost(Array.from({ length: 12 }, (_, i) => r(`p${i}`, "bob", "1"))).length).toBe(10);
+  });
+
   it("a duel's outcome from your side, by Score or by time", () => {
     const s = (score: number, time_s: number | null = null) => ({ score, time_s });
     expect(duelOutcome({ kind: "score", you: s(800), them: s(790) })).toBe("won");
@@ -99,5 +172,22 @@ describe("For you", () => {
     expect(duelOutcome({ kind: "time", you: s(700, 290), them: s(900, 300) })).toBe("won");
     expect(duelOutcome({ kind: "time", you: s(700, 300), them: s(900, 300) })).toBe("draw");
     expect(duelOutcome({ kind: "time", you: s(900, null), them: s(700, 310) })).toBe("lost");
+  });
+
+  it("a crew-mate's post of a crew drive you were both at: 'posted a drive you were on'; not a drive you missed, not across a block", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob"), c = await makeUser("cara");
+    const crew = (await json(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).id;
+    for (const u of [b, c]) await ok(api(u, "POST", "/api/crews/join", { token: (await json(api(a, "POST", `/api/crews/${crew}/invite`))).token }));
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO crew_events (id, crew_id, created_by, title, starts_at, meet_lat, meet_lon) VALUES ('e1', ?1, ?2, 'Skyway run', ?3, 35, -84)").bind(crew, a.id, `${today} 14:00:00`),
+      env.DB.prepare("INSERT INTO crew_event_attendance (event_id, user_id) VALUES ('e1', ?1), ('e1', ?2)").bind(a.id, b.id),
+    ]);
+    const line = encodeLine(Array.from({ length: 91 }, (_, i) => [35 + i * 0.001, -84] as [number, number]));
+    const { id } = await json(api(a, "POST", "/api/posts", { title: "Skyway run", driven_on: today, length_m: 10000, line, crew_id: crew }));
+    expect((await inbox(b)).items.filter((i) => i.kind === "post_with")).toEqual([expect.objectContaining({ post_id: id, title: "Skyway run", handle: "alice" })]);
+    expect((await inbox(c)).items.filter((i) => i.kind === "post_with")).toEqual([]);   // cara wasn't marked there
+    expect((await inbox(a)).items.filter((i) => i.kind === "post_with")).toEqual([]);   // your own post
+    await ok(api(b, "POST", "/api/blocks", { handle: "alice" }));
+    expect((await inbox(b)).items.filter((i) => i.kind === "post_with")).toEqual([]);
   });
 });

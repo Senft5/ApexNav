@@ -33,6 +33,15 @@ def test_astar_matches_brute_force_dijkstra():
     assert r["found"] > 600 and r["restricted"] > 100, r
 
 
+def test_a_gate_on_a_through_road_is_open():
+    """2026-11-14 (tools/famous_roads.js): the Blue Ridge Parkway's winter gates (16 between Blowing Rock and Linville
+    Falls), Beartooth's and Angeles Crest's each cost the private-road toll, so Fun and Long way went round them. A gate
+    on tertiary and up is open; on a residential street, or with access private, it still blocks."""
+    r = case("gates")
+    assert r["secondary"] == ["Gated"] and r["tertiary"] == ["Gated"], r
+    assert "Detour" in r["residential"] and r["privateSecondary"] == ["Detour"], r
+
+
 def test_restrictions_oneways_and_uturns():
     r = case("rules")
     assert r["free"] == ["South", "West"], r                         # the left at C
@@ -296,6 +305,62 @@ def test_fun_and_long_way_never_take_the_highway():
         assert x["limitS"] >= x["timeS"], "the budget never shuts out the highway-free way"
 
 
+def test_avoided_unpaved_roads_are_never_the_pick():
+    """2026-11-14 (tools/famous_roads.js): with unpaved roads avoided (the app's default) Fun still left Back of the Dragon
+    for 18 km of Nat'l Forest Road 614: its corners outweighed the search's cost. The pick drives no more unpaved road than
+    the level's quickest (UNPAVED_FREE_KM aside); with unpaved allowed, the forest road may win."""
+    r = case("unpavedPick")
+    assert r["avoided"] == ["Paved"] and "Forest Road" in r["allowed"], r
+
+
+def test_a_goal_part_way_along_a_long_edge_is_reached_inside_the_corridor():
+    """2026-11-14: every loop from Robbinsville at 100 km failed. A stage point 60 m along a 6 km mountain edge with no
+    junction: the edge's far end lay outside the leg's corridor ellipse, so the search never entered the edge the goal was
+    on. The ellipse bounds where the search goes on from, not the goal."""
+    r = case("ellipseGoal")
+    assert r == {"found": True, "n": 2}, r
+
+
+def test_a_start_on_a_road_joined_to_nothing_moves_to_one_that_leads_somewhere():
+    """2026-11-14: from La Cancada Flintridge the start snapped onto a 50 m bridge of Explorer Road cut off from the rest,
+    and no loop or route came back. snapLive skips a snap whose road reaches fewer than LIVE_NODES nodes."""
+    r = case("islandStart")
+    assert r == {"routed": True, "names": ["Main Road"]}, r
+
+
+def test_a_gravel_road_is_no_stage_when_unpaved_is_avoided():
+    """2026-11-14: Little Snowbird Road (forest gravel) was the best stage from Robbinsville, so loops were built round a
+    road their own legs avoid. With unpaved avoided (the app's default) explore leaves unpaved road out."""
+    r = case("dirtStage")
+    assert r == {"avoided": ["Paved Road"], "allowed": ["Gravel Road", "Paved Road"]}, r
+
+
+def test_a_long_good_road_is_one_stage_across_tiles_and_among_many_lanes():
+    """2026-11-15: from Robbinsville neither the Cherohala Skyway nor the Dragon was a stage (Best roads nearby, loops):
+    a chain broke at a tile's edge (a name's index is its tile's own), stopped at 15 km, and only the first 36 chains of
+    short twisty lanes were ever built. Now the Skyway is one stage of its length, up to K.STAGE_KM."""
+    r = case("longStage")
+    assert r["tiles"] >= 2, r
+    assert len(r["skyway"]) == 1 and 25 <= r["skyway"][0] <= r["cap"], r
+
+
+def test_loops_keep_off_unpaved_road_when_it_is_avoided():
+    """2026-11-14 (a survey of rider towns): with unpaved avoided (the app's default) Sturgis loops drove 15 to 31 km of
+    gravel and Stowe's 20 km. A loop leg first keeps off unpaved road entirely, and a loop with more than LOOP_DIRT_KM
+    of it goes when others need none."""
+    r = case("loopsDirt")
+    assert r["avoided"] and all(x <= 2 for x in r["avoided"]) and sum(r["avoided"]) < 1.5, r
+    assert sum(r["allowed"]) > 10, r
+
+
+def test_a_two_lane_trunk_that_bends_is_a_riders_road():
+    """2026-11-14 (tools/famous_roads.js): OSM tags many mountain US routes trunk, and Fun never drove The Snake (US 421,
+    4.4 corner points a km). A two-way trunk whose road bends (TRUNK_FUN_KM) is not a highway; a straight one (Cincinnati's
+    US 127, the AA Highway) or a divided one still is."""
+    r = case("riderTrunk")
+    assert r == {"bends": ["US 421"], "straight": ["Back Road"], "divided": ["Back Road"]}, r
+
+
 def test_the_highway_exception_takes_the_shortest_link_and_says_why():
     """A river crossed only by I-275's bridge: Fun and Long way drive River Road to the bridge's ramp, the bridge and the
     ramp off (1.7 km), not I-275 from the start (5.3 km, Quick's way), and the card says so; a car on I-275 rerouted at
@@ -517,3 +582,32 @@ def test_loops_land_near_the_length_asked_on_real_tiles():
         assert c["offs"], c
         assert min(abs(o) for o in c["offs"]) <= 0.2, c
         assert all(abs(o) <= 0.6 for o in c["offs"]) and all(r <= 0.4 for r in c["retraced"]), c
+
+
+def test_a_long_trip_loads_a_band_round_the_quickest_way_not_the_whole_ellipse():
+    """Cincinnati to Asheville at Fun loaded 580 tiles (258 MB) and took 39 s, and Long way found nothing: a trip whose
+    corridor is over K.LONG_TILES tiles is planned on a band round its quickest way, so the far tiles are never asked."""
+    r = case("longTrip")
+    for level in ("fun", "max"):
+        x = r[level]
+        assert x["routed"], x
+        assert x["northmost"] < x["farRow"], x
+        assert x["asked"] < x["ellipse"] / 2, x
+
+
+def test_a_long_trips_second_ask_reuses_the_tiles_the_first_decoded():
+    """Fun, then Long way, on one long trip: at the old 64 tiles Cincinnati to Asheville decoded 152 tiles for 65, half
+    of its 10 s. The kept tiles are a real least-recently-used cache of K.TILE_CACHE."""
+    r = case("tileCache")
+    fun, mx = r["kept"]
+    assert fun["routed"] and mx["routed"], r
+    assert mx["loads"] < mx["tiles"], r
+    assert r["tiny"][1]["loads"] > mx["loads"], r
+
+
+def test_a_plan_past_its_soft_time_answers_with_what_it_has():
+    """On a slow phone a long trip's refinement (more bisection steps, alternates, the spread) stops at K.PLAN_SOFT_MS;
+    the plan still answers with a route rather than running into the page's timeout."""
+    r = case("softBudget")
+    assert r["cutHasPick"] and r["cut"] >= 1, r
+    assert r["full"] >= r["cut"], r

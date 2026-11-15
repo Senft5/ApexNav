@@ -122,6 +122,54 @@
     return opts.advice ? `${text.replace(/[.\s]+$/, '')}. ${String(opts.advice).trim()}` : text;
   }
 
-  const api = { plainCall, plainHead, plainNamed, plainLink, plainChain, noteCode, kindOf, SEVERITY, CAUTION };
+  // ---- the same call as clips of the voice pack (web/voice_lines.js TEXT "pl:" tokens) ---------------------------------
+  // Plain words used to be spoken whole by the phone's own voice, so a drive in Plain words switched voices on every corner.
+  // plainTokens() names the pack's clips for exactly the words plainChain() says (tests/test_voice_coverage.py holds them
+  // together); null when a part has no clip (a recce call, a hazard the packs don't say), and the caller speaks the text.
+  const KIND_KEY = (k) => (k.kind === 'hairpin' ? 'hairpin' : k.kind === 'square' ? 'square' : SEVERITY[k.kind] ? SEVERITY[k.kind].toLowerCase() : null);
+  const MOD_KEY = { tightens: 'tightens', opens: 'opens', long: 'long', 'off-camber': 'off-camber', 'over crest': 'over-crest', banked: 'banked', short: 'short' };
+  const MARK_KEY = { 'Stop sign': 'stop', 'Railway crossing': 'level_crossing', 'One-lane bridge': 'one_lane_bridge', 'Speed bump': 'calming',
+    'Speed bumps': 'calming_many', 'Deer crossing': 'deer', 'Horse crossing': 'horse', 'Cattle crossing': 'cattle', 'Animal crossing': 'animal',
+    'Horse-drawn buggies': 'buggy', 'Covered bridge': 'covered_bridge', 'Water crossing': 'ford', 'Unpaved road': 'unpaved', 'Rough road': 'rough' };
+  /** The clip for a hazard's own call ("Crest", "Stop sign"), as web/voice.js codriverTokens names it, or null. */
+  function hazardToken(e) {
+    if (!e || e.type === 'corner') return null;
+    if (e.type === 'mark') return MARK_KEY[String(e.call || '')] ? `mark:${MARK_KEY[String(e.call)]}` : null;
+    return ['bump', 'crest', 'dip', 'alpr'].includes(e.type) ? `hazard:${e.type}` : null;
+  }
+  // one note: [head, ...mods] with "then" folded into the first ("then careful", "then hairpin left")
+  function noteTokens(n, then) {
+    if (!n || n.recce) return null;
+    const k = kindOf(n);
+    if (!k) { const h = hazardToken(n); return h ? (then ? ['pl:then', h] : [h]) : null; }
+    const key = KIND_KEY(k);
+    if (!key) return null;
+    const head = `${key}${k.dir}`, out = [];
+    if (n.caution >= 1 && n.caution <= 4) out.push(`pl:${then ? 't' : ''}c${n.caution}`, `pl:h:${head}`);
+    else out.push(`pl:${then ? 'th' : 'h'}:${head}`);
+    for (const m of n.mods || []) { if (!MOD_KEY[m]) return null; out.push(`pl:m:${MOD_KEY[m]}`); }
+    return out;
+  }
+  /** The clips for plainChain(chain, units, opts) (opts.adviceToken: the advice's own clip, for opts.advice), or null. */
+  function plainTokens(chain, units, opts = {}) {
+    if (!Array.isArray(chain) || !chain.length) return null;
+    const out = [];
+    for (let i = 0; i < chain.length; i++) { const t = noteTokens(chain[i], i > 0); if (!t) return null; out.push(...t); }
+    const last = chain[chain.length - 1], next = opts.next;
+    const reach = Number.isFinite(opts.reachM) ? opts.reachM : NAME_NEXT_M;
+    if (last && last.link && last.link !== 'into' && last.link !== 'and' && next && Number(last.link) <= reach) {
+      const m = Number(last.link);
+      const said = !Number.isFinite(m) ? '' : units && typeof units.spokenShort === 'function' ? units.spokenShort(m) : `${m} metres`;
+      if (said && plainNamed(next)) {
+        const named = noteTokens({ ...next, mods: [] }, true);
+        if (!named) return null;
+        out.push(...named, `pl:in:${said}`);
+      }
+    }
+    if (opts.advice) { if (!opts.adviceToken) return null; out.push(opts.adviceToken); }
+    return out;
+  }
+
+  const api = { plainTokens, hazardToken, MARK_KEY, plainCall, plainHead, plainNamed, plainLink, plainChain, noteCode, kindOf, SEVERITY, CAUTION };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexPlainNotes = api;
 })(typeof window !== 'undefined' ? window : globalThis);

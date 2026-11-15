@@ -61,6 +61,24 @@ describe("roadbooks", () => {
     expect((await get(f, id)).status).toBe(404);
   });
 
+  it("your friends' books with a road in them are listed, newest first; private, empty, strangers' and blocked ones are not", async () => {
+    const a = await makeUser("alice"), f = await makeUser("friend"), g = await makeUser("gina"), s = await makeUser("stranger");
+    await befriend(a, f); await befriend(a, g);
+    const fb = await book(f, { name: "Friend's Ohio", visibility: "friends" }); await ok(add(f, fb));
+    const fp = await book(f, { name: "Friend's private" }); await ok(add(f, fp));
+    await book(f, { name: "Friend's empty", visibility: "friends" });
+    const gb = await book(g, { name: "Gina's public", visibility: "public" }); await ok(add(g, gb));
+    const sb = await book(s, { name: "Stranger's public", visibility: "public" }); await ok(add(s, sb));
+    const mine = await book(a, { visibility: "friends" }); await ok(add(a, mine));
+    await env.DB.prepare("UPDATE roadbooks SET updated_at = '2026-01-01 00:00:00' WHERE id = ?").bind(fb).run();
+    const list = await json(api(a, "GET", "/api/roadbooks/friends"));
+    expect(list.map((x: Msg) => [x.name, x.by, x.roads, x.mine])).toEqual([["Gina's public", "gina", 1, false], ["Friend's Ohio", "friend", 1, false]]);
+    expect(list[0].road_list).toBeUndefined();                          // cards only: the shapes come when one is opened
+    await ok(api(a, "POST", "/api/blocks", { user_id: g.id }));
+    expect((await json(api(a, "GET", "/api/roadbooks/friends"))).map((x: Msg) => x.name)).toEqual(["Friend's Ohio"]);
+    expect((await api(null, "GET", "/api/roadbooks/friends")).status).toBe(401);
+  });
+
   it("showing a book needs a handle; names, shapes and limits are checked", async () => {
     const a = await makeUser("alice");
     await env.DB.prepare("UPDATE users SET handle = NULL WHERE id = ?").bind(a.id).run();
@@ -147,6 +165,48 @@ describe("roadbooks", () => {
     expect((await json(api(b, "GET", "/api/me/export"))).roadbooks_followed.map((x: Msg) => x.name)).toEqual(["Smokies classics"]);
     await ok(api(a, "DELETE", "/api/me", { confirm: "DELETE" }));
     for (const t of ["roadbooks", "roadbook_roads", "roadbook_follows"]) expect((await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${t}`).first<{ n: number }>())!.n).toBe(0);
+  });
+
+  it("a book kept with a crew: its members open it and add roads, take out their own; the crew's owner any; leaving takes them", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob"), c = await makeUser("cara"), s = await makeUser("stranger");
+    const crew = (await json(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).id as string;
+    const other = (await json(api(s, "POST", "/api/crews", { name: "Elsewhere" }))).id as string;
+    for (const u of [b, c]) await env.DB.prepare("INSERT INTO crew_members (crew_id, user_id) VALUES (?, ?)").bind(crew, u.id).run();
+    // only a crew you are in
+    expect((await api(b, "POST", "/api/roadbooks", { name: "Nope", crew: other })).status).toBe(403);
+    const id = await book(b, { name: "Crew favourites", crew });
+    const rb = (await json(add(b, id))).id as string;
+    const rc = (await json(add(c, id, { name: "Cherohala", geom: road(35.3, -84.1) }))).id as string;
+    const seen = await json(get(c, id));
+    expect([seen.mine, seen.can_add, seen.crew, seen.by, seen.roads]).toEqual([false, true, { id: crew, name: "Ridge Runners" }, "bob", 2]);
+    expect(seen.road_list.map((r: Msg) => [r.name, r.added_by, r.yours])).toEqual([["The Dragon", null, false], ["Cherohala", "cara", true]]);
+    expect((await json(get(b, id))).road_list[1]).toMatchObject({ added_by: "cara", yours: false });
+    // the crew page lists it; GET /api/roadbooks puts it under crews for the members who don't keep it
+    expect((await json(api(c, "GET", `/api/crews/${crew}/roadbooks`))).map((x: Msg) => x.name)).toEqual(["Crew favourites"]);
+    expect((await api(s, "GET", `/api/crews/${crew}/roadbooks`)).status).toBe(404);
+    const lists = await json(api(c, "GET", "/api/roadbooks"));
+    expect([lists.mine.length, lists.following.length, lists.crews.map((x: Msg) => x.id)]).toEqual([0, 0, [id]]);
+    // a stranger: not open (it is private), not addable; and a crew-mate can't change the book or bob's road
+    expect((await get(s, id)).status).toBe(404);
+    expect((await add(s, id)).status).toBe(404);
+    expect((await api(c, "PUT", `/api/roadbooks/${id}`, { name: "Mine now" })).status).toBe(404);
+    expect((await api(c, "DELETE", `/api/roadbooks/${id}/roads/${rb}`)).status).toBe(404);
+    expect((await api(c, "PUT", `/api/roadbooks/${id}/roads/${rb}`, { note: "x" })).status).toBe(404);
+    await ok(api(c, "PUT", `/api/roadbooks/${id}/roads/${rc}`, { note: "Fuel in Tellico" }));
+    // the crew's owner may take out any road; cara her own
+    await ok(api(a, "DELETE", `/api/roadbooks/${id}/roads/${rb}`));
+    expect((await json(get(b, id))).roads).toBe(1);
+    // her export has the road she added; leaving Vetta takes it out of bob's book, and his count with it
+    expect((await json(api(c, "GET", "/api/me/export"))).roadbook_roads.map((r: Msg) => r.name)).toEqual(["Cherohala"]);
+    await ok(api(c, "DELETE", "/api/me", { confirm: "DELETE" }));
+    expect([(await json(get(b, id))).roads, (await json(get(b, id))).road_list]).toEqual([0, []]);
+    // a crew-mate who leaves the crew can no longer open a private crew book; bob can take it off the crew
+    await ok(add(b, id));
+    await env.DB.prepare("DELETE FROM crew_members WHERE user_id = ?").bind(a.id).run();
+    expect((await get(a, id)).status).toBe(404);
+    await ok(api(b, "PUT", `/api/roadbooks/${id}`, { crew: null }));
+    expect((await json(get(b, id))).crew).toBe(null);
+    expect((await api(b, "PUT", `/api/roadbooks/${id}`, { crew: other })).status).toBe(403);
   });
 
   it("reports take a public book off 'near you' and its link; the owner's removal makes it private for good", async () => {

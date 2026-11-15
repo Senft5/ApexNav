@@ -101,3 +101,32 @@ def test_dedupe_and_radius(out):
 def test_requests_name_only_dates_and_tiles(out):
     assert "startDate=2026-07-02" in out["mlbUrl"] and "sportId=1,11" in out["mlbUrl"]
     assert "place_of_worship" in out["query"] and "39.0000,-84.7500,39.2500,-84.5000" in out["query"]
+
+
+def test_schools_and_worship_from_our_build_first_overpass_only_outside():
+    """Inside the region the plan's 0.25 degree cells come from our weekly build (GET /api/ctx/points via the app's apiGet,
+    cell ids only); only a cell it doesn't cover goes to Overpass, and with the server down everything does, as before."""
+    js = r"""
+const root = process.argv[1];
+const E = require(root + '/web/route_ctx/events.js'), C = require(root + '/tests/fixtures/route_ctx/corridor.js');
+const mem = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v), removeItem: (k) => m.delete(k), m }; };
+const line = [[39.0930, -84.5250], [39.0945, -84.5120], [39.0955, -84.5040]];
+const cor = () => C.corridor('river', line, { departAt: Date.UTC(2026, 10, 2, 12, 30), speedMps: 15 });
+(async () => {
+  const asked = [], over = [];
+  const fetchFn = async (u, init) => { if (String(u).includes('interpreter')) { over.push(String(init && init.body)); return { ok: true, status: 200, json: async () => ({ elements: [] }), text: async () => '{"elements":[]}' }; } return { ok: false, status: 404, json: async () => null, text: async () => '' }; };
+  const apiGet = async (p) => { asked.push(p); return { cells: { '156_-339': { fuel: [], schools: [[39.0950, -84.5120]], worship: [] }, '156_-338': null } }; };
+  const ours = await E.fetch([cor()], { fetchFn, apiGet, storage: mem(), budgetMs: 4000 });
+  const overAfterOurs = new Set(over).size;
+  const down = await E.fetch([cor()], { fetchFn, apiGet: async () => null, storage: mem(), budgetMs: 4000 });
+  const firstOver = over[0] || '';
+  console.log(JSON.stringify({ asked, overAfterOurs, firstOver: decodeURIComponent(firstOver), allOver: [...new Set(over)].map(decodeURIComponent), spans: ours.river.spans.map((s) => s.kind),
+    note: ours.river.note || '', downNote: down.river.note || '' }));
+})();
+"""
+    o = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert o["asked"] == ["/api/ctx/points?cells=156_-338,156_-339"]   # the route runs along the two cells' edge
+    # the uncovered cell alone goes to Overpass (its box starts at -84.5); the covered one never does
+    assert o["overAfterOurs"] == 1 and "-84.5000" in o["firstOver"] and "-84.7500" not in o["firstOver"]
+    assert len(o["allOver"]) == 2 and "-84.7500" in o["allOver"][1]   # server down: both cells go to Overpass, as before
+    assert "school-zone" in o["spans"] and "no schools" not in o["note"]

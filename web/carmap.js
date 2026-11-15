@@ -10,7 +10,7 @@
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
   const line = (coords) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords.map(([lat, lon]) => [lon, lat]) } });
 
-  const state = { theme: 'roadbook', night: false, route: [], corners: [], hazards: [], places: [], pos: null, sight: null, mode: 'idle', follow: true, inset: 0, limit: null };
+  const state = { theme: 'roadbook', night: false, route: [], arrow: null, corners: [], hazards: [], places: [], pos: null, sight: null, mode: 'idle', follow: true, inset: 0, limit: null };
   let map = null, ready = false, puck = null, sightTag = null;
 
   const look = () => { const t = root.ApexThemes.get(state.theme); return { P: t.map[state.night ? 'night' : 'day'], C: t[state.night ? 'night' : 'day'] }; };
@@ -134,6 +134,8 @@
     root.ApexBasemap.restyle(map, P);
     map.setPaintProperty('car-route-casing', 'line-color', P.casing);
     map.setPaintProperty('car-route', 'line-color', C.route);
+    for (const id of ['car-arrow-casing', 'car-arrow-headline']) map.setPaintProperty(id, 'line-color', C.route);
+    map.setPaintProperty('car-arrow', 'line-color', P.bg); map.setPaintProperty('car-arrow-head', 'fill-color', P.bg);
     const st = document.documentElement.style;
     st.setProperty('--plate', C.panel); st.setProperty('--plate-ink', C.panelInk);
     // U-89: the credit sits on a strip of the map's own ground, so no place name shows through under it ("Cincinnati" ran
@@ -203,10 +205,26 @@
     map.addSource('car-route-src', { type: 'geojson', data: empty() });
     map.addLayer({ id: 'car-route-casing', type: 'line', source: 'car-route-src', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-width': width(6, 14) } });
     map.addLayer({ id: 'car-route', type: 'line', source: 'car-route-src', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-width': width(4, 9) } });
+    // the next turn's arrow (car.arrow): the paper inside the route's ink, over the route
+    map.addSource('car-arrow-src', { type: 'geojson', data: empty() });
+    const isShaft = ['==', ['get', 'part'], 'shaft'], isHead = ['==', ['get', 'part'], 'head'];
+    map.addLayer({ id: 'car-arrow-casing', type: 'line', source: 'car-arrow-src', filter: isShaft, layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-width': 16 } });
+    map.addLayer({ id: 'car-arrow-headline', type: 'line', source: 'car-arrow-src', filter: isHead, layout: { 'line-join': 'round' }, paint: { 'line-width': 6 } });
+    map.addLayer({ id: 'car-arrow', type: 'line', source: 'car-arrow-src', filter: isShaft, layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-width': 10 } });
+    map.addLayer({ id: 'car-arrow-head', type: 'fill', source: 'car-arrow-src', filter: isHead, paint: {} });
+  }
+  // [[lat, lon]…] lists -> the arrow's two features
+  function arrowFC(a) {
+    if (!a || !Array.isArray(a.shaft) || a.shaft.length < 2 || !Array.isArray(a.head) || a.head.length !== 3) return empty();
+    const ll = (p) => [p[1], p[0]], ring = a.head.map(ll);
+    return { type: 'FeatureCollection', features: [
+      { type: 'Feature', properties: { part: 'shaft' }, geometry: { type: 'LineString', coordinates: a.shaft.map(ll) } },
+      { type: 'Feature', properties: { part: 'head' }, geometry: { type: 'Polygon', coordinates: [[...ring, ring[0]]] } }] };
   }
 
   function setData() {
     if (ready) map.getSource('car-route-src').setData(state.route.length >= 2 ? { type: 'FeatureCollection', features: [line(state.route)] } : empty());
+    if (ready) map.getSource('car-arrow-src').setData(arrowFC(state.arrow));
     placePlates();                                                  // plates are DOM markers: they need the map, not its style
   }
 
@@ -290,6 +308,8 @@
     route(coords) { state.route = Array.isArray(coords) ? coords.filter((p) => Array.isArray(p) && finite(p[0]) && finite(p[1])) : []; glider.setRoute(state.route, nowS()); kick(); setData(); camera();
       if (state.overview && state.route.length >= 2) car.overview(); },   // a reroute during Overview shows the new route whole
     corners(list) { state.corners = (Array.isArray(list) ? list : []).filter((c) => c && Array.isArray(c.at)).slice(0, 600); setData(); },
+    // the next turn's arrow ({ shaft, head } as [[lat, lon]…]; null or empty lists: none)
+    arrow(a) { state.arrow = a && Array.isArray(a.shaft) ? a : null; setData(); },
     hazards(list) { state.hazards = (Array.isArray(list) ? list : []).filter((h) => h && Array.isArray(h.at)).slice(0, 40); setData(); },
     // the cafés and fuel along the route by name (web/carplay.js alongMessage places)
     places(list) {

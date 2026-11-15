@@ -66,6 +66,45 @@ export async function friendList(env: Env, v: Viewer) {
       WHERE (f.user_a = ?1 OR f.user_b = ?1) AND NOT (f.status = 'pending' AND f.requested_by = ?1) ORDER BY u.handle`, v.id);
 }
 
+/** GET /api/friends/suggested: people you may know (docs/SOCIAL.md), at most 8. A member who shares a crew with you (named:
+ *  you see its members already) or who is friends with two or more of your friends (counted, never named). Never someone
+ *  you're friends with or have a request with either way, someone blocked either way, or someone three reports hid. */
+export async function friendSuggestions(env: Env, v: Viewer) {
+  const rows = await all<{ id: string; handle: string; photo_id: string | null; crew: string | null; mutual: number }>(env,
+    `WITH my AS (SELECT CASE WHEN user_a = ?1 THEN user_b ELSE user_a END AS id FROM friendships WHERE status = 'accepted' AND (user_a = ?1 OR user_b = ?1)),
+          fof AS (SELECT CASE WHEN f.user_a = my.id THEN f.user_b ELSE f.user_a END AS id, COUNT(*) AS n
+                    FROM friendships f JOIN my ON f.user_a = my.id OR f.user_b = my.id WHERE f.status = 'accepted' GROUP BY 1),
+          cm AS (SELECT o.user_id AS id, MIN(c.name) AS crew FROM crew_members me JOIN crew_members o ON o.crew_id = me.crew_id AND o.user_id != ?1
+                   JOIN crews c ON c.id = me.crew_id WHERE me.user_id = ?1 GROUP BY o.user_id),
+          cand AS (SELECT id FROM cm UNION SELECT id FROM fof WHERE n >= 2)
+     SELECT u.id, u.handle, u.photo_id, cm.crew, COALESCE(fof.n, 0) AS mutual
+       FROM cand JOIN users u ON u.id = cand.id JOIN members mb ON mb.user_id = u.id LEFT JOIN cm ON cm.id = u.id LEFT JOIN fof ON fof.id = u.id
+      WHERE u.id != ?1 AND u.handle IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM friendships x WHERE x.user_a = MIN(u.id, ?1) AND x.user_b = MAX(u.id, ?1))
+        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = u.id) OR (b.blocker = u.id AND b.blocked = ?1))
+        AND NOT ${reportedSql("user", "u.id")}
+      ORDER BY COALESCE(fof.n, 0) + (cm.id IS NOT NULL) * 2 DESC, u.handle LIMIT 8`, v.id);
+  return rows.map((r) => ({ handle: r.handle, photo_id: r.photo_id, crew: r.crew, mutual: r.mutual }));
+}
+
+/** GET /api/users/search?q=: members whose handle starts with q (2 to 20 of a-z, 0-9, _), the exact one first, then your
+ *  friends, eight at most, each with where you stand ('friend', 'sent', 'asked' or null). Handles are seen by any member
+ *  already; never you, someone blocked either way, or someone three reports hid. */
+export async function userSearch(env: Env, v: Viewer, url: URL) {
+  const q = (url.searchParams.get("q") || "").trim().replace(/^@/, "").toLowerCase();
+  if (!/^[a-z0-9_]{2,20}$/.test(q)) return [];
+  const rows = await all<{ handle: string; photo_id: string | null; status: string | null; by_me: number }>(env,
+    `SELECT u.handle, u.photo_id, f.status, f.requested_by = ?1 AS by_me
+       FROM users u JOIN members mb ON mb.user_id = u.id
+       LEFT JOIN friendships f ON f.user_a = MIN(u.id, ?1) AND f.user_b = MAX(u.id, ?1)
+      WHERE u.handle LIKE ?2 ESCAPE '\\' AND u.id != ?1
+        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = u.id) OR (b.blocker = u.id AND b.blocked = ?1))
+        AND NOT ${reportedSql("user", "u.id")}
+      ORDER BY u.handle = ?3 DESC, COALESCE(f.status = 'accepted', 0) DESC, u.handle LIMIT 8`, v.id, `${q.replace(/_/g, "\\_")}%`, q);
+  return rows.map((r) => ({ handle: r.handle, photo_id: r.photo_id,
+    you: r.status === "accepted" ? "friend" : r.status === "pending" ? (r.by_me ? "sent" : "asked") : null }));
+}
+
 /** Cancel a request you sent, by handle. Answers the same whether or not there was one (or such a member). */
 export async function friendRequestCancel(env: Env, v: Viewer, req: Request): Promise<void> {
   const { handle } = await body<{ handle?: string }>(req);
@@ -323,7 +362,7 @@ export async function setGrant(env: Env, v: Viewer, req: Request): Promise<void>
       `INSERT INTO grants (user_id, audience_type, audience_id, share_scores, share_times) VALUES (?1, ?2, ?3, 1, ?4)
        ON CONFLICT (user_id, audience_type, audience_id) DO UPDATE SET share_scores = 1, share_times = ?4`).bind(v.id, type, id, times ? 1 : 0),
   ];
-  if (!times) stmts.push(env.DB.prepare("UPDATE board_entries SET time_s = NULL WHERE user_id = ? AND audience_type = ? AND audience_id = ?").bind(v.id, type, id));
+  if (!times) stmts.push(env.DB.prepare("UPDATE board_entries SET time_s = NULL, splits = NULL WHERE user_id = ? AND audience_type = ? AND audience_id = ?").bind(v.id, type, id));
   await env.DB.batch(stmts);
 }
 
@@ -333,7 +372,7 @@ export const myGrants = (env: Env, v: Viewer) => all(env,
 // ---- boards --------------------------------------------------------------------------------------
 /** Publishes one result to every audience the owner has opted into, and only those. */
 export async function publish(env: Env, v: Viewer, req: Request): Promise<{ published: number }> {
-  const b = await body<{ segment_id?: string; driver_score?: number; time_s?: number | null; driven_on?: string; smoothness?: number | null }>(req);
+  const b = await body<{ segment_id?: string; driver_score?: number; time_s?: number | null; driven_on?: string; smoothness?: number | null; splits?: unknown; surface?: unknown }>(req);
   const seg = await first<{ id: string; origin_id: string | null }>(env,
     "SELECT id, origin_id FROM segments WHERE id = ? AND owner = ?", str(b.segment_id, "segment_id", 1, 64), v.id);
   if (!seg) throw new HttpError(404, "no_segment");
@@ -346,6 +385,9 @@ export async function publish(env: Env, v: Viewer, req: Request): Promise<{ publ
   // how smooth the run was, 0-100 (IDEAS S-08 smoothest crew); unknown stays null
   const smooth = b.smoothness == null ? null : b.smoothness;
   if (smooth !== null && (!Number.isInteger(smooth) || smooth < 0 || smooth > 100)) throw new HttpError(400, "bad_smoothness");
+  // the run's splits (live ghost duels, migration 0062): kept only with a time, and only where that time is shared
+  const splits = time === null ? null : splitsOf(b.splits, time);
+  const surface = b.surface === "dry" || b.surface === "wet" || b.surface === "ice" ? b.surface : null;
 
   // only to audiences still yours (an accepted friend, a crew you are in), checked in the same query: one check per grant
   // went past Workers Free's 50 D1 queries per invocation once someone shared with many friends
@@ -357,14 +399,69 @@ export async function publish(env: Env, v: Viewer, req: Request): Promise<{ publ
   const stmts: D1PreparedStatement[] = [];
   for (const g of grants) {
     stmts.push(env.DB.prepare(
-      `INSERT INTO board_entries (id, segment_id, canon_id, user_id, audience_type, audience_id, driver_score, time_s, driven_on, smoothness)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+      `INSERT INTO board_entries (id, segment_id, canon_id, user_id, audience_type, audience_id, driver_score, time_s, driven_on, smoothness, splits, surface)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
        ON CONFLICT (segment_id, user_id, audience_type, audience_id, driven_on)
-       DO UPDATE SET driver_score = ?7, time_s = ?8, smoothness = ?10`,
-    ).bind(crypto.randomUUID(), seg.id, seg.origin_id ?? seg.id, v.id, g.audience_type, g.audience_id, score, g.share_times ? time : null, day, smooth));
+       DO UPDATE SET driver_score = ?7, time_s = ?8, smoothness = ?10, splits = ?11, surface = ?12`,
+    ).bind(crypto.randomUUID(), seg.id, seg.origin_id ?? seg.id, v.id, g.audience_type, g.audience_id, score, g.share_times ? time : null, day, smooth,
+      g.share_times && splits ? JSON.stringify(splits) : null, surface));
   }
   if (stmts.length) await env.DB.batch(stmts);
   return { published: stmts.length };
+}
+
+export const SPLITS_MAX = 200;
+/**
+ * A run's splits (web/ghost_duel.js): [[q, t]], q the fraction of the stage (rising, the last 1) at one of its corners'
+ * apexes, t the seconds from the start to there (never going back, none past the run's own time), at most SPLITS_MAX.
+ * Rounded (q to a thousandth, t to a tenth). Null for anything else: a bad split list never stops the result itself from
+ * being kept.
+ */
+export function splitsOf(x: unknown, time: number): [number, number][] | null {
+  if (!Array.isArray(x) || x.length < 1 || x.length > SPLITS_MAX) return null;
+  const out: [number, number][] = [];
+  for (const p of x) {
+    if (!Array.isArray(p) || p.length !== 2) return null;
+    const [q, t] = p;
+    if (typeof q !== "number" || typeof t !== "number" || !Number.isFinite(q) || !Number.isFinite(t) || q <= 0 || q > 1 || t < 0 || t > time + 1) return null;
+    const rq = Math.round(q * 1000) / 1000, rt = Math.round(t * 10) / 10, prev = out[out.length - 1];
+    if (prev && (rq <= prev[0] || rt < prev[1])) return null;
+    out.push([rq, rt]);
+  }
+  return out[out.length - 1][0] === 1 ? out : null;
+}
+
+/**
+ * Live ghost duels (IDEAS D-04): for each of the viewer's stages asked (canon ids, at most 20), the quickest run a friend
+ * or crew-mate published to them there with its splits, on a road like the one asked for (`surface`: 'wet' or 'ice' only
+ * with the same, else dry or unknown), a friend in an open duel with the viewer on that stage first. Splits are only
+ * ever stored where the run's time is shared with the viewer (publish), and read through the same visibility as the
+ * board's times. One batch (one of the 50 D1 queries an invocation may make).
+ */
+export async function ghosts(env: Env, v: Viewer, canons: string[], surface: string | null) {
+  const ids = [...new Set(canons.filter((c) => typeof c === "string" && c.length >= 1 && c.length <= 64))].slice(0, 20);
+  if (!ids.length) return [];
+  const slick = surface === "wet" || surface === "ice" ? surface : null;
+  const res = await env.DB.batch(ids.map((c) => env.DB.prepare(
+    `SELECT be.canon_id, u.handle, ${NAME_FOR("be.user_id", "?1")} AS name, be.time_s, be.splits, be.driven_on, be.surface,
+            EXISTS (SELECT 1 FROM duels d WHERE d.canon_id = be.canon_id AND d.status = 'on' AND d.ends_on >= date('now')
+                     AND ((d.challenger = ?1 AND d.opponent = be.user_id) OR (d.opponent = ?1 AND d.challenger = be.user_id))) AS duel
+       FROM board_entries be JOIN users u ON u.id = be.user_id
+      WHERE be.canon_id = ?2 AND be.user_id != ?1 AND be.splits IS NOT NULL AND be.time_s IS NOT NULL
+        AND ${slick ? "be.surface = ?3" : "(be.surface IS NULL OR be.surface = 'dry') AND ?3 IS NULL"}
+        AND (${VISIBLE_FROM_OTHERS})
+      ORDER BY duel DESC, be.time_s ASC, be.driven_on DESC LIMIT 1`).bind(v.id, c, slick)));
+  const out: { canon_id: string; handle: string | null; name: string | null; time_s: number; splits: [number, number][]; driven_on: string; surface: string | null; duel: boolean }[] = [];
+  for (const r of res) {
+    const row = (r.results as Record<string, any>[])[0];
+    if (!row) continue;
+    let sp: unknown = null;
+    try { sp = JSON.parse(String(row.splits)); } catch { sp = null; }
+    const splits = splitsOf(sp, row.time_s);
+    if (!splits) continue;
+    out.push({ canon_id: row.canon_id, handle: row.handle, name: row.name, time_s: row.time_s, splits, driven_on: row.driven_on, surface: row.surface ?? null, duel: !!row.duel });
+  }
+  return out;
 }
 
 /** A board entry `be` someone else published TO the viewer ?1: still their friend or crew-mate, grant still on, no block. */

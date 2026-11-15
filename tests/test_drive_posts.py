@@ -27,6 +27,24 @@ console.log(JSON.stringify({
   inBox: xy.every(([x, y]) => x >= 0 && x <= 200 && y >= 0 && y <= 96),
   facts: D.facts({ length_m: 32000, roads: ['A', 'B', 'C', 'D'] }, (m) => (m / 1000).toFixed(1) + ' km'),
   factsNone: D.facts({ length_m: null, roads: [] }, String),
+  mentions: [D.mentionParts('@sam nice, and you@bob? @cara!'), D.mentionParts('no one here'), D.mentionParts('@ab @toolonghandle_toolong x')],
+  at: [D.mentionAt('hey @Sa', 7), D.mentionAt('hey @', 5), D.mentionAt('mail x@y', 8), D.mentionAt('@sam done', 9), D.mentionAt('@bo and', 3)],
+  sug: [D.suggest('c', ['cara', 'Cara', 'carl', 'me', 'cy', 'ce', 'cz'], 'me'), D.suggest('', ['bob', 'me', null], 'me')],
+  wk: [D.weekLine({ drives: 2, length_m: 45000, best: 790 }, (m) => (m / 1000).toFixed(0) + ' km'), D.weekLine({ drives: 1, length_m: 0, best: null }, String),
+    D.weekShown([{ you: true }]), D.weekShown([{ you: true }, { you: false }]), D.weekShown(null)],
+  um: [D.unmuted([{ handle: 'bob' }, { handle: 'cara' }, { handle: 'bob', mine: true }, { handle: 'bob', you: true }, null], new Set(['bob'])).length, D.unmuted(null, new Set())],
+  kl: [D.kudosLine(['bob'], 1), D.kudosLine(['bob', 'cara'], 2), D.kudosLine(['bob', 'cara', 'dan'], 5), D.kudosLine(['bob', 'cara', 'dan'], 3), D.kudosLine([], 4)],
+  rivals: (() => { const L = Array.from({ length: 100 }, (_, i) => [35 + i * 0.001, -84]), p = { line: D.encode(L), stages: [
+      { name: 'A', score: 801, ends: [L[10][0], L[10][1], L[60][0], L[60][1]] }, { name: 'B', score: null, ends: [L[60][0], L[60][1], L[90][0], L[90][1]] },
+      { name: 'C', score: 700 }, { name: 'D', score: 650, ends: [36, -84, 36.1, -84] }, { name: 'E', score: 640, ends: [L[60][0], L[60][1], L[90][0], L[90][1]] }] };
+    return { all: D.rivalsOf(p).map((r) => [r.name, r.length_m]), one: D.rivalsOf(p, 4).map((r) => r.name), none: D.rivalsOf({ stages: p.stages }) }; })(),
+  rl: [D.rivalLine([{ name: 'A', you: 780, them: 801 }], { handle: 'bob' }), D.rivalLine([{ name: 'A', you: 830.4, them: 801 }, { name: 'B', you: 700, them: 700 }, { name: 'C', you: 1, them: 2 }], { mine: true }),
+    D.rivalLine([{ name: 'A', you: null, them: 801 }], { handle: 'bob' })],
+  keep: (() => { const L = Array.from({ length: 100 }, (_, i) => [35 + i * 0.001, -84]), st = [{ name: 'A', score: 801, ends: [L[10][0], L[10][1], L[60][0], L[60][1]] }];
+    const now = Date.parse('2026-11-14T12:00:00Z'), old = { key: 'OLD_0', name: 'Old', ends: [0, 0, 0, 0], length_m: 900, score: 1, handle: 'x', at: now - 22 * 864e5 };
+    const k1 = D.keepStages([old, { key: 'P1_0', name: 'A', score: 700, at: now - 864e5 }], [{ id: 'P1', handle: 'bob', line: D.encode(L), stages: st }, { id: 'P2', mine: true, handle: 'me', line: D.encode(L), stages: st }], now);
+    const many = D.keepStages([], Array.from({ length: 50 }, (_, j) => ({ id: 'Q' + j, handle: 'h', line: D.encode(L), stages: st })), now);
+    return { keys: k1.map((x) => [x.key, x.handle, x.score]), many: many.length }; })(),
   ago: [D.ago('2026-11-13 12:00:00', Date.parse('2026-11-13T12:01:00Z')), D.ago('2026-11-13 12:00:00', Date.parse('2026-11-13T15:00:00Z'))],
 }));
 """
@@ -51,3 +69,64 @@ def test_codec_svg_and_facts():
     assert r["facts"] == "32.0 km · A, B +2"
     assert r["factsNone"] == ""
     assert r["ago"] == ["just now", "3 h"]
+
+
+def test_mentions_bold_handles_only():
+    m = run()["mentions"]
+    assert m[0] == [[True, "@sam"], [False, " nice, and you@bob? "], [True, "@cara"], [False, "!"]]   # an email-ish "you@bob" isn't one
+    assert m[1] == [[False, "no one here"]]
+    assert m[2] == [[False, "@ab @toolonghandle_toolong x"]]                                          # too short, too long
+
+
+def test_mention_suggestions():
+    r = run()
+    assert r["at"] == [{"start": 4, "q": "sa"}, {"start": 4, "q": ""}, None, None, {"start": 0, "q": "bo"}]
+    assert r["sug"] == [["cara", "carl", "cy", "ce"], ["bob"]]
+
+
+def test_week_line():
+    """This week on the Feed: how far, how many drives, the best Score when known; shown once a friend posted."""
+    assert run()["wk"] == ["45 km · 2 drives · best 790", "1 drive", False, True, False]
+
+
+def test_kudos_line():
+    assert run()["kl"] == ["Kudos from @bob", "Kudos from @bob and @cara", "Kudos from @bob, @cara and 3 others", "Kudos from @bob, @cara and 1 other", ""]
+
+
+def test_rivals_and_the_end_card_line():
+    r = run()
+    # stages with a Score and ends on the line, each with its length along it (about 50 x 111 m); B has no Score, C no
+    # ends, D ends off the line
+    assert [n for n, _ in r["rivals"]["all"]] == ["A", "E"]
+    assert 5400 < r["rivals"]["all"][0][1] < 5700
+    assert r["rivals"]["one"] == ["E"] and r["rivals"]["none"] == []
+    assert r["rl"][0] == "A: 780, 21 under @bob's 801."
+    assert r["rl"][1] == "A: 830, 29 over your posted 801. B: 700, level with your posted 700."
+    assert r["rl"][2] == ""
+
+
+def test_the_feed_keeps_friends_stages_for_the_end_card():
+    r = run()
+    # bob's stage, fresh from the Feed, replaces the older copy of it; your own post and one 22 days old are left out
+    assert r["keep"]["keys"] == [["P1_0", "bob", 801]]
+    assert r["keep"]["many"] == 40
+
+
+def test_unmuted():
+    """Mute keeps a driver's posts off your Feed; your own posts and your own week row always stay."""
+    assert run()["um"] == [3, None]
+
+
+WITH_RUNNER = r"""
+const D = require(process.argv[1] + '/web/drive_posts.js');
+console.log(JSON.stringify([D.withLine(['bob'], 'me'), D.withLine(['bob', 'cara'], 'me'), D.withLine(['Me', 'bob'], 'me'),
+  D.withLine(['bob', 'cara', 'dan'], null), D.withLine(['bob', 'cara', 'dan', 'eve', 'fay'], 'cara'), D.withLine([], 'me'), D.withLine(null)]));
+"""
+
+
+def test_with_line():
+    """Who came along on a crew post: you first, then up to three names, then "and N others"."""
+    import json as _j, subprocess as _s
+    r = _j.loads(_s.run([NODE, "-e", WITH_RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r == ["With @bob", "With @bob and @cara", "With you and @bob", "With @bob, @cara and @dan",
+                 "With you, @bob and 3 others", "", ""]

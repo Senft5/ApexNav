@@ -28,14 +28,20 @@ import numpy as np
 
 from . import grid, transforms
 
-UA = "Vetta-context-grid/1 (+https://apexnav.senftns.workers.dev)"
+UA = "Vetta-context-grid/1 (+https://vettadrive.com/about)"
 _locks = {}
 _locks_guard = threading.Lock()
 # rasterio.features.rasterize builds its in-memory raster before applying the transform it is given, and says so; the
 # output is georeferenced by that transform (tests/test_ctx_etl.py checks places), so the warning is noise.
 warnings.filterwarnings("ignore", message="Dataset has no geotransform")
-STATE_FIPS = {"OH": "39", "KY": "21", "IN": "18", "WV": "54", "TN": "47", "NC": "37", "VA": "51", "GA": "13", "SC": "45",
-              "PA": "42", "MD": "24", "AL": "01", "MI": "26", "IL": "17"}
+STATE_FIPS = {"AL": "01", "AZ": "04", "AR": "05", "CA": "06", "CO": "08", "CT": "09", "DE": "10", "DC": "11", "FL": "12",
+              "GA": "13", "ID": "16", "IL": "17", "IN": "18", "IA": "19", "KS": "20", "KY": "21", "LA": "22", "ME": "23",
+              "MD": "24", "MA": "25", "MI": "26", "MN": "27", "MS": "28", "MO": "29", "MT": "30", "NE": "31", "NV": "32",
+              "NH": "33", "NJ": "34", "NM": "35", "NY": "36", "NC": "37", "ND": "38", "OH": "39", "OK": "40", "OR": "41",
+              "PA": "42", "RI": "44", "SC": "45", "SD": "46", "TN": "47", "TX": "48", "UT": "49", "VT": "50", "VA": "51",
+              "WA": "53", "WV": "54", "WI": "55", "WY": "56"}
+# the lower 48 and DC: every state but Alaska and Hawaii (the "us" preset, .github/workflows/ctx-us.yml)
+LOWER48 = sorted(STATE_FIPS)
 
 SOURCES = {
     "nlcd": {"name": "NLCD 2021 Impervious Surface; NLCD/USFS Tree Canopy Cover 2021 (v2021-4)", "by": "USGS / MRLC; USDA Forest Service",

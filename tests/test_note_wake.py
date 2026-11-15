@@ -85,7 +85,7 @@ def test_the_page_wakes_on_the_road_and_speaks_the_pack_lines():
     # LA-4: the mode is a chime, never its name: the rising one rides on the first call after a wake, the falling one leads
     # the quiet line, which says how far the quiet lasts in the pack's words (or the chime alone when that is unknown/short)
     assert "if (t === 'on') state.wakeCue = true;" in notes
-    assert "ApexVoiceLines.quietLine(state.voiceId, quietSaid())" in notes and "cue: 'sleep'" in notes and "else chime('sleep');" in notes
+    assert "ApexVoiceLines.quietLine(state.voiceId, span)" in notes and "cue: 'sleep'" in notes and "else chime('sleep');" in notes
     assert "cue = e.type === 'corner' && state.wakeCue ? 'wake' : undefined" in notes
     assert "packSays(" not in html and "'Full notes.'" not in notes and "'Quiet from here. Bumps and cameras only.'" not in notes
     # the Notes switch chimes too

@@ -190,11 +190,11 @@
     });
   }
   // Two sources: the tiles shipped in the app (data/graph/v1: Cincinnati) and the region's from the Worker
-  // (/api/graph/v1: the rest of Ohio, Kentucky and Indiana, relayed from the repository's graph-data branch). The coverage
+  // (/api/graph/v1: the 48 mainland states, from R2, else the US release, else the graph-data branch). The coverage
   // is the union of their indexes; the region's index is asked once a day (kept in IndexedDB for offline). A tile comes
   // from memory, then IndexedDB, then its source; one fetched from the Worker is kept in IndexedDB, so a road once
   // planned (or an area saved, prefetchArea) works offline.
-  const REGION_PATH = '/api/graph/v1/', DAY = 864e5, WORKER = 'https://apexnav.senftns.workers.dev';
+  const REGION_PATH = '/api/graph/v1/', DAY = 864e5, WORKER = 'https://vettadrive.app';
   const apiBase = (o) => (o.apiBase !== undefined ? o.apiBase : root.ApexSync && root.ApexSync.apiBase != null ? root.ApexSync.apiBase
     : root.location && root.location.protocol === 'apexnav:' ? WORKER : '');
   const regionBase = (o) => (o.region === null ? null : o.region || apiBase(o) + REGION_PATH);
@@ -323,9 +323,18 @@
    */
   async function keepArea(bbox, o = {}) {
     const [s, w, n, e] = Array.isArray(bbox) ? bbox : [bbox.s, bbox.w, bbox.n, bbox.e];
+    return keepTiles(tilesIn(s, w, n, e), o);
+  }
+  /**
+   * The same for a line (lat[], lon[]): the tiles within padKm of it (tilesAlong). A drive on a planned route keeps the
+   * network along all of it as it starts (cockpit.js startDrive), so a reroute in a dead zone further on still has roads,
+   * where the 15 km kept round you (warmOwnTiles) doesn't reach yet. Bytes only, never decoded.
+   */
+  function keepAlong(lat, lon, o = {}) { return keepTiles(tilesAlong(lat, lon, o.padKm), o); }
+  async function keepTiles(list, o = {}) {
     const fetchFn = fetchOf(o), src = await sources(o);
     let tiles = 0, fetched = 0;
-    for (const { i, j } of tilesIn(s, w, n, e)) {
+    for (const { i, j } of list) {
       const name = `${i}_${j}`, first = order(src, name)[0];
       if (!first || first[0] === src.bundled) continue;
       tiles++;
@@ -342,7 +351,7 @@
     return out;
   }
 
-  const api = { VERSION, READS, CHANNELS, BASE, TILE_DEG, FLAGS, NODE_FLAGS, CLASS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, tileOf, keyOf, unkey, origin, unq8, funPts, decode, index, load, prefetchArea, prefetchAlong, tilesAlong, keepArea, tilesIn, _mem: mem, _indexes: indexes };
+  const api = { VERSION, READS, CHANNELS, BASE, TILE_DEG, FLAGS, NODE_FLAGS, CLASS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, tileOf, keyOf, unkey, origin, unq8, funPts, decode, index, load, prefetchArea, prefetchAlong, tilesAlong, keepArea, keepAlong, tilesIn, _mem: mem, _indexes: indexes };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -39,10 +39,9 @@
     return left >= LATE_M && left <= Math.max(MIN_LEAD_M, vMps * LEAD_S);
   }
 
-  /** The line; spoken(m) says a distance in the driver's units (units.js spokenShort). */
-  function text(s, cursorM, spoken) {
-    const say = (m) => String(spoken(m)).replace(/(\d)\.0\b/, '$1');
-    return `Twisty section in ${say(s.startM - cursorM)}. ${say(s.endM - s.startM)}, ${s.corners} corners.`;
+  /** The line: short, and in the pack's own clips (voice_lines.js compose); the section's start is about 30 s out. */
+  function text(s) {
+    return `Twisty section ahead. ${s.corners} corners.`;
   }
 
   const api = { sections, next, due, text, QUIET_M };

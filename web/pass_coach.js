@@ -23,6 +23,8 @@
     stretch_best: 'Best stretch yet.',
     stretch_level: 'Level with your best.',
     brake_later: 'Brake later.',
+    wet_today: 'Wet today. Your best here was dry.',
+    icy_today: 'Icy today. Your best here was dry. Go gently.',
     brake_here: 'Brake later here.',
   };
   const lc = (x) => x.charAt(0).toLowerCase() + x.slice(1);
@@ -68,7 +70,10 @@
    * max bounds the work to your newest drives.
    */
   function build(Core, records, cornersOf, { max = 40, timesOf = null } = {}) {
-    const recs = (records || []).filter((d) => d && d.lat && d.lat.length > 4 && d.speed_mps && d.lon_g && d.lat_g)
+    // a wet or icy pass is not your best here (road_surface.js): the refs are your dry (or unknown) passes, so a wet
+    // drive is never the time a dry one is held to, nor "brake later" learnt from it
+    const slick = (d) => d && (d.surface === 'wet' || d.surface === 'ice');
+    const recs = (records || []).filter((d) => d && !slick(d) && d.lat && d.lat.length > 4 && d.speed_mps && d.lon_g && d.lat_g)
       .sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, max);
     const out = [], grid = new Map();
     for (const d of recs) {
@@ -122,6 +127,9 @@
    * best; gap is seconds against the fastest pass (above 0 behind), summed over the corners whose time both passes know.
    */
   function createCoach(Core, refs) {
+    // the road now (setSurface: wet_roads.js / road_surface.js state): on a wet or icy one your best (a dry pass) is no
+    // time to chase: no gap, no "brake later", technique only, and said once, at the first remembered corner
+    let wet = null, wetSaid = false;
     const grid = new Map();
     for (const r of refs || []) { const k = cellKey(r.e[0], r.e[1]); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(r); }
     const watch = new Map();         // ref id -> { ref, m, i } closest approach to its end so far
@@ -174,9 +182,10 @@
               if (!finite(sc)) continue;
               if (!stretch) stretch = { live: [], best: [], lastI: i, said: new Set(), bestAt: -Infinity, gap: 0, timed: 0 };
               stretch.live.push(t); stretch.best.push(w.ref.t); stretch.lastI = i;
-              const gap = finite(got.time) && finite(w.ref.tBest) ? got.time - w.ref.tBest : null;
+              const gap = !wet && finite(got.time) && finite(w.ref.tBest) ? got.time - w.ref.tBest : null;
               if (finite(gap)) { stretch.gap += gap; stretch.timed++; }
-              const early = finite(got.brakeM) && finite(w.ref.brakeBest) && got.brakeM - w.ref.brakeBest >= EARLY_M;
+              const early = !wet && finite(got.brakeM) && finite(w.ref.brakeBest) && got.brakeM - w.ref.brakeBest >= EARLY_M;
+              if (wet && !wetSaid) { wetSaid = true; events.push({ kind: 'surface', surface: wet, say: wet === 'ice' ? SPOKEN.icy_today : SPOKEN.wet_today }); }
               const ev = { kind: 'corner', ref: w.ref, t, sc, delta: sc - w.ref.sc, gap: finite(gap) ? Math.round(gap * 100) / 100 : null, early };
               // sparse: each hint once a stretch, "best yet" at most every third corner
               let say = line(ev);
@@ -191,6 +200,8 @@
         scanned = rows.length;
         return { events, view: stretch ? { delta: delta(stretch), gap: gapOf(stretch), n: stretch.live.length } : null };
       },
+      /** The road now: 'wet' | 'ice' (your best here was dry), else dry or unknown. */
+      setSurface(st) { wet = st === 'wet' || st === 'ice' ? st : null; },
     };
   }
 

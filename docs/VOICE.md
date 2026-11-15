@@ -25,7 +25,14 @@
    reported hazards, coaching memos, break nudges, regroup and track-mode lines are in every bank too (`web/voice_lines.js`,
    one JSON table the bank builder reads). A line with a name in it plays its fixed part from the bank and leaves the
    name on screen; on the website with the live voice loaded, the whole sentence is rendered in the pack's voice instead.
-5. **DEVICE** — the phone's own voice, used only when a pack's bank isn't on the phone or a line isn't in it (the convoy
+5. **One voice for the whole drive** (2026-11-14, the owner heard "a lot of system voice"): Plain words corners
+   (`plain_notes.js plainTokens`, the `pl:` clips), road marks ("Stop sign", "Railway crossing": `mark:`), the quiet
+   lines (limit `lim:`, briefing, twisty section, descent, sun, brake heat, flow, "Quiet for two miles" `span:`) and the
+   DOTs' traffic events (`dot:`) are in every bank too. Lines built with numbers are put together from clips by
+   `voice_lines.js compose()`; `tests/test_voice_coverage.py` samples every generator and fails when a line has no clips
+   or a bank lacks one, so a new spoken line can't fall back to the phone's voice unnoticed.
+6. **DEVICE** — the phone's own voice, used only when a pack's bank isn't on the phone or a line isn't in it: your own
+   recce notes, Siri answers with a place's name, convoy lines with a friend's handle.
    lines with a friend's handle and hazard, for now).
 
 ### Checked rendering and loudness

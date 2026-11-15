@@ -105,3 +105,36 @@ def test_no_signal_uses_a_kept_list_past_its_week_and_says_how_old(out):
     assert out["tooOld"] is None and out["part"] is None, "too old, or one tile never kept: unknown, never a partial map"
     src = open(os.path.join(ROOT, "web", "cockpit.js")).read()
     assert "no signal to check for newer ones." in src
+
+
+def test_the_lower_48_cells_answer_tiles_the_region_file_does_not():
+    """Outside our region file the cameras come from the weekly OSM build's cells (GET /api/ctx/points, "cams"), 40 tiles a
+    request; a tile whose cell has no cams list (not built, or built before cams) still goes to Overpass."""
+    src = r"""
+const C = require(process.argv[1] + '/web/cameras.js');
+const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k),
+  key: (i) => [...m.keys()][i], get length() { return m.size; } }; };
+(async () => {
+  const asked = [];
+  const doc = { tiles: ['156_-339'], cams: [[39.1, -84.6, 'a']] };
+  const cells = { '142_-335': { fuel: [], cams: [[35.6, -83.7, 's'], [35.61, -83.71, 'a']] }, '142_-336': { fuel: [] }, '143_-335': null };
+  const fetchFn = (url) => {
+    asked.push(url.includes('region.json') ? 'region' : url.includes('/api/ctx/points') ? 'points:' + url.split('cells=')[1] : 'overpass');
+    if (url.includes('region.json')) return Promise.resolve({ ok: true, json: async () => doc });
+    if (url.includes('/api/ctx/points')) return Promise.resolve({ ok: true, json: async () => ({ cells }) });
+    return Promise.resolve({ ok: true, json: async () => ({ elements: [] }) });
+  };
+  const got = await C.load(['156_-339', '142_-335', '142_-336'], { fetchFn, storage: mem(), now: 1000, region: 'https://w/api/cameras/v1/region.json', points: 'https://w/api/ctx/points?cells=' });
+  const many = []; for (let j = 0; j < 45; j++) many.push(`100_${-300 - j}`);
+  const asked2 = [];
+  await C.load(many, { fetchFn: (url) => { asked2.push(url); return Promise.resolve({ ok: true, json: async () => (url.includes('points') ? { cells: {} } : { elements: [] }) }); },
+    storage: mem(), now: 1000, region: null, points: 'https://w/api/ctx/points?cells=' });
+  console.log(JSON.stringify({ kinds: got.map((c) => c.kind).sort(), asked, pointAsks: asked2.filter((u) => u.includes('points')).length,
+    parsed: [...C.pointsTiles(cells)].map(([k, v]) => [k, v.length]) }));
+})();
+"""
+    r = json.loads(subprocess.run([NODE, "-e", src, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["kinds"] == ["alpr", "alpr", "speed"]
+    assert list(dict.fromkeys(r["asked"])) == ["region", "points:142_-335,142_-336", "overpass"], "only 142_-336 (no cams list) goes to Overpass (its servers raced)"
+    assert r["pointAsks"] == 2, "45 tiles: two requests of at most 40"
+    assert r["parsed"] == [["142_-335", 2]]

@@ -47,7 +47,13 @@ out.lines = [R.bookLine({ roads: 7, length_m: 212000, followers: 41 }), R.bookLi
 out.link = [R.link('https://vetta.example/', 'AbCdEfGhIjKlMnOp'), R.link('https://vetta.example', 'a b')];
 const svg = R.overview([{ geom: g, stamped: true }, { geom: g.map(([lo, la]) => [lo, la + 0.01]) }, { geom: [[1, 1]] }], { line: 'var(--panel-dim)', hi: 'var(--accent)' });
 out.esc = R.overview([{ geom: g }], { label: 'A "book" <img src=x onerror=1> & more' });
-out.svg = [(svg.match(/<path /g) || []).length, svg.indexOf('var(--panel-dim)') < svg.indexOf('var(--accent)'), /NaN|undefined/.test(svg), R.overview([]), R.overview([{ geom: [[1, 1]] }])];
+out.svg = [(svg.match(/<path d=/g) || []).length, svg.indexOf('var(--panel-dim)') < svg.indexOf('var(--accent)'), /NaN|undefined/.test(svg), R.overview([]), R.overview([{ geom: [[1, 1]] }])];
+// Drive them all: nearest first from here, each from its nearer end, a road out of reach left out, at most four
+const rd = (id, lat0, rev) => { const gg = Array.from({ length: 20 }, (_, i) => [-84, lat0 + i * 0.001]); return { id, geom: rev ? gg.reverse() : gg }; };
+const T = (here, roads, max) => R.tour(here, roads, max).map((l) => l.road.id + (l.fwd ? '>' : '<'));
+const set = [rd('c', 35.2, true), rd('far', 37), rd('a', 35.0), rd('b', 35.1)];
+out.tour = { here: T({ lat: 34.99, lon: -84 }, set), noHere: T(null, set), cap: T({ lat: 34.99, lon: -84 }, [rd('a', 35), rd('b', 35.1), rd('c', 35.2), rd('d', 35.3), rd('e', 35.4)]),
+  two: T({ lat: 34.99, lon: -84 }, set, 2), away: T({ lat: 40, lon: -84 }, set), none: T({ lat: 35, lon: -84 }, []) };
 console.log(JSON.stringify(out));
 """
 
@@ -89,3 +95,104 @@ def test_wired_into_the_app():
         assert needle in cockpit, needle
     # the app's link handler passes the key on (apexnav://open?roadbook=…)
     assert '"roadbook"' in re.search(r"static let linkKeys: Set<String> = \[([^\]]*)\]", open(os.path.join(ROOT, "ApexNavApp.swift"), encoding="utf-8").read()).group(1)
+
+
+def test_drive_them_all_goes_nearest_first(out):
+    t = out["tour"]
+    assert t["here"] == ["a>", "b>", "c<"]            # c is drawn north to south: driven from its nearer (south) end
+    assert t["noHere"] == ["c>", "b<", "a<"]          # no location: the book's first road as drawn, then nearest
+    assert t["cap"] == ["a>", "b>", "c>", "d>"]       # four at most
+    assert t["two"] == ["a>", "b>"]
+    assert t["away"] == [] and t["none"] == []         # nothing within 150 km of here
+
+
+MAP_RUNNER = r"""
+const R = require(process.argv[1] + '/web/roadbooks.js'), M = require(process.argv[1] + '/web/post_map.js');
+const W = 320, H = 150, PAD = 12;
+// where Web Mercator at camera v puts [lat, lon] in a W×H box
+const px = (v, lat, lon) => {
+  const ws = 512 * 2 ** v.zoom, X = (lo) => (lo + 180) / 360 * ws;
+  const Y = (la) => (1 - Math.log(Math.tan(Math.PI / 4 + la * Math.PI / 360)) / Math.PI) / 2 * ws;
+  return [W / 2 + X(lon) - X(v.center[0]), H / 2 + Y(lat) - Y(v.center[1])];
+};
+// the drawn points of every line (casings skipped), against where the map at viewFor(overviewFrame) has them
+const worst = (roads) => {
+  const v = M.viewFor(R.overviewFrame(roads), W, H, PAD), svg = R.overview(roads, { w: W, h: H, pad: PAD });
+  const paths = [...svg.matchAll(/<path (class="rb-casing" )?d="([^"]+)"/g)].filter((m) => !m[1]).map((m) => m[2]);
+  let w = 0;
+  paths.forEach((d, k) => {
+    const g = roads[k].geom, step = Math.max(1, Math.floor(g.length / 160)), kept = g.filter((_, i) => i % step === 0 || i === g.length - 1);
+    const xy = d.match(/-?[\d.]+ -?[\d.]+/g).map((q) => q.split(' ').map(Number));
+    kept.forEach(([lo, la], i) => { const [x, y] = px(v, la, lo); w = Math.max(w, Math.hypot(x - xy[i][0], y - xy[i][1])); });
+  });
+  return w;
+};
+const line = (lat0, lon0, dlat, dlon, n = 120) => ({ geom: Array.from({ length: n }, (_, i) => [lon0 + i * dlon + Math.sin(i / 9) * dlon * 6, lat0 + i * dlat]) });
+const ohio = [line(39.10, -84.62, 0.0006, 0.0003), line(39.2, -84.4, -0.0002, 0.0009), line(38.95, -84.7, 0.0004, 0.0001)];    // three roads, ~40 km across
+const smoky = [line(35.45, -83.95, 0.0002, 0.001, 200), line(35.6, -83.5, -0.0005, -0.0002)];
+const norway = [line(60.1, 10.5, 0.002, 0.0002, 100)];
+console.log(JSON.stringify({ ohio: worst(ohio), smoky: worst(smoky), norway: worst(norway),
+  frame: R.overviewFrame(ohio).map((p) => p.map((x) => +x.toFixed(4))), none: [R.overviewFrame([]), R.overviewFrame([{ geom: [[1, 2]] }]), R.overviewFrame(null)],
+  casings: (R.overview(ohio).match(/class="rb-casing"/g) || []).length }));
+"""
+
+
+def test_the_real_map_lies_under_the_books_roads():
+    r = json.loads(subprocess.run([NODE, "-e", MAP_RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
+    # within a pixel of the drawn lines everywhere, from Ohio to Norway, so the roads sit on their streets
+    assert r["ohio"] < 1.0, r
+    assert r["smoky"] < 1.0, r
+    assert r["norway"] < 1.0, r
+    assert r["none"] == [None, None, None]
+    assert r["casings"] == 3            # one casing under each line, shown only on the map
+    cockpit = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert re.search(r"changed: \(\) => \{ if \(booksRowCount\) booksRowCount\(\); \}, mapUnder,", cockpit)
+
+
+STAGE_RUNNER = r"""
+const R = require(process.argv[1] + '/web/roadbooks.js');
+// a 2 km stage as the Log keeps it: 60 points of [lat, lon] in a JSON string
+const g = Array.from({ length: 60 }, (_, i) => [+(39.2 + i * 0.0003).toFixed(6), +(-84.5 + Math.sin(i / 8) * 0.001).toFixed(6)]);
+const seg = { name: 'Kellogg bends', geom: JSON.stringify(g) };
+const r = R.fromStage(seg);
+const zone = R.fromStage(seg, [{ lat: g[10][0], lon: g[10][1], r: 400 }]);
+console.log(JSON.stringify({
+  ends: [r[0][0] === g[0][1], r[0][1] === g[0][0], r[r.length - 1][1] === g[59][0]], len: Math.round(R.lengthM(r) / 100), n: r.length,
+  zone: [zone[0][1] > g[10][0], Math.round(R.lengthM(zone) / 100)],
+  none: [R.fromStage({ geom: '[]' }), R.fromStage({ geom: 'nope' }), R.fromStage({}), R.fromStage(seg, [{ lat: 39.21, lon: -84.5, r: 5000 }]), R.fromStage({ geom: JSON.stringify(g.slice(0, 5)) })],
+  arr: !!R.fromStage({ geom: g }),
+}));
+"""
+
+
+def test_a_stage_goes_into_a_roadbook_as_marked_without_the_zones():
+    r = json.loads(subprocess.run([NODE, "-e", STAGE_RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["ends"] == [True, True, True]       # nothing trimmed off a stage's ends (a route loses its first 400 m), lon first
+    assert r["len"] == 20 and r["n"] == 60
+    assert r["zone"][0] and r["zone"][1] < 20    # a privacy zone over it: the longer side outside it is kept
+    assert r["none"] == [None, None, None, None, None]
+    assert r["arr"]
+    cockpit = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert re.search(r"mapUnder,\n\s+stages: \(\) =>", cockpit)
+
+
+def test_keep_a_posts_road_in_a_roadbook_is_wired():
+    rb = open(os.path.join(ROOT, "web", "roadbooks.js"), encoding="utf-8").read()
+    posts = open(os.path.join(ROOT, "web", "drive_posts.js"), encoding="utf-8").read()
+    cockpit = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    # the post's ··· offers it; the line goes through fromStage (your privacy zones out, nothing trimmed) and only name + geom are sent
+    assert "btn('Keep in a roadbook'" in posts and "page.keepRoad(p.title || 'Road', line)" in posts
+    assert "const geom = fromStage({ geom: pts }, page.zones ? page.zones() : [])" in rb
+    assert "{ name: String(t.name || 'Road').slice(0, 60), geom: t.geom }" in rb
+    assert "keepRoad: (name, pts) => { if (roadbooks) roadbooks.keep(name, pts); }" in cockpit
+
+
+def test_a_link_card_says_the_book_its_facts_and_its_keeper():
+    out = subprocess.run(["node", "-e", f"""const R = require({json.dumps(os.path.join(ROOT, 'web', 'roadbooks.js'))});
+      const b = {{ name: 'Smokies classics', by: 'sam', roads: 2, length_m: 10000, followers: 0, road_list: [{{ stamped: true }}, {{ stamped: false }}] }};
+      console.log(JSON.stringify([R.cardLines(b, (m) => (m / 1000) + ' km'), R.cardLines({{ name: '', road_list: [] }}, (m) => m + ' m'), R.CARD]));"""],
+        capture_output=True, text=True, check=True).stdout
+    one, empty, card = json.loads(out)
+    assert one["name"] == "Smokies classics" and one["facts"].endswith(" · kept by @sam") and "2 roads" in one["facts"]
+    assert empty["name"] == "Roadbook" and "@" not in empty["facts"]
+    assert (card["w"], card["h"]) == (1200, 630)

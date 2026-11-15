@@ -138,6 +138,57 @@
     let yearText = '';
     // This month's challenges (challenges.js, IDEAS S-11): text and a bar each; shown once this month has a dated drive.
     // Your notes (recce.js, IDEAS V-09): keep a drive's calls as yours, edit them, forget them.
+    // A ghost duel's result (ghost_duel.js): on one of your stages this drive covered, against the quickest run a friend
+    // shared with you there on a road like this one (GET /api/board/ghosts), the gap at the finish and the corners that
+    // decided it. Members only, silent offline. #dvGhostActs holds its one key, Challenge back (a time duel, POST /api/duels).
+    async function renderGhost(d, run) {
+      const panel = $('dvGhost'), G = window.ApexGhostDuel;
+      panel.hidden = true;
+      if (!G || !window.ApexSync || !Array.isArray(d.speed_mps) || !(await ApexSync.member())) return;
+      const mine = (segs || []).filter((x) => x && x.synced).map((seg) => ({ seg, p: Core.segmentPass(seg, d) })).filter((x) => x.p);
+      if (!mine.length) return;
+      const canon = (x) => x.origin || x.id, surf = d.surface === 'wet' || d.surface === 'ice' ? d.surface : '';
+      const r = await ApexSync.apiFetch(`/api/board/ghosts?canons=${encodeURIComponent(mine.slice(0, 20).map((x) => canon(x.seg)).join(','))}${surf ? `&surface=${surf}` : ''}`);
+      const ghosts = r.ok ? await r.json() : [];
+      if (run !== dvRun || !Array.isArray(ghosts)) return;
+      const pick = mine.map((x) => ({ ...x, g: ghosts.find((g) => g.canon_id === canon(x.seg)) })).find((x) => x.g);
+      if (!pick) return;
+      const { seg, p, g } = pick, fine = G.splitsOf(Core, d, p.lo, p.hi), cs = G.cornerSplits(fine, g.splits);
+      if (!fine || !Number.isFinite(cs.total)) return;
+      const who = `@${g.handle || 'friend'}`, words = ApexDriveView.noteWordsPref ? ApexDriveView.noteWordsPref() : undefined;
+      // a stretch is named by the corner its split was taken at (the friend's apex, within 100 m of one of yours)
+      const nameOf = (row) => {
+        if (row.b >= 1) return 'To the finish';
+        const at = p.lo + row.b * (p.hi - p.lo);
+        let best = null;
+        (d.corners || []).forEach((c, k) => { const m = Math.abs(c.apex - at); if (m <= 20 && (!best || m < best.m)) best = { m, k, c }; });
+        return best ? `Corner ${best.k + 1} \u00b7 ${ApexDriveView.cornerCall(best.c, words)}` : `Corner stretch ${row.k}`;
+      };
+      const fmt = (x) => `${x >= 0.05 ? '+' : x <= -0.05 ? '\u2212' : ''}${Math.abs(x).toFixed(1)} s`;
+      $('dvGhostHead').textContent = `${seg.name || 'Stage'} vs ${who}`;
+      $('dvGhostLine').innerHTML = `<b class="${cs.total > 0.05 ? 'loss' : cs.total < -0.05 ? 'gain' : ''}">${Math.abs(cs.total) < 0.05 ? `Level with ${escH(who)}` : `${Math.abs(cs.total).toFixed(1)} s ${cs.total > 0 ? 'behind' : 'ahead of'} ${escH(who)}`}</b>`
+        + ` <span class="note">their best${g.driven_on ? `, ${escH(ApexFormat.dayShort(g.driven_on))}` : ''}${g.surface === 'wet' || g.surface === 'ice' ? ` \u00b7 ${g.surface === 'ice' ? 'icy' : 'wet'} road` : ''}</span>`;
+      const st = G.standout(cs.rows, 3), list = (title, rows) => rows.length
+        ? `<h3>${title}</h3><ol class="dv-time">${rows.map((x) => `<li><span>${escH(nameOf(x))}</span><em class="${x.gap_s > 0 ? 'loss' : 'gain'}">${fmt(x.gap_s)}</em></li>`).join('')}</ol>` : '';
+      $('dvGhostRows').innerHTML = list(`Where ${escH(who)} was quicker`, st.lost) + list('Where you were quicker', st.gained);
+      panel.dataset.stage = seg.id; panel.dataset.who = g.handle || ''; panel.dataset.gap = String(cs.total);
+      // one key: a 7-day time duel with them on this stage (none while you already have one open with them there)
+      const acts = $('dvGhostActs'), key = G.challengeKey(cs.total, g.handle, g.duel);
+      acts.replaceChildren();
+      if (key) {
+        const b = document.createElement('button'); b.className = 'btn'; b.textContent = key;
+        b.addEventListener('click', async () => {
+          b.disabled = true;
+          let st = 0;
+          try { st = (await ApexSync.apiFetch('/api/duels', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ handle: g.handle, segment_id: seg.id, days: 7, kind: 'time' }) })).status; } catch (_) {}
+          const p = document.createElement('p'); p.className = 'note'; p.setAttribute('role', 'status'); p.textContent = G.challengeSaid(st, g.handle, seg.name);
+          acts.replaceChildren(p);
+          if (st !== 201 && st !== 200 && st !== 409 && st !== 404 && st !== 429) { b.disabled = false; acts.append(b); }
+        });
+        acts.append(b);
+      }
+      panel.hidden = false;
+    }
     function renderRecce(d) {
       const t = { lat: d.lat, lon: d.lon, events: d.events || [] }, notes = ApexRecce.load(localStorage), mine = ApexRecce.onTrack(notes, t);
       const b = (label, fn, cls = 'btn') => { const n = document.createElement('button'); n.className = cls; n.textContent = label; n.addEventListener('click', fn); return n; };
@@ -397,11 +448,14 @@
       // the road's look before you read it. From the summary's 32 points; none known, nothing drawn.
       const shapeThumb = (d) => { const sh = Array.isArray(d.shape) && d.shape.length > 1 ? d.shape : null; if (!sh || !window.ApexRouteThumb) return '';
         return (ApexRouteThumb.svg(sh.map((p) => p[0]), sh.map((p) => p[1]), { w: 48, h: 48, pad: 6, line: C.accent, hi: C.panelInk, width: 2 }) || '').replace(' role="img" aria-label="Route map"', ' aria-hidden="true"'); };
-      const rows = shown.slice().reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${escH(d.name)}">
+      // your best on a road you have scored twice or more, marked on its row as a fitness app marks a PR (free roamer B,
+      // 2026-11-14): the same rule as Your records' "Best Score on this road" (roads by name, a tie to the earlier drive)
+      const pb = roadBests(drives);
+      const rows = shown.slice().reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${escH(d.name)}${pb.has(d.id) ? ', your best on this road' : ''}">
         <td class="ix-date">${stamp(d)}</td>
         <td class="ix-shape">${shapeThumb(d)}</td>
         <td class="l ix-road"><b>${escH(listName(d.name))}</b><span class="sub">${ApexFormat.factsLine(d, ['distance', 'corners'])}${ApexDriveTags.normalize(d.tags).length ? ` · <span class="tagline">${escH(ApexDriveTags.normalize(d.tags).join(', '))}</span>` : ''}</span></td>
-        <td class="ix-score">${d.ds.score != null ? `<span class="score">${d.ds.score}</span>` : ''}</td></tr>`).join('');
+        <td class="ix-score">${pb.has(d.id) ? '<span class="pb">Best</span>' : ''}${d.ds.score != null ? `<span class="score">${d.ds.score}</span>` : ''}</td></tr>`).join('');
       $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="4"><span class="note">No drives yet.</span></td></tr>' : !shown.length ? '<tr><td class="l" colspan="4"><span class="note">No drives with those tags.</span></td></tr>' : rows;
       setTimeout(renderRecords, 0);
       setTimeout(renderSteadiness, 0);                                  // the coach runs per road: after the Log has painted
@@ -412,17 +466,24 @@
     // smoothest drive and best braking, and your cleanest corner of each kind (tight, medium, fast: technique credits, as Your
     // driving reads them). No speed, time or pace record of its own.
     // A drive whose date is unknown never counts for "this month".
-    function renderRecords(list = drives) {
+    const whenOf = (d) => monthOf(d) ? d.date : '';                     // an unknown date is never "latest" and never wins a tie
+    /** Each road (by name) scored twice or more: its best drive (a tie to the earlier), how many scored, and its latest drive. */
+    function roadRecords(list) {
       const roads = new Map();
       for (const d of list) { const r = roads.get(d.name) || []; r.push(d); roads.set(d.name, r); }
-      const when = (d) => monthOf(d) ? d.date : '';                    // an unknown date is never "latest" and never wins a tie
-      const rows = [...roads.entries()].map(([name, all]) => {
+      const when = whenOf;
+      return [...roads.entries()].map(([name, all]) => {
         const ds = all.filter(d => d.ds.score != null);
         if (ds.length < 2) return null;
         const best = ds.reduce((m, d) => (d.ds.score > m.ds.score || (d.ds.score === m.ds.score && when(d) && (!when(m) || when(d) < when(m))) ? d : m));
         const dated = all.filter(when), last = dated.length ? dated.reduce((m, d) => (when(d) > when(m) ? d : m)) : null;
         return { name, best, n: ds.length, fresh: last === best, last };
-      }).filter(Boolean).sort((p, q) => (q.last ? when(q.last) : '').localeCompare(p.last ? when(p.last) : '')).slice(0, 6);
+      }).filter(Boolean);
+    }
+    const roadBests = (list) => new Set(roadRecords(list).map((r) => r.best.id));
+    function renderRecords(list = drives) {
+      const when = whenOf;
+      const rows = roadRecords(list).sort((p, q) => (q.last ? when(q.last) : '').localeCompare(p.last ? when(p.last) : '')).slice(0, 6);
       const month = new Date(), key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
       const mine = list.filter(d => d.ds.score != null && monthOf(d) === key && d.ds.components);
       const of = (k) => mine.filter(d => finiteNum(d.ds.components[k]));
@@ -524,11 +585,23 @@
       driving.pending = key;
       ApexAnalysis.job('profile', { plan }).then((r) => {
         if (driving.pending !== key) return;                             // the library changed meanwhile: a newer run answers
+        syncDna(r.profile || null);
         driving.key = key; driving.pending = null; driving.p = r.profile || null; driving.pr = r.practice || null; driving.best = r.best || null; driving.records = r.records || null;
         renderRecords();                                                  // records by kind of corner come from the same kept observations
         if (plan && driving.pr) ApexDriverProfile.savePlan(localStorage, { ...plan, before: driving.pr.before });
         driving.wait.forEach((f) => f(driving.p, driving.pr));
       }).catch(() => { if (driving.pending === key) driving.pending = null; });
+    }
+    // Your driving DNA to your friends (dna_card.js wireOf, PUT /api/me/dna): members, sent when it changed since last sent
+    async function syncDna(p) {
+      const wire = window.ApexDnaCard ? ApexDnaCard.wireOf(ApexDnaCard.dnaModel(p)) : null, body = wire && JSON.stringify(wire);
+      if (!body || !window.ApexSync) return;
+      try { if (localStorage.getItem('vetta.dnaSent') === body) return; } catch (_) {}
+      try {
+        if (!(await ApexSync.member())) return;
+        const r = await ApexSync.apiFetch('/api/me/dna', { method: 'PUT', headers: { 'content-type': 'application/json' }, body });
+        if (r && r.ok) localStorage.setItem('vetta.dnaSent', body);
+      } catch (_) {}
     }
     function renderDrivingCard() {
       const card = $('drivingCard'); if (!card) return;
@@ -550,6 +623,9 @@
       ApexDriverProfile.render($('drivingRoot'), drives.length ? null : { corners: 0 });
       if (drives.length) drivingProfile((p, pr) => {
         if (view !== 'driving') return;
+        // Share my DNA (dna_card.js): the six skills as one picture, offered once all six are measured
+        const dna = window.ApexDnaCard ? ApexDnaCard.dnaModel(p) : null, share = $('drivingShare');
+        if (share) { share.hidden = !dna; driving.dna = dna; }
         ApexDriverProfile.render($('drivingRoot'), p || { corners: 0 }, { plan: pr ? planNow() : null, practice: pr, onPlan: (plan) => {
           ApexDriverProfile.savePlan(localStorage, plan);
           driving.moved = true; renderDriving();                         // the Practicing box in the Work on box's place
@@ -681,12 +757,12 @@
       await stagePasses();
       for (const s of segs.filter(x => x.synced)) {
         const best = passesFor(s).filter(x => x.p.score != null && /^\d{4}-\d{2}-\d{2}/.test(x.d.date)).sort((p, q) => q.p.score - p.p.score)[0];
-        if (best) await ApexSync.publishScore(s.id, best.p.score, best.p.time_s, best.d.date.slice(0, 10), best.p.components ? best.p.components.smoothness : null);
+        if (best) await ApexSync.publishScore(s.id, best.p.score, best.p.time_s, best.d.date.slice(0, 10), best.p.components ? best.p.components.smoothness : null, { splits: best.p.splits, surface: best.p.surface });
         // each recent day's best too, once, so the board can count days for its local legend (IDEAS S-08)
         let sent = {};
         try { sent = JSON.parse(localStorage.getItem('apex.publishedDays') || '{}') || {}; } catch (_) {}
         for (const b of ApexLegends.toPublish(s.id, ApexLegends.dayBests(passesFor(s)), sent)) {
-          if (await ApexSync.publishScore(s.id, b.score, b.time_s, b.day, b.smoothness)) sent[`${s.id}|${b.day}`] = b.score;
+          if (await ApexSync.publishScore(s.id, b.score, b.time_s, b.day, b.smoothness, { splits: b.splits, surface: b.surface })) sent[`${s.id}|${b.day}`] = b.score;
         }
         try { localStorage.setItem('apex.publishedDays', JSON.stringify(sent)); } catch (_) {}
       }
@@ -988,14 +1064,15 @@
         if (dvView) dvView.destroy();
         dvView = null; dvCurrent = null; dvInfo = null; dcPanel = null;
         $('dvRoot').replaceChildren(); $('dvDashcam').replaceChildren();
-        for (const k of ['dvRoad', 'dvVote', 'dvRecce', 'dvFlyby', 'dvTouch', 'dvBest']) $(k).hidden = true;
+        for (const k of ['dvRoad', 'dvGhost', 'dvVote', 'dvRecce', 'dvFlyby', 'dvTouch', 'dvBest']) $(k).hidden = true;
       }
       // The drive's name is the page title (you arrive from the Log list); the picker stays only as this view's state.
       $('dvTitle').textContent = s.name;
       $('dvAgain').hidden = !(Number.isFinite(s.len_m) && s.len_m >= 1000);   // panel D-1: a road to drive again, not an errand
       // Round 3 (drive_keep.js): a drive that ended itself, or was recovered after the app closed, says so
       const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(s) : null;
-      $('dvNote').textContent = [dateLabel(s), s.source === 'web-gps' ? 'Recorded on this phone' : s.source === 'imported' ? 'Imported' : 'Example drive', ended].filter(Boolean).join(' · ');
+      const wet = window.ApexRoadSurface ? ApexRoadSurface.label(s.surface) : '';   // a wet or icy road, said: its times aren't your dry ones
+      $('dvNote').textContent = [dateLabel(s), s.source === 'web-gps' ? 'Recorded on this phone' : s.source === 'imported' ? 'Imported' : 'Example drive', wet, ended].filter(Boolean).join(' · ');
       const [d, info] = await Promise.all([full(id), ApexAnalysis.job('drive', { id }).catch(() => null)]);
       if (run !== dvRun || !d) return;                                   // another drive opened meanwhile
       dvInfo = info || {};
@@ -1028,6 +1105,7 @@
             videoUrl: (name) => `${window.APEX_DRIVECAM || 'drivecam/'}${encodeURIComponent(name)}` } : {}) }));
       } else { dcPanel = null; $('dvDashcam').replaceChildren(); }
       renderRoadHistory(d, dvInfo.road || []);
+      renderGhost(d, run).catch(() => { $('dvGhost').hidden = true; });
       renderTouch(dvInfo.touch || null);
       loadRoadFeel(d, dvView);
       renderTags(d);
@@ -1108,15 +1186,26 @@
       if (same.length < 2) { panel.hidden = true; return; }
       panel.hidden = false;
       const W = 760, H = 150, L = 40, R = 14, T = 12, B = 24, sc = same.filter(x => x.score != null);
+      const S = window.ApexRoadSurface, me = same.find((o) => o.self), wetMe = !!(S && me && S.slick(me.surface)), wword = me && me.surface === 'ice' ? 'icy' : 'wet';
       const X = (i) => L + (sc.length < 2 ? 0.5 : i / (sc.length - 1)) * (W - L - R), Y = (v) => T + (1 - v / 1000) * (H - T - B);
       const grid = [0, 500, 1000].map(v => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.rule}"/><text x="${L - 6}" y="${Y(v) + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${v}</text>`).join('');
       const line = sc.map((x, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(x.score).toFixed(1)}`).join('');
-      const dots = sc.map((x, i) => `<circle cx="${X(i)}" cy="${Y(x.score)}" r="${x.self ? 7 : 4.5}" fill="${x.self ? C.accent : C.panel}" stroke="${C.accent}" stroke-width="2"/><text x="${X(i)}" y="${H - 7}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${ApexFormat.dayShort(String(x.date || ''))}</text>`).join('');
+      const dots = sc.map((x, i) => `<circle cx="${X(i)}" cy="${Y(x.score)}" r="${x.self ? 7 : 4.5}" fill="${x.self ? C.accent : C.panel}" stroke="${C.accent}" stroke-width="2"${S && S.slick(x.surface) ? ' stroke-dasharray="2 2"' : ''}/><text x="${X(i)}" y="${H - 7}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${ApexFormat.dayShort(String(x.date || ''))}</text>`).join('');
       $('dvRoadChart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Score on this road over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
+      // since your first drive here: the Score and the time over the corners both drove (drive_view.js roadProgress)
+      const pr = window.ApexDriveView && ApexDriveView.roadProgress ? ApexDriveView.roadProgress(same) : null;
+      $('dvRoadSince').hidden = !pr;
+      if (pr) {
+        const sd = pr.score_d == null ? '' : `Score ${pr.score_d >= 0 ? '+' : '\u2212'}${Math.abs(pr.score_d)}`;
+        const ts = `${slower(-pr.gain_s)} over ${pr.matched} corners`;
+        $('dvRoadSince').innerHTML = `<span class="note">Since your first ${wetMe ? `${wword} ` : ''}drive here${pr.since ? ` (${escH(pr.since)})` : ''}</span> <b class="${cls(-pr.gain_s)}">${[sd, ts].filter(Boolean).join(' \u00b7 ')}</b>`;
+      }
+      // on a wet drive, the best wet pass here beside the best of all (a dry one, most often): like with like
+      const wetSc = wetMe ? sc.filter((x) => S.alike(x.surface, me.surface)) : [];
       const last = sc[sc.length - 1];   // the latest and the best, never a "trend" from the first drive to the last (two drives)
       $('dvRoadTable').innerHTML = '<tr><th class="l">Drive</th><th>Score</th><th>Corners</th><th class="l">vs this drive</th></tr>' + same.map(o =>
-        `<tr class="${o.self ? 'best' : ''}"><td class="l"><b></b><span class="sub">${o.dateLabel}</span></td><td><span class="score">${o.score ?? UNK}</span></td><td>${o.corners ?? UNK}</td><td class="l">${o.self ? 'this drive' : o.matched ? `${o.delta_s == null ? '--' : slower(o.delta_s)} on ${o.matched} corner${o.matched === 1 ? '' : 's'}` : '--'}</td></tr>`
-      ).join('') + `<tr><td class="l" colspan="4"><span class="note">${sc.length > 1 ? `Latest ${last.score} \u00b7 best ${Math.max(...sc.map((x) => x.score))} \u00b7 ${sc.length} scored drives here` : ''}</span></td></tr>`;
+        `<tr class="${o.self ? 'best' : ''}"><td class="l"><b></b><span class="sub">${o.dateLabel}${S && S.label(o.surface) ? ` \u00b7 ${S.label(o.surface)}` : ''}</span></td><td><span class="score">${o.score ?? UNK}</span></td><td>${o.corners ?? UNK}</td><td class="l">${o.self ? 'this drive' : o.matched ? `${o.delta_s == null ? '--' : slower(o.delta_s)} on ${o.matched} corner${o.matched === 1 ? '' : 's'}` : '--'}</td></tr>`
+      ).join('') + `<tr><td class="l" colspan="4"><span class="note">${sc.length > 1 ? `Latest ${last.score} \u00b7 best ${Math.max(...sc.map((x) => x.score))}${wetSc.length > 1 ? ` \u00b7 best ${wword} ${Math.max(...wetSc.map((x) => x.score))}` : ''} \u00b7 ${sc.length} scored drives here` : ''}</span></td></tr>`;
       $('dvRoadTable').querySelectorAll('tr td.l b').forEach((b, i) => { if (same[i]) b.textContent = same[i].name; });
     }
 
@@ -1208,6 +1297,16 @@
       const out = await ApexDriveCard.shareCard(cv, `${(d.name || 'drive').replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'drive'}.png`);
       const b = $('dvCard');
       if (out === 'saved') { b.textContent = 'Card saved'; setTimeout(() => { b.textContent = 'Share card'; }, 2000); }
+    });
+    // Share my DNA (dna_card.js): Your driving's six skills as one picture, sent the way the drive card is
+    $('drivingShare').addEventListener('click', async () => {
+      if (!driving.dna) return;
+      const css = getComputedStyle(document.documentElement);
+      const cv = ApexDnaCard.drawDna(document.createElement('canvas'), driving.dna,
+        { ...C, fontNum: css.getPropertyValue('--font-num').trim(), fontUi: css.getPropertyValue('--font-ui').trim() });
+      const out = await ApexDriveCard.shareCard(cv, 'driving-dna.png');
+      const b = $('drivingShare');
+      if (out === 'saved') { b.textContent = 'Card saved'; setTimeout(() => { b.textContent = 'Share my DNA'; }, 2000); }
     });
     // Compare with…: this drive against the best other drive on the same road (the drive job's reference), else any other
     const bestOther = (d) => summaryOf(dvInfo && dvInfo.bestOther) || drives.find((x) => x.id !== d.id) || null;

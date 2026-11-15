@@ -199,6 +199,54 @@
     return out;
   }
 
-  const api = { along, forCar, fuelGap, summary, places, placeLine, nextAnswer, declutter, fallsQuery, fallsFrom, NEAR_M, FUEL_WARN_M, KIND_NAME };
+  /**
+   * The waterfalls in a box from the region's built list (GET /api/ctx/falls.json, tools/osm_ctx/region.py), as fallsFrom
+   * gives them; null when the list doesn't cover the whole box (a route near or past the region's border: ask Overpass).
+   */
+  function fallsInRegion(doc, s, w, n, e) {
+    if (!doc || !Array.isArray(doc.cells) || !Array.isArray(doc.falls) || !(doc.bundle > 0)) return null;
+    if (![s, w, n, e].every(finite) || s > n || w > e) return null;
+    const step = doc.bundle, have = new Set(doc.cells.map((c) => `${c[0]}_${c[1]}`));
+    for (let bi = Math.floor(s / step); bi <= Math.floor(n / step); bi++) {
+      for (let bj = Math.floor(w / step); bj <= Math.floor(e / step); bj++) if (!have.has(`${bi}_${bj}`)) return null;
+    }
+    const out = [];
+    for (const f of doc.falls) {
+      const [lat, lon, name] = f;
+      if (finite(lat) && finite(lon) && lat >= s && lat <= n && lon >= w && lon <= e) out.push({ kind: 'falls', name: typeof name === 'string' && name ? name : null, lat, lon });
+    }
+    return out;
+  }
+  /**
+   * The 0.25 degree cells (ids "bi_bj") that a box (south, west, north, east) touches, for GET /api/ctx/points?cells=
+   * (the weekly OSM build's per-cell files, lower 48); [] for a bad box or one over `max` cells.
+   */
+  const CELL_STEP = 0.25;
+  function cellsIn(s, w, n, e, max = 40) {
+    if (![s, w, n, e].every(finite) || s > n || w > e) return [];
+    const out = [];
+    for (let bi = Math.floor(s / CELL_STEP); bi <= Math.floor(n / CELL_STEP); bi++) {
+      for (let bj = Math.floor(w / CELL_STEP); bj <= Math.floor(e / CELL_STEP); bj++) out.push(`${bi}_${bj}`);
+    }
+    return out.length > max ? [] : out;
+  }
+  /**
+   * The points answer's cells ({ "bi_bj": { falls, closures, ... } | null }) as the region list fallsInRegion (kind
+   * 'falls') or conditional_closures.js inRegion (kind 'closures', listed as `ways`) reads: only the cells whose file has
+   * that list count as covered, so a cell not built (or built before the lists were added) still goes to Overpass.
+   */
+  function cellsDoc(cells, kind) {
+    if (!cells || typeof cells !== 'object' || (kind !== 'falls' && kind !== 'closures')) return null;
+    const have = [], rows = [];
+    for (const [k, c] of Object.entries(cells)) {
+      const m = /^(-?\d+)_(-?\d+)$/.exec(k);
+      if (!m || !c || !Array.isArray(c[kind])) continue;
+      have.push([Number(m[1]), Number(m[2])]);
+      rows.push(...c[kind]);
+    }
+    if (!have.length) return null;
+    return kind === 'falls' ? { bundle: CELL_STEP, cells: have, falls: rows } : { bundle: CELL_STEP, cells: have, ways: rows };
+  }
+  const api = { along, forCar, fuelGap, summary, places, placeLine, nextAnswer, declutter, fallsQuery, fallsFrom, fallsInRegion, cellsIn, cellsDoc, NEAR_M, FUEL_WARN_M, KIND_NAME };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexScenic = api;
 })(typeof window !== 'undefined' ? window : globalThis);

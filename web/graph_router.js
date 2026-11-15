@@ -53,12 +53,12 @@
     TURN_RIGHT_S: 2, TURN_RIGHT_K: 4, TURN_LEFT_S: 5, TURN_LEFT_K: 8, STRAIGHT_RAD: 0.35, UTURN_S: 30,
     // passing a node with a signal, a stop sign, give way, a level crossing, calming or a crossing (the tiles' node flags;
     // the same seconds the ETL adds for those inside an edge, tools/graph_etl/build.py DELAY_S; end nodes are ours)
-    SIGNAL_S: 15, STOP_S: 7, GIVE_WAY_S: 2, LEVEL_CROSSING_S: 4, CALMING_S: 3, CROSSING_S: 1, BARRIER_S: 120,
+    SIGNAL_S: 15, STOP_S: 7, GIVE_WAY_S: 2, LEVEL_CROSSING_S: 4, CALMING_S: 3, CROSSING_S: 1, BARRIER_S: 120, OPEN_GATE_CLS: 4,
     // the search's weight on a signal's, stop's and give way's seconds (Route tuning's "Traffic lights and stops",
     // web/route_tuning.js): 1 counts their wait as it is; above it the search keeps off them, while the route's time (the
     // card's, the ETA's) still counts only the real wait
     STOP_AVOID_X: 1,
-    PRIVATE_X: 10, PRIVATE_S: 600, DESTINATION_X: 2, DESTINATION_S: 60, FERRY_X: 2, UNPAVED_X: 1.5,
+    PRIVATE_X: 10, PRIVATE_S: 600, DESTINATION_X: 2, DESTINATION_S: 60, FERRY_X: 2, UNPAVED_X: 1.5, UNPAVED_FREE_KM: 0.5,
     AVOID_HWY_X: 4, AVOID_TOLL_X: 3, AVOID_FERRY_X: 5, AVOID_UNPAVED_X: 5,
     AVOID_POINT_X: 8, AVOID_POINT_M: 150, AVOID_POINT_MAX: 20,   // Avoid police reports: edges within 150 m of a live report
     AVOID_CAM_X: 8, AVOID_CAM_M: 35, AVOID_CAM_MAX: 60,          // Avoid cameras: edges within 35 m of a plate reader or speed camera
@@ -88,15 +88,24 @@
     // highway-free way over HWY_ABSURD x the quickest's time is still the level's way (the card says Quick is the way); the
     // budget never shuts out the highway-free quickest (+ HWY_FREE_SLACK_S). A point snapped onto a highway moves to the
     // nearest other road within HWY_SNAP_M (a car on the highway, heading given and within HWY_ON_M of it, stays on it)
-    NO_HWY: { fun: true, max: true }, HWY_LINK_X: 25, HWY_ABSURD: 2, HWY_FREE_SLACK_S: 60, HWY_SNAP_M: 150, HWY_ON_M: 25,
+    NO_HWY: { fun: true, max: true }, TRUNK_FUN_KM: 1.5, HWY_LINK_X: 25, HWY_ABSURD: 2, HWY_FREE_SLACK_S: 60, HWY_SNAP_M: 150, HWY_ON_M: 25,
     // loops (loop()): at Quick motorway and trunk cost x LOOP_HWY_X on every leg (a short link to good roads, never the
     // bulk), at Fun and Long way they are never driven (NO_HWY, the same exception); the
     // stages within reach of half the length at LOOP_REACH_MS; at most LOOP_STAGES of them chained, LOOP_TRIES loops
     // routed, each stage driven through a point every LOOP_ALONG_M; a loop with more than LOOP_MAX_RETRACED driven twice
     // is dropped
-    LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 12, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_MAX_RETRACED: 0.4,
+    LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 12, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_MAX_RETRACED: 0.4, LOOP_DIRT_KM: 2, LOOP_DIRT_TRY: [0.7, 0.5, 1.4], STAGE_KM: 40,
     LOOP_CONN_FACTOR: 1.7, LOOP_CONN_A: 3, LOOP_MAX_OFF: 0.6, LOOP_NEAR_OFF: 0.15, LOOP_RING_OFF: 0.3, LOOP_RETRIES: 4, LOOP_REFITS: 2, LOOP_CONN_A_SHORT: 1, LOOP_CONN_A_LONG: 6, LOOP_FIT_OFF: 0.12,   // a connector's road length over its crow line, the router's detours to good road in it (Cincinnati, 2026-11-04)
-    SNAP_M: 1500, GRID_DEG: 0.01,
+    SNAP_M: 1500, GRID_DEG: 0.01, LIVE_NODES: 200, LIVE_TRIES: 4,   // a snap's road reaches LIVE_NODES or it's an island (snapLive)
+    // long trips (2026-11-15): a corridor over LONG_TILES tiles (about 150 km crow at Fun, 100 at Long way) is cut to a
+    // band of BAND_M round a spine, the quickest way on a band of SPINE_M (SPINE_SHARE x the crow line) round the straight
+    // line. Cincinnati to Asheville at Fun: 580 tiles (258 MB) and 39 s became 72 tiles and 6 s; Long way's 1,271 tiles
+    // found nothing at all. The search's own ellipse is unchanged inside the band
+    LONG_TILES: 120, SPINE_SHARE: 0.15, SPINE_MIN_M: 20000, SPINE_MAX_M: 40000, BAND_M: { quick: 15000, fun: 20000, max: 30000 },
+    LONG_KM: 150, LONG_TOL: 0.4, PLAN_SOFT_MS: 6000,
+    // decoded tiles kept (about 0.5 MB each): a long trip's spine and band together pass 64, and at 64 Cincinnati to
+    // Asheville decoded 152 tiles for 65 (5 s of its 10)
+    TILE_CACHE: 160,
     OUT_BACK_KM: 2,          // Best roads nearby: a dead-end run of good road this long stays (driven there and back); the stage minimum
   };
 
@@ -138,6 +147,17 @@
    * tile key so the same tiles always make the same ids), cross-tile edges stitched to the loaded neighbour (an edge into
    * a tile that isn't loaded can't be used), the reverse adjacency, dead ends, and a node grid for snapping.
    */
+  function openGates(N, E, first, rfirst, redge, flags, cls, nflags) {
+    const B = flagBits(), NB = nodeBits(), through = (e) => cls[e] <= K.OPEN_GATE_CLS && !(flags[e] & B.private);
+    for (let e = 0; e < E; e++) if ((flags[e] & B.barrier) && through(e)) flags[e] &= ~B.barrier;
+    for (let a = 0; a < N; a++) {
+      if (!(nflags[a] & NB.barrier)) continue;
+      let ok = first[a + 1] > first[a] || rfirst[a + 1] > rfirst[a];
+      for (let e = first[a]; e < first[a + 1] && ok; e++) ok = through(e);
+      for (let r = rfirst[a]; r < rfirst[a + 1] && ok; r++) ok = through(redge[r]);
+      if (ok) nflags[a] &= ~NB.barrier;
+    }
+  }
   function view(tiles) {
     const list = (tiles || []).filter((t) => t && t.nodes && t.edges).slice().sort((a, b) => (keyOf(a.tile.i, a.tile.j) < keyOf(b.tile.i, b.tile.j) ? -1 : 1));
     const T = list.length, index = new Map();
@@ -196,6 +216,11 @@
     for (let a = 0; a < N; a++) rfirst[a + 1] += rfirst[a];
     const fill = rfirst.slice(0, N);
     for (let e = 0; e < E; e++) if (to[e] >= 0) redge[fill[to[e]]++] = e;
+    // a gate on a through road (tertiary and up, no access tag) is open: park roads and parkways are gated for winter
+    // closures every few km (the Blue Ridge Parkway, 2026-11-14: 16 gates from Blowing Rock to Linville Falls, each
+    // costing the private-road toll, so Fun never took it). Closures come from the road feeds; a gate on a smaller road,
+    // or with access=no/private, still blocks.
+    openGates(N, E, first, rfirst, redge, flags, cls, nflags);
     // dead ends: one neighbour, in or out (the only place a U-turn is allowed)
     const deadEnd = new Uint8Array(N);
     for (let a = 0; a < N; a++) {
@@ -292,6 +317,13 @@
     const ix = v.name[e], t = v.tiles[v.eTile[e]];
     return ix >= 0 && t.names && t.names[ix] ? t.names[ix] : null;
   }
+  /** Two edges of the same named road, in one tile or across a tile's edge (a name's index is the tile's own). */
+  function sameName(v, a, b) {
+    if (v.name[a] < 0 || v.name[b] < 0) return false;
+    if (v.eTile[a] === v.eTile[b]) return v.name[a] === v.name[b];
+    const n = nameOf(v, a);
+    return n !== null && n === nameOf(v, b);
+  }
   /** The other direction of the same road (v -> u with about the same length), or -1. */
   function twin(v, e) {
     const b = v.to[e], a = v.tail[e];
@@ -375,6 +407,37 @@
     const tw = twin(v, best.edge);
     if (tw >= 0 && (!filter || filter(tw))) out.push({ edge: tw, frac: 1 - best.frac, d: best.d, lat: best.lat, lon: best.lon });
     return out;
+  }
+
+  /**
+   * The nearest road that goes somewhere: snap, unless that road is an island (a bridge or a stub cut off from the rest,
+   * reaching fewer than LIVE_NODES nodes the way it's driven: forward from a start, backward into an end), then the nearest
+   * road off it, LIVE_TRIES times. From La Cañada Flintridge the start landed on a 50 m piece of Explorer Road joined to
+   * nothing, and every loop and route from there failed (2026-11-14).
+   */
+  function snapLive(v, la, lo, back = false, filter = null, maxM = K.SNAP_M) {
+    const off = new Set(), first = snap(v, la, lo, filter, maxM);
+    let x = first;
+    for (let k = 0; k < K.LIVE_TRIES && x.length; k++) {
+      const seen = island(v, x, back);
+      if (!seen) return x;
+      for (const e of seen) off.add(e);
+      x = snap(v, la, lo, (e) => !off.has(e) && (!filter || filter(e)), maxM);
+    }
+    return first;   // islands all round (a small network): the nearest, as before
+  }
+  /** The edges reached from a snap (forward, or backward with back) when fewer than LIVE_NODES nodes are; else null. */
+  function island(v, x, back) {
+    const nodes = new Set(), edges = new Set(), todo = [];
+    for (const y of x) { edges.add(y.edge); const n = back ? v.tail[y.edge] : v.to[y.edge]; if (n >= 0 && !nodes.has(n)) { nodes.add(n); todo.push(n); } }
+    while (todo.length) {
+      const n = todo.pop();
+      const visit = (e, m) => { edges.add(e); if (m >= 0 && !nodes.has(m)) { nodes.add(m); todo.push(m); } };
+      if (back) for (let r = v.rfirst[n]; r < v.rfirst[n + 1]; r++) visit(v.redge[r], v.tail[v.redge[r]]);
+      else for (let e = v.first[n]; e < v.first[n + 1]; e++) visit(e, v.to[e]);
+      if (nodes.size >= K.LIVE_NODES) return null;
+    }
+    return edges;
   }
 
   /**
@@ -757,7 +820,7 @@
       }
       for (const e of hit) mult[e] *= K.HAZARD_X;
     }
-    return { bad, mult, add, minBad, nodeCosts: o.nodeCosts !== false };
+    return { bad, mult, add, minBad, nodeCosts: o.nodeCosts !== false, noDirt: !!avoid.unpaved };
   }
 
   // ---- the search ------------------------------------------------------------------------------------------------------
@@ -889,7 +952,12 @@
       if (++settled > maxSettle) break;
       for (let e = v.first[node]; e < v.first[node + 1]; e++) {
         const head = v.to[e];
-        if (head < 0 || (ban && ban[e]) || !allowed(v, p, e, back) || (bound && !bound(head))) continue;
+        if (head < 0 || (ban && ban[e]) || !allowed(v, p, e, back)) continue;
+        // the ellipse bounds where the search goes on from, not the goal: a target edge whose far end is outside it (a 6 km
+        // mountain edge with no junction, the goal 60 m along it) is still reached (2026-11-14: every Robbinsville loop
+        // failed on such a leg)
+        const out = bound && !bound(head);
+        if (out && !dstMap.has(e)) continue;
         let tc = turnCost(v, p, e, obj);
         if (tc === Infinity) continue;
         if (stopX !== 0 && obj.nodeCosts) tc += stopX * stopCost(v, node);
@@ -900,6 +968,7 @@
           const cand = gp + tc + dstMap.get(e) * be;
           if (cand < bestGoal) { bestGoal = cand; bestEdge = e; bestPred = p; direct = null; }
         }
+        if (out) continue;
         if (stamp[e] !== qid || x < g[e] - 1e-9) {
           stamp[e] = qid; g[e] = x; pred[e] = p;
           push(x + H(head), e);
@@ -959,7 +1028,7 @@
     const B = flagBits(), coords = [], names = [], steps = [], turns = [], times = [];
     let lineM = 0;
     const gEnd = [], gEdge = [];
-    let timeS = 0, distM_ = 0, q = 0, s = 0, sw = 0, f = 0, cf = 0, wsum = 0, junctions = 0, signals = 0, hwyM = 0, gm = 0, poorM = 0, goodM = 0;
+    let timeS = 0, distM_ = 0, q = 0, s = 0, sw = 0, f = 0, cf = 0, wsum = 0, junctions = 0, signals = 0, hwyM = 0, gm = 0, poorM = 0, goodM = 0, unpavedM = 0;
     const hwyBy = new Map();                                            // metres per highway name (the card's "Uses 0.4 mi of I-275")
     const has = { highways: false, tolls: false, ferries: false, unpaved: false };
     let roundabout = null;
@@ -1020,7 +1089,7 @@
       if (isHwyEdge(v, e)) { hwyM += m; const hn = nm || 'the highway'; hwyBy.set(hn, (hwyBy.get(hn) || 0) + (fl & B.ramp ? m / 1000 : m)); }
       if (fl & B.toll) has.tolls = true;
       if (fl & B.ferry) has.ferries = true;
-      if (fl & B.unpaved) has.unpaved = true;
+      if (fl & B.unpaved) { has.unpaved = true; unpavedM += m; }
     }
     const end = coords[coords.length - 1];
     if (coords.length) {
@@ -1031,7 +1100,7 @@
     const nameKm = new Map();
     for (const n of names) if (n.name) nameKm.set(n.name, (nameKm.get(n.name) || 0) + (n.toM - n.fromM) / 1000);   // km, as routeOf has them (Valhalla lengths)
     const why = { source: 'own', level: meta.level || null, role: meta.role || null, a: meta.a != null ? meta.a : 0,
-      quality: cf > 0 ? q / cf : null, scenery: sw > 0 ? s / sw : null, fun: f, conf: wsum > 0 ? cf / wsum : 0, goodness: wsum > 0 ? gm / wsum : null, poorKm: poorM / 1000, goodKm: goodM / 1000, junctions, signals,
+      quality: cf > 0 ? q / cf : null, scenery: sw > 0 ? s / sw : null, fun: f, conf: wsum > 0 ? cf / wsum : 0, goodness: wsum > 0 ? gm / wsum : null, poorKm: poorM / 1000, goodKm: goodM / 1000, unpavedKm: unpavedM / 1000, junctions, signals,
       objective: meta.a ? 't*(1+a*(1-goodness))' : 'time', hwyKm: hwyM / 1000 };
     // motorway, trunk and their links driven (km) and the one most of it is on, by name (NO_HWY levels report it)
     const hwyName = hwyM > 0 ? [...hwyBy].sort((x, y) => y[1] - x[1])[0][0] : null;
@@ -1112,6 +1181,41 @@
     }
     return out;
   }
+  /**
+   * The tiles within m metres of a line (points [{ lat, lon }], sampled every 2 km): the long trip's band (corridorOf).
+   * A tile is in when the nearest point of its rectangle to a sample is within m.
+   */
+  function bandTiles(points, m) {
+    const out = new Map(), at = [];
+    for (let k = 0; k < points.length; k++) {
+      if (k) {
+        const p = points[k - 1], q = points[k], n = Math.ceil(distM(p.lat, p.lon, q.lat, q.lon) / 2000);
+        for (let s = 1; s < n; s++) at.push({ lat: p.lat + (q.lat - p.lat) * s / n, lon: p.lon + (q.lon - p.lon) * s / n });
+      }
+      at.push(points[k]);
+    }
+    for (const p of at) {
+      const dLat = m / 110540, dLon = m / (111320 * Math.cos(p.lat * RAD));
+      const sw = tileOf(p.lat - dLat, p.lon - dLon), ne = tileOf(p.lat + dLat, p.lon + dLon);
+      for (let i = sw.i; i <= ne.i; i++) for (let j = sw.j; j <= ne.j; j++) {
+        const k = keyOf(i, j);
+        if (out.has(k)) continue;
+        const la = Math.min(Math.max(p.lat, j * TILE_DEG - 90), (j + 1) * TILE_DEG - 90), lo = Math.min(Math.max(p.lon, i * TILE_DEG - 180), (i + 1) * TILE_DEG - 180);
+        if (distM(la, lo, p.lat, p.lon) <= m) out.set(k, { i, j });
+      }
+    }
+    return [...out.values()];
+  }
+  /** A route's line ([[lon, lat]]) as points about every 2 km, for bandTiles. */
+  function spineOf(coords) {
+    const out = [];
+    let last = null;
+    for (let k = 0; k < coords.length; k++) {
+      const p = { lat: coords[k][1], lon: coords[k][0] };
+      if (!last || k === coords.length - 1 || distM(last.lat, last.lon, p.lat, p.lon) >= 2000) { out.push(p); last = p; }
+    }
+    return out;
+  }
   /** The tiles under the straight line from a to b (sampled every 2 km), the ends' first. */
   function lineTiles(a, b) {
     const n = Math.max(1, Math.ceil(distM(a.lat, a.lon, b.lat, b.lon) / 2000)), out = [], seen = new Set();
@@ -1128,13 +1232,36 @@
 
   // ---- highways (NO_HWY levels) ---------------------------------------------------------------------------------------
   /** A motorway, trunk or one of their links (the tiles give a link its road's class; the ETL's motorway flag too), or an
-   *  expressway of a lower class (`motorroad=yes` / `expressway=yes`: the tiles' expressway flag, in builds from 2026-11-09). */
-  function isHwyEdge(v, e) { const B = v.bits || flagBits(); return v.cls[e] <= CLS.trunk || !!(v.flags[e] & (B.motorway | B.expressway)); }
-  /** Per edge, 1 on a highway (kept per view). */
+   *  expressway of a lower class (`motorroad=yes` / `expressway=yes`: the tiles' expressway flag, in builds from 2026-11-09).
+   *  Not a two-way trunk whose road bends (hwyOf: The Snake, US 421, 2026-11-14: OSM tags many mountain US routes trunk). */
+  function isHwyEdge(v, e) { return hwyOf(v)[e] === 1; }
+  function hwyClassEdge(v, e) { const B = v.bits || flagBits(); return v.cls[e] <= CLS.trunk || !!(v.flags[e] & (B.motorway | B.expressway)); }
+  /**
+   * Per edge, 1 on a highway (kept per view). A two-way trunk (no one-way carriageways, not a link) is a two-lane road: by
+   * its name across the view, one with TRUNK_FUN_KM corner points a km or more is a rider's road, not a highway (The Snake
+   * 4.4, US 421 by Shady Valley 2.5; Cincinnati's US 127, US 27 and the AA Highway 0 to 0.25).
+   */
   function hwyOf(v) {
     if (v.isHwy) return v.isHwy;
-    const h = new Uint8Array(v.E);
-    for (let e = 0; e < v.E; e++) if (isHwyEdge(v, e)) h[e] = 1;
+    const B = v.bits || flagBits(), h = new Uint8Array(v.E), byName = new Map();
+    const nameOf = (e) => { const ix = v.name[e], t = v.tiles[v.eTile[e]]; return ix >= 0 && t.names ? t.names[ix] : null; };
+    const twoWayTrunk = (e) => v.cls[e] === CLS.trunk && !(v.flags[e] & (B.oneway | B.ramp | B.motorway | B.expressway));
+    for (let e = 0; e < v.E; e++) {
+      if (!hwyClassEdge(v, e)) continue;
+      h[e] = 1;
+      if (!twoWayTrunk(e)) continue;
+      const n = nameOf(e);
+      if (!n) continue;
+      let a = byName.get(n);
+      if (!a) byName.set(n, (a = { len: 0, fun: 0 }));
+      a.len += v.len[e];
+      if (Number.isFinite(v.fun[e])) a.fun += v.fun[e];
+    }
+    for (let e = 0; e < v.E; e++) {
+      if (!h[e] || !twoWayTrunk(e)) continue;
+      const a = byName.get(nameOf(e));
+      if (a && a.len > 0 && a.fun / (a.len / 1000) >= K.TRUNK_FUN_KM) h[e] = 0;
+    }
     v.isHwy = h;
     return h;
   }
@@ -1176,7 +1303,7 @@
 
   // ---- plans -----------------------------------------------------------------------------------------------------------
   function snapBoth(v, from, to) {
-    const src = snap(v, from.lat, from.lon), dst = snap(v, to.lat, to.lon);
+    const src = snapLive(v, from.lat, from.lon), dst = snapLive(v, to.lat, to.lon, true);
     if (!src.length) throw new Error('no road near the start');
     if (!dst.length) throw new Error('no road near the end');
     return { src, dst };
@@ -1230,27 +1357,34 @@
     const keep = (r) => { if (r && !found.some((x) => sameRoute(x, r))) found.push(r); return r; };
     // bisect the goodness weight (log steps): the largest a whose route is inside the budget
     let lo = 0, hi = typeof K.A_MAX === 'number' ? K.A_MAX : (K.A_MAX[level] || 40), best = base, tries = 0;
+    // a long trip (LONG_KM crow): each search crosses hundreds of km, so the weight is found more coarsely and the cheaper
+    // end of the spectrum (LOWER) is one try, not two
+    const long = distM(req.from.lat, req.from.lon, req.to.lat, req.to.lon) > K.LONG_KM * 1000;
     let a = K.A_FIRST[level] || 1, first = null;
     // no highway-free way in a sensible time: that way alone (and the quickest, for Quick's card); nothing longer
     if (hwy.absurd) tries = K.BISECT;
-    while (tries < K.BISECT) {
+    // past PLAN_SOFT_MS (a long trip on a slow phone) the plan stops refining and answers with what it has: at least two
+    // steps of the bisection, then no more steps, cheaper weights, alternates or spread (the page's timeout would
+    // otherwise end it with no route at all)
+    const over = () => Date.now() - t0 > K.PLAN_SOFT_MS;
+    while (tries < K.BISECT && !(tries >= 2 && over())) {
       tries++;
       const r = run(a);
       if (!first) first = r;
       if (r && r.timeS <= limitS) { lo = a; best = r; keep(r); } else hi = a;
-      if (hi - lo < 0.15 * Math.max(lo, 0.25)) break;
+      if (hi - lo < (long ? K.LONG_TOL : 0.15) * Math.max(lo, 0.25)) break;
       a = lo > 0 ? Math.sqrt(lo * hi) : hi / 4;
     }
     // and the cheaper end of the spectrum: the bisection only tries weights from its first one up, so the routes that buy a
     // little good road for a little time were never offered, only the one that spends the whole budget (live 2026-11-04,
     // a cross-suburb trip at Fun: a 9-minute I-275 loop came back and the 7-minute way to the same county road didn't)
-    for (const k of K.LOWER) if (lo * k > 0.05) { const r = run(lo * k); if (r && r.timeS <= limitS) keep(r); }
+    for (const k of long ? K.LOWER.slice(-1) : K.LOWER) if (lo * k > 0.05 && !over()) { const r = run(lo * k); if (r && r.timeS <= limitS) keep(r); }
     best.why.role = best === quick ? 'quickest' : best === base ? 'quickest-free' : 'best';
     // alternates by the penalty method: the chosen route's edges cost more, until a route differs by ALT_MIN_DIFF
     const alts = [], chosen = [best];
     const penal = new Float32Array(v.E).fill(1);
     for (const p of hwy.absurd ? [] : K.ALT_PENALTIES) {
-      if (alts.length >= K.ALTS) break;
+      if (alts.length >= K.ALTS || over()) break;
       for (const r of chosen) for (const e of r.edgeIdx) penal[e] = Math.max(penal[e], 1 + p);
       const r = run(lo, penal, 'alternate');
       if (!r) continue;
@@ -1263,7 +1397,7 @@
     // the quickest way), which find the next good road over: the bisection's large weights shun the worst stretches
     // rather than seek the best, so they leave this road unfound (2026-11-08, the levels audit)
     const free2 = free && !hwy.absurd;
-    if (free2 && first && first.timeS <= limitS) {
+    if (free2 && first && first.timeS <= limitS && !over()) {
       for (const p of K.SPREAD[level] || []) {
         const pen = new Float32Array(v.E).fill(1);
         for (const e of first.edgeIdx) pen[e] = 1 + p;
@@ -1274,7 +1408,7 @@
     // the pick at Fun and Long way: the goodness the extra time buys (pick()), not the largest weight inside the budget
     if (free2 && K.BUY[level] != null) {
       const was = best;
-      best = pick(base, [...found, ...alts], limitS, K.BUY[level]);
+      best = pick(base, [...found, ...alts], limitS, K.BUY[level], unpavedOk(req.avoid, base));
       if (best !== was) {
         if (was.why.role === 'best') was.why.role = 'step';
         // an alternate is a route that differs from the pick (ALT_MIN_DIFF); one that doesn't any more is a step
@@ -1299,14 +1433,22 @@
    * that's near (price 0.12: 10 % more time must buy 0.012 of goodness), Long way also the good road further off (0.03),
    * and neither lengthens a trip for road no better than the quickest's (2026-11-08, the levels audit).
    */
-  function pick(base, routes, limitS, price) {
+  /** With unpaved roads avoided (the app's default: fun_route.js AVOID_DEFAULT), a route the pick may take drives no more
+   *  of them than the level's quickest does, UNPAVED_FREE_KM aside: the search's AVOID_UNPAVED_X is a cost, and at Fun's
+   *  weights a forest road's corners outweigh it (Back of the Dragon, 2026-11-14: 18 km of Nat'l Forest Road 614 picked off VA 16). */
+  function unpavedOk(avoid, base) {
+    if (!avoid || !avoid.unpaved) return null;
+    const cap = ((base && base.why.unpavedKm) || 0) + K.UNPAVED_FREE_KM;
+    return (r) => !((r.why.unpavedKm || 0) > cap);
+  }
+  function pick(base, routes, limitS, price, ok = null) {
     const rel = (r) => (r.timeS - base.timeS) / Math.max(1, base.timeS);
     const road = (r) => K.ROAD.good * (r.why.goodKm || 0) - K.ROAD.poor * (r.why.poorKm || 0);
     const g = (r) => r.why.goodness + K.ROAD.w * (road(r) - road(base));
     const u = (r) => g(r) - price * rel(r);
     let best = base;
     for (const r of routes) {
-      if (r === base || r.timeS > limitS || !Number.isFinite(r.why.goodness)) continue;
+      if (r === base || r.timeS > limitS || !Number.isFinite(r.why.goodness) || (ok && !ok(r))) continue;
       const x = rel(r), dg = g(r) - base.why.goodness;
       if (x > 0 && dg < K.BUY_MIN * x) continue;
       if (x <= 0 && dg <= 0) continue;
@@ -1352,7 +1494,7 @@
       if (!backs.length) continue;
       const quickBack = backs.reduce((x, y) => (y.timeS < x.timeS ? y : x));
       const limitS = quickBack.timeS * (1 + L.budget) + L.slackS;
-      const back = K.BUY[level] != null ? pick(quickBack, backs, limitS, K.BUY[level]) : quickBack;
+      const back = K.BUY[level] != null ? pick(quickBack, backs, limitS, K.BUY[level], unpavedOk(req.avoid, quickBack)) : quickBack;
       const r = loopRoute(v, obj, [{ edges: Array.from(o.edgeIdx), fs: o.fs, ft: o.ft }, { edges: Array.from(back.edgeIdx), fs: back.fs, ft: back.ft }], level, back.why.a);
       r.kind = 'round'; r.why.role = 'round';
       r.out = { timeS: o.timeS, distM: o.distM, role: o.why.role }; r.back = { timeS: back.timeS, distM: back.distM, a: back.why.a };
@@ -1388,7 +1530,7 @@
     // never a neighbourhood street, so the loop's start line isn't in a subdivision; else the nearest road, as before
     let s0 = req.through ? snap(v, req.start.lat, req.start.lon, (e) => throughEdge(v, e), 3000) : [];
     if (!s0.length) {
-      s0 = snap(v, req.start.lat, req.start.lon);
+      s0 = snapLive(v, req.start.lat, req.start.lon);
       if (!s0.length) throw new Error('no road near the start');
       if (noHighway(level)) s0 = snapOff(v, req.start, s0, req.start.heading);
     }
@@ -1418,21 +1560,39 @@
       }
     };
     const tries = req.max || K.LOOP_TRIES;
-    drive(loopCombos(v, req.start, km, tries, req.prefs), tries);
+    drive(loopCombos(v, req.start, km, tries, req.prefs, req.avoid), tries);
     // The length is a guess until routed (connectors as crow lines x LOOP_CONN_FACTOR): routed loops came out 0.6 to 1.7
     // times it (Cincinnati, 2026-11-13: 112 to 127 km for 80 asked). None within LOOP_NEAR_OFF: once more, the stages
     // picked for the length the routed ones say this ground needs (their median ratio); still none within LOOP_RING_OFF,
     // the rings, which aim at the length itself. The ranking (fun_route.js loopRank) weighs length against the roads.
     if (!out.some((r) => offOf(r) <= K.LOOP_NEAR_OFF) && ratios.length) {
       const q = ratios.slice().sort((x, y) => x - y)[Math.floor(ratios.length / 2)], rho = Math.max(0.6, Math.min(1.7, q));
-      if (Math.abs(rho - 1) >= 0.05) drive(loopCombos(v, req.start, km / rho, tries + 2 * K.LOOP_RETRIES, req.prefs), K.LOOP_RETRIES);
+      if (Math.abs(rho - 1) >= 0.05) drive(loopCombos(v, req.start, km / rho, tries + 2 * K.LOOP_RETRIES, req.prefs, req.avoid), K.LOOP_RETRIES);
     }
     if (!out.some((r) => offOf(r) <= K.LOOP_NEAR_OFF)) refit();
     if (!out.length || !out.some((r) => offOf(r) <= K.LOOP_RING_OFF)) {
       for (const r of rings(v, req, obj, s0, hwy, level, km)) if (!out.some((x) => sameRoute(x, r))) out.push(r);
     }
     // the length is a guess until routed: one more than 60 % off it isn't the loop asked for
-    const routes = out.filter((r) => Math.abs(r.distM / 1000 - km) / km <= K.LOOP_MAX_OFF);
+    const fits = () => out.filter((r) => offOf(r) <= K.LOOP_MAX_OFF);
+    const isClean = (r) => !((r.why.unpavedKm || 0) > K.LOOP_DIRT_KM);
+    // unpaved road avoided, and every loop found drives it: the stages picked for other lengths too (LOOP_DIRT_TRY x the
+    // length), whose loops may still fit it. Moab at 150 km (2026-11-15) found only Island in the Sky down the Shafer
+    // Trail and Gemini Bridges (46 km of 4x4 track); the paved La Sal Loop, 102 km, is a stage picked for 105
+    if (obj.noDirt && !fits().some(isClean)) {
+      for (const f of K.LOOP_DIRT_TRY) {
+        drive(loopCombos(v, req.start, km * f, tries, req.prefs, req.avoid), K.LOOP_RETRIES);
+        if (fits().some(isClean)) break;
+      }
+    }
+    let routes = fits();
+    // unpaved road avoided: where some loops keep (all but LOOP_DIRT_KM) off it, only those; where none can (the Black
+    // Hills' gravel between the paved canyons), the ones with the least of it (within LOOP_DIRT_KM of the least), their
+    // unpaved km on the card (why.unpavedKm)
+    if (obj.noDirt && routes.length) {
+      const least = Math.min(...routes.map((r) => r.why.unpavedKm || 0));
+      routes = routes.filter((r) => !((r.why.unpavedKm || 0) > Math.max(least, 0) + K.LOOP_DIRT_KM));
+    }
     for (const r of routes) delete r.combo;
     return { routes, ms: Date.now() - t0 };
   }
@@ -1453,8 +1613,25 @@
    * the shortest highway link.
    */
   function loopLeg(v, obj, prev, dst, a, penal, o, level) {
-    if (!noHighway(level)) return search(v, obj, prev, dst, a, penal, o);
-    const is = hwyOf(v);
+    // unpaved road avoided (the app's default): first without any, as a route's pick holds it to the quickest's (a loop
+    // has no quickest); else, no other way, the leg's search as before, unpaved road at its cost (2026-11-14: Sturgis
+    // loops drove 15 to 31 km of gravel, Ouray 70 km)
+    if (obj.noDirt) {
+      const res = loopLegOf(v, obj, prev, dst, a, penal, o, level, dirtOf(v));
+      if (res) return res;
+    }
+    return loopLegOf(v, obj, prev, dst, a, penal, o, level, null);
+  }
+  /** Edges that are unpaved, with the highways (hwyOf) at a level that never drives them: a loop leg's first ban. */
+  function dirtOf(v) {
+    if (v.isDirt) return v.isDirt;
+    const B = v.bits || flagBits(), h = new Uint8Array(v.E);
+    for (let e = 0; e < v.E; e++) if (v.flags[e] & B.unpaved) h[e] = 1;
+    return (v.isDirt = h);
+  }
+  function loopLegOf(v, obj, prev, dst, a, penal, o, level, dirt) {
+    if (!noHighway(level)) return search(v, obj, prev, dst, a, penal, dirt ? { ...o, ban: dirt } : o);
+    const is = dirt ? hwyDirtOf(v) : hwyOf(v);
     const free = search(v, obj, prev, dst, a, penal, { ...o, ban: is });
     if (free) return free;
     const back = prev.map((x) => ({ x, tw: twin(v, x.edge) })).filter((y) => y.tw >= 0 && !is[y.tw]);
@@ -1463,7 +1640,14 @@
       const round = search(v, obj, back.map((y) => ({ edge: y.tw, frac: 1 - y.x.frac, lat: 0, lon: 0 })), dst, a, penal, { ...o, ban: is, startCost: (e) => (tws.has(e) ? K.UTURN_S : 0) });
       if (round) return round;
     }
+    if (dirt) return null;   // (the highway link is the leg as before, unpaved road and all)
     return search(v, obj, prev, dst, a, penal, { ...o, hwyX: { is, x: K.HWY_LINK_X } });
+  }
+  function hwyDirtOf(v) {
+    if (v.isHwyDirt) return v.isHwyDirt;
+    const a = hwyOf(v), b = dirtOf(v), h = new Uint8Array(v.E);
+    for (let e = 0; e < v.E; e++) h[e] = a[e] | b[e];
+    return (v.isHwyDirt = h);
   }
   /**
    * The best roads within reach, chained into loops: explore's stages that a loop of `km` can reach and come back from
@@ -1472,10 +1656,10 @@
    * its value is the stages' scores (quality x corners) times how near that guess is to the length. The best `n` with
    * different sets of stages; each as the points to drive through (each stage every LOOP_ALONG_M, with its heading).
    */
-  function loopCombos(v, start, km, n, prefs = null) {
+  function loopCombos(v, start, km, n, prefs = null, avoid = null) {
     const reachS = Math.max(600, km * 1000 / 2 / K.LOOP_REACH_MS);
     let stages;
-    try { stages = explore(v, { start, maxS: reachS, max: 3 * K.LOOP_STAGES, prefs }).stages; } catch (_) { return []; }
+    try { stages = explore(v, { start, maxS: reachS, max: 3 * K.LOOP_STAGES, prefs, avoid }).stages; } catch (_) { return []; }
     const crow = (a, b) => distM(a.lat, a.lon, b.lat, b.lon) / 1000;
     const near = (s) => Math.min(crow(start, { lat: s.lat[0], lon: s.lon[0] }), crow(start, { lat: s.lat[s.lat.length - 1], lon: s.lon[s.lon.length - 1] }));
     // explore's out-and-back roads (deadEnd: a long good road that ends) are a Best road nearby, not a loop's link: a loop
@@ -1547,6 +1731,21 @@
     return m > 1 ? bearing(g[2 * best], g[2 * best + 1], g[2 * best + 2], g[2 * best + 3]) : 0;
   }
   /**
+   * A snap that lands on a junction (a stage's point is often its node, where the stage turns onto another road): every
+   * edge into and out of that node going the stage's way, as targets, so the search arrives on whichever the stage drives.
+   * The nearest alone was often the other road arriving there from the far side (Old Field Gap Road into Meadow Branch
+   * Road: a 25 km way round to reach the node from behind, and every Robbinsville loop dropped, 2026-11-14).
+   */
+  function atNode(v, x, ok) {
+    const b = x[0], f = b.frac, node = f >= 0.999 ? v.to[b.edge] : f <= 0.001 ? v.tail[b.edge] : -1;
+    if (node < 0 || b.d > 15) return x;
+    const out = x.slice(), have = new Set(x.map((y) => `${y.edge}:${y.frac}`));
+    const add = (e, frac) => { const k = `${e}:${frac}`; if (!have.has(k) && v.to[e] >= 0 && ok(e)) { have.add(k); out.push({ edge: e, frac, d: b.d, lat: b.lat, lon: b.lon }); } };
+    for (let r = v.rfirst[node]; r < v.rfirst[node + 1]; r++) add(v.redge[r], 1);
+    for (let e = v.first[node]; e < v.first[node + 1]; e++) add(e, 0);
+    return out;
+  }
+  /**
    * A loop from s0 through `pts` ({ lat, lon, h }: snapped to the road there heading that way) and back: each leg the level's
    * search on the loop's costs, earlier legs' edges (both ways) x LOOP_RETRACE_X. The route with `retraced` (share of its
    * length on road driven twice) and `hwyShare` (on motorway or trunk), or null.
@@ -1556,8 +1755,10 @@
     const snaps = [];
     for (const p of pts) {
       // the stage's own road, the way it is driven (never a motorway beside it)
-      let x = Number.isFinite(p.h) ? snap(v, p.lat, p.lon, (e) => !is[e] && Math.abs(turnAngle(p.h, headingNear(v, e, p.lat, p.lon))) < 0.87, 60) : [];
+      const along = (e) => !is[e] && Math.abs(turnAngle(p.h, headingNear(v, e, p.lat, p.lon))) < 0.87;
+      let x = Number.isFinite(p.h) ? snap(v, p.lat, p.lon, along, 60) : [];
       if (!x.length) x = snap(v, p.lat, p.lon, noHighway(level) ? (e) => !is[e] : null, 200);
+      else x = atNode(v, x, along);
       if (x.length) snaps.push({ s: x, lat: p.lat, lon: p.lon, conn: !!p.conn });
     }
     if (!snaps.length) return null;
@@ -1650,7 +1851,7 @@
    * timed this way where our tiles cover you, not by a router across the network.
    */
   function times(v, req) {
-    const s0 = snap(v, req.start.lat, req.start.lon);
+    const s0 = snapLive(v, req.start.lat, req.start.lon);
     if (!s0.length) throw new Error('no road near you');
     const maxS = req.maxS || 1800, T = reach(v, s0, maxS);
     return { times: (req.targets || []).map((p) => {
@@ -1709,17 +1910,20 @@
    */
   function explore(v, req) {
     const t0 = Date.now(), B = v.bits, maxS = req.maxS || 1800, max = req.max || 12;
-    const s0 = snap(v, req.start.lat, req.start.lon);
+    const s0 = snapLive(v, req.start.lat, req.start.lon);
     if (!s0.length) throw new Error('no road near you');
     const T = reach(v, s0, maxS);
     // (the corner prefs weigh which roads are best here too, as they weigh the search: likeOf)
-    const score = new Float32Array(v.E), likeAt = likeOf(v, req.prefs);
+    const score = new Float32Array(v.E), likeAt = likeOf(v, req.prefs), noDirt = !!(req.avoid && req.avoid.unpaved);
     const seeds = [];
     for (let e = 0; e < v.E; e++) {
       if (v.to[e] < 0 || v.quality[e] === UNKNOWN_U8 || !Number.isFinite(v.fun[e]) || v.fun[e] <= 0) continue;
       const q = v.quality[e] / 254;
       if (q < K.POOR_HI || (v.flags[e] & (B.private | B.barrier | B.ramp | B.destination | B.expressway)) || v.cls[e] === CLS.motorway || v.cls[e] >= CLS.service) continue;
       if (streetEdge(v, e) === true) continue;
+      // unpaved road avoided (the app's default): never a stage, so a loop isn't built round a forest gravel road its own
+      // legs then won't drive (Little Snowbird Road, the best "road" from Robbinsville, 2026-11-14)
+      if (noDirt && (v.flags[e] & B.unpaved)) continue;
       score[e] = q * v.fun[e] * (likeAt ? likeAt(e) : 1) / Math.max(0.05, v.len[e] / 1000);
       if (Number.isFinite(T[v.tail[e]]) || Number.isFinite(T[v.to[e]])) seeds.push(e);
     }
@@ -1731,25 +1935,24 @@
       if (v.to[e] === v.tail[p]) return false;
       headings(v, p); headings(v, e);
       if (Math.abs(turnAngle(v.hOut[p], v.hIn[e])) > 1.05) return false;
-      return score[e] >= score[seed] / 3 || (v.name[e] >= 0 && v.name[e] === v.name[p] && v.eTile[e] === v.eTile[p]);
+      return score[e] >= score[seed] / 3 || sameName(v, e, p);
     };
     for (const seed of seeds) {
-      if (out.length >= max * 3) break;
       if (used[seed]) continue;
       const chain = [seed];
       take(seed);
       let km = v.len[seed] / 1000;
-      for (let p = seed; km < 15;) {                                 // forward
+      for (let p = seed; km < K.STAGE_KM;) {                         // forward
         const n = v.to[p];
         let best = -1;
         for (let e = v.first[n]; e < v.first[n + 1]; e++) if (ok(p, e, seed) && (best < 0 || score[e] > score[best])) best = e;
         if (best < 0) break;
         chain.push(best); take(best); km += v.len[best] / 1000; p = best;
       }
-      for (let q = seed; km < 15;) {                                 // back
+      for (let q = seed; km < K.STAGE_KM;) {                         // back
         const n = v.tail[q];
         let best = -1;
-        for (let r = v.rfirst[n]; r < v.rfirst[n + 1]; r++) { const e = v.redge[r]; if (!used[e] && v.to[e] >= 0 && score[e] > 0 && v.tail[q] === v.to[e] && v.tail[e] !== v.to[q]) { headings(v, e); headings(v, q); if (Math.abs(turnAngle(v.hOut[e], v.hIn[q])) <= 1.05 && (score[e] >= score[seed] / 3 || v.name[e] === v.name[q]) && (best < 0 || score[e] > score[best])) best = e; } }
+        for (let r = v.rfirst[n]; r < v.rfirst[n + 1]; r++) { const e = v.redge[r]; if (!used[e] && v.to[e] >= 0 && score[e] > 0 && v.tail[q] === v.to[e] && v.tail[e] !== v.to[q]) { headings(v, e); headings(v, q); if (Math.abs(turnAngle(v.hOut[e], v.hIn[q])) <= 1.05 && (score[e] >= score[seed] / 3 || sameName(v, e, q)) && (best < 0 || score[e] > score[best])) best = e; } }
         if (best < 0) break;
         chain.unshift(best); take(best); km += v.len[best] / 1000; q = best;
       }
@@ -1805,7 +2008,7 @@
    *   { id, type: 'covers', points }                -> { id, covers }
    *   { id, type: 'plan', from, to, level, ... }    -> { id, result: { routes, quick, limitS, ms, tiles } }
    *   { id, type: 'loop', start, km, level, ... }   -> { id, result: { routes, ms, tiles } }
-   * and { id, error } for anything that fails. Tiles are kept (the last 64) and the last view is reused for the same set.
+   * and { id, error } for anything that fails. Tiles are kept (the K.TILE_CACHE used last) and the last view is reused for the same set.
    */
   function host(env) {
     const tiles = new Map();
@@ -1814,11 +2017,12 @@
     const ready = new Set();                                          // tiles loaded and decoded (or known missing)
     const load = (t) => {
       const k = keyOf(t.i, t.j);
-      if (!tiles.has(k)) {
-        tiles.set(k, Promise.resolve(env.load(t.i, t.j)).catch(() => null).then((x) => { ready.add(k); return x; }));
-        if (tiles.size > 64) tiles.delete(tiles.keys().next().value);
-      }
-      return tiles.get(k);
+      let p = tiles.get(k);
+      if (p) tiles.delete(k);                                         // a hit goes to the back: the least recently used go first
+      else p = Promise.resolve(env.load(t.i, t.j)).catch(() => null).then((x) => { ready.add(k); return x; });
+      tiles.set(k, p);
+      if (tiles.size > K.TILE_CACHE) { const old = tiles.keys().next().value; tiles.delete(old); ready.delete(old); }
+      return p;
     };
     // the view is kept and grown: a plan inside the tiles already viewed (the preloaded area round you) reuses it; one
     // that needs more builds the union once (at most MAX_VIEW tiles, else just what it needs)
@@ -1845,6 +2049,27 @@
       last = { keys: new Set(v.keys), v };
       return v;
     }
+    // A trip's corridor (tilesFor), or for a long one (over K.LONG_TILES) the band round its spine: the quickest way on a
+    // band round the straight line (its view not kept), remembered for the trip's next ask (Fun, then Long way)
+    let spine = null;
+    async function corridorOf(from, to, level, msg) {
+      const full = tilesFor(from, to, level);
+      if (full.length <= K.LONG_TILES) return full;
+      const key = [from.lat, from.lon, to.lat, to.lon].map((x) => x.toFixed(4)).join(',');
+      if (!spine || spine.key !== key) {
+        const crow = distM(from.lat, from.lon, to.lat, to.lon), have = await keys();
+        const m = Math.min(K.SPINE_MAX_M, Math.max(K.SPINE_MIN_M, K.SPINE_SHARE * crow));
+        const want = bandTiles([from, to], m).filter((t) => !have.size || have.has(keyOf(t.i, t.j)));
+        const got = (await Promise.all(want.map(load))).filter(Boolean);
+        let r = null;
+        try { r = got.length ? quickest(view(got), { ...msg, from, to, level: 'quick', heading: null, crowd: null }) : null; } catch (_) { r = null; }
+        if (!r) return full;                                             // no way on the band: the whole corridor, as before
+        spine = { key, line: spineOf(r.route.coords) };
+      }
+      const band = bandTiles(spine.line, K.BAND_M[level] || K.BAND_M.fun), seen = new Set(band.map((t) => keyOf(t.i, t.j)));
+      for (const p of [from, to]) { const t = tileOf(p.lat, p.lon); if (!seen.has(keyOf(t.i, t.j))) band.push(t); }
+      return band;
+    }
     let inflight = 0;
     async function handle(msg) {
       const busy = msg && msg.type !== 'preload' && msg.type !== 'covers' && msg.type !== 'keep';
@@ -1870,7 +2095,7 @@
           const t1 = Date.now();
           let r = null;
           try { r = quickest(v, msg); } catch (_) { r = null; }
-          if (!r) { v = await viewFor(tilesFor(msg.from, msg.to, msg.level)); r = quickest(v, msg); }   // the line alone had no way
+          if (!r) { v = await viewFor(await corridorOf(msg.from, msg.to, msg.level, msg)); r = quickest(v, msg); }   // the line alone had no way
           return { id, result: { route: plain(r), loadMs: t1 - t0, ms: Date.now() - t1, tiles: v.keys } };
         }
         if (type === 'through') {
@@ -1938,7 +2163,7 @@
           // scope 'first': with the corridor's tiles not all in yet, the plan is made on those under the straight line
           // (as the first route was) and says so (partial); the page asks again for the whole corridor meanwhile
           await quickBusy;
-          const corridor = tilesFor(msg.from, msg.to, msg.level), have = await keys();
+          const corridor = await corridorOf(msg.from, msg.to, msg.level, msg), have = await keys();
           const notReady = () => corridor.filter((t) => (!have.size || have.has(keyOf(t.i, t.j))) && !ready.has(keyOf(t.i, t.j)));
           let missing = notReady();
           // (waitMs: the corridor's tiles get that long to come in first: the app's own and IndexedDB's are a few hundred ms
@@ -1966,7 +2191,7 @@
           } finally { v.crowd = null; }
         }
         if (type === 'round') {
-          const v = await viewFor(tilesFor(msg.from, msg.to, msg.level === 'quick' ? 'fun' : msg.level));
+          const v = await viewFor(await corridorOf(msg.from, msg.to, msg.level === 'quick' ? 'fun' : msg.level, msg));
           const r = roundTrip(v, msg);
           return { id, result: { ...strip({ routes: r.routes, quick: r.quick }), outTimeS: r.out ? r.out.timeS : null, ms: r.ms, tiles: v.keys } };
         }
@@ -2020,7 +2245,11 @@
       return inline;
     };
     const PLAN_MS = { fun: 12000, max: 20000 };
-    const planMs = (level) => Math.max(o.timeoutMs || 8000, PLAN_MS[level] || 0);
+    // a long trip searches a longer band: LONG_MS_KM more per crow km past LONG_FROM_KM (Cincinnati to Asheville, 450 km:
+    // 18 s more), so it isn't cut off for being long
+    const LONG_FROM_KM = 150, LONG_MS_KM = 60;
+    const longMs = (req) => { const a = req && req.from, b = req && req.to; if (!a || !b) return 0; const km = distM(a.lat, a.lon, b.lat, b.lon) / 1000; return km > LONG_FROM_KM ? (km - LONG_FROM_KM) * LONG_MS_KM : 0; };
+    const planMs = (level, req) => Math.max(o.timeoutMs || 8000, PLAN_MS[level] || 0) + longMs(req);
     function ask(msg, timeoutMs = o.timeoutMs || 8000) {
       const id = ++seq;
       const full = { ...msg, id };
@@ -2041,8 +2270,8 @@
       ready: () => ask({ type: 'covers', points: [] }, 10000).then(() => true),
       // Fun and Long way search a wider corridor with more weights than Quick (a 25 km Long way plan: 1.5x a Fun one's
       // time); on a slow phone one outlasted the page's 6 s and failed with no route (service check, 2026-11-12/13)
-      plan: (req) => ask({ type: 'plan', ...req }, planMs(req && req.level)).then((m) => m.result),
-      quick: (req) => ask({ type: 'quick', ...req }).then((m) => m.result),
+      plan: (req) => ask({ type: 'plan', ...req }, planMs(req && req.level, req)).then((m) => m.result),
+      quick: (req) => ask({ type: 'quick', ...req }, (o.timeoutMs || 8000) + longMs(req)).then((m) => m.result),
       through: (req) => ask({ type: 'through', ...req }).then((m) => m.result),
       score: (lines) => ask({ type: 'score', lines }, 3000).then((m) => m.result),
       preload: (at) => ask({ type: 'preload', ...at }, 20000).then((m) => m.result),
@@ -2051,13 +2280,13 @@
       times: (req) => ask({ type: 'times', ...req }).then((m) => m.result),
       // a loop loads every tile its length can reach and searches them all: on a phone a long one outlasted 8 s (2026-11-12)
       loop: (req) => ask({ type: 'loop', ...req }, 20000).then((m) => m.result),
-      round: (req) => ask({ type: 'round', ...req }, 12000).then((m) => m.result),
+      round: (req) => ask({ type: 'round', ...req }, 12000 + longMs(req)).then((m) => m.result),
       close: () => { try { if (w) w.terminate(); } catch (_) { /* gone */ } w = null; },
     };
   }
 
   const api = { VERSION: 1, K, withTune, BUILT_READ, builtAgreeOf, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, times, streetEdge, deadEndAt, junctionAt, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
-    assemble, through, overlap, sameRoute, tilesFor, loopTiles, plan, pick, loop, roundTrip, hwyOf, isHwyEdge, snapOff, freeQuickest, indexKeys, covers, host, client, edgeId, twin, turnCost };
+    assemble, through, overlap, sameRoute, tilesFor, bandTiles, spineOf, loopTiles, plan, pick, loop, roundTrip, hwyOf, isHwyEdge, snapOff, freeQuickest, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;
 })(typeof window !== 'undefined' ? window : globalThis);

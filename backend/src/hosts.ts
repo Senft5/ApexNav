@@ -3,7 +3,8 @@
 // Custom Domains on this one Worker (wrangler.jsonc routes), and apexnav.senftns.workers.dev keeps working unchanged, since
 // the iOS app calls it. www. of either goes to the bare name.
 // wrangler.jsonc run_worker_first sends "/", "/index.html" and "/.well-known/*" here, besides /api/*; everything else is a
-// static file served before the Worker runs.
+// static file served before the Worker runs. The app's front page gets a link preview card (src/link_preview.ts).
+import { withPreview } from "./link_preview";
 import { Env } from "./util";
 
 export const APP_HOST = "vettadrive.app";
@@ -20,6 +21,7 @@ export const AASA = {
         { "/": "/api/*", exclude: true },
         ...["invite", "crew", "add", "convoy", "road", "roadbook", "friend", "post"].map((k) => ({ "/": "/", "?": { [k]: "?*" } })),
         { "/": "/", "#": "road=*" },
+        { "/": "/", "#": "place=*" },                                       // a place someone sent (web/place_link.js)
       ],
     }],
   },
@@ -45,5 +47,7 @@ export async function routeHost(req: Request, env: Env): Promise<Response | null
     const about = await env.ASSETS.fetch(new Request(new URL("/about", url.origin), { headers: req.headers }));
     return new Response(about.body, { status: about.status, headers: about.headers });
   }
+  // the app's front page carries a link preview card (src/link_preview.ts) for whatever link it was opened by
+  if ((path === "/" || path === "/index.html") && req.method === "GET") return withPreview(await env.ASSETS.fetch(req), env, url);
   return env.ASSETS.fetch(req);
 }

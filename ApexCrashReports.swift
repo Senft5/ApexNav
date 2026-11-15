@@ -8,7 +8,7 @@ import MetricKit
 // binary name + offset (MetricKit's own unsymbolicated form). Never a location, a name, an account or a drive.
 final class ApexCrashReports: NSObject, MXMetricManagerSubscriber {
     static let shared = ApexCrashReports()
-    private static let endpoint = URL(string: "https://apexnav.senftns.workers.dev/api/errors")!
+    private static let endpoint = URL(string: "https://vettadrive.app/api/errors")!
     private static let maxPerLaunch = 5
 
     static func start() { MXMetricManager.shared.add(shared) }

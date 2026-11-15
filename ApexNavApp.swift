@@ -117,7 +117,7 @@ enum ApexWebBundle {
 
     /// "Open in the app" links from the web (apexnav://open?invite=…): the page's own link parameters, and only those, carried
     /// over to the cockpit page, which handles them exactly as it does on the web. Anything else opens the app as usual.
-    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy", "go", "q", "road", "roadbook", "view", "friend", "post"]   // q: a place said to Siri (base64url, ApexIntents.swift); go=drive: start a drive (IDEAS C-05); road: a road someone sent (web/road_link.js); view/friend/post: a push's tap (ApexPush.swift)
+    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy", "go", "q", "road", "roadbook", "view", "friend", "post", "place"]   // q: a place said to Siri (base64url, ApexIntents.swift); go=drive: start a drive (IDEAS C-05); road: a road someone sent (web/road_link.js); view/friend/post: a push's tap (ApexPush.swift)
     private static let linkValue = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
     /// Universal links (the owner's domain, 2026-11-14): a shared link on vettadrive.app opens here when the app is installed
     /// (project.yml associated-domains; the Worker's apple-app-site-association lists which). A road comes in the fragment
@@ -131,6 +131,10 @@ enum ApexWebBundle {
         var items = comps.queryItems ?? []
         if url.scheme == "https", let frag = comps.fragment, frag.hasPrefix("road=") {
             items.append(URLQueryItem(name: "road", value: String(frag.dropFirst("road=".count))))
+        }
+        // a place someone sent (web/place_link.js) comes the same way, #place=
+        if url.scheme == "https", let frag = comps.fragment, frag.hasPrefix("place=") {
+            items.append(URLQueryItem(name: "place", value: String(frag.dropFirst("place=".count))))
         }
         let kept = items.filter { item in
             guard linkKeys.contains(item.name), let v = item.value, (1...200).contains(v.count) else { return false }
@@ -330,6 +334,13 @@ struct ApexCockpitWebView: UIViewRepresentable {
             return true
         }
 
+        // Convoy voice (web/convoy_voice.js): the app's own page may use the microphone, which iOS still asks for once
+        // (NSMicrophoneUsageDescription); a page from anywhere else, or the camera, never.
+        func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo,
+                     type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+            decisionHandler(frame.isMainFrame && origin.protocol == ApexWebBundle.scheme && type == .microphone ? .grant : .deny)
+        }
+
         func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
                      initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
             let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
@@ -496,6 +507,12 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             shell?.setSoundtrack((dict["on"] as? Bool) ?? false)
             return
         }
+        // Convoy voice (web/convoy_voice.js): while the channel is on, the audio session is a call's (microphone in,
+        // speaker or Bluetooth out) so the co-driver's lines no longer switch it back to playback-only.
+        if cmd == "talk", let dict = body as? [String: Any] {
+            shell?.setTalk((dict["on"] as? Bool) ?? false)
+            return
+        }
         // While Vetta speaks (the map's Layers): "lower" ducks the music for each line, "pause" pauses it (cockpit.js sendMusicMode).
         if cmd == "voiceMusic", let dict = body as? [String: Any] {
             shell?.setVoiceMusic((dict["mode"] as? String) ?? "lower")
@@ -545,6 +562,11 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             ApexCar.shared.receive(dict)
             return
         }
+        // The car map's offline maps (CarPlay/ApexCarOffline.swift): the page's saved areas, the whole list each time.
+        if cmd == "offlinePacks", let dict = body as? [String: Any] {
+            ApexCarOffline.shared.receive(dict)
+            return
+        }
         // The drive journal (Round 3, web/drive_keep.js): the fixes the page has not yet kept.
         if cmd == "journal", let dict = body as? [String: Any] {
             shell?.handleJournal(dict)
@@ -589,6 +611,19 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             }
             if cmd == "placeResolve", let index = (dict["index"] as? NSNumber)?.intValue {
                 shell?.placeResolve(index: index, id: id)
+                return
+            }
+            if cmd == "placeSearch", let q = dict["q"] as? String {
+                shell?.placeSearch(query: q, lat: (dict["lat"] as? NSNumber)?.doubleValue, lon: (dict["lon"] as? NSNumber)?.doubleValue, id: id)
+                return
+            }
+            if cmd == "placeContact", let name = dict["name"] as? String, let lat = (dict["lat"] as? NSNumber)?.doubleValue,
+               let lon = (dict["lon"] as? NSNumber)?.doubleValue {
+                shell?.placeContact(name: name, lat: lat, lon: lon, id: id)
+                return
+            }
+            if cmd == "placeReverse", let lat = (dict["lat"] as? NSNumber)?.doubleValue, let lon = (dict["lon"] as? NSNumber)?.doubleValue {
+                shell?.placeReverse(lat: lat, lon: lon, id: id)
                 return
             }
             if cmd == "trafficProbe", let chunks = dict["chunks"] as? [[String: Any]] {
@@ -789,7 +824,9 @@ final class MotionLane: @unchecked Sendable {
 /// F-13: one live frame as the page reads it (window.apex.live), encoded off the main thread. nil is JSON null, never 0.
 struct LiveFrame: Encodable, Sendable {
     var lat, lon, accuracyM: Double?
-    var speedMps, courseDeg, elevationM, gradePct: Double?
+    var speedMps, courseDeg: Double?
+    var headingDeg: Double?   // where the phone points (compass, true north): the idle map's heading beam; nil when unknown
+    var elevationM, gradePct: Double?
     var latG, lonG, camberDeg, crestVerticalG, roughnessRms, vertPeakG, impactG: Double?
     var camberV: Int = IMUPipeline.camberVersion   // camber from the fixed pipeline (unknown when unobserved, never a decayed 0)
     var recording: Bool
@@ -804,7 +841,7 @@ struct LiveFrame: Encodable, Sendable {
     var seq: Int?
 
     enum CodingKeys: String, CodingKey {
-        case lat, lon, accuracyM = "accuracy_m", speedMps = "speed_mps", courseDeg = "course_deg", elevationM = "elevation_m",
+        case lat, lon, accuracyM = "accuracy_m", speedMps = "speed_mps", courseDeg = "course_deg", headingDeg = "heading_deg", elevationM = "elevation_m",
              gradePct = "grade_pct", latG = "lat_g", lonG = "lon_g", camberDeg = "camber_deg", crestVerticalG = "crest_vertical_g",
              roughnessRms = "roughness_rms", vertPeakG = "vert_peak_g", impactG = "impact_g", camberV = "camber_v", recording, calibration, thermal,
              lowPowerMode = "low_power_mode", battery, charging, hasFix = "has_fix", locationOff = "location_off", segments, at, seq
@@ -821,14 +858,15 @@ struct LiveFrame: Encodable, Sendable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         // every key, null when unknown: the page tells unknown from absent
         try c.encode(lat, forKey: .lat); try c.encode(lon, forKey: .lon); try c.encode(accuracyM, forKey: .accuracyM)
-        try c.encode(speedMps, forKey: .speedMps); try c.encode(courseDeg, forKey: .courseDeg); try c.encode(elevationM, forKey: .elevationM)
+        try c.encode(speedMps, forKey: .speedMps); try c.encode(courseDeg, forKey: .courseDeg); try c.encode(headingDeg, forKey: .headingDeg)
+        try c.encode(elevationM, forKey: .elevationM)
         try c.encode(gradePct, forKey: .gradePct); try c.encode(latG, forKey: .latG); try c.encode(lonG, forKey: .lonG)
         try c.encode(camberDeg, forKey: .camberDeg); try c.encode(crestVerticalG, forKey: .crestVerticalG)
         try c.encode(roughnessRms, forKey: .roughnessRms); try c.encode(vertPeakG, forKey: .vertPeakG); try c.encode(impactG, forKey: .impactG)
         try c.encode(camberV, forKey: .camberV)
         try c.encode(recording, forKey: .recording); try c.encode(calibration, forKey: .calibration); try c.encode(thermal, forKey: .thermal)
         try c.encode(lowPowerMode, forKey: .lowPowerMode); try c.encode(battery, forKey: .battery); try c.encode(charging, forKey: .charging)
-        try c.encode(hasFix, forKey: .hasFix); try c.encode(segments, forKey: .segments); try c.encode(at, forKey: .at); try c.encode(seq, forKey: .seq)
+        try c.encode(hasFix, forKey: .hasFix); try c.encode(locationOff, forKey: .locationOff); try c.encode(segments, forKey: .segments); try c.encode(at, forKey: .at); try c.encode(seq, forKey: .seq)
     }
 }
 
@@ -864,6 +902,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private var lonDeg: Double = 0.0
     private var speedMps: Double = 0.0
     private var courseDeg: Double?
+    private var headingDeg: Double?        // the compass, true north, while it is sure to within 30 degrees
+    private var headingAt: Date = .distantPast
     private var fixSpeedMps: Double = -1    // the last fix's own speed, -1 when it had none (the car map then measures it)
     private var fixAt = Date()              // when the last fix was taken
 
@@ -911,6 +951,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         #endif
         if !replaying {
             locManager.startUpdatingLocation()
+            if CLLocationManager.headingAvailable() { locManager.headingFilter = 3; locManager.startUpdatingHeading() }   // the idle map's heading beam
             updateSensorStack()   // NA-2: the 100 Hz IMU and the barometer start with a drive, not with the app
         }
         NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -1035,6 +1076,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         liveInFlight = 0; liveStalled = false; backlogInFlight = false
         // what the driver picks on the car's screen goes to the page (CarPlay/ApexCarPlay.swift)
         ApexCar.shared.toPage = { [weak self] obj in self?.sendToPage(obj) }
+        ApexCarOffline.shared.toPage = { [weak self] obj in self?.sendToPage(obj) }
         pushLiveFrame()
         offerDriveIfReady()
         if let g = pendingGpx { pendingGpx = nil; deliverGpx(g) }
@@ -1157,7 +1199,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     // The system sheet runs the Worker's Google flow with a PKCE challenge; the Worker's callback redirects to
     // apexnav://auth?code=... (single use, 2 min); the shell trades code + verifier for a session token and keeps it in
     // the Keychain; the page's /api calls go through ApexApiBridge, which adds it (IDEAS Z-10). No secrets in the bundle.
-    private static let apiBase = URL(string: "https://apexnav.senftns.workers.dev")!
+    private static let apiBase = URL(string: "https://vettadrive.app")!
     private var authSession: ASWebAuthenticationSession?
 
     private static func b64url(_ data: Data) -> String {
@@ -1384,10 +1426,87 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
-    private func sendPlaceResolved(id: Int, lat: Double?, lon: Double?, name: String?) {
-        var payload: [String: Any] = ["type": "placeResolved", "id": id]
+    /// Where to? text sent without tapping a suggestion: one MKLocalSearch for the words around the phone (about 200 km),
+    /// the best match answered as {type:'placeFound'}; the page falls back to Nominatim when Apple has none.
+    func placeSearch(query: String, lat: Double?, lon: Double?, id: Int) {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { sendPlaceResolved(id: id, lat: nil, lon: nil, name: nil, type: "placeFound"); return }
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = q
+        if let lat, let lon, lat.isFinite, lon.isFinite {
+            request.region = MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                                                latitudinalMeters: 200_000, longitudinalMeters: 200_000)
+        }
+        MKLocalSearch(request: request).start { [weak self] response, _ in
+            guard let self else { return }
+            let item = response?.mapItems.first
+            let lat = item?.placemark.coordinate.latitude, lon = item?.placemark.coordinate.longitude, name = item?.name
+            Task { @MainActor in self.sendPlaceResolved(id: id, lat: lat, lon: lon, name: name, type: "placeFound") }
+        }
+    }
+
+    /// A tapped place's phone and website from Apple's map, for what OpenStreetMap lacks: one MKLocalSearch for its name
+    /// within about 400 m, the nearest result of that name within 150 m, answered as {type:'placeContact'}.
+    func placeContact(name: String, lat: Double, lon: Double, id: Int) {
+        let q = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty, lat.isFinite, lon.isFinite else { sendPlaceContact(id: id, phone: nil, url: nil, found: false); return }
+        let here = CLLocation(latitude: lat, longitude: lon)
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = q
+        request.resultTypes = .pointOfInterest
+        request.region = MKCoordinateRegion(center: here.coordinate, latitudinalMeters: 800, longitudinalMeters: 800)
+        MKLocalSearch(request: request).start { [weak self] response, _ in
+            guard let self else { return }
+            let key = q.lowercased()
+            var best: MKMapItem?
+            var bestMetres = 150.0
+            for item in response?.mapItems ?? [] {
+                let n = (item.name ?? "").lowercased()
+                guard !n.isEmpty, n == key || n.hasPrefix(key) || key.hasPrefix(n) else { continue }
+                let c = item.placemark.coordinate
+                let d = here.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
+                if d <= bestMetres { bestMetres = d; best = item }
+            }
+            let phone = best?.phoneNumber, url = best?.url?.absoluteString, found = best != nil
+            Task { @MainActor in self.sendPlaceContact(id: id, phone: phone, url: url, found: found) }
+        }
+    }
+
+    private func sendPlaceContact(id: Int, phone: String?, url: String?, found: Bool) {
+        var payload: [String: Any] = ["type": "placeContact", "id": id, "failed": !found]
+        if let phone, !phone.isEmpty { payload["phone"] = phone }
+        if let url, url.hasPrefix("http") { payload["url"] = url }
+        guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
+        evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
+    }
+
+    private func sendPlaceResolved(id: Int, lat: Double?, lon: Double?, name: String?, type: String = "placeResolved") {
+        var payload: [String: Any] = ["type": type, "id": id]
         if let lat, let lon, lat.isFinite, lon.isFinite { payload["lat"] = lat; payload["lon"] = lon }
         if let name { payload["name"] = name }
+        guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
+        evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
+    }
+
+    // MARK: Apple reverse geocoding (CLGeocoder, free, no key): a place's name and town for a dropped pin, a saved area or a
+    // drive's plate, instead of public Nominatim, whose usage policy doesn't allow an app's traffic. One position in, the
+    // placemark's parts out, answered with window.apex.onNative({type:'placeReversed'}); the page falls back to Nominatim.
+
+    func placeReverse(lat: Double, lon: Double, id: Int) {
+        guard lat.isFinite, lon.isFinite, abs(lat) <= 90, abs(lon) <= 180 else { sendPlaceReversed(id: id, mark: nil); return }
+        CLGeocoder().reverseGeocodeLocation(CLLocation(latitude: lat, longitude: lon)) { [weak self] marks, _ in
+            Task { @MainActor in self?.sendPlaceReversed(id: id, mark: marks?.first) }
+        }
+    }
+
+    private func sendPlaceReversed(id: Int, mark: CLPlacemark?) {
+        var payload: [String: Any] = ["type": "placeReversed", "id": id, "failed": mark == nil]
+        if let mark {
+            let parts: [(String, String?)] = [("name", mark.name), ("road", mark.thoroughfare), ("house", mark.subThoroughfare),
+                                              ("city", mark.locality), ("area", mark.subLocality), ("county", mark.subAdministrativeArea),
+                                              ("state", mark.administrativeArea), ("country", mark.isoCountryCode)]
+            for (k, v) in parts { if let v, !v.isEmpty { payload[k] = v } }
+        }
         guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
         evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
     }
@@ -1507,7 +1626,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         let r = LiveFrame.r
         let frame = LiveFrame(
             lat: r(hasFix ? latDeg : nil, 7), lon: r(hasFix ? lonDeg : nil, 7), accuracyM: r(hasFix ? accuracyM : nil, 1),
-            speedMps: r(speedMps, 2), courseDeg: r(courseDeg, 1), elevationM: r(fusion.elevationM, 2), gradePct: r(odometer.gradePct, 2),
+            speedMps: r(speedMps, 2), courseDeg: r(courseDeg, 1), headingDeg: r(Date().timeIntervalSince(headingAt) < 5 ? headingDeg : nil, 0), elevationM: r(fusion.elevationM, 2), gradePct: r(odometer.gradePct, 2),
             latG: r(imu(pipeline.latAccMps2 / Self.gStd), 3), lonG: r(imu(pipeline.lonAccMps2 / Self.gStd), 3),
             camberDeg: r(pipeline.camberRad.flatMap { imu($0 * 180.0 / Double.pi) }, 2), crestVerticalG: r(imu(pipeline.crestAccMps2 / Self.gStd), 3),
             roughnessRms: r(imu(pipeline.roughRMSMps2 / Self.gStd), 4), vertPeakG: r(imu(vertPeak / Self.gStd), 3), impactG: r(imu(impact / Self.gStd), 2),
@@ -1615,6 +1734,17 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         )
         Task { @MainActor in
             self.ingest(fix: fix)
+        }
+    }
+
+    /// The compass, for the heading beam on the idle map (as Apple Maps draws it): true north, and only while iOS is sure of
+    /// it to within 30 degrees; the page shows no beam without it.
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        let sure = newHeading.headingAccuracy >= 0 && newHeading.headingAccuracy <= 30 && newHeading.trueHeading >= 0
+        let deg: Double? = sure ? newHeading.trueHeading : nil
+        Task { @MainActor in
+            self.headingDeg = deg
+            self.headingAt = Date()
         }
     }
 
@@ -1982,7 +2112,33 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
+    // Convoy voice: an open channel needs the microphone, so the session is play-and-record for as long as it is on, with
+    // the voice processing of a call (echo cancelling), out of the speaker when nothing else is connected, and through
+    // Bluetooth car audio, AirPods or a headset when one is (its microphone too). Other apps' music mixes in, and is ducked
+    // for a co-driver line as before.
+    private var talkOn = false
+
+    func setTalk(_ on: Bool) {
+        guard on != talkOn else { return }
+        talkOn = on
+        if on {
+            configureTalkSession(duck: false)
+            try? AVAudioSession.sharedInstance().setActive(true)
+        } else if synth.isSpeaking || webVoiceActive {
+            configureVoiceSession()
+        } else {
+            releaseVoice()
+        }
+    }
+
+    private func configureTalkSession(duck: Bool) {
+        var options: AVAudioSession.CategoryOptions = [.allowBluetooth, .allowBluetoothA2DP, .defaultToSpeaker]   // .allowBluetooth: HFP, the name every SDK the CI builds with knows
+        options.insert(duck && !pauseMusic ? .duckOthers : .mixWithOthers)
+        try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: options)
+    }
+
     private func holdForSoundtrack() {
+        if talkOn { configureTalkSession(duck: false); try? AVAudioSession.sharedInstance().setActive(true); return }
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
         try? AVAudioSession.sharedInstance().setActive(true)
     }
@@ -1996,6 +2152,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     // ducking it; pace notes, hazards, directions and anything spirited duck. The page decides (ApexSpeechQueue.ducks).
     // Pause music overrides it: the driver asked for the music to stop for every line.
     private func configureVoiceSession(duck: Bool = true) {
+        if talkOn { configureTalkSession(duck: duck); return }   // convoy voice: keep the microphone open
         let options: AVAudioSession.CategoryOptions = pauseMusic ? [] : (duck ? [.duckOthers, .interruptSpokenAudioAndMixWithOthers] : [.mixWithOthers])
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: options)
     }
@@ -2056,6 +2213,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     /// Gives the audio back: ducked music comes back up, paused music is told it may play on.
     private func releaseVoice() {
+        if talkOn { configureTalkSession(duck: false); return }   // convoy voice keeps the session; ducked music comes back up
         if soundtrackOn { holdForSoundtrack(); return }        // the Soundtrack keeps the session; other apps come back up
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
@@ -2086,9 +2244,9 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 }
 
 extension UIColor {
-    /// The night panel colour (#151310): the launch screen (Assets LaunchBackground), the shell behind the web view and the
+    /// The night panel colour (#111214, the main look since 2026-11-14): the launch screen (Assets LaunchBackground), the shell behind the web view and the
     /// page's opening cover all match, so opening the app never flashes another colour.
-    static let launchPanel = UIColor(red: 0x15 / 255.0, green: 0x13 / 255.0, blue: 0x10 / 255.0, alpha: 1)
+    static let launchPanel = UIColor(red: 0x11 / 255.0, green: 0x12 / 255.0, blue: 0x14 / 255.0, alpha: 1)
 }
 
 extension WKWebView {
@@ -2284,7 +2442,7 @@ enum ApexKeychain {
 /// forgets it (`signOut`) and says whether there is one (`hasSession`). Only the app's own top-level page is answered.
 @MainActor
 final class ApexApiBridge: NSObject, WKScriptMessageHandlerWithReply {
-    private static let base = "https://apexnav.senftns.workers.dev"
+    private static let base = "https://vettadrive.app"
     private static let userAgent: String = {
         let info = Bundle.main.infoDictionary
         return "ApexNav/\(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))"

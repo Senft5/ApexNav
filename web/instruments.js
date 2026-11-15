@@ -136,7 +136,12 @@
       // A junction from the route's directions (IDEAS V-04): the road you're on to the junction, the way straight on as a
       // thin stub, and the exit at its angle; a roundabout as a ring, arrival as a flag.
       body += `<path d="M50 92 L50 52" stroke="${ink}" stroke-width="${w}" stroke-linecap="round"/><circle cx="50" cy="92" r="4.2" fill="${ink}"/>`;
-      if (note.dir === 'A') {
+      if (note.dir === 'A' && (note.side === 'left' || note.side === 'right')) {
+        // the destination beside the road: the road on past it, a short way off to the side it is on, the flag there
+        const sx = note.side === 'right' ? 74 : 26, tip = note.side === 'right' ? 92 : 8;
+        body += `<path d="M50 52 L50 36" stroke="${ink}" stroke-width="${w}"/><path d="M50 36 L50 12" stroke="${ink}" stroke-width="1.4" opacity="0.55"/><path d="M50 36 L${sx} 36" stroke="${ink}" stroke-width="${w}" stroke-linecap="round"/>`
+          + `<path d="M${sx} 36 L${sx} 10" stroke="${ink}" stroke-width="2"/><path d="M${sx} 10 L${tip} 17 L${sx} 24 Z" fill="${accent}"/>`;
+      } else if (note.dir === 'A') {
         body += `<path d="M50 52 L50 14" stroke="${ink}" stroke-width="${w}"/><path d="M50 14 L76 22 L50 30 Z" fill="${accent}"/>`;
       } else if (note.dir === 'O') {
         body += `<circle cx="50" cy="38" r="14" fill="none" stroke="${ink}" stroke-width="${w}"/><path d="M60 28 L78 10" stroke="${ink}" stroke-width="${w}" stroke-linecap="round"/><polygon points="82,6 70,10 78,18" fill="${ink}"/>`;
@@ -165,6 +170,7 @@
       if (note.type === 'mark' && note.code === 'COVERED') body += `<path d="M30 40 L50 24 L70 40 M36 40 L36 72 M64 40 L64 72" fill="none" stroke="${accent}" stroke-width="3" stroke-linejoin="round"/>`;
       if (note.type === 'mark' && note.code === 'FORD') body += `<path d="M28 52 Q34 46 40 52 T52 52 T64 52 T76 52 M28 62 Q34 56 40 62 T52 62 T64 62 T76 62" fill="none" stroke="${accent}" stroke-width="3" stroke-linecap="round"/>`;
       if (note.type === 'mark' && note.code === 'GRAVEL') body += `<g fill="${accent}"><circle cx="34" cy="62" r="3.2"/><circle cx="46" cy="56" r="2.6"/><circle cx="56" cy="64" r="3.4"/><circle cx="66" cy="57" r="2.4"/><circle cx="42" cy="68" r="2.4"/><circle cx="62" cy="70" r="2.8"/></g>`;
+      if (note.type === 'mark' && note.code === 'TJUNC') body += `<path d="M30 14 L70 14" stroke="${accent}" stroke-width="5" stroke-linecap="round"/>`;
       if (note.type === 'mark' && note.code === 'ROUGH') body += `<path d="M28 62 L36 54 L44 64 L52 52 L60 64 L68 55 L74 62" fill="none" stroke="${accent}" stroke-width="3.4" stroke-linejoin="round"/>`;
       if (note.type === 'alpr') body += `<rect x="62" y="38" width="22" height="14" fill="none" stroke="${accent}" stroke-width="2.6"/><circle cx="73" cy="45" r="3.5" fill="${accent}"/><path d="M62 45 L54 45" stroke="${accent}" stroke-width="2.6"/>`;
     }
