@@ -45,7 +45,7 @@ const CASES = {
   bigsur: { name: 'Big Sur (CA 1, Carmel to Cambria)', from: { lat: 36.5550, lon: -121.9230 }, to: { lat: 35.5640, lon: -121.0810 }, road: /Cabrillo|Shoreline|^CA 1$|^SR 1$|Highway 1\b/i },
   ca36: { name: 'CA 36 (Red Bluff to Fortuna)', from: { lat: 40.1780, lon: -122.2350 }, to: { lat: 40.5980, lon: -124.1570 }, road: /\b36\b/i },
   // 2026-11-15, more of the country: the Ozarks, New England, the Cascades' coast, the Ouachitas, the Rockies, the Smokies
-  pig: { name: 'Pig Trail (AR 23)', from: { lat: 35.487, lon: -93.828 }, to: { lat: 35.905, lon: -93.795 }, road: /\b23\b|Pig Trail/i },
+  pig: { name: 'Pig Trail (AR 23)', from: { lat: 35.487, lon: -93.828 }, to: { lat: 35.8120, lon: -93.7950 }, road: /\b23\b|Pig Trail/i },
   kanc: { name: 'Kancamagus Highway (NH 112)', from: { lat: 44.045, lon: -71.67 }, to: { lat: 43.985, lon: -71.13 }, road: /Kancamagus|\b112\b/i },
   chuck: { name: 'Chuckanut Drive (WA 11)', from: { lat: 48.70, lon: -122.49 }, to: { lat: 48.50, lon: -122.34 }, road: /Chuckanut|\b11\b/i },
   talimena: { name: 'Talimena Scenic Drive', from: { lat: 34.62, lon: -94.20 }, to: { lat: 34.745, lon: -95.03 }, road: /Talimena|Skyline Drive|\b88\b|^OK 1$|^AR 88$/i },
