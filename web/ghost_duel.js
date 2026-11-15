@@ -137,9 +137,24 @@
              gained: ok.filter((r) => r.gap_s < -0.05).sort((a, b) => a.gap_s - b.gap_s).slice(0, n) };
   }
 
-  /** "+0.3 vs @sam", "−1.2 vs @sam", "level with @sam"; "--" when nothing compares yet. */
-  function label(gap, who) {
-    const w = who ? `@${String(who).replace(/^@/, '')}` : 'them';
+  /**
+   * Your own quickest pass of a stage as its ghost, on any stage you've driven before: passes [{ time_s, splits, surface }]
+   * (splits finely cut, every 25 m: it never leaves your phone), the quickest with whole splits on a road like today's
+   * (surface 'wet' / 'ice', or null for dry, where a pass of unknown surface counts as dry). Null when none.
+   */
+  function bestOwn(passes, surface = null) {
+    const like = (s) => (surface === 'wet' || surface === 'ice' ? s === surface : s !== 'wet' && s !== 'ice');
+    let best = null;
+    for (const p of passes || []) {
+      if (!p || !finite(p.time_s) || !(p.time_s > 0) || !Array.isArray(p.splits) || !p.splits.length || !like(p.surface)) continue;
+      if (!best || p.time_s < best.time_s) best = p;
+    }
+    return best ? { splits: best.splits, time_s: r1(best.time_s), surface: surface === 'wet' || surface === 'ice' ? surface : null } : null;
+  }
+
+  /** "+0.3 vs @sam", "−1.2 vs @sam", "level with @sam" ("vs your best" for your own ghost, self); "--" when nothing compares yet. */
+  function label(gap, who, self = false) {
+    const w = self ? 'your best' : who ? `@${String(who).replace(/^@/, '')}` : 'them';
     if (!finite(gap)) return '--';
     if (Math.abs(gap) < 0.05) return `level with ${w}`;
     return `${gap > 0 ? '+' : '−'}${Math.abs(gap).toFixed(1)} s vs ${w}`;
@@ -207,7 +222,7 @@
           if (off) { cur = null; scanned = i + 1; return null; }       // left the stage: no result
           if (cur.endMin.m <= NEAR_M && me > cur.endMin.m + PAST_M) {
             const e = rows[cur.endMin.i], time = finite(e.t_s) ? e.t_s - cur.t0 : null;
-            const out = { state: 'done', name: cur.g.stage.name, who: cur.g.who, stageId: cur.g.stage.id, q: 1, time_s: time,
+            const out = { state: 'done', name: cur.g.stage.name, who: cur.g.who, self: !!cur.g.self, stageId: cur.g.stage.id, q: 1, time_s: time,
                           gap: finite(time) ? time - cur.g.time_s : cur.gap, say: true };
             cur = null; scanned = i + 1;
             return out;
@@ -216,7 +231,7 @@
         scanned = n;
         if (!cur) return null;
         const last = rows[n - 1], el = last && finite(last.t_s) && finite(cur.t0) ? last.t_s - cur.t0 : null;
-        return { state: 'in', name: cur.g.stage.name, who: cur.g.who, stageId: cur.g.stage.id, q: cur.q, gap: cur.gap, say, elapsed_s: el };
+        return { state: 'in', name: cur.g.stage.name, who: cur.g.who, self: !!cur.g.self, stageId: cur.g.stage.id, q: cur.q, gap: cur.gap, say, elapsed_s: el };
       },
       /** Where the ghost of the stage you are on is after elapsed_s on its clock ([lat, lon]), or null off a stage. */
       ghostAt(elapsed_s) {
@@ -246,6 +261,6 @@
     return 'Couldn\u2019t send it. Try again.';
   }
 
-  const api = { cutsOf, splitsOf, timeAt, qAt, pointAt, gapAt, cornerSplits, standout, label, spoken, createTracker, countFor, MAX, challengeKey, challengeSaid };
+  const api = { cutsOf, splitsOf, bestOwn, timeAt, qAt, pointAt, gapAt, cornerSplits, standout, label, spoken, createTracker, countFor, MAX, challengeKey, challengeSaid };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexGhostDuel = api;
 })(typeof window !== 'undefined' ? window : globalThis);

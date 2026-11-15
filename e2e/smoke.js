@@ -6219,6 +6219,74 @@ flow('a ghost duel: on your stage a friend has driven, the bar shows the live ga
   check(said.filter((t) => /^Esses done\. .+ up on Sam\.$/.test(t)).length === 1, 'and at the finish, once: ' + JSON.stringify(said));
 });
 
+flow('your own ghost: on a stage you have driven before (no friend, not signed in), your quickest pass is a ghost on the map and the bar shows the time gap to it (ghost_duel.js bestOwn)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  let asked = 0;
+  await page.route('**/api/board/ghosts**', (route) => { asked++; route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }); });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html?notes=full');
+  await page.waitForFunction(() => window.apex && window.ApexGhostDuel && window.ApexRecording && window.apexDebug);
+  await page.evaluate(() => { if (window.ApexVoice) { ApexVoice.play = async () => false; ApexVoice.playWhole = async () => false; } });
+  // a winding road, your stored pass over it at the road's own pace, and the stage marked in the Log (never synced)
+  await page.evaluate(async () => {
+    const Core = window.ApexCore, lat = [], lon = [];
+    let la = 35.6, lo = -83.9, h = 0;
+    for (let i = 0; i < 800; i++) { if (i > 100 && i < 700) h += 0.05 * Math.sin((i - 100) / 25);
+      la += 5 * Math.cos(h) / 110540; lo += 5 * Math.sin(h) / (111320 * Math.cos(35.6 * Math.PI / 180)); lat.push(la); lon.push(lo); }
+    const { kappa } = Core.computeCurvature(lat, lon);
+    const v = kappa.map((k) => Math.max(9, 22 - 300 * Math.abs(k || 0)));
+    await ApexRecording.store({ id: 'e2e_best', name: 'Esses run', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: v,
+      lon_g: v.map(() => 0), lat_g: v.map(() => 0), g_known: null, events: [], elev: null, hz: 1 });
+    const a = 110, b = 690;
+    localStorage.setItem('apex.segments', JSON.stringify([{ id: 'seg_mine', name: 'Esses', lat0: lat[a], lon0: lon[a], lat1: lat[b], lon1: lon[b], length_m: (b - a) * 5,
+      geom: JSON.stringify(Array.from({ length: 60 }, (_, k) => { const i = a + Math.round(k * (b - a) / 59); return [lat[i], lon[i]]; })) }]));
+    window.__road = { lat, lon, v }; window.__clock = Date.now();
+  });
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForTimeout(800);
+  if (await page.isVisible('#permSheet.show')) await page.click('#permGo');
+  // drive it 10 % slower than your best, as the app's frames with their own clock
+  const bars = [], ghosts = [];
+  for (let burst = 0; burst < 11; burst++) {
+    await page.evaluate((burst) => {
+      const r = window.__road;
+      for (let j = burst * 160; j < Math.min(1598, (burst + 1) * 160); j++) {
+        const i = Math.min(799, Math.floor(j / 2)), f = (j % 2) / 2, k = Math.min(799, i + 1);
+        window.__clock += 2500 / (r.v[i] * 0.9);
+        window.apex.live({ lat: r.lat[i] + (r.lat[k] - r.lat[i]) * f, lon: r.lon[i] + (r.lon[k] - r.lon[i]) * f, accuracy_m: 4, speed_mps: r.v[i] * 0.9, course_deg: 0,
+          lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked', at: window.__clock });
+      }
+    }, burst);
+    await page.waitForTimeout(1050);
+    if (await page.isVisible('#ghostBar')) {
+      bars.push(await page.textContent('#ghostBar'));
+      ghosts.push(await page.evaluate(() => { const g = document.querySelector('.ghost-puck'), me = document.querySelector('.puck');
+        if (!g || !g.isConnected) return null; const a = g.getBoundingClientRect(), b = me.getBoundingClientRect();
+        return { label: g.getAttribute('aria-label'), self: g.classList.contains('self'), text: g.textContent, px: Math.round(Math.hypot(a.x - b.x, a.y - b.y)) }; }));
+    }
+  }
+  check(asked === 0, 'not signed in: no friend\'s run is asked for');
+  check(bars.length > 0 && bars.some((b) => /^Esses\+\d+\.\d s vs your bestGhost$/.test(b.trim())), 'the bar shows the live gap, behind your best: ' + JSON.stringify(bars));
+  check(ghosts.length > 0 && ghosts.every((g) => g && g.label === 'Ghost: your best' && g.self && g.text === '') && ghosts.some((g) => g.px > 4),
+    'your ghost is on the map while the bar is, ahead of your arrow: ' + JSON.stringify(ghosts));
+  check(!(await page.evaluate(() => { const g = document.querySelector('.ghost-puck'); return !!(g && g.isConnected); })), 'and gone once the stage is done');
+  check(!(await page.evaluate(() => window.apexDebug.ghostRuns)), 'a run against your own best is no duel result to challenge anyone with');
+  for (let burst = 0; burst < 10 && !(await page.evaluate(() => window.__said.some((t) => /^Esses done\./.test(t)))); burst++) {
+    await page.evaluate((burst) => {
+      const r = window.__road, n = r.lat.length, dLa = r.lat[n - 1] - r.lat[n - 2], dLo = r.lon[n - 1] - r.lon[n - 2];
+      for (let j = 1; j <= 80; j++) { const k = burst * 80 + j;
+        window.__clock += 125;
+        window.apex.live({ lat: r.lat[n - 1] + dLa * k / 2, lon: r.lon[n - 1] + dLo * k / 2, accuracy_m: 4, speed_mps: 20, course_deg: 0,
+          lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked', at: window.__clock }); }
+    }, burst);
+    await page.waitForTimeout(1000);
+  }
+  const said = await page.evaluate(() => window.__said.filter((t) => /your best/.test(t)));
+  check(said.filter((t) => /^Esses done\. .+ down on your best\.$/.test(t)).length === 1, 'the co-driver says it at the finish, once: ' + JSON.stringify(said));
+});
+
 flow('your best pass on a wet road: an ODOT sensor reads the road wet, so your dry best is no time to chase: said once, no gap, no "brake later" (pass_coach.js setSurface)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
