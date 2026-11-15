@@ -7,3 +7,6 @@
 # CALL SHEET
 ## 2026-11-15 (out and back): shorter and paved over the asked length on gravel
 Unpaved is avoided by default, and a loop over a 4x4 pass breaks that promise. A paved road there and back, even one well short of the length, is the honest answer. With unpaved allowed nothing changes. Undo: drop the outAndBack line in loopNow.
+
+## 2026-11-15 (out and back): startup script budget raised to 3.7 MB
+The map page loaded 3,602,844 script bytes against a 3.6 MB budget once graph_router.js gained out-and-back (4.6 KB); main had 1.7 KB left. The router plans offline, so it cannot load late, and boot CPU stayed 0.12 s against 2.0 s. Undo: set BOOT.scriptBytes in e2e/smoke.js back to 3.6e6.
