@@ -88,7 +88,7 @@
     // highway-free way over HWY_ABSURD x the quickest's time is still the level's way (the card says Quick is the way); the
     // budget never shuts out the highway-free quickest (+ HWY_FREE_SLACK_S). A point snapped onto a highway moves to the
     // nearest other road within HWY_SNAP_M (a car on the highway, heading given and within HWY_ON_M of it, stays on it)
-    NO_HWY: { fun: true, max: true }, TRUNK_FUN_KM: 1.5, HWY_LINK_X: 25, HWY_ABSURD: 2, HWY_FREE_SLACK_S: 60, HWY_SNAP_M: 150, HWY_ON_M: 25,
+    NO_HWY: { fun: true, max: true }, TRUNK_FUN_KM: 1.5, TRUNK_STRETCH_M: 8000, HWY_LINK_X: 25, HWY_ABSURD: 2, HWY_FREE_SLACK_S: 60, HWY_SNAP_M: 150, HWY_ON_M: 25,
     // a road trip (2026-11-15): where keeping off the highways costs more than HWY_FIT_S past the level's own budget
     // (Denver to Ouray at Fun: 12 h highway-free against 5.5 h, so the card fell back to Quick; Cincinnati to Deals Gap:
     // 8.4 h against 5 h with one bridge of interstate), the level takes highway where it must to stay inside its budget:
@@ -1329,7 +1329,8 @@
   /**
    * Per edge, 1 on a highway (kept per view). A two-way trunk (no one-way carriageways, not a link) is a two-lane road: by
    * its name across the view, one with TRUNK_FUN_KM corner points a km or more is a rider's road, not a highway (The Snake
-   * 4.4, US 421 by Shady Valley 2.5; Cincinnati's US 127, US 27 and the AA Highway 0 to 0.25).
+   * 4.4, US 421 by Shady Valley 2.5; Cincinnati's US 127, US 27 and the AA Highway 0 to 0.25), and so is a stretch of
+   * TRUNK_STRETCH_M with that many (a pass on a long US route that is straight elsewhere).
    */
   function hwyOf(v) {
     if (v.isHwy) return v.isHwy;
@@ -1347,10 +1348,39 @@
       a.len += v.len[e];
       if (Number.isFinite(v.fun[e])) a.fun += v.fun[e];
     }
+    // else by its stretch: the two-way trunk within TRUNK_STRETCH_M / 2 of the edge's middle, either way along it (US 550
+    // over Molas and Coal Bank passes, 1.5 to 2.1 points a km, shares its name with 0-point valley miles to New Mexico and
+    // was a highway; 2026-11-15)
+    const tw = new Uint8Array(v.E);
+    for (let e = 0; e < v.E; e++) if (h[e] && twoWayTrunk(e)) tw[e] = 1;
+    const stamp = new Int32Array(v.E), stack = [], half = K.TRUNK_STRETCH_M / 2;
     for (let e = 0; e < v.E; e++) {
-      if (!h[e] || !twoWayTrunk(e)) continue;
+      if (!tw[e]) continue;
       const a = byName.get(nameOf(e));
-      if (a && a.len > 0 && a.fun / (a.len / 1000) >= K.TRUNK_FUN_KM) h[e] = 0;
+      if (a && a.len > 0 && a.fun / (a.len / 1000) >= K.TRUNK_FUN_KM) { h[e] = 0; continue; }
+      if (!(half > 0)) continue;
+      const id = e + 1, te = twin(v, e);
+      let len = v.len[e], fun = v.fun[e] > 0 ? v.fun[e] : 0;
+      stamp[e] = id;
+      if (te >= 0) stamp[te] = id;
+      stack.length = 0;
+      stack.push(v.tail[e], v.len[e] / 2, v.to[e], v.len[e] / 2);
+      while (stack.length) {
+        const d = stack.pop(), n = stack.pop();
+        if (n < 0) continue;
+        for (let x = v.first[n]; x < v.first[n + 1]; x++) {
+          if (!tw[x] || stamp[x] === id) continue;
+          stamp[x] = id;
+          const t = twin(v, x);
+          if (t >= 0) stamp[t] = id;
+          // an edge running past the stretch's end counts for the part inside it
+          const f = v.len[x] > 0 ? Math.min(1, (half - d) / v.len[x]) : 1;
+          len += v.len[x] * f;
+          if (v.fun[x] > 0) fun += v.fun[x] * f;
+          if (d + v.len[x] < half) stack.push(v.to[x], d + v.len[x]);
+        }
+      }
+      if (len > 0 && fun / (len / 1000) >= K.TRUNK_FUN_KM) h[e] = 0;
     }
     v.isHwy = h;
     return h;

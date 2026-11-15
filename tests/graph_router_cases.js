@@ -65,6 +65,23 @@ const CASES = {
     };
     return { bends: run(12, 0), straight: run(0, 0), divided: run(12, 1) };
   },
+  trunkStretch() {
+    // US 550: 26 km straight (no corners) then a pass, 8.6 km bending (about 2.8 points a km), one name (0.7 points a km
+    // over all of it); A to B over the pass or the Back Road (slower, some corners). At Fun the pass is a rider's road, the
+    // straight miles still a highway
+    const nodes = [];
+    for (let k = 0; k <= 8; k++) nodes.push(at(39.3, -84.9 + k * 0.05));
+    nodes.push(at(39.31, -84.55));
+    const edges = [];
+    for (let k = 0; k < 6; k++) two(edges, k, k + 1, { quality: 0.8, cls: 1, name: 'US 550', t: 160 });
+    two(edges, 6, 7, { quality: 0.8, cls: 1, name: 'US 550', t: 200, fun: 12 }); two(edges, 7, 8, { quality: 0.8, cls: 1, name: 'US 550', t: 200, fun: 12 });
+    two(edges, 6, 9, { quality: 0.7, cls: 4, name: 'Back Road', t: 400, fun: 3 }); two(edges, 9, 8, { quality: 0.7, cls: 4, name: 'Back Road', t: 400, fun: 3 });
+    const v = R.view(H.tiles(nodes, edges).tiles), is = R.hwyOf(v);
+    const hwy = { pass: [], straight: [] };
+    for (let e = 0; e < v.E; e++) if (v.cls[e] === R.CLS.trunk) hwy[v.fun[e] > 0 ? 'pass' : 'straight'].push(is[e]);
+    const names = R.plan(v, { from: { lat: 39.3, lon: -84.5999 }, to: { lat: 39.3, lon: -84.5001 }, level: 'fun' }).routes[0].names.map((x) => x.name);
+    return { names, hwy };
+  },
   ellipseGoal() {
     // a goal 60 m along a 20 km edge with no junction (a mountain road): the edge's far end is outside the leg's corridor,
     // the goal isn't

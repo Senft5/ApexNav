@@ -389,6 +389,16 @@ def test_a_two_lane_trunk_that_bends_is_a_riders_road():
     assert r == {"bends": ["US 421"], "straight": ["Back Road"], "divided": ["Back Road"]}, r
 
 
+def test_a_pass_on_a_long_straight_trunk_is_a_riders_road():
+    """2026-11-15: US 550 over Molas and Coal Bank passes (1.5 to 2.1 corner points a km) shares its name with straight
+    valley miles to New Mexico, 0.7 a km over the whole view, so Fun never drove the passes. A stretch of two-way trunk
+    (TRUNK_STRETCH_M) that bends is a rider's road; the straight miles of the same road stay a highway."""
+    r = case("trunkStretch")
+    assert r["names"] == ["US 550"], r
+    assert r["hwy"]["pass"] and not any(r["hwy"]["pass"]), r
+    assert r["hwy"]["straight"] and all(r["hwy"]["straight"]), r
+
+
 def test_the_highway_exception_takes_the_shortest_link_and_says_why():
     """A river crossed only by I-275's bridge: Fun and Long way drive River Road to the bridge's ramp, the bridge and the
     ramp off (1.7 km), not I-275 from the start (5.3 km, Quick's way), and the card says so; a car on I-275 rerouted at
