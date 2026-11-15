@@ -9111,6 +9111,28 @@ flow('import: a drive from a file is named after the road that carried it (IDEAS
   check(hero.stamp === '--' && !(/Dry Ridge Road/.test(hero.what) && /Today|AM|PM/.test(hero.what)), 'the index stamps it "--" and the hero names no time for it: ' + JSON.stringify(hero));
 });
 
+flow('old drives named by a date or an address get their road on the map page; a name you gave stays (Nate\'s drives, round 2)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexStages && window.ApexRoadNames && window.ApexRecording);
+  const out = await page.evaluate(async () => {
+    ApexStages.namesAlong = async () => [{ properties: { name: 'Dry Ridge Road' }, geometry: { type: 'MultiLineString', coordinates: [[[-84.75, 39.24], [-84.68, 39.24]]] } }];
+    const kx = 111320 * Math.cos(39.24 * Math.PI / 180), lat = [], lon = [];
+    for (let i = 0; i < 400; i++) { lat.push(39.2401); lon.push(-84.74 + i * 5 / kx); }
+    const rec = (id, name) => ({ id, name, date: '2026-11-14T21:35:00', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps' });
+    await ApexRecording.store(rec('o1', 'Drive 11/14/2026 9:35 PM'));
+    await ApexRecording.store(rec('o2', 'To 10069 Pebble Ridge Ln'));
+    await ApexRecording.store(rec('o3', 'Sunday with Sam'));
+    const n = await apexDebug.renameStandInDrives(10);
+    const names = Object.fromEntries((await ApexRecording.all()).map((d) => [d.id, d.name]));
+    const again = await apexDebug.renameStandInDrives(10);           // asked once: not again
+    return { n, names, again };
+  });
+  check(out.n === 2 && out.names.o1 === 'Dry Ridge Road' && out.names.o2 === 'Dry Ridge Road' && out.names.o3 === 'Sunday with Sam' && out.again === 0,
+    'a date or an address gives way to the road; your own name stays: ' + JSON.stringify(out));
+});
+
 flow('track day: on a mapped raceway, Start/finish here times laps (IDEAS D-15)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.webkit = { messageHandlers: { apex: { postMessage() {} } } };   // the iOS shell's bridge, faked: frames come from window.apex.live

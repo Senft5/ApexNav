@@ -368,7 +368,7 @@
     });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, get ghostRuns() { return drive.ghosts || null; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), horizonFrom: async (coords, tee = false) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; if (tee) t.marks = [ApexRoadMarks.teeMark(t)]; useHorizon(t); return t.id; } };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, get ghostRuns() { return drive.ghosts || null; }, refreshSavedDrives: () => refreshSavedDrives(), renameStandInDrives: (m) => renameStandInDrives(m), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), horizonFrom: async (coords, tee = false) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; if (tee) t.marks = [ApexRoadMarks.teeMark(t)]; useHorizon(t); return t.id; } };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -9209,6 +9209,32 @@
       e.target.value = '';
     });
     document.querySelector('.tab[data-view="garage"]') && document.querySelector('.tab[data-view="garage"]').addEventListener('click', renderMyData);
+    // Nate's drives (round 2): drives saved before drives were named after their twistiest road keep a date ("Drive
+    // 11/14/2026 9:35 PM") or a destination ("To 10069 Pebble Ridge Ln"). Off the start, a few at a time, the map's own tiles
+    // name them as an import is named (road_names.js roadOfTrack). A name the driver gave a drive never matches either, so it
+    // is never touched; a drive the tiles name nothing for is not asked again.
+    const RENAMED_KEY = 'vetta.renamedDrives';
+    async function renameStandInDrives(max = 4) {
+      if (!window.ApexRoadNames || !window.ApexStages || !window.ApexRecording || !ApexRoadNames.isDestinationName) return 0;
+      let tried; try { tried = new Set(JSON.parse(localStorage.getItem(RENAMED_KEY) || '[]')); } catch (_) { tried = new Set(); }
+      const sums = await ApexRecording.summaries(null);
+      const want = sums.filter((x) => x && x.id && !tried.has(x.id) && (ApexRoadNames.isStandInName(x.name) || ApexRoadNames.isDestinationName(x.name))).reverse().slice(0, max);
+      let n = 0;
+      for (const x of want) {
+        if (state.mode === 'live') break;                              // never during a drive
+        const d = await ApexRecording.get(x.id);
+        if (!d || !Array.isArray(d.lat)) { tried.add(x.id); continue; }
+        const feats = await RouteLoading.optional(ApexStages.namesAlong(d, 48), 10000);
+        if (!feats || !feats.length) continue;                          // offline: asked again next time
+        tried.add(x.id);
+        const road = ApexRoadNames.roadOfTrack(feats, d);
+        if (road && road !== x.name) { await ApexRecording.patch(x.id, { name: road }); n++; }
+      }
+      try { localStorage.setItem(RENAMED_KEY, JSON.stringify([...tried].slice(-500))); } catch (_) {}
+      if (n) refreshSavedDrives().catch(() => {});
+      return n;
+    }
+    setTimeout(() => { if (state.mode !== 'live') renameStandInDrives().catch(() => {}); }, 8000);
 
     // Privacy zones (Settings): a circle at where you are or at the map's centre; remove any. Phone only.
     let zoneR = 500;
