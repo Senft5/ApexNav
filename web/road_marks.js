@@ -22,7 +22,8 @@
     unpaved: { code: 'GRAVEL', call: 'Unpaved road' },
     rough: { code: 'ROUGH', call: 'Rough road' },
     single_track: { code: 'NARROW', call: 'Narrow road' },
-    side_road: { code: 'JUNC', call: 'Hidden junction' },   // only where you can't see it coming (events: hidden)
+    side_road: { code: 'JUNC', call: 'Hidden junction' },
+    school: { code: 'SCHOOL', call: 'School zone' },        // said only in a school run (cockpit.js, events.js schoolRunAt)   // only where you can't see it coming (events: hidden)
     tee: { code: 'TJUNC', call: 'T-junction' },   // the road ahead ends (free driving: horizon.js tee), not from Overpass
   };
   // a mapped animal-crossing sign names its animal (osm_overpass.js hazardOf label); deer is the one on these roads
@@ -51,7 +52,7 @@
     const raw = [];
     for (const p of Array.isArray(ctx.points) ? ctx.points : []) {
       if (!p || !finite(p.atM)) continue;
-      if (p.kind === 'stop' || p.kind === 'level_crossing' || p.kind === 'buggy' || p.kind === 'ford' || p.kind === 'side_road') raw.push({ kind: p.kind, atM: p.atM });
+      if (p.kind === 'stop' || p.kind === 'level_crossing' || p.kind === 'buggy' || p.kind === 'ford' || p.kind === 'side_road' || p.kind === 'school') raw.push({ kind: p.kind, atM: p.atM });
       else if (p.kind === 'animal_crossing') raw.push({ kind: p.kind, atM: p.atM, call: animalCall(p.label) });
       else if (p.kind === 'calming' && BUMPS.has(String(p.label || 'yes'))) raw.push({ kind: 'calming', atM: p.atM });
     }
@@ -60,7 +61,7 @@
     const out = [], last = {};
     for (const r of raw) {
       const prev = last[r.kind];
-      if (prev && r.atM - prev.endM < (r.kind === 'calming' ? RUN_M : SAME_M)) { prev.endM = r.atM; prev.n++; continue; }
+      if (prev && r.atM - prev.endM < (r.kind === 'calming' || r.kind === 'school' ? RUN_M : SAME_M)) { prev.endM = r.atM; prev.n++; continue; }
       const m = { kind: r.kind, atM: r.atM, endM: r.atM, n: 1, ...(r.call ? { call: r.call } : {}) };
       out.push(m); last[r.kind] = m;
     }
@@ -178,7 +179,8 @@
    * for one. In daylight it waits for the notes like the other marks; unknown sun is daylight (no call it can't back).
    */
   const DUSK_RAD = 6 * Math.PI / 180;
-  const cruiseWorthy = (m, sunAltRad) => !!m && m.type === 'mark' && m.kind === 'animal_crossing' && finite(sunAltRad) && sunAltRad < DUSK_RAD;
+  const cruiseWorthy = (m, sunAltRad) => !!m && m.type === 'mark' && ((m.kind === 'animal_crossing' && finite(sunAltRad) && sunAltRad < DUSK_RAD)
+    || m.kind === 'school');   // a school zone only reaches the notes in a school run (cockpit.js allEvents): said at any pace
 
   /**
    * The T-junction where the road ahead ends (free driving: horizon.js says the road ends and every way on turns off), as

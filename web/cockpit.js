@@ -1796,7 +1796,9 @@
     // =======================================================================
     // 6. CO-DRIVER — quiet in cruise, full pace notes when spirited or STAGE
     // =======================================================================
-    const allEvents = () => (track ? track.events.concat(track.alpr || [], track.marks || []) : []);   // marks: road_marks.js
+    // a school zone is a mark only in a school run, now (events.js schoolRunAt: a school day, arrival or dismissal hours)
+    const schoolRun = (m) => { const now = Date.now(); if (!m.runAt || now - m.runAt > 60000) { m.runAt = now; m.run = !!(window.ApexCtxEvents && ApexCtxEvents.schoolRunAt && ApexCtxEvents.schoolRunAt(now, m.lat, m.lon)); } return m.run; };
+    const allEvents = () => (track ? track.events.concat(track.alpr || [], (track.marks || []).filter((m) => m.kind !== 'school' || schoolRun(m))) : []);   // marks: road_marks.js
     const distLabel = (m) => ApexUnits.short(m);          // feet and miles, or metres and km (Settings → Units, U-22)
     // Auto: wake on the road ahead (a corner that is tight or needs braking, updateNotes, U-58) or on hard driving. Full:
     // always awake. Quiet: never wake, so only cameras and severe bumps are called.

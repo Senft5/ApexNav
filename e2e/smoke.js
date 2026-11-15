@@ -12691,6 +12691,32 @@ flow('a hidden junction: a side road joining just past a blind bend on the road 
   check((await said()).length === 1, 'said once, by the bend: ' + JSON.stringify(await page.evaluate(() => window.__said)));
 });
 
+for (const [when, iso, want] of [['in a school run', '2026-11-16T12:45:00Z', 1], ['at noon', '2026-11-16T17:00:00Z', 0]]) flow(`a school zone by the road is said only in a school run: ${when} (road_marks.js school, events.js schoolRunAt)`, async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.clock.setFixedTime(new Date(iso));                  // a Monday in Cincinnati: 7:45 am, or noon
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [] }) }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive && window.ApexCtxEvents && window.ApexCtxEvents.schoolRunAt, null, { timeout: 20000 });
+  const KY = 110540, lat = (m) => 39.1 + m / KY, LON = -84.5;
+  const coords = []; for (let m = 0; m <= 2500; m += 10) coords.push([LON, lat(m)]);
+  await page.evaluate((c) => apexDebug.horizonFrom(c), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon');
+  // the school the map has by the road at 1 km (what attachHorizonMarks / attachMarks would lay from the plan's places)
+  await page.evaluate(() => { const t = apexDebug.track, i = t.dist.findIndex((d) => d >= 1000);
+    t.marks = [...(t.marks || []), { type: 'mark', kind: 'school', code: 'SCHOOL', call: 'School zone', index: i, dist_m: t.dist[i], end_m: t.dist[i], lat: t.lat[i], lon: t.lon[i] }]; });
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const said = () => page.evaluate(() => window.__said.filter((s) => /School zone/.test(s)));
+  for (let i = await iAt(600), end = await iAt(990); i <= end && !(await said()).length; i += 2) { await at(i); await page.waitForTimeout(60); }
+  check((await said()).length === want, `${want ? 'said' : 'not said'} ${when}: ` + JSON.stringify(await page.evaluate(() => window.__said)));
+});
+
 flow('road marks on a route set during a drive: the map is asked for this route alone (road_marks.js, attachMarksSoon)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const KY = 110540, lat = (m) => 35.5 + m / KY, LON = -83.9, kx = 111320 * Math.cos(35.5 * Math.PI / 180);
