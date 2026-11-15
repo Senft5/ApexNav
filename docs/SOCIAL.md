@@ -76,6 +76,8 @@ and in random batches so a trace cannot be re-assembled.
 - **Link cards** (2026-11-15, backend/src/link_preview.ts): a public book's link pasted into a chat shows a large card,
   its roads on the real map with its name and facts, made on the owner's phone when they press Share (sent again only
   when the name, facts or roads change); other links show what kind they are; the picture is otherwise the app icon.
+  A public crew's invite link names the crew, how many drive in it, its area and its line (what anyone sees of a public
+  crew); a private crew's, or a dead or reported link, says only that it is a crew on Vetta.
 ### 2.7 Duels (friends, Scores only)
 - Challenge a friend on one of your stages for 3, 7 or 14 days; the higher Vetta Score on it in that window wins.
   Accepting copies the stage to them. Won by the higher Score, or in a time duel (migration 0048) the quicker time;

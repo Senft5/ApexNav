@@ -63,6 +63,24 @@ describe("link previews", () => {
     expect(await (E.MEDIA as R2Bucket).head(`roadbook/${id}`)).toBeNull();
   });
 
+  it("a public crew's invite link names the crew, its size and area; a private crew's, or a dead link, says only that it's a crew", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob");
+    const id = ((await (await ok(api(a, "POST", "/api/crews", { name: "Secret Squirrels" }))).json()) as { id: string }).id;
+    const { token } = (await (await ok(api(a, "POST", `/api/crews/${id}/invite`))).json()) as { token: string };
+    const u = new URL(`https://vettadrive.app/?crew=${token}`);
+    expect((await previewFor(E, u)).title).toBe("A crew on Vetta");                 // private: nothing about it
+    await ok(api(a, "PUT", `/api/crews/${id}`, { name: "Ridge Runners", visibility: "public", about: "Sunday mornings", area: { name: "Robbinsville", lat: 35.3254, lon: -83.8071 } }));
+    await ok(api(b, "POST", "/api/crews/join", { token }));
+    const p = await previewFor(E, u);
+    expect(p).toMatchObject({ title: "Ridge Runners · a crew on Vetta", description: "2 drivers · Robbinsville. Sunday mornings", url: "https://vettadrive.app/", named: true });
+    const html = await (await withPreview(page(), E, u)).text();
+    expect(html).toContain("<title>Ridge Runners · a crew on Vetta</title>");
+    expect(html).not.toContain(token);                                              // the card's link is the front page
+    await E.DB.prepare("UPDATE crew_invites SET expires_at = datetime('now', '-1 hour')").run();
+    expect((await previewFor(E, u)).title).toBe("A crew on Vetta");                 // a dead link
+    expect(await (await withPreview(page(), E, u)).text()).toContain("<title>Vetta</title>");
+  });
+
   it("other links say what they are, never whose; a plain visit gets Vetta's line; a bad id asks nothing", async () => {
     expect((await previewFor(E, new URL("https://vettadrive.app/?crew=abc"))).title).toBe("A crew on Vetta");
     expect((await previewFor(E, new URL("https://vettadrive.app/?add=sam"))).description).not.toContain("sam");
