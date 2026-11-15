@@ -511,8 +511,14 @@
     /* real-drive review 2026-11-15: Play is a round key beside the scrubber, as on any player, one glyph that says what a tap
        does (it said "Play" while playing); its word stays for VoiceOver. The speeds, Jump to the corners and Done share the
        row under it. */
-    .transport { position: relative; grid-template-columns: 44px minmax(0, 1fr) auto; grid-template-areas: "play scrub scrub" "rate rate done"; }
-    .transport:has(> #videoBtn:not([hidden])) { grid-template-areas: "play scrub video" "rate rate done"; }
+    /* round 3: one row, as any player: play, the scrubber, one speed key that steps 1x, 2x, 4x, 8x (the radiogroup keeps its
+       four radios for VoiceOver; only the chosen one shows) and Done. Video floats over the map's left as Jump does its right. */
+    .transport { position: relative; grid-template-columns: 44px minmax(0, 1fr) auto auto; grid-template-areas: "play scrub rate done"; }
+    .transport:has(> #videoBtn:not([hidden])) { grid-template-areas: "play scrub rate done"; }
+    .transport .detents.tp-rate > button:not([aria-checked="true"]) { display: none; }
+    .transport .detents.tp-rate > button[aria-checked="true"] { min-width: 52px; padding: 0 8px; }
+    .transport > #videoBtn { position: absolute; left: 6px; bottom: calc(100% + 14px); min-height: 44px; padding: 0 16px; font-size: 15px; font-weight: 700;
+      background: var(--panel); color: var(--panel-ink); border: 1.5px solid var(--panel-ink); border-radius: var(--r-chip, 0); box-shadow: var(--elev-1, none); }
     /* Jump to the corners floats on the map over the transport's right end, as a player's Skip intro does */
     .transport > #jumpCorners { position: absolute; right: 6px; bottom: calc(100% + 14px); min-height: 44px; padding: 0 16px; font-size: 15px; font-weight: 700; white-space: nowrap;
       background: var(--panel); color: var(--panel-ink); border: 1.5px solid var(--panel-ink); border-radius: var(--r-chip, 0); box-shadow: var(--elev-1, none); }

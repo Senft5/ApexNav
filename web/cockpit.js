@@ -9445,8 +9445,12 @@
     $('playBtn').addEventListener('click', () => { setPlaying(!state.playing); });
     $('jumpCorners').addEventListener('click', () => { const b = $('jumpCorners'); if (b._at == null || !track) return; state.cursorM = b._at; paintReplayEnd(false); render(true); });   // the name is on the plate; the pack's voice is for the road
     document.querySelectorAll('#rateDetents [data-rate]').forEach((b) => b.addEventListener('click', () => {
-      state.rate = Number(b.dataset.rate);
-      document.querySelectorAll('#rateDetents [data-rate]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+      const all = [...document.querySelectorAll('#rateDetents [data-rate]')];
+      // one speed key (index.html, the transport's one row): the chosen speed is the only one shown, and a tap steps on
+      const pick = b.getAttribute('aria-checked') === 'true' && all.every((x) => x === b || !x.getClientRects().length) ? all[(all.indexOf(b) + 1) % all.length] : b;
+      state.rate = Number(pick.dataset.rate);
+      all.forEach((x) => x.setAttribute('aria-checked', String(x === pick)));
+      if (pick !== b) pick.focus({ preventScroll: true });
     }));
     const scrubber = $('scrubber');
     let scrubbing = false;
