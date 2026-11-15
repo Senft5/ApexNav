@@ -4349,7 +4349,11 @@ flow('the Log list: each drive has its road\'s shape beside its name; a summary 
     // sh2's summary as the app before this kept it: version 2, no shape, a score of its own that must survive
     const db = await new Promise((ok, no) => { const r = indexedDB.open('apexnav'); r.onsuccess = () => ok(r.result); r.onerror = no; });
     await new Promise((ok) => { const t = db.transaction('summaries', 'readwrite'), st = t.objectStore('summaries');
-      st.get('sh2').onsuccess = (e) => { const x = e.target.result; delete x.shape; x.sv = 2; x.ds = { ...x.ds, score: 777 }; st.put(x); }; t.oncomplete = ok; });
+      st.get('sh2').onsuccess = (e) => { const x = e.target.result; delete x.shape; x.sv = 2; x.ds = { ...x.ds, score: 777 }; st.put(x); };
+      // sh1 as an older build kept it: camber from before the fix (no cam_v) and a version-3 summary scored with it
+      st.get('sh1').onsuccess = (e) => { const x = e.target.result; x.sv = 3; x.ds = { ...x.ds, score: 555 }; st.put(x); }; t.oncomplete = ok; });
+    await new Promise((ok) => { const t = db.transaction('drives', 'readwrite'), st = t.objectStore('drives');
+      st.get('sh1').onsuccess = (e) => { const x = e.target.result; x.camber = x.lat.map(() => 5); st.put(x); }; t.oncomplete = ok; });
     db.close(); });
   await page.goto(base + '/analysis.html');
   await page.waitForSelector('#historyTable tr.row-link', { timeout: 15000 });
@@ -4358,7 +4362,9 @@ flow('the Log list: each drive has its road\'s shape beside its name; a summary 
   const sum = await page.evaluate(async () => (await ApexRecording.summaries(null)).map((x) => ({ id: x.id, sv: x.sv, n: (x.shape || []).length, score: x.ds.score })));
   check(rows.length === 2 && rows.every((r) => r.svg && r.hidden === 'true' && r.d > 100 && r.w === 48), 'each row draws its road, 48 pt, quiet to VoiceOver: ' + JSON.stringify(rows));
   const old = sum.find((x) => x.id === 'sh2');
-  check(old && old.sv === 3 && old.n === 32 && old.score === 777 && rows.find((r) => r.id === 'sh2').score.trim() === '777', 'the old summary got its shape and kept its score (not scored again): ' + JSON.stringify(sum));
+  check(old && old.sv === 4 && old.n === 32 && old.score === 777 && rows.find((r) => r.id === 'sh2').score.trim() === '777', 'the old summary got its shape and kept its score (not scored again): ' + JSON.stringify(sum));
+  const cam = sum.find((x) => x.id === 'sh1');
+  check(cam && cam.sv === 4 && cam.score !== 555, 'a drive with camber from before the fix is scored again, its camber unknown: ' + JSON.stringify(sum));
 });
 
 flow('the Log marks your best drive on a road you have scored twice or more, once, and never a road driven once (free roamer B, 2026-11-14)', async (page, base) => {
