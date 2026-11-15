@@ -11,7 +11,7 @@
 //        ctx/v1/index.json, ctx/v1/8/<x>/<y>.vcg, cameras/v1/region.json, osm/v2/<bi>_<bj>.bin (+ index.json, falls.json, closures.json)
 //        valhalla/v1/index.json, valhalla/v1/b/<build>/part-NNN   our own router's tile tar in 45 MB parts (src/valhalla.ts),
 //                                       read only by its container; the index goes live when every part is there
-import { verifyGitHubOidc } from "./github_oidc";
+import { ROAD_CARDS, verifyGitHubOidc } from "./github_oidc";
 import { Env, HttpError, json } from "./util";
 
 export const BUILD = /^[\w.:-]{1,64}$/;
@@ -60,6 +60,8 @@ export async function dataPut(req: Request, env: Env, ctx?: ExecutionContext): P
   if (!claims) throw new HttpError(401, "bad_token");
   const key = new URL(req.url).searchParams.get("key") ?? "";
   if (!KEYS.some((re) => re.test(key))) throw new HttpError(400, "bad_key");
+  // the card job writes its cards and nothing else; the map data jobs never write cards
+  if ((claims.workflow_file === ROAD_CARDS) !== key.startsWith("roads/")) throw new HttpError(403, "wrong_workflow");
   const declared = Number(req.headers.get("content-length") ?? 0);
   if (declared > MAX_BYTES) throw new HttpError(413, "too_big");
   const bytes = await req.arrayBuffer();
