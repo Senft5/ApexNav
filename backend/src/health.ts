@@ -7,7 +7,8 @@ import { Env, HttpError, body } from "./util";
 /** The only metrics accepted; anything else in a report is ignored. Keep in step with web/health.js. */
 export const METRICS = ["drives", "route_ok", "route_fail", "route_fallback", "road_upload_ok", "road_upload_fail",
   "hazard_queued", "hazard_sent_late", "calib_locked", "calib_lock_s", "directions_said", "crash_asked",
-  "boot_n", "boot_ready_cs", "boot_map_cs", "boot_slow", "voice_pack", "voice_phone"] as const;
+  "boot_n", "boot_ready_cs", "boot_map_cs", "boot_slow", "voice_pack", "voice_phone",
+  "reload_gl", "reload_web", "reload_back"] as const;
 const MAX_N = 100_000, MAX_AGE_DAYS = 7, KEEP_DAYS = 90;
 
 export async function healthReport(req: Request, env: Env): Promise<void> {

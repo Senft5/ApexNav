@@ -10809,6 +10809,32 @@ async function storeDashDrive(page, id = 'dc1', name = 'Dashcam road') {
   }, [id, name]);
 }
 
+flow('Replay from the Log plays the drive on the map in place: no page load, so no launch screen (the owner, 2026-11-15)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording);
+  await storeDashDrive(page, 'rp1', 'Replay road');
+  await storeDashDrive(page, 'rp2', 'Second road');
+  let loads = 0; page.on('framenavigated', (f) => { if (f === page.mainFrame()) loads++; });
+  await page.evaluate(() => { window.__samePage = 1; ApexLogHost.changed('drives'); });
+  await page.evaluate(() => document.querySelector('#tabbar .tab[data-view="log"]').click());
+  await page.waitForSelector('#logFrame:not([hidden])', { timeout: 30000 });
+  const log = page.frameLocator('#logFrame');
+  await log.locator('tr[data-drive="rp1"]').first().click();
+  await log.locator('#dvReplay').click();
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.id === 'rp1' && apexDebug.state.playing, null, { timeout: 20000 });
+  const one = await page.evaluate(() => ({ same: window.__samePage === 1, frame: document.getElementById('logFrame').hidden, open: document.documentElement.classList.contains('log-open'), mode: apexDebug.state.mode }));
+  check(loads === 0 && one.same && one.frame && !one.open && one.mode === 'replay', 'Replay plays the drive on this map, the Log closed, with no page load: ' + JSON.stringify({ loads, ...one }));
+  // a second replay from the Log: the first is dropped as a track (the page load used to drop it)
+  await page.evaluate(() => ApexLogHost.load('index.html?drive=rp2&play=1'));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.id === 'rp2', null, { timeout: 20000 });
+  check(loads === 0 && await page.evaluate(() => window.__samePage === 1), 'a second replay also plays in place');
+  // a drive deleted meanwhile says so and leaves the map as it was
+  await page.evaluate(() => ApexLogHost.load('index.html?drive=gone&play=1'));
+  await page.waitForFunction(() => /Couldn.t open that drive/.test(document.getElementById('toast').textContent), null, { timeout: 15000 });
+  check(loads === 0 && await page.evaluate(() => apexDebug.track && apexDebug.track.id === 'rp2'), 'a missing drive: one line, and the replay stays');
+});
+
 flow('the empty Log is a first page: the book\'s furniture in pencil, one key, and its switch in the page\'s own typeface (design pass 2026-11-10)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/analysis.html');

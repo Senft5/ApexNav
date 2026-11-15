@@ -419,6 +419,7 @@
       toast('Map graphics reset. Restoring…');
       glTimer = setTimeout(() => {
         if (state.mode === 'live') { toast('Map display lost. Your drive is still recording.'); return; }
+        health.bump('reload_gl');                                            // why the launch screen came back (app health)
         location.reload();                                                   // the planned route is kept (restorePlanned)
       }, 4000);
     });
@@ -6140,6 +6141,11 @@
         // a friend's handle on the Log: People, on their profile, without reloading the map page
         const friend = (() => { try { return new URL(url, location.href).searchParams.get('friend'); } catch (_) { return null; } })();
         if (friend && window.apexOpenFriend) { window.apexOpenFriend(String(friend).toLowerCase()); ApexLogHost.close('friends'); return; }
+        // a replay of a drive (Log → Replay): played on this map, in place. It was a page load, which brought the launch
+        // screen back and built the whole map again for every replay (the owner, 2026-11-15: "refreshing with the main
+        // loading screen when i do certain things")
+        const want = (() => { try { const q = new URL(url, location.href).searchParams; return q.get('drive') ? { id: q.get('drive'), at: parseFloat(q.get('at')) || 0, play: q.get('play') === '1' } : null; } catch (_) { return null; } })();
+        if (want && state.mode !== 'live' && !driveActive) { ApexLogHost.close('map'); replaySaved(want); return; }
         location.href = url;
       },
       // 'drives' | 'theme' | 'units': told now when the Log is showing, else when it is next opened
@@ -7048,7 +7054,8 @@
             `road uploads failed ${pct(get(app, 'road_upload_fail'), uploads)} of ${uploads}`,
             `mount set in ${locks ? Math.round(get(app, 'calib_lock_s') / locks) + ' s' : '--'} on average`,
             `${get(app, 'hazard_queued')} reports queued with no signal`, `${get(app, 'crash_asked')} crash checks`,
-            ...(get(app, 'boot_n') ? [`launch: ready in ${(get(app, 'boot_ready_cs') / get(app, 'boot_n') / 100).toFixed(1)} s, map in ${(get(app, 'boot_map_cs') / get(app, 'boot_n') / 100).toFixed(1)} s on average, over 2 s ${pct(get(app, 'boot_slow'), get(app, 'boot_n'))} of ${get(app, 'boot_n')}`] : [])].join(' · ') }));
+            ...(get(app, 'boot_n') ? [`launch: ready in ${(get(app, 'boot_ready_cs') / get(app, 'boot_n') / 100).toFixed(1)} s, map in ${(get(app, 'boot_map_cs') / get(app, 'boot_n') / 100).toFixed(1)} s on average, over 2 s ${pct(get(app, 'boot_slow'), get(app, 'boot_n'))} of ${get(app, 'boot_n')}`] : []),
+            ...(get(app, 'reload_gl') + get(app, 'reload_web') + get(app, 'reload_back') ? [`reloaded: map graphics lost ${get(app, 'reload_gl')}×, page killed in use ${get(app, 'reload_web')}×, after the background ${get(app, 'reload_back')}×`] : [])].join(' · ') }));
         }
       }).catch(() => sec.append(el('p', { className: 'note', textContent: 'Couldn\'t load the counts.' })));
       return sec;
@@ -11934,6 +11941,23 @@
     });
 
     const flag = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (_) {} return null; };
+    // A drive from the Log replayed on this map without a page load (ApexLogHost.load). Only the one replayed is kept as a
+    // track: a replay before it is dropped, as the page load that used to start each replay dropped it.
+    async function replaySaved({ id, at = 0, play = false }) {
+      const slow = setTimeout(() => toast('Loading the replay…'), 400);
+      for (let i = drives.length - 1; i >= 0; i--) if (drives[i].saved && drives[i] !== track && drives[i].id !== id) drives.splice(i, 1);
+      await refreshSavedDrives(id).catch(() => null);
+      let d = drives.find((x) => x.id === id);
+      if (!d) { await loadDemos(); d = drives.find((x) => x.id === id); }
+      clearTimeout(slow);
+      if (state.mode === 'live' || driveActive) return;                // a drive started meanwhile: it owns the map
+      if (!d) { toast('Couldn\'t open that drive. It may have been deleted.'); return; }
+      setPlaying(false);
+      booting = false; replayOn = true; closeSheet();
+      activate(d, Math.max(0, Math.min(1, at)) * d.dist[d.dist.length - 1]);
+      if (play) replayWhenReady(d); else paintIdle();
+    }
+    window.apexDebug.replaySaved = (w) => replaySaved(w);
     async function watchDryRidge() {
       if (!drives.some(x => x.id === 'dry_ridge')) toast('Loading the replay…');
       await loadDemos();
@@ -12492,6 +12516,7 @@
         if (msg && msg.type === 'journals') { if (journalsWaiter) journalsWaiter(msg); return; }
         if (msg && msg.type === 'driveCam') { driveCamSaid(msg.state); return; }
         if (msg && msg.type === 'carOffline') { carOfflineBytes = Number.isFinite(msg.bytes) ? msg.bytes : null; if (typeof renderOffline === 'function') renderOffline().catch(() => {}); return; }
+        if (msg && msg.type === 'reloaded') { health.bump(msg.why === 'background' ? 'reload_back' : 'reload_web'); return; }   // the shell reloaded a page iOS killed
         if (msg && msg.type === 'lifecycle') { if (driveActive) keepSave(); return; }   // going to the background: kept now
         if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'placeFound' || msg.type === 'placeContact' || msg.type === 'placeReversed' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'nudge') { nudgeAnswered(!!msg.granted); return; }
