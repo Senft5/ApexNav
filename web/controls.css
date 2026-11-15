@@ -145,3 +145,12 @@ html.kb-open .confirm-sheet .cs-acts { margin-top: 10px; } html.kb-open .confirm
    skip the double-tap-zoom wait. The controls above keep their own pressed look on top of this. */
 button, a[href], [role="button"], [role="switch"], .sw, label, summary { touch-action: manipulation; }
 button:not(:disabled):active, a[href]:active, [role="button"]:active, [role="switch"]:active, .sw:active, summary:active { opacity: 0.62; }
+
+/* The driving words on tap (web/vocabulary.js watchTerms; Nate 2026-11-15 "what do you mean by turn in"): the word keeps its
+   place in the sentence with a dotted underline; a tap opens one short line under it, a tap anywhere closes it. */
+.vt { display: inline; padding: 4px 0; margin: 0;   /* the padding only grows the tap area (an inline box), never the line */
+  border: 0; background: none; font: inherit; color: inherit; letter-spacing: inherit;
+  text-transform: inherit; text-decoration: underline dotted; text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; }
+.vt[aria-expanded="true"] { text-decoration-style: solid; color: var(--accent); }
+.vt-pop { position: fixed; z-index: 10001; padding: 10px 12px; background: var(--panel-ink); color: var(--panel); font-size: 14px; line-height: 1.4;
+  font-weight: 500; text-transform: none; letter-spacing: 0; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); border-radius: 2px; }

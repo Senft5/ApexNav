@@ -7903,6 +7903,7 @@
         const view = el('div', { className: 'stack-8 profile-view' });
         // P-04: Unfriend, Report and Block live at the profile's foot, not on the row
         const st = stateOf(f), photo = (where.get(f.handle) || {}).photo_id || null;
+        if (window.ApexVocabulary && ApexVocabulary.watchTerms) ApexVocabulary.watchTerms(view);   // a friend's DNA words, on tap
         ApexProfileView.show(view, p && !Array.isArray(p) ? p : { handle: f.handle, name: f.name }, { el, btn, back: () => closeProfile(), keys: keysFor(f),
           avatar: window.ApexPhotos ? ApexPhotos.avatar(photo, f.handle || '?', 56) : null, status: st && st.text ? { text: st.text, live: !!st.live } : null,
           partial: !p || Array.isArray(p), extra: [...lastShare(f), ...(drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), ...(roadbooks && f.handle ? [roadbooks.ofFriend(f.handle)] : []), aboutYou(f)],
@@ -11219,6 +11220,7 @@
       $('endPostRow').hidden = !member; $('endPost').disabled = false; $('endPost').textContent = 'Post to friends'; $('endPost').setAttribute('aria-disabled', 'true');
       $('endPostMore').hidden = false; $('endPostMore').setAttribute('aria-disabled', 'true');
       $('endShare').classList.toggle('solid', !member);
+      if (window.ApexVocabulary && ApexVocabulary.watchTerms) ApexVocabulary.watchTerms($('endCard'));   // the coaching's driving words, on tap
       $('endCard').classList.add('show');
       showEndTrail(c);
     }
