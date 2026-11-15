@@ -200,6 +200,125 @@
     return gps >= 1 ? 'sharp' : gps >= 0.4 ? 'firm' : 'gentle';
   }
 
-  const api = { rateWord, TERMS, SHARED, KNOWN, SAMPLE, ROAD_WORDS, plainRoads, sampleCall, sampleStrip, sampleQuote, wordsExample };
+  // ---- the driving words, on tap (Nate 2026-11-15: "what do you mean by turn in and stuff") ----------------------------
+  // The coaching and the DNA skills speak a driver's language (turn-in, apex, trail-braking). Each word is underlined where
+  // it first shows in a paragraph, and a tap on it says what it means in a sentence or two: no glossary page, no wall of text.
+  // `words` are how it is written in the app (matched whole, any case; the longest first, so "late apex" is not "apex").
+  const DRIVING = {
+    turnIn: { label: 'Turn-in', words: ['turn-in', 'turn in', 'turning in', 'turns in'],
+      meaning: 'The moment you start steering into a corner.' },
+    apex: { label: 'Apex', words: ['apex', 'apexes'],
+      meaning: 'The middle of a corner, where your car passes closest to its inside edge.' },
+    lateApex: { label: 'Late apex', words: ['late apex'],
+      meaning: 'Reaching the inside of the corner just after its middle. You see the way out sooner and can get back on the gas earlier.' },
+    earlyApex: { label: 'Early apex', words: ['early apex'],
+      meaning: 'Reaching the inside of the corner too soon, which runs you wide on the way out.' },
+    patientApex: { label: 'Patient apex', words: ['patient apex'],
+      meaning: 'Waiting to be at your slowest until the middle of the corner or just after, not before it.' },
+    trailBrake: { label: 'Trail-braking', words: ['trail-braking', 'trail braking', 'trail-braker', 'trail-brake'],
+      meaning: 'Easing off the brakes gradually as you start to steer, instead of letting go of them before you turn.' },
+    entrySpeed: { label: 'Entry speed', words: ['entry speed'],
+      meaning: 'How fast you are going as you start into the corner.' },
+    brakingPoint: { label: 'Braking point', words: ['braking point'],
+      meaning: 'The spot where you start braking for a corner.' },
+    backToPower: { label: 'Back to power', words: ['back to power'],
+      meaning: 'Picking the gas back up once the braking is done.' },
+    camber: { label: 'Camber', words: ['negative camber', 'camber', 'off-camber'],
+      meaning: 'The road’s sideways tilt. Tilted into the turn helps hold you; tilted away (negative camber) pushes you out.' },
+    rhythm: { label: 'Rhythm', words: ['rhythm'], meaning: TERMS.rhythm.meaning },
+  };
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const WORD_LIST = Object.entries(DRIVING).flatMap(([k, t]) => t.words.map((w) => [w, k])).sort((a, b) => b[0].length - a[0].length);
+  const WORD_RE = new RegExp(`(^|[^\\w-])(${WORD_LIST.map(([w]) => esc(w).replace(/[- ]/g, '[- ]')).join('|')})(?![\\w-])`, 'i');
+  const keyOf = (w) => { const n = w.toLowerCase().replace(/ /g, '-'); const hit = WORD_LIST.find(([x]) => x.replace(/ /g, '-') === n); return hit ? hit[1] : null; };
+
+  /** A text in pieces: [{ text }] and [{ text, term }] for each driving word in it, the first of each kind only (seen: the
+   *  kinds already marked in this paragraph). Pure: tests/test_vocabulary.py. */
+  function termSpans(text, seen = new Set()) {
+    const out = []; let rest = String(text == null ? '' : text);
+    for (let m = WORD_RE.exec(rest); m; m = WORD_RE.exec(rest)) {
+      const at = m.index + m[1].length, word = m[2], k = keyOf(word);
+      if (k && !seen.has(k)) {
+        seen.add(k);
+        if (at) out.push({ text: rest.slice(0, at) });
+        out.push({ text: word, term: k });
+      } else out.push({ text: rest.slice(0, at + word.length) });
+      rest = rest.slice(at + word.length);
+    }
+    if (rest) out.push({ text: rest });
+    return out.reduce((a, x) => (!x.term && a.length && !a[a.length - 1].term ? (a[a.length - 1].text += x.text, a) : (a.push({ ...x }), a)), []);
+  }
+  /** What a tap on a word says: "Turn-in: the moment you start steering into a corner." */
+  const termLine = (k) => (DRIVING[k] ? `${DRIVING[k].label}: ${DRIVING[k].meaning.charAt(0).toLowerCase()}${DRIVING[k].meaning.slice(1)}` : null);
+
+  // The page side: underline the words in a part of the page, and one small card under the word on a tap.
+  const SKIP = 'button, a, input, select, textarea, label, svg, canvas, script, style, .vt-pop, [data-no-terms]';
+  const BLOCK = 'p, li, td, th, dd, dt, summary, h2, h3, h4, figcaption, div';
+  function explainTerms(el) {
+    const doc = el && el.ownerDocument;
+    if (!doc || !doc.createTreeWalker) return 0;
+    const walk = doc.createTreeWalker(el, 4), hits = [];
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) if (WORD_RE.test(n.nodeValue) && n.parentElement && !n.parentElement.closest(SKIP)) hits.push(n);
+    let made = 0;
+    for (const n of hits) {
+      const block = n.parentElement.closest(BLOCK) || n.parentElement;
+      const seen = new Set([...block.querySelectorAll('.vt')].map((b) => b.dataset.term));
+      const spans = termSpans(n.nodeValue, seen);
+      if (!spans.some((x) => x.term)) continue;
+      const frag = doc.createDocumentFragment();
+      for (const x of spans) {
+        if (!x.term) { frag.append(doc.createTextNode(x.text)); continue; }
+        const b = doc.createElement('button');
+        b.type = 'button'; b.className = 'vt'; b.dataset.term = x.term; b.textContent = x.text;
+        b.setAttribute('aria-expanded', 'false'); b.setAttribute('aria-label', `${x.text}: what it means`);
+        frag.append(b); made++;
+      }
+      n.replaceWith(frag);
+    }
+    return made;
+  }
+  let pop = null, popFor = null;
+  function closeTerm() {
+    if (pop) pop.remove();
+    if (popFor) popFor.setAttribute('aria-expanded', 'false');
+    pop = popFor = null;
+  }
+  function openTerm(b) {
+    const doc = b.ownerDocument, line = termLine(b.dataset.term);
+    if (!line) return;
+    closeTerm();
+    pop = doc.createElement('div'); pop.className = 'vt-pop'; pop.setAttribute('role', 'status'); pop.textContent = line;
+    doc.body.append(pop); popFor = b; b.setAttribute('aria-expanded', 'true');
+    // fixed under the word (the card may sit in a sheet that scrolls on its own); above it when the word is low on the screen
+    const r = b.getBoundingClientRect(), vw = doc.documentElement.clientWidth, vh = doc.documentElement.clientHeight, w = Math.min(300, vw - 32);
+    pop.style.width = `${w}px`;
+    pop.style.left = `${Math.max(16, Math.min(r.left, vw - w - 16))}px`;
+    if (r.bottom + 6 + 90 > vh && r.top > vh / 2) pop.style.bottom = `${vh - r.top + 6}px`; else pop.style.top = `${r.bottom + 6}px`;
+  }
+  let wired = false;
+  /** Underline the driving words in `el` now and as it changes; a tap on one opens its line, a tap anywhere closes it. */
+  function watchTerms(el) {
+    if (!el || !el.ownerDocument) return;
+    const doc = el.ownerDocument;
+    if (!wired) {
+      wired = true;
+      doc.addEventListener('click', (e) => {
+        const b = e.target && e.target.closest && e.target.closest('.vt');
+        if (b) { e.preventDefault(); e.stopPropagation(); if (popFor === b) closeTerm(); else openTerm(b); return; }
+        closeTerm();
+      }, true);
+      doc.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTerm(); });
+      doc.defaultView.addEventListener('resize', closeTerm);
+      doc.addEventListener('scroll', () => { if (pop) closeTerm(); }, true);
+    }
+    if (el.dataset.vtWatch) return;
+    el.dataset.vtWatch = '1';
+    explainTerms(el);
+    if (typeof MutationObserver === 'undefined') return;
+    let t = 0;
+    new MutationObserver(() => { if (!t) t = setTimeout(() => { t = 0; explainTerms(el); }, 120); }).observe(el, { childList: true, subtree: true });
+  }
+
+  const api = { rateWord, DRIVING, termSpans, termLine, explainTerms, watchTerms, TERMS, SHARED, KNOWN, SAMPLE, ROAD_WORDS, plainRoads, sampleCall, sampleStrip, sampleQuote, wordsExample };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexVocabulary = api;
 })(typeof window !== 'undefined' ? window : globalThis);

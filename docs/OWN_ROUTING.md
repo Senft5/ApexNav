@@ -241,7 +241,9 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   with no pointer it serves the branch's OH/KY/IN tiles. Plan: tools/graph_etl/us_plan.py (one job per 1 degree band x
   15 degree chunk, each fetching only the Geofabrik states under its blocks' margins, kept once per run as artifacts).
   A pilot (`only=` in tools/graph_etl/US_BUILD) makes a release but moves the pointer only with `live=true`; the two
-  newest US releases are kept. Still free: public-repo Actions minutes and release storage. R2 (bet #1, needs the
+  newest US releases are kept. Alaska and Hawaii (2026-11-15) are built too, on their own boxes where the roads are
+  (us_plan.py EXTRA: Alaska's outline crosses the date line, Hawaii's runs out to Midway); `bands_from` takes several
+  run ids, so a pilot's Alaska and Hawaii publish beside the lower 48's bands without building those again. Still free: public-repo Actions minutes and release storage. R2 (bet #1, needs the
   owner's card) would replace the release reads, nothing else. Outside OH/KY/IN the context grid is unknown (the
   edges' grid channels unknown, never guessed) until ctx-region.yml covers more.
 

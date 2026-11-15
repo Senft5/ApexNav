@@ -33,7 +33,7 @@ def poly_text(name: str, geometry: dict) -> str:
 
 def write(index: dict, out_dir: str) -> list[str]:
     """polys/<state>.poly for every lower-48 state in the index; returns the ids written."""
-    want = set(states(index))
+    want = set(states(index, extra=False))   # the lower-48 route context build's states (Alaska and Hawaii: graph only)
     os.makedirs(out_dir, exist_ok=True)
     done = []
     for f in index.get("features", []):

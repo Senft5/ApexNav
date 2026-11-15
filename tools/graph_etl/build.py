@@ -186,7 +186,7 @@ def road_channels(g, f, k, sc):
             "calming_per_km": float(per[ki["calming"]]), "schools_per_km": float(f["civic"][k][0]),
             "worship_per_km": float(f["civic"][k][1]), "sidewalk": None if walk is None or walk != walk else float(walk),
             "built": sc.get("built"), "density": sc.get("dens"), "bldg_per_km": float(f["bldg"][k]),
-            "addr_per_km": float(f["addr"][k]) if f["addr"] is not None else None}
+            "addr_per_km": float(f["addr"][k]) if f["addr"] is not None else None, "byway": float(a.get("byway") or 0)}
 
 
 def simplify(coords):
@@ -402,7 +402,8 @@ def ctx_tag(ctx_dir):
     p = os.path.join(ctx_dir or "", "index.json")
     if not ctx_dir or not os.path.exists(p) or os.path.samefile(ctx_dir, os.path.join(ROOT, "web", "data", "ctx", "v1")):
         return ""
-    return "-g" + hashlib.sha1(open(p, "rb").read()).hexdigest()[:6]
+    release = json.load(open(p)).get("release")      # a cut of one release (tools/ctx_etl/fetch.py): that release's id
+    return "-g" + (str(release)[:6] if release else hashlib.sha1(open(p, "rb").read()).hexdigest()[:6])
 
 
 def run_scorer(records_path, scores_path, dem_cache, ctx_dir):

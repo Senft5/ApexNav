@@ -53,7 +53,7 @@
     "mark:stop": "Stop sign", "mark:level_crossing": "Railway crossing", "mark:one_lane_bridge": "One-lane bridge", "mark:calming": "Speed bump",
     "mark:calming_many": "Speed bumps", "mark:deer": "Deer crossing", "mark:horse": "Horse crossing", "mark:cattle": "Cattle crossing",
     "mark:animal": "Animal crossing", "mark:buggy": "Horse-drawn buggies", "mark:covered_bridge": "Covered bridge", "mark:ford": "Water crossing",
-    "mark:unpaved": "Unpaved road", "mark:rough": "Rough road", "mark:narrow": "Narrow road", "mark:tee": "T-junction", "line:sun_ahead": "Sun in your eyes ahead.", "line:brakes_hot": "Brakes are getting hot. Use a lower gear and ease off.",
+    "mark:unpaved": "Unpaved road", "mark:rough": "Rough road", "mark:narrow": "Narrow road", "mark:junction": "Hidden junction", "mark:school": "School zone", "mark:roundabout": "Roundabout", "mark:icy_bridge": "Bridge may be icy", "mark:icy_bridges": "Bridges may be icy", "mark:tee": "T-junction", "line:sun_ahead": "Sun in your eyes ahead.", "line:brakes_hot": "Brakes are getting hot. Use a lower gear and ease off.",
     "line:descent": "Long descent ahead. A lower gear saves the brakes.", "dot:crash": "Crash ahead.", "dot:lane": "Lane closed ahead.",
     "dot:ramp": "Ramp closed ahead.", "dot:closure": "Road closed ahead.", "dot:roadwork": "Roadwork ahead.", "dot:obstruction": "Obstruction ahead.",
     "dot:slow": "Slow traffic ahead.", "dot:stop_go": "Stop and go ahead.", "dot:weather": "Weather ahead.", "dot:alert": "Traffic alert ahead.",
@@ -229,6 +229,7 @@
       if (m[4]) { const h = nums(+m[4]); if (!h) return null; out.push(...h, m[5] === 'hairpin' ? 'frag:hairpin' : 'frag:hairpins'); }
       return out;
     }
+    if (t === 'Twisty section ahead.') return ['frag:twisty'];   // its corners run on past the road ahead (free drive)
     if ((m = /^Twisty section ahead\. (\d+) corners\.$/.exec(t))) { const c = nums(+m[1]); return c ? ['frag:twisty', ...c, 'frag:corners'] : null; }
     if ((m = /^(.+) ahead\.?$/.exec(t)) && DOT[m[1].toLowerCase()]) return [DOT[m[1].toLowerCase()]];
     // live coaching (pass_coach.js line): the gap to your fastest pass, in tenths or seconds, or points on a stretch

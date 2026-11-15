@@ -42,6 +42,8 @@
     // goodness = not a side street (the engine's poor cost: quality 0.25 -> 0.45) + quality + corners + scenery. Corners
     // carry most of it: a motorway is good road (quality ~0.8) but no fun, and must not soak up the Fun objective
     W_NOTPOOR: 0.2, W_QUALITY: 0.15, W_FUN: 0.45, W_SCENERY: 0.2, POOR_LO: 0.25, POOR_HI: 0.45,
+    // the least scenery a designated scenic road counts (tiles' byway channel: [none, a scenic byway, a National Scenic Byway])
+    BYWAY_S: [null, 0.75, 0.9],
     FUN_FULL_PCT: 0.5,       // fun per km that counts as full: the loaded network's median of edges with corners
     // members' data (crowd.js channels) per edge, with the route engine's own weights (route_engine.js QUALITY/SCENERY)
     // against the share of the model the tile's score already knew (conf x the model's weight)
@@ -88,13 +90,24 @@
     // highway-free way over HWY_ABSURD x the quickest's time is still the level's way (the card says Quick is the way); the
     // budget never shuts out the highway-free quickest (+ HWY_FREE_SLACK_S). A point snapped onto a highway moves to the
     // nearest other road within HWY_SNAP_M (a car on the highway, heading given and within HWY_ON_M of it, stays on it)
-    NO_HWY: { fun: true, max: true }, TRUNK_FUN_KM: 1.5, HWY_LINK_X: 25, HWY_ABSURD: 2, HWY_FREE_SLACK_S: 60, HWY_SNAP_M: 150, HWY_ON_M: 25,
+    NO_HWY: { fun: true, max: true }, TRUNK_FUN_KM: 1.5, TRUNK_STRETCH_M: 8000, HWY_LINK_X: 25, HWY_ABSURD: 2, HWY_FREE_SLACK_S: 60, HWY_SNAP_M: 150, HWY_ON_M: 25,
+    // a road trip (2026-11-15): where keeping off the highways costs more than HWY_FIT_S past the level's own budget
+    // (Denver to Ouray at Fun: 12 h highway-free against 5.5 h, so the card fell back to Quick; Cincinnati to Deals Gap:
+    // 8.4 h against 5 h with one bridge of interstate), the level takes highway where it must to stay inside its budget:
+    // each highway second costs the largest of HWY_FIT_X that fits, so the twisty roads stay and the long straight
+    // transit goes on the highway. A short ride is untouched: its highway-free way is rarely that much longer.
+    HWY_FIT_S: 1200, HWY_FIT_X: [8, 4, 2.5, 1.6, 1.25],
+    // the A* bound's top speed (view): the fastest edge of at least VMAX_MIN_M, at most VMAX_MPS (the 85 mph of Texas 130,
+    // as the tiles time it: the limit x 1.05 flow, 40 m/s)
+    VMAX_MIN_M: 200, VMAX_MPS: 40,
+    // a corridor that holds no way (wider()): tried again this much larger, then with none
+    ELLIPSE_GROW: 1.5, ELLIPSE_GROW_M: 10000,
     // loops (loop()): at Quick motorway and trunk cost x LOOP_HWY_X on every leg (a short link to good roads, never the
     // bulk), at Fun and Long way they are never driven (NO_HWY, the same exception); the
     // stages within reach of half the length at LOOP_REACH_MS; at most LOOP_STAGES of them chained, LOOP_TRIES loops
     // routed, each stage driven through a point every LOOP_ALONG_M; a loop with more than LOOP_MAX_RETRACED driven twice
     // is dropped
-    LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 12, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_MAX_RETRACED: 0.4, LOOP_DIRT_KM: 2, LOOP_DIRT_TRY: [0.7, 0.5, 1.4], STAGE_KM: 40,
+    LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 12, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_ALONG_N: 10, OUT_BACK_ROUTES: 2, OUT_BACK_NEXT_KM: 5, LOOP_MAX_RETRACED: 0.4, LOOP_DIRT_KM: 2, LOOP_DIRT_TRY: [0.7, 0.5, 1.4], STAGE_KM: 40, STAGE_ON_TURN: 0.5, STAGE_GAP_M: 4000, STAGE_JOIN_M: 6000, STAGE_NAME_TURN: 2.6, STAGE_PLAIN: 1,
     LOOP_CONN_FACTOR: 1.7, LOOP_CONN_A: 3, LOOP_MAX_OFF: 0.6, LOOP_NEAR_OFF: 0.15, LOOP_RING_OFF: 0.3, LOOP_RETRIES: 4, LOOP_REFITS: 2, LOOP_CONN_A_SHORT: 1, LOOP_CONN_A_LONG: 6, LOOP_FIT_OFF: 0.12,   // a connector's road length over its crow line, the router's detours to good road in it (Cincinnati, 2026-11-04)
     SNAP_M: 1500, GRID_DEG: 0.01, LIVE_NODES: 200, LIVE_TRIES: 4,   // a snap's road reaches LIVE_NODES or it's an island (snapLive)
     // long trips (2026-11-15): a corridor over LONG_TILES tiles (about 150 km crow at Fun, 100 at Long way) is cut to a
@@ -205,8 +218,11 @@
         name[g] = ed.name && ed.name[e] !== NO_NAME ? ed.name[e] : -1;
         if (ed.hIn && ed.hOut) { hIn[g] = ed.hIn[e] / 256 * 2 * Math.PI; hOut[g] = ed.hOut[e] / 256 * 2 * Math.PI; }
         if (ed.ch) for (const k in ed.ch) roadCh[k][g] = ed.ch[k][e];
+        // the A* bound's top speed: from edges long enough for their time to be measured, never past VMAX_MPS (2026-11-15:
+        // one 60 m edge in Ohio timed at 0.5 s, 430 km/h, made every search in its view 3 x as blind, and Long way from
+        // Cincinnati to Deals Gap ran out of search before reaching it; a 4 m edge rounds to 0.1 s, 43 m/s)
         const v = len[g] / time[g];
-        if (v > vmax) vmax = v;
+        if (v > vmax && len[g] >= K.VMAX_MIN_M) vmax = Math.min(v, K.VMAX_MPS);
       }
     });
     first[N] = E;
@@ -470,7 +486,8 @@
       if (f.mode === 'link') out.route.hwyReason = hwyReason(v, out);
       return out;
     }
-    const r = search(v, obj, src, dst, 0, null, opts);
+    let r = search(v, obj, src, dst, 0, null, opts);
+    for (const el of r ? [] : wider(opts.ellipse)) { r = search(v, obj, src, dst, 0, null, { ...opts, ellipse: el }); if (r) break; }
     if (!r) throw new Error('no route');
     v.quickMemo = { key: quickKey(req, level, obj), r };
     return assemble(v, r, obj, { level, role: 'quickest', a: 0 });
@@ -505,8 +522,14 @@
       if (!dst.length) { if (k === pts.length - 1) throw new Error('no road near the end'); continue; }   // a via off the network: passed by
       if (free) dst = snapOff(v, p, dst);
       const o = { ...(!legs.length && sc ? { startCost: sc } : {}), ellipse: ellipseFor(at, p, 'quick') };
-      let res = search(v, obj, prev, dst, 0, null, free ? { ...o, ban: is } : o);
-      if (!res && free) res = search(v, obj, prev, dst, 0, null, { ...o, hwyX: { is, x: K.HWY_LINK_X } });
+      let res = null;
+      // (a mountain road can leave the leg's ellipse: wider() ones then)
+      for (const el of [o.ellipse, ...wider(o.ellipse)]) {
+        const oe = { ...o, ellipse: el };
+        res = search(v, obj, prev, dst, 0, null, free ? { ...oe, ban: is } : oe);
+        if (!res && free) res = search(v, obj, prev, dst, 0, null, { ...oe, hwyX: { is, x: K.HWY_LINK_X } });
+        if (res) break;
+      }
       if (!res) throw new Error('no route');
       legs.push(res);
       prev = [{ edge: res.edges[res.edges.length - 1], frac: res.ft, lat: 0, lon: 0 }];
@@ -673,7 +696,7 @@
     return v.objCache.get(key);
   }
   const OBJ_KNOBS = ['W_NOTPOOR', 'W_QUALITY', 'W_FUN', 'W_SCENERY', 'POOR_LO', 'POOR_HI', 'GATE_LO', 'GATE_HI', 'UNKNOWN_G', 'MODEL_WQ', 'MODEL_WS', 'PRIVATE_X', 'PRIVATE_S',
-    'DESTINATION_X', 'DESTINATION_S', 'FERRY_X', 'UNPAVED_X', 'AVOID_HWY_X', 'AVOID_TOLL_X', 'AVOID_FERRY_X', 'AVOID_UNPAVED_X', 'AVOID_POINT_X', 'AVOID_POINT_M', 'AVOID_CAM_X', 'AVOID_CAM_M', 'CLOSED_X', 'CLOSED_M', 'HAZARD_X', 'HAZARD_M', 'PREF_STEP'];
+    'DESTINATION_X', 'DESTINATION_S', 'FERRY_X', 'UNPAVED_X', 'AVOID_HWY_X', 'AVOID_TOLL_X', 'AVOID_FERRY_X', 'AVOID_UNPAVED_X', 'AVOID_POINT_X', 'AVOID_POINT_M', 'AVOID_CAM_X', 'AVOID_CAM_M', 'CLOSED_X', 'CLOSED_M', 'HAZARD_X', 'HAZARD_M', 'PREF_STEP', 'BYWAY_S'];
   const clampPref = (x) => (Number.isFinite(Number(x)) ? Math.max(-1, Math.min(1, Number(x))) : 0);
   /**
    * Per edge, the share of its turning (radians, at each inner vertex of its line) in tight corners (local radius under
@@ -729,11 +752,17 @@
     // only, so the built-up cut is applied here from the v2 tiles' road channels, read as route_engine.js builtEvidence
     // reads them (density, sidewalk, businesses, buildings, addresses: two agreeing)
     const builtAt = builtAgreeOf(v), F = FunRoute();
+    // a designated scenic road (the tiles' byway channel, from 2026-11-15's builds: 1 a scenic byway, 2 a National Scenic
+    // Byway or All-American Road) counts at least BYWAY_S[level] scenery: the Talimena and the Blue Ridge Parkway sweep
+    // more than they wind, and their views aren't in the land cover (2026-11-15: Fun took US 59 off the Talimena)
+    const byway = v.roadCh && v.roadCh.byway ? v.roadCh.byway : null, BS = K.BYWAY_S || [];
     let minBad = 1;
     for (let e = 0; e < E; e++) {
       // unknown (255, 65535) is unknown: its weight drops out; nothing known at all is UNKNOWN_G
-      const qk = v.quality[e] !== UNKNOWN_U8, sk = v.scenery[e] !== UNKNOWN_U8, fk = Number.isFinite(v.fun[e]);
-      let q = qk ? v.quality[e] / 254 : K.UNKNOWN_G, s = sk ? v.scenery[e] / 254 : 0, cf = qk ? v.conf[e] / 255 : 0;
+      const by = byway && byway[e] >= 1 ? BS[Math.min(2, byway[e])] : null;
+      const qk = v.quality[e] !== UNKNOWN_U8, sk = v.scenery[e] !== UNKNOWN_U8 || Number.isFinite(by), fk = Number.isFinite(v.fun[e]);
+      let q = qk ? v.quality[e] / 254 : K.UNKNOWN_G, s = v.scenery[e] !== UNKNOWN_U8 ? v.scenery[e] / 254 : 0, cf = qk ? v.conf[e] / 255 : 0;
+      if (Number.isFinite(by)) s = Math.max(s, by);
       // members' measurements on this edge: smooth and flowing raise its quality, loved and banked its scenery
       if (crowd && crowd.has[e]) {
         const c = crowd, kq = cf * K.MODEL_WQ, ks = (sk ? cf : 0) * K.MODEL_WS;
@@ -830,6 +859,62 @@
       hk: new Float64Array(1024), hv: new Int32Array(1024), hn: 0 };
     return v.scratch;
   }
+  /**
+   * The search's lower bound on the time from each node to the goal (dst: snaps), by one backward Dijkstra on the edge
+   * times inside the corridor ellipse: turn costs, restrictions, bans and the objective's factors left out, so it never
+   * overestimates (every edge costs at least its time x exp(a x minBad)). Infinity: no way to the goal inside the
+   * ellipse. A long trip's searches then go along the corridor instead of flooding it (2026-11-15: Cincinnati to Deals
+   * Gap's searches settled 1.5 to 4 million edges each by the crow-line bound). Kept on the view for the goal (v.tt).
+   */
+  function timeTo(v, dst, el, ban = null, fwd = false) {
+    const key = (fwd ? 'f' : 'b') + dst.map((d) => `${d.edge}:${d.frac}`).join(',') + (el ? `|${el.a.lat},${el.a.lon},${el.b.lat},${el.b.lon},${el.major}` : '') + (ban ? `|ban${banId(ban)}` : '');
+    // three kept (to the goal, to it off the highways, and from the start: fwd, the same from the snaps `dst` given as
+    // the start), the oldest reused
+    const kept = v.tt || (v.tt = []);
+    const hit = kept.find((x) => x.key === key);
+    if (hit) return hit.t;
+    const N = v.N, old = kept.length >= 3 ? kept.shift() : null;
+    const T = old && old.t.length === N ? old.t : new Float32Array(N), seen = old && old.in.length === N ? old.in : new Uint8Array(N);
+    T.fill(Infinity); seen.fill(0);
+    const inside = el ? (n) => { if (!seen[n]) seen[n] = distM(v.lat[n], v.lon[n], el.a.lat, el.a.lon) + distM(v.lat[n], v.lon[n], el.b.lat, el.b.lon) <= el.major ? 1 : 2; return seen[n] === 1; } : () => true;
+    let hk = new Float64Array(1024), hv = new Int32Array(1024), hn = 0;
+    const push = (k, n) => {
+      if (hn >= hk.length) { const a = new Float64Array(hk.length * 2); a.set(hk); hk = a; const b = new Int32Array(hv.length * 2); b.set(hv); hv = b; }
+      let i = hn++;
+      while (i > 0) { const p = (i - 1) >> 1; if (hk[p] <= k) break; hk[i] = hk[p]; hv[i] = hv[p]; i = p; }
+      hk[i] = k; hv[i] = n;
+    };
+    // (keys as stored: T is a Float32Array, and a 64-bit key a hair over its rounded copy would read as stale)
+    for (const d of dst) { const n = fwd ? v.to[d.edge] : v.tail[d.edge], c = Math.fround((fwd ? 1 - d.frac : d.frac) * v.time[d.edge]); if (n >= 0 && c < T[n]) { T[n] = c; push(c, n); } }
+    while (hn > 0) {
+      const k = hk[0], m = hv[0], lk = hk[--hn], lm = hv[hn];
+      let i = 0;
+      for (;;) { let c = 2 * i + 1; if (c >= hn) break; if (c + 1 < hn && hk[c + 1] < hk[c]) c++; if (hk[c] >= lk) break; hk[i] = hk[c]; hv[i] = hv[c]; i = c; }
+      hk[i] = lk; hv[i] = lm;
+      if (k > T[m]) continue;
+      if (fwd) {
+        for (let e = v.first[m]; e < v.first[m + 1]; e++) {
+          const n = v.to[e];
+          if (n < 0 || (ban && ban[e])) continue;
+          const c = Math.fround(k + v.time[e]);
+          if (c < T[n] && inside(n)) { T[n] = c; push(c, n); }
+        }
+      } else {
+        for (let r = v.rfirst[m]; r < v.rfirst[m + 1]; r++) {
+          const e = v.redge[r];
+          if (ban && ban[e]) continue;
+          const n = v.tail[e], c = Math.fround(k + v.time[e]);
+          if (c < T[n] && inside(n)) { T[n] = c; push(c, n); }
+        }
+      }
+    }
+    kept.push({ key, t: T, in: seen });
+    return T;
+  }
+  // a ban array's id for timeTo's key (the same array, the same id)
+  const banIds = new WeakMap();
+  let banN = 0;
+  function banId(b) { if (!banIds.has(b)) banIds.set(b, ++banN); return banIds.get(b); }
   /** Seconds a turn from edge p onto edge e costs at their node (time, not scaled); Infinity when it isn't allowed. */
   function turnCost(v, p, e, obj) {
     const B = v.bits, node = v.to[p];
@@ -898,7 +983,14 @@
     const { bad, mult, add, minBad } = obj;
     const tgt = dst[0];
     const hMul = Math.exp(a * minBad) / v.vmax * 0.995;
-    const H = (n) => { if (hs[n] !== S.qid) { hs[n] = S.qid; h[n] = distM(v.lat[n], v.lon[n], tgt.lat, tgt.lon) * hMul; } return h[n]; };
+    // opts.timeTo: the backward bound (timeTo) when the plan has one, else the crow line at the top speed
+    const tt = opts.timeTo ? timeTo(v, dst, opts.ellipse || null, opts.ban || null) : null, tMul = Math.exp(a * minBad) * 0.995;
+    // opts.limitS (with the bound): a node no route can pass inside the plan's budget (the same bound from the start,
+    // then the bound to the goal) is never entered; a route through it would be over the budget anyway
+    const lim = tt && opts.limitS ? opts.limitS : 0, tf = lim ? timeTo(v, src, opts.ellipse || null, opts.ban || null, true) : null;
+    const late = lim ? (n) => tf[n] + tt[n] > lim : null;
+    const H = tt ? (n) => { if (hs[n] !== S.qid) { hs[n] = S.qid; h[n] = Math.max(distM(v.lat[n], v.lon[n], tgt.lat, tgt.lon) * hMul, tt[n] * tMul); } return h[n]; }
+      : (n) => { if (hs[n] !== S.qid) { hs[n] = S.qid; h[n] = distM(v.lat[n], v.lon[n], tgt.lat, tgt.lon) * hMul; } return h[n]; };
     const ban = opts.ban || null, hx = opts.hwyX || null, stopX = Math.max(-1, (Number.isFinite(K.STOP_AVOID_X) ? K.STOP_AVOID_X : 1) - 1);
     const base = hx ? (e) => (v.time[e] * Math.exp(a * bad[e]) * mult[e] + add[e]) * (penal ? penal[e] : 1) * (hx.is[e] ? hx.x : 1)
       : (e) => (v.time[e] * Math.exp(a * bad[e]) * mult[e] + add[e]) * (penal ? penal[e] : 1);
@@ -956,7 +1048,7 @@
         // the ellipse bounds where the search goes on from, not the goal: a target edge whose far end is outside it (a 6 km
         // mountain edge with no junction, the goal 60 m along it) is still reached (2026-11-14: every Robbinsville loop
         // failed on such a leg)
-        const out = bound && !bound(head);
+        const out = (bound && !bound(head)) || (late && late(head));
         if (out && !dstMap.has(e)) continue;
         let tc = turnCost(v, p, e, obj);
         if (tc === Infinity) continue;
@@ -1154,6 +1246,12 @@
    * trip reach a good road). A loop: the circle its length can reach.
    */
   /** The corridor ellipse a level's budget can reach (as tilesFor sizes it): foci at the ends, the sum of distances. */
+  /**
+   * The larger corridors to try when a level's ellipse holds no way at all (2026-11-15: Estes Park to Grand Lake at
+   * Quick, "no route": Trail Ridge Road winds 78 km for a 28 km crow line and leaves Quick's ellipse by 1.4 km). Then
+   * no ellipse: the loaded tiles bound it.
+   */
+  function wider(el) { return el ? [{ ...el, major: el.major * K.ELLIPSE_GROW + K.ELLIPSE_GROW_M }, null] : []; }
   function ellipseFor(from, to, level = 'fun') {
     const L = levels()[level] || levels().fun, crow = distM(from.lat, from.lon, to.lat, to.lon);
     return { a: from, b: to, major: Math.max(crow * (1 + Math.max(0.1, L.budget)) * 1.3 + 4000, crow + 6000) };
@@ -1239,7 +1337,8 @@
   /**
    * Per edge, 1 on a highway (kept per view). A two-way trunk (no one-way carriageways, not a link) is a two-lane road: by
    * its name across the view, one with TRUNK_FUN_KM corner points a km or more is a rider's road, not a highway (The Snake
-   * 4.4, US 421 by Shady Valley 2.5; Cincinnati's US 127, US 27 and the AA Highway 0 to 0.25).
+   * 4.4, US 421 by Shady Valley 2.5; Cincinnati's US 127, US 27 and the AA Highway 0 to 0.25), and so is a stretch of
+   * TRUNK_STRETCH_M with that many (a pass on a long US route that is straight elsewhere).
    */
   function hwyOf(v) {
     if (v.isHwy) return v.isHwy;
@@ -1257,10 +1356,39 @@
       a.len += v.len[e];
       if (Number.isFinite(v.fun[e])) a.fun += v.fun[e];
     }
+    // else by its stretch: the two-way trunk within TRUNK_STRETCH_M / 2 of the edge's middle, either way along it (US 550
+    // over Molas and Coal Bank passes, 1.5 to 2.1 points a km, shares its name with 0-point valley miles to New Mexico and
+    // was a highway; 2026-11-15)
+    const tw = new Uint8Array(v.E);
+    for (let e = 0; e < v.E; e++) if (h[e] && twoWayTrunk(e)) tw[e] = 1;
+    const stamp = new Int32Array(v.E), stack = [], half = K.TRUNK_STRETCH_M / 2;
     for (let e = 0; e < v.E; e++) {
-      if (!h[e] || !twoWayTrunk(e)) continue;
+      if (!tw[e]) continue;
       const a = byName.get(nameOf(e));
-      if (a && a.len > 0 && a.fun / (a.len / 1000) >= K.TRUNK_FUN_KM) h[e] = 0;
+      if (a && a.len > 0 && a.fun / (a.len / 1000) >= K.TRUNK_FUN_KM) { h[e] = 0; continue; }
+      if (!(half > 0)) continue;
+      const id = e + 1, te = twin(v, e);
+      let len = v.len[e], fun = v.fun[e] > 0 ? v.fun[e] : 0;
+      stamp[e] = id;
+      if (te >= 0) stamp[te] = id;
+      stack.length = 0;
+      stack.push(v.tail[e], v.len[e] / 2, v.to[e], v.len[e] / 2);
+      while (stack.length) {
+        const d = stack.pop(), n = stack.pop();
+        if (n < 0) continue;
+        for (let x = v.first[n]; x < v.first[n + 1]; x++) {
+          if (!tw[x] || stamp[x] === id) continue;
+          stamp[x] = id;
+          const t = twin(v, x);
+          if (t >= 0) stamp[t] = id;
+          // an edge running past the stretch's end counts for the part inside it
+          const f = v.len[x] > 0 ? Math.min(1, (half - d) / v.len[x]) : 1;
+          len += v.len[x] * f;
+          if (v.fun[x] > 0) fun += v.fun[x] * f;
+          if (d + v.len[x] < half) stack.push(v.to[x], d + v.len[x]);
+        }
+      }
+      if (len > 0 && fun / (len / 1000) >= K.TRUNK_FUN_KM) h[e] = 0;
     }
     v.isHwy = h;
     return h;
@@ -1293,6 +1421,29 @@
     const xl = { hwyX: { is, x: K.HWY_LINK_X } };
     const l = search(v, obj, src, dst, 0, null, { ...opts, ...xl });
     return l ? { r: l, mode: 'link', src, dst, xo: xl } : null;
+  }
+  /**
+   * A road trip's level quickest inside the budget (HWY_FIT_S): the route that keeps off the highways the most while its
+   * time stays at most fitS, each highway second costing the largest HWY_FIT_X that fits. Returns { route, x, src, dst,
+   * xo } or null (not even the cheapest fits: the level keeps its highway-free way).
+   */
+  function fitHighway(v, obj, src, dst, opts, is, fitS, level) {
+    // a binary search over HWY_FIT_X (largest first): each try crosses the whole trip, so two or three, not five
+    const X = K.HWY_FIT_X, at = new Map();
+    const tryX = (i) => {
+      if (!at.has(i)) {
+        const x = X[i], xo = { hwyX: { is, x } }, r = search(v, obj, src, dst, 0, null, { ...opts, ...xo, ...(opts.timeTo ? { limitS: fitS } : {}) });
+        const route = r ? assemble(v, r, obj, { level, role: 'quickest', a: 0 }) : null;
+        at.set(i, route && route.timeS <= fitS ? { route, x, src, dst, xo } : null);
+      }
+      return at.get(i);
+    };
+    let lo = 0, hi = X.length - 1, best = null;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1, g = tryX(mid);
+      if (g) { best = g; hi = mid - 1; } else lo = mid + 1;
+    }
+    return best;
   }
   /** Why a route with the exception drives a highway: it starts on one, ends on one, or there is no other way across. */
   function hwyReason(v, r) {
@@ -1329,13 +1480,17 @@
     const snaps = snapBoth(v, req.from, req.to);
     let { src, dst } = snaps;
     const sc = startCostFor(v, req.from.heading != null ? req.from.heading : req.heading);
-    const opts0 = { ...(sc ? { startCost: sc } : {}), ellipse: ellipseFor(req.from, req.to, level) };
+    // a long trip (LONG_KM crow): the searches use the backward bound (timeTo), one Dijkstra per goal
+    const crowM = distM(req.from.lat, req.from.lon, req.to.lat, req.to.lon);
+    let opts0 = { ...(sc ? { startCost: sc } : {}), ellipse: ellipseFor(req.from, req.to, level), ...(crowM > K.LONG_KM * 1000 ? { timeTo: true } : {}) };
     let opts = opts0;
     const run = (a, penal = null, role = 'step') => { const r = search(v, obj, src, dst, a, penal, opts); return r ? assemble(v, r, obj, { level, role, a }) : null; };
     const free = noHighway(level);
     const memoOf = (kind) => (v.quickMemo && v.quickMemo.key === quickKey(req, level, obj, kind) ? v.quickMemo : null);
     const memo = free ? null : memoOf('any');
-    const quick = memo ? assemble(v, memo.r, obj, { level, role: 'quickest', a: 0 }) : run(0, null, 'quickest');
+    let quick = memo ? assemble(v, memo.r, obj, { level, role: 'quickest', a: 0 }) : run(0, null, 'quickest');
+    // a mountain road can leave the corridor ellipse (wider()): the plan goes on in the one that holds a way
+    for (const el of quick ? [] : wider(opts0.ellipse)) { opts = opts0 = { ...opts0, ellipse: el }; quick = run(0, null, 'quickest'); if (quick) break; }
     if (!quick) throw new Error('no route');
     // the level's own quickest: at Fun and Long way the quickest way off the highways (the first route's search when it
     // was the same: quickest() made it), else `quick` itself
@@ -1350,9 +1505,21 @@
       base = f.r ? assemble(v, f.r, obj, { level, role: 'quickest', a: 0 }) : quick;
       if (base !== quick) quick.why.role = 'quickest-highway';
       hwy = { mode: f.mode, absurd: f.mode === 'free' && base.timeS > K.HWY_ABSURD * quick.timeS, quickS: quick.timeS, freeS: f.mode === 'free' ? base.timeS : null };
+      const fitS = quick.timeS * (1 + L.budget) + L.slackS;
+      if (base !== quick && base.timeS > fitS + K.HWY_FIT_S) {
+        const g = fitHighway(v, obj, snaps.src, snaps.dst, opts0, is, fitS, level);
+        if (g) {
+          ({ src, dst } = g);
+          opts = { ...opts0, ...g.xo };
+          hwy = { mode: 'link', fit: g.x, absurd: false, quickS: quick.timeS, freeS: hwy.freeS };
+          base = g.route;
+        }
+      }
     }
     // the budget over the quickest; never so tight it shuts out the level's own quickest (a highway-free way)
     const limitS = Math.max(quick.timeS * (1 + L.budget) + L.slackS, base === quick ? 0 : base.timeS + K.HWY_FREE_SLACK_S);
+    // (a long trip: the searches below never enter a node no route inside the budget can pass)
+    if (opts.timeTo) opts = { ...opts, limitS };
     const found = [base];
     const keep = (r) => { if (r && !found.some((x) => sameRoute(x, r))) found.push(r); return r; };
     // bisect the goodness weight (log steps): the largest a whose route is inside the budget
@@ -1585,7 +1752,11 @@
         if (fits().some(isClean)) break;
       }
     }
+    // still none: out along the best paved road near and back (Ouray, 2026-11-15: no paved loop under about 350 km, and
+    // every loop went over a 4x4 pass, 44 to 72 km unpaved; the Million Dollar Highway to Silverton and back is the drive)
+    // (and shorter than asked if it must: a paved road there and back is the honest answer, not a loop over a pass)
     let routes = fits();
+    if (obj.noDirt && !routes.some(isClean)) routes = routes.concat(outAndBack(v, req, obj, s0, hwy, level, km).filter((r) => !routes.some((x) => sameRoute(x, r))));
     // unpaved road avoided: where some loops keep (all but LOOP_DIRT_KM) off it, only those; where none can (the Black
     // Hills' gravel between the paved canyons), the ones with the least of it (within LOOP_DIRT_KM of the least), their
     // unpaved km on the card (why.unpavedKm)
@@ -1595,6 +1766,67 @@
     }
     for (const r of routes) delete r.combo;
     return { routes, ms: Date.now() - t0 };
+  }
+  /**
+   * There and back along a good road near the start, each a loop route of kind 'outBack' (retraced as it drives): the
+   * best stages (by explore's score) whose nearer end is within a third of the length, each cut to what the length leaves
+   * after the drive to it and back. Only paved road: a leg that needs unpaved road is no way back.
+   */
+  function outAndBack(v, req, obj, s0, hwy, level, km) {
+    let stages;
+    try { stages = explore(v, { start: req.start, maxS: Math.max(600, km * 1000 / 2 / K.LOOP_REACH_MS), max: 3 * K.LOOP_STAGES, prefs: req.prefs, avoid: req.avoid }).stages; } catch (_) { return []; }
+    const crow = (lat, lon) => distM(req.start.lat, req.start.lon, lat, lon) / 1000;
+    const out = [];
+    for (const st of stages) {
+      if (out.length >= K.OUT_BACK_ROUTES) break;
+      const L = st.lat.length - 1, rev = crow(st.lat[L], st.lon[L]) < crow(st.lat[0], st.lon[0]);
+      const conn = K.LOOP_CONN_FACTOR * Math.min(crow(st.lat[0], st.lon[0]), crow(st.lat[L], st.lon[L]));
+      const want = km / 2 - conn;                                     // the stage's km out that the length leaves
+      if (conn > km / 3 || want < Math.min(10, st.km)) continue;
+      // on along the next good road from its far end, outward, while the length wants more (Silverton on to Durango)
+      const run = [cutStage(st, rev, want)];
+      for (let left = want - run[0].km; left > 5 && run.length < 3;) {
+        const last = run[run.length - 1], n = last.lat.length - 1, from = crow(last.lat[n], last.lon[n]);
+        const gap = (lat, lon) => distM(last.lat[n], last.lon[n], lat, lon) / 1000;
+        let next = null;
+        for (const x of stages) {
+          if (x === st || run.some((y) => y.from === x)) continue;
+          const M = x.lat.length - 1, r2 = gap(x.lat[M], x.lon[M]) < gap(x.lat[0], x.lon[0]);
+          const g = r2 ? gap(x.lat[M], x.lon[M]) : gap(x.lat[0], x.lon[0]), far = r2 ? crow(x.lat[0], x.lon[0]) : crow(x.lat[M], x.lon[M]);
+          if (g <= K.OUT_BACK_NEXT_KM && far > from && (!next || x.score > next.x.score)) next = { x, r2 };
+        }
+        if (!next) break;
+        const c = cutStage(next.x, next.r2, left);
+        c.from = next.x;
+        run.push(c); left -= c.km;
+      }
+      // the whole run, else just the first road: out and back the same way (no retrace cost: the way back is the road)
+      let r = null;
+      for (let k = run.length; k >= 1 && !r; k = k > 1 ? 1 : 0) {
+        const there = run.slice(0, k).reduce((a, c) => a.concat(alongStage(c, false)), []);
+        const pts = there.concat(there.slice(0, -1).reverse().map((p) => ({ ...p, h: p.h + Math.PI, conn: false })));
+        r = loopAlong(v, obj, s0, req.start, pts, hwy, level, K.LOOP_CONN_A, false);
+        if (r && (r.why.unpavedKm || 0) > K.LOOP_DIRT_KM) r = null;
+        if (r) run.length = k;
+      }
+      if (!r) continue;
+      r.kind = 'outBack'; r.stages = run.map((c) => c.name);
+      if (!out.some((x) => sameRoute(x, r))) out.push(r);
+    }
+    return out;
+  }
+  /** A stage driven from its start (or its end, rev) for at most km: { lat, lon, km }. */
+  function cutStage(st, rev, km) {
+    const idx = [...st.lat.keys()];
+    if (rev) idx.reverse();
+    const lat = [st.lat[idx[0]]], lon = [st.lon[idx[0]]];
+    let run = 0;
+    for (let q = 1; q < idx.length && run < km * 1000; q++) {
+      const i = idx[q];
+      run += distM(lat[lat.length - 1], lon[lon.length - 1], st.lat[i], st.lon[i]);
+      lat.push(st.lat[i]); lon.push(st.lon[i]);
+    }
+    return { lat, lon, km: run / 1000, name: st.name };
   }
   /**
    * Per-edge cost factors a loop starts from: motorway and trunk (and their ramps) x LOOP_HWY_X at Quick; 1 at Fun and
@@ -1711,6 +1943,9 @@
     const n = s.lat.length, idx = [...Array(n).keys()];
     if (rev) idx.reverse();
     const out = [];
+    // every LOOP_ALONG_M, at most LOOP_ALONG_N legs to a stage: each point is a search, and a whole road as one stage
+    // (40 km of the Blue Ridge Parkway) took 27 of them
+    const step = Math.max(K.LOOP_ALONG_M, (s.km || 0) * 1000 / K.LOOP_ALONG_N);
     let run = 0, next = 0;
     for (let q = 0; q < n; q++) {
       const i = idx[q];
@@ -1718,7 +1953,7 @@
       if (run >= next || q === n - 1) {
         const j = idx[Math.min(n - 1, q + 1)], h = q < n - 1 ? bearing(s.lat[i], s.lon[i], s.lat[j], s.lon[j]) : bearing(s.lat[idx[q - 1]], s.lon[idx[q - 1]], s.lat[i], s.lon[i]);
         out.push({ lat: s.lat[i], lon: s.lon[i], h, conn: !out.length });   // the leg to its first point is a connector
-        next = run + K.LOOP_ALONG_M;
+        next = run + step;
       }
     }
     return out;
@@ -1750,13 +1985,17 @@
    * search on the loop's costs, earlier legs' edges (both ways) x LOOP_RETRACE_X. The route with `retraced` (share of its
    * length on road driven twice) and `hwyShare` (on motorway or trunk), or null.
    */
-  function loopAlong(v, obj, s0, start, pts, hwy, level, connA = K.LOOP_CONN_A) {
-    const a = K.LOOP_A[level], penal = Float32Array.from(hwy), is = hwyOf(v);
+  function loopAlong(v, obj, s0, start, pts, hwy, level, connA = K.LOOP_CONN_A, retrace = true) {
+    const a = K.LOOP_A[level], penal = Float32Array.from(hwy), is = hwyOf(v), B = v.bits || flagBits();
     const snaps = [];
     for (const p of pts) {
       // the stage's own road, the way it is driven (never a motorway beside it)
-      const along = (e) => !is[e] && Math.abs(turnAngle(p.h, headingNear(v, e, p.lat, p.lon))) < 0.87;
+      // (and never an unpaved road beside it when that is avoided: a point on US 550 snapped onto the Little Molas
+      // campground road, and the loop drove 6 km of its gravel, 2026-11-15)
+      const paved = (e) => !(obj.noDirt && (v.flags[e] & B.unpaved));
+      const along = (e) => !is[e] && paved(e) && Math.abs(turnAngle(p.h, headingNear(v, e, p.lat, p.lon))) < 0.87;
       let x = Number.isFinite(p.h) ? snap(v, p.lat, p.lon, along, 60) : [];
+      if (!x.length) x = snap(v, p.lat, p.lon, (e) => paved(e) && !(noHighway(level) && is[e]), 200);
       if (!x.length) x = snap(v, p.lat, p.lon, noHighway(level) ? (e) => !is[e] : null, 200);
       else x = atNode(v, x, along);
       if (x.length) snaps.push({ s: x, lat: p.lat, lon: p.lon, conn: !!p.conn });
@@ -1776,7 +2015,7 @@
         loopLeg(v, obj, prev, nx.s, legA, penal, {}, level);
       if (!res) return null;
       legs.push(res);
-      for (const e of res.edges) { penal[e] = hwy[e] * K.LOOP_RETRACE_X; const tw = twin(v, e); if (tw >= 0) penal[tw] = hwy[tw] * K.LOOP_RETRACE_X; }
+      if (retrace) for (const e of res.edges) { penal[e] = hwy[e] * K.LOOP_RETRACE_X; const tw = twin(v, e); if (tw >= 0) penal[tw] = hwy[tw] * K.LOOP_RETRACE_X; }
       const last = res.edges[res.edges.length - 1];
       prev = [{ edge: last, frac: res.ft, lat: 0, lon: 0 }];
       at = nx;
@@ -1920,45 +2159,66 @@
     const T = reach(v, s0, maxS);
     // (the corner prefs weigh which roads are best here too, as they weigh the search: likeOf)
     const score = new Float32Array(v.E), likeAt = likeOf(v, req.prefs), noDirt = !!(req.avoid && req.avoid.unpaved);
+    // a road edge a stage may run along (score 0 when it has no corners: a tunnel, a straight between two bends)
+    const road = new Uint8Array(v.E);
     const seeds = [];
     for (let e = 0; e < v.E; e++) {
-      if (v.to[e] < 0 || v.quality[e] === UNKNOWN_U8 || !Number.isFinite(v.fun[e]) || v.fun[e] <= 0) continue;
+      if (v.to[e] < 0 || v.quality[e] === UNKNOWN_U8 || !Number.isFinite(v.fun[e]) || v.fun[e] < 0) continue;
       const q = v.quality[e] / 254;
       if (q < K.POOR_HI || (v.flags[e] & (B.private | B.barrier | B.ramp | B.destination | B.expressway)) || v.cls[e] === CLS.motorway || v.cls[e] >= CLS.service) continue;
       if (streetEdge(v, e) === true) continue;
       // unpaved road avoided (the app's default): never a stage, so a loop isn't built round a forest gravel road its own
       // legs then won't drive (Little Snowbird Road, the best "road" from Robbinsville, 2026-11-14)
       if (noDirt && (v.flags[e] & B.unpaved)) continue;
+      road[e] = 1;
       score[e] = q * v.fun[e] * (likeAt ? likeAt(e) : 1) / Math.max(0.05, v.len[e] / 1000);
-      if (Number.isFinite(T[v.tail[e]]) || Number.isFinite(T[v.to[e]])) seeds.push(e);
+      if (score[e] > 0 && (Number.isFinite(T[v.tail[e]]) || Number.isFinite(T[v.to[e]]))) seeds.push(e);
     }
     seeds.sort((a, b) => score[b] - score[a] || a - b);
-    const used = new Uint8Array(v.E), out = [];
+    const used = new Uint8Array(v.E), out = [], chains = [];
     const take = (e) => { used[e] = 1; const tw = twin(v, e); if (tw >= 0) used[tw] = 1; };
+    // the chain goes on along good road, or along its own road through a plainer run (a tunnel, a straight between two
+    // sets of bends) up to STAGE_GAP_M of it in a row (Ironton Park on US 550, 3.5 km): its own road by name, or the same road on under another name (its
+    // class, nearly straight on). US 550 south of Ouray, 2026-11-15: a 40 m tunnel, cornerless edges between the bends and
+    // a stretch OSM names only by its ref cut the Million Dollar Highway into 2-7 km stages, all below the county roads.
+    // (its own road by name may turn sharper: a hairpin that meets a side road at its apex, US 550 by Red Mountain)
+    const on = (p, e, seed) => {
+      const turn = Math.abs(turnAngle(v.hOut[p], v.hIn[e]));
+      if (turn > K.STAGE_NAME_TURN) return false;
+      if (turn > 1.05) return sameName(v, e, p);
+      if (score[e] >= score[seed] / 3) return true;
+      return sameName(v, e, p) || (v.cls[e] === v.cls[p] && turn <= K.STAGE_ON_TURN);
+    };
+    // plain: under a third of the seed's and under STAGE_PLAIN (a third of a short seed's single corner per km is still good road)
+    const plain = (e, seed) => score[e] < Math.min(score[seed] / 3, K.STAGE_PLAIN);
     const ok = (p, e, seed) => {
-      if (used[e] || v.to[e] < 0 || score[e] <= 0) return false;
+      if (used[e] || !road[e]) return false;
       if (v.to[e] === v.tail[p]) return false;
       headings(v, p); headings(v, e);
-      if (Math.abs(turnAngle(v.hOut[p], v.hIn[e])) > 1.05) return false;
-      return score[e] >= score[seed] / 3 || sameName(v, e, p);
+      return on(p, e, seed);
     };
     for (const seed of seeds) {
       if (used[seed]) continue;
       const chain = [seed];
       take(seed);
-      let km = v.len[seed] / 1000;
+      let km = v.len[seed] / 1000, gap = 0;
       for (let p = seed; km < K.STAGE_KM;) {                         // forward
         const n = v.to[p];
         let best = -1;
         for (let e = v.first[n]; e < v.first[n + 1]; e++) if (ok(p, e, seed) && (best < 0 || score[e] > score[best])) best = e;
         if (best < 0) break;
+        gap = plain(best, seed) ? gap + v.len[best] : 0;
+        if (gap > K.STAGE_GAP_M) break;
         chain.push(best); take(best); km += v.len[best] / 1000; p = best;
       }
+      gap = 0;
       for (let q = seed; km < K.STAGE_KM;) {                         // back
         const n = v.tail[q];
         let best = -1;
-        for (let r = v.rfirst[n]; r < v.rfirst[n + 1]; r++) { const e = v.redge[r]; if (!used[e] && v.to[e] >= 0 && score[e] > 0 && v.tail[q] === v.to[e] && v.tail[e] !== v.to[q]) { headings(v, e); headings(v, q); if (Math.abs(turnAngle(v.hOut[e], v.hIn[q])) <= 1.05 && (score[e] >= score[seed] / 3 || sameName(v, e, q)) && (best < 0 || score[e] > score[best])) best = e; } }
+        for (let r = v.rfirst[n]; r < v.rfirst[n + 1]; r++) { const e = v.redge[r]; if (!used[e] && road[e] && v.tail[q] === v.to[e] && v.tail[e] !== v.to[q]) { headings(v, e); headings(v, q); if (on(e, q, seed) && (best < 0 || score[e] > score[best])) best = e; } }
         if (best < 0) break;
+        gap = plain(best, seed) ? gap + v.len[best] : 0;
+        if (gap > K.STAGE_GAP_M) break;
         chain.unshift(best); take(best); km += v.len[best] / 1000; q = best;
       }
       // a through road, not a cul-de-sac: an end that runs into a dead end is cut back to the last junction on the way (a
@@ -1976,7 +2236,16 @@
         while (chain.length && !junctionAt(v, endNode())) km -= v.len[atEnd ? chain.pop() : chain.shift()] / 1000;
       };
       cut(true); cut(false);
-      if (!chain.length || km < 2) continue;
+      // a stage starts and ends on its good road, not on the plain run it went on through
+      if (!outBack) {
+        while (chain.length > 1 && plain(chain[chain.length - 1], seed)) km -= v.len[chain.pop()] / 1000;
+        while (chain.length > 1 && plain(chain[0], seed)) km -= v.len[chain.shift()] / 1000;
+      }
+      if (chain.length) chains.push({ edges: chain, km, seed, outBack });
+    }
+    joinStages(chains);
+    for (const { edges: chain, km, outBack, dead } of chains) {
+      if (dead || km < 2) continue;
       const aS = T[v.tail[chain[0]]], bS = T[v.to[chain[chain.length - 1]]];
       if (!Number.isFinite(aS) && !Number.isFinite(bS)) continue;
       const lat = [], lon = [], names = new Map();
@@ -1994,6 +2263,73 @@
     }
     out.sort((a, b) => b.score - a.score);
     return { stages: out.slice(0, max), ms: Date.now() - t0 };
+
+    /**
+     * Pieces of one road made one stage: a chain that ends where another starts (or ends: that one driven the other way)
+     * is joined to it, across the plain run between them if that is its own road on (on()) for at most STAGE_JOIN_M. Each
+     * seed grows its own chain and stops at road an earlier one took, so a long road came out in pieces (the Million
+     * Dollar Highway in three, 2026-11-15).
+     */
+    function joinStages(list) {
+      const owner = new Int32Array(v.E).fill(-1);
+      list.forEach((c, i) => { for (const e of c.edges) owner[e] = i; });
+      const rev = (c) => { const r = []; for (let i = c.edges.length - 1; i >= 0; i--) { const t = twin(v, c.edges[i]); if (t < 0) return null; r.push(t); } return r; };
+      const lenKm = (es) => es.reduce((a, e) => a + v.len[e], 0) / 1000;
+      // the chain (and which way round) that starts at node n, as edges driven onward from p
+      const ends = new Map(), at = (n) => ends.get(n) || [];
+      const put = (n, i) => { const l = ends.get(n); if (l) l.push(i); else ends.set(n, [i]); };
+      list.forEach((c, i) => { if (!c.outBack) { put(v.tail[c.edges[0]], i); put(v.to[c.edges[c.edges.length - 1]], i); } });
+      const startsAt = (n, self, p, seed) => {
+        for (const i of at(n)) {
+          const c = list[i];
+          if (i === self || c.dead) continue;
+          if (v.tail[c.edges[0]] === n && joins(p, c.edges[0], seed)) return { i, edges: c.edges };
+          if (v.to[c.edges[c.edges.length - 1]] === n) { const r = rev(c); if (r && joins(p, r[0], seed)) return { i, edges: r }; }
+        }
+        return null;
+      };
+      const joins = (p, e, seed) => { headings(v, p); headings(v, e); return v.to[e] !== v.tail[p] && on(p, e, seed); };
+      for (let i = 0; i < list.length; i++) {
+        const a = list[i];
+        if (a.outBack || a.dead) continue;
+        for (let turns = 0; !a.dead && turns < 2; turns++) {
+          // forward from its end; then the same from its start (the chain turned round)
+          for (let grew = true; grew && a.km < K.STAGE_KM;) {
+            grew = false;
+            let p = a.edges[a.edges.length - 1], m = 0;
+            const path = [], inPath = new Set();
+            for (;;) {
+              const n = v.to[p], hit = startsAt(n, i, p, a.seed);
+              if (hit) {
+                const add = path.concat(hit.edges), km = a.km + lenKm(add);
+                if (km <= K.STAGE_KM) {
+                  a.edges = a.edges.concat(add); a.km = km; list[hit.i].dead = true;
+                  for (const e of add) owner[e] = i;
+                  put(v.to[a.edges[a.edges.length - 1]], i);
+                  grew = true;
+                }
+                break;
+              }
+              let best = -1, bestT = Infinity;
+              for (let e = v.first[n]; e < v.first[n + 1]; e++) {
+                const tw = twin(v, e);
+                if (v.to[e] < 0 || !road[e] || owner[e] >= 0 || (tw >= 0 && owner[tw] >= 0) || inPath.has(e) || !joins(p, e, a.seed)) continue;
+                const t = Math.abs(turnAngle(v.hOut[p], v.hIn[e]));
+                if (t < bestT) { best = e; bestT = t; }
+              }
+              if (best < 0) break;
+              m = plain(best, a.seed) ? m + v.len[best] : 0;
+              if (m > K.STAGE_JOIN_M || path.length > 200) break;
+              path.push(best); inPath.add(best); p = best;
+            }
+          }
+          const r = rev(a);
+          if (!r) break;
+          a.edges = r;
+          put(v.to[r[r.length - 1]], i);
+        }
+      }
+    }
   }
 
   // ---- coverage -------------------------------------------------------------------------------------------------------
@@ -2290,7 +2626,7 @@
     };
   }
 
-  const api = { VERSION: 1, K, withTune, BUILT_READ, builtAgreeOf, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, times, streetEdge, deadEndAt, junctionAt, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
+  const api = { VERSION: 1, K, withTune, BUILT_READ, builtAgreeOf, lineTiles, edgeTable, fromTable, crowdOnto, project, edgesNear, quickest, scoreLine, reach, explore, times, streetEdge, deadEndAt, junctionAt, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
     assemble, through, overlap, sameRoute, tilesFor, bandTiles, spineOf, loopTiles, plan, pick, loop, roundTrip, hwyOf, isHwyEdge, snapOff, freeQuickest, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;

@@ -16,7 +16,7 @@ const BIN_KM = 0.005;
  * on every straight (and a fading tail after each corner), so camber from an upload without `cam_v: CAM_V` is stored as
  * unknown (null). Its roughness, crest and curvature are unaffected.
  */
-export const CAM_V = 2;
+export const CAM_V = 3;   // 3 since 2026-11-15: camber from the specific force; 2 read the attitude filter's drift
 
 /**
  * crest: the bin's peak unweighting in g (0 = none, 1 = weightless over the top), null when the phone did not measure it.

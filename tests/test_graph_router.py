@@ -352,6 +352,17 @@ def test_a_long_good_road_is_one_stage_across_tiles_and_among_many_lanes():
     assert len(r["skyway"]) == 1 and 25 <= r["skyway"][0] <= r["cap"], r
 
 
+def test_a_mountain_road_the_map_breaks_up_is_still_one_stage():
+    """2026-11-15: Best roads nearby from Ouray listed the Million Dollar Highway as 2 to 7 km pieces below the county
+    roads: a 40 m tunnel with no corners, cornerless straights between the bends, a stretch OSM names only by its ref
+    and a hairpin that meets a side road each ended a chain, and each seed's chain stopped at road an earlier one took.
+    Now the road is one stage (its pieces joined across up to STAGE_GAP_M of plain road), and a road with far more
+    straight than that between its two good parts is still two stages."""
+    r = case("brokenRoad")
+    assert len(r["one"]) == 1 and r["one"][0] >= 25, r
+    assert len(r["two"]) == 2, r
+
+
 def test_loops_keep_off_unpaved_road_when_it_is_avoided():
     """2026-11-14 (a survey of rider towns): with unpaved avoided (the app's default) Sturgis loops drove 15 to 31 km of
     gravel and Stowe's 20 km. A loop leg first keeps off unpaved road entirely, and a loop with more than LOOP_DIRT_KM
@@ -361,12 +372,42 @@ def test_loops_keep_off_unpaved_road_when_it_is_avoided():
     assert sum(r["allowed"]) > 10, r
 
 
+def test_where_every_loop_needs_gravel_the_pass_road_there_and_back_is_offered():
+    """2026-11-15: from Ouray there is no paved loop under about 350 km, and with unpaved avoided (the app's default)
+    every loop went over a 4x4 pass (44 to 72 km unpaved). Now the best paved road near is offered there and back
+    (kind outBack, no unpaved road), and with unpaved allowed the loop over the pass is still found."""
+    r = case("valleyLoop")
+    assert r["avoided"] and all(x["kind"] == "outBack" and x["dirt"] <= 2 for x in r["avoided"]), r
+    assert any(x["kind"] == "stages" and x["dirt"] > 10 for x in r["allowed"]), r
+
+
 def test_a_two_lane_trunk_that_bends_is_a_riders_road():
     """2026-11-14 (tools/famous_roads.js): OSM tags many mountain US routes trunk, and Fun never drove The Snake (US 421,
     4.4 corner points a km). A two-way trunk whose road bends (TRUNK_FUN_KM) is not a highway; a straight one (Cincinnati's
     US 127, the AA Highway) or a divided one still is."""
     r = case("riderTrunk")
     assert r == {"bends": ["US 421"], "straight": ["Back Road"], "divided": ["Back Road"]}, r
+
+
+def test_a_pass_on_a_long_straight_trunk_is_a_riders_road():
+    """2026-11-15: US 550 over Molas and Coal Bank passes (1.5 to 2.1 corner points a km) shares its name with straight
+    valley miles to New Mexico, 0.7 a km over the whole view, so Fun never drove the passes. A stretch of two-way trunk
+    (TRUNK_STRETCH_M) that bends is a rider's road; the straight miles of the same road stay a highway."""
+    r = case("trunkStretch")
+    assert r["names"] == ["US 550"], r
+    assert r["hwy"]["pass"] and not any(r["hwy"]["pass"]), r
+    assert r["hwy"]["straight"] and all(r["hwy"]["straight"]), r
+
+
+def test_a_scenic_byway_counts_as_scenic_in_funs_search():
+    """2026-11-15 (tools/famous_roads.js): the Talimena and the Blue Ridge Parkway sweep more than they wind, so Fun left
+    them for roads with more corner points. A road the tiles mark a scenic byway (their byway channel, from OSM's route=road
+    relations) counts at least BYWAY_S scenery: Fun takes it over a road a little curvier; with no byway, or tiles from
+    before the channel, nothing changes."""
+    assert case("byway") == ["US 59"]
+    assert case("byway", "0") == ["US 59"]
+    assert case("byway", "1") == ["Skyline Drive"]
+    assert case("byway", "2") == ["Skyline Drive"]
 
 
 def test_the_highway_exception_takes_the_shortest_link_and_says_why():
@@ -393,6 +434,45 @@ def test_no_highway_free_way_in_a_sensible_time():
     assert r["rankHwy"] == [0] and r["rankAbsurd"] == [True], r
     assert r["why"] == "No highway-free way in a sensible time; Quick is the way", r["why"]
     assert r["quickPick"] > 8, "Quick: the motorway"
+
+
+def test_a_road_trip_takes_the_highway_it_must_to_stay_inside_the_levels_budget():
+    """2026-11-15: Denver to Ouray at Fun was 12 h highway-free against 5.5 h, so the card answered with Quick. A road trip
+    whose highway-free way costs more than HWY_FIT_S past the budget takes the motorway to the good road and the good road
+    on, inside the budget; the same trip a quarter of an hour long keeps off the highway as before."""
+    r = case("levelsHighway")["trip"]
+    for lv in ("fun", "max"):
+        x = r[lv]
+        assert x["mode"] == "link" and x["fit"] and not x["absurd"], (lv, x)
+        assert "Pass Road" in x["names"] and "Loop Road" not in x["names"] and x["hwyKm"] > 0, (lv, x)
+        assert x["timeS"] <= x["limitS"] and x["timeS"] < 1.4 * x["quickS"], (lv, x)
+    assert r["short"]["mode"] == "free" and r["short"]["hwyKm"] == 0 and "Loop Road" in r["short"]["names"], r["short"]
+
+
+def test_a_broken_edge_time_does_not_blind_the_search():
+    """2026-11-15: one 60 m Ohio edge timed at 0.5 s (430 km/h) set the A* bound's top speed, every search in its view was
+    3 x as blind, and Long way from Cincinnati to Deals Gap ran out of search before reaching it."""
+    assert 0 < case("levelsHighway")["vmax"] <= 40
+
+
+def test_a_pass_road_that_winds_out_of_the_corridor_is_still_found():
+    """2026-11-15: Estes Park to Grand Lake at Quick said "no route": Trail Ridge Road winds 78 km for a 28 km crow line and
+    left Quick's corridor ellipse by 1.4 km. A level whose ellipse holds no way tries a wider one, then none."""
+    r = case("outOfEllipse")
+    for k in ("quick", "fun", "max", "quickest", "through"):
+        assert r[k]["ok"], (k, r[k])
+
+
+def test_a_long_trip_search_follows_its_corridor_and_finds_the_same_route():
+    """2026-11-15: Cincinnati to Deals Gap's searches settled 1.5 to 4 million edges each by the crow-line bound. Past
+    LONG_KM the plan bounds them by one backward Dijkstra on the edge times (timeTo): the same route, far fewer edges."""
+    r = case("longBound")
+    assert r["crowKm"] > 150, r
+    for x in r["runs"]:
+        assert x["same"] and abs(x["cost"][0] - x["cost"][1]) < 1e-6 * x["cost"][0], x
+        # the time bound is tight at a = 0 (Quick, the quickest of each level); with a goodness weight it never does worse
+        assert x["settled"][1] < (0.2 if x["a"] == 0 else 1.0001) * x["settled"][0], x
+    assert r["plan"]["routes"] >= 2 and r["plan"]["ok"], r["plan"]
 
 
 def test_an_expressway_below_trunk_class_is_a_highway_to_the_levels():

@@ -51,6 +51,7 @@
   <script src="flyover_video.js" defer></script>
   <script src="best_clip.js" defer></script>
   <script src="spot_photos.js" defer></script>
+  <script src="roughness.js" defer></script>   <!-- the one roughness scale: before measured_stages, route_story, coverage, contributor -->
   <script src="measured_stages.js" defer></script>
   <script src="route_loading.js" defer></script>
   <script src="stages.js" defer></script>
@@ -62,6 +63,7 @@
        first plan (cockpit.js needCtx) -->
   <script src="route_engine.js" defer></script>
   <script src="graph_router.js" defer></script>
+  <script src="road_line.js" defer></script>   <!-- a drive put on the map's road, for its line against the road's shape (inline Log jobs; the worker loads it itself) -->
   <script src="own_routing.js" defer></script>
   <script src="route_ctx/context_grid.js" defer></script>
   <script src="sync.js" defer></script>
@@ -89,17 +91,12 @@
   <script src="plan_options.js" defer></script>
   <script src="place_plate.js" defer></script>
   <script src="your_roads.js" defer></script>
-  <script src="horizon.js" defer></script>
   <script src="pro.js" defer></script>
   <script src="route_tuning.js" defer></script>
   <script src="theme_sounds.js" defer></script>
   <script src="audio_bus.js" defer></script>
   <script src="brake_heat.js" defer></script>
-  <script src="sun_ahead.js" defer></script>
   <script src="limit_ahead.js" defer></script>
-  <script src="briefing.js" defer></script>
-  <script src="corners_ahead.js" defer></script>
-  <script src="along_ahead.js" defer></script>
   <script src="road_marks.js" defer></script>    <!-- stop signs, rail crossings, one-lane bridges, speed bumps on a planned route -->     <!-- "Sun in your eyes ahead." when the road turns into a low sun (live R-13) -->
   <script src="soundtrack.js" defer></script>
   <script src="week_digest.js" defer></script>
@@ -1702,6 +1699,8 @@
     /* a long word ("Kilometres", "Steady") is a key's narrowest: at large text each key is at least that wide, the wider
        words take the room, and on a narrow phone the keys wrap to a second row rather than cut the word (320 pt, 2x) */
     html[data-type-size] .switch { flex-wrap: wrap; } html[data-type-size] .switch > button { flex: 1 1 auto; min-width: min-content; }
+    /* the same for a row of detents (Best roads nearby's "Within 15 min"): at 2x on a 320 pt phone its words ran over the next key */
+    html[data-type-size] .detents:not(.scroll):not(.tp-rate) > button { flex: 1 1 auto; min-width: min-content; white-space: normal; line-height: 1.15; }
     /* the level cards one a row once the text is larger: the level, its time and its corners on one line */
     html[data-type-size] .rc-levels { grid-template-columns: minmax(0, 1fr); }
     html[data-type-size] .rc-levels > button + button { margin-left: 0; margin-top: -1px; }   /* one a row: the hairlines shared top and bottom */
@@ -1826,6 +1825,11 @@
     .stage-bar b { font-family: var(--font-num, inherit); font-size: 22px; }
     .stage-bar small { color: var(--panel-dim); }
     .stage-bar.ahead { border-left-color: #2e9e5b; } .stage-bar.behind { border-left-color: #d0453a; }
+    /* The ghost on the map (IDEAS D-04): where your friend was at this moment of their run, a hollow marker that never hides the road */
+    .ghost-puck { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--accent, #e8b21a); background: color-mix(in srgb, var(--accent, #e8b21a) 25%, transparent);
+      box-shadow: 0 0 0 2px var(--panel, #111); display: grid; place-items: center; font: 800 10px var(--font-ui, sans-serif); color: var(--panel-ink, #fff); pointer-events: none; }
+    .ghost-puck.self { border-style: dashed; border-color: var(--panel-ink, #fff); background: color-mix(in srgb, var(--panel-ink, #fff) 18%, transparent); }   /* your own best: dashed, no initial */
+    .ghost-puck[hidden] { display: none; }
     .hz-ask span { flex: 1; font-weight: 700; }
     .hz-ask .key { min-height: 56px; }
     .g-score { text-align: center; line-height: 1; margin-top: 2px; } .g-score b { display: block; font: 700 26px var(--font-num); color: var(--panel-ink); letter-spacing: 0.04em; } .g-score span { font-size: 13px; letter-spacing: 0.08em; color: var(--panel-dim); }

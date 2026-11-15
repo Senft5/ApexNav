@@ -65,6 +65,7 @@ def test_an_electric_car_hears_its_chargers(out):
 
 def test_viewpoints_by_name_at_most_every_5_minutes(out):
     assert out["view"]["text"] == "Wiseman's View on the left, in a quarter mile." and out["view"]["view"] is True
+    assert set(out["view"]["at"]) == {"lat", "lon"} and "at" not in out["fuelNow"]   # a free drive's next road ahead skips it
     assert out["viewSoon"] is None and out["viewLater"]["text"] == "A viewpoint in a quarter mile."
     assert out["falls"]["text"] == "A waterfall on the right, in a quarter mile."
     assert out["slow"] is None and out["bare"] is None
@@ -72,7 +73,14 @@ def test_viewpoints_by_name_at_most_every_5_minutes(out):
 
 def test_wired_through_the_quiet_gate_on_the_planned_route():
     js = open(os.path.join(ROOT, "web", "cockpit.js")).read()
-    assert "track === plannedRoute && Array.isArray(track.scenic) && window.ApexAlongAhead" in js
+    assert "(track === plannedRoute || track.kind === 'horizon') && Array.isArray(track.scenic) && window.ApexAlongAhead" in js
     assert "lastViewS: state.notesMode === 'quiet' ? nowS : drive.viewAt" in js
     assert "alongSay = null; drive.alongSaid = null; drive.viewAt = null;" in js
-    assert '<script src="along_ahead.js" defer></script>' in open(os.path.join(ROOT, "web", "index.html")).read()
+    assert "'along_ahead.js'" in open(os.path.join(ROOT, "web", "lazy.js")).read()   # lazy: the 'ahead' group
+
+
+def test_a_free_drive_hears_the_road_aheads_viewpoints_once():
+    js = open(os.path.join(ROOT, "web", "cockpit.js")).read()
+    assert "async function attachHorizonViews(t)" in js and "attachHorizonViews(t).catch(() => {});" in js
+    assert "p.kind === 'view'" in js and "free.viewsSaid = [...(free.viewsSaid || []), a.at]" in js
+    assert "free.marksSaid = null; free.viewsSaid = null;" in js

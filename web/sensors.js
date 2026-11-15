@@ -16,7 +16,7 @@
   const G = 9.80665, D2R = Math.PI / 180;
   // camber_v: frames whose camber comes from the fixed live pipeline (unknown off a corner, never a decayed 0) carry it
   // (ApexKit IMUPipeline.camberVersion, live_pipeline.js). Camber in frames without it is a placeholder and is not recorded.
-  const CAMBER_V = 2;
+  const CAMBER_V = 3;   // 3 since 2026-11-15: the specific force (live_pipeline.js CAMBER_VERSION); 2 read attitude drift
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
   const wrapPi = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
   const metres = (a, b) => { const c = Math.cos(a.lat * D2R); return Math.hypot((b.lon - a.lon) * 111320 * c, (b.lat - a.lat) * 110540); };

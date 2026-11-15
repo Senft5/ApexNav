@@ -28,6 +28,9 @@ const U = require(process.argv[1] + '/web/units.js');
 console.log(JSON.stringify({ d, bare, head: P.headline(d), meters: P.meters(d), bareMeters: P.meters(bare), facts: P.facts(d), bareFacts: P.facts(bare),
   one: P.facts({ ...d, corners: 5, hairpins: 1 }), some: P.facts({ ...d, corners: 9, hairpins: 3 }), none: P.facts({ ...d, hairpins: 0 }),
   // what the sheet used to pass for the climb: ApexUnits.short is an object, and the line read "climbing [object Object]"
+  felt: (() => { const m = P.describe(Core, s, { measured: { coverage: 0.7, avgPasses: 3, bankedKm: 0.42, offCamberKm: 0.2, repavedKm: 0.3, repavedOn: '2026-03' } });
+    return { d: m, facts: P.facts(m, (x) => `${(x / 1609.344).toFixed(1)} mi`, (ym) => `month ${ym}`),
+      thin: P.facts(P.describe(Core, s, { measured: { coverage: 0.7, avgPasses: 3, bankedKm: 0.01, offCamberKm: 0, repavedKm: 0.01, repavedOn: '2026-03' } })) }; })(),
   objHead: P.headline(d, undefined, (m) => U.short(m)), ftHead: P.headline(d, undefined, (m) => `${Math.round(m * 3.28084)} ft`) }));
 """
 
@@ -121,7 +124,10 @@ const list = P.onThisRoad(rs, measured, reports);
 const mi = (m) => `${(m / 1609.344).toFixed(1)} mi`;
 console.log(JSON.stringify({ list, facts: P.hazardFacts(list, mi), none: P.hazardFacts(P.onThisRoad(rs, null, [])),
   unknown: P.onThisRoad(rs, null, null), unknownFacts: P.hazardFacts(null), bumpsOnly: P.hazardFacts(P.onThisRoad(rs, measured, null), mi),
-  one: P.hazardFacts(P.onThisRoad(rs, { crowdBumps: [{ index: 80, p: 0.9 }] }, null), mi) }));
+  one: P.hazardFacts(P.onThisRoad(rs, { crowdBumps: [{ index: 80, p: 0.9 }] }, null), mi),
+  feel: (() => { const l = P.onThisRoad(rs, { crowdBumps: [], crowdCrests: [{ index: 100, g: 0.3 }, { index: 300, g: 0.4 }, { index: 5000, g: 0.4 }],
+    crowdRough: [{ index: 40, endIndex: 160 }, { index: 380, endIndex: 9999 }] }, null); return { list: l, facts: P.hazardFacts(l, mi) }; })(),
+  oneEach: P.hazardFacts(P.onThisRoad(rs, { crowdCrests: [{ index: 100, g: 0.3 }], crowdRough: [{ index: 40, endIndex: 160 }, { index: 200, endIndex: 280 }] }, null), mi) }));
 """
 
 
@@ -174,3 +180,27 @@ def test_route_reports_line():
     # closures have their own warning
     assert out["line"] == "Reported on the way: Pothole at 3 km (1 confirmed) · Gravel at 12 km (3 confirmed) · Debris at 15 km (1 confirmed) and 1 more"
     assert out["two"].endswith("and 2 more") and out["none"] == ""
+
+
+def test_crests_and_rough_road_members_felt(haz):
+    # crests and rough stretches (2+ drivers, contributor.js) on the road page; ones past the road's end left out
+    kinds = [(x["kind"], x["atM"], x.get("toM")) for x in haz["feel"]["list"]]
+    assert kinds == [("rough", 200, 800), ("crest", 500, None), ("crest", 1500, None)]
+    f = haz["feel"]["facts"]
+    assert ["2 crests members went light over", "at 0.3 and 0.9 mi"] in f
+    assert ["Rough road members felt", "0.1–0.5 mi"] in f
+    o = haz["oneEach"]
+    assert ["Crest members went light over", "at 0.3 mi"] in o
+    assert ["2 rough stretches members felt", "0.1–0.5 mi and 0.6–0.9 mi"] in o
+
+
+def test_members_camber_and_repaving(out):
+    f = out["felt"]["facts"]
+    assert ["Camber", "0.3 mi banked, 0.1 mi off-camber"] in f
+    assert ["Repaved", "month 2026-03"] in f
+    assert f[-1][0] == "How sure"
+    labels = [k for k, _ in out["felt"]["thin"]]
+    assert "Camber" not in labels and "Repaved" not in labels       # under 50 m: not worth a row
+    bare = [k for k, _ in out["bareFacts"]]
+    assert "Camber" not in bare and "Repaved" not in bare           # nobody measured it: no row, never "none"
+    assert out["bare"]["bankedKm"] is None and out["bare"]["repavedOn"] is None

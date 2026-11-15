@@ -28,13 +28,25 @@ function live(speed) {                                          // rows at `spee
   let t = 0;
   for (let i = 0; i <= 220; i++) { rows.push({ lat: lat[i], lon: lon[i], t_s: t }); t += 5 / speed;
     const r = tr.update(rows); if (r) seen.push(r); }
-  return { says: seen.filter((r) => r.say).map((r) => [r.state, Math.round(r.gap * 10) / 10]), done: seen.filter((r) => r.state === 'done'), mid: seen.find((r) => r.q > 0.5) };
+  // the ghost on the map (D-04): where the tracker puts it when you reach the middle of the stage
+  const mid = seen.find((r) => r.q > 0.5), at = mid ? tr2(speed) : null;
+  return { says: seen.filter((r) => r.say).map((r) => [r.state, Math.round(r.gap * 10) / 10]), done: seen.filter((r) => r.state === 'done'), mid, ghostMid: at };
+}
+function tr2(speed) {                                           // a fresh pass, stopped at the stage's middle
+  const tr = G.createTracker([{ stage, who: 'sam', splits: sp, time_s: 50 }]), rows = [];
+  let t = 0, r = null;
+  for (let i = 0; i <= 110; i++) { rows.push({ lat: lat[i], lon: lon[i], t_s: t }); t += 5 / speed; r = tr.update(rows) || r; }
+  const p = tr.ghostAt(r.elapsed_s);
+  return { elapsed: r.elapsed_s, ahead_m: p ? (p[0] - lat[110]) * 110540 : null, off: tr.ghostAt(null) };
 }
 const back = G.createTracker([{ stage, who: 'sam', splits: sp, time_s: 50 }]), brows = [];
 let anyBack = false; for (let i = 220; i >= 0; i--) { brows.push({ lat: lat[i], lon: lon[i], t_s: (220 - i) * 0.25 }); if (back.update(brows)) anyBack = true; }
 console.log(JSON.stringify({
   n: fine.length, first: fine[0], last: fine[fine.length - 1], counts: [G.countFor(30), G.countFor(1000), G.countFor(20000)], cuts, sp,
   t: [G.timeAt(sp, 0), G.timeAt(sp, 0.5), G.timeAt(sp, 1)], gap: G.gapAt(sp, 0.5, 26.2),
+  q: [G.qAt(sp, -1), G.qAt(sp, 0), G.qAt(sp, 25), G.qAt(sp, 50), G.qAt(sp, 80), G.qAt(null, 3)],
+  inverse: [0.1, 0.33, 0.77].map((x) => G.qAt(sp, G.timeAt(sp, x))),
+  pt: [G.pointAt(stage.geom, 0), G.pointAt(stage.geom, 0.5), G.pointAt(stage.geom, 1), G.pointAt(null, 0.5)],
   same: live(20), slow: live(16), backwards: anyBack,
   corners: G.cornerSplits(fine.map(([q, t]) => [q, t * 1.1]), sp),
   standout: G.standout([{ k: 1, gap_s: 0.5 }, { k: 2, gap_s: -1.2 }, { k: 3, gap_s: 0.02 }, { k: 4, gap_s: 2 }, { k: 5, gap_s: 0.3 }, { k: 6, gap_s: 0.1 }], 2),
@@ -110,3 +122,112 @@ def test_challenge_back_key():
     assert r["said"][2] == "That’s enough duels for now."
     assert r["said"][3].startswith("@sam isn’t your friend")
     assert r["said"][4] == "Couldn’t send it. Try again."
+
+
+def test_the_ghost_on_the_map_goes_at_its_splits_pace(out):
+    """D-04: the ghost marker. qAt is timeAt's inverse; between two splits it goes evenly, so the map tells no more than
+    the splits (corner to corner times) already do; pointAt places it along the stage's line by length."""
+    assert out["q"][:5] == [0, 0, pytest.approx(0.5, abs=0.01), 1, 1] and out["q"][5] is None
+    assert out["inverse"] == [pytest.approx(x, abs=1e-6) for x in (0.1, 0.33, 0.77)]
+    p0, p5, p1, none = out["pt"]
+    assert none is None and p0[0] == pytest.approx(39.0 + 50 / 110540) and p1[0] == pytest.approx(39.0 + 1050 / 110540)
+    assert p5[0] == pytest.approx(39.0 + 550 / 110540, abs=1e-7)          # half its 1000 m, past the bend in its line
+
+
+def test_the_ghost_is_where_your_friend_was_at_this_moment(out):
+    same, slow = out["same"]["ghostMid"], out["slow"]["ghostMid"]
+    assert abs(same["ahead_m"]) < 6                                       # at their pace: beside you
+    assert slow["ahead_m"] > 100                                         # 16 m/s against their 20: they are well up the road
+    assert same["off"] is None
+
+
+OWN_RUNNER = r"""
+const R = process.argv[1];
+const Core = require(R + '/web/apex_core.js'), G = require(R + '/web/ghost_duel.js');
+const lat = [], lon = []; for (let i = 0; i <= 220; i++) { lat.push(39.0 + i * 5 / 110540); lon.push(-84.5); }
+const pass = (mps) => G.splitsOf(Core, { speed_mps: lat.map(() => mps) }, 10, 210);
+const p = (mps, surface) => ({ time_s: 1000 / mps, splits: pass(mps), surface });
+const passes = [p(20, null), p(25, 'wet'), p(18, 'dry'), { time_s: 30, splits: null, surface: null }, p(40, 'ice')];
+const stage = { id: 's1', name: 'Dry Ridge', start: [lat[10], lon[10]], end: [lat[210], lon[210]], length_m: 1000, geom: [[lat[10], lon[10]], [lat[210], lon[210]]] };
+const best = G.bestOwn(passes);
+// a live pass at 16 m/s against your own best (20 m/s): the tracker says it is yours
+const tr = G.createTracker([{ stage, who: 'you', self: true, splits: best.splits, time_s: best.time_s }]), rows = [], seen = [];
+let t = 0; for (let i = 0; i <= 220; i++) { rows.push({ lat: lat[i], lon: lon[i], t_s: t }); t += 5 / 16; const r = tr.update(rows); if (r) seen.push(r); }
+console.log(JSON.stringify({
+  dry: best, wet: G.bestOwn(passes, 'wet'), ice: G.bestOwn(passes, 'ice'), none: [G.bestOwn([]), G.bestOwn(null), G.bestOwn([p(20, 'wet')])],
+  n: best.splits.length, selfs: seen.map((r) => r.self), done: seen.filter((r) => r.state === 'done').map((r) => Math.round(r.gap)),
+  labels: [G.label(0.31, 'you', true), G.label(-1.24, 'you', true), G.label(0, 'you', true)], spoken: G.spoken(-1.4, 'your best'),
+}));
+"""
+
+
+def test_your_own_best_is_a_ghost_on_a_road_like_todays():
+    """Your quickest pass of a stage is its ghost on any stage you've driven before: on a dry road the quickest dry or
+    unknown-surface pass, on a wet one only a wet pass (a dry best is no ghost for the rain); its splits every 25 m (it
+    never leaves your phone), so the marker goes at your own pace down the straights too."""
+    r = json.loads(subprocess.run([NODE, "-e", OWN_RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["dry"]["time_s"] == 50 and r["dry"]["surface"] is None and r["n"] == 40        # 20 m/s unknown beats 18 m/s dry; no splits, no ghost
+    assert r["wet"]["time_s"] == 40 and r["wet"]["surface"] == "wet" and r["ice"]["time_s"] == 25
+    assert r["dry"]["pass"]["time_s"] == 50 and r["dry"]["pass"]["surface"] is None   # which pass it is (the drive page dates it)
+    assert r["none"] == [None, None, None]
+    assert r["selfs"] and all(r["selfs"]) and r["done"] == [13]                              # 62.5 s against 50: 12.5 down (rounded up)
+    assert r["labels"] == ["+0.3 s vs your best", "−1.2 s vs your best", "level with your best"]
+    assert r["spoken"] == "1.4 seconds up on your best."
+
+
+WORST_RUNNER = r"""
+const R = process.argv[1];
+const Core = require(R + '/web/apex_core.js'), G = require(R + '/web/ghost_duel.js');
+const lat = [], lon = []; for (let i = 0; i <= 220; i++) { lat.push(39.0 + i * 5 / 110540); lon.push(-84.5); }
+const d = { speed_mps: lat.map(() => 20) };
+const sp = G.splitsOf(Core, d, 10, 210, G.cutsOf(10, 210, [12, 40, 50, 70, 120, 205]));   // cut at 15 %, 30 %, 55 %, the finish
+const stage = { id: 's1', name: 'Dry Ridge', start: [lat[10], lon[10]], end: [lat[210], lon[210]], length_m: 1000, geom: [[lat[10], lon[10]], [lat[210], lon[210]]] };
+function finish(slow) {                                      // the ghost's pace, but 10 m/s over bins slow[0]..slow[1]
+  const tr = G.createTracker([{ stage, who: 'sam', splits: sp, time_s: 50 }]), rows = [];
+  let t = 0, done = null;
+  for (let i = 0; i <= 220; i++) { rows.push({ lat: lat[i], lon: lon[i], t_s: t }); t += 5 / (i >= slow[0] && i < slow[1] ? 10 : 20);
+    const r = tr.update(rows); if (r && r.state === 'done') done = r; }
+  return done && { gap: Math.round(done.gap * 10) / 10, worst: done.worst, said: G.worstSaid(done.worst) };
+}
+console.log(JSON.stringify({
+  middle: finish([95, 115]), early: finish([20, 40]), late: finish([150, 170]), none: finish([0, 0]),
+  said: [G.worstSaid({ k: 2, of: 4, a: 0.7, b: 0.9 }), G.worstSaid(null)],
+  gap: G.worstOf([{ t_s: 0 }, { t_s: null }, { t_s: 2 }], 0, 2, 0, [[0.5, 1], [1, 2]]),
+  whole: G.worstOf([{ t_s: 0 }, { t_s: 5 }, { t_s: 9 }], 0, 2, 0, [[1, 4]]),
+}));
+"""
+
+
+def test_where_a_stage_was_lost():
+    """At the finish, down on the ghost: the stretch between its corner cuts that cost most (0.3 s or more), said by where
+    it is on the stage (early on, in the middle, late on, the run to the finish), never a corner number the road doesn't have."""
+    r = json.loads(subprocess.run([NODE, "-e", WORST_RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["middle"]["gap"] == pytest.approx(5, abs=0.3) and r["middle"]["worst"]["k"] == 3 and r["middle"]["worst"]["of"] == 4
+    assert r["middle"]["worst"]["gap_s"] == pytest.approx(5, abs=0.3) and r["middle"]["said"] == "Lost the most in the middle."
+    assert r["early"]["worst"]["k"] == 1 and r["early"]["said"] == "Lost the most early on."
+    assert r["late"]["worst"]["k"] == 4 and r["late"]["said"] == "Lost the most in the run to the finish."
+    assert r["none"]["worst"] is None and r["none"]["said"] is None                          # level: nothing lost anywhere
+    assert r["said"] == ["Lost the most late on.", None]
+    assert r["gap"] is None                                                                  # a gap in the clock: no answer
+    assert r["whole"] is None                       # no corner cut: the one stretch is the whole stage, nothing to point at
+
+
+IDEAL_RUNNER = r"""
+const R = process.argv[1];
+const Core = require(R + '/web/apex_core.js'), G = require(R + '/web/ghost_duel.js');
+const pass = (f) => ({ fine: G.splitsOf(Core, { speed_mps: Array.from({ length: 221 }, (_, i) => f(i)) }, 10, 210), lo: 10, hi: 210, apexes: [40, 70, 120, 160] });
+const a = pass((i) => (i < 110 ? 25 : 20)), b = pass((i) => (i < 110 ? 20 : 25)), c = pass(() => 18);
+console.log(JSON.stringify({ two: G.idealOf([a, b, c]), alone: G.idealOf([a]), same: G.idealOf([a, a]), none: G.idealOf(null) }));
+"""
+
+
+def test_your_ideal_run_is_your_quickest_stretches_put_together():
+    """A stage's ideal run: over each stretch between the quickest pass's corners, the quickest of your passes, added up.
+    Quick early on one day and late on another, the ideal is quicker than either; one pass, or the same pass twice, is
+    no better than your best."""
+    r = json.loads(subprocess.run([NODE, "-e", IDEAL_RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
+    two = r["two"]
+    assert two["best_s"] == pytest.approx(45, abs=0.2) and two["time_s"] == pytest.approx(40.5, abs=0.6) and two["runs"] == 2
+    assert two["stretches"] == 5                                          # cut at 4 apexes 100 m apart, then the finish
+    assert r["alone"] is None and r["none"] is None
+    assert r["same"]["time_s"] == r["same"]["best_s"]

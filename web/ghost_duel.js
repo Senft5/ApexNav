@@ -69,6 +69,40 @@
     return p0[1];
   }
 
+  /**
+   * Where the ghost is after elapsed_s, as a fraction of the stage (the inverse of timeAt): between two of its splits it
+   * goes at that stretch's even pace, so the map shows no more than the splits tell (how long corner to corner, never a
+   * speed down a straight). 0 before the start, 1 once its time is up; null without splits.
+   */
+  function qAt(splits, elapsed_s) {
+    if (!Array.isArray(splits) || !splits.length || !finite(elapsed_s)) return null;
+    if (elapsed_s <= 0) return 0;
+    let p0 = [0, 0];
+    for (const p of splits) {
+      if (!Array.isArray(p) || !finite(p[0]) || !finite(p[1])) return null;
+      if (elapsed_s <= p[1]) return p[1] > p0[1] ? p0[0] + (p[0] - p0[0]) * (elapsed_s - p0[1]) / (p[1] - p0[1]) : p[0];
+      p0 = p;
+    }
+    return 1;
+  }
+  /** The point a fraction q (0..1) of the way along a line [[lat, lon], ...], by length; null without a line. */
+  function pointAt(geom, q) {
+    if (!Array.isArray(geom) || geom.length < 2 || !finite(q)) return null;
+    let total = 0;
+    const seg = [];
+    for (let i = 1; i < geom.length; i++) { const m = metres(geom[i - 1], geom[i]); seg.push(m); total += m; }
+    if (!(total > 0)) return [geom[0][0], geom[0][1]];
+    let want = Math.max(0, Math.min(1, q)) * total;
+    for (let i = 0; i < seg.length; i++) {
+      if (want <= seg[i] || i === seg.length - 1) {
+        const f = seg[i] > 0 ? Math.min(1, want / seg[i]) : 0, a = geom[i], b = geom[i + 1];
+        return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+      }
+      want -= seg[i];
+    }
+    return [geom[geom.length - 1][0], geom[geom.length - 1][1]];
+  }
+
   /** Seconds you are behind the ghost (above 0) or ahead (below 0), at fraction q having taken elapsed_s. */
   function gapAt(splits, q, elapsed_s) {
     const g = timeAt(splits, q);
@@ -103,9 +137,46 @@
              gained: ok.filter((r) => r.gap_s < -0.05).sort((a, b) => a.gap_s - b.gap_s).slice(0, n) };
   }
 
-  /** "+0.3 vs @sam", "−1.2 vs @sam", "level with @sam"; "--" when nothing compares yet. */
-  function label(gap, who) {
-    const w = who ? `@${String(who).replace(/^@/, '')}` : 'them';
+  /**
+   * Your own quickest pass of a stage as its ghost, on any stage you've driven before: passes [{ time_s, splits, surface }]
+   * (splits finely cut, every 25 m: it never leaves your phone), the quickest with whole splits on a road like today's
+   * (surface 'wet' / 'ice', or null for dry, where a pass of unknown surface counts as dry), and `pass` the one it is. Null
+   * when none.
+   */
+  function bestOwn(passes, surface = null) {
+    const like = (s) => (surface === 'wet' || surface === 'ice' ? s === surface : s !== 'wet' && s !== 'ice');
+    let best = null;
+    for (const p of passes || []) {
+      if (!p || !finite(p.time_s) || !(p.time_s > 0) || !Array.isArray(p.splits) || !p.splits.length || !like(p.surface)) continue;
+      if (!best || p.time_s < best.time_s) best = p;
+    }
+    return best ? { splits: best.splits, time_s: r1(best.time_s), surface: surface === 'wet' || surface === 'ice' ? surface : null, pass: best } : null;
+  }
+
+  /**
+   * Your ideal run of a stage: the quickest of your passes over each stretch between the same cuts, put together. passes
+   * [{ fine, lo, hi, apexes }] (fine: 25 m splits; apexes: the drive's corner apexes, sample indices); the stretches are
+   * cut at the quickest pass's corners (cutsOf), so a stretch always holds a corner. { time_s, best_s, stretches, runs }
+   * or null under two passes with whole splits.
+   */
+  function idealOf(passes) {
+    const ok = (passes || []).filter((p) => p && Array.isArray(p.fine) && p.fine.length && finite(timeAt(p.fine, 1)));
+    if (ok.length < 2) return null;
+    const best = ok.reduce((a, b) => (timeAt(b.fine, 1) < timeAt(a.fine, 1) ? b : a));
+    const cuts = cutsOf(best.lo, best.hi, best.apexes), used = new Set();
+    let sum = 0, q0 = 0;
+    for (const q of cuts) {
+      let m = Infinity, who = -1;
+      ok.forEach((p, i) => { const d = timeAt(p.fine, q) - timeAt(p.fine, q0); if (finite(d) && d < m) { m = d; who = i; } });
+      if (!finite(m)) return null;
+      sum += m; used.add(who); q0 = q;
+    }
+    return { time_s: r1(sum), best_s: r1(timeAt(best.fine, 1)), stretches: cuts.length, runs: used.size };
+  }
+
+  /** "+0.3 vs @sam", "−1.2 vs @sam", "level with @sam" ("vs your best" for your own ghost, self); "--" when nothing compares yet. */
+  function label(gap, who, self = false) {
+    const w = self ? 'your best' : who ? `@${String(who).replace(/^@/, '')}` : 'them';
     if (!finite(gap)) return '--';
     if (Math.abs(gap) < 0.05) return `level with ${w}`;
     return `${gap > 0 ? '+' : '−'}${Math.abs(gap).toFixed(1)} s vs ${w}`;
@@ -118,10 +189,39 @@
     return `${say ? say(Math.abs(gap)) : `${Math.abs(gap).toFixed(1)} seconds`} ${gap > 0 ? 'down on' : 'up on'} ${w}.`;
   }
 
-  const ENTRY_M = 30, HEADING_DEG = 60, NEAR_M = 25, PAST_M = 12, SAY_EVERY = 2;
+  /**
+   * At a stage's finish: the corner stretch where you lost most to the ghost, { k, of, a, b, gap_s } (k counts the ghost's
+   * corner-cut splits from 1, k === of the run to the finish; a..b the stretch as fractions of the stage), from the live rows [entry, end] (their own clock, t_s,
+   * read at each cut by distance along the pass). Null when no stretch lost WORST_S or more, or the clock has a gap.
+   */
+  function worstOf(rows, entry, end, t0, cut) {
+    if (!Array.isArray(cut) || cut.length < 2 || !(end > entry)) return null;     // one stretch is the whole stage: nothing to point at
+    const mine = [];
+    for (const [q] of cut) {
+      const x = entry + q * (end - entry), i = Math.floor(x), f = x - i, a = rows[i] && rows[i].t_s, b = rows[Math.min(end, i + 1)] && rows[Math.min(end, i + 1)].t_s;
+      if (!finite(a) || !finite(b)) return null;
+      mine.push([q, a + (b - a) * f - t0]);
+    }
+    const lost = standout(cornerSplits(mine, cut).rows, 1).lost[0];
+    return lost && lost.gap_s >= WORST_S ? { k: lost.k, of: cut.length, a: lost.a, b: lost.b, gap_s: r1(lost.gap_s) } : null;
+  }
+  /**
+   * What the co-driver adds at the finish, where on the stage it went (the stretch's middle; a corner number would not be
+   * the road's own): "Lost the most early on." / "in the middle." / "late on." / "in the run to the finish." Not "most of
+   * it": on Nate's roads the worst stretch held under half the gap a third of the time (2026-11-15).
+   */
+  function worstSaid(w) {
+    if (!w || !finite(w.a) || !finite(w.b)) return null;
+    if (w.k >= w.of) return 'Lost the most in the run to the finish.';
+    const m = (w.a + w.b) / 2;
+    return `Lost the most ${m < 1 / 3 ? 'early on' : m < 2 / 3 ? 'in the middle' : 'late on'}.`;
+  }
+
+  const ENTRY_M = 30, HEADING_DEG = 60, NEAR_M = 25, PAST_M = 12, SAY_EVERY = 2, WORST_S = 0.3;
   /**
    * Follows the live 5 m rows ({ lat, lon, t_s }) against ghosts [{ stage: { id, name, start, end, length_m, geom }, who,
-   * splits, time_s }]. update(rows) → null outside a stage, { state: 'in', name, who, gap, q } inside, and
+   * splits, time_s }]. update(rows) → null outside a stage, { state: 'in', name, who, gap, q, elapsed_s } inside (and
+   * ghostAt(elapsed_s) places the ghost on the map, D-04), and
    * { state: 'done', ..., gap, time_s } once on finishing. Time is the rows' own clock (t_s); without one nothing shows.
    * gap is as of the last of the ghost's splits passed (null before the first). say: true at the first split past half
    * way, and at the finish (the co-driver's moments: two lines a stage, no more).
@@ -172,14 +272,21 @@
           if (off) { cur = null; scanned = i + 1; return null; }       // left the stage: no result
           if (cur.endMin.m <= NEAR_M && me > cur.endMin.m + PAST_M) {
             const e = rows[cur.endMin.i], time = finite(e.t_s) ? e.t_s - cur.t0 : null;
-            const out = { state: 'done', name: cur.g.stage.name, who: cur.g.who, stageId: cur.g.stage.id, q: 1, time_s: time,
-                          gap: finite(time) ? time - cur.g.time_s : cur.gap, say: true };
+            const out = { state: 'done', name: cur.g.stage.name, who: cur.g.who, self: !!cur.g.self, stageId: cur.g.stage.id, q: 1, time_s: time,
+                          gap: finite(time) ? time - cur.g.time_s : cur.gap, say: true, worst: worstOf(rows, cur.entry, cur.endMin.i, cur.t0, cur.g.self ? cur.g.corners : cur.g.corners || cur.g.splits) };   // your own 25 m splits are no corner stretches
             cur = null; scanned = i + 1;
             return out;
           }
         }
         scanned = n;
-        return cur ? { state: 'in', name: cur.g.stage.name, who: cur.g.who, stageId: cur.g.stage.id, q: cur.q, gap: cur.gap, say } : null;
+        if (!cur) return null;
+        const last = rows[n - 1], el = last && finite(last.t_s) && finite(cur.t0) ? last.t_s - cur.t0 : null;
+        return { state: 'in', name: cur.g.stage.name, who: cur.g.who, self: !!cur.g.self, stageId: cur.g.stage.id, q: cur.q, gap: cur.gap, say, elapsed_s: el };
+      },
+      /** Where the ghost of the stage you are on is after elapsed_s on its clock ([lat, lon]), or null off a stage. */
+      ghostAt(elapsed_s) {
+        if (!cur || !finite(elapsed_s)) return null;
+        return pointAt(cur.g.stage.geom, qAt(cur.g.splits, elapsed_s));
       },
     };
   }
@@ -204,6 +311,6 @@
     return 'Couldn\u2019t send it. Try again.';
   }
 
-  const api = { cutsOf, splitsOf, timeAt, gapAt, cornerSplits, standout, label, spoken, createTracker, countFor, MAX, challengeKey, challengeSaid };
+  const api = { cutsOf, splitsOf, bestOwn, idealOf, worstOf, worstSaid, timeAt, qAt, pointAt, gapAt, cornerSplits, standout, label, spoken, createTracker, countFor, MAX, challengeKey, challengeSaid };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexGhostDuel = api;
 })(typeof window !== 'undefined' ? window : globalThis);

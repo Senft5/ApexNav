@@ -192,6 +192,40 @@ def test_an_expressway_keeps_its_flag_into_the_tiles(tmp_path):
     assert js is None or js.stdout.strip() == "16384", js
 
 
+def test_a_scenic_byway_keeps_its_level_into_the_tiles(tmp_path):
+    """A road in a route=road relation named a National Scenic Byway is 2 in the tiles' byway channel, one tagged
+    scenic=yes 1, a plain road 0 (web/route_ctx/osm_overpass.js bywayLevel's levels); the byway's edges don't merge with
+    the plain road it meets end to end."""
+    d = 0.001
+    nodes = {k: (39.1, -84.5 + (k - 1) * d, {}) for k in range(1, 7)}
+    nodes[9] = (39.1 + d, -84.5 + 2 * d, {})
+    R = {"highway": "secondary", "name": "Skyline Drive"}
+    ways = {1: ([1, 2, 3], R), 2: ([3, 4], R), 3: ([4, 5, 6], {**R, "scenic": "yes"}), 4: ([3, 9], {"highway": "tertiary", "name": "Side Road"})}
+    rels = [([("w", 1, ""), ("w", 2, "")], {"type": "route", "route": "road", "name": "Talimena National Scenic Byway"})]
+    p = tmp_path / "x.osm.pbf"
+    write_osm(p, nodes, ways, rels)
+    assert G.byway_level({"network": "US:NSB"}) == 2 and G.byway_level({"name": "Ohio River Scenic Byway"}) == 1
+    assert G.byway_level({"name": "US 50", "network": "US:US"}) == 0
+    out = tmp_path / "v1"
+    from tools.graph_etl import build
+    build.main(["--pbf", str(p), "--tiles=-84.51,39.09,-84.49,39.11", "--out", str(out), "--work", str(tmp_path / "w"), "--ctx", ""])
+    r = T.read_tile(open(out / "382_516.vgr", "rb").read())
+    e, nd = r["edges"], r["nodes"]
+    lon = lambda k: [nd["lon"][v] for v in range(len(nd["lon"])) if nd["first_edge"][v] <= k < nd["first_edge"][v + 1]][0]  # noqa: E731
+    by = {}
+    for k in range(len(e["to"])):
+        name = r["names"][e["name"][k]]
+        mid = (lon(k) + nd["lon"][e["to"][k]]) / 2
+        by.setdefault((name, round(mid, 4)), set()).add(e["ch"]["byway"][k])
+    assert all(v == {0} for (n, m), v in by.items() if n == "Side Road"), by
+    sky = sorted((m, v) for (n, m), v in by.items() if n == "Skyline Drive")
+    assert [v for m, v in sky] == [{2}, {2}, {1}], sky          # west to east: ways 1 and 2 (the side road splits them), way 3
+    assert ("byway", 1) == T.CHANNELS[-1]
+    js = subprocess.run([NODE, "-e", "const C = require(process.argv[1] + '/web/graph_tiles.js').CHANNELS; console.log(JSON.stringify(C[C.length - 1]))", ROOT],
+                        capture_output=True, text=True, timeout=30) if NODE else None
+    assert js is None or json.loads(js.stdout) == ["byway", 1], js
+
+
 # ---- the scorer ---------------------------------------------------------------------------------------------------
 SCORE = r"""
 const S = require(process.argv[1] + '/tools/graph_etl/score_edges.js');

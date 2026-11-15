@@ -1,5 +1,6 @@
 // Members' road feel kept with a saved route (IDEAS F-03): what the crowd measured along it (contributor.js measuredAlong:
-// the coverage line's numbers, the driven corners that replace the map's, the bumps several members felt) is kept on the
+// the coverage line's numbers, the driven corners that replace the map's, the bumps several members felt, the crests they went light over,
+// the broken pavement they measured) is kept on the
 // phone when the route is saved or its card asks with signal, so a saved route opened with no signal still gets the
 // members' corners and bump calls and says how old they are. Only what the route uses is kept: the curvature runs that
 // blendCurvature would take (2+ passes, 30 m), by metres along the route so a rebuilt track lines up. Nothing is invented;
@@ -32,10 +33,27 @@
       if (j - i >= MIN_RUN) k.push([Math.round(dist[i]), K.slice(i, j).map((v) => Math.round(v * K_SCALE))]);
       i = j;
     }
+    // the camber members agree on (contributor.js camFrom): runs [metres, tenths of a degree...], only when there is any
+    const cam = [], C = Array.isArray(m.crowdCam) ? m.crowdCam : [];
+    for (let i = 0; i < Math.min(C.length, dist.length);) {
+      if (!finite(C[i]) || !finite(dist[i])) { i++; continue; }
+      let j = i;
+      while (j < Math.min(C.length, dist.length) && finite(C[j])) j++;
+      cam.push([Math.round(dist[i]), C.slice(i, j).map((v) => Math.round(v * 10))]);
+      i = j;
+    }
     const bumps = (Array.isArray(m.crowdBumps) ? m.crowdBumps : [])
       .filter((b) => b && Number.isInteger(b.index) && finite(dist[b.index]))
       .map((b) => [Math.round(dist[b.index]), finite(b.p) ? r4(b.p) : null]);
-    return { at: nowMs, sum, k, bumps };
+    // and the crests members felt (contributor.js crestsFrom): [metres, g], kept only when there are any
+    const crests = (Array.isArray(m.crowdCrests) ? m.crowdCrests : [])
+      .filter((c) => c && Number.isInteger(c.index) && finite(dist[c.index]))
+      .map((c) => [Math.round(dist[c.index]), finite(c.g) ? r4(c.g) : null]);
+    // and the broken pavement members measured (contributor.js roughFrom): [from metres, to metres], only when there is any
+    const rough = (Array.isArray(m.crowdRough) ? m.crowdRough : [])
+      .filter((r) => r && Number.isInteger(r.index) && Number.isInteger(r.endIndex) && finite(dist[r.index]) && finite(dist[r.endIndex]))
+      .map((r) => [Math.round(dist[r.index]), Math.round(dist[r.endIndex])]);
+    return { at: nowMs, sum, k, bumps, ...(crests.length ? { crests } : {}), ...(rough.length ? { rough } : {}), ...(cam.length ? { cam } : {}) };
   }
   const indexAt = (dist, m) => {
     let lo = 0, hi = dist.length - 1;
@@ -56,8 +74,21 @@
       run[1].forEach((v, q) => { if (i0 + q < n && finite(v)) { K[i0 + q] = v / K_SCALE; N[i0 + q] = MIN_PASSES; } });
     }
     out.crowdK = K; out.crowdKn = N;
+    if (Array.isArray(p.cam)) {
+      const A = new Array(n).fill(null);
+      for (const run of p.cam) {
+        if (!Array.isArray(run) || !finite(run[0]) || !Array.isArray(run[1]) || run[0] > end + 1) continue;
+        const i0 = indexAt(dist, run[0]);
+        run[1].forEach((v, q) => { if (i0 + q < n && finite(v)) A[i0 + q] = v / 10; });
+      }
+      out.crowdCam = A;
+    }
     out.crowdBumps = (Array.isArray(p.bumps) ? p.bumps : []).filter((b) => Array.isArray(b) && finite(b[0]) && b[0] <= end + 1)
       .map((b) => ({ index: indexAt(dist, b[0]), p: finite(b[1]) ? b[1] : null }));
+    out.crowdCrests = (Array.isArray(p.crests) ? p.crests : []).filter((c) => Array.isArray(c) && finite(c[0]) && c[0] <= end + 1)
+      .map((c) => ({ index: indexAt(dist, c[0]), g: finite(c[1]) ? c[1] : null }));
+    out.crowdRough = (Array.isArray(p.rough) ? p.rough : []).filter((r) => Array.isArray(r) && finite(r[0]) && finite(r[1]) && r[0] <= end + 1)
+      .map((r) => ({ index: indexAt(dist, r[0]), endIndex: indexAt(dist, Math.min(r[1], end)) }));
     return out;
   }
   /** Keeps measured `m` for route `id`; the oldest routes go past MAX_ROUTES or MAX_CHARS. False when nothing was kept. */

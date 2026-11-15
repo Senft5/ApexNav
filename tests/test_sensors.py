@@ -44,11 +44,11 @@ out.accel = line(10, 20).lon_g; out.brake = line(20, 10).lon_g; out.straightLat 
   const csv = rec.toCsv().trim().split('\n'), rows = csv.slice(1).map((l) => l.split(','));
   out.rec = { n: rows.length, km: rec.km, head: csv[0], gaps: rows.slice(1).every((r, i) => Math.abs(+r[1] - +rows[i][1] - 5) < 1e-6), camberBlank: rows.every((r) => r[8] === ''), mph: +rows[10][5], src: rows[3][12], peakBlank: rows.every((r) => r[11] === ''), lonGBlankEarly: rows[0][6] }; }
 // native frames: camber and crest are kept only while the mount calibration is locked
-// (camber_v 2: the current shell's frames; 'old' is a build whose camber decayed to a placeholder 0: never recorded)
+// (camber_v 3: the current shell's frames; 'old' is a build whose camber decayed to a placeholder 0: never recorded)
 for (const cal of ['locked', 'default', 'awaitingPull', 'old']) {
   const rec = new S.Recorder();
   for (let t = 0; t <= 20; t++) rec.add({ t: t * 1000, has_fix: true, ...at(t * 20, 0), speed_mps: 20, lat_g: 0.1, lon_g: 0, roughness_rms: 0.05, camber_deg: 3.5, crest_vertical_g: -0.12,
-    calibration: cal === 'old' ? 'locked' : cal, ...(cal === 'old' ? {} : { camber_v: 2 }) });
+    calibration: cal === 'old' ? 'locked' : cal, ...(cal === 'old' ? {} : { camber_v: 3 }) });
   const rows = rec.toCsv().trim().split('\n').slice(1).map((l) => l.split(','));
   out['native_' + cal] = { camber: [...new Set(rows.map((r) => r[8]))], crest: [...new Set(rows.map((r) => r[10]))], latG: [...new Set(rows.map((r) => r[7]))], camberV: [...new Set(rows.map((r) => r[13]))], n: rows.length };
 }
@@ -121,7 +121,7 @@ def test_recording_is_5m_samples_with_blanks(r):
 def test_native_camber_and_crest_recorded_only_when_calibrated(r):
     locked = r["native_locked"]
     assert locked["n"] > 50 and locked["camber"] == ["3.50"] and locked["crest"] == ["-0.120"] and locked["latG"] == ["0.1000"]
-    assert locked["camberV"] == ["2"], "each row says its camber is from the fixed pipeline"
+    assert locked["camberV"] == ["3"], "each row says its camber is from the fixed pipeline"
     old = r["native_old"]                                                                 # an older build's frames: camber unknown, the rest kept
     assert old["camber"] == [""] and old["camberV"] == [""] and old["crest"] == ["-0.120"] and old["latG"] == ["0.1000"]
     for cal in ("default", "awaitingPull"):                                               # an unsolved mount: unknown, not a guess

@@ -24,7 +24,7 @@
     set(v) { try { if (v) sessionStorage.setItem(KEY_STORE, v); else sessionStorage.removeItem(KEY_STORE); } catch (e) { /* private mode */ } },
   };
 
-  let metric = "rough_g", key = store.get(), map = null, data = { type: "FeatureCollection", features: [] }, timer = 0;
+  let metric = "rough_g", thin = true, key = store.get(), map = null, data = { type: "FeatureCollection", features: [] }, timer = 0;
 
   function colorExpr() {
     const m = METRICS[metric], stops = [];
@@ -105,7 +105,7 @@
     if (e - w > 1) { w = c.lng - 0.5; e = c.lng + 0.5; clipped = true; }
     const box = [s, w, n, e].map((v) => v.toFixed(4)).join(",");
     let res;
-    try { res = await fetch(`${API}?bbox=${box}`, { headers: { authorization: `Bearer ${key}` } }); }
+    try { res = await fetch(`${API}?bbox=${box}${thin ? "&floor=app" : ""}`, { headers: { authorization: `Bearer ${key}` } }); }
     catch (err) { $("keymsg").textContent = "No connection. Showing what was loaded."; return; }
     if (!res.ok) {
       let code = "";
@@ -118,8 +118,9 @@
     }
     const fc = await res.json();
     $("keymsg").textContent = "";
+    $("thinwrap").hidden = fc.access !== "internal";
     setMode(true, fc.features.length ? (clipped ? "Showing the middle 1° of the view. Zoom in to see the edges." : "")
-      : "No road here has 10 or more drivers yet. Unknown stays unknown.");
+      : fc.floor === "app" ? "No measured road in view yet." : "No road here has 10 or more drivers yet. Unknown stays unknown.");
     setData(fc);
   }
 
@@ -162,7 +163,8 @@
       $("keymsg").textContent = "Loading…";
       loadLive();
     });
-    $("keyclear").addEventListener("click", () => { key = ""; store.set(""); loadSample(); });
+    $("keyclear").addEventListener("click", () => { key = ""; store.set(""); $("thinwrap").hidden = true; loadSample(); });
+    $("thin").addEventListener("change", () => { thin = $("thin").checked; if (key) loadLive(); });
     if (!window.maplibregl) { $("note").textContent = "The map didn't load."; return; }
     map = new maplibregl.Map({ container: "map", style: STYLE, center: [-84.33, 39.25], zoom: 12, attributionControl: { compact: true } });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
@@ -173,7 +175,7 @@
         paint: { "line-color": "#F5F5F7", "line-width": ["interpolate", ["linear"], ["zoom"], 9, 5, 14, 10, 17, 15] } });
       map.addLayer({ id: "roads", type: "line", source: "roads", layout: { "line-cap": "round", "line-join": "round" },
         paint: { "line-color": colorExpr(), "line-width": ["interpolate", ["linear"], ["zoom"], 9, 1.5, 14, 5, 17, 9],
-                 "line-opacity": ["match", ["get", "confidence"], "fair", 0.65, 0.95] } });
+                 "line-opacity": ["match", ["get", "confidence"], "low", 0.45, "fair", 0.65, 0.95] } });
       map.on("click", "roads", (ev) => {
         const f = ev.features && ev.features[0];
         if (!f) return;

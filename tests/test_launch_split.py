@@ -40,6 +40,7 @@ def test_lazy_modules_are_not_on_the_launch_path_and_exist():
     g = groups()
     assert {"crew_page.js", "garage_ui.js", "builds.js", "convoy_ui.js", "friends_map.js"} <= set(g["social"])
     assert g["g2p"] == ["g2p.js"]
+    assert set(g["ahead"]) == {"sun_ahead.js", "briefing.js", "corners_ahead.js", "along_ahead.js", "horizon.js"}   # a drive's quiet lines and the free drive's road ahead
     for name, files in g.items():
         for f in files:
             assert (WEB / f).exists(), f

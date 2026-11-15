@@ -392,3 +392,153 @@ def test_coach_says_turn_in_later_when_the_quicker_pass_did():
     assert c["tip"] == {"kind": "turn_in_later", "value": pytest.approx(25.0), "vs_best": True}
     same = da.coach(_ramped(78, 0.96), [late])["corners"][0]      # the same turn-in: the time is elsewhere, no turn-in tip
     assert same["tip"] is None or same["tip"]["kind"] != "turn_in_later"
+
+
+def _early_corner(v_min_at, lon_cross_at, dip=4.0, n=120, s=50, e=70, a=60):
+    """A left corner at 20 m/s whose GPS speed bottoms out at bin v_min_at, and whose a_lon (the motion sensors) goes from
+    slowing to speeding up at bin lon_cross_at; the load sideways peaks at the apex."""
+    v = np.full(n, 20.0)
+    for i in range(n):
+        v[i] = 20.0 - dip * max(0.0, 1.0 - abs(i - v_min_at) / 12.0)
+    lon = np.array([-0.15 if i < lon_cross_at else 0.15 for i in range(n)], dtype=float)
+    lat = np.array([0.5 * max(0.0, 1.0 - abs(i - a) / 10.0) for i in range(n)], dtype=float)
+    return v, lon, lat, s, e, a
+
+
+def test_early_apex_is_told_only_when_gps_and_the_motion_sensors_agree():
+    """Nate's drives (2026-11-15, "i don't do that?"): 37 early-apex notes on 11 drives, half from a dip under 2 mph that GPS
+    cannot tell and more where the motion sensors put the slowest point at the apex. Now: a real dip, more than one GPS fix
+    early, and the sensors saying so too. Not softer: the same corner with both agreeing is still told."""
+    v, lon, lat, s, e, a = _early_corner(56, 56)                     # slowest 20 m early, the sensors agree
+    m = da.corner_phases(v, lon, lat, s, e, a, 25.0)
+    assert m["min_offset_m"] == -20.0 and m["imu_slow_m"] == -20.0
+    assert da._tip({**m, "road_off_m": -20.0}, None)["kind"] == "early_apex"
+    # the size told is the line's against the road (Nate: "drive geometry compared to road geometry"), not the slowest point's
+    assert da._tip({**m, "road_off_m": -17.25}, None)["value"] == 17.3
+    v, lon, lat, s, e, a = _early_corner(56, 60)                     # GPS says early, the sensors say at the apex
+    m = da.corner_phases(v, lon, lat, s, e, a, 25.0)
+    assert m["imu_slow_m"] == 0.0 and da._tip(m, None) is None
+    v, lon, lat, s, e, a = _early_corner(56, 56, dip=0.4)            # a dip under 1 m/s is GPS noise, not slowing
+    assert da._tip(da.corner_phases(v, lon, lat, s, e, a, 25.0), None) is None
+    v, lon, lat, s, e, a = _early_corner(57, 57)                     # 15 m early is inside one GPS fix of travel (16 m at 16 m/s)
+    assert da._tip(da.corner_phases(v, lon, lat, s, e, a, 25.0), None) is None
+
+
+def _road_corner(turn_at, n=120, s=50, e=70, road_at=60):
+    """A left corner on the map centred at bin road_at (a 40 m radius arc over 20 bins, straight either side), and the
+    phone's sideways load, at 15 m/s, centred at bin turn_at."""
+    import math as m
+    v = np.full(n, 15.0)
+    lat_g = np.array([0.55 * max(0.0, 1.0 - abs(i - turn_at) / 10.0) for i in range(n)], dtype=float)
+    x, y, h, la, lo = 0.0, 0.0, 0.0, [], []
+    for i in range(n):
+        la.append(39.0 + y / 110540.0)
+        lo.append(-84.0 + x / (111320.0 * m.cos(m.radians(39.0))))
+        k = (1 / 40.0) * max(0.0, 1.0 - abs(i + 0.5 - road_at) / 10.0)   # curvature rises to the road's apex and falls,
+        x += 5.0 * m.cos(h + k * 2.5)                                    # taken at the middle of each 5 m step
+        y += 5.0 * m.sin(h + k * 2.5)
+        h += k * 5.0
+    return v, lat_g, la, lo, s, e
+
+
+def test_the_line_is_measured_against_the_roads_own_shape():
+    """Nate (2026-11-15): "shouldn't it be drive geometry compared to road geometry?". road_turn_offset_m: the centre of
+    your turning less the centre of the road's under you. On his 13 drives it says median -2 m (no early habit), and backs
+    2 of the 13 corners the speed alone called early. Unknown road: None, never 0."""
+    v, g, la, lo, s, e = _road_corner(56)                             # turned 20 m before the road does
+    assert da.road_turn_offset_m(la, lo, v, g, s, e) == pytest.approx(-20.0, abs=3)
+    v, g, la, lo, s, e = _road_corner(60)                             # turned with the road
+    assert abs(da.road_turn_offset_m(la, lo, v, g, s, e)) < 3
+    v, g, la, lo, s, e = _road_corner(64)                             # later than the road: a late apex
+    assert da.road_turn_offset_m(la, lo, v, g, s, e) == pytest.approx(20.0, abs=3)
+    assert da.road_turn_offset_m(None, None, v, g, s, e) is None
+    la[60] = None                                                     # a bin off the map: the road is not known there
+    assert da.road_turn_offset_m(la, lo, v, g, s, e) is None
+
+
+def test_an_early_apex_needs_the_line_itself_early():
+    """Speed alone (slowest before the tightest) said early on 13 of Nate's corners; against the road his turning was
+    centred within 10 m of the road's on 11. The note now also needs the line early on the map, and with no road known
+    it says nothing about the line. Not softer: a corner whose line is early is still told."""
+    v, lon, lat, s, e, a = _early_corner(56, 56)
+    m = da.corner_phases(v, lon, lat, s, e, a, 25.0)
+    assert da._tip({**m, "road_off_m": -20.0}, None)["kind"] == "early_apex"
+    assert da._tip({**m, "road_off_m": -15.0}, None)["kind"] == "early_apex"
+    assert da._tip({**m, "road_off_m": -5.0}, None) is None           # slowest early, but the line with the road
+    assert da._tip({**m, "road_off_m": None}, None) is None           # no road: no claim
+    assert da._tip(m, None) is None
+
+
+def test_the_line_against_the_road_is_the_same_in_the_app():
+    """web/apex_core.js roadTurnOffsetM is the port of road_turn_offset_m."""
+    import json, shutil, subprocess
+    from pathlib import Path
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not installed")
+    cases = []
+    for t in (56, 60, 64, 52):
+        v, g, la, lo, s, e = _road_corner(t)
+        cases.append({"v": v.tolist(), "g": g.tolist(), "la": la, "lo": lo, "s": s, "e": e})
+    cases.append({**cases[0], "la": [None if i == 60 else x for i, x in enumerate(cases[0]["la"])]})
+    js = "const C = require(process.argv[1]); const k = JSON.parse(process.argv[2]); console.log(JSON.stringify(k.map((c) => C.roadTurnOffsetM(c.la, c.lo, c.v, c.g, c.s, c.e))))"
+    got = json.loads(subprocess.run([node, "-e", js, str(Path(__file__).resolve().parents[1] / "web" / "apex_core.js"), json.dumps(cases)],
+                                    capture_output=True, text=True, check=True).stdout)
+    want = [da.road_turn_offset_m(c["la"], c["lo"], np.asarray(c["v"]), np.asarray(c["g"]), c["s"], c["e"]) for c in cases]
+    assert got[-1] is None and want[-1] is None
+    assert got[:-1] == pytest.approx(want[:-1], abs=1e-6), (got, want)
+
+
+def test_the_motion_sensors_slowest_point_is_the_same_in_the_app():
+    """web/apex_core.js imuSlowM is the port of _imu_slow_m: the same metres on the same corner, unknown g included."""
+    import json, shutil, subprocess
+    from pathlib import Path
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not installed")
+    cases = []
+    for vm, lc in ((56, 56), (56, 60), (60, 52), (50, 64)):
+        v, lon, lat, s, e, a = _early_corner(vm, lc)
+        lon = [None if i in (40, 41) else float(x) for i, x in enumerate(lon)]   # unknown g before the corner
+        cases.append({"v": v.tolist(), "lon": lon, "lat": lat.tolist(), "s": s, "e": e})
+    js = "const C = require(process.argv[1]); const k = JSON.parse(process.argv[2]); console.log(JSON.stringify(k.map((c) => C.imuSlowM(c.v, c.lon, c.lat, c.s, c.e))))"
+    got = json.loads(subprocess.run([node, "-e", js, str(Path(__file__).resolve().parents[1] / "web" / "apex_core.js"), json.dumps(cases)],
+                                    capture_output=True, text=True, check=True).stdout)
+    want = [da._imu_slow_m(np.asarray(c["v"]), np.asarray([np.nan if x is None else x for x in c["lon"]]), np.asarray(c["lat"]), c["s"], c["e"]) for c in cases]
+    assert got == want and want[:2] == [-20.0, 0.0], (got, want)
+
+
+def _drive_with_g_ahead(ahead):
+    """A winding drive whose phone g runs `ahead` bins ahead of GPS (as builds before Nov 14 recorded it)."""
+    import math as m
+    n = 400
+    x = np.arange(n) * 5.0
+    lat = (39.0 + (12.0 * np.sin(x / 25.0)) / 110540.0).tolist()
+    lon = (-84.0 + x / (111320.0 * m.cos(m.radians(39.0)))).tolist()
+    v = (18.0 + 4.0 * np.sin(x / 30.0)).tolist()
+    kappa, _ = da.rd.compute_curvature(np.asarray(lat), np.asarray(lon))
+    true_lat = [v[i] * v[i] * kappa[i] / da.G for i in range(n)]
+    true_lon = [((v[min(n - 1, i + 1)] - v[max(0, i - 1)]) / (10.0 / v[i])) / da.G for i in range(n)]
+    sh = lambda a: [a[min(n - 1, i + ahead)] for i in range(n)]
+    return {"lat": lat, "lon": lon, "speed_mps": v, "lon_g": sh(true_lon), "lat_g": sh(true_lat), "g_known": [1] * n}
+
+
+def test_the_phones_g_is_put_back_on_gps_places():
+    """Nate's drives (2026-11-15): builds before Nov 14 put g 2 bins ahead of GPS, so braking read as done 10 m early. The lag
+    is read from the drive (a_lon against GPS dv/dt, a_lat against v^2 kappa) and undone; a drive in step is left alone."""
+    import json, shutil, subprocess
+    from pathlib import Path
+    d = _drive_with_g_ahead(2)
+    assert da.imu_lag_bins(d) == -2
+    fixed = da.align_imu(d, -2)
+    assert da.imu_lag_bins(fixed) == 0 and fixed["lat_g"][:2] == [None, None] and fixed["g_known"][:2] == [0, 0]
+    assert fixed["lat_g"][100] == d["lat_g"][98]
+    assert da.imu_lag_bins(_drive_with_g_ahead(0)) == 0
+    node = shutil.which("node")
+    if node is None:
+        return
+    js = "const C = require(process.argv[1]); const k = JSON.parse(process.argv[2]); console.log(JSON.stringify(k.map((d) => C.imuLagBins(d))))"
+    got = json.loads(subprocess.run([node, "-e", js, str(Path(__file__).resolve().parents[1] / "web" / "apex_core.js"),
+                                     json.dumps([_drive_with_g_ahead(2), _drive_with_g_ahead(0), _drive_with_g_ahead(-1)])],
+                                    capture_output=True, text=True, check=True).stdout)
+    assert got == [-2, 0, da.imu_lag_bins(_drive_with_g_ahead(-1))]

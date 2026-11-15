@@ -812,8 +812,8 @@ final class MotionLane: @unchecked Sendable {
         return { motion, _ in
             guard let m = motion else { return }
             let gravity = Vec3(x: m.gravity.x, y: m.gravity.y, z: m.gravity.z)
-            // CoreMotion userAcceleration is reported with the opposite sign of proper (specific-force)
-            // acceleration, so negate it and convert g -> m/s^2.
+            // CoreMotion userAcceleration (gravity removed) has the opposite sign of the car's acceleration, so negate it
+            // and convert g -> m/s^2. Camber adds gravity back (IMUPipeline, specific force = accel - g * gravity).
             let accel = Vec3(x: -m.userAcceleration.x, y: -m.userAcceleration.y, z: -m.userAcceleration.z).scaled(ApexKit.gStd)
             let gyro = Vec3(x: m.rotationRate.x, y: m.rotationRate.y, z: m.rotationRate.z)
             if let rows = lane.ingest(gravityG: gravity, accelMps2: accel, gyroRadS: gyro, timestamp: m.timestamp) { saveMount(rows) }

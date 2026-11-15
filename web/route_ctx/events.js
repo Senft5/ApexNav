@@ -34,7 +34,8 @@
 //   school_bus_hour 0/1  the eta is inside bus-run hours (06:15-08:45, 14:00-16:45) on a school day in this state (time only:
 //                   stopped buses on rural roads; the engine weighs it by road type).
 //   church_window   0/1  within 150 m of a place of worship during a service window; NaN without places.
-// Spans: event (value k people, label the event), school-zone, church. Points: venue (atM nearest the venue, value k people).
+// Spans: event (value k people, label the event), school-zone, church. Points: venue (atM nearest the venue, value k people),
+// school (a school within 150 m of the road, at any hour).
 (function (root) {
   'use strict';
   const NODE = typeof module !== 'undefined' && module.exports;
@@ -167,6 +168,14 @@
   }
   const inAny = (h, wins) => wins.some(([a, b]) => h >= a && h < b);
   const ZONE_HOURS = [[7, 9.25], [14, 16.25]], BUS_HOURS = [[6.25, 8.75], [14, 16.75]];
+  /** Whether it is a school run at time ms by a school at lat, lon (a school day in its state, arrival or dismissal hours);
+   *  null where the state's school year isn't known. */
+  function schoolRunAt(ms, lat, lon) {
+    const state = U.stateAt(lat, lon);
+    if (!state || !SCHOOL_YEAR[state] || !finite(ms)) return null;
+    const lt = U.localTime(ms, lat, lon);
+    return !!lt && schoolDay(lt, state) && inAny(lt.hour, ZONE_HOURS);
+  }
   const churchWindow = (lt) => (lt.dow === 0 && lt.hour >= 8 && lt.hour < 12.5) || (lt.dow === 6 && lt.hour >= 16.5 && lt.hour < 18.5);
 
   // ---- places (OSM) -----------------------------------------------------------------------------------------------------
@@ -255,6 +264,12 @@
         if (lts[i] && states[i] && schoolDay(lts[i], states[i]) && inAny(lts[i].hour, ZONE_HOURS)) ch.school_zone[i] = 1;
       }
       spans.push(...U.spansWhere(d, (i) => ch.school_zone[i] === 1, 'school-zone', { label: 'School run', joinM: 100 }));
+      // a school by the road itself (150 m: its grounds front the road), whatever the hour: the drive says it when it is
+      // a school run then (road_marks.js, schoolRunAt)
+      for (const s of places.schools) {
+        const near = U.samplesWithin(corridor, s.lat, s.lon, 150);
+        if (near.length) points.push({ atM: d[near.reduce((x, y) => (y.dM < x.dM ? y : x)).i], kind: 'school' });
+      }
     }
     if (places && places.worship) {
       for (let i = 0; i < n; i++) if (lts[i]) ch.church_window[i] = 0;
@@ -276,8 +291,9 @@
     const inBox = (ev) => ev.lat >= box[0] - 0.05 && ev.lat <= box[2] + 0.05 && ev.lon >= box[1] - 0.05 && ev.lon <= box[3] + 0.05;
     const jobs = [];
     // MLB: one call for the plan's dates, kept 6 h (schedules change only with postponements).
+    // placesOnly (the free drive's road ahead, cockpit.js attachHorizonMarks): only the schools, no schedules asked
     jobs.push((async () => {
-      if (!finite(fromMs)) return null;
+      if (!finite(fromMs) || opts.placesOnly) return null;
       const key = 'mlb.' + ymd(fromMs) + '.' + ymd(toMs);
       let ev = U.cacheGet(e.storage, key, 6 * 3600e3, e.now);
       if (!ev) { const j = await U.getJSON(e.fetchFn, mlbUrl(fromMs, toMs), { timeoutMs: BUDGET_MS - 500, signal: e.signal }); if (!j) return null; ev = parseMlb(j); U.cachePut(e.storage, key, ev, e.now); }
@@ -285,7 +301,7 @@
     })());
     const sgKey = U.keyFor(opts, 'seatgeekClientId');
     jobs.push((async () => {
-      if (!sgKey || !finite(fromMs)) return undefined;
+      if (!sgKey || !finite(fromMs) || opts.placesOnly) return undefined;
       const key = 'sg.' + box.map((v) => v.toFixed(1)).join(',') + '.' + Math.floor(fromMs / 36e5);
       let ev = U.cacheGet(e.storage, key, 3 * 3600e3, e.now);
       if (!ev) { const j = await U.getJSON(e.fetchFn, seatgeekUrl(box, fromMs, toMs, sgKey), { timeoutMs: BUDGET_MS - 500, signal: e.signal }); if (!j) return null; ev = parseSeatgeek(j); U.cachePut(e.storage, key, ev, e.now); }
@@ -311,8 +327,10 @@
     return out;
   }
 
-  const provider = { id: ID, version: VERSION, channels: CHANNELS, needs: { network: true, key: 'seatgeekClientId' }, budgetMs: BUDGET_MS, fetch };
+  // no needs.key: the registry would skip the whole provider without a SeatGeek id, and baseball, church hours, school
+  // runs and the schools by the road need none (fetch asks SeatGeek only with an id, and says so without one)
+  const provider = { id: ID, version: VERSION, channels: CHANNELS, needs: { network: true }, budgetMs: BUDGET_MS, fetch };
   U.register(provider);
-  const api = { provider, CHANNELS, VENUES, HOURS, FILL, radiusM, phase, mlbUrl, parseMlb, seatgeekUrl, parseSeatgeek, dedupe, SCHOOL_YEAR, schoolDay, churchWindow, placesQuery, parsePlaces, evaluate, fetch };
+  const api = { provider, CHANNELS, VENUES, HOURS, FILL, radiusM, phase, mlbUrl, parseMlb, seatgeekUrl, parseSeatgeek, dedupe, SCHOOL_YEAR, schoolDay, schoolRunAt, churchWindow, placesQuery, parsePlaces, evaluate, fetch };
   if (NODE) module.exports = api; else root.ApexCtxEvents = api;
 })(typeof window !== 'undefined' ? window : globalThis);

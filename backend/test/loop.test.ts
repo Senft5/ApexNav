@@ -15,7 +15,7 @@ const C = umd(contributorNs, "ApexContributor"), FR = umd(funRouteNs, "ApexFunRo
 
 beforeEach(async () => { await freshDb(); roadClass = "track"; });
 
-// Two parallel 2 km roads running north: way 101 (rough) and way 202 (smooth).
+// Two parallel 2 km roads running north: way 101 (rough) and way 202 (smooth), on the app's scale (web/roughness.js).
 const ROADS: Record<number, number> = { 101: -84.0, 202: -83.99 };
 const LAT0 = 39.0, N = 400, STEP = 5 / 110540;
 const line = (lon: number) => Array.from({ length: N }, (_, i) => [LAT0 + i * STEP, lon] as [number, number]);
@@ -57,7 +57,7 @@ describe("road-data loop (IDEAS Q-07)", () => {
     expect(ranked.every((c: Any) => c.m.coveredKm === 0 && c.m.roughness === null && c.adjust === 0)).toBe(true);   // unknown stays unknown
 
     // Alice drives both roads: uploads are acknowledged, but one driver alone is never published (Z-08).
-    for (const [w, r] of [[101, 0.4], [202, 0.03]] as const) {
+    for (const [w, r] of [[101, 0.12], [202, 0.015]] as const) {
       const res = await C.contributeDrive(drive(`a${w}`, w, r), post(a), { fetch: mapStub, trimM: 0 });
       expect(res.sent).toBeGreaterThan(0);
     }
@@ -65,21 +65,21 @@ describe("road-data loop (IDEAS Q-07)", () => {
     expect(ranked.every((c: Any) => c.adjust === 0)).toBe(true);
 
     // Bob drives them too: the profile reads back and the smooth road now wins despite being 30 s slower.
-    for (const [w, r] of [[101, 0.38], [202, 0.04]] as const)
+    for (const [w, r] of [[101, 0.11], [202, 0.02]] as const)
       expect((await C.contributeDrive(drive(`b${w}`, w, r), post(b), { fetch: mapStub, trimM: 0 })).sent).toBeGreaterThan(0);
     const rows = (await lookup(reader)([101, 202])) as Any;
     expect(Object.keys(rows).sort()).toEqual(["101", "202"]);
     expect(rows["101"]["0"].n.every((n: number) => n === 2)).toBe(true);
     ranked = FR.rank(await cands(), "fun");
     const by = Object.fromEntries(ranked.map((c: Any) => [c.way, c]));
-    expect(by[101].m.roughness).toBeGreaterThan(0.3);
-    expect(by[202].m.roughness).toBeLessThan(0.08);
+    expect(by[101].m.roughness).toBeGreaterThan(0.1);
+    expect(by[202].m.roughness).toBeLessThan(0.034);
     expect(by[101].adjust).toBeLessThan(0);
     expect(by[202].adjust).toBeGreaterThan(0);
     expect(ranked[0].way).toBe(202);
 
     // A retried upload of the same drive is merged once (no third pass).
-    await C.contributeDrive(drive("b101", 101, 0.38), post(b), { fetch: mapStub, trimM: 0 });
+    await C.contributeDrive(drive("b101", 101, 0.11), post(b), { fetch: mapStub, trimM: 0 });
     expect(((await lookup(reader)([101])) as Any)["101"]["0"].n.every((n: number) => n === 2)).toBe(true);
   });
 
@@ -87,7 +87,7 @@ describe("road-data loop (IDEAS Q-07)", () => {
     roadClass = "secondary";
     const a = await makeUser("alice"), reader = await makeUser("carol");
     await env.DB.prepare("UPDATE members SET contribute = 1 WHERE user_id = ?").bind(a.id).run();
-    for (const [w, r] of [[101, 0.4], [202, 0.03]] as const)
+    for (const [w, r] of [[101, 0.12], [202, 0.015]] as const)
       expect((await C.contributeDrive(drive(`a${w}`, w, r), post(a), { fetch: mapStub, trimM: 0 })).sent).toBeGreaterThan(0);
     const rows = (await lookup(reader)([101, 202])) as Any;
     expect(Object.keys(rows).sort()).toEqual(["101", "202"]);
@@ -116,7 +116,7 @@ describe("road-data loop (IDEAS Q-07)", () => {
     await env.DB.prepare("UPDATE members SET contribute = 1 WHERE user_id = ?").bind(a.id).run();
     const { out, sent } = await viaSync(a, () => C.contributeDrive({ ...drive("a101", 101, 0.2), cam_v: C.CAM_V }, S.contribute, { fetch: mapStub, trimM: 0 }));
     expect(out.sent).toBe(1);
-    expect(sent[0]).toMatchObject({ way_id: 101, cls: "secondary", cam_v: 2 });
+    expect(sent[0]).toMatchObject({ way_id: 101, cls: "secondary", cam_v: 3 });
     expect(sent[0].shape.length).toBeGreaterThanOrEqual(2);
     expect(await env.DB.prepare("SELECT cls FROM road_ways WHERE way_id = 101").first()).toEqual({ cls: "secondary" });
     const cov = await (await api(reader, "GET", "/api/coverage?bbox=38.95,-84.05,39.05,-83.95")).json() as { ways: { way: number; conf: number[] }[] };

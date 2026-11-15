@@ -44,6 +44,14 @@ const CASES = {
   maricopa: { name: 'Maricopa Highway (CA 33)', from: { lat: 34.4480, lon: -119.2470 }, to: { lat: 34.8600, lon: -119.4800 }, road: /Maricopa|\b33\b/i },
   bigsur: { name: 'Big Sur (CA 1, Carmel to Cambria)', from: { lat: 36.5550, lon: -121.9230 }, to: { lat: 35.5640, lon: -121.0810 }, road: /Cabrillo|Shoreline|^CA 1$|^SR 1$|Highway 1\b/i },
   ca36: { name: 'CA 36 (Red Bluff to Fortuna)', from: { lat: 40.1780, lon: -122.2350 }, to: { lat: 40.5980, lon: -124.1570 }, road: /\b36\b/i },
+  // 2026-11-15, more of the country: the Ozarks, New England, the Cascades' coast, the Ouachitas, the Rockies, the Smokies
+  pig: { name: 'Pig Trail (AR 23)', from: { lat: 35.487, lon: -93.828 }, to: { lat: 35.8120, lon: -93.7950 }, road: /\b23\b|Pig Trail/i },
+  kanc: { name: 'Kancamagus Highway (NH 112)', from: { lat: 44.045, lon: -71.67 }, to: { lat: 43.985, lon: -71.13 }, road: /Kancamagus|\b112\b/i },
+  chuck: { name: 'Chuckanut Drive (WA 11)', from: { lat: 48.70, lon: -122.49 }, to: { lat: 48.50, lon: -122.34 }, road: /Chuckanut|\b11\b/i },
+  talimena: { name: 'Talimena Scenic Drive', from: { lat: 34.62, lon: -94.20 }, to: { lat: 34.745, lon: -95.03 }, road: /Talimena|Skyline Drive|\b88\b|^OK 1$|^AR 88$/i },
+  // (Quick said "no route" here until wider(): Trail Ridge winds 78 km for a 28 km crow line, out of Quick's ellipse)
+  trailridge: { name: 'Trail Ridge Road (US 34)', from: { lat: 40.377, lon: -105.53 }, to: { lat: 40.25, lon: -105.82 }, road: /Trail Ridge|\b34\b/i },
+  nc28: { name: 'Moonshiner 28 (NC 28)', from: { lat: 35.40, lon: -83.80 }, to: { lat: 35.055, lon: -83.20 }, road: /\b28\b|Moonshiner|^Highlands Road$|^Bryson City Road$/i },
 };
 
 function get(url, file) {

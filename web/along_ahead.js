@@ -46,7 +46,8 @@
   }
 
   /**
-   * The line due now on track t ({ scenic, dist, lat, lon }) from the car at cursorM at vMps, or null: { key, text, view }.
+   * The line due now on track t ({ scenic, dist, lat, lon }) from the car at cursorM at vMps, or null: { key, text, view }
+   * (a viewpoint's or waterfall's also `at`, its { lat, lon }, so a free drive's next road ahead doesn't say it again).
    * said: a Set of keys already said; lastViewS: when a viewpoint was last said (seconds), nowS: now; electric: an EV;
    * spoken(m): a distance in the driver's units (units.js spokenShort); metric: kilometres, else miles.
    */
@@ -72,7 +73,7 @@
       const what = name || (p.kind === 'falls' ? 'A waterfall' : 'A viewpoint'), s = side(t, p), w = say(p.m - cursorM);
       // bare: the line without the name, which the voice packs can say from their clips (the name stays on the screen)
       const plain = p.kind === 'falls' ? 'A waterfall' : 'A viewpoint', line = (x) => (s ? `${x} on the ${s}, in ${w}.` : `${x} in ${w}.`);
-      return { key, view: true, text: line(what), ...(name ? { bare: line(plain) } : {}) };
+      return { key, view: true, at: { lat: p.lat, lon: p.lon }, text: line(what), ...(name ? { bare: line(plain) } : {}) };
     }
     return null;
   }

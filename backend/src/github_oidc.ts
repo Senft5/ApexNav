@@ -11,7 +11,9 @@ export const REF = "refs/heads/main";
 export const REPO_ID = "1432495043", OWNER_ID = "55918175";
 /** Only the workflows that upload map data, as files on main (workflow_ref): any other workflow on main, or one that runs
  *  a pull request's code with main's token (pull_request_target), is refused. */
-export const WORKFLOWS = [".github/workflows/data-mirror.yml", ".github/workflows/graph-us.yml", ".github/workflows/osm-ctx.yml", ".github/workflows/osm-ctx-us.yml", ".github/workflows/ctx-us.yml", ".github/workflows/valhalla-tiles.yml"];
+/** The road library's card job (road-cards.yml): it may write its cards (roads/v1/) and nothing else (data_store.ts). */
+export const ROAD_CARDS = ".github/workflows/road-cards.yml";
+export const WORKFLOWS = [".github/workflows/data-mirror.yml", ".github/workflows/graph-us.yml", ".github/workflows/osm-ctx.yml", ".github/workflows/osm-ctx-us.yml", ".github/workflows/ctx-us.yml", ".github/workflows/valhalla-tiles.yml", ROAD_CARDS];
 const EVENTS = ["push", "schedule", "workflow_dispatch", "workflow_run"];
 const JWKS_URL = `${ISSUER}/.well-known/jwks`;
 const JWKS_MS = 3600_000, SKEW_S = 60;
@@ -37,7 +39,7 @@ async function keyFor(kid: string, now: number): Promise<CryptoKey | null> {
   return null;   // GitHub rotated past it, or a made-up kid (looked up again once, then refused)
 }
 
-export interface Claims { repository: string; ref: string; workflow: string; run_id: string; sha: string }
+export interface Claims { repository: string; ref: string; workflow: string; run_id: string; sha: string; workflow_file: string }
 
 /** The token's claims when it is a valid GitHub Actions token for this repository's main branch and our audience; else null. */
 export async function verifyGitHubOidc(token: string, now = Date.now()): Promise<Claims | null> {
@@ -56,11 +58,12 @@ export async function verifyGitHubOidc(token: string, now = Date.now()): Promise
   if (String(c.repository).toLowerCase() !== REPO || c.ref !== REF) return null;
   if (String(c.repository_id) !== REPO_ID || String(c.repository_owner_id) !== OWNER_ID) return null;
   if (!EVENTS.includes(String(c.event_name))) return null;
-  if (!WORKFLOWS.some((w) => String(c.workflow_ref).toLowerCase() === `${REPO}/${w}@${REF}`)) return null;
+  const file = WORKFLOWS.find((w) => String(c.workflow_ref).toLowerCase() === `${REPO}/${w}@${REF}`);
+  if (!file) return null;
   let key: CryptoKey | null;
   try { key = await keyFor(head.kid, now); } catch { return null; }
   if (!key) return null;
   const ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, b64url(parts[2]), new TextEncoder().encode(`${parts[0]}.${parts[1]}`));
   if (!ok) return null;
-  return { repository: String(c.repository), ref: String(c.ref), workflow: String(c.workflow ?? ""), run_id: String(c.run_id ?? ""), sha: String(c.sha ?? "") };
+  return { repository: String(c.repository), ref: String(c.ref), workflow: String(c.workflow ?? ""), run_id: String(c.run_id ?? ""), sha: String(c.sha ?? ""), workflow_file: file };
 }

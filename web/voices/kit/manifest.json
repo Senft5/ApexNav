@@ -10404,6 +10404,46 @@
    "heard": 1.0,
    "voice": "bm_fable",
    "pace": null
+  },
+  "mark:junction": {
+   "file": "mark_junction.m4a",
+   "dur": 1.12,
+   "text": "Hidden junction",
+   "heard": 1.0,
+   "voice": "bm_fable",
+   "pace": 10.91
+  },
+  "mark:school": {
+   "file": "mark_school.m4a",
+   "dur": 0.784,
+   "text": "School zone",
+   "heard": 1.0,
+   "voice": "bm_fable",
+   "pace": 10.26
+  },
+  "mark:icy_bridge": {
+   "file": "mark_icy_bridge.m4a",
+   "dur": 1.148,
+   "text": "Bridge may be icy",
+   "heard": 1.0,
+   "voice": "bm_fable",
+   "pace": 10.53
+  },
+  "mark:icy_bridges": {
+   "file": "mark_icy_bridges.m4a",
+   "dur": 1.425,
+   "text": "Bridges may be icy",
+   "heard": 1.0,
+   "voice": "bm_fable",
+   "pace": 10.0
+  },
+  "mark:roundabout": {
+   "file": "mark_roundabout.m4a",
+   "dur": 0.777,
+   "text": "Roundabout",
+   "heard": 1.0,
+   "voice": "bm_fable",
+   "pace": 10.53
   }
  }
 }

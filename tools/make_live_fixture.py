@@ -88,20 +88,27 @@ def build() -> dict:
     n = int(DURATION_S * FS)
     t = np.arange(n) / FS
     ax, speed_true, yaw = vehicle_motion(t)
-    banked = (yaw > 0).astype(float)
-    ay = speed_true * yaw * np.where(banked > 0, math.cos(BANK_RAD), 1.0) - lp.G * math.sin(BANK_RAD) * banked
+    # What CoreMotion hands the app: userAcceleration (gravity removed) and gravity, both in the phone frame, as the car
+    # leans on the bank. In the banked left turn the car's left (+Y) side dips by BANK_RAD: the turn's horizontal
+    # acceleration v*w reads as v*w*cos(bank) on +Y and v*w*sin(bank) on +Z, gravity gains +sin(bank) on +Y (it points
+    # down), and the yaw about the vertical shows on -Y and +Z. The bank is only in gravity: camber must use specific force.
+    phi = np.where(yaw > 0, BANK_RAD, 0.0)
+    a_turn = speed_true * yaw
+    ay = a_turn * np.cos(phi)
     az = 0.8 * np.sin(2 * math.pi * 12.0 * t) * (t > 5) + rng.normal(0, 0.15, n) * (t > 2)
     az += np.where((t > 52) & (t < 53.5), -1.5 * np.sin(math.pi * (t - 52) / 1.5), 0.0)   # crest unweighting
+    az += a_turn * np.sin(phi)
     Rs = phone_rotations(t)
 
     accel_phone = np.einsum("nij,nj->ni", Rs, np.column_stack([ax, ay, az]))
-    gyro_veh = np.einsum("nij,nj->ni", Rs, np.column_stack([np.zeros(n), np.zeros(n), yaw]))
+    gyro_veh = np.einsum("nij,nj->ni", Rs, np.column_stack([np.zeros(n), -yaw * np.sin(phi), yaw * np.cos(phi)]))
     # the phone turning relative to the car, seen in the phone frame: omega = -rotvec(R(t+dt) R(t)^T) / dt
     rel = np.zeros((n, 3))
     for i in range(n - 1):
         rel[i] = -Rotation.from_matrix(Rs[i + 1] @ Rs[i].T).as_rotvec() * FS
     gyro_phone = gyro_veh + rel + rng.normal(0, 0.002, (n, 3)) * (t > 2)[:, None]
-    gravity_g = np.einsum("nij,j->ni", Rs, np.array([0.0, 0.0, -1.0]))                    # CoreMotion gravity (points down), g
+    gravity_veh = np.column_stack([np.zeros(n), np.sin(phi), -np.cos(phi)])               # points down, g; tilted on the bank
+    gravity_g = np.einsum("nij,nj->ni", Rs, gravity_veh)                                    # CoreMotion gravity, phone frame
     speed_gps = speed_true[(np.floor(t) * FS).astype(int)]                                # GPS speed, held between 1 Hz fixes
 
     pipe = lp.IMUPipeline()

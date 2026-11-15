@@ -76,7 +76,7 @@
       case 'turn_in_later': return `Turned in ${m} earlier than your best pass: wait for the corner`;
       case 'coast': return t.vs_best ? `${m} more coasting than your best pass` : `${m} coasting between brake and throttle`;
       case 'brake_after_apex': return `Still braking after the apex (${t.value.toFixed(2)} g)`;
-      case 'early_apex': return `Slowest ${m} before the apex: turn in later`;
+      case 'early_apex': return `Your turning centred ${m} before the road\u2019s bend: turn in later`;
       default: return null;
     }
   }
@@ -89,7 +89,7 @@
   const HABIT = {
     coast: (n) => `you coasted between brake and gas in ${corners(n)}; go from one straight to the other`,
     brake_after_apex: (n) => `you were still braking past the middle of ${corners(n)}; finish by the middle`,
-    early_apex: (n) => `your slowest point came early in ${corners(n)}; turn in a moment later`,
+    early_apex: (n) => `your turning came before the road\u2019s bend in ${corners(n)}; turn in a moment later`,
   };
   const WEAK = { smoothness: 'steer more gently, with fewer corrections mid-corner', braking: 'finish your braking by the middle of the corner',
     consistency: 'keep the same calm rhythm in every corner' };

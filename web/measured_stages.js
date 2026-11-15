@@ -6,7 +6,8 @@
 (function (root) {
   'use strict';
   const NEAR_M = 15, STEP = 4, MIN_SHARE = 0.25;                 // a stage point counts as measured within 15 m of a measured road
-  const SMOOTH_G = 0.08, ROUGH_G = 0.30;                         // as contributor.js
+  const RS = (root.ApexRoughness || (typeof module !== 'undefined' && typeof require === 'function' ? require('./roughness.js') : null));   // the one roughness scale (roughness.js)
+  const SMOOTH_G = RS.SMOOTH_G, ROUGH_G = RS.ROUGH_G;
   const ROUGH_MAX = 6, SMOOTH_MAX = 2, BANK_MAX = 1, HAZARD_PTS = 3, HAZARD_MAX = 6, HAZARD_NEAR_M = 30;
   // crests two passes measured (share of bins going light by 0.15 g, full at CREST_FULL) are character; each crowd-verified
   // bump on the stage's roads costs BUMP_PTS, at most BUMP_MAX (a confirmed hand-reported hazard costs HAZARD_PTS)
@@ -80,7 +81,7 @@
     let adj = 0;
     if (finite(m.rough)) {
       adj -= Math.min(ROUGH_MAX, Math.max(0, score) * 0.5) * w * clamp01((m.rough - SMOOTH_G) / (ROUGH_G - SMOOTH_G));
-      adj += SMOOTH_MAX * w * clamp01((SMOOTH_G - m.rough) / 0.03);
+      adj += SMOOTH_MAX * w * RS.glass(m.rough);
     }
     if (finite(m.banked)) adj += BANK_MAX * w * clamp01(m.banked / 0.3);
     if (finite(m.offCamber)) adj -= BANK_MAX * w * clamp01(m.offCamber / 0.3);   // off-camber is a hazard, never a bonus

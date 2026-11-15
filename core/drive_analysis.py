@@ -268,7 +268,8 @@ COAST_G = 0.05               # |a_lon| below this: neither braking nor driving, 
 THROTTLE_G = 0.05            # a_lon above this after the slowest point counts as back on the throttle
 TRAIL_LAT_G = 0.20           # braking while this much lateral load is on counts as trail braking
 BRAKE_GAP = 20               # braking that ended more than 100 m before turn-in belongs to something else
-SOLO_APEX_DIP_MPS = 0.3      # early-apex note only when the apex itself is this much faster than the slowest point
+SOLO_APEX_DIP_MPS = 1.0      # early-apex note only when the apex itself is this much faster than the slowest point (under is GPS noise)
+GPS_FIX_S = 1.0              # ...and the slowest point more than one GPS fix of travel before it (it sits on a fix)
 THROTTLE_LOOKAHEAD = 20      # search 100 m past the corner exit for the throttle point
 TIP_SPEED_MPS = 0.9          # ~2 mph at the slowest point is a real difference, less is GPS noise
 TIP_BRAKE_M = 10.0           # two bins of brake or throttle point
@@ -277,6 +278,9 @@ TIP_GAIN_S = 0.20            # a corner worth less than this is not an opportuni
 SOLO_COAST_M = 20.0          # without a better pass: this much coasting after braking is worth a note
 SOLO_EARLY_APEX_M = -15.0    # ...slowest point this far before the apex
 SOLO_LATE_BRAKE_G = 0.25     # ...braking this hard after the apex
+ROAD_EARLY_M = -15.0         # ...and your turning centred this far before the road's own (road_turn_offset_m): the line itself
+ROAD_PAD = 12                # bins either side of a corner the road's shape is read over...
+ROAD_SPAN = 4                # ...and either side its turning (and yours) is weighed over
 TOP_OPPORTUNITIES = 3
 
 
@@ -318,7 +322,75 @@ def corner_phases(speed_mps, lon_g, lat_g, start: int, end: int, apex: int, apex
         late = max(late, -float(lon[k]))
     return {**m, "brake_m": None if r0 is None else (apex - r0) * 5.0, "trail_m": trail * 5.0, "coast_m": coast * 5.0,
             "throttle_m": None if k_thr is None else (k_thr - apex) * 5.0, "late_brake_g": late,
-            "apex_mps_driven": float(v[apex])}
+            "apex_mps_driven": float(v[apex]), "imu_slow_m": _imu_slow_m(v, lon, lat, start, end)}
+
+
+def road_turn_offset_m(road_lat, road_lon, speed_mps, lat_g, start: int, end: int):
+    """Where you turned against where the road turns (Nate, 2026-11-15: "shouldn't it be drive geometry compared to road
+    geometry?"), in metres: the centre of your turning (a_lat / v^2 from the motion sensors, weighted over the corner) less
+    the centre of the road's (the curvature of the map's road under you, road_lat / road_lon: each bin of the drive put on
+    the road, graph tiles). < 0 your turning came before the road's: an early apex in the line itself, not the speed.
+    Single tightest points are 20 m noisy on a phone; centres repeat to about 10 m (Nate's 13 drives). None when the road
+    is not known over the corner, or either turning is not there."""
+    n = len(speed_mps)
+    a, b = max(0, start - ROAD_PAD), min(n - 1, end + ROAD_PAD)
+    if road_lat is None or road_lon is None or b - a < 6:
+        return None
+    la = [road_lat[k] for k in range(a, b + 1)]
+    lo = [road_lon[k] for k in range(a, b + 1)]
+    if not all(x is not None and math.isfinite(float(x)) for x in la + lo):
+        return None
+    rk, _ = rd.compute_curvature(np.asarray(la, dtype=float), np.asarray(lo, dtype=float))
+    lo_k, hi_k = max(a, start - ROAD_SPAN), min(b, end + ROAD_SPAN)
+    sg = 1.0 if sum(float(rk[k - a]) for k in range(lo_k, hi_k + 1)) >= 0 else -1.0
+
+    def centre(f):
+        w = wq = 0.0
+        for k in range(lo_k, hi_k + 1):
+            x = f(k)
+            if x is not None and math.isfinite(x) and x > 0:
+                w += x
+                wq += x * k
+        return wq / w if w > 0 else None
+
+    def you(k):
+        v, g = speed_mps[k], lat_g[k]
+        if v is None or g is None or not math.isfinite(float(v)) or not math.isfinite(float(g)):
+            return None
+        return sg * float(g) * G / max(float(v), 3.0) ** 2
+
+    r, y = centre(lambda k: sg * float(rk[k - a])), centre(you)
+    return None if r is None or y is None else (y - r) * 5.0
+
+
+IMU_SLOW_LEAD = 10           # bins before the corner the IMU's slowest point is looked for...
+IMU_SLOW_TAIL = 4            # ...and after it
+
+
+def _imu_slow_m(v, lon, lat, start: int, end: int):
+    """The slowest point against the tightest, from the motion sensors alone (Nate's drives, 2026-11-15): the slowest is
+    where smoothed a_lon crosses from slowing to speeding up (nearest the tightest), the tightest where a_lat / v^2 peaks.
+    GPS places fixes up to a second late, not always as late for speed as for position, so "early" needs this to agree."""
+    n = len(v)
+
+    def sm(a, i):
+        return (float(a[max(0, i - 1)]) + float(a[i]) + float(a[min(n - 1, i + 1)])) / 3.0
+
+    s = sum(float(lat[k]) for k in range(start, end + 1) if math.isfinite(float(lat[k])))
+    sg = 1.0 if s >= 0 else -1.0
+    kp, best = -1, -math.inf
+    for k in range(start, end + 1):
+        x = sg * sm(lat, k) * G / max(float(v[k]), 3.0) ** 2 if math.isfinite(float(v[k])) else math.nan
+        if math.isfinite(x) and x > best:
+            best, kp = x, k
+    if kp < 0:
+        return None
+    zc = -1
+    for q in range(max(1, start - IMU_SLOW_LEAD), min(n - 1, end + IMU_SLOW_TAIL)):
+        a, b = sm(lon, q), sm(lon, q + 1)
+        if a < 0 and b >= 0 and (zc < 0 or abs(q - kp) < abs(zc - kp)):
+            zc = q
+    return None if zc < 0 else (zc - kp) * 5.0
 
 
 def _known(drive: dict, start: int, end: int, apex: int) -> bool:
@@ -409,8 +481,14 @@ def _tip(m: dict, ref: dict | None):
         return {"kind": "brake_after_apex", "value": m["late_brake_g"], "vs_best": False}
     if m["brake_m"] is not None and m["coast_m"] >= SOLO_COAST_M:     # dead time between brake and throttle
         return {"kind": "coast", "value": m["coast_m"], "vs_best": False}
-    if m["min_offset_m"] <= SOLO_EARLY_APEX_M and m["apex_mps_driven"] - m["min_mps"] >= SOLO_APEX_DIP_MPS:
-        return {"kind": "early_apex", "value": -m["min_offset_m"], "vs_best": False}
+    # past what the phone can tell: more than a GPS fix early, a real dip, the motion sensors agreeing (_imu_slow_m), and
+    # the line itself early against the road's shape (road_turn_offset_m; no road known, no claim about the line). Speed
+    # alone said early on 13 of Nate's corners; the road agreed on 2 (2026-11-15).
+    if (m["min_offset_m"] <= min(SOLO_EARLY_APEX_M, -m["min_mps"] * GPS_FIX_S) and m["apex_mps_driven"] - m["min_mps"] >= SOLO_APEX_DIP_MPS
+            and m.get("imu_slow_m") is not None and m["imu_slow_m"] <= SOLO_EARLY_APEX_M
+            and m.get("road_off_m") is not None and m["road_off_m"] <= ROAD_EARLY_M):
+        # the size told is the line's own (how far before the road's bend your turning centred), not the slowest point's
+        return {"kind": "early_apex", "value": math.floor(-m["road_off_m"] * 10 + 0.5) / 10, "vs_best": False}
     return None
 
 
@@ -557,6 +635,7 @@ def coach(a: dict, others: list) -> dict:
             out.append({"apex": c["apex"], "m": None, "best": None, "gain_s": None, "tip": None, "passes": 0})
             continue
         ma = corner_phases(a["speed_mps"], a["lon_g"], a["lat_g"], c["start"], c["end"], c["apex"], c["apex_mps"])
+        ma["road_off_m"] = road_turn_offset_m(a.get("road_lat"), a.get("road_lon"), a["speed_mps"], a["lat_g"], c["start"], c["end"])
         if ma["min_mps"] < STOPPED_MPS:
             out.append({"apex": c["apex"], "m": ma, "best": None, "gain_s": None, "tip": None, "passes": 0})
             continue
@@ -870,3 +949,61 @@ def fatigue(speed_mps, lon_g, lat_g, corners, g_known=None) -> dict | None:
         if change >= floor and change >= FATIGUE_SE * math.sqrt(se ** 2 + sl ** 2):
             out["cues"].append(cue)
     return out
+
+
+# The motion sensors against GPS, per drive (Nate's drives, 2026-11-15): builds before Nov 14 placed the phone's g up to 10 m
+# ahead of where GPS put the car, so braking read as done earlier than it was. web/apex_core.js imuLagBins / alignImu, the same.
+IMU_LAG_MAX = 4              # bins either way the lag is looked for
+IMU_LAG_MIN_R = 0.5          # both a_lon ~ GPS dv/dt and a_lat ~ v^2 kappa must correlate this well at the lag kept...
+IMU_LAG_GAIN = 0.03          # ...and together beat no shift by this much
+
+
+def imu_lag_bins(drive: dict) -> int:
+    """The shift (bins) that puts the drive's g on GPS's places: lat_g'[i] = lat_g[i + lag]; 0 when not clearly better."""
+    v, lon, lat = drive.get("speed_mps"), drive.get("lon_g"), drive.get("lat_g")
+    n = len(v) if v is not None else 0
+    if not n or lon is None or lat is None or drive.get("lat") is None or drive.get("lon") is None or n < 40:
+        return 0
+    kappa, _ = rd.compute_curvature(np.asarray(drive["lat"], dtype=float), np.asarray(drive["lon"], dtype=float))
+
+    def num(x):
+        return x is not None and math.isfinite(float(x))
+
+    def r(L):
+        axy = axx = ayy = bxy = bxx = byy = 0.0
+        for i in range(4, n - 4):
+            j = i + L
+            if not (num(v[i]) and num(v[i - 2]) and num(v[i + 2]) and v[i] > 5 and v[i - 2] > 3 and v[i + 2] > 3) or j < 0 or j >= n:
+                continue
+            a = (float(v[i + 2]) - float(v[i - 2])) / (20.0 / float(v[i])) / G
+            c = float(v[i]) * float(v[i]) * float(kappa[i]) / G
+            if num(lon[j]):
+                x = float(lon[j]); axy += a * x; axx += a * a; ayy += x * x
+            if num(lat[j]) and math.isfinite(c):
+                y = float(lat[j]); bxy += c * y; bxx += c * c; byy += y * y
+        return (axy / math.sqrt(axx * ayy) if axx > 0 and ayy > 0 else 0.0, bxy / math.sqrt(bxx * byy) if bxx > 0 and byy > 0 else 0.0)
+
+    at0 = r(0)
+    best, best_r = 0, at0
+    for L in range(-IMU_LAG_MAX, IMU_LAG_MAX + 1):
+        if L == 0:
+            continue
+        x = r(L)
+        if x[0] + x[1] > best_r[0] + best_r[1]:
+            best, best_r = L, x
+    if best == 0 or best_r[0] < IMU_LAG_MIN_R or best_r[1] < IMU_LAG_MIN_R or best_r[0] + best_r[1] - at0[0] - at0[1] < IMU_LAG_GAIN:
+        return 0
+    return best
+
+
+def align_imu(drive: dict, lag: int) -> dict:
+    """The drive with its g (lon_g, lat_g, g_known) moved by lag bins onto GPS's places; past the ends is unknown."""
+    if not lag:
+        return drive
+    n = len(drive["speed_mps"])
+
+    def mv(a, fill):
+        return None if a is None else [a[i + lag] if 0 <= i + lag < len(a) else fill for i in range(n)]
+
+    return {**drive, "lon_g": mv(drive.get("lon_g"), None), "lat_g": mv(drive.get("lat_g"), None),
+            "g_known": mv(drive.get("g_known"), 0) if drive.get("g_known") is not None else drive.get("g_known")}

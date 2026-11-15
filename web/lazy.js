@@ -19,6 +19,9 @@
     // by the first plan, whichever is first); each registers itself with route_ctx/registry.js, which stays at launch
     ctx: ['route_ctx/graph.js', 'route_ctx/router_edges.js', 'route_ctx/dem.js', 'route_ctx/conditions.js', 'route_ctx/wildlife.js',
       'route_ctx/events.js', 'route_ctx/hazards_live.js', 'route_ctx/photos.js', 'route_ctx/osm_tiles.js', 'route_ctx/osm_overpass.js', 'route_ctx/road_name_age.js'],
+    // the quiet lines of a drive (cockpit.js notes loop, each behind its window.Apex* check): once the map is idle after the
+    // launch, or when a drive starts, whichever is first
+    ahead: ['sun_ahead.js', 'briefing.js', 'corners_ahead.js', 'along_ahead.js', 'horizon.js'],
     ops: ['service_check.js'],       // the owner's service check (cockpit.js serviceCheckSection): only while /api/me says moderator           // dev mode's panel (cockpit.js devPanel): only on a developer's phone (/api/me developer)
   };
   const files = new Map();           // file -> Promise, so a file is fetched and run once whoever asks

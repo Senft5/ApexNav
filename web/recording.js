@@ -3,6 +3,7 @@
 (function (root) {
   const MPH = 2.2369362921;
   const HAZARD_VERSION = 1;   // records profiled with bump/crest/dip detection (parse and repair set it)
+  const CAM_V = 3;            // camber_v of rows read by the fixed pipeline (core/live_pipeline.py CAMBER_VERSION; contributor.js)
   let dbp = null;
   // v3 (REVIEW_FEEL F-06): 'summaries' holds a few hundred bytes per drive (its name, date, length, score, corners, box),
   // so the Log lists a year of drives without reading 1.6 MB of rows each. Opening v3 only adds the store: 'drives' is
@@ -214,9 +215,9 @@
     const stamp = (fileName.match(/(\d{8})_(\d{6})/) || []);
     const date = meta.date || (stamp.length ? `${stamp[1].slice(0, 4)}-${stamp[1].slice(4, 6)}-${stamp[1].slice(6, 8)}T${stamp[2].slice(0, 2)}:${stamp[2].slice(2, 4)}` : new Date().toISOString());
     const nul = (a) => (a ? a.map((v) => (Number.isFinite(v) ? v : null)) : null);
-    // cam_v 2: every camber in the file is from the fixed live pipeline (its camber_v column says so row by row). Files
+    // cam_v (CAM_V, 3): every camber in the file is from the fixed live pipeline (its camber_v column says so row by row). Files
     // without it (older builds) hold placeholder zeros on straights: kept for this phone, never shared (contributor.js).
-    const camV = cols.camber_v && cols.camber_deg && cols.camber_deg.every((v, i) => !Number.isFinite(v) || cols.camber_v[i] === 2) ? 2 : null;
+    const camV = cols.camber_v && cols.camber_deg && cols.camber_deg.every((v, i) => !Number.isFinite(v) || cols.camber_v[i] === CAM_V) ? CAM_V : null;
     return {
       cam_v: camV,
       id: meta.id || ('rec_' + fileName.replace(/\W+/g, '_')), name: meta.name || fileName.replace(/\.csv$/i, ''), date, date_known: !!(meta.date || stamp.length), source: meta.source || 'imported',
@@ -250,6 +251,8 @@
    */
   function repair(Core, d) {
     if (!d || !Array.isArray(d.events)) return d;
+    // its g on GPS's places (Core.imuLagBins: builds before Nov 14 put the g up to 10 m ahead); once, marked imu_lag
+    if (d.imu_lag === undefined && Core.imuLagBins && Array.isArray(d.speed_mps)) { const lag = Core.imuLagBins(d); if (lag) d = { ...Core.alignImu(d, lag), imu_lag: lag }; }
     const measuredHazards = [d.crest, d.vpeak].some((a) => Array.isArray(a) && a.some(Number.isFinite));
     const stale = d.hz !== HAZARD_VERSION && measuredHazards;        // saved before hazards were found on phone drives
     if (!stale && d.events.every((e) => e.type !== 'corner' || Number.isFinite(e.apex_mph))) return d;

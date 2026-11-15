@@ -235,6 +235,10 @@ def observe(drive: dict) -> list:
         ph = da.corner_phases(v, lon, lat, s, e, a, c["apex_mps"])
         w0, w1 = max(0, s - SLOW_PAD), min(n - 1, e + SLOW_PAD)
         slow = da._marks(d, w0, w1, a)[1] if all(math.isfinite(v[q]) for q in range(w0, w1 + 1)) else None
+        # how early the slowest point came, in m: GPS's, and with the motion sensors' own reading beside it the mean of the
+        # two, since GPS places its fixes up to a second late (Nate's drives, 2026-11-15; web/driver_profile.js the same)
+        imu = None if slow is None else da._imu_slow_m(v, lon, lat, s, e)
+        early = None if slow is None else ((a - slow) * 5.0 if imu is None else ((a - slow) * 5.0 - imu) / 2.0)
         # the load the steering asks for, with the speed taken out (load ~ speed squared on one arc): slowing to the
         # middle of a long corner and driving out of it is one arc, not a correction
         vbar = da._mean_se([float(x) for x in v[s:e + 1]])[0]
@@ -278,7 +282,7 @@ def observe(drive: dict) -> list:
             "squeeze": squeeze,
             "brake": None if run is None else float(tech["brake"]),
             "exit": None if slow is None else 1.0 - _clamp01((ph["coast_m"] - EXIT_FREE_M) / EXIT_SPAN_M),
-            "line": None if slow is None else 1.0 - _clamp01(((a - slow) * 5.0 - LINE_FREE_M) / LINE_SPAN_M),
+            "line": None if early is None else 1.0 - _clamp01((early - LINE_FREE_M) / LINE_SPAN_M),
             "entry": 1.0 - _clamp01(_excess([-float(x) for x in v[s:e + 1]], ENTRY_SWING_MPS) / ENTRY_SPAN_MPS),
             "trail": None if ph["brake_m"] is None else (1 if ph["trail_m"] >= TRAIL_MIN_M else 0),
             "slow_m": None if slow is None else (slow - a) * 5.0,
