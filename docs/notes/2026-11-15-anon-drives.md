@@ -1,0 +1,10 @@
+# STATE
+## Session 2026-11-15 (anonymous drives): Help improve Vetta roads sends an anonymous copy of each drive (claude/project-thread-m2wech)
+- Done: web/anon_drives.js (lazy 'anondrives'; anonymize() pure, tested) makes pieces on the phone: no account, name, note, tags, car, minute or drive id; a random 1 to 1.5 km cut off each end; privacy zones cut the drive into unlinked pieces; under 2 km not sent; imported drives never; the last 30 days, 3 drives per sync. Optional age band (Garage → Settings → Road feel, localStorage apex.ageBand). Switch `improve`, on by default; turned off then on, drives from while it was off never go (apex.anonDrives.since). Developers skip it (their whole drives go via dev_drives).
+- Worker: POST /api/anon/drives (never reads the caller; server's own random key, <day>/<32 hex>.json.gz, no metadata), GET /api/anon/drives?prefix= and /file?key= with the internal read key only. R2 bucket apexnav-anondrives (ANON_DRIVES, created 2026-11-15, production only).
+- Privacy page, PrivacyInfo.xcprivacy (Analytics on precise location; Other Data not linked), docs/LISTING.md label rows and docs/APP_REVIEW.md row updated.
+- Next: the owner mirrors the label rows in App Store Connect before submission. Routing and analysis threads can read pieces with the key in project files dev-drives/READ_KEY.txt (GET /api/anon/drives).
+
+# CALL SHEET
+## 2026-11-15 (anonymous drives): on by default, trimmed 1 to 1.5 km, internal use only (claude/project-thread-m2wech)
+Why: the owner asked for every user's drives without personal data, with a switch on by default, ends trimmed and privacy zones skipped. 1 to 1.5 km rather than the half mile asked, so Road feel's existing "the first and last km of every trip stay on this phone" stays true. The privacy page says "used by Vetta only, to improve the app"; nothing about selling (a sale would need a new opt-in and new copy, and about.html says "no data sold"). Undo: set `improve: false` in cockpit.js state.toggles (opt-in), or drop the ANON_DRIVES binding (uploads 503, phones retry quietly).
