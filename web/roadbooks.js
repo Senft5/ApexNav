@@ -433,7 +433,14 @@
       // keys: yours to run, or someone's to follow
       const keys = el('div', { className: 'row', style: 'flex-wrap:wrap' });
       // a book of roads is a day out: one drive through them, nearest first (tour), from where you are
-      if (page.driveBook && (book.road_list || []).length > 1) keys.append(btn('Drive them all', () => { s.close(); page.driveBook(book); }, book.mine || book.following ? 'ink-btn solid' : 'ink-btn'));
+      // with some driven already, the day out is the ones still to stamp ("Drive the 3 new"), and All stays a small key
+      if (page.driveBook && (book.road_list || []).length > 1) {
+        const fresh = book.road_list.filter((r) => r && !r.stamped), lead = book.mine || book.following || book.can_add ? 'ink-btn solid' : 'ink-btn';
+        if (fresh.length > 1 && fresh.length < book.road_list.length) {
+          keys.append(btn(`Drive the ${fresh.length} new`, () => { s.close(); page.driveBook({ ...book, road_list: fresh, onlyNew: true }); }, lead));
+          const all = btn('All', () => { s.close(); page.driveBook(book); }, 'linkbtn'); all.setAttribute('aria-label', `Drive all ${book.road_list.length} roads`); keys.append(all);
+        } else keys.append(btn('Drive them all', () => { s.close(); page.driveBook(book); }, lead));
+      }
       if (book.mine) {
         keys.append(btn('Edit', () => edit(book, () => paint(book, s, body)), 'ink-btn'));
         // a public one's link shows its roads on the map in a chat (the card goes up as the link is copied)
