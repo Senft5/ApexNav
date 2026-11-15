@@ -53,7 +53,7 @@
     "mark:stop": "Stop sign", "mark:level_crossing": "Railway crossing", "mark:one_lane_bridge": "One-lane bridge", "mark:calming": "Speed bump",
     "mark:calming_many": "Speed bumps", "mark:deer": "Deer crossing", "mark:horse": "Horse crossing", "mark:cattle": "Cattle crossing",
     "mark:animal": "Animal crossing", "mark:buggy": "Horse-drawn buggies", "mark:covered_bridge": "Covered bridge", "mark:ford": "Water crossing",
-    "mark:unpaved": "Unpaved road", "mark:rough": "Rough road", "line:sun_ahead": "Sun in your eyes ahead.", "line:brakes_hot": "Brakes are getting hot. Use a lower gear and ease off.",
+    "mark:unpaved": "Unpaved road", "mark:rough": "Rough road", "mark:narrow": "Narrow road", "mark:tee": "T-junction", "line:sun_ahead": "Sun in your eyes ahead.", "line:brakes_hot": "Brakes are getting hot. Use a lower gear and ease off.",
     "line:descent": "Long descent ahead. A lower gear saves the brakes.", "dot:crash": "Crash ahead.", "dot:lane": "Lane closed ahead.",
     "dot:ramp": "Ramp closed ahead.", "dot:closure": "Road closed ahead.", "dot:roadwork": "Roadwork ahead.", "dot:obstruction": "Obstruction ahead.",
     "dot:slow": "Slow traffic ahead.", "dot:stop_go": "Stop and go ahead.", "dot:weather": "Weather ahead.", "dot:alert": "Traffic alert ahead.",
@@ -140,8 +140,15 @@
     "gap:s3.3": "3.3 seconds", "gap:s3.4": "3.4 seconds", "gap:s3.5": "3.5 seconds", "gap:s3.6": "3.6 seconds", "gap:s3.7": "3.7 seconds",
     "gap:s3.8": "3.8 seconds", "gap:s3.9": "3.9 seconds", "gap:s4.0": "4.0 seconds", "gap:s4.1": "4.1 seconds", "gap:s4.2": "4.2 seconds",
     "gap:s4.3": "4.3 seconds", "gap:s4.4": "4.4 seconds", "gap:s4.5": "4.5 seconds", "gap:s4.6": "4.6 seconds", "gap:s4.7": "4.7 seconds",
-    "gap:s4.8": "4.8 seconds", "gap:s4.9": "4.9 seconds", "gap:s5.0": "5.0 seconds",
-    "line:wet": "Wet roads. Notes come earlier.", "line:ice": "Ice risk. Notes come earlier. Go gently.", "line:cold_summer": "Cold out. Summer tyres grip less in the cold.", "line:cold_any": "Cold out. Tyres grip less until they warm.", "line:stage_level": "That stage: level with your best.", "frag:that_stage": "That stage:", "frag:pts_up": "points up on your best.", "frag:pts_down": "points down on your best."
+    "gap:s4.8": "4.8 seconds", "gap:s4.9": "4.9 seconds", "gap:s5.0": "5.0 seconds", "gap:s5.1": "5.1 seconds", "gap:s5.2": "5.2 seconds", "gap:s5.3": "5.3 seconds", "gap:s5.4": "5.4 seconds", "gap:s5.5": "5.5 seconds", "gap:s5.6": "5.6 seconds", "gap:s5.7": "5.7 seconds", "gap:s5.8": "5.8 seconds", "gap:s5.9": "5.9 seconds", "gap:s6.0": "6.0 seconds", "gap:s6.1": "6.1 seconds", "gap:s6.2": "6.2 seconds", "gap:s6.3": "6.3 seconds", "gap:s6.4": "6.4 seconds", "gap:s6.5": "6.5 seconds", "gap:s6.6": "6.6 seconds", "gap:s6.7": "6.7 seconds", "gap:s6.8": "6.8 seconds", "gap:s6.9": "6.9 seconds", "gap:s7.0": "7.0 seconds", "gap:s7.1": "7.1 seconds", "gap:s7.2": "7.2 seconds", "gap:s7.3": "7.3 seconds", "gap:s7.4": "7.4 seconds", "gap:s7.5": "7.5 seconds", "gap:s7.6": "7.6 seconds", "gap:s7.7": "7.7 seconds", "gap:s7.8": "7.8 seconds", "gap:s7.9": "7.9 seconds", "gap:s8.0": "8.0 seconds", "gap:s8.1": "8.1 seconds", "gap:s8.2": "8.2 seconds", "gap:s8.3": "8.3 seconds", "gap:s8.4": "8.4 seconds", "gap:s8.5": "8.5 seconds", "gap:s8.6": "8.6 seconds", "gap:s8.7": "8.7 seconds", "gap:s8.8": "8.8 seconds", "gap:s8.9": "8.9 seconds", "gap:s9.0": "9.0 seconds", "gap:s9.1": "9.1 seconds", "gap:s9.2": "9.2 seconds", "gap:s9.3": "9.3 seconds", "gap:s9.4": "9.4 seconds", "gap:s9.5": "9.5 seconds", "gap:s9.6": "9.6 seconds", "gap:s9.7": "9.7 seconds", "gap:s9.8": "9.8 seconds", "gap:s9.9": "9.9 seconds",
+    "line:wet": "Wet roads. Notes come earlier.", "line:ice": "Ice risk. Notes come earlier. Go gently.", "line:cold_summer": "Cold out. Summer tyres grip less in the cold.", "line:cold_any": "Cold out. Tyres grip less until they warm.", "line:stage_level": "That stage: level with your best.", "line:level": "Level.", "frag:stage_done": "Stage done.",
+    "line:no_stages": "This route has no stages.", "line:no_more_stages": "No more stages on this route.", "line:no_stage_skip": "No stage ahead to skip.",
+    "line:crash_ask": "Are you OK? Tap I'm OK, or get help.",
+    "line:plan_cafe": "Plan a route to hear the cafés along it.", "line:plan_fuel": "Plan a route to hear the fuel stops along it.",
+    "line:plan_charge": "Plan a route to hear the chargers along it.", "line:plan_view": "Plan a route to hear the viewpoints along it.",
+    "line:plan_falls": "Plan a route to hear the waterfalls along it.", "line:none_cafe": "No cafés ahead on this route.",
+    "line:none_fuel": "No fuel stops ahead on this route.", "line:none_charge": "No chargers ahead on this route.",
+    "line:none_view": "No viewpoints ahead on this route.", "line:none_falls": "No waterfalls ahead on this route.", "frag:that_stage": "That stage:", "frag:pts_up": "points up on your best.", "frag:pts_down": "points down on your best."
   } /* END_VOICE_LINES_JSON */;
 
   // Valhalla maneuver type -> verb token (web/directions.js VERB says the same words with the street name).
@@ -222,6 +229,7 @@
       if (m[4]) { const h = nums(+m[4]); if (!h) return null; out.push(...h, m[5] === 'hairpin' ? 'frag:hairpin' : 'frag:hairpins'); }
       return out;
     }
+    if (t === 'Twisty section ahead.') return ['frag:twisty'];   // its corners run on past the road ahead (free drive)
     if ((m = /^Twisty section ahead\. (\d+) corners\.$/.exec(t))) { const c = nums(+m[1]); return c ? ['frag:twisty', ...c, 'frag:corners'] : null; }
     if ((m = /^(.+) ahead\.?$/.exec(t)) && DOT[m[1].toLowerCase()]) return [DOT[m[1].toLowerCase()]];
     // live coaching (pass_coach.js line): the gap to your fastest pass, in tenths or seconds, or points on a stretch
@@ -230,6 +238,10 @@
     if ((m = /^Best yet\. (.+) up\.$/.exec(t)) && !/^\d+$/.test(m[1]) && gap(m[1])) return ['frag:best_yet', ...gap(m[1]), 'frag:up'];
     if ((m = /^(.+) down\.( Brake later\.)?$/.exec(t)) && !/^\d+$/.test(m[1]) && !/:/.test(m[1]) && gap(m[1])) return [...gap(m[1]), 'frag:down', ...(m[2] ? ['line:pass_brake_later'] : [])];
     if ((m = /^Best stretch yet\. (.+) up\.$/.exec(t)) && gap(m[1])) return ['line:pass_stretch_best', ...gap(m[1]), 'frag:up'];
+    // a ghost duel without the friend's name (on the bar): "1.4 seconds up.", "Stage done. 4.0 seconds down."
+    if ((m = /^(Stage done\. )?(.+) (up|down)\.$/.exec(t)) && !/^\d+$/.test(m[2]) && !/[.:]\s/.test(m[2]) && gap(m[2])) return [...(m[1] ? ['frag:stage_done'] : []), ...gap(m[2]), m[3] === 'up' ? 'frag:up' : 'frag:down'];
+    if (t === 'Stage done. Level.') return ['frag:stage_done', 'line:level'];
+    if (t === 'Stage done.') return ['frag:stage_done'];
     if ((m = /^That stretch: (.+) down on your best\.$/.exec(t)) && gap(m[1])) return ['frag:that_stretch', ...gap(m[1]), 'frag:down_best'];
     // a saved stage's result (cockpit.js stage tracker), said without the stage's name (on the screen)
     if ((m = /^That stage: (\d+) points (up|down) on your best\.$/.exec(t)) && nums(+m[1])) return ['frag:that_stage', ...nums(+m[1]), m[2] === 'up' ? 'frag:pts_up' : 'frag:pts_down'];

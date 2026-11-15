@@ -82,5 +82,6 @@ SELECT
   (SELECT COUNT(*) FROM member_items) AS member_items,
   (SELECT COUNT(*) FROM driver_dna) AS driver_dna,
   (SELECT COUNT(*) FROM direct_messages) AS direct_messages,
+  (SELECT COUNT(*) FROM drive_post_tags) AS drive_post_tags,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;

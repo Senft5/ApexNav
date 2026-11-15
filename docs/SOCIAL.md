@@ -70,6 +70,9 @@ and in random batches so a trace cannot be re-assembled.
   with a road in the map's view are opened, chosen on the phone from the road boxes it already holds. Public books round
   the view are drawn too, thin and faint (legend: Public), found by the coarse cell of the map's centre as Roadbooks near
   you asks (never from inside a privacy zone, once a cell a page); a tap opens one, where Follow is.
+- **On the route card** (2026-11-15): a planned route that drives a road of your books (yours, followed, your crews')
+  says so on its card: "Drives The Dragon from Smokies classics, new to you", or a count for more than one. By the
+  stamp's own measure (85% of the road within reach); only books with a road whose box meets the route's are opened.
 - **Link cards** (2026-11-15, backend/src/link_preview.ts): a public book's link pasted into a chat shows a large card,
   its roads on the real map with its name and facts, made on the owner's phone when they press Share (sent again only
   when the name, facts or roads change); other links show what kind they are; the picture is otherwise the app icon.
@@ -197,6 +200,12 @@ and in random batches so a trace cannot be re-assembled.
   For you tells each of them: "@alice posted a drive you were on: Skyway run." (kind `post_with`, Open).
   The Post sheet picks that crew by itself on a day you were marked at one of its drives, and shows the "With" line the
   post will carry (`GET /api/feed/with?day=`); picking Friends drops it.
+- Tags (2026-11-15, Nate's go, migration 0066 `drive_post_tags`): on a post to friends, the Post sheet's "Who came?" row
+  tags up to five accepted friends (tap a handle). The post says "With you and @cara" to its readers, never across a block;
+  each tagged friend gets the same For you line (`post_with`) and can take their own tag off (··· → Remove my tag,
+  `DELETE /api/posts/:id/tag`). Not on a crew post (the crew drive's record says who came). In Download my data.
+  A tagged friend with Notifications on gets a push, "@alice tagged you on a drive." (kind `post_tag`, under Comments and
+  mentions), only while they can see the post (2026-11-15).
 - Next: "Post to crew" from a corner clip on the drive's page (analysis thread adds the key, `page.post(blob, meta)`).
   Kudos and comments push (2.12).
 
@@ -213,6 +222,18 @@ and in random batches so a trace cannot be re-assembled.
 - Show my code (2026-11-14): on the Invite sheet, a friend link as a QR code for a meet. Their phone camera opens it, they
   tap Accept and you're friends. It's the same one-use link Send a friend link makes (10 open at most), so New code makes
   the next one. Drawn on a canvas by `vendor/qrcode.js`, which loads only when it's asked for.
+
+### 2.15 Events on the map (members; built 2026-11-15)
+- Nate (2026-11-15): time attacks and meets pop up as you drive near, like an open-world game's event markers, in our own
+  look. The Layers sheet's Events switch (on by default, kept like every layer).
+- The area's time attack loops stand as a glowing start gate (orange, facing the way the loop leaves); your crews' drives
+  and public meets in the next 24 hours stand at their meeting points (blue). Tapping either opens its card.
+- Driving up to one (a gate within 450 m, a meet within 800 m from 3 h before it starts to 1 h after, ahead of you within
+  75 degrees, or anywhere close while you're stopped) raises one card at the foot of the map: what it is, its name, three
+  facts (Length / Your best / Leader, or Starts / Crew / Going), and one key, Start or Join, with Not now (down 30 min).
+  One card at a time; it goes when you're well past. Unknown stays `--`.
+- Start enters the loop (if needed) and drives it, the same as Where to? (`timeAttack.go`). Join opens the drive's card.
+- No backend change: `/api/ta` (area point only), `/api/events`, `/api/events/near` (privacy-zone cell). `web/event_markers.js`.
 
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.

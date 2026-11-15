@@ -6,7 +6,7 @@
 // Post sheet.
 (function (root) {
   'use strict';
-  const CUT_M = 500, MAX_POINTS = 600, PREVIEW = 3;
+  const CUT_M = 500, MAX_POINTS = 600, PREVIEW = 3, TAG_N = 5;   // TAG_N: friends tagged on a post, as the Worker (drive_posts.ts TAG_N)
   /** A comment's text with each @handle in bold (the server tells whoever it names, if they can see the post). */
   const MENTION = /(^|[^A-Za-z0-9_@])(@[A-Za-z0-9_]{3,20})(?![A-Za-z0-9_])/g;
   /** The @handle being typed just before the caret: { start, q } (q may be empty), or null when none is. */
@@ -254,6 +254,8 @@
     .feed-faces { display: inline-flex; } .feed-faces > * + * { margin-left: -8px; }
     .feed-kudos-row { display: flex; align-items: center; gap: 12px; min-height: 48px; width: 100%; background: none; border: 0; padding: 0; color: var(--panel-ink); font: inherit; text-align: left; cursor: pointer; }
     .feed-with { margin: -2px 0 0; font-size: 13px; color: var(--panel-dim); }
+    .post-tags { display: grid; gap: 6px; } .post-tags small { color: var(--panel-dim); font-size: 13px; }
+    .post-tag-keys { display: flex; flex-wrap: wrap; gap: 6px; max-height: 96px; overflow-y: auto; }
     .feed-comment .feed-reply { display: inline-block; min-height: 32px; padding: 6px 0; font-size: 13px; color: var(--panel-dim); }
     .feed-tags { display: flex; flex-wrap: wrap; gap: 8px; }
     .feed-tags .feed-tag { min-height: 44px; }
@@ -438,6 +440,13 @@
           if (r && r.ok) { toast('Post deleted.'); if (o.gone) o.gone(); if (o.after) o.after(); } else toast('Couldn’t delete it. Check signal.');
         }, 'ink-btn'));
         else {
+          // tagged on a friend's post (2026-11-15): take your own tag off; the post stays
+          const own = page.myHandle ? String(page.myHandle() || '').toLowerCase() : '';
+          if (own && !p.crew && Array.isArray(p.with) && p.with.some((h) => String(h).toLowerCase() === own)) keys.append(btn('Remove my tag', async () => {
+            s.close();
+            const r = await apiCall('DELETE', `/api/posts/${encodeURIComponent(p.id)}/tag`).catch(() => null);
+            if (r && r.ok) { p.with = p.with.filter((h) => String(h).toLowerCase() !== own); toast('Tag removed.'); if (o.after) o.after(); } else toast('Couldn’t remove it. Check signal.');
+          }, 'ink-btn'));
           if (page.report) keys.append(btn('Report', () => { s.close(); page.report({ kind: 'drive', target: p.id, label: `@${p.handle}'s drive "${p.title}"`, who: p.handle }); }, 'ink-btn'));
           if (p.handle && o.mute) keys.append(btn(`Mute @${p.handle}`, () => { s.close(); o.mute(p.handle); }, 'ink-btn'));
           if (page.block && p.handle) keys.append(btn(`Block @${p.handle}`, () => { s.close(); page.block(p.handle); }, 'ink-btn'));
@@ -651,9 +660,9 @@
       return el('div', { className: 'stack-12' }, pick, list, more, mutedBox);
     }
     // a post's body: the drive's card, its line without its ends (trimLine), to a crew (to) or your friends (null)
-    function bodyOf(d, to, caption) {
+    function bodyOf(d, to, caption, tags) {
       const line = trimLine(d.lat, d.lon, page.inZone || (() => false));
-      return { title: String(d.name || 'Drive').slice(0, 60), caption: caption || null, driven_on: d.driven_on, length_m: Number.isFinite(d.len_m) ? Math.round(d.len_m) : null,
+      return { ...(!to && tags && tags.length ? { tags: tags.slice(0, TAG_N) } : {}), title: String(d.name || 'Drive').slice(0, 60), caption: caption || null, driven_on: d.driven_on, length_m: Number.isFinite(d.len_m) ? Math.round(d.len_m) : null,
         score: Number.isFinite(d.score) ? Math.round(d.score) : null, roads: (d.roads || []).slice(0, 8), line: line ? encode(line) : null, crew_id: to || null,
         stages: (d.stages || []).filter((x) => x && x.name).slice(0, 3).map((x) => ({ name: String(x.name).slice(0, 60), score: Number.isFinite(x.score) ? Math.round(x.score) : null,
           ...(Array.isArray(x.ends) && x.ends.length === 4 && x.ends.every(Number.isFinite) ? { ends: x.ends } : {}) })) };
@@ -697,10 +706,28 @@
         // a crew drive you were marked at that day: that crew is picked, and the post will say who came (GET /api/feed/with)
         let along = null, picked = false;
         const withNote = el('p', { className: 'feed-with post-with', hidden: true });
+        // who came, on a post to friends (2026-11-15): tap up to five friends; they see "With you" and a For you line
+        const tags = new Set();
+        let friends = [];
+        const tagRow = el('div', { className: 'post-tags', hidden: true });
+        const paintTags = () => {
+          tagRow.hidden = to !== null || !friends.length;
+          if (tagRow.hidden) return;
+          const keys = friends.map((h) => {
+            const on = tags.has(h), k = btn(`@${h}`, () => { if (on) tags.delete(h); else if (tags.size < TAG_N) tags.add(h); else toast(`Five at most.`); paintTags(); }, `chip${on ? ' on' : ''}`);
+            k.setAttribute('aria-pressed', String(on)); return k;
+          });
+          tagRow.replaceChildren(el('small', { textContent: tags.size ? withLine([...tags], null) : 'Who came? (optional)' }), el('div', { className: 'post-tag-keys' }, ...keys));
+        };
+        apiCall('GET', '/api/friends').then((r) => (r && r.ok ? jsonOf(r) : null)).then((l) => {
+          friends = Array.isArray(l) ? l.filter((f) => f && f.status === 'accepted' && f.handle).map((f) => f.handle).sort().slice(0, 24) : [];
+          if (s.box.isConnected) paintTags();
+        }).catch(() => {});
         const paint = () => {
           chips.querySelectorAll('button').forEach((b, i) => { const on = opts[i][0] === to; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
           const show = !!(along && to === along.crew_id && along.with.length);
           withNote.hidden = !show; withNote.textContent = show ? withLine(along.with, null) : '';
+          paintTags();
         };
         for (const [id, label] of opts) {
           const b = btn(label, () => { to = id; picked = true; paint(); }, 'chip'); b.setAttribute('role', 'radio'); chips.append(b);
@@ -743,7 +770,7 @@
         const line = trimLine(d.lat, d.lon, page.inZone || (() => false));
         const post = btn('Post', async () => {
           post.disabled = true;
-          const body = bodyOf(d, to, say.value.trim());
+          const body = bodyOf(d, to, say.value.trim(), [...tags]);
           const r = await apiCall('POST', '/api/posts', body).catch(() => null);
           // no signal (IDEAS F-05): the post waits on the phone and goes when there is one (outbox.js), as a hazard report does
           // (a post with a clip or photo can't wait: the outbox keeps text only, so the sheet stays open for another try)
@@ -762,7 +789,7 @@
           toast(where);
         }, 'ink-btn solid');
         const cancel = btn('Cancel', () => { s.close(); done(false); }, 'linkbtn');
-        s.box.append(el('h2', { textContent: 'Post this drive' }), chips, withNote, say, mrow,
+        s.box.append(el('h2', { textContent: 'Post this drive' }), chips, withNote, tagRow, say, mrow,
           el('p', { className: 'note', textContent: line ? 'Its start and end stay off the line.' : 'No line: too short to show without its start and end.' }),
           el('div', { className: 'row' }, post, cancel));
       });

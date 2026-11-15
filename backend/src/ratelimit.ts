@@ -7,6 +7,7 @@
 // per day) stay where they are; this is the floor under all of them.
 import { Env, HttpError } from "./util";
 import { sessionHash } from "./auth";
+import { PATHS as VALHALLA_PATHS } from "./valhalla";
 
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -15,7 +16,7 @@ const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const AUTH_LIMITED = new Set(["/api/auth/google/start", "/api/auth/app/exchange", "/api/auth/apple"]);
 
 // The relays a signed-out phone uses while planning; a plan asks a few dozen tiles, so the limit (wrangler.jsonc) is generous.
-export const RELAYS = new Set(["/api/ctx/osm", "/api/ctx/trace", "/api/ctx/workzones"]);
+export const RELAYS = new Set(["/api/ctx/osm", "/api/ctx/trace", "/api/ctx/workzones", ...VALHALLA_PATHS]);
 
 export const DATA_UPLOAD = "/api/ops/data";
 

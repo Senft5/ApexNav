@@ -461,9 +461,14 @@ def rebuild_checked(voice_id: str, only: list[str] | None = None, threshold: flo
             if sc >= threshold:
                 break
         sc, audio, heard, text = best
+        # the pack's one pace (tools/voice_pace.py): kept only if Whisper hears the paced take as well
+        import voice_pace
+        paced, pace, changed, _ = voice_pace.paced_and_heard(audio, want, cfg["lang"], voice_pace.TARGETS[voice_id], ear, sc)
+        if changed:
+            audio, sc = paced, max(sc, ear.score(paced, want)[0])
         fname = (safe_name(key) if not multi else "p_" + hashlib.sha1(key.encode()).hexdigest()[:12]) + ".m4a"
         encode_m4a(audio, os.path.join(out_dir, fname))
-        manifest["tokens"][key] = {"file": fname, "dur": round(len(audio) / SR, 3), "text": want, "heard": round(sc, 2), "voice": cfg["kokoro_voice"]}
+        manifest["tokens"][key] = {"file": fname, "dur": round(len(audio) / SR, 3), "text": want, "heard": round(sc, 2), "voice": cfg["kokoro_voice"], "pace": pace}
         if n % 20 == 0 or n == len(keys):
             with open(mpath, "w", encoding="utf-8") as f:   # resumable
                 json.dump(manifest, f, indent=1)

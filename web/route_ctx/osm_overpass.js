@@ -38,7 +38,8 @@
 //   'hazard' (other hazard=* values, label), 'viewpoint' (300 m), 'historic' (300 m; label name, value tag), 'fuel'
 //   (800 m; value 1 open 24/7, 0 has other hours, NaN unknown; `hours` = opening_hours, label brand/name), 'ford' (the
 //   road crosses water at a node on it).
-// Spans: 'roundabout', 'one_lane_bridge' (bridge with lanes=1, two-way), 'covered_bridge', 'access_private',
+// Spans: 'roundabout', 'one_lane_bridge' (bridge with lanes=1, two-way), 'single_track' (a two-way road, not a bridge, with
+//   lanes=1: room for one car, so an oncoming one means someone pulls over; label name), 'covered_bridge', 'access_private',
 //   'access_destination', 'cycle_route' (label route name), 'byway' (label byway name), 'divided', 'ford' (a way through water).
 (function (root) {
   'use strict';
@@ -87,6 +88,7 @@
     if (/^(destination|customers|delivery|residents)$/.test(v)) return 1;
     return 0;
   }
+  const SINGLE_TRACK_RE = /^(trunk|primary|secondary|tertiary|unclassified|residential|road)$/;   // not a driveway, an alley or a track
   const isOneway = (t) => t.oneway === 'yes' || t.oneway === '1' || t.oneway === '-1' || t.junction === 'roundabout' || /^motorway(_link)?$/.test(t.highway || '') && t.oneway !== 'no';
   const lanesOf = (t) => { const m = String(t.lanes || '').match(/\d+/); return m ? +m[0] : NaN; };
   /** A posted height or width in metres: "3.5", "3.5 m", "12'6\"", "12 ft 6 in"; NaN for none, default or below_default. */
@@ -337,6 +339,7 @@
     const span = (kind, pred, label) => { for (const s of G.runs(c.distM, pred)) res.spans.push({ fromM: Math.round(s.fromM), toM: Math.round(s.toM), kind, ...(label ? { label: label(s.from) } : {}) }); };
     span('roundabout', (i) => !!(match[i] && /^(roundabout|circular)$/.test(match[i].tags.junction || '')));
     span('one_lane_bridge', (i) => !!(match[i] && match[i].tags.bridge && match[i].tags.bridge !== 'no' && lanesOf(match[i].tags) === 1 && !isOneway(match[i].tags)), (i) => match[i].tags['bridge:name'] || match[i].tags.name);
+    span('single_track', (i) => !!(match[i] && !(match[i].tags.bridge && match[i].tags.bridge !== 'no') && lanesOf(match[i].tags) === 1 && !isOneway(match[i].tags) && SINGLE_TRACK_RE.test(match[i].tags.highway || '')), (i) => match[i].tags.name);
     span('covered_bridge', (i) => !!(match[i] && (match[i].tags.bridge === 'covered' || (match[i].tags.bridge && match[i].tags.covered === 'yes'))), (i) => match[i].tags['bridge:name'] || match[i].tags.name);
     span('ford', (i) => !!(match[i] && match[i].tags.ford && match[i].tags.ford !== 'no'));
     span('access_private', (i) => ch.access_level[i] === 2);

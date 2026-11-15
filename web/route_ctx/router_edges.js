@@ -30,6 +30,8 @@
   // the registry itself (a provider shim, ctx_util.js / osm_common.js, has only register): in node, require it
   const Ctx = root.ApexRouteCtx && root.ApexRouteCtx.corridor ? root.ApexRouteCtx : typeof require === 'function' ? require('./registry.js') : root.ApexRouteCtx || null;
   const VALHALLA = 'https://valhalla1.openstreetmap.de';
+  // ours first when route_loading.js is loaded (it is on the map page), else straight to `f` (tests, the analysis page)
+  const viaOurs = (f) => (u, i) => (root.ApexRouteLoading && root.ApexRouteLoading.valhallaFetch ? root.ApexRouteLoading.valhallaFetch(u, i, f) : f(u, i));
   const ATTRS = ['edge.speed_limit', 'edge.speed', 'edge.road_class', 'edge.use', 'edge.density', 'edge.lane_count', 'edge.surface', 'edge.unpaved',
     'edge.bridge', 'edge.tunnel', 'edge.toll', 'edge.traffic_signal', 'edge.length', 'edge.roundabout', 'edge.truck_route', 'edge.sidewalk',
     'edge.way_id', 'edge.names', 'node.traffic_signal', 'node.type', 'node.intersecting_edge.use', 'node.intersecting_edge.driveability', 'node.intersecting_edge.road_class'];
@@ -182,7 +184,7 @@
         if (opts.signal && opts.signal.aborted) return { status: 'unavailable', note: 'out of time' };
         try {
           const body = match === 'edge_walk' || match === 'walk_or_snap' ? request(c.coords, match) : request(thin(c.coords, 2000), match);
-          const r = await f(`${VALHALLA}/trace_attributes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: opts.signal });
+          const r = await viaOurs(f)(`${VALHALLA}/trace_attributes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: opts.signal });
           if (!r.ok) continue;
           edges = parse(await r.json());
           if (edges) break;

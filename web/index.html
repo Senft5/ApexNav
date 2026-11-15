@@ -95,11 +95,7 @@
   <script src="theme_sounds.js" defer></script>
   <script src="audio_bus.js" defer></script>
   <script src="brake_heat.js" defer></script>
-  <script src="sun_ahead.js" defer></script>
   <script src="limit_ahead.js" defer></script>
-  <script src="briefing.js" defer></script>
-  <script src="corners_ahead.js" defer></script>
-  <script src="along_ahead.js" defer></script>
   <script src="road_marks.js" defer></script>    <!-- stop signs, rail crossings, one-lane bridges, speed bumps on a planned route -->     <!-- "Sun in your eyes ahead." when the road turns into a low sun (live R-13) -->
   <script src="soundtrack.js" defer></script>
   <script src="week_digest.js" defer></script>
@@ -511,8 +507,14 @@
     /* real-drive review 2026-11-15: Play is a round key beside the scrubber, as on any player, one glyph that says what a tap
        does (it said "Play" while playing); its word stays for VoiceOver. The speeds, Jump to the corners and Done share the
        row under it. */
-    .transport { position: relative; grid-template-columns: 44px minmax(0, 1fr) auto; grid-template-areas: "play scrub scrub" "rate rate done"; }
-    .transport:has(> #videoBtn:not([hidden])) { grid-template-areas: "play scrub video" "rate rate done"; }
+    /* round 3: one row, as any player: play, the scrubber, one speed key that steps 1x, 2x, 4x, 8x (the radiogroup keeps its
+       four radios for VoiceOver; only the chosen one shows) and Done. Video floats over the map's left as Jump does its right. */
+    .transport { position: relative; grid-template-columns: 44px minmax(0, 1fr) auto auto; grid-template-areas: "play scrub rate done"; }
+    .transport:has(> #videoBtn:not([hidden])) { grid-template-areas: "play scrub rate done"; }
+    .transport .detents.tp-rate > button:not([aria-checked="true"]) { display: none; }
+    .transport .detents.tp-rate > button[aria-checked="true"] { min-width: 52px; padding: 0 8px; }
+    .transport > #videoBtn { position: absolute; left: 6px; bottom: calc(100% + 14px); min-height: 44px; padding: 0 16px; font-size: 15px; font-weight: 700;
+      background: var(--panel); color: var(--panel-ink); border: 1.5px solid var(--panel-ink); border-radius: var(--r-chip, 0); box-shadow: var(--elev-1, none); }
     /* Jump to the corners floats on the map over the transport's right end, as a player's Skip intro does */
     .transport > #jumpCorners { position: absolute; right: 6px; bottom: calc(100% + 14px); min-height: 44px; padding: 0 16px; font-size: 15px; font-weight: 700; white-space: nowrap;
       background: var(--panel); color: var(--panel-ink); border: 1.5px solid var(--panel-ink); border-radius: var(--r-chip, 0); box-shadow: var(--elev-1, none); }
@@ -696,6 +698,7 @@
     .ly-key .k-cam { stroke: var(--signal); stroke-width: 1.5; stroke-linecap: butt; stroke-linejoin: miter; fill: var(--panel); }
     .ly-key .k-hill { stroke: var(--panel-dim); stroke-width: 1.5; fill: var(--hair, transparent); }
     .ly-key .k-meet { stroke: var(--panel-ink); stroke-width: 1.5; fill: var(--panel); }
+    .ly-key .k-event { stroke: #ff7a1a; stroke-width: 2.2; fill: none; stroke-linecap: round; }
     .ly-key .k-driven { stroke: var(--gain); } .ly-key .k-todo { stroke: var(--panel-ink); stroke-dasharray: 3 2.5; stroke-linecap: butt; }
     .ly-legend b.k-pub::before { background: var(--panel-ink); opacity: 0.5; height: 1.5px; } .ly-legend b.k-driven::before { background: var(--gain); } .ly-legend b.k-todo::before { background: none; border-top: 2px dashed var(--panel-ink); height: 0; }
     .ly-key .k-roadcam { stroke: var(--panel); stroke-width: 1.5; fill: var(--panel-ink); }
@@ -1692,6 +1695,9 @@
     /* rows that cut their end off with an ellipsis wrap instead once the text is larger */
     html[data-type-size] .tc-head { flex-wrap: wrap; }
     html[data-type-size] .switch > button { white-space: normal; text-overflow: clip; line-height: 1.15; padding: 4px; }
+    /* a long word ("Kilometres", "Steady") is a key's narrowest: at large text each key is at least that wide, the wider
+       words take the room, and on a narrow phone the keys wrap to a second row rather than cut the word (320 pt, 2x) */
+    html[data-type-size] .switch { flex-wrap: wrap; } html[data-type-size] .switch > button { flex: 1 1 auto; min-width: min-content; }
     /* the level cards one a row once the text is larger: the level, its time and its corners on one line */
     html[data-type-size] .rc-levels { grid-template-columns: minmax(0, 1fr); }
     html[data-type-size] .rc-levels > button + button { margin-left: 0; margin-top: -1px; }   /* one a row: the hairlines shared top and bottom */
@@ -2054,6 +2060,10 @@
     .cluster-line .ledger > .g-score { flex: none; margin: 0 0 0 auto; display: flex; flex-direction: row-reverse; align-items: baseline; gap: 8px; min-height: 44px; }
     .cluster-line .ledger > .g-score b { font-size: 26px; line-height: 44px; } .cluster-line .ledger > .g-score.unk b { color: var(--panel-dim); } .cluster-line .ledger > .g-score span { font-size: 13px; }
     html[data-mode="night"] #cluster.cluster-line:not(.show-trip) .trip-peek { padding: 0; min-width: 44px; text-align: left; }
+    /* the drive screen as the replay (real-drive reviews): what the drive can't know steps aside, not a framed dash: the
+       Score until scored, the limit sign until a limit is known, the Bank figure until measured (a web drive never is) */
+    .cluster-line .ledger > .g-score.unk, .cluster-line .ro-limit.unknown { display: none; }
+    .cluster-line .g-line .dial-digital.small.unk { visibility: hidden; }
     @media (orientation: landscape) and (max-height: 540px), (max-width: 359px) {
       /* a narrow column (a phone on its side, a small phone): the numeral keeps its size; the meter moves down beside the ledger */
       .cluster-line { grid-template-columns: 80px minmax(0, 1fr) auto; grid-template-areas: "speed speed read" "rule rule rule" "g ledger ledger"; }
@@ -2083,6 +2093,8 @@
       /* real-drive review: a framed dash is not news. The limit sign and the Score step aside while unknown */
       #app.replaying .cluster-line .ro-limit.unknown, #app.replaying .cluster-line .g-score.unk { display: none; }
       #app.replaying .cluster-line .g-line .dial-digital.small.unk { visibility: hidden; }
+      /* the ring's BRAKE axis mark read as a state over "Gas 0.07 g": the card beside the ball names the pedal, so the mark goes */
+      #app.replaying .cluster-line .g-line .dial-label { display: none; }
       #app.replaying .cluster-line .odo-digits .lead { display: none; }
       /* the night's quiet Trip key is for a drive; a replay is watched, not driven: the trip shows */
       html[data-mode="night"] #app.replaying #cluster.cluster-line .odo { display: flex; }
@@ -2336,6 +2348,8 @@
         <button class="sw ly" data-toggle="satellite" id="satSwitch" hidden><i></i><span>Satellite</span><svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"></svg></button>
         <button class="sw ly" data-toggle="roadbooks"><i></i><span>Roadbooks<small class="ly-legend"><b class="k-driven">Driven</b><b class="k-todo">To drive</b><b class="k-pub">Public</b></small></span>
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><path class="k-driven" d="M3 15 C7 15 8 8 12 8"/><path class="k-todo" d="M15 9 C19 10 20 5 25 5"/></svg></button>
+        <button class="sw ly" data-toggle="events"><i></i><span>Events<small>Time attacks and meets as you drive near</small></span>
+          <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><path class="k-event" d="M7 18 V5 M21 18 V5 M5 4 H23 V9 H5 Z"/></svg></button>
         <button class="sw ly" data-toggle="meets"><i></i><span>Meets<small>Public crews' meets</small></span>
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><rect class="k-meet" x="6" y="3" width="16" height="10"/><path class="k-meet" d="M14 13 V18"/></svg></button>
         <button class="sw ly" data-toggle="friends"><i></i><span>Friends<small>Sharing where they are</small></span>
