@@ -8573,6 +8573,7 @@
       // text (not shown), so the plate still reads "Tellico Plains · Dry · 61°" to a screen reader and to textContent.
       const fill = () => {
         const pp = $('placePlate'), m = ApexPlacePlate.parts(d, ApexUnits.metric()), b = document.createElement('b');
+        if (!m.head && !m.rest) return;   // nothing came back (a dropped signal): the plate keeps what it last knew
         b.textContent = m.head; pp.replaceChildren(...(m.head ? [b] : []));
         if (m.rest) { const i = document.createElement('i'), sp = document.createElement('span'); i.textContent = ' · '; sp.textContent = m.rest; pp.append(i, sp); }
         paintPlacePlate();

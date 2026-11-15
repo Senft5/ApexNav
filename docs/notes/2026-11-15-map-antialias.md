@@ -5,6 +5,9 @@
   terrain mesh and other polygon edges stair-stepped (worst in a drive, where the canvas is capped at 2x). Both maps now
   pass `antialias: true`. Reproduced in headless Chromium (Cincinnati, pitch 60, with and without terrain): staircase
   edges before, smooth after.
+- The slower frames exposed a race in the end-card e2e flow: the place plate's boot-time lookup, failing, emptied a plate
+  that already had text. `fill()` in `web/cockpit.js` now leaves the plate as it was when nothing came back (a dropped
+  signal no longer blanks the town and weather).
 - Not covered: the CarPlay native map (`CarPlay/ApexCarMap.swift`, MapLibre Native) and the shimmer of far-off detail
   draped on 3D terrain (MapLibre's terrain textures have no mipmaps); look there next if Nate still sees it.
 
