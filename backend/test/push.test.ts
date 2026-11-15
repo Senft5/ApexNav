@@ -124,6 +124,18 @@ describe("push notifications", () => {
     expect(calls).toEqual([]);
   });
 
+  it("a tag tells each tagged friend who can see the post, never the words, and not one who turned Comments off", async () => {
+    await configure();
+    const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara")];
+    await befriend(a, b); await befriend(a, c);
+    await phone(b, 2); await phone(c, 3);
+    await ok(api(c, "PUT", "/api/push/kinds", { off: ["comments"] }));
+    const line = encodeLine(Array.from({ length: 91 }, (_, i) => [35 + i * 0.001, -84] as [number, number]));
+    await ok(api(a, "POST", "/api/posts", { title: "Cherohala Skyway", driven_on: today, length_m: 10000, line, tags: ["bob", "cara"] }));
+    await settle(1);
+    expect(calls.map((x) => [x.token, x.body.aps.alert.title, x.body.aps.alert.body])).toEqual([[tok(2), "Cherohala Skyway", "@alice tagged you on a drive."]]);
+  });
+
   it("an @mention tells a friend of the poster who can see the post, once, and never a stranger or someone blocked", async () => {
     await configure();
     const [a, b, c, d] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara"), await makeUser("dave")];

@@ -88,7 +88,7 @@ const names = (v: unknown, max: number, field: string) => {
 };
 
 /** POST /api/posts: the drive's card, to friends (no crew_id) or to a crew you're in. → { id } */
-export async function postCreate(env: Env, v: Viewer, req: Request): Promise<{ id: string }> {
+export async function postCreate(env: Env, v: Viewer, req: Request): Promise<{ id: string; tagged: number }> {
   const b = await body<Record<string, unknown>>(req);
   const title = optText(b.title, 60, "title");
   if (!title) throw new HttpError(400, "bad_title");
@@ -136,7 +136,7 @@ export async function postCreate(env: Env, v: Viewer, req: Request): Promise<{ i
     .bind(id, v.id, crew, title, caption, day, length === null ? null : Math.round(length), score, roads.length ? JSON.stringify(roads) : null,
       stagesOut.length ? JSON.stringify(stagesOut) : null, line).run();
   if (tagged.length) await env.DB.batch(tagged.map((u) => env.DB.prepare("INSERT INTO drive_post_tags (post_id, user_id) VALUES (?, ?)").bind(id, u)));
-  return { id };
+  return { id, tagged: tagged.length };
 }
 
 type Row = { id: string; author: string; handle: string | null; photo_id: string | null; crew_id: string | null; crew_name: string | null; title: string; caption: string | null;
