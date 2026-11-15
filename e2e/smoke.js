@@ -3630,6 +3630,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   const crewPage = { id: 'k1', name: 'Ridge Runners', motto: 'Slow in, smooth out.', visibility: 'private', area_name: null, members: 3, is_owner: true,
     crest: null, crest_photo_id: null, stripe: null, cover_photo_id: null, livery: 'plain', sharing_scores: true,
     board: [{ handle: 'sam', score: 811, car: 'Mazda MX-5', mine: false }, { handle: 'me', score: null, car: null, mine: true }],
+    dna: [{ handle: 'sam', mine: false, skills: { squeeze: 81, brake: 64, arc: 92, entry: 77, line: 58, exit: 70 } }, { handle: 'me', mine: true, skills: { squeeze: 80, brake: 75, arc: 70, entry: 76, line: 60, exit: 72 } }],
     next: { id: 'e1', title: 'Dawn run', starts_at: soon, meet_name: 'The Hardee\'s', going: ['sam'], my_rsvp: null } };
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method();
@@ -3698,6 +3699,10 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
     return { body, panes: Object.fromEntries([...document.querySelectorAll('.cp-pane')].map((p) => [p.id, [...p.children].map(name).filter(Boolean)])) }; });
   check(JSON.stringify(order.body) === '["title","tabs"]' && JSON.stringify(order.panes['cpPane-drives'].slice(0, 2)) === '["run","Members"]'
     && order.panes['cpPane-chat'].length === 1 && order.panes['cpPane-board'][0] === 'Vetta Score board', 'the page in order: ' + JSON.stringify(order));
+  // the crew's DNA under the board (dna_card.js crewLeaders): who is cleanest at each skill, your level beside it
+  const dnaRows = await page.$$eval('#cpPane-board .cp-dna-row', (r) => r.map((x) => [...x.children].map((c) => c.textContent).filter(Boolean).join(' ')));
+  check(order.panes['cpPane-board'].includes('Cleanest in the crew') && dnaRows.length === 6 && dnaRows[0] === 'One braking @sam 81 you 80' && dnaRows[1] === 'Brakes done You 75',
+    'cleanest in the crew, skill by skill: ' + JSON.stringify(dnaRows));
   check(await page.evaluate(() => ![...document.querySelectorAll('#cpPane-chat h3')].some((h) => h.textContent === 'Chat')), 'the Chat tab names the chat: no second "Chat" heading under it');
   check(!(await page.$$('.crew-page .cp-livery, .crew-page .cp-meter')).length, 'no livery box or meter on the page (they are in Edit livery)');
   check(!/Convoy/.test(await page.$$eval('#crewsBody h3', (h) => h.map((x) => x.textContent).join('|'))), 'no Convoy heading on Crews');
