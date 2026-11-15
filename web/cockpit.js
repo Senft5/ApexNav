@@ -1716,6 +1716,22 @@
       el.setAttribute('aria-valuetext', text);
       el.setAttribute('aria-valuenow', String(T > 0 ? Math.round(at / T * 100) : 0));
     }
+    // Jump to the corners (real-drive review 2026-11-15: a free drive's replay opened on twenty minutes of interstate): where
+    // the drive's corners start, the first run of three corners inside 1.5 km (else its first corner), 400 m before it so
+    // the notes have their run-in. Offered while the replay is more than a kilometre short of it; one tap moves there.
+    function cornersStartM(t) {
+      const cs = (t && Array.isArray(t.events) ? t.events : []).filter((e) => e.type === 'corner' && Number.isFinite(e.dist_m)).map((e) => Number.isFinite(e.start_m) ? e.start_m : e.dist_m).sort((a, b) => a - b);
+      if (!cs.length) return null;
+      const run = cs.find((m, i) => i + 2 < cs.length && cs[i + 2] - m <= 1500);
+      return Math.max(0, (run != null ? run : cs[0]) - 400);
+    }
+    function paintJump() {
+      const b = $('jumpCorners'); if (!b) return;
+      const at = replayOn && state.mode === 'replay' && track ? cornersStartM(track) : null;
+      const show = at != null && state.cursorM < at - 1000;
+      if (b.hidden === show) b.hidden = !show;
+      b._at = at;
+    }
     function drawScrubber() {
       const r = scrubRect || scrubCanvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
       const w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
@@ -1723,6 +1739,7 @@
       sctx.clearRect(0, 0, w, h);
       if (!track) return;
       paintScrubValue();
+      paintJump();
       const C = look.colors, n = track.dist.length, T = totalM(), step = Math.max(1, Math.floor(n / w)), xOf = (m) => (m / T) * w;
       if (track.elev) {
         let lo = Infinity, hi = -Infinity;
@@ -9335,7 +9352,8 @@
     function renderCamList() { document.querySelectorAll('[data-cam]').forEach(b => b.classList.toggle('on', b.dataset.cam === state.camFeel)); }
     document.querySelectorAll('[data-cam]').forEach(b => b.addEventListener('click', () => { state.camFeel = b.dataset.cam; renderCamList(); savePrefs(); }));
     renderCamList();
-    $('playBtn').addEventListener('click', () => { setPlaying(!state.playing); });   // the name is on the plate; the pack's voice is for the road
+    $('playBtn').addEventListener('click', () => { setPlaying(!state.playing); });
+    $('jumpCorners').addEventListener('click', () => { const b = $('jumpCorners'); if (b._at == null || !track) return; state.cursorM = b._at; paintReplayEnd(false); render(true); });   // the name is on the plate; the pack's voice is for the road
     document.querySelectorAll('#rateDetents [data-rate]').forEach((b) => b.addEventListener('click', () => {
       state.rate = Number(b.dataset.rate);
       document.querySelectorAll('#rateDetents [data-rate]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
