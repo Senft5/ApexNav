@@ -204,6 +204,8 @@ and in random batches so a trace cannot be re-assembled.
   tags up to five accepted friends (tap a handle). The post says "With you and @cara" to its readers, never across a block;
   each tagged friend gets the same For you line (`post_with`) and can take their own tag off (··· → Remove my tag,
   `DELETE /api/posts/:id/tag`). Not on a crew post (the crew drive's record says who came). In Download my data.
+  A tagged friend with Notifications on gets a push, "@alice tagged you on a drive." (kind `post_tag`, under Comments and
+  mentions), only while they can see the post (2026-11-15).
 - Next: "Post to crew" from a corner clip on the drive's page (analysis thread adds the key, `page.post(blob, meta)`).
   Kudos and comments push (2.12).
 

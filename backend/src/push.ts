@@ -67,7 +67,7 @@ export async function pushQuiet(env: Env, v: Viewer, req: Request): Promise<void
 
 /** The kinds a driver can each turn off (Garage → Settings → Notifications), and which pushes each holds. */
 export const PUSH_GROUPS: Record<string, string[]> = {
-  friends: ["request", "friend"], kudos: ["kudos", "post_kudos"], comments: ["post_comment"], duels: ["duel"], beaten: ["topped", "passed"], crews: ["crew_drive"], messages: ["message"],
+  friends: ["request", "friend"], kudos: ["kudos", "post_kudos"], comments: ["post_comment", "post_tag"], duels: ["duel"], beaten: ["topped", "passed"], crews: ["crew_drive"], messages: ["message"],
 };
 const offKey = (userId: string) => `pushoff/${userId}`;
 const groupOf = (kind: string) => Object.keys(PUSH_GROUPS).find((g) => PUSH_GROUPS[g].includes(kind)) || null;
@@ -131,6 +131,7 @@ export const PUSH = {
   postComment: (from: string | null, title: string, post: string): Push => ({ kind: "post_comment", title, body: `${at(from)} commented on your drive.`, link: `${LINK}?view=friends&post=${post}` }),
   postAlso: (from: string | null, owner: string | null, title: string, post: string): Push => ({ kind: "post_comment", title, body: `${at(from)} also commented on ${owner ? `@${owner}'s` : "a"} drive.`, link: `${LINK}?view=friends&post=${post}` }),
   postMention: (from: string | null, owner: string | null, title: string, post: string): Push => ({ kind: "post_comment", title, body: `${at(from)} mentioned you on ${owner ? `@${owner}'s` : "a"} drive.`, link: `${LINK}?view=friends&post=${post}` }),
+  postTag: (from: string | null, title: string, post: string): Push => ({ kind: "post_tag", title, body: `${at(from)} tagged you on a drive.`, link: `${LINK}?view=friends&post=${post}` }),
   topped: (from: string | null, stage: string, score: number, yours: number): Push => ({ kind: "topped", title: "Topped", body: `${at(from)} scored ${score} on ${stage}, over your best of ${yours}.`, link: `${LINK}?view=friends` }),
   passed: (from: string | null, stage: string): Push => ({ kind: "passed", title: "Time attack", body: `${at(from)} went quicker than you on ${stage}.`, link: `${LINK}?view=friends` }),
   message: (from: string | null): Push => ({ kind: "message", title: "Message", body: `${at(from)} sent you a message.`, link: `${LINK}?view=friends${from ? `&chat=${encodeURIComponent(from)}` : ""}` }),
@@ -205,6 +206,14 @@ export async function afterPostComment(env: Env, v: Viewer, post: string, author
      LIMIT 20`).bind(null, post, v.id).all<{ id: string; owner: string | null }>();
   const rows = r.results.filter((x) => !told.has(x.id));
   if (rows.length) await notify(env, rows.map((x) => x.id), PUSH.postAlso(v.handle, rows[0].owner, title, post));
+}
+
+/** A friend tagged you on their drive post (drive_post_tags): only while you can see the post, never across a block. */
+export async function afterPostTag(env: Env, v: Viewer, post: string): Promise<void> {
+  if (!pushConfigured(env)) return;
+  const r = await env.DB.prepare(`SELECT t.user_id AS id, p.title FROM drive_post_tags t JOIN drive_posts p ON p.id = t.post_id
+     WHERE t.post_id = ?2 AND ${POST_SEEN("p").replaceAll("?1", "t.user_id")}`).bind(null, post).all<{ id: string; title: string }>();
+  if (r.results.length) await notify(env, r.results.map((x) => x.id), PUSH.postTag(v.handle, r.results[0].title, post));
 }
 
 /** Before a run goes on the boards (POST /api/board): its stage, and your best Score there until now, for afterTopped. */
