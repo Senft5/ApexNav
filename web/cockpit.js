@@ -11255,7 +11255,7 @@
       // the pack says the gap without the stage's or the friend's name (both on the bar): "Stage done. 1.4 seconds up."
       const bareGap = (gap) => (Math.abs(gap) < 0.05 ? 'Level.' : `${words(Math.abs(gap))} ${gap > 0 ? 'down' : 'up'}.`);
       if (r.state === 'done') {
-        // down on the ghost: where most of it went ("Most of it late on."), from the stretch between its corners that cost most
+        // down on the ghost: where it lost the most ("Lost the most late on."), from the stretch between its corners that cost most
         const where = Number.isFinite(r.gap) && r.gap > 0.05 && ApexGhostDuel.worstSaid ? ApexGhostDuel.worstSaid(r.worst) : null, tail = where ? ` ${where}` : '';
         const line = Number.isFinite(r.gap) ? `${r.name} done. ${ApexGhostDuel.spoken(r.gap, name, words)}${tail}` : `${r.name} done.`;
         toast(line); if (isSpirited()) sayQuietLine(line, Number.isFinite(r.gap) ? `Stage done. ${bareGap(r.gap)}${tail}` : 'Stage done.');

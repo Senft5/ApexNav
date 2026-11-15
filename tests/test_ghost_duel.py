@@ -193,6 +193,7 @@ console.log(JSON.stringify({
   middle: finish([95, 115]), early: finish([20, 40]), late: finish([150, 170]), none: finish([0, 0]),
   said: [G.worstSaid({ k: 2, of: 4, a: 0.7, b: 0.9 }), G.worstSaid(null)],
   gap: G.worstOf([{ t_s: 0 }, { t_s: null }, { t_s: 2 }], 0, 2, 0, [[0.5, 1], [1, 2]]),
+  whole: G.worstOf([{ t_s: 0 }, { t_s: 5 }, { t_s: 9 }], 0, 2, 0, [[1, 4]]),
 }));
 """
 
@@ -202,12 +203,13 @@ def test_where_a_stage_was_lost():
     it is on the stage (early on, in the middle, late on, the run to the finish), never a corner number the road doesn't have."""
     r = json.loads(subprocess.run([NODE, "-e", WORST_RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
     assert r["middle"]["gap"] == pytest.approx(5, abs=0.3) and r["middle"]["worst"]["k"] == 3 and r["middle"]["worst"]["of"] == 4
-    assert r["middle"]["worst"]["gap_s"] == pytest.approx(5, abs=0.3) and r["middle"]["said"] == "Most of it in the middle."
-    assert r["early"]["worst"]["k"] == 1 and r["early"]["said"] == "Most of it early on."
-    assert r["late"]["worst"]["k"] == 4 and r["late"]["said"] == "Most of it in the run to the finish."
+    assert r["middle"]["worst"]["gap_s"] == pytest.approx(5, abs=0.3) and r["middle"]["said"] == "Lost the most in the middle."
+    assert r["early"]["worst"]["k"] == 1 and r["early"]["said"] == "Lost the most early on."
+    assert r["late"]["worst"]["k"] == 4 and r["late"]["said"] == "Lost the most in the run to the finish."
     assert r["none"]["worst"] is None and r["none"]["said"] is None                          # level: nothing lost anywhere
-    assert r["said"] == ["Most of it late on.", None]
+    assert r["said"] == ["Lost the most late on.", None]
     assert r["gap"] is None                                                                  # a gap in the clock: no answer
+    assert r["whole"] is None                       # no corner cut: the one stretch is the whole stage, nothing to point at
 
 
 IDEAL_RUNNER = r"""
