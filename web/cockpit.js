@@ -368,7 +368,7 @@
     });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, get ghostRuns() { return drive.ghosts || null; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), horizonFrom: async (coords, tee = false) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; if (tee) t.marks = [ApexRoadMarks.teeMark(t)]; useHorizon(t); return t.id; } };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, get ghostRuns() { return drive.ghosts || null; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), get limitSaid() { return drive.limitSaid ? drive.limitSaid.length : 0; }, horizonFrom: async (coords, tee = false) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; if (tee) t.marks = [ApexRoadMarks.teeMark(t)]; useHorizon(t); return t.id; } };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -2363,10 +2363,11 @@
       // A posted limit that drops ahead (limit_ahead.js): said once per drop, before the sign, when you're over the new one;
       // first through the quiet gate (a limit has a place: 8 s, then the sign is close and the line goes stale).
       if (live && !offRoute && !limitSay && track && track.limitMps && window.ApexLimitAhead && vMps != null) {
-        const drop = ApexLimitAhead.next(track, state.cursorM), said = drive.limitSaid || (drive.limitSaid = new Set());
-        const key = drop && `${track.id}:${Math.round(drop.atM)}`;
-        if (drop && !said.has(key) && ApexLimitAhead.due(drop, state.cursorM, vMps)) {
-          said.add(key);
+        // said by where the sign is, not by the track: the road ahead on a free drive is rebuilt and overlaps itself
+        const drop = ApexLimitAhead.next(track, state.cursorM), said = drive.limitSaid || (drive.limitSaid = []);
+        const di = drop ? Math.max(0, track.dist.findIndex((d) => d >= drop.atM)) : -1, where = drop && { lat: track.lat[di], lon: track.lon[di] };
+        if (drop && !ApexLimitAhead.saidNear(said, where.lat, where.lon) && ApexLimitAhead.due(drop, state.cursorM, vMps)) {
+          said.push(where);
           const text = ApexLimitAhead.text(drop.limitMps, ApexUnits.speed);
           if (text) limitSay = { text, until: performance.now() + 8000 };
         }
@@ -2807,6 +2808,8 @@
         if (track !== t || !c.ctx || !c.corridor) return;
         t.marks = ApexRoadMarks.union(t.marks, ApexRoadMarks.events(c.ctx, c.corridor, t, (la, lo, lats, lons) => Core.nearestIndex(la, lo, lats, lons, -1)));
         if (ApexRoadMarks.noTeeAtStop) t.marks = ApexRoadMarks.noTeeAtStop(t.marks);
+        // the posted limits on the road ahead from the same answer (limit_ahead.js fromCtx), for "Limit 35 ahead." on a free drive
+        if (!t.limitMps && window.ApexLimitAhead && ApexLimitAhead.fromCtx) { const l = ApexLimitAhead.fromCtx(c.ctx, c.corridor, t.dist); if (l) { t.limitMps = l; t.limitSource = 'map'; } }
         const cos = Math.cos(t.lat[0] * Math.PI / 180);
         for (const e of t.marks) if ((free.marksSaid || []).some(k => k.code === e.code && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 40)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
         if (t.marks.length) { rebuildPins(); render(false); }

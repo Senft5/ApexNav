@@ -12283,6 +12283,44 @@ flow('a T-junction where the road ahead ends: a free drive hears it before the e
   check((await tees()).length === 1, 'once: ' + JSON.stringify(await tees()));
 });
 
+flow('a limit that drops on the road ahead: a free drive with no route hears "Limit 35 ahead." from the map, once (limit_ahead.js fromCtx)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  const KY = 110540, lat = (m) => 35.5 + m / KY, LON = -83.9, g = (m) => ({ lat: lat(m), lon: LON });
+  const ids = (a, b) => { const o = []; for (let m = a; m <= b; m += 100) o.push(1000 + m / 100); return o; };
+  // the map's road north: 55 mph to 1.5 km, then 35 mph into a town
+  const elements = [
+    { type: 'way', id: 1, tags: { highway: 'secondary', name: 'Valley Road', maxspeed: '55 mph' }, nodes: ids(0, 1500), geometry: ids(0, 1500).map((_, k) => g(k * 100)) },
+    { type: 'way', id: 2, tags: { highway: 'secondary', name: 'Main Street', maxspeed: '35 mph' }, nodes: ids(1500, 4000), geometry: ids(1500, 4000).map((_, k) => g(1500 + k * 100)) },
+  ];
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexLimitAhead);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const coords = []; for (let m = 0; m <= 2500; m += 10) coords.push([LON, lat(m)]);
+  await page.evaluate((coords) => apexDebug.horizonFrom(coords), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon' && Array.isArray(apexDebug.track.limitMps), null, { timeout: 30000 })
+    .catch(async () => { throw new Error('no limits on the road ahead: ' + JSON.stringify(await page.evaluate(() => apexDebug.lastCtx))); });
+  const mph = await page.evaluate(() => { const t = apexDebug.track, at = (m) => t.limitMps[t.dist.findIndex((d) => d >= m)]; return [at(500), at(2000)].map((v) => v && Math.round(v * 2.2369362921)); });
+  check(mph[0] === 55 && mph[1] === 35, 'the map\'s limits on the road ahead: ' + JSON.stringify(mph));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 25, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const lim = () => page.evaluate(() => window.__said.filter((s) => /^Limit 35 ahead/.test(s)));
+  for (let i = await iAt(1000), end = await iAt(1440); i <= end && !(await lim()).length; i += 2) { await at(i); await page.waitForTimeout(60); }
+  check((await lim()).length === 1, 'said before the sign: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  // the next road ahead starts short of the sign (rebuilt before its end): the same sign is not said again
+  const c2 = []; for (let m = 1100; m <= 3600; m += 10) c2.push([LON, lat(m)]);
+  await page.evaluate((c) => apexDebug.horizonFrom(c), c2);
+  await page.waitForFunction(() => apexDebug.track.dist[apexDebug.track.dist.length - 1] > 2400 && apexDebug.track.lat[0] > 35.509 && Array.isArray(apexDebug.track.limitMps), null, { timeout: 30000 });
+  for (let i = 0, end = await iAt(380); i <= end; i += 1) { await at(i); await page.waitForTimeout(60); }
+  // (the drop is queued at most once: a second queue would be a second sign where there is one)
+  check((await lim()).length === 1 && await page.evaluate(() => apexDebug.limitSaid) === 1, 'not again on the next road ahead: ' + JSON.stringify([await lim(), await page.evaluate(() => apexDebug.limitSaid)]));
+});
+
 flow('road marks on a route set during a drive: the map is asked for this route alone (road_marks.js, attachMarksSoon)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const KY = 110540, lat = (m) => 35.5 + m / KY, LON = -83.9, kx = 111320 * Math.cos(35.5 * Math.PI / 180);
