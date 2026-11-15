@@ -268,7 +268,8 @@ COAST_G = 0.05               # |a_lon| below this: neither braking nor driving, 
 THROTTLE_G = 0.05            # a_lon above this after the slowest point counts as back on the throttle
 TRAIL_LAT_G = 0.20           # braking while this much lateral load is on counts as trail braking
 BRAKE_GAP = 20               # braking that ended more than 100 m before turn-in belongs to something else
-SOLO_APEX_DIP_MPS = 0.3      # early-apex note only when the apex itself is this much faster than the slowest point
+SOLO_APEX_DIP_MPS = 1.0      # early-apex note only when the apex itself is this much faster than the slowest point (under is GPS noise)
+GPS_FIX_S = 1.0              # ...and the slowest point more than one GPS fix of travel before it (it sits on a fix)
 THROTTLE_LOOKAHEAD = 20      # search 100 m past the corner exit for the throttle point
 TIP_SPEED_MPS = 0.9          # ~2 mph at the slowest point is a real difference, less is GPS noise
 TIP_BRAKE_M = 10.0           # two bins of brake or throttle point
@@ -318,7 +319,37 @@ def corner_phases(speed_mps, lon_g, lat_g, start: int, end: int, apex: int, apex
         late = max(late, -float(lon[k]))
     return {**m, "brake_m": None if r0 is None else (apex - r0) * 5.0, "trail_m": trail * 5.0, "coast_m": coast * 5.0,
             "throttle_m": None if k_thr is None else (k_thr - apex) * 5.0, "late_brake_g": late,
-            "apex_mps_driven": float(v[apex])}
+            "apex_mps_driven": float(v[apex]), "imu_slow_m": _imu_slow_m(v, lon, lat, start, end)}
+
+
+IMU_SLOW_LEAD = 10           # bins before the corner the IMU's slowest point is looked for...
+IMU_SLOW_TAIL = 4            # ...and after it
+
+
+def _imu_slow_m(v, lon, lat, start: int, end: int):
+    """The slowest point against the tightest, from the motion sensors alone (Nate's drives, 2026-11-15): the slowest is
+    where smoothed a_lon crosses from slowing to speeding up (nearest the tightest), the tightest where a_lat / v^2 peaks.
+    GPS places fixes up to a second late, not always as late for speed as for position, so "early" needs this to agree."""
+    n = len(v)
+
+    def sm(a, i):
+        return (float(a[max(0, i - 1)]) + float(a[i]) + float(a[min(n - 1, i + 1)])) / 3.0
+
+    s = sum(float(lat[k]) for k in range(start, end + 1) if math.isfinite(float(lat[k])))
+    sg = 1.0 if s >= 0 else -1.0
+    kp, best = -1, -math.inf
+    for k in range(start, end + 1):
+        x = sg * sm(lat, k) * G / max(float(v[k]), 3.0) ** 2 if math.isfinite(float(v[k])) else math.nan
+        if math.isfinite(x) and x > best:
+            best, kp = x, k
+    if kp < 0:
+        return None
+    zc = -1
+    for q in range(max(1, start - IMU_SLOW_LEAD), min(n - 1, end + IMU_SLOW_TAIL)):
+        a, b = sm(lon, q), sm(lon, q + 1)
+        if a < 0 and b >= 0 and (zc < 0 or abs(q - kp) < abs(zc - kp)):
+            zc = q
+    return None if zc < 0 else (zc - kp) * 5.0
 
 
 def _known(drive: dict, start: int, end: int, apex: int) -> bool:
@@ -409,7 +440,9 @@ def _tip(m: dict, ref: dict | None):
         return {"kind": "brake_after_apex", "value": m["late_brake_g"], "vs_best": False}
     if m["brake_m"] is not None and m["coast_m"] >= SOLO_COAST_M:     # dead time between brake and throttle
         return {"kind": "coast", "value": m["coast_m"], "vs_best": False}
-    if m["min_offset_m"] <= SOLO_EARLY_APEX_M and m["apex_mps_driven"] - m["min_mps"] >= SOLO_APEX_DIP_MPS:
+    # past what the phone can tell: more than a GPS fix early, a real dip, and the motion sensors agreeing (_imu_slow_m)
+    if (m["min_offset_m"] <= min(SOLO_EARLY_APEX_M, -m["min_mps"] * GPS_FIX_S) and m["apex_mps_driven"] - m["min_mps"] >= SOLO_APEX_DIP_MPS
+            and m.get("imu_slow_m") is not None and m["imu_slow_m"] <= SOLO_EARLY_APEX_M):
         return {"kind": "early_apex", "value": -m["min_offset_m"], "vs_best": False}
     return None
 

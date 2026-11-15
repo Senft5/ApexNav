@@ -392,3 +392,50 @@ def test_coach_says_turn_in_later_when_the_quicker_pass_did():
     assert c["tip"] == {"kind": "turn_in_later", "value": pytest.approx(25.0), "vs_best": True}
     same = da.coach(_ramped(78, 0.96), [late])["corners"][0]      # the same turn-in: the time is elsewhere, no turn-in tip
     assert same["tip"] is None or same["tip"]["kind"] != "turn_in_later"
+
+
+def _early_corner(v_min_at, lon_cross_at, dip=4.0, n=120, s=50, e=70, a=60):
+    """A left corner at 20 m/s whose GPS speed bottoms out at bin v_min_at, and whose a_lon (the motion sensors) goes from
+    slowing to speeding up at bin lon_cross_at; the load sideways peaks at the apex."""
+    v = np.full(n, 20.0)
+    for i in range(n):
+        v[i] = 20.0 - dip * max(0.0, 1.0 - abs(i - v_min_at) / 12.0)
+    lon = np.array([-0.15 if i < lon_cross_at else 0.15 for i in range(n)], dtype=float)
+    lat = np.array([0.5 * max(0.0, 1.0 - abs(i - a) / 10.0) for i in range(n)], dtype=float)
+    return v, lon, lat, s, e, a
+
+
+def test_early_apex_is_told_only_when_gps_and_the_motion_sensors_agree():
+    """Nate's drives (2026-11-15, "i don't do that?"): 37 early-apex notes on 11 drives, half from a dip under 2 mph that GPS
+    cannot tell and more where the motion sensors put the slowest point at the apex. Now: a real dip, more than one GPS fix
+    early, and the sensors saying so too. Not softer: the same corner with both agreeing is still told."""
+    v, lon, lat, s, e, a = _early_corner(56, 56)                     # slowest 20 m early, the sensors agree
+    m = da.corner_phases(v, lon, lat, s, e, a, 25.0)
+    assert m["min_offset_m"] == -20.0 and m["imu_slow_m"] == -20.0
+    assert da._tip(m, None)["kind"] == "early_apex"
+    v, lon, lat, s, e, a = _early_corner(56, 60)                     # GPS says early, the sensors say at the apex
+    m = da.corner_phases(v, lon, lat, s, e, a, 25.0)
+    assert m["imu_slow_m"] == 0.0 and da._tip(m, None) is None
+    v, lon, lat, s, e, a = _early_corner(56, 56, dip=0.4)            # a dip under 1 m/s is GPS noise, not slowing
+    assert da._tip(da.corner_phases(v, lon, lat, s, e, a, 25.0), None) is None
+    v, lon, lat, s, e, a = _early_corner(57, 57)                     # 15 m early is inside one GPS fix of travel (16 m at 16 m/s)
+    assert da._tip(da.corner_phases(v, lon, lat, s, e, a, 25.0), None) is None
+
+
+def test_the_motion_sensors_slowest_point_is_the_same_in_the_app():
+    """web/apex_core.js imuSlowM is the port of _imu_slow_m: the same metres on the same corner, unknown g included."""
+    import json, shutil, subprocess
+    from pathlib import Path
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not installed")
+    cases = []
+    for vm, lc in ((56, 56), (56, 60), (60, 52), (50, 64)):
+        v, lon, lat, s, e, a = _early_corner(vm, lc)
+        lon = [None if i in (40, 41) else float(x) for i, x in enumerate(lon)]   # unknown g before the corner
+        cases.append({"v": v.tolist(), "lon": lon, "lat": lat.tolist(), "s": s, "e": e})
+    js = "const C = require(process.argv[1]); const k = JSON.parse(process.argv[2]); console.log(JSON.stringify(k.map((c) => C.imuSlowM(c.v, c.lon, c.lat, c.s, c.e))))"
+    got = json.loads(subprocess.run([node, "-e", js, str(Path(__file__).resolve().parents[1] / "web" / "apex_core.js"), json.dumps(cases)],
+                                    capture_output=True, text=True, check=True).stdout)
+    want = [da._imu_slow_m(np.asarray(c["v"]), np.asarray([np.nan if x is None else x for x in c["lon"]]), np.asarray(c["lat"]), c["s"], c["e"]) for c in cases]
+    assert got == want and want[:2] == [-20.0, 0.0], (got, want)
