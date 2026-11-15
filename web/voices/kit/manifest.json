@@ -10396,6 +10396,14 @@
    "heard": 1.0,
    "voice": "bm_fable",
    "pace": 10.42
+  },
+  "mark:narrow": {
+   "file": "mark_narrow.m4a",
+   "dur": 0.818,
+   "text": "Narrow road",
+   "heard": 1.0,
+   "voice": "bm_fable",
+   "pace": null
   }
  }
 }

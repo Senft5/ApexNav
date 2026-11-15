@@ -130,7 +130,8 @@
   const MOD_KEY = { tightens: 'tightens', opens: 'opens', long: 'long', 'off-camber': 'off-camber', 'over crest': 'over-crest', banked: 'banked', short: 'short' };
   const MARK_KEY = { 'Stop sign': 'stop', 'Railway crossing': 'level_crossing', 'One-lane bridge': 'one_lane_bridge', 'Speed bump': 'calming',
     'Speed bumps': 'calming_many', 'Deer crossing': 'deer', 'Horse crossing': 'horse', 'Cattle crossing': 'cattle', 'Animal crossing': 'animal',
-    'Horse-drawn buggies': 'buggy', 'Covered bridge': 'covered_bridge', 'Water crossing': 'ford', 'Unpaved road': 'unpaved', 'Rough road': 'rough', 'T-junction': 'tee' };
+    'Horse-drawn buggies': 'buggy', 'Covered bridge': 'covered_bridge', 'Water crossing': 'ford', 'Unpaved road': 'unpaved', 'Rough road': 'rough',
+    'Narrow road': 'narrow', 'T-junction': 'tee' };
   /** The clip for a hazard's own call ("Crest", "Stop sign"), as web/voice.js codriverTokens names it, or null. */
   function hazardToken(e) {
     if (!e || e.type === 'corner') return null;

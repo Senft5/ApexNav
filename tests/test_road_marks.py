@@ -83,10 +83,10 @@ def test_nothing_invented_or_off_the_road(out):
 
 
 def test_each_mark_has_its_own_glyph_on_the_strip():
-    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'ANIMAL', 'BUGGY', 'COVERED', 'GRAVEL', 'ROUGH', 'FORD', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
+    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'ANIMAL', 'BUGGY', 'COVERED', 'GRAVEL', 'ROUGH', 'FORD', 'NARROW', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
     svgs = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
     assert "<polygon" in svgs[0] and "M58 32 L80 54" in svgs[1] and "M36 30" in svgs[2] and "Q50 34" in svgs[3]
-    assert len(set(svgs[:10])) == 10 and all(s.count("#f70") == 0 for s in svgs[10:])   # an unknown code: the bare hazard straight
+    assert len(set(svgs[:11])) == 11 and all(s.count("#f70") == 0 for s in svgs[11:])   # an unknown code: the bare hazard straight
 
 
 def test_rural_signs_deer_buggies_and_a_covered_bridge(out):
@@ -147,3 +147,38 @@ console.log(JSON.stringify({ tee, none: M.teeMark({ dist: [0] }),
     assert out["atStop"] == ["STOP"] and out["farStop"] == ["STOP", "TJUNC"]
     js = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
     assert "if (h.tee && window.ApexRoadMarks && ApexRoadMarks.teeMark)" in js and "e.kind === 'tee' ? 4" in js
+
+
+NARROW = r"""
+const R = process.argv[1];
+const O = require(R + '/web/route_ctx/osm_overpass.js'), M = require(R + '/web/road_marks.js'), Core = require(R + '/web/apex_core.js');
+const n = 121, lat0 = 39, lon0 = -84.5, dLon = 25 / (111320 * Math.cos(39 * Math.PI / 180));   // 3 km east-west, 25 m samples
+const c = { id: 's', lat: Float64Array.from({ length: n }, () => lat0), lon: Float64Array.from({ length: n }, (_, i) => lon0 + i * dLon), distM: Float64Array.from({ length: n }, (_, i) => i * 25) };
+const at = (i) => [lat0, lon0 + i * dLon];
+const way = (id, tags, a, b) => ({ type: 'way', id, tags, nodes: [id * 10, id * 10 + 1], geometry: [at(a), at(b)].map(([la, lo]) => ({ lat: la, lon: lo })) });
+const run = (ways) => {
+  const ctx = O.aggregate(c, O.parse({ elements: ways }), new Uint8Array(n).fill(1));
+  const t = { lat: Array.from(c.lat), lon: Array.from(c.lon), dist: Array.from(c.distM) };
+  return { spans: ctx.spans.filter((s) => s.kind === 'single_track').map((s) => [s.fromM, s.toM, s.label || null]),
+    ev: M.events(ctx, c, t, (a, b, la, lo) => Core.nearestIndex(a, b, la, lo, -1)).map((e) => [e.code, e.call, e.dist_m]) };
+};
+console.log(JSON.stringify({
+  // two lanes, then a single track 500-1000 m, a mapped passing place (two lanes, 100 m), one again to 1600 m, two lanes
+  road: run([way(1, { highway: 'tertiary' }, -1, 20), way(2, { highway: 'tertiary', lanes: '1', name: 'Hollow Rd' }, 20, 40),
+    way(3, { highway: 'tertiary', lanes: '2' }, 40, 44), way(4, { highway: 'tertiary', lanes: '1' }, 44, 64), way(5, { highway: 'tertiary', lanes: '2' }, 64, 121)]),
+  // a one-way lane, a one-lane bridge (its own call), a driveway and a 100 m pinch are not a narrow road
+  not: run([way(1, { highway: 'secondary', lanes: '1', oneway: 'yes' }, -1, 30), way(2, { highway: 'secondary', lanes: '1', bridge: 'yes' }, 30, 40),
+    way(3, { highway: 'service', lanes: '1' }, 40, 70), way(4, { highway: 'secondary' }, 70, 80), way(5, { highway: 'secondary', lanes: '1' }, 80, 84), way(6, { highway: 'secondary' }, 84, 121)]),
+  // the route starts on it: the car is already on the narrow road
+  start: run([way(1, { highway: 'unclassified', lanes: '1' }, -1, 40), way(2, { highway: 'unclassified' }, 40, 121)]),
+  untagged: run([way(1, { highway: 'tertiary' }, -1, 121)]) }));
+"""
+
+
+def test_a_narrow_road_where_it_narrows_to_one_lane():
+    """A two-way road the map has as one lane is a single track: "Narrow road" where it starts, once for the stretch."""
+    out = json.loads(subprocess.run([NODE, "-e", NARROW, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["road"]["ev"] == [["NARROW", "Narrow road", 525]]          # its first sample matched to it; the passing place is no second call
+    assert out["road"]["spans"][0][2] == "Hollow Rd" and len(out["road"]["spans"]) == 2
+    assert [e[0] for e in out["not"]["ev"]] == ["BRIDGE"] and out["not"]["spans"] == [[2025, 2100, None]]   # the pinch: a span, too short to call
+    assert out["start"]["ev"] == [] and out["untagged"] == {"spans": [], "ev": []}

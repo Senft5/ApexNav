@@ -10238,6 +10238,14 @@
    "heard": 1.0,
    "voice": "bm_lewis",
    "pace": 11.68
+  },
+  "mark:narrow": {
+   "file": "mark_narrow.m4a",
+   "dur": 0.731,
+   "text": "Narrow road",
+   "heard": 1.0,
+   "voice": "bm_lewis",
+   "pace": null
   }
  }
 }

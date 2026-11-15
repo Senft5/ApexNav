@@ -11638,6 +11638,14 @@
    "heard": 1.0,
    "voice": "af_bella",
    "pace": 12.78
+  },
+  "mark:narrow": {
+   "file": "mark_narrow.m4a",
+   "dur": 0.61,
+   "text": "Narrow road",
+   "heard": 1.0,
+   "voice": "af_bella",
+   "pace": null
   }
  }
 }

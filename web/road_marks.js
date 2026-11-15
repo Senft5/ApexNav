@@ -1,7 +1,8 @@
 // Road marks the co-driver calls on a planned route (the route context's OpenStreetMap points and spans, route_ctx/
 // osm_overpass.js): a stop sign that applies to the route, a railway level crossing, a one-lane bridge on a two-way road,
 // speed bumps (one call for a run of them), a mapped deer (or other animal) crossing, horse-drawn buggies, a
-// covered bridge, a ford (the road through water), and where the road turns unpaved or rough. On a back road picked for its corners these are what catch a driver out:
+// covered bridge, a ford (the road through water), where the road turns unpaved or rough, and where it narrows to a single
+// track (room for one car). On a back road picked for its corners these are what catch a driver out:
 // a stop sign over a crest, a hump at the end of a fast straight. Each becomes a note event on the track (type 'mark'),
 // read with the pace notes when they are on and drawn on the strip and the map; a stop sign's call distance includes
 // braking to a stop (cockpit.js apexMpsOf). Only what the map has: a mark the map lacks is not invented, and with no route
@@ -20,12 +21,13 @@
     ford: { code: 'FORD', call: 'Water crossing' },
     unpaved: { code: 'GRAVEL', call: 'Unpaved road' },
     rough: { code: 'ROUGH', call: 'Rough road' },
+    single_track: { code: 'NARROW', call: 'Narrow road' },
     tee: { code: 'TJUNC', call: 'T-junction' },   // the road ahead ends (free driving: horizon.js tee), not from Overpass
   };
   // a mapped animal-crossing sign names its animal (osm_overpass.js hazardOf label); deer is the one on these roads
   const animalCall = (label) => { const a = String(label || 'animals').toLowerCase(); return a === 'deer' ? 'Deer crossing' : /^(horse|horses)$/.test(a) ? 'Horse crossing' : /^(cow|cows|cattle)$/.test(a) ? 'Cattle crossing' : 'Animal crossing'; };
   const BUMPS = new Set(['bump', 'hump', 'table', 'cushion', 'yes', 'dip', 'rumble_strip']);   // not chicanes, islands or chokers
-  const RUN_M = 200, SAME_M = 40, SNAP_M = 30, UNPAVED_MIN_M = 50, ROUGH_MIN_M = 100, SURFACE_GAP_M = 300;
+  const RUN_M = 200, SAME_M = 40, SNAP_M = 30, UNPAVED_MIN_M = 50, ROUGH_MIN_M = 100, SURFACE_GAP_M = 300, NARROW_MIN_M = 200;
 
   /** Where along a corridor ({lat, lon, distM}) metre m lies, as [lat, lon], or null. */
   function placeAt(c, m) {
@@ -61,7 +63,7 @@
       const m = { kind: r.kind, atM: r.atM, endM: r.atM, n: 1, ...(r.call ? { call: r.call } : {}) };
       out.push(m); last[r.kind] = m;
     }
-    out.push(...surfaceRuns(ctx, corridor));
+    out.push(...surfaceRuns(ctx, corridor), ...narrowRuns(ctx, corridor));
     out.sort((a, b) => a.atM - b.atM);
     return out.map(({ kind, atM, endM, n, call }) => ({ kind, atM, endM, n, ...(call ? { call } : {}) }));
   }
@@ -93,6 +95,25 @@
       close();
     }
     return out.filter((m) => m.atM > d[0]);
+  }
+
+  /**
+   * Where the road narrows to a single track, as marks { kind: 'single_track', atM, endM, n: 1 } from the context's
+   * 'single_track' spans (osm_overpass.js: a two-way road mapped with one lane). Stretches less than 300 m apart are one
+   * (a passing place mapped as two lanes is no new road); one counts from 200 m (a pinch point is not a narrow road). Not at
+   * the very start: the car is already on it. Untagged roads are unknown, never narrow.
+   */
+  function narrowRuns(ctx, c) {
+    const spans = (Array.isArray(ctx.spans) ? ctx.spans : []).filter((s) => s && s.kind === 'single_track' && finite(s.fromM) && finite(s.toM) && s.toM >= s.fromM)
+      .sort((a, b) => a.fromM - b.fromM);
+    const runs = [];
+    for (const s of spans) {
+      const last = runs[runs.length - 1];
+      if (last && s.fromM - last.endM < SURFACE_GAP_M) last.endM = Math.max(last.endM, s.toM);
+      else runs.push({ kind: 'single_track', atM: s.fromM, endM: s.toM, n: 1 });
+    }
+    const start = c && c.distM && c.distM.length ? c.distM[0] : 0;
+    return runs.filter((r) => r.endM - r.atM >= NARROW_MIN_M && r.atM > start);
   }
 
   /**
