@@ -118,7 +118,10 @@ V.mount(rootNoG, { ...scoredDrive, g_known: d.lat.map(() => 0) }, { Core, C, MPH
 const ggNone = rootNoG.children[1].children[1].children.length;
 const rootGap = mkEl('div');                                       // elevation unknown for the first 50 samples (no altitude yet)
 V.mount(rootGap, { ...scoredDrive, elev: scoredDrive.elev.map((v, i) => (i < 50 ? NaN : v)) }, { Core, C, MPH: Core.MPS_TO_MPH });
-const gapLanes = rootGap.children[1].children[1].children[1].innerHTML;
+const gapRight = rootGap.children[1].children[1], gapPick = gapRight.children[3];
+const pickNames = gapPick.children.map((b) => b.innerHTML), lanesSpeed = gapRight.children[1].innerHTML;
+gapPick.children.find((b) => b.dataset.lane === 'elev').onclick();
+const gapLanes = gapRight.children[1].innerHTML, pickOn = gapRight.children[3].children.filter((b) => b.className === 'on').map((b) => b.innerHTML);
 
 // Repeatability rows: the big number is labelled once below, the slowest point and turn-in stay in the spoken label.
 const sp = (b, extra) => ({ apex: 20, passes: 6, spread: { passes: 6, brake_passes: 6, brake_sd_m: b, min_sd_m: 4, min_passes: 6, turn_sd_m: 3, turn_passes: 6, speed_sd_mps: 1, speed_passes: 6, ...extra } });
@@ -133,7 +136,7 @@ const rootCar = mkEl('div');
 V.mount(rootCar, { ...scoredDrive, car: { label: '<b>Miata</b>', mu: 0.52 } }, { Core, C, MPH: Core.MPS_TO_MPH });
 const carHead = rootCar.children[0].innerHTML;
 console.log(JSON.stringify({ notTopCard, carHead, repIntro, reps, full, bare, headHtml, unscoredHeadHtml, hiddenBeforeScrub, hiddenAfterKeyScrub, hiddenBeforeZoom, hiddenAfterZoom,
-  coachHead, timeHtml, cardHtml, refSlower, refLevel, refNone, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, ggLede, ggMore, ggOrder, ggRole, ggHas, ggCapHidden, barSay, barHint, feelRead, gapLanes }));
+  coachHead, timeHtml, cardHtml, refSlower, refLevel, refNone, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, ggLede, ggMore, ggOrder, ggRole, ggHas, ggCapHidden, pickNames, lanesSpeed, pickOn, barSay, barHint, feelRead, gapLanes }));
 """
 
 
@@ -197,7 +200,7 @@ def test_grip_circle_from_measured_g_only(r):
     assert r["ggCaption"].startswith("Grip circle. ") and "Outline: braking " in r["ggCaption"] and " · left " in r["ggCaption"] and " · throttle " in r["ggCaption"]
     assert r["ggCapHidden"] is True, "no line under the circle until a corner is picked"
     assert r["ggCorner"].startswith("Corner 1: ") and r["ggCorner"].endswith("% of the outline on average, from 100 m before turn-in to the exit") or r["ggCorner"].startswith("Corner 1: --"), r["ggCorner"]
-    assert r["ggNone"] == 3, "no measured g: no grip circle"
+    assert r["ggNone"] == 4, "no measured g: no grip circle (the zoom keys, the chart, its readout and the chart picker)"
 
 
 def test_grip_circle_explains_itself(r):
@@ -279,6 +282,14 @@ console.log(JSON.stringify({
     for v in r.values():
         assert v is None or not any(w in v.lower() for w in ("faster", "quicker", "speed up", "mph", "apex"))
         assert v is None or len(v) <= 140, v   # two or three lines on a phone, not a paragraph
+
+
+def test_one_chart_at_a_time(r):
+    """Drive page round 1 (Nate 2026-11-15): one chart, chosen from a row of names, in place of five stacked lanes."""
+    assert r["pickNames"] == ["Speed", "Turning", "Pedals", "Height"], r["pickNames"]
+    sp = r["lanesSpeed"]
+    assert ">Speed<" in sp and "Turning" not in sp and "Elevation" not in sp
+    assert r["pickOn"] == ["Height"]
 
 
 def test_unknown_elevation_is_a_gap_not_nan(r):

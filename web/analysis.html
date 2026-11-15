@@ -192,6 +192,8 @@
     .dv-corner.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
     .dv-corner b { font-family: var(--font-num); color: var(--signal); } .dv-call { font-weight: 700; font-size: 14px; } .dv-v { font-family: var(--font-num); font-size: 13px; }
     .dv-d { grid-column: 2 / 4; font-size: 11px; color: var(--panel-dim); }
+    .dv-res { font-weight: 700; font-size: 15px; } .dv-res.miss { color: var(--signal); }
+    .dv-lvl { font-family: var(--font-num); font-size: 18px; font-weight: 700; } #tab-drive .dv-d .dv-call { font-weight: 400; font-size: 13px; } .dv-d { font-size: 13px; } .dv-d .dv-v { font-size: inherit; }
     .dv-tip { grid-column: 2 / 4; font-size: 12px; line-height: 1.35; }
     /* the corner overlay: one corner, this pass against your best pass, under the row tapped */
     .dv-ovl { grid-column: 1 / -1; display: block; padding: 10px 12px 12px; border-radius: 10px; background: var(--face, var(--panel)); }
@@ -217,6 +219,7 @@
     .dv-head .dv-bar-say { margin: 0; font-size: 13px; }
     /* the page's three parts: a small label over each, so How you drove, The road and Yours read as three */
     #tab-drive > .dv-part { margin: 18px 0 0; font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--panel-dim); }
+    .dv-lanepick { max-width: 100%; } .dv-lanepick > button { padding: 0 4px; font-size: 14px; }
     .dv-tagnew { display: inline-flex; align-items: center; gap: 8px; } .dv-tagnew[hidden] { display: none; }
     .dv-gg-pic { position: relative; width: 100%; max-width: 220px; aspect-ratio: 1; } .dv-gg-pic svg { display: block; width: 100%; height: 100%; }
     .dv-gg-hot { position: absolute; inset: 0; pointer-events: none; }
