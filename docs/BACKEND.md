@@ -145,6 +145,10 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
   `GET /api/friends/:id/profile` carries `dna: { mine, theirs }` when that friend shares Scores with you (their friend
   grant's `share_scores`), else `dna: null`. `GET /api/crews/:id/page` carries `dna: [{ handle, mine, skills }]`: you, and each
   member who shares Scores with the crew, never across a block. In the export as `driving_dna`; cascades with the account.
+- Direct messages (migration 0065, `src/messages.ts`): `GET /api/messages` (your conversations, newest first, with unread
+  counts), `GET /api/me/messages/unread`, `GET`/`POST /api/messages/:handle` (read marks them seen; send only to an accepted
+  friend, 1000 characters, 60 an hour), `DELETE /api/messages/m/:id` (unsend, yours only). Blocked either way answers 404;
+  report kind `dm`; push kind `messages`. Kept a year (sweep); in the export as what you sent; cascades with either account.
 
 ## 7. Auth: Google sign-in, no library
 `/api/auth/google/start` → Google (authorization-code flow, PKCE S256, `state`, `nonce`) → `/api/auth/google/callback`: exchanges the code

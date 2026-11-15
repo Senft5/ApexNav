@@ -8,6 +8,7 @@ import { FEEDBACK_SWEEP } from "./feedback";
 import { KUDOS_SWEEP } from "./kudos";
 import { STATS_SWEEP } from "./stats";
 import { CHAT_SWEEP } from "./crew_page";
+import { DM_SWEEP } from "./messages";
 import { PRESENCE_SWEEP } from "./presence";
 import { BUILD_CHAT_SWEEP } from "./builds";
 import { TA_SWEEP } from "./time_attack";
@@ -38,6 +39,7 @@ export const SWEEPS: Record<string, string> = {
   ...TA_SWEEP,
   ...TA_FIXED_SWEEP,
   duels: DUELS_SWEEP,
+  direct_messages: DM_SWEEP,
 };
 
 export async function sweepExpired(env: Env): Promise<Record<string, number>> {
