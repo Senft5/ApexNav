@@ -4408,6 +4408,14 @@ flow('drive ended: the card and the Log give the same score and time for the rec
   // RA-3 (panel round 2): one set of numbers: the card's line and the drive page's are the same words (distance, time,
   // every corner), and the Log's row says the same distance and corners (recording 7: 3 corners on the card, 2 on the row)
   check(/ min/.test(card.meta) && !/ h /.test(card.meta) && /corner/.test(card.meta) && log.meta === card.meta, `the card's line is the drive page's: ${card.meta} against ${log.meta}`);
+  // drive page round 1 (Nate 2026-11-15): each part of the Score is out of 100 and a tap says what it means; a second tap puts the hint back
+  await page.click('.dv-head .bar[data-k="pace"]');
+  const say = await page.textContent('.dv-head .dv-bar-say');
+  await page.click('.dv-head .bar[data-k="pace"]');
+  const back = await page.textContent('.dv-head .dv-bar-say');
+  check(/^Pace \d+ of 100: How close to the road’s grip you drove the corners\.$/.test(say) && /^Each part out of 100/.test(back), 'a part of the Score says what it means: ' + JSON.stringify([say, back]));
+  await page.click('.dv-head .dv-gg');
+  check(/^Grip circle: /.test(await page.textContent('.dv-head .dv-bar-say')), 'the grip circle says what it is on a tap');
   await page.goto(`${base}/analysis.html`);
   await page.waitForSelector(`tr[data-drive="${card.id}"] .sub`, { timeout: 15000 });
   const row = await page.evaluate((id) => document.querySelector(`tr[data-drive="${id}"] .sub`).textContent, card.id);
@@ -6582,6 +6590,12 @@ flow('drive tags: tag a drive in the Log, filter by it, the note stays on the ph
     await ApexRecording.store(rec('t2', 'Dry one'));
   });
   await page.goto(base + '/analysis.html?drive=t1');
+  // the tags fold behind + Tag until one is used (drive page round 1): none chosen, so no chips out yet
+  await page.waitForSelector('#dvRoot .dv-head', { timeout: 15000 });   // drawn in the same turn as the tags
+  const fold = await page.evaluate(() => ({ chips: document.querySelectorAll('#dvTags button').length, tagsHidden: document.getElementById('dvTags').hidden,
+    more: document.getElementById('dvTagMore').hidden, open: !document.getElementById('dvTagOpen').hidden }));
+  check(fold.chips === 0 && fold.tagsHidden && fold.more && fold.open, 'no tag chips out until + Tag: ' + JSON.stringify(fold));
+  await page.click('#dvTagOpen');
   await page.waitForSelector('#dvTags button');
   await page.click('#dvTags button:has-text("Wet")');
   await page.fill('#dvTagNew', 'E46');
@@ -10869,6 +10883,20 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
     return { first: score && score.compareDocumentPosition(document.getElementById('dvTagsPanel')) & Node.DOCUMENT_POSITION_FOLLOWING, replay: document.getElementById('dvReplay').className,
       tags: tags && tags.className, wide: [...document.querySelectorAll('#tab-drive *')].filter((e) => e.offsetParent && e.getBoundingClientRect().right > innerWidth + 1).map((e) => e.className).slice(0, 5), ids: ids.length }; });
   check(dv.first && /solid/.test(dv.replay) && /stamps/.test(dv.tags) && !dv.wide.length, 'Drive detail: ' + JSON.stringify(dv));
+  // drive page round 1 (Nate 2026-11-15): three parts in order, the grip circle beside the Score, a part of the Score says what it means
+  const parts = await page.evaluate(() => {
+    const top = (q) => { const e = document.querySelector(q); return e && e.offsetParent ? Math.round(e.getBoundingClientRect().top + scrollY) : null; };
+    const s = document.querySelector('.dv-score').getBoundingClientRect(), g = document.querySelector('.dv-head > .dv-gg');
+    return { drove: top('#dvPartDrove'), score: top('.dv-score'), road: top('#dvPartRoad'), map: top('#dvRoadRoot .dv-map'), yours: top('#dvPartYours'), tags: top('#dvTagsPanel'),
+      beside: g ? Math.abs(g.getBoundingClientRect().top - s.top) < 140 && g.getBoundingClientRect().left > s.left : false, para: !!document.querySelector('.dv-gg-lede, .dv-gg-more') };
+  });
+  check(parts.drove < parts.score && parts.score < parts.road && parts.road < parts.map && parts.map < parts.yours && parts.yours < parts.tags && parts.beside && !parts.para,
+    'three parts, the circle beside the Score: ' + JSON.stringify(parts));
+  if (await page.$('.dv-head .bar[data-k="pace"]')) {                  // a scored drive: its four parts
+    await page.click('.dv-head .bar[data-k="pace"]');
+    const say = await page.textContent('.dv-head .dv-bar-say');
+    check(/^Pace \d+ of 100: How close to the road’s grip you drove the corners\.$/.test(say), 'a part of the Score says what it means: ' + say);
+  } else console.log('     (unscored drive: ' + await page.textContent('.dv-score') + ')');
   // People signed out: the same Friends | Crews switch, each side what it gets you in three glyphs, then sign-in (the owner, 2026-10-30)
   await page.goto(base + '/index.html?view=people');
   await page.waitForSelector('#accountBody .join-gets');

@@ -104,12 +104,13 @@ vFeel.move(5);
 const feelRead = rootFeel.children[1].children[1].children[2].innerHTML;
 
 // Grip circle: shown with measured g, absent without it; scrubbing into a corner names its grip use.
-const ggCol = rootScored.children[1].children[1].children[3];
-const ggCap = ggCol ? ggCol.children.find((c) => c.className === 'note') : null;
-const ggCaption = ggCap ? ggCap.textContent : null;
-const ggLede = ggCol ? (ggCol.children.find((c) => c.className === 'note dv-gg-lede') || {}).textContent : null;
-const ggMore = ggCol ? (ggCol.children.find((c) => c.className === 'quiet dv-gg-more') || {}).innerHTML : null;
-const ggOrder = ggCol ? ggCol.children.map((c) => c.tag) : null;
+const ggHead = rootScored.children[0], ggBox = ggHead.children.find((c) => c.className === 'dv-gg');
+const ggCap = ggHead.children.find((c) => c.className === 'note dv-gg-cap') || null;
+const ggCaption = ggBox ? ggBox['aria-label'] : null, ggCapHidden = ggCap ? ggCap.hidden : null;
+const ggLede = ggBox ? ggBox.title : null, ggRole = ggBox ? ggBox.role : null, ggHas = ggHead.classList.contains('has-gg');
+const ggMore = ggBox ? ggBox.children.some((c) => c.tag === 'details' || c.tag === 'p') : null;
+const ggOrder = ggBox ? ggBox.children.map((c) => c.tag) : null;
+const barSay = V.barMeaning('smoothness', 'Smooth 72'), barHint = V.BAR_HINT;
 lanesEl.dispatch('keydown', { key: 'Home' }); for (let q = 0; q < 4; q++) lanesEl.dispatch('keydown', { key: 'ArrowRight', preventDefault() {} });
 const ggCorner = ggCap ? ggCap.textContent : null;
 const rootNoG = mkEl('div');
@@ -132,7 +133,7 @@ const rootCar = mkEl('div');
 V.mount(rootCar, { ...scoredDrive, car: { label: '<b>Miata</b>', mu: 0.52 } }, { Core, C, MPH: Core.MPS_TO_MPH });
 const carHead = rootCar.children[0].innerHTML;
 console.log(JSON.stringify({ notTopCard, carHead, repIntro, reps, full, bare, headHtml, unscoredHeadHtml, hiddenBeforeScrub, hiddenAfterKeyScrub, hiddenBeforeZoom, hiddenAfterZoom,
-  coachHead, timeHtml, cardHtml, refSlower, refLevel, refNone, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, ggLede, ggMore, ggOrder, feelRead, gapLanes }));
+  coachHead, timeHtml, cardHtml, refSlower, refLevel, refNone, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, ggLede, ggMore, ggOrder, ggRole, ggHas, ggCapHidden, barSay, barHint, feelRead, gapLanes }));
 """
 
 
@@ -193,23 +194,28 @@ def test_coast_tip_wording_follows_the_tip_not_the_best_pass(r):
 
 
 def test_grip_circle_from_measured_g_only(r):
-    assert r["ggCaption"].startswith("Outline: braking ") and " · left " in r["ggCaption"] and " · throttle " in r["ggCaption"]
+    assert r["ggCaption"].startswith("Grip circle. ") and "Outline: braking " in r["ggCaption"] and " · left " in r["ggCaption"] and " · throttle " in r["ggCaption"]
+    assert r["ggCapHidden"] is True, "no line under the circle until a corner is picked"
     assert r["ggCorner"].startswith("Corner 1: ") and r["ggCorner"].endswith("% of the outline on average, from 100 m before turn-in to the exit") or r["ggCorner"].startswith("Corner 1: --"), r["ggCorner"]
     assert r["ggNone"] == 3, "no measured g: no grip circle"
 
 
 def test_grip_circle_explains_itself(r):
-    """TestFlight 14 ("explain what grip circle actually means?"): one line from the vocabulary, then the rest behind a tap."""
+    """Beside the Score (drive page round 1, Nate 2026-11-15): no paragraph under it; a tap says the vocabulary's one line."""
     vocab = json.loads(subprocess.run([NODE, "-e", "console.log(JSON.stringify(require(process.argv[1]).TERMS.gripCircle))",
                                        str(__import__("pathlib").Path(__file__).resolve().parents[1] / "web" / "vocabulary.js")],
                                       capture_output=True, text=True, check=True).stdout)
+    assert r["ggHas"], "the head carries the circle"
     assert r["ggLede"] == vocab["meaning"], "the one line is the vocabulary's meaning, not a second wording"
-    assert r["ggOrder"] == ["h3", "p", "div", "p", "details"], r["ggOrder"]
-    m = r["ggMore"]
-    assert m.startswith("<summary>What the grip circle shows</summary>")
-    for part in ("The dots.", "every 5 m", "The outline.", "16 directions", "5 in 100", "The rings.", "0.5 g",
-                 "bigger shape", "rounder one", "not a target"):
-        assert part in m, part
+    assert r["ggOrder"] == ["small", "div"], r["ggOrder"]
+    assert r["ggMore"] is False, "no paragraph or explainer under the circle"
+    assert r["ggRole"] == "button"
+
+
+def test_score_parts_say_out_of_100(r):
+    assert 'aria-label="Pace 85 out of 100"' in r["headHtml"] and 'data-k="smoothness"' in r["headHtml"]
+    assert r["barHint"] in r["headHtml"]
+    assert r["barSay"] == "Smooth 72 of 100: How gently you steered through the corners."
 
 
 def test_road_feel_says_how_far_to_trust_it():

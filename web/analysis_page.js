@@ -1056,14 +1056,16 @@
       const list = drives.slice().reverse();
       list.forEach(d => pick.add(new Option(driveLabel(d), d.id)));
       const actions = document.querySelector('#tab-drive .actions'); actions.hidden = !list.length;
-      if (!list.length) { $('dvTitle').textContent = 'No drives yet'; $('dvNote').textContent = ''; $('dvRoot').innerHTML = '<p class="note">Start a drive on the map, or import a recording in Garage, Your data.</p>'; return; }
+      const parts = (on) => { for (const k of ['dvPartDrove', 'dvPartRoad', 'dvPartYours', 'dvTagsPanel', 'dvRecce']) $(k).hidden = !on; };   // the three parts' labels, with a drive only
+      if (!list.length) { parts(false); $('dvTitle').textContent = 'No drives yet'; $('dvNote').textContent = ''; $('dvRoadRoot').replaceChildren(); $('dvRoot').innerHTML = '<p class="note">Start a drive on the map, or import a recording in Garage, Your data.</p>'; return; }
+      parts(true);
       pick.value = list.some(d => d.id === keep) ? keep : list[0].id;
       const id = pick.value, s = summaryOf(id), run = ++dvRun;
       if (dvCurrent && dvCurrent.id !== id) {                            // another drive: nothing of the last one stays on its page
         $('tab-drive').insertBefore(dvActs, $('dvRoot'));
         if (dvView) dvView.destroy();
         dvView = null; dvCurrent = null; dvInfo = null; dcPanel = null;
-        $('dvRoot').replaceChildren(); $('dvDashcam').replaceChildren();
+        $('dvRoot').replaceChildren(); $('dvRoadRoot').replaceChildren(); $('dvDashcam').replaceChildren(); tagsOpen = false;
         for (const k of ['dvRoad', 'dvGhost', 'dvVote', 'dvRecce', 'dvFlyby', 'dvTouch', 'dvBest']) $(k).hidden = true;
       }
       // The drive's name is the page title (you arrive from the Log list); the picker stays only as this view's state.
@@ -1079,7 +1081,7 @@
       if (dvView) dvView.destroy();
       const reference = dvInfo.reference || null, coach = dvInfo.coach || null;
       $('tab-drive').insertBefore(dvActs, $('dvRoot'));                // out of the root before it is redrawn
-      dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach, mapPalette: () => look.map, traceOf: (k) => ApexAnalysis.job('cornerTrace', { id, k }),
+      dvView = ApexDriveView.mount($('dvRoot'), d, { roadRoot: $('dvRoadRoot'), Core, C, MPH, reference, coach, mapPalette: () => look.map, traceOf: (k) => ApexAnalysis.job('cornerTrace', { id, k }),
         // one tap from a corner to its clip, from the app's own video of the drive (the Dashcam panel below, big bet 5)
         canClip: (s, e) => !!(dcPanel && dcPanel.canClip && dcPanel.canClip(s, e)), clip: (s, e) => (dcPanel && dcPanel.clip ? dcPanel.clip(s, e) : false),
         canPostClip: () => !!(dcPanel && dcPanel.canPost && dcPanel.canPost()), postClip: () => (dcPanel && dcPanel.post ? dcPanel.post() : null),
@@ -1154,9 +1156,15 @@
       // written in the worker: the record's one transaction, its summary with it (F-06)
       try { return !!(await ApexAnalysis.job('patch', { id: d.id, fields: { tags: d.tags, note: d.note } })).summary; } catch (_) { return false; }
     }
+    // Drive page round 1 (Nate 2026-11-15): the tags you chose, and "+ Tag" for the rest; all seven chips only once it is open
+    let tagsOpen = false;
+    $('dvTagOpen').addEventListener('click', () => { tagsOpen = true; const d = currentDrive(); if (d) renderTags(d); $('dvTagNew').focus({ preventScroll: true }); });
     function renderTags(d) {
       const box = $('dvTags'), current = ApexDriveTags.normalize(d.tags);
-      box.replaceChildren(...ApexDriveTags.offered(drives.filter((x) => x.id !== d.id), current).map((t) => {
+      const shown = tagsOpen ? ApexDriveTags.offered(drives.filter((x) => x.id !== d.id), current) : current;
+      $('dvTagOpen').hidden = tagsOpen; $('dvTagOpen').setAttribute('aria-expanded', String(tagsOpen)); $('dvTagMore').hidden = !tagsOpen;
+      box.hidden = !shown.length;
+      box.replaceChildren(...shown.map((t) => {
         const on = current.some((c) => c.toLowerCase() === t.toLowerCase()), b = document.createElement('button');
         b.className = 'btn' + (on ? ' on' : ''); b.textContent = t; b.setAttribute('aria-pressed', String(on));
         b.addEventListener('click', async () => { await saveTags(d, ApexDriveTags.toggle(d.tags, t), d.note); renderTags(d); });

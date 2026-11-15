@@ -19,6 +19,15 @@
     return a === b ? `${a} ${u}` : `${a}–${b} ${u}`; };
   const DIST_WORDS = (m) => (U() && U().metric() ? `${(m / 1000).toFixed(2)} kilometres` : `${(m / 1609.344).toFixed(2)} miles`);
 
+  // the Score's four parts: what each means (vocabulary.js, one term one meaning), said when its bar is tapped
+  const BAR_HINT = 'Each part out of 100. Tap one for what it means.';
+  const BAR_TERM = { pace: 'pace', smoothness: 'smooth', braking: 'brakes', consistency: 'rhythm' };
+  function barMeaning(k, text) {
+    const V = root.ApexVocabulary || (typeof module !== 'undefined' && typeof require === 'function' ? require('./vocabulary.js') : null);
+    const t = V && V.TERMS && V.TERMS[BAR_TERM[k]], label = String(text || '').trim();
+    return t ? `${label} of 100: ${t.meaning.replace(/, part of the Score\.$/, '.')}` : label;
+  }
+
   /** Summary numbers for the header strip; null where the drive has no such data. */
   function summarize(d, Core) {
     const t = Core.elapsedS(d.speed_mps), n = d.lat.length;
@@ -182,27 +191,22 @@
       + txt(c0, 26, 'middle', 'THROTTLE') + txt(c0, S - 18, 'middle', 'BRAKE') + txt(16, c0 - 4, 'start', 'L') + txt(S - 16, c0 - 4, 'end', 'R') + '</svg>';
     const g2 = (v) => (v == null ? '--' : `${v.toFixed(2)} g`);
     const base = `Outline: braking ${g2(env.brake_g)} \u00b7 left ${g2(env.left_g)} \u00b7 right ${g2(env.right_g)} \u00b7 throttle ${g2(env.throttle_g)}`;   // one labelled row
-    cap.textContent = base;
-    const head = el('h3', null, 'Grip circle');
-    // TestFlight 14 ("explain what grip circle actually means?"): its one line from the vocabulary (one term, one meaning),
-    // and the rest behind a tap, as the Log's other quiet rows open
+    cap.hidden = true;                                               // the outline's numbers are its spoken label; the line under it is a corner's
+    // Drive page round 1 (Nate 2026-11-15, metrics confusing): the circle sits beside the Score; its axis words say what it
+    // is, so no paragraph under it. Its one-line meaning (vocabulary.js) is the picture's tooltip and spoken label.
     const V = root.ApexVocabulary || (typeof module !== 'undefined' && typeof require === 'function' ? require('./vocabulary.js') : null);
     const term = V && V.TERMS && V.TERMS.gripCircle;
-    const lede = el('p', 'note dv-gg-lede');
-    lede.textContent = term ? term.meaning : '';
-    const more = el('details', 'quiet dv-gg-more');
-    more.innerHTML = '<summary>What the grip circle shows</summary>'
-      + '<p class="note"><b>The dots.</b> One for every ' + fine(5) + ' of the drive where the phone measured the forces on the car: how hard you were braking or speeding up (down and up) and turning (left and right) at that moment. Dots near the middle are gentle driving.</p>'
-      + `<p class="note"><b>The outline.</b> In each of 16 directions, how far your dots reach, leaving out the furthest 5 in 100 so one pothole doesn’t count. Where it breaks off, too few moments went that way to say.</p>`
-      + `<p class="note"><b>The rings.</b> 0.5 g${R > 1.05 ? ' and 1 g' : ''}. At 1 g the push you feel is as strong as gravity.</p>`
-      + '<p class="note"><b>What the shape means.</b> A bigger shape: you asked more of the tyres. A rounder one: you blended braking into turning, and turning into speeding up, instead of doing one and then the other. It is a picture of how you drove, not a target to push: on a public road the grip left in reserve is what keeps you safe.</p>'
-      + '<p class="note">Move along the drive into a corner and that corner’s own line is drawn on top.</p>';
-    box.append(...(term ? [head, lede, pic, cap, more] : [head, pic, cap, more]));
+    if (term) box.title = term.meaning;
+    box.setAttribute('aria-label', `Grip circle. ${term ? `${term.meaning} ` : ''}${base}.`);
+    box.setAttribute('role', 'button'); box.setAttribute('tabindex', '0'); box.setAttribute('aria-expanded', 'false');
+    cap.className = 'note dv-gg-cap';
+    box.append(el('small', 'dv-gg-name', 'Grip circle'), pic);
     pic.append(hot);
     let shown = -2;
     function show(c, kc) {
       if (kc === shown) return; shown = kc;
-      if (!c) { hot.innerHTML = ''; cap.textContent = base; return; }
+      if (!c) { hot.innerHTML = ''; cap.textContent = ''; cap.hidden = true; return; }
+      cap.hidden = false;
       let p = '';
       const lo = Math.max(0, c.start - 20);                          // 100 m before turn-in: the brake zone, not the straight before it
       for (let i = lo; i <= c.end; i++) if (ok(i)) { const [x, y] = xy(d.lat_g[i], d.lon_g[i]); p += `${p ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`; }
@@ -210,7 +214,7 @@
       const use = Core.gripUse(d.lat_g, d.lon_g, lo, c.end, env, d.g_known || null);
       cap.textContent = `Corner ${kc + 1}: ${use == null ? '--' : `${Math.round(Math.min(1, use) * 100)}%`} of the outline on average, from ${U() && U().size ? U().size(100) : '100 m'} before turn-in to the exit`;
     }
-    return { box, show, env };
+    return { box, cap, show, env };
   }
 
   // How far to trust member road feel at sample i: passes and their spread (ApexContributor.agreement), never a guess.
@@ -282,9 +286,10 @@
     const ds = d.ds || (Core && Core.driverScore ? Core.driverScore(d.speed_mps, d.lon_g, d.lat_g, d.corners) : null);
     const comp = ds && ds.components;
     const scoreVal = ds && finite(ds.score) ? ds.score : '<i class="unk">--</i>';   // unknown in pencil (REVIEW2.md U-34)
+    // the four parts of the Score, each out of 100 (the Score is out of 1000): a tap says what one means, in one line
     const bar = (k, label) => {
       const v = comp && finite(comp[k]) ? Math.round(comp[k] * 100) : null;
-      return `<div class="bar">${label} ${v != null ? v : '--'}<i><u style="width:${v != null ? v : 0}%"></u></i></div>`;
+      return `<button type="button" class="bar" data-k="${k}" aria-expanded="false" aria-label="${label} ${v != null ? `${v} out of 100` : 'not known'}">${label} ${v != null ? v : '--'}<i><u style="width:${v != null ? v : 0}%"></u></i></button>`;
     };
     // the ideal drive only means something once another pass of the same corners exists
     const ideal = co && co.clean && co.gain_s > 0 && co.corners.some((x) => x.passes > 1)
@@ -306,6 +311,7 @@
     const scored = !!(ds && finite(ds.score)), nCorners = Array.isArray(d.corners) ? d.corners.length : null;
     head.innerHTML = (scored ? `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`
       + `<div class="bars">${bar('pace', 'Pace')}${bar('smoothness', 'Smooth')}${bar('braking', 'Brakes')}${bar('consistency', 'Rhythm')}</div>`
+      + `<p class="note dv-bar-say" aria-live="polite">${BAR_HINT}</p>`
       : `<div class="dv-score no-score"><b class="score">${nCorners ? 'Too few clean corners to score' : 'No corners to score'}</b></div>`)
       // RA-3 (panel round 2): the end card's line, from the one helper (format.js factsLine): same distance, time and corners
       + `<div class="dv-meta">${root.ApexFormat ? root.ApexFormat.factsLine({ len_m: finite(S.km) ? S.km * 1000 : null, secs: S.duration_s, corners: d.corners }) : `${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners`}</div>`
@@ -323,12 +329,28 @@
       + (tired ? `<p class="dv-plain">${esc(tired)}</p>` : '')
       + (brakes ? `<p class="dv-plain">${esc(brakes)}</p>` : '')
       + (ideal ? `<div class="dv-meta">Ideal drive: <b class="gain">${ideal.gain.toFixed(1)} s</b> quicker \u00b7 your best pass at each of ${ideal.n} corner${ideal.n === 1 ? '' : 's'}, from ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
-    root_.append(head, el('div', 'dv-grid'));
-    const grid = root_.lastChild; grid.append(mapBox, el('div', 'dv-right'));
-    const zoom = el('div', 'dv-zoom'); grid.lastChild.append(zoom, lanes, read);
+    // a tap on a part of the Score says what it means; a second tap puts the hint back
+    // (the grip circle the same way: a tap says what it is, in the same line, in place of a paragraph under it)
+    const explain = (e) => {
+      const b = e.target && e.target.closest ? e.target.closest('.bar[data-k], .dv-gg') : null, say = head.querySelector('.dv-bar-say');
+      if (!b || !say) return;
+      const open = b.getAttribute('aria-expanded') !== 'true';
+      head.querySelectorAll('.bar[data-k], .dv-gg').forEach((x) => x.setAttribute('aria-expanded', String(x === b && open)));
+      say.textContent = !open ? BAR_HINT : b.dataset.k ? barMeaning(b.dataset.k, b.textContent) : `Grip circle: ${b.title || 'how hard you braked, turned and sped up, every moment of the drive'}`;
+    };
+    head.addEventListener('click', explain);
+    head.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('dv-gg')) { e.preventDefault(); explain(e); } });
+    // Drive page round 1 (Nate 2026-11-15): How you drove first (the Score, and the grip circle beside it), then the road.
+    // o.roadRoot: where the map, the chart and the corners go (the page's The road part); here, after the head, without one
     const gg = ggView(d, Core, C);                                   // friction circle; null without enough measured g
-    if (gg) grid.lastChild.append(gg.box);
-    root_.append(list);
+    if (gg) { head.classList.add('has-gg'); head.append(gg.box, gg.cap); }
+    const roadRoot = o.roadRoot || root_;
+    if (o.roadRoot) o.roadRoot.innerHTML = '';
+    root_.append(head);
+    roadRoot.append(el('div', 'dv-grid'));
+    const grid = roadRoot.lastChild; grid.append(mapBox, el('div', 'dv-right'));
+    const zoom = el('div', 'dv-zoom'); grid.lastChild.append(zoom, lanes, read);
+    roadRoot.append(list);
 
     // ---- plan map ------------------------------------------------------------------------------------------------
     // planned in Web Mercator metres (drive_basemap.js project) so the real map lines up under it exactly; centred, and at
@@ -831,6 +853,6 @@
     return { since: first.dateLabel || '', score_d: Number.isFinite(a) && Number.isFinite(b) ? a - b : null, gain_s: first.delta_s, matched: first.matched };
   }
 
-  const api = { mount, newBests, roadProgress, overlaySvg, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };
+  const api = { barMeaning, BAR_HINT, mount, newBests, roadProgress, overlaySvg, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveView = api;
 })(typeof window !== 'undefined' ? window : globalThis);
