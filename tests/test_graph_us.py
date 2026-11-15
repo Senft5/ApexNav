@@ -222,3 +222,33 @@ def test_the_lower_48_is_rebuilt_monthly_and_goes_live():
     wf = open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "graph-us.yml")).read()
     assert 'cron: "23 3 1 * *"' in wf, "the 1st of each month (day of month and day of week together would be either)"
     assert '[ -z "$only" ] && live=true' in wf, "a scheduled run has no inputs: the whole country, live"
+
+
+def test_bands_that_differ_only_in_their_grid_cut_merge_as_one_build(tmp_path):
+    """2026-11-15: the first rescore with the lower 48's grid built all 141 bands and the publish refused them, each
+    band's build id carrying the hash of its own cut of the grid's index. Ids that differ only in that tag are one
+    build; a different road build is still refused."""
+    from tools.graph_etl import merge_index as M
+    assert M.same_build({"us-2026-46-abc-g000001"}) == "us-2026-46-abc-g000001"
+    one = M.same_build({"us-2026-46-abc-g000001", "us-2026-46-abc-g0000ff"})
+    assert one.startswith("us-2026-46-abc-g") and len(one) == len("us-2026-46-abc-g000001")
+    assert M.same_build({"us-2026-46-abc-g000001", "us-2026-47-abc-g000001"}) is None
+    for k, b in enumerate(("us-2026-46-abc-g000001", "us-2026-46-abc-g0000ff")):
+        d = tmp_path / f"b{k}"
+        d.mkdir()
+        (d / f"t{k}.vgr").write_bytes(b"x")
+        (d / "index.json").write_text(json.dumps({"build": b, "model": "m", "tiles": {f"t{k}": {"bytes": 1}}}))
+    ix = M.merge(str(tmp_path / "out"), [str(tmp_path / "b0"), str(tmp_path / "b1")])
+    assert ix["build"] == one and ix["tile_count"] == 2
+
+
+def test_a_bands_grid_cut_carries_its_releases_id(tmp_path):
+    """The cut of the grid a band fetches names the whole release, so build.py ctx_tag gives every band one tag."""
+    from tools.graph_etl import build as B
+    for k in range(2):
+        d = tmp_path / f"c{k}"
+        d.mkdir()
+        (d / "index.json").write_text(json.dumps({"region": "us", "bundles": {f"{k}/1": {}}, "release": "a1b2c3d4e5f6"}))
+    assert B.ctx_tag(str(tmp_path / "c0")) == B.ctx_tag(str(tmp_path / "c1")) == "-ga1b2c3"
+    src = open(os.path.join(os.path.dirname(__file__), "..", "tools", "ctx_etl", "fetch.py")).read()
+    assert "release=hashlib.sha1(" in src

@@ -14,6 +14,7 @@ import json
 import os
 import sys
 import time
+import hashlib
 import urllib.request
 
 from . import grid
@@ -65,7 +66,8 @@ def main(argv=None):
     a = ap.parse_args(argv)
     base = a.base.rstrip("/") + "/api/ctx/v1/"
     try:
-        index = json.loads(get(base + "index.json"))
+        raw = get(base + "index.json")
+        index = json.loads(raw)
     except Exception as e:  # noqa: BLE001
         print(f"no live context grid index: {e}")
         return 3
@@ -82,7 +84,10 @@ def main(argv=None):
         with open(p, "wb") as f:
             f.write(data)
         total += len(data)
-    cut = dict(index, bundles={k: index["bundles"][k] for k in keys}, bytes=total)
+    # the release's own id (its whole index hashed), so every band's build id carries the same grid tag (build.py
+    # ctx_tag) however few of its bundles the band took
+    cut = dict(index, bundles={k: index["bundles"][k] for k in keys}, bytes=total,
+               release=hashlib.sha1(raw if isinstance(raw, bytes) else raw.encode()).hexdigest()[:12])
     os.makedirs(a.out, exist_ok=True)
     with open(os.path.join(a.out, "index.json"), "w") as f:
         json.dump(cut, f, indent=1, sort_keys=True)
