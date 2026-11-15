@@ -184,7 +184,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, roadbooks: false, nudge: false, push: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, roadbooks: false, nudge: false, push: false, satellite: false, improve: true }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -703,8 +703,9 @@
       applyDevTune();
       paintDevRow();
       if (devAccess) { const d = devSettings(); if (d && (d.offline || d.lines)) devPanel().catch(() => {}); }   // their switches, without the panel open
-      if (devAccess) devDrivesSync();                                    // their drives go up to Vetta (web/dev_drives.js)
       else if (window.ApexDevPanel) ApexDevPanel.unmount();
+      if (devAccess) devDrivesSync();                                    // their drives go up to Vetta (web/dev_drives.js)
+      meAnswered = true; anonDrivesSync();                               // or, anyone else, the anonymous copies (web/anon_drives.js)
     }
     // Dev mode (the owner, 2026-11-09: "a dev mode in the app that shows all routing parameters and other debug info for only
     // me and my codev to mess with"), behind the Satellite layer's gate: a fresh /api/me with developer true. Its settings
@@ -744,8 +745,24 @@
         apiFetch: ApexSync.apiFetch, store: localStorage, allowed: () => devAccess }))
         .then((r) => { devDrivesStat = r; paintDevRow(); }).catch((e) => console.error('dev drives', e));
     }
-    try { const ch = new BroadcastChannel('apex-drives'); ch.onmessage = () => devDrivesSync(); } catch (_) { /* no channel: the next launch sends it */ }
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') devDrivesSync(); });
+    // Help improve Vetta roads (the owner, 2026-11-15; web/anon_drives.js, backend/src/anon_drives.ts): on by default, Garage →
+    // Settings → Road feel. Everyone but a developer (whose whole drives go above) sends an anonymous copy of each drive: no
+    // account, name or clock time, the first and last 1 to 1.5 km and every privacy zone left out. Only once /api/me has
+    // answered, so a developer's phone never sends both. The driver's own drive is never changed.
+    let meAnswered = false;
+    { const ab = $('ageBand');                                          // its optional age band, on this phone only (sent with each copy)
+      if (ab) { try { ab.value = localStorage.getItem('apex.ageBand') || ''; } catch (_) {}
+        ab.addEventListener('change', () => { try { if (ab.value) localStorage.setItem('apex.ageBand', ab.value); else localStorage.removeItem('apex.ageBand'); } catch (_) {} }); } }
+    function anonDrivesSync() {
+      if (!meAnswered || devAccess || !state.toggles.improve || !window.ApexLazy || !window.ApexRecording || !window.ApexSync) return;
+      ApexLazy.load('anondrives').then(() => ApexAnonDrives.sync({ ids: () => ApexRecording.ids(), get: (id) => ApexRecording.get(id),
+        post: async (bytes) => { const r = await ApexSync.apiFetch('/api/anon/drives', { method: 'POST', headers: { 'content-type': 'application/gzip' }, body: bytes }); return !!(r && r.ok); },
+        store: localStorage, allowed: () => !devAccess && !!state.toggles.improve,
+        inZone: (lat, lon) => { try { return !!ApexPrivacyZones.zoneAt(ApexPrivacyZones.load(localStorage), lat, lon); } catch (_) { return true; } } }))
+        .catch((e) => console.error('anon drives', e));
+    }
+    try { const ch = new BroadcastChannel('apex-drives'); ch.onmessage = () => { devDrivesSync(); anonDrivesSync(); }; } catch (_) { /* no channel: the next launch sends it */ }
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { devDrivesSync(); anonDrivesSync(); } });
     // the Garage's Settings row (index.html section data-setting="dev"): empty, so hidden, unless this is a developer
     function paintDevRow() {
       const b = $('garageDevBody');
@@ -9372,6 +9389,10 @@
       state.toggles[k] = !state.toggles[k];
       paintSwitches();
       if (k === 'lpr') updatePins();
+      if (k === 'improve') {                                           // Help improve Vetta roads: on again, only drives from now on go
+        try { if (state.toggles.improve) localStorage.setItem('apex.anonDrives.since', new Date().toISOString()); } catch (_) {}
+        anonDrivesSync();
+      }
       if (k === 'satellite') {                                         // developers only (applyDevFlags); anyone else: stays off
         if (!devAccess) { state.toggles.satellite = false; paintSwitches(); return; }
         applySatellite();

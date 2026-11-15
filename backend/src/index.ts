@@ -31,6 +31,7 @@ import * as drivePosts from "./drive_posts";
 import * as messages from "./messages";
 import { mediaGet, mediaPut } from "./post_media";
 import { devDriveGet, devDriveList, devDrivePut } from "./dev_drives";
+import { anonDriveGet, anonDriveList, anonDrivePut } from "./anon_drives";
 import { afterCrewDrive, afterDuel, afterMessage, afterFriend, afterKudos, afterPassed, afterTopped, bestBefore, afterPostComment, afterPostKudos, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewBadge, crewFeed, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
@@ -453,6 +454,10 @@ on("PUT", "/api/posts/:id/media", async (req, env, m) => json(await mediaPut(env
 on("POST", "/api/dev/drives/:id", async (req, env, m) => json(await devDrivePut(env, await requireMember(req, env), m.groups!.id, req)));
 on("GET", "/api/dev/drives", async (req, env) => json(await devDriveList(env, req, await viewer(req, env))));
 on("GET", "/api/dev/drives/file", async (req, env) => devDriveGet(env, req, await viewer(req, env)));
+// Anonymous drives (src/anon_drives.ts): anyone's phone sends anonymous pieces; this route never reads who is calling
+on("POST", "/api/anon/drives", async (req, env) => { await anonDrivePut(env, req); return noContent(); });
+on("GET", "/api/anon/drives", async (req, env) => json(await anonDriveList(env, req)));
+on("GET", "/api/anon/drives/file", async (req, env) => anonDriveGet(env, req));
 on("GET", "/api/posts/:id/media", async (req, env, m) => mediaGet(env, await requireMember(req, env), m.groups!.id));
 on("DELETE", "/api/comments/:id", async (req, env, m) => { await drivePosts.commentDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 on("POST", "/api/kudos", async (req, env, _m, ctx) => {

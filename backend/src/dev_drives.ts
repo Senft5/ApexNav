@@ -30,12 +30,14 @@ export async function devDrivePut(env: Env, v: Viewer, id: string, req: Request)
   return { key, bytes: bytes.length };
 }
 
+/** The internal read key (also src/anon_drives.ts). */
+export async function mayReadInternal(env: Env, req: Request): Promise<boolean> {
+  const m = /^Bearer (.{20,200})$/.exec(req.headers.get("authorization") || "");
+  return !!m && (await sha256hex(m[1])) === (env.DEV_DRIVES_READ_HASH || DEV_DRIVES_READ_HASH);
+}
 /** The internal read key, or a developer's own session. */
 async function mayRead(env: Env, req: Request, v: Viewer | null): Promise<boolean> {
-  const a = req.headers.get("authorization") || "";
-  const m = /^Bearer (.{20,200})$/.exec(a);
-  if (m && (await sha256hex(m[1])) === (env.DEV_DRIVES_READ_HASH || DEV_DRIVES_READ_HASH)) return true;
-  return !!v && (await isDeveloper(env, v));
+  return (await mayReadInternal(env, req)) || (!!v && (await isDeveloper(env, v)));
 }
 
 /** GET /api/dev/drives: every kept drive's key, size and upload time. */
