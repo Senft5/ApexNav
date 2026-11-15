@@ -13082,8 +13082,14 @@ flow('the drive screen, Vetta Line: one hero speed over a ruled line, Limit, Sig
   check(drawn.dash === 'none' && parseFloat(drawn.off) === 0 && drawn.op === '1', 'after the move the tulip is whole and the call fully inked: ' + JSON.stringify(drawn));
   const tp = await page.evaluate(() => { const ink = (() => { const i = document.createElement('i'); i.style.color = getComputedStyle(document.documentElement).getPropertyValue('--panel-ink'); document.body.append(i); const c = getComputedStyle(i).color; i.remove(); return c; })();
     const filled = [...document.querySelectorAll('#transport button')].filter((b) => b.getClientRects().length && getComputedStyle(b).backgroundColor === ink).map((b) => b.id || b.textContent);
-    return { filled, rates: [...document.querySelectorAll('#rateDetents button')].map((b) => Math.round(b.getBoundingClientRect().height)) }; });
+    return { filled, rates: [...document.querySelectorAll('#rateDetents button')].filter((b) => b.getClientRects().length).map((b) => Math.round(b.getBoundingClientRect().height)) }; });
   check(JSON.stringify(tp.filled) === '["replayDone"]' && tp.rates.every((h) => h >= 44), 'the replay\'s one ink key is Done; the speeds keep a thumb\'s height: ' + JSON.stringify(tp));
+  // the transport is one row (real-drive review): one speed key that steps on when tapped, beside the scrubber and Done
+  const row = await page.evaluate(() => { const k = document.querySelector('#rateDetents [aria-checked="true"]'), y = (e) => Math.round(e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2);
+    const before = k.dataset.rate; k.click(); const after = document.querySelector('#rateDetents [aria-checked="true"]').dataset.rate;
+    return { before, after, shown: [...document.querySelectorAll('#rateDetents button')].filter((b) => b.getClientRects().length).length,
+      ys: ['playBtn', 'scrubber', 'replayDone'].map((id) => y(document.getElementById(id))).concat(y(document.querySelector('#rateDetents [aria-checked="true"]'))) }; });
+  check(row.shown === 1 && row.before !== row.after && Math.max(...row.ys) - Math.min(...row.ys) <= 12, 'one speed key that steps on, on one row with play, the scrubber and Done: ' + JSON.stringify(row));
   // reduced motion: cuts. No count, no arriving paper, no searching stroke, and nothing left hidden or half drawn
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 393, height: 852 });
