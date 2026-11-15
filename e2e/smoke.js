@@ -9404,6 +9404,42 @@ flow('the narrowest phone and a phone on its side: the welcome, the map, a route
   else check(!found.length, `on a narrow phone or on its side, text cut off, words over words or a key too small:\n  ${found.join('\n  ')}`);
 });
 
+// Every Garage setting page and the Stages list at the largest text, on a 390 phone and on the narrowest one (320 pt, an
+// SE or mini with Display Zoom), 2026-11-15: no word cut, no words over words, no key too small, no page wider than the
+// phone. A switch's long word ("Kilometres", "Steady") was cut at 320 pt; its keys now wrap instead.
+flow('large text in the Garage: every setting page and the Stages list cut nothing at 2x, on a 390 phone and a 320 pt one (IDEAS U-15)', async (page, base) => {
+  const found = [];
+  const read = async (p, where) => { found.push(...(await clippedText(p)).map((h) => `${where}: ${h}`), ...(await smallTargets(p)).map((h) => `${where}: small key ${h}`), ...(await overlappingText(p)).map((h) => `${where}: ${h}`));
+    const wide = await p.evaluate(() => Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth);
+    if (wide > 1) found.push(`${where}: the page is ${wide} px wider than the phone`); };
+  for (const [w, h] of [[390, 844], [320, 568]]) {
+    const ctx = await page.context().browser().newContext({ viewport: { width: w, height: h } });
+    await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
+    await ctx.addInitScript(() => { try { localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+    const p = await ctx.newPage();
+    try {
+      await p.goto(base + '/index.html');
+      await p.waitForFunction(() => window.apexDebug && !document.getElementById('boot'), null, { timeout: 20000 });
+      await p.evaluate(() => document.querySelector('#tabbar .tab[data-view="garage"]').click()); await p.waitForTimeout(400);
+      await p.click('#garageGear'); await p.waitForTimeout(400);
+      const keys = await p.evaluate(() => [...new Set([...document.querySelectorAll('#garageSettings .nav-row[data-setting]')].filter((r) => r.offsetParent && getComputedStyle(r).visibility !== 'hidden').map((r) => r.dataset.setting))]);
+      check(keys.length >= 8, 'the Garage lists its settings: ' + keys.join(', '));
+      for (const key of keys) {
+        await p.goto(base + '/index.html');
+        await p.waitForFunction(() => window.apexDebug && !document.getElementById('boot'), null, { timeout: 20000 });
+        await p.evaluate(TYPE_AT(2));
+        await p.evaluate(() => document.querySelector('#tabbar .tab[data-view="garage"]').click()); await p.waitForTimeout(400);
+        await openSetting(p, key);
+        await read(p, `${w}x${h} setting ${key}`);
+      }
+      await p.goto(base + '/analysis.html?tab=segments'); await p.evaluate(TYPE_AT(2)); await p.waitForTimeout(800);
+      await read(p, `${w}x${h} stages`);
+    } finally { await ctx.close(); }
+  }
+  if (process.env.CLIP_LOG) for (const f of found) console.log('CLIP garage | ' + f);
+  else check(!found.length, `at the largest text, in the Garage or Stages:\n  ${found.join('\n  ')}`);
+});
+
 // U-15: the route card, Saved and Where to? in every look, day and night: the card is what a driver reads most before a drive
 flow('contrast in every look: a planned route\'s card and its Saved key hold 4.5:1 in each theme, day and night (IDEAS U-15)', async (page, base) => {
   graphDir = graphFixture();
@@ -13908,7 +13944,7 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
     ['the strip never cuts', 23], ['when to go', 21], ['the map is a fixed stage', 20], ['a deliberate detour', 20],
     ['theme contract on the page', 19], ['plan flow (d)', 18], ['plan flow (g)', 18], ['a loop by time', 17], ['plan flow (a)', 17],
     ['plan flow (e, f)', 16], ["the map's viewpoint, café and fuel stamps", 15],
-    ['contrast in every look: the welcome', 30], ['contrast in every look: a planned', 27], ['contrast in every look: the drive', 22], ['large text on every screen', 20], ['the narrowest phone and a phone on its side', 30]];
+    ['contrast in every look: the welcome', 30], ['contrast in every look: a planned', 27], ['contrast in every look: the drive', 22], ['large text on every screen', 20], ['the narrowest phone and a phone on its side', 30], ['large text in the Garage', 40]];
   const weight = (f) => (LONG_S.find(([p]) => f.name.startsWith(p)) || [, 5])[1];
   const slice = new Map();
   if (shard) {
