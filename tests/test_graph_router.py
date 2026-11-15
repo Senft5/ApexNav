@@ -573,3 +573,14 @@ def test_loops_land_near_the_length_asked_on_real_tiles():
         assert c["offs"], c
         assert min(abs(o) for o in c["offs"]) <= 0.2, c
         assert all(abs(o) <= 0.6 for o in c["offs"]) and all(r <= 0.4 for r in c["retraced"]), c
+
+
+def test_a_long_trip_loads_a_band_round_the_quickest_way_not_the_whole_ellipse():
+    """Cincinnati to Asheville at Fun loaded 580 tiles (258 MB) and took 39 s, and Long way found nothing: a trip whose
+    corridor is over K.LONG_TILES tiles is planned on a band round its quickest way, so the far tiles are never asked."""
+    r = case("longTrip")
+    for level in ("fun", "max"):
+        x = r[level]
+        assert x["routed"], x
+        assert x["northmost"] < x["farRow"], x
+        assert x["asked"] < x["ellipse"] / 2, x
