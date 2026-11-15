@@ -12859,6 +12859,9 @@ flow('the drive screen, Vetta Line: one hero speed over a ruled line, Limit, Sig
     await page.setViewportSize({ width: w, height: h });
     await page.waitForTimeout(300);
     await page.evaluate(() => { const d = document.querySelector('#cluster .dna-arch'); d.hidden = false; d.textContent = 'Road: Northwest Expressway'; });
+    // the panel's own resize pass can land after 300 ms on a loaded runner (CI 2026-11-15, 320x568: fits false once, whole
+    // on its re-run): give it up to 3 s to settle, then judge it as it stands
+    await page.waitForFunction((src) => { const s = (0, eval)(src)(); return !s.out.length && s.fits; }, '(' + boxes.toString() + ')', { timeout: 3000 }).catch(() => {});
     const s = await page.evaluate(boxes);
     check(!s.out.length && s.px >= 64 && s.fits && s.side <= 0, `${w}x${h}: a 64 px numeral or more, nothing overprints, the cluster whole on screen: ` + JSON.stringify(s));
   }
