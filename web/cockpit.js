@@ -2968,7 +2968,12 @@
       const roads = {}, lines = {};
       for (const k of cells) { const e = feelCells.get(k); if (e && e.ways) { Object.assign(roads, e.ways); Object.assign(lines, e.lines); } }
       if (!spans.some((sp) => roads[sp.label])) return;
-      if (!applyCrowdBumps(t, ApexContributor.feelFromWays(t, spans, roads, lines))) return;
+      const m = ApexContributor.feelFromWays(t, spans, roads, lines);
+      // the corners ahead from the camber members agree on: "slopes away" / "banked", only corners not yet said and 300 m
+      // or more ahead, so no call changes as it comes up (the map's corners stay: no curvature swap mid-drive)
+      const leaning = m && m.crowdCam && ApexContributor.camberMods ? ApexContributor.camberMods(t, m.crowdCam, Core.paceNoteText,
+        (e) => !state.spoken.has(`${t.id}:${e.type}:${e.index}`) && e.dist_m - (track === t ? state.cursorM : 0) >= 300) : 0;
+      if (!applyCrowdBumps(t, m) && !leaning) return;
       const cos = Math.cos(t.lat[0] * Math.PI / 180);
       for (const e of t.events) if (e.crowd && (free.feelSaid || []).some((k) => k.type === e.type && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 25)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
       for (const e of t.marks || []) if (e.crowd && (free.marksSaid || []).some((k) => k.code === e.code && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 40)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);

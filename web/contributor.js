@@ -483,7 +483,7 @@
       if (sp && sp.fromM <= d + 2.5) { match[i] = { way: sp.label, cls: sp.cls || null }; ways[sp.label] = (lines && Array.isArray(lines[sp.label]) && lines[sp.label].length > 1 ? lines[sp.label] : null) || sp.geom; }
     }
     const runs = locate({ drive: track, match, ways }), s = seriesFrom(runs, roads, n);
-    return { crowdBumps: s.bumps, crowdCrests: crestsFrom(s.crest, s.crn), crowdRough: roughFrom(s.rough, s.n, track.dist) };
+    return { crowdBumps: s.bumps, crowdCrests: crestsFrom(s.crest, s.crn), crowdRough: roughFrom(s.rough, s.n, track.dist), crowdCam: camFrom(s.cam, s.cn, s.csd) };
   }
   /**
    * Per-sample measured series along a route: { cam[], rough[], n[], cn[], csd[], rsd[], k[], kn[] } with null where no member has measured
@@ -523,6 +523,25 @@
   function camFrom(cam, cn, csd) {
     return (Array.isArray(cam) ? cam : []).map((v, i) => (finite(v) && Math.abs(v) >= CAMBER_MIN_DEG
       && agreement(Array.isArray(cn) ? cn[i] : null, Array.isArray(csd) ? csd[i] : null, AGREE.camber_deg) === 'agree' ? v : null));
+  }
+  /**
+   * Corner notes on track ({ events }) from the camber members agree on (camFrom, degrees relative to the turn) at each
+   * apex: "off-camber" (slopes away) at -3 deg or less, "banked" at +3 or more, the call worked out again (apex_core.js
+   * paceNoteText). Only the corners `may(e)` allows (on a free drive: not yet said, and far enough ahead that the call
+   * doesn't change as it comes). Returns how many changed.
+   */
+  function camberMods(track, cam, paceNoteText, may = () => true) {
+    let n = 0;
+    if (!track || !Array.isArray(track.events) || !Array.isArray(cam) || typeof paceNoteText !== 'function') return 0;
+    for (const e of track.events) {
+      if (!e || e.type !== 'corner' || !Array.isArray(e.mods) || !finite(cam[e.index]) || !may(e)) continue;
+      const mod = cam[e.index] <= -CAMBER_MIN_DEG ? 'off-camber' : cam[e.index] >= CAMBER_MIN_DEG ? 'banked' : null;
+      if (!mod || e.mods.includes(mod)) continue;
+      e.mods = [...e.mods.filter((m) => m !== 'off-camber' && m !== 'banked'), mod];
+      const t = paceNoteText(e);
+      e.code = t.code; e.call = t.call; e.crowdCam = true; n++;
+    }
+    return n;
   }
   /**
    * Broken pavement members measured (IDEAS Q-01 data): runs where two or more passes measured the roughness and its mean is
@@ -702,6 +721,6 @@
     return Math.round(100 * (1 - Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30))));
   }
 
-  const api = { CAM_V, binFlow, bumpEvidence, binBump, bumpEvents, crestsFrom, crestEvents, camFrom, roughFrom, roughMarks, feelFromWays, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, wayTiles, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { CAM_V, binFlow, bumpEvidence, binBump, bumpEvents, crestsFrom, crestEvents, camFrom, camberMods, roughFrom, roughMarks, feelFromWays, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, wayTiles, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -660,3 +660,25 @@ def test_camber_members_agree_on():
     assert o == [-5, -5, 4, None, None, None, None, None]
     js = open(os.path.join(root, "web", "cockpit.js")).read()
     assert "Core.detectCorners(kappa, ds, camberRad)" in js and "Core.brakingEnvelopeMps(kappa, ds, camberRad," in js
+
+
+CAM_MODS = r"""
+const C = require(process.argv[1] + '/web/contributor.js'), Core = require(process.argv[1] + '/web/apex_core.js');
+const corner = (index, mods, dist_m) => ({ type: 'corner', index, dist_m, dir: 'L', severity: 3, grade: '', shape: null, caution: null, mods, code: 'L3', call: 'Left 3' });
+const t = { events: [corner(10, [], 500), corner(20, ['tightens'], 900), corner(30, ['banked'], 1300), corner(40, [], 200), corner(50, [], 1700), { type: 'bump', index: 10 }] };
+const cam = new Array(60).fill(null); cam[10] = -4; cam[20] = 5; cam[30] = -3.5; cam[40] = -6; cam[50] = 2;
+const n = C.camberMods(t, cam, Core.paceNoteText, (e) => e.dist_m >= 300);
+console.log(JSON.stringify({ n, calls: t.events.filter((e) => e.type === 'corner').map((e) => [e.call, e.mods, !!e.crowdCam]) }));
+"""
+
+
+def test_the_road_aheads_corners_take_the_camber_members_agree_on():
+    """A free drive's corners ahead get "off-camber" (slopes away) or "banked" from members' agreed camber at the apex; a
+    mapped "banked" that members measured leaning away is corrected; a corner too close (not allowed) or a flat one stays."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    o = json.loads(subprocess.run([NODE, "-e", CAM_MODS, root], capture_output=True, text=True, check=True).stdout)
+    assert o["n"] == 3
+    assert o["calls"] == [["Left 3 off-camber", ["off-camber"], True], ["Left 3 tightens banked", ["tightens", "banked"], True],
+                          ["Left 3 off-camber", ["off-camber"], True], ["Left 3", [], False], ["Left 3", [], False]]
+    js = open(os.path.join(root, "web", "cockpit.js")).read()
+    assert "ApexContributor.camberMods(t, m.crowdCam, Core.paceNoteText," in js
