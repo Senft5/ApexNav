@@ -2048,6 +2048,28 @@
       .cluster-line .ledger > .dna-arch { flex: none; width: 100%; }
       .cluster-line .ledger > .g-score { margin: 0; min-height: 0; } .cluster-line .ledger > .g-score b { line-height: 1.2; }
     }
+    /* The replay (the owner 2026-11-15, after a real drive: "replay screen is kind of cluttered", "g ball should be more
+       prominent", "the metrics a little confusing"): the g-ball is the hero on the left with what it shows in words under it;
+       the speed and its limit on the right; one ledger line. The ruler (the speed again) and Sight (a look ahead, for a
+       drive) step aside, and the trip drops its odometer zeros. On a drive the panel is as it was. */
+    .dial.dial-g > .g-read { display: none; }
+    @media not ((orientation: landscape) and (max-height: 540px)) {
+      #app.replaying .cluster-line { grid-template-columns: 112px minmax(0, 1fr) auto; grid-template-areas: "g speed read" "g gread gread" "ledger ledger ledger"; column-gap: 16px; align-items: center; }
+      #app.replaying .cluster-line > .dial.dial-g { display: contents; }
+      #app.replaying .cluster-line > .dial.dial-g > svg.g-line { grid-area: g; width: 112px; align-self: start; }
+      #app.replaying .cluster-line > .dial.dial-g > .g-read { grid-area: gread; align-self: start; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 10px 12px; border-radius: var(--r-key, 0); background: var(--raised, transparent); }
+      #app.replaying .cluster-line .gr-cell { display: grid; gap: 2px; min-width: 0; }
+      #app.replaying .cluster-line .gr-cell span { font: 600 13px/1.2 var(--font-ui); color: var(--panel-dim); }
+      #app.replaying .cluster-line .gr-cell b { font: 700 19px/1.15 var(--font-num); color: var(--panel-ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+      #app.replaying .cluster-line > .dial.dial-speed { justify-self: start; max-width: 130px; align-self: end; }
+      #app.replaying .cluster-line > .cluster-center { align-self: end; margin-bottom: 6px; }
+      #app.replaying .cluster-line .ro.ro-sight, #app.replaying .cluster-line > .speed-line { display: none; }
+      #app.replaying .cluster-line .odo-digits .lead { display: none; }
+      /* the night's quiet Trip key is for a drive; a replay is watched, not driven: the trip shows */
+      html[data-mode="night"] #app.replaying #cluster.cluster-line .odo { display: flex; }
+      html[data-mode="night"] #app.replaying #cluster.cluster-line .trip-peek { display: none; }
+      #app.replaying .cluster-line > .ledger { margin-top: 4px; }
+    }
     /* 4. the start: the strip and the panel arrive as paper on one curve, once; then stillness */
     @keyframes hud-rise { from { transform: translateY(100%); } }
     @keyframes hud-drop { from { transform: translateY(-100%); } }

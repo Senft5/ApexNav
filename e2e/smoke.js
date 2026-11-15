@@ -3286,12 +3286,15 @@ flow('one red that means act now: Sight is ink until you are over it, then colou
   check(loud.grey !== calm.grey || loud.label !== calm.label, 'in greyscale the alarm still differs from the reading');
   await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'); return t && !t.hidden && t.classList.contains('short'); }, null, { timeout: 8000 });
   check(/^SLOW\d+$/.test((await page.textContent('.sight-tag')).trim()), 'the plate says SLOW: ' + await page.textContent('.sight-tag'));
-  // PR-1: in a replay a tap on Sight, then the Score, says what it is; Done closes it
-  await page.click('#cluster .ro-sight');
+  // PR-1: in a replay a tap on the g-ball, then the Score, says what it is; Done closes it. The replay's panel (the owner
+  // 2026-11-15: "cluttered", "g ball should be more prominent") leaves Sight to the plate under the arrow, so its cell is
+  // read above for its colours but not tapped here
+  check(await page.evaluate(() => getComputedStyle(document.querySelector('#cluster .ro-sight')).display === 'none'), 'a replay leaves Sight to the plate on the map');
+  await page.click('#cluster .g-read');
   await page.waitForSelector('#explainCard.show', { timeout: 3000 });
   const sheet = await page.evaluate(() => ({ title: document.getElementById('explainTitle').textContent, what: document.getElementById('explainWhat').textContent,
     how: document.getElementById('explainHow').textContent, now: document.getElementById('explainNow').textContent }));
-  check(sheet.title === 'Sight' && /never a target/.test(sheet.what) && /SLOW/.test(sheet.how) && /^Now: \d+ (mph|km\/h)$/.test(sheet.now), 'the Sight sheet: ' + JSON.stringify(sheet));
+  check(sheet.title === 'Grip ball and Bank' && /rolls forward under braking/.test(sheet.what) && /^Now: BANK --$/.test(sheet.now), 'the g-ball sheet: ' + JSON.stringify(sheet));
   await page.click('#explainDone');
   // waited for, not read once: on a busy runner the class can come off a frame after the click returns (CI 2026-11-11)
   check(await page.waitForFunction(() => !document.getElementById('explainCard').classList.contains('show'), null, { timeout: 2000 }).then(() => true, () => false), 'Done closes it');
@@ -9236,8 +9239,12 @@ flow('theme contract on the page: the hazard plate, the speed, the call and the 
     // night is a mode (REVIEW2.md U-36): a 46 px numeral, Limit and Sight on one row, the trip behind its Trip key
     const nm = await page.evaluate(() => { const d = document.querySelector('.dial-speed .dial-digital'), vis = (q) => { const e = document.querySelector(q); return !!e && e.getClientRects().length > 0; };
       const l = document.querySelector('.ro-limit').getBoundingClientRect(), g = document.querySelector('.ro-sight').getBoundingClientRect();
-      return { px: Math.round(parseFloat(getComputedStyle(d).fontSize) * d.getScreenCTM().a), oneRow: Math.abs(l.top - g.top) < 12, odo: vis('#cluster .odo'), key: vis('#cluster .trip-peek') }; });
-    if (night) {
+      return { px: Math.round(parseFloat(getComputedStyle(d).fontSize) * d.getScreenCTM().a), oneRow: Math.abs(l.top - g.top) < 12, odo: vis('#cluster .odo'), key: vis('#cluster .trip-peek'),
+        replay: document.getElementById('app').classList.contains('replaying'), sight: vis('#cluster .ro-sight') }; });
+    if (night && nm.replay) {
+      // a replay is watched, not driven (the owner 2026-11-15): the g-ball leads, Sight is left to the map's plate, the trip shows
+      check(nm.px >= 46 && !nm.sight && nm.odo && !nm.key, 'night replay: a 46 px numeral, Sight on the map, the trip in view: ' + JSON.stringify(nm));
+    } else if (night) {
       check(nm.px >= 46 && nm.oneRow && !nm.odo && nm.key, 'night: a 46 px numeral, Limit and Sight in a row, the trip behind its key: ' + JSON.stringify(nm));
       await page.click('#cluster .trip-peek');
       check(await page.evaluate(() => document.querySelector('#cluster .odo').getClientRects().length > 0), 'night: the Trip key shows the trip');
