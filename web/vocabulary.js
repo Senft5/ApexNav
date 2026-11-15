@@ -193,6 +193,13 @@
     return words === 'plain' ? `For example "${call}".` : `Rally pace notes, 1 tightest to 6: "${call}".`;
   }
 
-  const api = { TERMS, SHARED, KNOWN, SAMPLE, ROAD_WORDS, plainRoads, sampleCall, sampleStrip, sampleQuote, wordsExample };
+  // How fast the load on the car changed (g a second: the one spelling, drive page round 1, Nate 2026-11-15), in a word first:
+  // the number stays beside it. One scale for the abrupt moments and for your touch.
+  function rateWord(gps) {
+    if (typeof gps !== 'number' || !Number.isFinite(gps)) return null;
+    return gps >= 1 ? 'sharp' : gps >= 0.4 ? 'firm' : 'gentle';
+  }
+
+  const api = { rateWord, TERMS, SHARED, KNOWN, SAMPLE, ROAD_WORDS, plainRoads, sampleCall, sampleStrip, sampleQuote, wordsExample };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexVocabulary = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -228,3 +228,13 @@ def test_every_theme_card_quote_is_a_line_its_pack_can_say(out):
             assert q["text"] == f'{q["call"]}. {q["signOff"]}'
             # the words the recording showed and the voice never said
             assert "Late apex" not in q["text"] and "Easy in" not in q["text"] and "Left four" not in q["text"]
+
+
+def test_how_fast_the_load_changed_in_a_word():
+    """Drive page round 1 (Nate 2026-11-15): "1.4 g/s" and "0.2 g a second" were one unit spelled two ways, neither said.
+    One spelling, g a second, and a word first on one scale for the abrupt moments and your touch."""
+    out = json.loads(subprocess.run([NODE, "-e", "const V = require(process.argv[1]); console.log(JSON.stringify([0.2, 0.39, 0.4, 0.99, 1, 1.4, null, NaN].map(V.rateWord)))",
+                                     str(WEB / "vocabulary.js")], capture_output=True, text=True, check=True).stdout)
+    assert out == ["gentle", "gentle", "firm", "firm", "sharp", "sharp", None, None]
+    for f in ("drive_view.js", "driver_profile.js", "analysis_page.js"):
+        assert "g/s" not in re.sub(r"//[^\n]*", "", (WEB / f).read_text()), f"{f}: say g a second"

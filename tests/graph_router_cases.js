@@ -150,6 +150,19 @@ const CASES = {
       return { full: full.routes.length, cut: cut.routes.length, cutHasPick: !!cut.routes[0] };
     } finally { R.K.PLAN_SOFT_MS = keep; }
   },
+  lakeLoop() {
+    // a good road 10 km east of the start across a lake: the only ways there go round it, 15 km north or south, outside
+    // the ellipse a loop's leg searches first. The leg searches again without it, so the loop is round the lake
+    const nodes = [at(39.3, -84.6), at(39.435, -84.6), at(39.435, -84.484), at(39.3, -84.484), at(39.3, -84.44), at(39.165, -84.44), at(39.165, -84.6)];
+    const edges = [], seg = (a, b, p) => two(edges, a, b, p);
+    const link = { quality: 0.6, cls: 4, name: 'Shore Road', t: 700, fun: 2 };
+    seg(0, 1, link); seg(1, 2, { ...link, name: 'North Shore' }); seg(2, 3, link);
+    seg(3, 4, { quality: 0.9, cls: 4, name: 'Ridge Road', t: 240, fun: 40 });
+    seg(4, 5, { ...link, name: 'South Shore' }); seg(5, 6, { ...link, name: 'South Shore' }); seg(6, 0, link);
+    const T = H.tiles(nodes, edges), v = R.view(T.tiles);
+    const r = R.loop(v, { start: { lat: 39.3, lon: -84.6 }, km: 80, level: 'fun' });
+    return { routes: r.routes.length, km: r.routes.map((x) => +(x.distM / 1000).toFixed(0)), ridge: r.routes.map((x) => (x.stages || []).includes('Ridge Road')), retraced: r.routes.map((x) => +x.retraced.toFixed(2)) };
+  },
   longStage() {
     // a 30 km good road across a tile's edge (-84.5) and a 6 km twistier lane: the road is one stage, its whole length up
     // to K.STAGE_KM (a name's index is its tile's own, so the chain once broke at the edge, and stopped at 15 km), and

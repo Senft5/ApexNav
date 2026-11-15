@@ -368,7 +368,29 @@
       if (page.line) page.line(summaryLine(week, dist));
       if (page.entered) page.entered(enteredLoops(r.j), week);          // the car's Places has them too (cockpit carPlaces)
     }
-    return { section, peek };
+    /**
+     * Start a loop from its start gate on the map (event_markers.js): enter it first if you haven't (its copy goes in your
+     * Stages, as Enter does), then drive it, the loop itself as the route. → true once it is under way.
+     */
+    async function go(c) {
+      if (!c || !c.id) return false;
+      let g = [];
+      try { g = (typeof c.geom === 'string' ? JSON.parse(c.geom) : c.geom) || []; } catch (_) {}
+      if (!c.entered) {
+        const r = await call('POST', '/api/ta/enter', { id: c.id });
+        if (!r.ok) { say(r.code); return false; }
+        if (r.j && r.j.added && page.segs && page.saveSegs) {
+          const segs = page.segs(), copy = localCopy({ ...c, segment_id: c.id }, r.j.segment_id);
+          if (copy && !segs.some((s) => s.id === copy.id)) { segs.push(copy); page.saveSegs(segs); }
+        }
+        c.entered = true;
+      }
+      if (g.length && page.driveLoop) await page.driveLoop({ segment_id: c.id, name: c.name }, g);
+      else if (g.length && page.goTo) page.goTo({ label: c.name, lat: g[0][0], lon: g[0][1] });
+      else return false;
+      return true;
+    }
+    return { section, peek, go };
   }
   const PEEK_MS = 5 * 60 * 1000;
 

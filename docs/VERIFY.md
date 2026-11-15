@@ -57,13 +57,13 @@ with a mark per row (✓ good, ✗ bad + one line on what you saw, – skipped).
 5. Restore connectivity and retry without restarting the app. Report whether the exact original freeze reproduces. If it does, capture the last label, approximate elapsed time, voice/road-name settings and device logs; automated timer/Node tests are not physical-phone evidence.
 
 Four things I cannot do from my cloud container (no Google account, no live map servers, no real recording, no screen reader).
-Each is a short, ordered check with what "good" looks like. Site: https://apexnav.senftns.workers.dev (replace if your workers.dev name differs).
+Each is a short, ordered check with what "good" looks like. Site: https://vettadrive.app.
 
 ## 1. Google sign-in (about 15 minutes)
 **Create the client** (Google Cloud console, free):
 1. console.cloud.google.com → create a project "Vetta" → **APIs & Services → OAuth consent screen**: User type *External*, app name Vetta, your email as support and developer contact, scopes: only the defaults (`openid`, `email`, `profile`), then **Publish app** (status "In production"; basic scopes like these do not need Google's app verification).
 2. **Credentials → Create credentials → OAuth client ID → Web application.**
-   Authorized redirect URI (exact): `https://apexnav.senftns.workers.dev/api/auth/google/callback`
+   Authorized redirect URIs (exact): `https://vettadrive.app/api/auth/google/callback` and `https://apexnav.senftns.workers.dev/api/auth/google/callback` (older builds)
 3. Copy the **Client ID** and **Client secret**.
 
 **Set the secrets** (Cloudflare dashboard → Workers & Pages → apexnav → Settings → Variables and Secrets → Add, type *Secret*):
@@ -98,7 +98,7 @@ What is unverified: Valhalla `trace_attributes` map-matching, Overpass way geome
 Report back: the two curl results (or errors) and what the Share button said.
 
 ## 3. Screen reader (about 10 minutes)
-**iPhone:** Settings → Accessibility → VoiceOver (or triple-click the side button after enabling the shortcut). Open the analysis page: https://apexnav.senftns.workers.dev/analysis.html
+**iPhone:** Settings → Accessibility → VoiceOver (or triple-click the side button after enabling the shortcut). Open the analysis page: https://vettadrive.app/analysis
 - Swipe right through the header: you should hear "Analysis views, tab list", then each tab ("Drive, tab, selected, 1 of 4"); double-tap to switch.
 - On the Drive tab find the **"Position along the drive" slider**: swipe up/down (adjustable) should move it and speak e.g. "0.17 miles, 38 miles per hour".
 - Zoom buttons should read "Zoom: 0.5 mi window"; corner buttons "Corner 5: Left 5 minus, apex 55 miles per hour".

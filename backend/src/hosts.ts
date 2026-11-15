@@ -9,6 +9,8 @@ import { Env } from "./util";
 
 export const APP_HOST = "vettadrive.app";
 export const INFO_HOST = "vettadrive.com";
+/** The road insights viewer (web/insights.html, src/road_insights.ts): its front page is the viewer; the API answers there too. */
+export const DATA_HOST = "data.vettadrive.com";
 const TEAM_APP_ID = "JNX759T5W6.com.senft.ApexNav";   // Apple team + bundle id (project.yml)
 
 /** apple-app-site-association: which links on vettadrive.app open the app (ApexNavApp.swift ApexWebBundle.linkItems),
@@ -46,6 +48,10 @@ export async function routeHost(req: Request, env: Env): Promise<Response | null
   if (host === INFO_HOST && (path === "/" || path === "/index.html")) {
     const about = await env.ASSETS.fetch(new Request(new URL("/about", url.origin), { headers: req.headers }));
     return new Response(about.body, { status: about.status, headers: about.headers });
+  }
+  if (host === DATA_HOST && (path === "/" || path === "/index.html")) {
+    const page = await env.ASSETS.fetch(new Request(new URL("/insights", url.origin), { headers: req.headers }));
+    return new Response(page.body, { status: page.status, headers: page.headers });
   }
   // the app's front page carries a link preview card (src/link_preview.ts) for whatever link it was opened by
   if ((path === "/" || path === "/index.html") && req.method === "GET") return withPreview(await env.ASSETS.fetch(req), env, url);
