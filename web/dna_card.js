@@ -111,6 +111,18 @@
     return svg;
   }
 
+  /** The crew's DNA (GET /api/crews/:id/page `dna`: [{ handle, mine, skills }]): for each skill, the cleanest in the crew
+   *  (ties: the first handle in order) and your own level beside it. [] with fewer than two members' DNA. */
+  function crewLeaders(list) {
+    const ok = (list || []).filter((r) => r && r.skills && SKILLS.every((k) => finite(r.skills[k])));
+    if (ok.length < 2) return [];
+    const me = ok.find((r) => r.mine) || null;
+    return SKILLS.map((k) => {
+      const top = ok.slice().sort((a, b) => b.skills[k] - a.skills[k] || String(a.handle).localeCompare(String(b.handle)))[0];
+      return { key: k, name: SHORT[k], handle: top.handle, mine: !!top.mine, level: top.skills[k], you: me && !top.mine ? me.skills[k] : null };
+    });
+  }
+
   /** The lines under the hexagon, in order (pure, so the test reads what the picture says). */
   function dnaLines(m) {
     if (!m) return [];
@@ -178,6 +190,6 @@
     return canvas;
   }
 
-  const api = { dnaModel, wireOf, compareLines, compareSvg, spanText, dnaLines, scopeText, styleWords, bySize, hexPoint, drawDna, SKILLS, SHORT, W, H };
+  const api = { dnaModel, wireOf, compareLines, compareSvg, crewLeaders, spanText, dnaLines, scopeText, styleWords, bySize, hexPoint, drawDna, SKILLS, SHORT, W, H };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDnaCard = api;
 })(typeof window !== 'undefined' ? window : globalThis);

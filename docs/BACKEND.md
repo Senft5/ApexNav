@@ -143,7 +143,8 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
 - Driving DNA (migration 0064, `src/dna.ts`): `PUT /api/me/dna` (members) keeps your Your driving card as the phone read it,
   checked down to the six skill levels (0 to 100), at most three known style words, the corner kind and two counts.
   `GET /api/friends/:id/profile` carries `dna: { mine, theirs }` when that friend shares Scores with you (their friend
-  grant's `share_scores`), else `dna: null`. In the export as `driving_dna`; cascades with the account.
+  grant's `share_scores`), else `dna: null`. `GET /api/crews/:id/page` carries `dna: [{ handle, mine, skills }]`: you, and each
+  member who shares Scores with the crew, never across a block. In the export as `driving_dna`; cascades with the account.
 
 ## 7. Auth: Google sign-in, no library
 `/api/auth/google/start` → Google (authorization-code flow, PKCE S256, `state`, `nonce`) → `/api/auth/google/callback`: exchanges the code
