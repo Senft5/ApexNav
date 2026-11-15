@@ -487,7 +487,8 @@ def _tip(m: dict, ref: dict | None):
     if (m["min_offset_m"] <= min(SOLO_EARLY_APEX_M, -m["min_mps"] * GPS_FIX_S) and m["apex_mps_driven"] - m["min_mps"] >= SOLO_APEX_DIP_MPS
             and m.get("imu_slow_m") is not None and m["imu_slow_m"] <= SOLO_EARLY_APEX_M
             and m.get("road_off_m") is not None and m["road_off_m"] <= ROAD_EARLY_M):
-        return {"kind": "early_apex", "value": -m["min_offset_m"], "vs_best": False}
+        # the size told is the line's own (how far before the road's bend your turning centred), not the slowest point's
+        return {"kind": "early_apex", "value": math.floor(-m["road_off_m"] * 10 + 0.5) / 10, "vs_best": False}
     return None
 
 
