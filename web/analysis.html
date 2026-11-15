@@ -264,7 +264,8 @@
     html[data-type-size] :is(.fp-ghost .fp-index, .fp-ghost .fp-glyph) { display: none; } html[data-type-size] .fp-digits i { width: 28px; height: 48px; }
     .fp-ghost { color: var(--panel-dim); border-bottom: 1px solid var(--rule); margin-bottom: 16px; }
     .fp-ghost .hero-score { display: flex; align-items: flex-end; padding: 6px 0 14px; border-bottom: 1px solid var(--rule); }
-    .fp-digits { display: inline-flex; gap: 6px; } .fp-digits i { width: 40px; height: 68px; border: 1.5px dashed var(--panel-dim); }   /* three places for the score's figures */
+    .fp-digits { display: inline-flex; gap: 6px; min-width: 0; } .fp-digits i { width: 40px; height: 68px; flex: 0 1 auto; min-width: 0; border: 1.5px dashed var(--panel-dim); }   /* three places for the score's figures; on a narrow phone at large text they give way, not the page */
+    .fp-ghost .hero-score small { flex: none; }
     .fp-ghost .stamp-d { border: 1.5px dashed var(--panel-dim); } .fp-ghost table.fp-index td { border-bottom: 0; }   /* its own class: a drawing of a row is not a row of the index */
     .fp-ghost .ix-road b { font-weight: 500; } .fp-ghost .score { color: var(--panel-dim); }
     /* the road's shape, in pencil where the drive's own line will be drawn (as on the end card), its start in the one red */
@@ -341,6 +342,7 @@
     .hero-score b { font: 800 88px/0.9 var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
     .hero-score small { font-size: 18px; font-weight: 600; color: var(--panel-dim); margin-left: 4px; }
     .hero-what { margin: 6px 0 0; font-size: 15px; font-weight: 600; }
+    html[data-type-size] .log-hero .hero-score { display: flex; flex-wrap: wrap; align-items: baseline; }   /* a narrow phone at large text: the unit (mi, /1000) wraps under the figure, not off the screen */
     .hero-best { display: inline-block; vertical-align: 18px; margin-left: 12px; padding: 4px 10px; border: 1.5px solid var(--rule); border-radius: var(--r-chip, 999px); font-size: 14px; font-weight: 700; color: var(--panel-dim); }
     .short-row td { padding: 10px 0; text-align: center; }
     .short-row .btn { min-height: 44px; }

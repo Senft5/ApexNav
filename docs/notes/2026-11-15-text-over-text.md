@@ -7,6 +7,12 @@
 - Tests: full e2e locally with `OVERLAP_LOG=1` (no hits, all flows pass).
 - Next: another roam item.
 
+## 2026-11-15 the narrowest phone and a phone on its side get the same sweep
+- What: the large text sweep's screens moved into `screensSweep(page, base, shapes)`. A new flow reads them on a 320 pt phone (an iPhone SE or mini with Display Zoom on) at 1x and 2x text, and on a phone on its side (844 x 390).
+- Why: at 320 pt and 2x the Log ran off the phone. The empty page's three score boxes and "/1000" were 31 px too wide, and with drives the hero's "mi" ran 9 px off.
+- Fix: the boxes may shrink (`min-width: 0`), and at large text the hero's unit wraps under its figure (`flex-wrap`). Undo: delete the two rules in analysis.html (the new flow names the cut again).
+- The text-over-text check also cuts each line to its boxes' overflow, so an ellipsis's hidden tail isn't counted ("Loop from here · 45 mi" under Plan).
+
 # CALL SHEET
 ## 2026-11-15 the text-over-text check uses glyph ink, from the canvas's text metrics
 - What: each text run's box is cut to the font's actual ascent and descent above and below its baseline (`actualBoundingBoxAscent/Descent`, the baseline from `fontBoundingBoxDescent`).
