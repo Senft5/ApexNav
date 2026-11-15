@@ -21,6 +21,9 @@ const BASE = (process.env.BASE || 'https://apexnav.senftns.workers.dev').replace
 const OUT = process.env.OUT || path.join(require('os').tmpdir(), 'road_library');
 const FILE = path.join(ROOT, 'web/data/road_library.json');
 const MAX_S = 2700, PER_AREA = 10, MIN_KM = 5, LINE_MAX = 160, TOL_M = 8, LINK_PTS = 11, PAD_KM = 70;
+// a road worth a page: a corner a kilometre or more, and a score Best roads nearby would rank (a flat state's best farm
+// road, 10 corners in 19 km, is not listed: its area then has fewer roads, or none)
+const MIN_CORNERS_KM = 1, MIN_SCORE = 10;
 
 // Areas riders drive to, and the places most members live. id, name (the page's "near"), state, centre.
 const AREAS = [
@@ -61,6 +64,15 @@ const AREAS = [
   ['la-canada', 'La Cañada Flintridge', 'CA', 34.200, -118.188], ['julian', 'Julian', 'CA', 33.079, -116.602],
   ['los-gatos', 'Los Gatos', 'CA', 37.227, -121.975], ['tahoe', 'South Lake Tahoe', 'CA', 38.940, -119.977],
   ['mammoth', 'Mammoth Lakes', 'CA', 37.649, -118.972], ['eureka-ca', 'Eureka', 'CA', 40.802, -124.164],
+  // every other state of the lower 48 (2026-11-15): its best-known driving country, or its biggest city
+  ['dover', 'Dover', 'DE', 39.158, -75.524], ['tallahassee', 'Tallahassee', 'FL', 30.438, -84.281],
+  ['decorah', 'Decorah', 'IA', 43.303, -91.786], ['manhattan-ks', 'Manhattan', 'KS', 39.184, -96.572],
+  ['st-francisville', 'St. Francisville', 'LA', 30.780, -91.376], ['cumberland', 'Cumberland', 'MD', 39.653, -78.763],
+  ['natchez', 'Natchez', 'MS', 31.560, -91.403], ['valentine', 'Valentine', 'NE', 42.873, -100.551],
+  ['las-vegas', 'Las Vegas', 'NV', 36.170, -115.140], ['medora', 'Medora', 'ND', 46.914, -103.524],
+  ['stockton-nj', 'Stockton', 'NJ', 40.407, -74.978], ['talihina', 'Talihina', 'OK', 34.751, -95.048],
+  ['westerly', 'Westerly', 'RI', 41.377, -71.827], ['greenville-sc', 'Greenville', 'SC', 34.853, -82.394],
+  ['mena', 'Mena', 'AR', 34.586, -94.240], ['spearfish', 'Spearfish', 'SD', 44.490, -103.859],
 ];
 
 function get(url, file) {
@@ -134,10 +146,12 @@ function area([id, name, state, lat, lon], index) {
   if (!process.env.KEEP) for (const f of files) try { fs.unlinkSync(f); } catch (_) {}
   const roads = [];
   for (const s of res.stages) {
-    if (!s.name || s.km < MIN_KM || s.deadEnd) continue;
+    if (!s.name || s.km < MIN_KM || s.deadEnd || s.score < MIN_SCORE) continue;
     // a road on several numbered routes is named by all of them ("US 19;US 129;GA 11"): shown "US 19 / US 129 / GA 11"
     const name = s.name.split(';').map((x) => x.trim()).filter(Boolean).join(' / ');
-    roads.push({ name, area: id, km: Math.round(s.km * 10) / 10, corners: cornerCount(s.lat, s.lon), score: s.score,
+    const corners = cornerCount(s.lat, s.lon);
+    if (corners / s.km < MIN_CORNERS_KM) continue;
+    roads.push({ name, area: id, km: Math.round(s.km * 10) / 10, corners, score: s.score,
       line: simplify(s.lat, s.lon), link: RoadLink.encode(along(s.lat, s.lon, LINK_PTS).map(([la, lo]) => ({ lat: la, lon: lo })), name) });
     if (roads.length >= PER_AREA) break;
   }
@@ -180,7 +194,7 @@ function main() {
   }
   const out = {
     built: new Date().toISOString().slice(0, 10), graph: index.build,
-    areas: AREAS.filter((a) => results.has(a[0])).map(([id, name, state, lat, lon]) => ({ id, name, state, lat, lon })),
+    areas: AREAS.filter((a) => kept.some((r) => r.area === a[0])).map(([id, name, state, lat, lon]) => ({ id, name, state, lat, lon })),
     roads: kept.map(({ score, ...r }) => ({ ...r, score: Math.round(score) })),
   };
   fs.writeFileSync(FILE, JSON.stringify(out) + '\n');

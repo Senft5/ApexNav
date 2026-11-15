@@ -21,3 +21,7 @@
 - The library's lines are now Douglas-Peucker in metres (8 m, at most 160 points) instead of 60 even points, so hairpins keep their shape on the page and the card.
 - Undo: delete the workflow; pages fall back to the icon by themselves.
 - Fix (first run, 2026-11-15): the Worker refused the card job's token (401: road-cards.yml wasn't among the upload workflows). backend/src/github_oidc.ts now lets it in, and data_store.ts holds each job to its own keys: the card job may write only `roads/`, the map data jobs never `roads/` (403 otherwise).
+
+## 2026-11-15 (road library, every state): all of the lower 48
+- What: 16 more areas, one in each missing state (DE, FL, IA, KS, LA, MD, MS, NE, NV, ND, NJ, OK, RI, SC) plus Mena AR and Spearfish SD. A road needs a corner a kilometre and a Best-roads score of 10 to be listed, so a flat state's best farm road (Oak Road near Dover: 10 corners in 19 km) isn't called worth the drive; an area with nothing left is dropped. 791 roads in 90 areas, all 48 states. Cards follow on merge (road-cards.yml).
+- Undo: set MIN_CORNERS_KM and MIN_SCORE in tools/road_library.js to 0 and rebuild.
