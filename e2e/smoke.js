@@ -6885,7 +6885,7 @@ flow('flyby: a friend on the same stage that day shows on the drive, as text; ch
 // A recorded drive as its CSV, for Your driving: 36 corners, with a fault planted in the right-handers
 const PROFILE_CSV = `(fault, seed) => {
   // a road of 36 corners 300 m apart, alternating left and right, radius 35 / 60 / 110 m: brake once, slowest at the middle, drive out.
-  // fault 'saw': two steering corrections in every right-hander; 'coast': 50 m of coasting after the slowest point in rights
+  // fault 'saw': two steering corrections in every right-hander; 'coast': 50 m held at the corner speed after the slowest point in rights (held speed is not coasting since 2026-11-15)
   const G = 9.80665, rows = [], R = [35, 60, 110], VC = [10.5, 13.5, 17.5];
   let lat = 38.72 + seed * 0.02, lon = -84.6, hd = 0.3, dist = 0;
   const pts = [];
@@ -7203,7 +7203,9 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   await page.click('#drivingRoot h2');
   check(await page.evaluate(() => !document.querySelector('.vt-pop')), 'a tap anywhere closes it');
   check(/Work on: One steering arc\s+Through rights \d+, through lefts 100, on 3 of 3 drives\./.test(text) && !/One steering arc: through rights/.test(text), 'the weak side is named once, in the focus: ' + text);
-  check((text.match(/^Back to power: /gm) || []).length <= 1 && /^Back to power: in fast corners \d+, in the rest \d+, on 3 of 3 drives\./m.test(text), 'one finding a skill, as a row: ' + text);
+  // (the finding was Back to power's until 2026-11-15: these drives hold their speed out of the fast corners, which is part
+  // throttle, not coasting, so no exit is marked down now; the apex is the finding they carry)
+  check((text.match(/^Patient apex: /gm) || []).length <= 1 && /^Patient apex: in tight corners \d+, in the rest \d+, on 3 of 3 drives\./m.test(text), 'one finding a skill, as a row: ' + text);
   check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st:not([data-skill="pace"])').length === 6), 'six stations, the weak one marked');
   // IDEAS D-29: pace beside them, in its own panel, and never the one to work on
   const pace = await page.evaluate(() => { const p = document.querySelector('#drivingRoot .dp-pace'); return p ? p.innerText : null; });

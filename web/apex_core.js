@@ -740,6 +740,16 @@
   }
   // Corner coach — port of core/drive_analysis.coach (parity-tested). Phases of each corner and the
   // time lost to the person's own best clean pass of it; passes over the sane limit never count as best.
+  // coasting: neither braking nor driving (|a_lon| < COAST_G) and slowing by COAST_SLOW_G or more by the motion sensors and
+  // GPS's speed over COAST_SPAN bins either side (port of drive_analysis._coasting): held speed is part throttle, not coasting
+  // (Nate's drives, 2026-11-15: 15 of 20 corners told "coasting" were held at or gaining speed there by GPS)
+  const COAST_SLOW_G = 0.01, COAST_SPAN = 2;
+  function coasting(v, lonG, k) {
+    const a = k - COAST_SPAN, b = k + COAST_SPAN, x = lonG[k];
+    if (!(typeof x === 'number' && x > -COAST_G && x <= -COAST_SLOW_G) || a < 0 || b >= v.length) return false;
+    if (![v[a], v[b], v[k]].every((y) => typeof y === 'number' && Number.isFinite(y))) return false;
+    return (v[b] - v[a]) * v[k] / (5 * (b - a)) / G_STD <= -COAST_SLOW_G;
+  }
   const COAST_G = 0.05, THROTTLE_G = 0.05, TRAIL_LAT_G = 0.20, BRAKE_GAP = 20, SOLO_APEX_DIP_MPS = 1.0, GPS_FIX_S = 1.0, THROTTLE_LOOKAHEAD = 20, TIP_SPEED_MPS = 0.9, TIP_BRAKE_M = 10,
     TIP_COAST_M = 15, TIP_GAIN_S = 0.20, SOLO_COAST_M = 20, SOLO_EARLY_APEX_M = -15, SOLO_LATE_BRAKE_G = 0.25, TOP_OPPORTUNITIES = 3,
     ROAD_EARLY_M = -15, ROAD_PAD = 12, ROAD_SPAN = 4;
@@ -757,7 +767,7 @@
     for (let k = iMin; k < Math.min(n, end + THROTTLE_LOOKAHEAD + 1); k++) if (lonG[k] > THROTTLE_G) { kThr = k; break; }
     const b0 = r0 === null ? start : r0, b1 = kThr === null ? end : kThr;
     let coast = 0;
-    for (let k = b0; k <= b1; k++) if (Math.abs(lonG[k]) < COAST_G) coast++;
+    for (let k = b0; k <= b1; k++) if (coasting(v, lonG, k)) coast++;
     let late = 0;
     for (let k = apex; k <= end; k++) late = Math.max(late, -lonG[k]);
     return { ...m, brake_m: r0 === null ? null : (apex - r0) * 5, trail_m: trail * 5, coast_m: coast * 5,

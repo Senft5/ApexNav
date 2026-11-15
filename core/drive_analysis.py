@@ -264,7 +264,12 @@ def driver_score(speed_mps, lon_g, lat_g, corners, lo: int = 0, hi=None) -> dict
 # Compared against the person's own best clean pass of the same corner, never against a limit.
 # ---------------------------------------------------------------------------
 
-COAST_G = 0.05               # |a_lon| below this: neither braking nor driving, the car is coasting
+COAST_G = 0.05               # |a_lon| below this: neither braking nor driving...
+COAST_SLOW_G = 0.01          # ...and the car losing at least this, by the motion sensors and GPS's speed both: coasting.
+#   Held speed is not coasting (Nate's drives, 2026-11-15): 15 of 20 corners told "coasting" were held at or gaining
+#   speed over those metres by GPS (part throttle, which a phone cannot tell from a lift but a car off the gas slows).
+COAST_SPAN = 2               # GPS's speed read over 2 bins either side (20 m), past its noise
+G_STD = 9.80665
 THROTTLE_G = 0.05            # a_lon above this after the slowest point counts as back on the throttle
 TRAIL_LAT_G = 0.20           # braking while this much lateral load is on counts as trail braking
 BRAKE_GAP = 20               # braking that ended more than 100 m before turn-in belongs to something else
@@ -284,13 +289,24 @@ ROAD_SPAN = 4                # ...and either side its turning (and yours) is wei
 TOP_OPPORTUNITIES = 3
 
 
+def _coasting(v, lon, k: int) -> bool:
+    """Bin k coasts: neither braking nor driving (|a_lon| < COAST_G) and slowing by COAST_SLOW_G or more by the motion
+    sensors and by GPS's speed over COAST_SPAN bins either side (an unknown speed there: not coasting)."""
+    n = len(v)
+    a, b = k - COAST_SPAN, k + COAST_SPAN
+    if not (-COAST_G < lon[k] <= -COAST_SLOW_G) or a < 0 or b >= n or not (np.isfinite(v[a]) and np.isfinite(v[b]) and np.isfinite(v[k])):
+        return False
+    return (v[b] - v[a]) * v[k] / (5.0 * (b - a)) / G_STD <= -COAST_SLOW_G
+
+
 def corner_phases(speed_mps, lon_g, lat_g, start: int, end: int, apex: int, apex_mps: float) -> dict:
     """corner_metrics plus the phases of the corner: its own brake zone, trail braking, coasting and the throttle point.
 
     brake_m (replaces corner_metrics'): start of the braking run nearest the apex, in m before it, None when that run
       ends more than BRAKE_GAP bins before the corner starts (that braking was for something else).
     trail_m: metres of that run with |a_lat| >= TRAIL_LAT_G, before the apex.
-    coast_m: metres with |a_lon| < COAST_G from the brake point (or corner start) to the throttle point (or exit).
+    coast_m: metres with |a_lon| < COAST_G from the brake point (or corner start) to the throttle point (or exit) where
+      the car slows, by a_lon and GPS's speed both (_coasting); speed held there is part throttle, not coasting.
     throttle_m: throttle point relative to the apex (< 0 before it); None if not back on the throttle by 100 m after.
     """
     m = corner_metrics(speed_mps, lon_g, lat_g, start, end, apex, apex_mps)
@@ -316,7 +332,7 @@ def corner_phases(speed_mps, lon_g, lat_g, start: int, end: int, apex: int, apex
             break
     b0 = start if r0 is None else r0
     b1 = end if k_thr is None else k_thr
-    coast = sum(1 for k in range(b0, b1 + 1) if abs(lon[k]) < COAST_G)
+    coast = sum(1 for k in range(b0, b1 + 1) if _coasting(v, lon, k))
     late = 0.0
     for k in range(apex, end + 1):
         late = max(late, -float(lon[k]))
