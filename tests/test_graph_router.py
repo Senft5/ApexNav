@@ -434,6 +434,18 @@ def test_a_broken_edge_time_does_not_blind_the_search():
     assert 0 < case("levelsHighway")["vmax"] <= 40
 
 
+def test_a_long_trip_search_follows_its_corridor_and_finds_the_same_route():
+    """2026-11-15: Cincinnati to Deals Gap's searches settled 1.5 to 4 million edges each by the crow-line bound. Past
+    LONG_KM the plan bounds them by one backward Dijkstra on the edge times (timeTo): the same route, far fewer edges."""
+    r = case("longBound")
+    assert r["crowKm"] > 150, r
+    for x in r["runs"]:
+        assert x["same"] and abs(x["cost"][0] - x["cost"][1]) < 1e-6 * x["cost"][0], x
+        # the time bound is tight at a = 0 (Quick, the quickest of each level); with a goodness weight it never does worse
+        assert x["settled"][1] < (0.2 if x["a"] == 0 else 1.0001) * x["settled"][0], x
+    assert r["plan"]["routes"] >= 2 and r["plan"]["ok"], r["plan"]
+
+
 def test_an_expressway_below_trunk_class_is_a_highway_to_the_levels():
     """A limited-access expressway mapped as `primary` (motorroad=yes / expressway=yes: the tiles' expressway flag) beside
     a plain back road. Flagged: Quick drives it, Fun and Long way never (the plan, its first route, every route of the
