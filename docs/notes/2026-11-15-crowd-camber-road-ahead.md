@@ -7,4 +7,5 @@
 - `cockpit.js` `horizonFeel` applies it to the road ahead. Only corners not yet said and 300 m or more ahead change, so
   no call changes as it comes up. The map's curvature stays, because corners are never swapped mid-drive.
 - Tests: `tests/test_contributor.py` (`camberMods`).
-- Next: an e2e with a bend on the road ahead, if the free-drive flows ever get a curved stub road.
+- e2e: "members' camber on the road ahead" drives a stub road with one right-hander that members measured sloping
+  away by 6°, and checks the bend gets "off-camber" from them (`crowdCam`).
