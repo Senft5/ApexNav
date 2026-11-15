@@ -89,12 +89,17 @@ final class LiveFixtureTests: XCTestCase {
         // a corner holds its value for camberHoldS after its last cornering sample, then it is unknown
         var pipe = IMUPipeline()
         pipe.mount = MountCalibrator(rows: [1, 0, 0, 0, 1, 0, 0, 0, 1])
+        let down = Vec3(x: 0, y: 0, z: -1)
+        var blind = pipe
         for i in 0..<300 {
-            pipe.step(accel: Vec3(x: 0, y: 4.0, z: 0), gyro: Vec3(x: 0, y: 0, z: 0.2), timestamp: Double(i) * 0.01, speedMps: 20)
+            pipe.step(accel: Vec3(x: 0, y: 4.0, z: 0), gyro: Vec3(x: 0, y: 0, z: 0.2), timestamp: Double(i) * 0.01, speedMps: 20, gravityG: down)
+            blind.step(accel: Vec3(x: 0, y: 4.0, z: 0), gyro: Vec3(x: 0, y: 0, z: 0.2), timestamp: Double(i) * 0.01, speedMps: 20)
         }
         XCTAssertNotNil(pipe.camberRad)
+        XCTAssertLessThan(abs(pipe.camberRad ?? 1), 0.01, "a flat corner reads flat")
+        XCTAssertNil(blind.camberRad, "no gravity, no specific force: camber unknown, never a guess")
         for i in 300..<500 {
-            pipe.step(accel: Vec3(x: 0, y: 0, z: 0), gyro: Vec3(x: 0, y: 0, z: 0), timestamp: Double(i) * 0.01, speedMps: 20)
+            pipe.step(accel: Vec3(x: 0, y: 0, z: 0), gyro: Vec3(x: 0, y: 0, z: 0), timestamp: Double(i) * 0.01, speedMps: 20, gravityG: down)
             if i == 350 { XCTAssertNotNil(pipe.camberRad, "held just after the corner") }
         }
         XCTAssertNil(pipe.camberRad)

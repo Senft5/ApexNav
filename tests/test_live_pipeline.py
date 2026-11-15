@@ -100,6 +100,31 @@ def test_camber_is_held_briefly_after_a_corner_then_unknown():
     assert pipe.camber is None and pipe.outputs()[6] is None                          # unknown, not decayed to 0
 
 
+def test_camber_ignores_the_attitude_filter_leaning_in_a_long_flat_corner():
+    """CoreMotion's gravity leans toward the apparent vertical in a long turn and userAcceleration (gravity removed)
+    leans with it. Camber reads the specific force (accel - G * gravity, the raw accelerometer), which doesn't, so a flat
+    corner stays flat (members' data, 2026-11-15: the gravity-free reading put 9.7 deg on straight motorways)."""
+    pipe = lp.IMUPipeline()
+    pipe.mount.restore([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0])
+    v, yaw, t = 25.0, 0.1, 0.0                                                        # 2.5 m/s^2, a long motorway bend
+    _drive(pipe, np.eye(3), [(3.0, 0.0, 0.0)], v=v)
+    f_true = np.array([0.0, v * yaw, lp.G])                                           # flat road: specific force, up +
+    for k in range(3000):                                                             # 30 s, the filter leaning to 8 deg
+        lean = math.radians(8.0) * min(1.0, k / 1500)
+        g_est = np.array([0.0, -math.sin(lean), -math.cos(lean)])                     # gravity (down) leaning out of the turn
+        accel = f_true + lp.G * g_est                                                 # its userAcceleration, m/s^2
+        pipe.step(tuple(accel), (0.0, 0.0, yaw), 3.0 + k / 100, v, tuple(g_est))
+    assert pipe.camber is not None and abs(math.degrees(pipe.camber)) < 0.5
+
+
+def test_no_gravity_no_camber():
+    pipe = lp.IMUPipeline()
+    pipe.mount.restore([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0])
+    for k in range(300):
+        pipe.step((0.0, 4.0, 0.0), (0.0, 0.0, 0.2), k / 100, 20.0, None)
+    assert pipe.camber is None                                                        # unknown, never a guess
+
+
 def test_braking_alone_locks_forward_the_right_way_round():
     R = Rotation.from_euler("xyz", [-60.0, 15.0, 140.0], degrees=True).as_matrix()
     pipe = lp.IMUPipeline()

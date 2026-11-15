@@ -13,7 +13,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const bins = (n = 60) => Array.from({ length: n }, (_, j) => ({ i: j, cam: 1.5, rough: 0.05, crest: 0.1, k: 0.01 }));
 // a 1 km road running north from 35.5, -83.5: 11 points 100 m apart
 const line = Array.from({ length: 11 }, (_, k) => [35.5 + k * 100 / 110540, -83.5]);
-const upload = (driveId: string, over: Record<string, unknown> = {}) => ({ way_id: 777, dir: 0, driven_on: today(), drive_id: driveId, bins: bins(), shape: line, cam_v: 2, ...over });
+const upload = (driveId: string, over: Record<string, unknown> = {}) => ({ way_id: 777, dir: 0, driven_on: today(), drive_id: driveId, bins: bins(), shape: line, cam_v: 3, ...over });
 const optIn = async (...us: { id: string }[]) => { for (const u of us) await env.DB.prepare("UPDATE members SET contribute = 1 WHERE user_id = ?").bind(u.id).run(); };
 const BOX = "/api/coverage?bbox=35.4,-83.6,35.6,-83.4";
 

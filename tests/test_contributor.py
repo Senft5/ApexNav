@@ -177,7 +177,7 @@ def test_payload_has_no_drive_coordinates_or_times(result):
 
 def test_a_drive_recorded_before_the_camber_fix_sends_no_camber(result):
     o = result["oldDrive"]
-    assert result["oldDrive"]["newCamV"] == 2, "a drive from the fixed pipeline says so"
+    assert result["oldDrive"]["newCamV"] == 3, "a drive from the fixed pipeline says so"
     assert o["camV"] is None and o["cams"] == [None], "the old pipeline's placeholder 0s are never shared as measured"
     assert o["rough"] == [0.2] and o["bins"] == 600, "roughness and the rest still go"
 
@@ -333,8 +333,9 @@ const out = {};
     const live = C.createLive({ Core, fetch: fake(st), driveId: 'd_live_test_07', drivenOn: '2026-10-25', post: async (c) => { posts.push(c); return true; } });
     for (let i = 0; i < 199; i++) live.push(row(i));
     await live.finish(); out.edges = { e, distinct: many.size, min: Math.min(...many), max: Math.max(...many), shortPosts: posts.length, matches: st.matches }; }
-  // 8. camber: a row from the fixed pipeline (camber_v 2) keeps its camber; a row without it (an older build's frame) is unknown
-  for (const v of [2, undefined]) {
+  // 8. camber: a row from the fixed pipeline (camber_v 3) keeps its camber; a row without it (an older build's frame) or
+  // marked 2 (the gravity-free camber, attitude drift) is unknown
+  for (const v of [3, 2, undefined]) {
     const st = { matches: 0, overpass: 0, failTimes: 0 }, posts = [];
     const live = C.createLive({ Core, skip: 200, lag: 200, fetch: fake(st), driveId: 'd_live_test_08', drivenOn: '2026-10-25', post: async (c) => { posts.push(c); return true; } });
     for (let i = 0; i < N; i++) { live.push({ ...row(i), camber_deg: i % 2 ? 3 : null, camber_v: v }); if (i % 50 === 0) await new Promise((r) => setTimeout(r, 0)); }
@@ -392,7 +393,8 @@ def test_live_road_change_at_a_chunk_edge_loses_nothing(live, split):
 
 
 def test_live_camber_only_from_the_fixed_pipeline(live):
-    assert live["cam2"]["camV"] == [2] and 3 in live["cam2"]["cams"]
+    assert live["cam3"]["camV"] == [3] and 3 in live["cam3"]["cams"]
+    assert live["cam2"]["cams"] == [None], "version 2 read attitude drift: its camber is never sent"
     assert live["camOld"]["cams"] == [None], "an older build's camber (a decayed placeholder) is never sent"
 
 
