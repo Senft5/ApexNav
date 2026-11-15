@@ -497,7 +497,7 @@
     // Drive page round 1 (Nate 2026-11-15): one chart at a time, chosen from a row of names, in place of five stacked lanes
     const pickRow = el('div', 'switch dv-lanepick'); pickRow.setAttribute('role', 'group'); pickRow.setAttribute('aria-label', 'Chart');
     state.lane = 'speed';
-    const laneChoices = () => [['speed', 'Speed'], ['lat', 'Turning'], ['lon', 'Pedals'], ...(own ? [['own', 'Road']] : feel ? [['feel', 'Road']] : []), ...(hasElev ? [['elev', 'Height']] : [])];
+    const laneChoices = () => [['speed', 'Speed'], ['lat', 'Turning'], ['lon', 'Pedals'], ...(own || feel ? [['road', 'Road']] : []), ...(hasElev ? [['elev', 'Height']] : [])];
     function buildPick() {
       const ch = laneChoices();
       if (!ch.some(([k]) => k === state.lane)) state.lane = 'speed';
@@ -541,7 +541,7 @@
         svg += p ? `<path d="${p}" fill="none" stroke="${L.id === 'speed' ? C.panelInk : C.accent}" stroke-width="1.6" stroke-linejoin="round"/>` : `<text x="${LM}" y="${top + h / 2}" font-size="11" fill="${C.panelDim}">not recorded</text>`;
         yTop = top + h + 10;
       }
-      if (own && state.lane === 'own') {                                   // HE-1: what this phone felt, labelled so it is never the crowd's
+      if (own && state.lane === 'road') {                                   // HE-1: what this phone felt, labelled so it is never the crowd's
         const top = yTop + LH, h = 140, cs = Math.max(1, Math.floor((v1 - v0) / (W * 1.2))), bw = Math.max(1, (W - LM - RM) / ((v1 - v0) / cs));
         svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Your road feel</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">this phone \u00b7 1 run \u00b7 banking \u00b18\u00b0 \u00b7 roughness</text>`;
         svg += `<line x1="${LM}" x2="${W - RM}" y1="${top + h / 2}" y2="${top + h / 2}" stroke="${C.rule}" stroke-dasharray="3 4"/><line x1="${LM}" x2="${W - RM}" y1="${top + h}" y2="${top + h}" stroke="${C.rule}"/>`;
@@ -554,7 +554,7 @@
         svg += bars + (rp ? `<path d="${rp}" fill="none" stroke="${C.panelDim}" stroke-width="1.4"/>` : '');
         geo.lanes.push({ top, h }); yTop = top + h + 10;
       }
-      if (feel && !own && state.lane === 'feel') {                         // what members measured on these roads; gaps are unknown, not zero
+      if (feel && state.lane === 'road') {   // what members measured on these roads; gaps are unknown, not zero
         const top = yTop + LH, h = 140, covered = feel.cam.filter((v) => v != null).length;
         svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Road feel</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${covered ? `banking \u00b18\u00b0 (faint: 1 run or runs differ) \u00b7 roughness` : 'no member data on this road yet'}</text>`;
         svg += `<line x1="${LM}" x2="${W - RM}" y1="${top + h / 2}" y2="${top + h / 2}" stroke="${C.rule}" stroke-dasharray="3 4"/><line x1="${LM}" x2="${W - RM}" y1="${top + h}" y2="${top + h}" stroke="${C.rule}"/>`;
