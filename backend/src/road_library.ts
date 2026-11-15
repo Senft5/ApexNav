@@ -14,11 +14,13 @@ const DATA_PATH = "/data/road_library.json";
 export const cardKey = (id: string) => `roads/v1/${id}.jpg`;
 const ID_RE = /^[a-z0-9-]{1,80}$/;
 export const STATES: Record<string, string> = {
-  AL: "Alabama", AR: "Arkansas", AZ: "Arizona", CA: "California", CO: "Colorado", CT: "Connecticut", GA: "Georgia", ID: "Idaho",
-  IL: "Illinois", IN: "Indiana", KY: "Kentucky", MA: "Massachusetts", ME: "Maine", MI: "Michigan", MN: "Minnesota", MO: "Missouri",
-  MT: "Montana", NC: "North Carolina", NH: "New Hampshire", NM: "New Mexico", NY: "New York", OH: "Ohio", OR: "Oregon",
-  PA: "Pennsylvania", SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VA: "Virginia", VT: "Vermont", WA: "Washington",
-  WI: "Wisconsin", WV: "West Virginia", WY: "Wyoming",
+  AL: "Alabama", AR: "Arkansas", AZ: "Arizona", CA: "California", CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida",
+  GA: "Georgia", IA: "Iowa", ID: "Idaho", IL: "Illinois", IN: "Indiana", KS: "Kansas", KY: "Kentucky", LA: "Louisiana",
+  MA: "Massachusetts", MD: "Maryland", ME: "Maine", MI: "Michigan", MN: "Minnesota", MO: "Missouri", MS: "Mississippi", MT: "Montana",
+  NC: "North Carolina", ND: "North Dakota", NE: "Nebraska", NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico", NV: "Nevada",
+  NY: "New York", OH: "Ohio", OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VA: "Virginia", VT: "Vermont", WA: "Washington", WI: "Wisconsin",
+  WV: "West Virginia", WY: "Wyoming",
 };
 
 let cached: { at: number; lib: Library } | null = null;
