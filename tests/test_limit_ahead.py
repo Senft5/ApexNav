@@ -67,3 +67,20 @@ def test_wired_first_through_the_quiet_gate():
     assert "const quiet = limitSay || briefSay || cornersSay || alongSay || brakeSay || sunSay || breakSay || flowSay;" in js
     assert "ApexLimitAhead.due(drop, state.cursorM, vMps)" in js and "drive.limitSaid = null" in js
     assert '<script src="limit_ahead.js" defer></script>' in open(os.path.join(ROOT, "web", "index.html")).read()
+
+
+def test_the_road_ahead_on_a_free_drive_gets_its_limits_from_the_map():
+    runner = r"""
+const A = require(process.argv[1] + '/web/limit_ahead.js');
+const cd = Float64Array.from({ length: 31 }, (_, k) => k * 100), v = Float64Array.from(cd, (m) => (m < 1500 ? 88.5 : m < 2000 ? NaN : 56.3));
+const dist = Array.from({ length: 61 }, (_, i) => i * 50);
+const l = A.fromCtx({ channels: { maxspeed_kph: v } }, { distM: cd }, dist);
+console.log(JSON.stringify({ first: l[0], at1400: l[28], gap: l[34], at2000: l[40], end: l[60], none: A.fromCtx({ channels: { maxspeed_kph: Float64Array.from(cd, () => NaN) } }, { distM: cd }, dist),
+  near: A.saidNear([{ lat: 35.5, lon: -83.9 }], 35.5 + 40 / 110540, -83.9), far: A.saidNear([{ lat: 35.5, lon: -83.9 }], 35.5 + 90 / 110540, -83.9) }));
+"""
+    out = json.loads(subprocess.run([NODE, "-e", runner, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert abs(out["first"] - 88.5 / 3.6) < 1e-9 and abs(out["at1400"] - 88.5 / 3.6) < 1e-9 and abs(out["at2000"] - 56.3 / 3.6) < 1e-9 and abs(out["end"] - 56.3 / 3.6) < 1e-9
+    assert out["gap"] is None and out["none"] is None                   # unknown stays unknown: no limit, never a guess
+    assert out["near"] is True and out["far"] is False                  # the same sign on the next road ahead is said once
+    js = open(os.path.join(ROOT, "web", "cockpit.js")).read()
+    assert "ApexLimitAhead.fromCtx(c.ctx, c.corridor, t.dist)" in js and "ApexLimitAhead.saidNear(said, where.lat, where.lon)" in js
