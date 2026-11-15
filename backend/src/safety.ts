@@ -19,7 +19,7 @@ import { mediaErase } from "./post_media";
 const HIDES: Record<ReportKind, string | null> = {
   user: null, car: "1",
   crew: "(SELECT visibility FROM crews WHERE id = r.target_id) = 'public'",
-  highlight: "1", event: "1", photo: "1", chat: "1", post: "1", reply: "1", build_chat: "1", circuit: "1", drive: "1", comment: "1",
+  highlight: "1", event: "1", photo: "1", chat: "1", post: "1", reply: "1", build_chat: "1", circuit: "1", drive: "1", comment: "1", dm: null,   // a direct message: the reporter stops seeing it (messages.ts); the owner decides
   roadbook: "(SELECT visibility FROM roadbooks WHERE id = r.target_id) = 'public'",
 };
 
@@ -127,6 +127,11 @@ async function resolveTarget(env: Env, v: Viewer, kind: ReportKind, target: unkn
     if (!m) throw new HttpError(404, "no_message");
     return { id, person: m.author };
   }
+  if (kind === "dm") {   // a direct message to you (messages.ts); never your own
+    const m = await first<{ sender: string }>(env, "SELECT sender FROM direct_messages WHERE id = ?1 AND recipient = ?2", id, v.id);
+    if (!m) throw new HttpError(404, "no_message");
+    return { id, person: m.sender };
+  }
   if (kind === "drive" || kind === "comment") {   // a drive post, or a comment on one, that you can see (drive_posts.ts); never your own
     const m = await first<{ person: string }>(env, kind === "drive"
       ? `SELECT p.author AS person FROM drive_posts p WHERE p.id = ?2 AND p.author != ?1 AND ${POST_SEEN("p")}`
@@ -209,6 +214,8 @@ export async function moderationQueue(env: Env, v: Viewer) {
   await each("photo", (q) => `SELECT p.id, p.kind, u.handle FROM photos p JOIN users u ON u.id = p.owner WHERE p.id IN (${q})`, (r) => `a ${r.kind} photo · @${r.handle ?? "?"} · /api/photos/${r.id}`);
   await each("chat", (q) => `SELECT m.id, m.body, c.name AS crew, u.handle FROM crew_chat m JOIN crews c ON c.id = m.crew_id JOIN users u ON u.id = m.author WHERE m.id IN (${q})`,
     (r) => `"${String(r.body).slice(0, 120)}" · ${r.crew} chat · @${r.handle ?? "?"}`);
+  await each("dm", (q) => `SELECT m.id, m.body, u.handle FROM direct_messages m JOIN users u ON u.id = m.sender WHERE m.id IN (${q})`,
+    (r) => `"${String(r.body).slice(0, 120)}" · a direct message · @${r.handle ?? "?"}`);
   await each("post", (q) => `SELECT p.id, p.title, u.handle FROM build_posts p JOIN builds b ON b.id = p.build_id JOIN users u ON u.id = b.owner WHERE p.id IN (${q})`,
     (r) => `build post "${String(r.title).slice(0, 80)}" · @${r.handle ?? "?"}`);
   await each("reply", (q) => `SELECT r.id, r.body, u.handle FROM build_replies r JOIN users u ON u.id = r.author WHERE r.id IN (${q})`,
@@ -271,6 +278,7 @@ export async function moderationResolve(env: Env, v: Viewer, req: Request): Prom
     post: [env.DB.prepare("DELETE FROM build_posts WHERE id = ?").bind(id)],
     reply: [env.DB.prepare("DELETE FROM build_replies WHERE id = ?").bind(id)],
     build_chat: [env.DB.prepare("DELETE FROM build_chat WHERE id = ?").bind(id)],
+    dm: [env.DB.prepare("DELETE FROM direct_messages WHERE id = ?").bind(id)],
     // a week's time attack loop: down, and its week's times and entries with it; the area's next phone builds another from
     // the next seed (time_attack.ts current)
     circuit: [env.DB.prepare(`DELETE FROM ta_entries WHERE (week, cell) IN (SELECT week, cell FROM ta_weeks WHERE segment_id = ?)`).bind(id),

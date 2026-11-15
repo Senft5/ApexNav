@@ -184,7 +184,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, nudge: false, push: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, roadbooks: false, nudge: false, push: false, satellite: false, improve: true }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -280,6 +280,7 @@
         if (n !== themeAfter) return;
         if (track && track.kind !== 'horizon') loadTrackOnMap();   // the road ahead is never drawn
         if (window.ApexLogHost) ApexLogHost.changed('theme');
+        try { if (themeCards.size) renderThemePicker(); } catch (_) { /* before the Garage was ever drawn */ }   // the looks' cards in the mode the page turned to
       });
     }
     function refreshAutoNight() {
@@ -367,7 +368,7 @@
     });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), horizonFrom: async (coords) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; useHorizon(t); return t.id; } };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, get ghostRuns() { return drive.ghosts || null; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), horizonFrom: async (coords, tee = false) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; if (tee) t.marks = [ApexRoadMarks.teeMark(t)]; useHorizon(t); return t.id; } };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -516,6 +517,7 @@
       sightTag.setOffset([0, carSvg ? 19 : 15]);                         // the tag stays clear of the car's tail
     }
 
+    let roadbookMap = null;                                               // web/roadbook_map.js, mounted with the social scripts (below)
     function restyleBasemap() {
       drawPuck();
       $('map').style.background = look.map.bg;                             // U-68: the paper the map fades in on
@@ -534,6 +536,7 @@
       if (has('apex-places')) { map.setPaintProperty('apex-places', 'text-color', P.label); map.setPaintProperty('apex-places', 'text-halo-color', P.halo); placeGlyphs(P.label, P.halo); }
       // Measured roads by the pavement measured there (coverage.js surface): smooth, fair, rough; ink where roughness is unknown
       if (has('apex-coverage')) map.setPaintProperty('apex-coverage', 'line-color', ['match', ['get', 's'], 1, C.gain, 2, C.amber, 3, C.signal, C.dim]);
+      if (roadbookMap) roadbookMap.restyle();
     }
 
     function addApexLayers() {
@@ -694,13 +697,15 @@
       if (!me || typeof me.signed_in !== 'boolean') return;
       devAccess = !!(me.signed_in && me.member && me.developer === true);
       $('satSwitch').hidden = !devAccess;
-      if (!devAccess && state.toggles.satellite) { state.toggles.satellite = false; savePrefs(); paintSwitches(); }
+      // a launch that reads signed out (a token being renewed) draws no imagery (applySatellite) but keeps the developer's choice
       applySatellite();
       devCache = undefined;                                              // read again for this account (or none)
       applyDevTune();
       paintDevRow();
       if (devAccess) { const d = devSettings(); if (d && (d.offline || d.lines)) devPanel().catch(() => {}); }   // their switches, without the panel open
       else if (window.ApexDevPanel) ApexDevPanel.unmount();
+      if (devAccess) devDrivesSync();                                    // their drives go up to Vetta (web/dev_drives.js)
+      meAnswered = true; anonDrivesSync();                               // or, anyone else, the anonymous copies (web/anon_drives.js)
     }
     // Dev mode (the owner, 2026-11-09: "a dev mode in the app that shows all routing parameters and other debug info for only
     // me and my codev to mess with"), behind the Satellite layer's gate: a fresh /api/me with developer true. Its settings
@@ -730,6 +735,34 @@
       if (!devAccess || !window.ApexLazy) return Promise.resolve(null);
       return devPanelP || (devPanelP = ApexLazy.load('dev').then(() => (window.ApexDevPanel ? ApexDevPanel.mount(devHost) : null)).catch((e) => { devPanelP = null; throw e; }));
     }
+    // Developers' drives (the owner, 2026-11-15; web/dev_drives.js, backend/src/dev_drives.ts): on a developer's phone only,
+    // every drive (the ones from before too) uploads whole for internal review: at /api/me, when a drive is saved (recording.js
+    // says so on the 'apex-drives' channel) and when the app comes back to the front. Anyone else's phone never loads it.
+    let devDrivesStat = null;
+    function devDrivesSync() {
+      if (!devAccess || !window.ApexLazy || !window.ApexRecording || !window.ApexSync) return;
+      ApexLazy.load('devdrives').then(() => ApexDevDrives.sync({ ids: () => ApexRecording.ids(), get: (id) => ApexRecording.get(id),
+        apiFetch: ApexSync.apiFetch, store: localStorage, allowed: () => devAccess }))
+        .then((r) => { devDrivesStat = r; paintDevRow(); }).catch((e) => console.error('dev drives', e));
+    }
+    // Help improve Vetta roads (the owner, 2026-11-15; web/anon_drives.js, backend/src/anon_drives.ts): on by default, Garage →
+    // Settings → Road feel. Everyone but a developer (whose whole drives go above) sends an anonymous copy of each drive: no
+    // account, name or clock time, the first and last 1 to 1.5 km and every privacy zone left out. Only once /api/me has
+    // answered, so a developer's phone never sends both. The driver's own drive is never changed.
+    let meAnswered = false;
+    { const ab = $('ageBand');                                          // its optional age band, on this phone only (sent with each copy)
+      if (ab) { try { ab.value = localStorage.getItem('apex.ageBand') || ''; } catch (_) {}
+        ab.addEventListener('change', () => { try { if (ab.value) localStorage.setItem('apex.ageBand', ab.value); else localStorage.removeItem('apex.ageBand'); } catch (_) {} }); } }
+    function anonDrivesSync() {
+      if (!meAnswered || devAccess || !state.toggles.improve || !window.ApexLazy || !window.ApexRecording || !window.ApexSync) return;
+      ApexLazy.load('anondrives').then(() => ApexAnonDrives.sync({ ids: () => ApexRecording.ids(), get: (id) => ApexRecording.get(id),
+        post: async (bytes) => { const r = await ApexSync.apiFetch('/api/anon/drives', { method: 'POST', headers: { 'content-type': 'application/gzip' }, body: bytes }); return !!(r && r.ok); },
+        store: localStorage, allowed: () => !devAccess && !!state.toggles.improve,
+        inZone: (lat, lon) => { try { return !!ApexPrivacyZones.zoneAt(ApexPrivacyZones.load(localStorage), lat, lon); } catch (_) { return true; } } }))
+        .catch((e) => console.error('anon drives', e));
+    }
+    try { const ch = new BroadcastChannel('apex-drives'); ch.onmessage = () => { devDrivesSync(); anonDrivesSync(); }; } catch (_) { /* no channel: the next launch sends it */ }
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { devDrivesSync(); anonDrivesSync(); } });
     // the Garage's Settings row (index.html section data-setting="dev"): empty, so hidden, unless this is a developer
     function paintDevRow() {
       const b = $('garageDevBody');
@@ -740,7 +773,9 @@
         const o = document.createElement('button'); o.type = 'button'; o.className = 'ink-btn'; o.id = 'devOpenBtn'; o.textContent = 'Open the Dev panel';
         o.addEventListener('click', () => { if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.close(); showView('map');
           devPanel().then((p) => p && p.open()).catch((e) => { console.error('dev panel', e); toast('Couldn\'t load the Dev panel.'); }); });
-        b.append(p, o);
+        const sy = document.createElement('p'); sy.className = 'note'; sy.id = 'devDrivesNote';
+        sy.textContent = devDrivesStat ? `Dev: drives sync to Vetta (${devDrivesStat.total - devDrivesStat.pending} of ${devDrivesStat.total} sent)` : 'Dev: drives sync to Vetta';
+        b.append(p, o, sy);
       }
       try { if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.refresh(); } catch (_) { /* drawn at the next open */ }
     }
@@ -1404,15 +1439,26 @@
       if (pinMarker) { pinMarker.remove(); pinMarker = null; }
       droppedPin = null;
     }
+    // A position's place (a Nominatim-shaped reverse answer, or null): in the app Apple's geocoder (the shell's CLGeocoder,
+    // ApexPlacePlate.fromApple), since public Nominatim's usage policy doesn't allow an app's traffic; Nominatim on the
+    // website, or when Apple has nothing in 4 s. zoom: Nominatim's detail (18 a building, 12 a town).
+    async function reverseGeocode(lat, lon, zoom, timeoutMs) {
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      // a town's lookup is asked to about 1 km (2 decimals), of either service; only a dropped pin asks its exact spot
+      if (zoom < 18) { lat = Math.round(lat * 100) / 100; lon = Math.round(lon * 100) / 100; }
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex) {
+        const got = ApexPlacePlate.fromApple(await askNative({ cmd: 'placeReverse', lat, lon }, 4000));
+        if (got) return got;
+      }
+      const q = zoom >= 18 ? `lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}` : `lat=${lat.toFixed(2)}&lon=${lon.toFixed(2)}`;
+      try { return await RouteLoading.json(`https://nominatim.openstreetmap.org/reverse?format=json&${q}&zoom=${zoom}&addressdetails=1`, {}, timeoutMs); } catch (_) { return null; }
+    }
     async function reversePin(p) {
       const lookup = ++pinLookup;
       let name = '--';
       try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${encodeURIComponent(p.lat)}&lon=${encodeURIComponent(p.lon)}&zoom=18&addressdetails=1`);
-        if (response.ok) {
-          const place = await response.json();
-          name = place.name || place.address?.road || place.address?.hamlet || place.address?.village || place.address?.town || place.address?.city || place.display_name?.split(',')[0] || '--';
-        }
+        const place = await reverseGeocode(p.lat, p.lon, 18, 8000);
+        if (place) name = place.name || place.address?.road || place.address?.hamlet || place.address?.village || place.address?.town || place.address?.city || place.display_name?.split(',')[0] || '--';
       } catch (_) { /* An offline or unnamed place remains unknown. */ }
       if (lookup === pinLookup && droppedPin === p) $('pinPlace').textContent = name;
     }
@@ -1441,7 +1487,16 @@
       if (!place) reversePin(point);
       else if (window.ApexPlaceInfo) {                                  // hours, phone and site, once known (place_info.js)
         const asked = droppedPin;
-        ApexPlaceInfo.lookup(place.name, point.lat, point.lon).then((tags) => { if (droppedPin === asked && tags) placeInfo(ApexPlaceInfo.contact(tags, new Date())); }).catch(() => {});
+        const show = (tags) => { if (droppedPin === asked && tags) placeInfo(ApexPlaceInfo.contact(tags, new Date())); };
+        ApexPlaceInfo.lookup(place.name, point.lat, point.lon).then(async (tags) => {
+          show(tags);
+          // in the app, Apple's map fills a phone or website OpenStreetMap doesn't have (US businesses often lack them)
+          const t = tags || {};
+          if ((t.phone || t['contact:phone']) && (t.website || t['contact:website'])) return;
+          if (!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex)) return;
+          const more = ApexPlaceInfo.withApple(tags, await askNative({ cmd: 'placeContact', name: place.name, lat: point.lat, lon: point.lon }, 5000));
+          if (more && more !== tags) show(more);
+        }).catch(() => {});
       }
     }
     // How long the drive there takes, on the Go key ("Go here · 12 min"), as Apple and Google Maps' place cards say it: the
@@ -2016,7 +2071,7 @@
       if (learned != null) { try { localStorage.setItem(REACT_KEY, learned.toFixed(2)); } catch (_) {} }
     }
     const noteM = (e) => (Number.isFinite(e.start_m) && e.start_m <= e.dist_m ? e.start_m : e.dist_m);
-    const apexMpsOf = (e) => (e.type === 'corner' && Number.isFinite(e.apex_mph) ? e.apex_mph / 2.2369362921 : e.type === 'mark' && e.kind === 'stop' ? 0 : null);   // a stop sign: braking to a stop
+    const apexMpsOf = (e) => (e.type === 'corner' && Number.isFinite(e.apex_mph) ? e.apex_mph / 2.2369362921 : e.type === 'mark' && e.kind === 'stop' ? 0 : e.type === 'mark' && e.kind === 'tee' ? 4 : null);   // a stop sign: braking to a stop; a T: to a turn
     let lastNotes = [];
     // U-58: Auto says when it goes quiet and when the notes come back (ApexNoteTiming.createWakeVoice: once each way, never
     // within two minutes of the last, silent on a drive's first reading). The drive's first note is called whatever the
@@ -2723,6 +2778,8 @@
       const t = await trackFromPolyline(h.coords, 'horizon', 'The road ahead');
       if (!onFreeRoad()) return;
       t.kind = 'horizon'; t.subtitle = 'The road ahead, from the map'; t.horizonEnd = h.end;
+      // the road ahead ends at a T (horizon.js tee): a mark there, called like a stop sign (braking to a turn)
+      if (h.tee && window.ApexRoadMarks && ApexRoadMarks.teeMark) { const m = ApexRoadMarks.teeMark(t); if (m) t.marks = [m]; }
       useHorizon(t);
     }
     function useHorizon(t) {
@@ -2731,6 +2788,7 @@
       if (old && Array.isArray(old.marks)) free.marksSaid = [...(free.marksSaid || []), ...old.marks.filter(e => state.spoken.has(`${old.id}:${e.type}:${e.index}`))].slice(-30);
       track = t; state.cursorM = 0; state.spoken.clear();
       for (const e of t.events) if (said.some(k => k.type === e.type && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 25)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
+      for (const e of t.marks || []) if ((free.marksSaid || []).some(k => k.code === e.code && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 40)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
       if (mapReady) map.getSource('apex-route-src').setData({ type: 'FeatureCollection', features: [] });   // not a route: not drawn
       rebuildPins();
       render(false);
@@ -2748,6 +2806,7 @@
         await contextOn([c], CTX_BUDGET_MS, 'ahead', ['osm_overpass']);
         if (track !== t || !c.ctx || !c.corridor) return;
         t.marks = ApexRoadMarks.union(t.marks, ApexRoadMarks.events(c.ctx, c.corridor, t, (la, lo, lats, lons) => Core.nearestIndex(la, lo, lats, lons, -1)));
+        if (ApexRoadMarks.noTeeAtStop) t.marks = ApexRoadMarks.noTeeAtStop(t.marks);
         const cos = Math.cos(t.lat[0] * Math.PI / 180);
         for (const e of t.marks) if ((free.marksSaid || []).some(k => k.code === e.code && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 40)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
         if (t.marks.length) { rebuildPins(); render(false); }
@@ -3918,6 +3977,12 @@
       }
       const m = q.match(COORDS);
       if (m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]), label: `Pin ${parseFloat(m[1]).toFixed(3)}, ${parseFloat(m[2]).toFixed(3)}` };
+      // in the app, Apple's search first (better for US addresses and businesses, no usage limits); Nominatim after
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex) {
+        const p = state.lastPosition;
+        const got = await askNative({ cmd: 'placeSearch', q: q.trim(), lat: p ? p.lat : undefined, lon: p ? p.lon : undefined }, 6000);
+        if (got && Number.isFinite(got.lat) && Number.isFinite(got.lon)) return { lat: got.lat, lon: got.lon, label: got.name || q.trim() };
+      }
       let items;
       try { items = await RouteLoading.json(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`, {}, 10000); }
       catch (_) {
@@ -4470,7 +4535,7 @@
         try { if (window.ApexErrors && ApexErrors.reporter) ApexErrors.reporter.route(level, own.reason, own.error); } catch (_) { /* a report is never in the way */ }
         if (early.shown) return true;                                       // (never: the early quickest is ours too)
         const what = FunRoute.LEVELS[level].label;
-        const msg = own.reason === 'out' ? `${what} routes use Vetta's own road map, which covers Ohio, Kentucky and Indiana so far. Quick works anywhere.`
+        const msg = own.reason === 'out' ? `${what} routes use Vetta's own road map, which covers the 48 mainland US states. Quick works anywhere.`
           : own.reason === 'off' ? `${what} routes need Vetta's own router, which is switched off. Quick still works.`
           : own.reason === 'index' ? `Couldn't load Vetta's road map for this trip. Check signal and try again, or use Quick.`
           : `Couldn't plan a ${what} route just now. Try again, or use Quick.`;
@@ -5312,9 +5377,12 @@
       try { if (window.ApexErrors && ApexErrors.reporter) ApexErrors.reporter.route('loop', why, failed ? `${asked}, ${failed}` : asked); } catch (_) { /* a report is never in the way */ }
       toast(!ownOn() ? 'Loops need Vetta\'s own router, which is switched off.'
         : here == null ? 'Couldn\'t load Vetta\'s road map here. Check signal and try again.'
-        : !here ? 'Loops use Vetta\'s own road map, which covers Ohio, Kentucky and Indiana so far.'
+        : !here ? 'Loops use Vetta\'s own road map, which covers the 48 mainland US states.'
         : failed ? `Vetta's router couldn't finish a ${asked} loop this time. Try again, or a shorter one.`
-        : `Couldn't find a ${asked} loop on Vetta's road map from here. Try another length.`);
+        : `Couldn't find a ${asked} loop on Vetta's road map from here. Try another length.`,
+        // no loop at all (Big Sur, Moab, the San Juans: the good roads there run out and back) still leaves the best roads in
+        // reach: the key opens Best roads nearby, which leads to one (not on the car, where the message is said instead)
+        why === 'none' && !(car.echo > 0) ? { label: 'Best roads', ms: 10000, onClick: () => openNearby() } : undefined);
     }
     const loopCircle = (L) => ({ kind: 'circle', pts: loopWaypoints(L.c, L.miles, Math.random() * 2 * Math.PI), through: true, extra: loopCosting() || {} });
     /** Loop jobs routed (ours come routed) and built into tracks: { t, job, route, km, score, ... } for those that worked. */
@@ -7207,7 +7275,10 @@
     onSocial(() => { try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, askPublicSharing,
       invite: (c) => crewInviteLink(c),
       openRoute: (id) => openSharedRoute(id), builds: () => builds, onAllDrives: toDrives,
-      posts: (c) => (drivePosts && drivePosts.crewDrives ? drivePosts.crewDrives(c.id) : null),   // the drives members posted to this crew onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); },
+      posts: (c) => (drivePosts && drivePosts.crewDrives ? drivePosts.crewDrives(c.id) : null),
+      // the drives members posted to this crew (posts), and its roadbooks, every member adding roads (roadbooks.js)
+      books: (c) => (roadbooks && roadbooks.ofCrew ? roadbooks.ofCrew(c) : null),
+      onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); },
       // the owner's TestFlight note 05: the crew page's Upcoming drives is the crew's drives list, a + plans one (no Crew drives row)
       drives: (c, o) => (crewEvents ? crewEvents.section([{ id: c.id, name: c.name, visibility: c.visibility, role: c.is_owner ? 'owner' : 'member' }], { crewId: c.id, ...o }) : null),
       // P-18: the crew page's drive is the Crew drives sheet's card; a change on one redraws the other
@@ -7321,13 +7392,21 @@
         return snap.snap(`${look.map.bg}|${look.map.road}|${id}`, pts, w, h, pad); }; })();
     // Roadbooks (web/roadbooks.js, docs/SOCIAL.md 2.6): collections of great roads, yours, followed and public ones near you;
     // a road you drive is stamped from your own Log. In People (Friends), in Where to?, on a route card's Share, and by link.
-    let roadbooks = null;
+    let roadbooks = null, booksEdited = 0;
     onSocial(() => { try { roadbooks = window.ApexRoadbooks ? ApexRoadbooks.mount({ el, btn, toast, apiCall, jsonOf, copyText,
       me: () => accountMe, here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), mayLookUp: nearLookupOk,
       cellQuery: (lat, lon) => ApexPrivacyZones.cellQuery(lat, lon), fmtLen: (m) => ApexUnits.long(m, 1, true), origin: () => shareOrigin(),
       zones: () => privacyZones, planned: () => (plannedRoute && Array.isArray(plannedRoute.lat) && plannedRoute.lat.length > 1 ? plannedRoute : null),
       report: (o) => safety && safety.report(o), changed: () => { if (booksRowCount) booksRowCount(); }, mapUnder,
       stages: () => { try { const l = JSON.parse(localStorage.getItem('apex.segments') || '[]'); return Array.isArray(l) ? l : []; } catch (_) { return []; } },
+      edited: () => { clearTimeout(booksEdited); booksEdited = setTimeout(() => { if (roadbookMap) roadbookMap.forget(); }, 600); },   // a burst of stamps reads the map's books once
+      // a crew roadbook's road as a crew drive: People's Crews side, the crew's plan form named after the road, the road as
+      // its route (shared with the crew as Plan it does with a planned route)
+      planCrewDrive: (road, crew) => {
+        if (!crewEvents || !crew) return;
+        setPeopleSide('crews');
+        setTimeout(() => { if (!crewEvents.plan(crew.id, { title: road.name, route: { name: road.name, geom: road.geom } })) toast('Open the crew to plan a drive.'); }, 0);
+      },
       driveRoad: async (road, book) => {
         closeSheet();
         // from where you are to the road's start, then the road as drawn (as Drive it on a post leads to their line); close
@@ -7405,7 +7484,7 @@
       const tab = $('crewTab'), old = tab.querySelector('.badge'); if (old) old.remove();
       // friend requests from For you once it has answered (it may know of a newer one), else from /api/me
       const req = inboxBadge ? inboxBadge.data.items.filter((i) => i.kind === 'request').length : peopleRequests;
-      const parts = [[req, 'friend request'], ...peopleAsks, ...(inboxBadge && inboxBadge.n - req > 0 ? [[inboxBadge.n - req, 'new for you']] : [])].filter(([k]) => k > 0);
+      const parts = [[req, 'friend request'], ...peopleAsks, [dmUnread, 'unread message'], ...(inboxBadge && inboxBadge.n - req > 0 ? [[inboxBadge.n - req, 'new for you']] : [])].filter(([k]) => k > 0);
       const n = parts.reduce((a, [k]) => a + k, 0);
       if (!n) return;
       const b = el('span', { className: 'badge', textContent: String(n) });
@@ -7426,6 +7505,12 @@
     onSocial(() => { try { peopleSuggest = window.ApexPeopleSuggest ? ApexPeopleSuggest.mount({ el, btn, toast, apiCall, jsonOf,
       avatar: (id, h, px) => (window.ApexPhotos ? ApexPhotos.avatar(id, h, px) : el('span')),
       sent: (h) => { try { const l = JSON.parse(localStorage.getItem('apex.sentRequests') || '[]'); localStorage.setItem('apex.sentRequests', JSON.stringify([...(Array.isArray(l) ? l : []).filter((x) => x !== h), h].slice(-30))); } catch (_) {} } }) : null; } catch (e) { console.error('suggest', e); } });
+    // Messages (web/messages.js, backend/src/messages.ts): friend to friend; People's row, a profile's Message, a push's tap
+    let messages = null, dmUnread = 0;
+    onSocial(() => { try { messages = window.ApexMessages ? ApexMessages.mount({ el, btn, toast, apiCall, jsonOf,
+      avatar: (id, h, px) => (window.ApexPhotos ? ApexPhotos.avatar(id, h, px) : el('span')),
+      report: (o) => (safety ? safety.report(o) : null),
+      badge: (n) => { if (n !== dmUnread) { dmUnread = n; paintPeopleBadge(); } } }) : null; } catch (e) { console.error('messages', e); } });
     // Drive posts and the Feed (web/drive_posts.js, docs/SOCIAL.md 2.13): Post on the drive's card; the Feed on People → Friends
     let drivePosts = null;
     onSocial(() => { try { drivePosts = window.ApexDrivePosts ? ApexDrivePosts.mount({ el, btn, toast, apiCall, jsonOf,
@@ -7473,6 +7558,20 @@
     onSocial(() => { try { meetsMap = window.ApexMeetsMap && crewEvents && crewEvents.meetCard ? ApexMeetsMap.mount({ el, btn, apiCall, jsonOf, map,
       mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; }, mayLookUp: nearLookupOk,
       card: (e, redo) => crewEvents.meetCard(e, redo) }) : null; } catch (e) { console.error('meets map', e); } });
+    // Roadbooks on the map (web/roadbook_map.js): the roads of your books, your crews' and the ones you follow, and public
+    // books round the view, quieter; a tap opens the book. Only books with a road in view are opened.
+    const booksNearAt = new Map();                                       // cell query → the public books there (a promise)
+    onSocial(() => { try { roadbookMap = window.ApexRoadbookMap && roadbooks ? ApexRoadbookMap.mount({ map,
+      call: async (m, p) => { const r = await apiCall(m, p); return { ok: r.ok, data: r.ok ? await jsonOf(r) : null }; },
+      // your lists as last read, read once if this page hasn't yet; with no signal, what this phone kept of them
+      books: async () => { const l = roadbooks.lists() || await roadbooks.reload().catch(() => null); if (l) return [...l.mine, ...(l.crews || []), ...l.following];
+        try { const c = JSON.parse(localStorage.getItem('apex.roadbooks') || 'null'); return c && Array.isArray(c.books) ? c.books : []; } catch (_) { return []; } },
+      // public books round the map's centre: its coarse cell, never from inside a privacy zone, asked once a cell a page
+      near: (lat, lon) => { if (!nearLookupOk({ lat, lon })) return []; const q = ApexPrivacyZones.cellQuery(lat, lon);
+        if (!booksNearAt.has(q)) booksNearAt.set(q, apiCall('GET', `/api/roadbooks/near?${q}`).then(async (r) => { const d = r.ok ? await jsonOf(r) : null; if (!Array.isArray(d)) booksNearAt.delete(q); return Array.isArray(d) ? d : []; }).catch(() => { booksNearAt.delete(q); return []; }));
+        return booksNearAt.get(q); },
+      colours: () => ({ ink: look.colors.ink, gain: look.colors.gain, casing: look.colors.routeCasing }),
+      open: (id) => { if (roadbooks) roadbooks.open(id); }, blocked: () => state.tapToRoute || state.mode === 'live' || Date.now() < suppressMapClickUntil }) : null; } catch (e) { console.error('roadbook map', e); } });
     // Friends on the map (web/friends_map.js, REVIEW.md 5.4): the Friends layer and who sees you, sent only while you drive
     let friendsMap = null;
     onSocial(() => { try { friendsMap = window.ApexFriendsMap ? ApexFriendsMap.mount({ el, btn, toast, askSignIn, apiCall, map, zones: () => privacyZones, inZone: inPrivacyZone,
@@ -7523,10 +7622,18 @@
       paintPushState();
       // Where to? opened before the account came back: its time attack row's peek skipped then, so it goes now (CI 2026-11-12)
       if (accountMe && accountMe.member && $('planPanel').classList.contains('open')) peekTimeAttack();
-      if (friendsMap && accountMe && accountMe.member) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
-      else if (state.toggles.friends) { state.toggles.friends = false; paintSwitches(); }
-      if (meetsMap && accountMe && accountMe.member) { if (state.toggles.meets) meetsMap.setLayer(true); }
-      else if (state.toggles.meets && socialIn) { state.toggles.meets = false; paintSwitches(); }
+      // A layer left on stays on (Nate 2026-11-15: "the map layers sometimes reset when I reopen the app"): the account comes
+      // back before the lazy social scripts, so a member's Friends, Meets and Roadbooks load them and draw then; a launch
+      // that reads signed out draws none of them but keeps the choice for the next one signed in.
+      if (accountMe && accountMe.member) {
+        if (friendsMap) friendsMap.start();
+        if ((state.toggles.friends || state.toggles.meets || state.toggles.roadbooks) && !socialFailed) needSocial().then(() => {
+          if (!accountMe || !accountMe.member) return;
+          if (friendsMap) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
+          if (meetsMap && state.toggles.meets) meetsMap.setLayer(true);
+          if (roadbookMap && state.toggles.roadbooks) roadbookMap.setLayer(true);
+        }).catch(() => {});
+      }
       if (feedbackUi) feedbackUi.refresh();
       if (me && !me.signed_in) setRoutingCars(null);
       else if (me && me.member) apiCall('GET', '/api/garage').then(r => (r.ok ? r.json() : null)).then(list => { if (list) setRoutingCars(list); }).catch(() => {});
@@ -7731,6 +7838,11 @@
       // For you (inbox.js): what happened to you lately, one sentence a row (a new account's page stays its three parts)
       if (inbox && !empty) body.append(inbox.section());
       // the Feed (drive_posts.js): the newest drives your friends and crews posted, kudos and comments one tap in
+      // Messages: your conversations with friends, one row (its count is what you haven't read) over a sheet of them
+      if (messages && accepted.length) {
+        const mpop = popSheet('Messages'); pops.push(mpop);
+        body.append(el('div', { className: 'nav-rows' }, messages.row(() => { mpop.replaceChildren(mpop.firstElementChild, messages.list()); mpop.classList.add('open'); })));
+      }
       if (drivePosts && !empty) {
         const fpop = popSheet('Feed'); pops.push(fpop);
         body.append(drivePosts.section(() => { if (!fpop._filled) { fpop.append(drivePosts.full()); fpop._filled = true; } fpop.classList.add('open'); }));
@@ -7765,6 +7877,7 @@
         if (r.ok) closeSheet();
       };
       const keysFor = (f) => [
+        ...(messages && f.handle ? [['Message', () => { closeProfile(); messages.open(f.handle); }]] : []),
         ...(where.get(f.handle) && friendsMap ? [['On the map', () => seeOnMap(f)]] : []),
         ['Share a route', () => { closeProfile(); shareRouteWith(f.handle); }],
         ...(convoy ? [['Invite to a drive', () => driveWith(f)]] : []),
@@ -7920,7 +8033,7 @@
         let booksRow = null;
         const say = (t) => { if (booksRow) booksRow._count.textContent = t; };
         booksRow = navRow('Roadbooks', roadbooks.section(say));
-        booksRowCount = () => { const l = roadbooks.lists(); if (l) say([l.mine.length ? `${l.mine.length} yours` : '', l.following.length ? `${l.following.length} followed` : ''].filter(Boolean).join(' \u00b7 ')); };
+        booksRowCount = () => { const l = roadbooks.lists(); if (l) say(roadbooks.countLine(l)); };
         friendRows.append(booksRow);
       }
       if (friendRows.children.length) body.append(friendRows);
@@ -8350,7 +8463,7 @@
       try {
         // a new area is named for its town (the map's reverse geocode, as the place plate asks it: to 0.01°), else its place
         let town = null;
-        if (!name) { try { town = ApexPlacePlate.town(await RouteLoading.json(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat.toFixed(2)}&lon=${lon.toFixed(2)}&zoom=12&addressdetails=1`, {}, 6000)); } catch (_) {} }
+        if (!name) { try { town = ApexPlacePlate.town(await reverseGeocode(lat, lon, 12, 6000)); } catch (_) {} }
         const a = await ApexOfflineTiles.download({ lat, lon, radiusKm, styleUrl: MAP_STYLE, id, name: name || (town ? `Around ${town}` : `Around ${lat.toFixed(2)}, ${lon.toFixed(2)}`),
           onProgress: (d, n) => { if (d % 25 === 0 || d === n) btn.textContent = `Saving the map… ${Math.round(100 * d / n)}%`; } });
         // members' road feel for the area too (signed in as a member): measured roads plan the same with no signal
@@ -8457,7 +8570,8 @@
       if (Date.now() - placeAsk.at < 20 * 60000 && moved < 5) return;
       placeAsk.at = Date.now(); placeAsk.lat = p.lat; placeAsk.lon = p.lon;
       const la = p.lat.toFixed(2), lo = p.lon.toFixed(2), d = {};
-      try { const r = await RouteLoading.json(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${la}&lon=${lo}&zoom=12&addressdetails=1`, {}, 6000); d.place = ApexPlacePlate.town(r); } catch (_) {}
+      // the town, beside the weather rather than before it: the sky (and the cold-tyres line) never waits on a slow geocoder
+      const town = reverseGeocode(Number(la), Number(lo), 12, 6000).then((r) => { d.place = ApexPlacePlate.town(r); }).catch(() => {});
       // the forecast's now and its last 3 hours of rain, and (US) the nearest NWS stations' latest observation, together
       const om = RouteLoading.json(`https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}&current=temperature_2m,weather_code,precipitation&hourly=precipitation&past_hours=3&forecast_hours=1&timezone=GMT`, {}, 6000)
         .then((w) => { if (w && w.current) { d.tempC = w.current.temperature_2m; d.code = w.current.weather_code; d.mmNow = w.current.precipitation; } d.mm3h = ApexPlacePlate.pastMm(w); }).catch(() => {});
@@ -8470,14 +8584,20 @@
         obs.sort((a, b) => a.ageMin - b.ageMin);                         // the freshest of the nearest three
         d.obs = obs[0] || null;
       })().catch(() => {});
-      await Promise.all([om, nws]);
-      placeAsk.data = d;
       // Vetta Line: a masthead, the place set large and the sky as its line under it. The separator between them stays in the
       // text (not shown), so the plate still reads "Tellico Plains · Dry · 61°" to a screen reader and to textContent.
-      { const pp = $('placePlate'), m = ApexPlacePlate.parts(d, ApexUnits.metric()), b = document.createElement('b');
+      const fill = () => {
+        const pp = $('placePlate'), m = ApexPlacePlate.parts(d, ApexUnits.metric()), b = document.createElement('b');
         b.textContent = m.head; pp.replaceChildren(...(m.head ? [b] : []));
-        if (m.rest) { const i = document.createElement('i'), sp = document.createElement('span'); i.textContent = ' · '; sp.textContent = m.rest; pp.append(i, sp); } }
-      paintPlacePlate();
+        if (m.rest) { const i = document.createElement('i'), sp = document.createElement('span'); i.textContent = ' · '; sp.textContent = m.rest; pp.append(i, sp); }
+        paintPlacePlate();
+      };
+      // the sky is used (wet roads, cold tyres) as soon as it is known; the town fills the plate when it comes
+      await Promise.all([om, nws]);
+      placeAsk.data = d;
+      fill();
+      await town;
+      fill();
     }
     setTimeout(refreshPlacePlate, 4000); setInterval(refreshPlacePlate, 60000);
     window.apexDebug.placePlate = () => { placeAsk.at = 0; return refreshPlacePlate(); };   // e2e: ask now (the first ask waits 4 s for a fix)
@@ -8845,7 +8965,7 @@
       paintPushKinds();
     }
     // each kind its own switch, under the main one while it is on (the server keeps which are off: GET/PUT /api/push/kinds)
-    const PUSH_KINDS = [['friends', 'Friend requests'], ['kudos', 'Kudos'], ['comments', 'Comments and mentions'], ['duels', 'Duels'], ['beaten', 'Someone beat you'], ['crews', 'Crew drives']];
+    const PUSH_KINDS = [['friends', 'Friend requests'], ['kudos', 'Kudos'], ['comments', 'Comments and mentions'], ['duels', 'Duels'], ['beaten', 'Someone beat you'], ['crews', 'Crew drives'], ['messages', 'Messages']];
     let pushOff = null;
     function paintPushKinds() {
       const box = $('pushKinds'); if (!box) return;
@@ -8945,10 +9065,17 @@
       // asked for, from the plate's Watch a replay, never as part of trying the look
       paintTrial();
     }
+    // a look's card is drawn in the mode the page is in (2026-11-14, the main look's redesign: a day card glared white
+    // in the night Garage); refreshed when the mode turns (paintThemeCards)
+    function previewTokens(box, t) {
+      const m = cardMode(), c = t[m] || t.day;
+      for (const [k, v] of Object.entries(c)) box.style.setProperty(`--${k.replace(/[A-Z]/g, (x) => '-' + x.toLowerCase())}`, v);
+      box._tok = m;
+    }
     function themePreview(t) {
-      const c = t.day, box = document.createElement('div');
+      const box = document.createElement('div');
       box.className = `theme-preview tp-${t.id}`;
-      for (const [k, v] of Object.entries(c)) box.style.setProperty(`--${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}`, v);
+      previewTokens(box, t);
       box.style.setProperty('--font-ui', t.fonts.ui); box.style.setProperty('--font-num', t.fonts.num);
       fillPreview(box, t);
       return box;
@@ -8958,7 +9085,7 @@
     const vocabDeps = () => ({ plain: window.ApexPlainNotes, units: ApexUnits, paceNoteText: Core.paceNoteText, lockup: Inst.lockup, voiceLines: window.ApexVoiceLines });
     const cardMode = () => (document.documentElement.dataset.mode === 'night' ? 'night' : 'day');
     function fillPreview(box, t) {
-      const c = t.day, st = window.ApexVocabulary && ApexVocabulary.sampleStrip(state.noteWords, vocabDeps());
+      const c = t[cardMode()] || t.day, st = window.ApexVocabulary && ApexVocabulary.sampleStrip(state.noteWords, vocabDeps());
       box._words = state.noteWords;
       if (t.car && t.car.dial && t.car.meter) {
         // a car's own theme: its card is the car's cluster, parked (needles at rest: no reading is shown), and the car from
@@ -8989,6 +9116,7 @@
       const box = $('themeCards'); if (!box) return;
       if (themeCards.size !== Object.keys(Themes.THEMES).length) {
         themeCards.clear();
+        box._at = null;                                                  // new cards start the shelf at 0: turn it to the look in use again
         box.replaceChildren(...Object.values(Themes.THEMES).map((t) => {
           const card = el('div', { className: 'theme-card' });
           const ok = () => themeAllowed(t.id);
@@ -9018,7 +9146,9 @@
       }
       for (const { t, card, preview, key, inUseTag, ok, quote } of themeCards.values()) {
         const allowed = ok(), inUse = state.theme === t.id && !themeTrial;
-        if (preview._words !== state.noteWords || (t.car && preview._mode !== cardMode())) fillPreview(preview, t);   // the words changed: the strip head follows
+        const turned = preview._tok !== cardMode();
+        if (turned) previewTokens(preview, t);
+        if (turned || preview._words !== state.noteWords || (t.car && preview._mode !== cardMode())) fillPreview(preview, t);   // the words changed: the strip head follows
         const q = t.voice ? ' · suggested voice' : '';
         if (quote.data !== q) quote.data = q;
         card.classList.toggle('in-use', state.theme === t.id);
@@ -9259,6 +9389,10 @@
       state.toggles[k] = !state.toggles[k];
       paintSwitches();
       if (k === 'lpr') updatePins();
+      if (k === 'improve') {                                           // Help improve Vetta roads: on again, only drives from now on go
+        try { if (state.toggles.improve) localStorage.setItem('apex.anonDrives.since', new Date().toISOString()); } catch (_) {}
+        anonDrivesSync();
+      }
       if (k === 'satellite') {                                         // developers only (applyDevFlags); anyone else: stays off
         if (!devAccess) { state.toggles.satellite = false; paintSwitches(); return; }
         applySatellite();
@@ -9282,6 +9416,13 @@
         needSocial().then(() => {
           if (meetsMap) meetsMap.setLayer(state.toggles.meets);
           if (state.toggles.meets) toast(`Meets within ${ApexUnits.long(80000, 0)} of the map. Tap a pin.`);   // the Worker's 80 km, in the driver's units
+        });
+      }
+      if (k === 'roadbooks') {   // your roadbooks' roads on the map (roadbook_map.js)
+        if (!accountMe || !accountMe.member) { state.toggles.roadbooks = false; paintSwitches(); askSignIn('see your roadbooks on the map'); return; }
+        needSocial().then(() => {
+          if (roadbookMap) roadbookMap.setLayer(state.toggles.roadbooks);
+          if (state.toggles.roadbooks) toast(roadbooks && roadbooks.hasAny() ? 'Your roadbooks\u2019 roads: solid ones you\u2019ve driven. Tap one to open its book.' : 'No roadbooks yet. Keep one in People \u2192 Roadbooks and its roads show here.');
         });
       }
       if (k === 'roadcams') roadCamsLayer(state.toggles.roadcams);   // Ohio's traffic cameras (road_cams.js), loaded on first use
@@ -9766,6 +9907,23 @@
       }
       return regionLists[name];
     }
+    // The same lists for anywhere the lower-48 build covers (osm-ctx-us.yml): the waterfalls and closures in the points
+    // files of the 0.25° cells round the route (GET /api/ctx/points?cells=, cell ids only), one request shared by both;
+    // the answer as the region list's shape (scenic.js cellsDoc), or null, and the region's file or Overpass then.
+    const cellAnswers = new Map();
+    async function cellList(kind, s, w, n, e) {
+      if (!window.ApexScenic || !ApexScenic.cellsIn) return null;
+      const keys = ApexScenic.cellsIn(s, w, n, e);
+      if (!keys.length) return null;
+      const id = keys.join(',');
+      if (!cellAnswers.has(id)) {
+        if (cellAnswers.size > 8) cellAnswers.delete(cellAnswers.keys().next().value);
+        cellAnswers.set(id, apiCall('GET', `/api/ctx/points?cells=${id}`).then((r) => (r && r.ok ? r.json() : null)).catch(() => null));
+      }
+      const j = await cellAnswers.get(id);
+      if (!j) cellAnswers.delete(id);
+      return j && j.cells ? ApexScenic.cellsDoc(j.cells, kind) : null;
+    }
     // Seasonal and time-of-day closures (conditional_closures.js, IDEAS R-22): OSM conditional access tags on the roads the
     // route uses, read for when you'd get there. A trip over 1° across, or the map offline: nothing said.
     async function attachClosures(t) {
@@ -9774,10 +9932,11 @@
       let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
       for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
       if (n - s > 1 || e - w > 1) return;
-      // inside Ohio, Kentucky and Indiana from the list built weekly with the OSM tiles (GET /api/ctx/closures.json, asked
-      // once a session), elsewhere from Overpass, every server raced
+      // from the weekly OSM build: the cells round the route (lower 48), else the region's list (GET /api/ctx/closures.json,
+      // asked once a session); elsewhere from Overpass, every server raced
       const box = [s - 0.005, w - 0.005, n + 0.005, e + 0.005];
-      const json = (ApexConditional.inRegion && ApexConditional.inRegion(await regionList('closures'), ...box))
+      const json = (ApexConditional.inRegion && (ApexConditional.inRegion(await cellList('closures', ...box), ...box)
+          || ApexConditional.inRegion(await regionList('closures'), ...box)))
         || await ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexConditional.query(...box)));
       if (!json || plannedRoute !== t) return;
       const total = t.dist[t.dist.length - 1], now = leaveAt();
@@ -10197,8 +10356,8 @@
       $('routeCardAlong').hidden = true; $('routeAlongPanel').hidden = true; $('routeAlongPanel').replaceChildren();
       $('routeAlongLine').setAttribute('aria-expanded', 'false');
     }
-    // IDEAS R-24: waterfalls near the route, from OpenStreetMap (the map's tiles have none): inside Ohio, Kentucky and
-    // Indiana from the list built weekly with the OSM tiles (GET /api/ctx/falls.json, asked once a session), elsewhere
+    // IDEAS R-24: waterfalls near the route, from OpenStreetMap (the map's tiles have none): from the weekly OSM build (the
+    // cells round the route, lower 48; else the region's GET /api/ctx/falls.json, asked once a session), elsewhere
     // through Overpass. A trip over 1° across, the servers down or offline: none, and the Along line says what the tiles gave.
     async function fallsNear(t) {
       if (!window.ApexCameras || !ApexScenic.fallsQuery) return [];
@@ -10206,7 +10365,8 @@
       for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
       if (n - s > 1 || e - w > 1) return [];
       if (ApexScenic.fallsInRegion) {
-        const got = ApexScenic.fallsInRegion(await regionList('falls'), s - 0.005, w - 0.005, n + 0.005, e + 0.005);
+        const box = [s - 0.005, w - 0.005, n + 0.005, e + 0.005];
+        const got = ApexScenic.fallsInRegion(await cellList('falls', ...box), ...box) || ApexScenic.fallsInRegion(await regionList('falls'), ...box);
         if (got) return got;
       }
       try {
@@ -10267,9 +10427,27 @@
         if (reported.pins.has(h.id)) continue;
         const el = document.createElement('div'); el.className = h.official ? 'hz-pin hz-dot' : 'hz-pin';   // a DOT's event: its own word
         el.textContent = ((h.official && h.label) || ApexHazardReports.LABEL[h.kind] || 'Hazard').toUpperCase();
-        reported.pins.set(h.id, new maplibregl.Marker({ element: el }).setLngLat([h.lon, h.lat]).addTo(map));
+        el.setAttribute('aria-label', el.textContent.toLowerCase());
+        const mk = new maplibregl.Marker({ element: el }).setLngLat([h.lon, h.lat]).addTo(map);
+        mk.hz = h; reported.pins.set(h.id, mk);
+      }
+      placePins();
+    }
+    // Which pins show, and how (hazard_reports.js pinView): only in view, a mark zoomed out, a tag closer in, never piled up
+    let pinsQueued = false;
+    function placePins() {
+      if (!reported.pins.size || !mapReady) return;
+      const c = map.getCanvas(), w = c.clientWidth, h = c.clientHeight, list = [];
+      for (const [id, mk] of reported.pins) { const ll = mk.getLngLat(), pt = map.project(ll), hz = mk.hz || {};
+        list.push({ id, x: pt.x, y: pt.y, kind: hz.kind, label: mk.getElement().textContent }); }
+      const how = ApexHazardReports.pinView(list, { width: w, height: h, zoom: map.getZoom() });
+      for (const [id, mk] of reported.pins) {
+        const e = mk.getElement(), v = how.get(id);
+        e.style.display = v ? '' : 'none';
+        e.classList.toggle('hz-mini', v === 'mark');
       }
     }
+    if (map) map.on('move', () => { if (pinsQueued) return; pinsQueued = true; requestAnimationFrame(() => { pinsQueued = false; placePins(); }); });
     // Each fresh fix while driving: call the next reported hazard ahead, and after passing one ask if it's still there.
     // ---- crash check (IDEAS D-17; web/incident.js): impact + stop asks "Are you OK?"; the contact is local only ----------
     const CRASH_KEY = 'apex.crashContact';
@@ -10741,7 +10919,7 @@
       const r = w.tracker.update(rows);
       const bar = $('stageBar');
       if (!r) { bar.hidden = true; return; }
-      bar.hidden = r.state === 'done';
+      bar.hidden = r.state === 'done' || !$('ghostBar').hidden;      // a friend's ghost on this stage takes the bar
       $('stageName').textContent = r.name;
       $('stageDelta').textContent = ApexStageDelta.label(r.delta);
       $('stageCount').textContent = `${r.done}/${r.of} corners`;
@@ -10751,6 +10929,57 @@
       toast(line);
       const bare = r.delta == null ? null : r.delta === 0 ? 'That stage: level with your best.' : `That stage: ${Math.abs(r.delta)} points ${r.delta > 0 ? 'up on' : 'down on'} your best.`;
       if (r.delta != null) sayQuietLine(line, bare);   // the co-driver says how the stage went, once it's over (technique, never time)
+    }
+    // ---- live ghost duels (web/ghost_duel.js, IDEAS D-04; the owner: time duels, live time gaps) -------------------------
+    // On one of your stages a friend has driven, their quickest run as they shared it (its splits, only where their times
+    // reach you, on a road like today's) is a ghost: the bar shows "+0.3 s vs @sam" and gives way to nothing else on a
+    // stage; the co-driver says how you stand half way, and at the finish (full notes only,
+    // in the quiet slot). Members only; offline or with no friend's run there, nothing shows.
+    let ghostWatch = null;
+    async function startGhostWatch(surface = null) {
+      ghostWatch = null; $('ghostBar').hidden = true;
+      if (!window.ApexGhostDuel || !window.ApexSync) return;
+      let segs = [];
+      try { segs = JSON.parse(localStorage.getItem('apex.segments') || '[]'); } catch (_) {}
+      segs = (Array.isArray(segs) ? segs : []).filter((x) => x && x.synced && Number.isFinite(x.lat0) && Number.isFinite(x.length_m));
+      if (!segs.length) return;
+      try { if (!(await ApexSync.member())) return; } catch (_) { return; }
+      const canon = (x) => x.origin || x.id;
+      let rows = [];
+      try {
+        const r = await ApexSync.apiFetch(`/api/board/ghosts?canons=${encodeURIComponent(segs.slice(0, 20).map(canon).join(','))}${surface ? `&surface=${surface}` : ''}`);
+        rows = r.ok ? await r.json() : [];
+      } catch (_) { rows = []; }
+      if (!driveActive || !Array.isArray(rows) || !rows.length) return;
+      const geom = (x) => { try { const g = typeof x.geom === 'string' ? JSON.parse(x.geom) : x.geom; return Array.isArray(g) && g.length > 1 ? g : null; } catch (_) { return null; } };
+      const ghosts = rows.map((g) => { const st = segs.find((x) => canon(x) === g.canon_id);
+        return st ? { stage: { id: st.id, name: st.name || 'Stage', start: [st.lat0, st.lon0], end: [st.lat1, st.lon1], length_m: st.length_m, geom: geom(st) },
+                       who: g.handle || g.name || 'friend', name: g.name || g.handle || 'your friend', splits: g.splits, time_s: g.time_s, surface: g.surface || null } : null; }).filter(Boolean);
+      if (ghosts.length) ghostWatch = { tracker: ApexGhostDuel.createTracker(ghosts), ghosts, at: 0, surface };
+    }
+    function feedGhost() {
+      const w = ghostWatch, rows = drive.rec && drive.rec.rows;
+      if (!w || !rows || performance.now() - w.at < 1000) return;
+      w.at = performance.now();
+      // the road turned wet or icy since: your friend's dry run is no ghost for it (road_surface.js, like with like)
+      const st = drive.wet && drive.wet.state, slick = st === 'wet' || st === 'ice' ? st : null;
+      if (slick !== w.surface && !w.refetching) { w.refetching = true; startGhostWatch(slick); return; }
+      const r = w.tracker.update(rows), bar = $('ghostBar');
+      if (!r) { bar.hidden = true; return; }
+      const g = w.ghosts.find((x) => x.stage.id === r.stageId), name = g ? String(g.name).split(' ')[0] : r.who;
+      bar.hidden = r.state === 'done';
+      $('ghostName').textContent = r.name;
+      $('ghostGap').textContent = ApexGhostDuel.label(r.gap, r.who);
+      bar.classList.toggle('ahead', Number.isFinite(r.gap) && r.gap < -0.05); bar.classList.toggle('behind', Number.isFinite(r.gap) && r.gap > 0.05);
+      if (!bar.hidden) { $('stageBar').hidden = true; $('coachBar').hidden = true; }
+      const words = (x) => (window.ApexPassCoach && ApexPassCoach.spoken ? ApexPassCoach.spoken(x) : `${x.toFixed(1)} seconds`);
+      if (r.state === 'done') {
+        const line = Number.isFinite(r.gap) ? `${r.name} done. ${ApexGhostDuel.spoken(r.gap, name, words)}` : `${r.name} done.`;
+        toast(line); if (isSpirited()) sayQuietLine(line);
+        (drive.ghosts || (drive.ghosts = [])).push({ stage: r.name, who: r.who, gap_s: Number.isFinite(r.gap) ? Math.round(r.gap * 10) / 10 : null });
+        return;
+      }
+      if (r.say && isSpirited() && Number.isFinite(r.gap)) sayQuietLine(ApexGhostDuel.spoken(r.gap, name, words));
     }
     // ---- live coaching against your best pass, on any road driven before (web/pass_coach.js) ---------------------------
     // Each remembered corner you finish is set against its fastest pass (the time gap, owner 2026-11-14) and its best
@@ -10774,7 +11003,7 @@
         w.saidAt = performance.now(); sayQuietLine(ev.say);
       }
       const v = r.view;
-      bar.hidden = !v || (v.delta == null && v.gap == null) || !$('stageBar').hidden;
+      bar.hidden = !v || (v.delta == null && v.gap == null) || !$('stageBar').hidden || !$('ghostBar').hidden;
       if (bar.hidden) return;
       $('coachDelta').textContent = ApexPassCoach.label(v.delta, v.gap);
       $('coachCount').textContent = `${v.n} corner${v.n === 1 ? '' : 's'}`;
@@ -10869,7 +11098,7 @@
       carPost({ kind: 'start', title: track && track.kind === 'route' ? String(track.name || 'Route').slice(0, 80) : 'Drive' });
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0; drive.battery = null;
-      startStageWatch(); startCoach();
+      startStageWatch(); startCoach(); drive.ghosts = null; startGhostWatch(null);
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
       drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); drive.surface = window.ApexRoadSurface ? ApexRoadSurface.createLog() : null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
@@ -10900,7 +11129,7 @@
             paintPerms();
             paintDriveStat();
           },
-          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.status.webMount = fr.web_mount || null; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); noteBrakes(fr); noteWet(); noteFlow(); feedStage(); feedCoach(); feedTrack(fr);
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.status.webMount = fr.web_mount || null; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); noteBrakes(fr); noteWet(); noteFlow(); feedStage(); feedGhost(); feedCoach(); feedTrack(fr);
             if (window.ApexBattery && webBattery) drive.battery = ApexBattery.feed(drive.battery, webBattery.level, webBattery.charging, Date.now());
             window.apex.live(fr); paintDriveStat(); },
         });
@@ -11304,7 +11533,7 @@
       if (pendingEnd) { clearTimeout(pendingEnd.timer); pendingEnd = null; paintEndUndo(); }   // I-3: any other way out ends it now
       driveActive = false; paintBehind(); paintOverviewKey(); paintTurnArrow(null, -1); driveCam(false); pushQuiet(false); soundtrackStop(); drive.wet = null; if (ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null);   // the dry road back
       const kept = keepStop();                                         // Round 3: no more checkpoints; dropped once saved
-      stageWatch = null; $('stageBar').hidden = true; coachWatch = null; $('coachBar').hidden = true;
+      stageWatch = null; $('stageBar').hidden = true; coachWatch = null; $('coachBar').hidden = true; ghostWatch = null; $('ghostBar').hidden = true;
       const laps = circuit.timer ? circuit.timer.state(Date.now()).laps : [];
       const battery = window.ApexBattery ? ApexBattery.summary(drive.battery) : null; drive.battery = null;
       resetCircuit();
@@ -11751,6 +11980,7 @@
       // a push's tap (backend/src/push.ts): the post it is about, or the friend, or People's side
       showView(ok(p.crew) || ok(p.convoy) || p.view === 'crews' ? 'crews' : 'friends');
       if (ok(p.post)) needSocial().then(() => { if (drivePosts) drivePosts.open(p.post); });
+      if (ok(p.chat) && /^[A-Za-z0-9_]{1,20}$/.test(p.chat)) needSocial().then(() => { if (messages) messages.open(p.chat); });
       if (ok(p.friend) && /^[A-Za-z0-9_]{3,20}$/.test(p.friend)) window.apexOpenFriend(p.friend.toLowerCase()); else renderAccount();
     }
     // Siri: go=to with the place said (q, base64url UTF-8: ApexIntents.swift linkWords), go=loop60 for "Find a 1 hour loop".
@@ -11939,7 +12169,7 @@
         feedReported(frame); feedReaction(frame); feedCrash(frame);
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec && !(Number.isFinite(frame.seq) && keep.seq != null && frame.seq <= keep.seq)) {   // (taken in a backlog)
-          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); noteBrakes(frame); noteWet(); noteFlow(); feedStage(); feedCoach(); feedTrack(frame);
+          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); noteBrakes(frame); noteWet(); noteFlow(); feedStage(); feedGhost(); feedCoach(); feedTrack(frame);
           if (window.ApexBattery) drive.battery = ApexBattery.feed(drive.battery, frame.battery, frame.charging === true, Date.now());
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;
@@ -11975,7 +12205,7 @@
         if (msg && msg.type === 'driveCam') { driveCamSaid(msg.state); return; }
         if (msg && msg.type === 'carOffline') { carOfflineBytes = Number.isFinite(msg.bytes) ? msg.bytes : null; if (typeof renderOffline === 'function') renderOffline().catch(() => {}); return; }
         if (msg && msg.type === 'lifecycle') { if (driveActive) keepSave(); return; }   // going to the background: kept now
-        if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
+        if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'placeFound' || msg.type === 'placeContact' || msg.type === 'placeReversed' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'nudge') { nudgeAnswered(!!msg.granted); return; }
         if (msg && msg.type === 'push') { pushAnswered(!!msg.granted); return; }
         if (msg && msg.type === 'pushToken') { pushTokenIn(msg); return; }

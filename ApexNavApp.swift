@@ -117,7 +117,7 @@ enum ApexWebBundle {
 
     /// "Open in the app" links from the web (apexnav://open?invite=…): the page's own link parameters, and only those, carried
     /// over to the cockpit page, which handles them exactly as it does on the web. Anything else opens the app as usual.
-    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy", "go", "q", "road", "roadbook", "view", "friend", "post", "place"]   // q: a place said to Siri (base64url, ApexIntents.swift); go=drive: start a drive (IDEAS C-05); road: a road someone sent (web/road_link.js); view/friend/post: a push's tap (ApexPush.swift)
+    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy", "go", "q", "road", "roadbook", "view", "friend", "post", "place", "chat"]   // q: a place said to Siri (base64url, ApexIntents.swift); go=drive: start a drive (IDEAS C-05); road: a road someone sent (web/road_link.js); view/friend/post/chat: a push's tap (ApexPush.swift)
     private static let linkValue = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
     /// Universal links (the owner's domain, 2026-11-14): a shared link on vettadrive.app opens here when the app is installed
     /// (project.yml associated-domains; the Worker's apple-app-site-association lists which). A road comes in the fragment
@@ -611,6 +611,19 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             }
             if cmd == "placeResolve", let index = (dict["index"] as? NSNumber)?.intValue {
                 shell?.placeResolve(index: index, id: id)
+                return
+            }
+            if cmd == "placeSearch", let q = dict["q"] as? String {
+                shell?.placeSearch(query: q, lat: (dict["lat"] as? NSNumber)?.doubleValue, lon: (dict["lon"] as? NSNumber)?.doubleValue, id: id)
+                return
+            }
+            if cmd == "placeContact", let name = dict["name"] as? String, let lat = (dict["lat"] as? NSNumber)?.doubleValue,
+               let lon = (dict["lon"] as? NSNumber)?.doubleValue {
+                shell?.placeContact(name: name, lat: lat, lon: lon, id: id)
+                return
+            }
+            if cmd == "placeReverse", let lat = (dict["lat"] as? NSNumber)?.doubleValue, let lon = (dict["lon"] as? NSNumber)?.doubleValue {
+                shell?.placeReverse(lat: lat, lon: lon, id: id)
                 return
             }
             if cmd == "trafficProbe", let chunks = dict["chunks"] as? [[String: Any]] {
@@ -1186,7 +1199,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     // The system sheet runs the Worker's Google flow with a PKCE challenge; the Worker's callback redirects to
     // apexnav://auth?code=... (single use, 2 min); the shell trades code + verifier for a session token and keeps it in
     // the Keychain; the page's /api calls go through ApexApiBridge, which adds it (IDEAS Z-10). No secrets in the bundle.
-    private static let apiBase = URL(string: "https://apexnav.senftns.workers.dev")!
+    private static let apiBase = URL(string: "https://vettadrive.app")!
     private var authSession: ASWebAuthenticationSession?
 
     private static func b64url(_ data: Data) -> String {
@@ -1413,10 +1426,87 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
-    private func sendPlaceResolved(id: Int, lat: Double?, lon: Double?, name: String?) {
-        var payload: [String: Any] = ["type": "placeResolved", "id": id]
+    /// Where to? text sent without tapping a suggestion: one MKLocalSearch for the words around the phone (about 200 km),
+    /// the best match answered as {type:'placeFound'}; the page falls back to Nominatim when Apple has none.
+    func placeSearch(query: String, lat: Double?, lon: Double?, id: Int) {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { sendPlaceResolved(id: id, lat: nil, lon: nil, name: nil, type: "placeFound"); return }
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = q
+        if let lat, let lon, lat.isFinite, lon.isFinite {
+            request.region = MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                                                latitudinalMeters: 200_000, longitudinalMeters: 200_000)
+        }
+        MKLocalSearch(request: request).start { [weak self] response, _ in
+            guard let self else { return }
+            let item = response?.mapItems.first
+            let lat = item?.placemark.coordinate.latitude, lon = item?.placemark.coordinate.longitude, name = item?.name
+            Task { @MainActor in self.sendPlaceResolved(id: id, lat: lat, lon: lon, name: name, type: "placeFound") }
+        }
+    }
+
+    /// A tapped place's phone and website from Apple's map, for what OpenStreetMap lacks: one MKLocalSearch for its name
+    /// within about 400 m, the nearest result of that name within 150 m, answered as {type:'placeContact'}.
+    func placeContact(name: String, lat: Double, lon: Double, id: Int) {
+        let q = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty, lat.isFinite, lon.isFinite else { sendPlaceContact(id: id, phone: nil, url: nil, found: false); return }
+        let here = CLLocation(latitude: lat, longitude: lon)
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = q
+        request.resultTypes = .pointOfInterest
+        request.region = MKCoordinateRegion(center: here.coordinate, latitudinalMeters: 800, longitudinalMeters: 800)
+        MKLocalSearch(request: request).start { [weak self] response, _ in
+            guard let self else { return }
+            let key = q.lowercased()
+            var best: MKMapItem?
+            var bestMetres = 150.0
+            for item in response?.mapItems ?? [] {
+                let n = (item.name ?? "").lowercased()
+                guard !n.isEmpty, n == key || n.hasPrefix(key) || key.hasPrefix(n) else { continue }
+                let c = item.placemark.coordinate
+                let d = here.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
+                if d <= bestMetres { bestMetres = d; best = item }
+            }
+            let phone = best?.phoneNumber, url = best?.url?.absoluteString, found = best != nil
+            Task { @MainActor in self.sendPlaceContact(id: id, phone: phone, url: url, found: found) }
+        }
+    }
+
+    private func sendPlaceContact(id: Int, phone: String?, url: String?, found: Bool) {
+        var payload: [String: Any] = ["type": "placeContact", "id": id, "failed": !found]
+        if let phone, !phone.isEmpty { payload["phone"] = phone }
+        if let url, url.hasPrefix("http") { payload["url"] = url }
+        guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
+        evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
+    }
+
+    private func sendPlaceResolved(id: Int, lat: Double?, lon: Double?, name: String?, type: String = "placeResolved") {
+        var payload: [String: Any] = ["type": type, "id": id]
         if let lat, let lon, lat.isFinite, lon.isFinite { payload["lat"] = lat; payload["lon"] = lon }
         if let name { payload["name"] = name }
+        guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
+        evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
+    }
+
+    // MARK: Apple reverse geocoding (CLGeocoder, free, no key): a place's name and town for a dropped pin, a saved area or a
+    // drive's plate, instead of public Nominatim, whose usage policy doesn't allow an app's traffic. One position in, the
+    // placemark's parts out, answered with window.apex.onNative({type:'placeReversed'}); the page falls back to Nominatim.
+
+    func placeReverse(lat: Double, lon: Double, id: Int) {
+        guard lat.isFinite, lon.isFinite, abs(lat) <= 90, abs(lon) <= 180 else { sendPlaceReversed(id: id, mark: nil); return }
+        CLGeocoder().reverseGeocodeLocation(CLLocation(latitude: lat, longitude: lon)) { [weak self] marks, _ in
+            Task { @MainActor in self?.sendPlaceReversed(id: id, mark: marks?.first) }
+        }
+    }
+
+    private func sendPlaceReversed(id: Int, mark: CLPlacemark?) {
+        var payload: [String: Any] = ["type": "placeReversed", "id": id, "failed": mark == nil]
+        if let mark {
+            let parts: [(String, String?)] = [("name", mark.name), ("road", mark.thoroughfare), ("house", mark.subThoroughfare),
+                                              ("city", mark.locality), ("area", mark.subLocality), ("county", mark.subAdministrativeArea),
+                                              ("state", mark.administrativeArea), ("country", mark.isoCountryCode)]
+            for (k, v) in parts { if let v, !v.isEmpty { payload[k] = v } }
+        }
         guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
         evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
     }
@@ -2352,7 +2442,7 @@ enum ApexKeychain {
 /// forgets it (`signOut`) and says whether there is one (`hasSession`). Only the app's own top-level page is answered.
 @MainActor
 final class ApexApiBridge: NSObject, WKScriptMessageHandlerWithReply {
-    private static let base = "https://apexnav.senftns.workers.dev"
+    private static let base = "https://vettadrive.app"
     private static let userAgent: String = {
         let info = Bundle.main.infoDictionary
         return "ApexNav/\(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))"

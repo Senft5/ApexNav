@@ -131,18 +131,32 @@ export async function postCreate(env: Env, v: Viewer, req: Request): Promise<{ i
 
 type Row = { id: string; author: string; handle: string | null; photo_id: string | null; crew_id: string | null; crew_name: string | null; title: string; caption: string | null;
   driven_on: string; length_m: number | null; score: number | null; roads: string | null; stages: string | null; line: string | null; media: string | null; created_at: string;
-  kudos: number; my_kudos: number; comments: number };
+  kudos: number; my_kudos: number; comments: number; with_handles: string | null };
+/** Who came with the author (docs/SOCIAL.md 2.13): on a post to a crew, the others marked as there (crew_event_attendance,
+ *  the "I was there" / convoy record the crew already sees) at a crew drive of that crew the author was at too, on the post's
+ *  day (the phone's day, so within 14 h of the drive's UTC start). Never across a block with the viewer (?1); five at most. */
+export const WITH_N = 5;
+const WITH_SQL = `(SELECT group_concat(handle, ',') FROM (SELECT DISTINCT wu.handle FROM crew_events e
+      JOIN crew_event_attendance a1 ON a1.event_id = e.id AND a1.user_id = p.author
+      JOIN crew_event_attendance a2 ON a2.event_id = e.id AND a2.user_id <> p.author
+      JOIN users wu ON wu.id = a2.user_id
+     WHERE e.crew_id = p.crew_id AND e.cancelled = 0 AND wu.handle IS NOT NULL
+       AND p.driven_on BETWEEN date(e.starts_at, '-14 hours') AND date(e.starts_at, '+14 hours')
+       AND (a2.user_id = ?1 OR ${NOT_BLOCKED("a2.user_id")})
+     ORDER BY wu.handle LIMIT ${WITH_N}))`;
 const SELECT = `SELECT p.id, p.author, u.handle, u.photo_id, p.crew_id, c.name AS crew_name, p.title, p.caption, p.driven_on, p.length_m, p.score, p.roads,
     p.stages, p.line, p.media, p.created_at,
     (SELECT COUNT(*) FROM drive_post_kudos k WHERE k.post_id = p.id) AS kudos,
     EXISTS (SELECT 1 FROM drive_post_kudos k WHERE k.post_id = p.id AND k.user_id = ?1) AS my_kudos,
-    (SELECT COUNT(*) FROM drive_comments dc WHERE dc.post_id = p.id AND (dc.author = ?1 OR (${NOT_BLOCKED("dc.author")} AND NOT ${reportedSql("comment", "dc.id")}))) AS comments
+    (SELECT COUNT(*) FROM drive_comments dc WHERE dc.post_id = p.id AND (dc.author = ?1 OR (${NOT_BLOCKED("dc.author")} AND NOT ${reportedSql("comment", "dc.id")}))) AS comments,
+    CASE WHEN p.crew_id IS NULL THEN NULL ELSE ${WITH_SQL} END AS with_handles
   FROM drive_posts p JOIN users u ON u.id = p.author LEFT JOIN crews c ON c.id = p.crew_id`;
 const shape = (r: Row, me: string) => ({
   id: r.id, handle: r.handle, photo_id: r.photo_id, mine: r.author === me, crew: r.crew_id ? { id: r.crew_id, name: r.crew_name } : null,
   title: r.title, caption: r.caption, driven_on: r.driven_on, length_m: r.length_m, score: r.score,
   roads: r.roads ? (JSON.parse(r.roads) as string[]) : [], stages: r.stages ? (JSON.parse(r.stages) as { name: string; score: number | null; ends?: number[] }[]) : [],
   line: r.line, media: (() => { const m = mediaOf(r.media); return m ? { kind: m.kind, label: m.label } : null; })(), created_at: r.created_at, kudos: r.kudos, my_kudos: !!r.my_kudos, comments: r.comments,
+  with: r.with_handles ? r.with_handles.split(",").filter(Boolean) : [],
 });
 
 /** GET /api/feed?before=&author=: the newest posts you can see (yours too), FEED_N at a time, older than `before` (a
@@ -152,11 +166,29 @@ export async function feed(env: Env, v: Viewer, url: URL) {
   const cut = before && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(before) ? before : "9999-12-31 23:59:59";
   if (author !== null && !/^[A-Za-z0-9_-]{1,64}$/.test(author)) throw new HttpError(400, "bad_author");
   if (crew !== null && !/^[A-Za-z0-9_-]{1,64}$/.test(crew)) throw new HttpError(400, "bad_crew");
-  // ?author= one driver's posts (their profile), ?crew= the posts to one crew (its page); either way only what you can see
-  const only = author ? " AND p.author = ?3" : crew ? " AND p.crew_id = ?3" : "";
+  // ?author= one driver's posts (their profile), ?crew= the posts to one crew (its page), ?friends=1 the posts to friends
+  // (the Feed's pick); either way only what you can see
+  const only = author ? " AND p.author = ?3" : crew ? " AND p.crew_id = ?3" : url.searchParams.get("friends") === "1" ? " AND p.crew_id IS NULL" : "";
   const rows = (await env.DB.prepare(`${SELECT} WHERE p.created_at < ?2 AND ${POST_SEEN("p")}${only} ORDER BY p.created_at DESC, p.rowid DESC LIMIT ${FEED_N}`)
     .bind(...(author || crew ? [v.id, cut, author || crew] : [v.id, cut])).all<Row>()).results;
   return rows.map((r) => shape(r, v.id));
+}
+
+/** GET /api/feed/with?day=YYYY-MM-DD (the Post sheet): the crew drives you were marked at on that day (the phone's, within
+ *  14 h of the drive's UTC start), each with its crew and who else was marked there (WITH_N at most, never across a block),
+ *  so the sheet can pick that crew and say who the post will name. Only crews you are still in; newest drive first. */
+export async function feedWith(env: Env, v: Viewer, url: URL) {
+  const day = url.searchParams.get("day") || "";
+  if (!DATE_RE.test(day)) throw new HttpError(400, "bad_day");
+  const rows = (await env.DB.prepare(
+    `SELECT e.crew_id, c.name AS crew, e.title,
+            (SELECT group_concat(handle, ',') FROM (SELECT wu.handle FROM crew_event_attendance a2 JOIN users wu ON wu.id = a2.user_id
+               WHERE a2.event_id = e.id AND a2.user_id <> ?1 AND wu.handle IS NOT NULL AND ${NOT_BLOCKED("a2.user_id")} ORDER BY wu.handle LIMIT ${WITH_N})) AS with_handles
+       FROM crew_events e JOIN crew_event_attendance a ON a.event_id = e.id AND a.user_id = ?1
+       JOIN crews c ON c.id = e.crew_id JOIN crew_members m ON m.crew_id = e.crew_id AND m.user_id = ?1
+      WHERE e.cancelled = 0 AND ?2 BETWEEN date(e.starts_at, '-14 hours') AND date(e.starts_at, '+14 hours')
+      ORDER BY e.starts_at DESC LIMIT 5`).bind(v.id, day).all<{ crew_id: string; crew: string; title: string; with_handles: string | null }>()).results;
+  return rows.map((r) => ({ crew_id: r.crew_id, crew: r.crew, title: r.title, with: r.with_handles ? r.with_handles.split(",").filter(Boolean) : [] }));
 }
 
 /** GET /api/feed/week: this week (from Monday) on the Feed, per driver: drives posted, how far, the best Score; you and

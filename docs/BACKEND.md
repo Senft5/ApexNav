@@ -51,7 +51,7 @@ Applied to both `apexnav-db` and `apexnav-preview-db`: **0001_init.sql**, **0002
 | Segments & boards | `segments` (+`origin_id`), `segment_shares`, `grants` (**one row per friend or crew; Scores and Times on by default for friends and private crews, off for public crews; an "off" row is kept so a default never undoes it**), `board_entries` (+`canon_id`), `shared_routes` |
 | Crowd road data | `road_bins`, `hazard_obs`, `ingest_pending`, `rank_slots`, `road_floor`, `seen`, `points_ledger` (private tables: no API route reads or writes them directly) |
 | Road map lines | `road_ways` (a measured way's public OSM line, box, and since 0029 its road class `cls` and map length `len_m`: the open-road rule, docs/ROAD_DATA.md) |
-| Roadbooks | `roadbooks` (private / friends / public), `roadbook_roads` (planned shapes, never drives), `roadbook_follows`, `roadbook_stamps` (a keyed hash of the member, no user id). `GET /api/roadbooks/friends` (members): your accepted friends' friends or public books with a road in them, newest 30, cards only, never across a block |
+| Roadbooks | `roadbooks` (private / friends / public), `roadbook_roads` (planned shapes, never drives), `roadbook_follows`, `roadbook_stamps` (a keyed hash of the member, no user id). `GET /api/roadbooks/friends` (members): your accepted friends' friends or public books with a road in them, newest 30, cards only, never across a block. A crew's roadbook (migration 0063): `roadbooks.crew_id` (its members open it and `POST /:id/roads`), `roadbook_roads.added_by` (NULL = the keeper; a member removes their own, the crew's owner any); `crew` on create/update (a crew you are in, or null), `GET /api/crews/:id/roadbooks` (members), `GET /api/roadbooks` adds `crews` |
 | Your own items | `member_items` (0060: saved routes and pinned places on your account, `GET/PUT/DELETE /api/me/items`; newest `at` wins per item, a removal kept 60 days as body NULL then swept; only its owner reads it; member_items.ts) |
 | Highlights | `highlights` (author hidden), `highlight_ratings` (1–5, `visited` proved on the phone), `reports` |
 
@@ -88,6 +88,13 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
   audience exists. `GET /api/board/:canon` returns only entries published **to the viewer**, by someone who is still their friend / crew-mate, whose grant is
   still on, and not blocked either way. Times appear only with `share_times`. `GET /api/board/activity` (IDEAS S-03): the same visibility, the last
   14 days of others' best per day on stages the viewer has, with the viewer's rank on each; scores only, never times.
+- **Ghost splits (IDEAS D-04, migration 0062):** `POST /api/board` may carry `splits` ([[q, t]]: the fraction of the stage at
+  each of the run's corner apexes, at least 100 m apart, and the finish, with the seconds to there; `splitsOf` validates) and
+  `surface` (dry / wet / ice). Splits are stored only where the run's `time_s` is (an audience with `share_times`) and are
+  cleared with it when times stop being shared. `GET /api/board/ghosts?canons=a,b&surface=wet` (at most 20, one batch): per
+  stage, the quickest run with splits published to the viewer on a like surface (wet or ice only with the same; else dry or
+  unknown), an open duel's opponent first, under the board's visibility. Cut at corners only, so no straight's speed is ever
+  stored ("No top speeds").
 - **Duels (IDEAS S-24, migrations 0047, 0048):** `POST /api/duels {handle, segment_id, days: 3|7|14, kind?: score|time}` (an accepted friend, your own
   segment; 404 `no_friend` for strangers and unknown handles alike; 409 `duel_exists`; 10 open, 10 a day), `POST
   /api/duels/:id/accept` (opponent only; copies the stage), `DELETE /api/duels/:id` (decline or withdraw), `GET /api/duels`
@@ -133,6 +140,15 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
 - **Fixed time attacks** (`ta_fixed.ts`, migration 0057; the owner, 2026-11-12: static best roads, a featured one in turn, boards by week, month, year and all time): `ta_circuits` (up to three loops per cell a season, a calendar quarter: id `ta-…`, slot 0-2, name, length, geom, `tries`/`removed`), `ta_entered` (the opt-in), `ta_times` (your quickest time each day you drove one, with that run's Score). `GET /api/ta?lat&lon[&id][&period=week|month|year|all]` (the season's circuits, the featured one marked, one a week in slot order; `make {slot, seed, km, best, avoid}` while a slot is empty; the board of `id` or the featured one for the period), `POST /api/ta/circuit {cell, slot, seed, name, geom}` (checked as the weekly loop, and starting 3 km or more from the area's other loops), `GET /api/ta/entered`, `POST /api/ta/enter {id}`, `POST /api/ta/runs` (as the weekly one: entered, this season, not before you entered), `DELETE /api/ta/entry?id` (all your times on it go). Blocks hide both ways; report kind `circuit` takes one down with its times and its slot is built again from the next seed. Seasons kept two years; in the export (`backend/test/ta_fixed.test.ts`). The weekly endpoints stay for older builds.
 - Invites and sessions are stored as SHA-256 hashes; an invite works once, expires after 7 days, and is redeemed atomically.
 - Verified by `backend/test/*.test.ts` (76 tests; each privacy rule was checked by temporarily reintroducing the bug and seeing the test fail).
+- Driving DNA (migration 0064, `src/dna.ts`): `PUT /api/me/dna` (members) keeps your Your driving card as the phone read it,
+  checked down to the six skill levels (0 to 100), at most three known style words, the corner kind and two counts.
+  `GET /api/friends/:id/profile` carries `dna: { mine, theirs }` when that friend shares Scores with you (their friend
+  grant's `share_scores`), else `dna: null`. `GET /api/crews/:id/page` carries `dna: [{ handle, mine, skills }]`: you, and each
+  member who shares Scores with the crew, never across a block. In the export as `driving_dna`; cascades with the account.
+- Direct messages (migration 0065, `src/messages.ts`): `GET /api/messages` (your conversations, newest first, with unread
+  counts), `GET /api/me/messages/unread`, `GET`/`POST /api/messages/:handle` (read marks them seen; send only to an accepted
+  friend, 1000 characters, 60 an hour), `DELETE /api/messages/m/:id` (unsend, yours only). Blocked either way answers 404;
+  report kind `dm`; push kind `messages`. Kept a year (sweep); in the export as what you sent; cascades with either account.
 
 ## 7. Auth: Google sign-in, no library
 `/api/auth/google/start` → Google (authorization-code flow, PKCE S256, `state`, `nonce`) → `/api/auth/google/callback`: exchanges the code
@@ -155,7 +171,7 @@ Google setup (owner, free): Google Cloud console → OAuth consent screen (Exter
 | CI | `.github/workflows/core-tests.yml` job `backend`: type check, vitest, `wrangler deploy --dry-run` |
 | iOS | Every main run that builds the app uploads it to TestFlight (job `testflight`, App Store Connect API key, automatic signing): docs/TESTFLIGHT.md. The unsigned sideload IPA is still built too. CarPlay needs Apple's separate CarPlay entitlement |
 | Everyone else | The web app (installable PWA). iPhone Safari recording needs the screen on and a lower sensor rate |
-| Domain | Custom Domains on the same Worker (`wrangler.jsonc` routes, `backend/src/hosts.ts`): **vettadrive.app** is the web app, the API and the links people share; **vettadrive.com** is the information page (its `/` is `about.html`, with Privacy and Terms); `www.` of either redirects to the bare name. `apexnav.senftns.workers.dev` stays on: the iOS app calls it and old links point at it. `/.well-known/apple-app-site-association` lists which vettadrive.app links open the app |
+| Domain | Custom Domains on the same Worker (`wrangler.jsonc` routes, `backend/src/hosts.ts`): **vettadrive.app** is the web app, the API and the links people share; **vettadrive.com** is the information page (its `/` is `about.html`, with Privacy and Terms); `www.` of either redirects to the bare name. `apexnav.senftns.workers.dev` stays on: the iOS app calls it and old links point at it. `/.well-known/apple-app-site-association` lists which vettadrive.app links open the app. The front page carries Open Graph / Twitter link-preview tags (`backend/src/link_preview.ts`, 2026-11-15): a public roadbook's link names the book, its roads, length and keeper; other shared links say only what kind they are; the picture is the app icon, or a public roadbook's own card (`PUT /api/roadbooks/:id/card`, its owner, image/jpeg up to 600 KB, R2 MEDIA `roadbook/<id>`; `GET /api/roadbooks/:id/card.jpg` while public) |
 
 Going private (owner wants full control): the site is already served by Cloudflare, so make the GitHub repo private and turn off GitHub Pages.
 On the free plan a private repo gets 2,000 Actions minutes a month and macOS counts 10x; `build.yml` skips docs/tests/tools/voice-only changes.

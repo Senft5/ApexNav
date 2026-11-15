@@ -16,19 +16,23 @@ import { cronHealth, runCron } from "./cron_runs";
 import { appleSignIn } from "./apple";
 import { crewHazardKinds, hazardsNear, reportHazard, voteHazard } from "./hazards";
 import { routeDelete, routeGet, routesSharedWithMe, shareRoute } from "./routes_shared";
-import { bookCreate, bookDelete, bookFollow, bookGet, bookUpdate, booksFriends, booksMine, booksNear, roadAdd, roadRemove, roadStamp, roadUpdate } from "./roadbooks";
+import { bookCreate, bookDelete, bookFollow, bookGet, bookUpdate, booksCrew, booksFriends, booksMine, booksNear, cardGet, cardPut, roadAdd, roadRemove, roadStamp, roadUpdate } from "./roadbooks";
 import { duelAccept, duelCreate, duelEnd, duelList } from "./duels";
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
 import {
   boardActivity, boardFor, crewCreate, crewDiscover, crewInvite, crewInvitePreview, crewInvitesBy, crewInvitesRevoke, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendSuggestions, userSearch, friendRequest, friendRequestCancel,
-  myGrants, publish, removePair, setGrant, setHandle,
+  ghosts, myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
 import { itemsDelete, itemsGet, itemsPut } from "./member_items";
+import { dnaPut } from "./dna";
 import * as drivePosts from "./drive_posts";
+import * as messages from "./messages";
 import { mediaGet, mediaPut } from "./post_media";
-import { afterCrewDrive, afterDuel, afterFriend, afterKudos, afterPassed, afterTopped, bestBefore, afterPostComment, afterPostKudos, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
+import { devDriveGet, devDriveList, devDrivePut } from "./dev_drives";
+import { anonDriveGet, anonDriveList, anonDrivePut } from "./anon_drives";
+import { afterCrewDrive, afterDuel, afterMessage, afterFriend, afterKudos, afterPassed, afterTopped, bestBefore, afterPostComment, afterPostKudos, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewBadge, crewFeed, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
 import { decalsPlace } from "./livery";
@@ -160,6 +164,8 @@ on("DELETE", "/api/me", async (req, env) => deleteAccount(env, await requireUser
 on("GET", "/api/me/items", async (req, env) => json(await itemsGet(env, await requireUser(req, env), new URL(req.url))));
 on("PUT", "/api/me/items", async (req, env) => json(await itemsPut(env, await requireUser(req, env), req)));
 on("DELETE", "/api/me/items", async (req, env) => { await itemsDelete(env, await requireUser(req, env), new URL(req.url)); return noContent(); });
+// Your driving DNA (dna.ts): members, shown to friends you share scores with
+on("PUT", "/api/me/dna", async (req, env) => { await dnaPut(env, await requireMember(req, env), req); return noContent(); });
 on("PUT", "/api/me/handle", async (req, env) => { await setHandle(env, await requireMember(req, env), req); return noContent(); });
 
 on("PUT", "/api/me/contribute", async (req, env) => { await setContribute(env, await requireMember(req, env), req); return noContent(); });
@@ -278,6 +284,7 @@ on("PUT", "/api/crews/:id/decals", async (req, env, m) => { await decalsPlace(en
 on("GET", "/api/crews/:id/chat", async (req, env, m) => json(await chatList(env, await requireMember(req, env), m.groups!.id, new URL(req.url))));
 on("POST", "/api/crews/:id/chat", async (req, env, m) => json(await chatPost(env, await requireMember(req, env), m.groups!.id, req), 201));
 on("DELETE", "/api/crews/:id/chat/:msg", async (req, env, m) => { await chatDelete(env, await requireMember(req, env), m.groups!.id, m.groups!.msg); return noContent(); });
+on("GET", "/api/crews/:id/roadbooks", async (req, env, m) => json(await booksCrew(env, await requireMember(req, env), m.groups!.id)));   // roadbooks.ts: kept with this crew
 on("GET", "/api/crews/:id/members", async (req, env, m) => json(await crewMembers(env, await requireMember(req, env), m.groups!.id)));
 // fair meeting points (crew_meet.ts): your rough home area for this crew, opt-in; the crew's cells without names
 on("PUT", "/api/crews/:id/home", async (req, env, m) => json(await crewHomeSet(env, await requireMember(req, env), m.groups!.id, req)));
@@ -366,6 +373,8 @@ on("GET", "/api/roadbooks", async (req, env) => json(await booksMine(env, await 
 on("POST", "/api/roadbooks", async (req, env) => json(await bookCreate(env, await requireMember(req, env), req), 201));
 on("PUT", "/api/roadbooks/roads/:rid/stamp", async (req, env, m) => json(await roadStamp(env, await requireMember(req, env), m.groups!.rid, true)));
 on("DELETE", "/api/roadbooks/roads/:rid/stamp", async (req, env, m) => json(await roadStamp(env, await requireMember(req, env), m.groups!.rid, false)));
+on("GET", "/api/roadbooks/:id/card.jpg", async (req, env, m) => cardGet(env, m.groups!.id));
+on("PUT", "/api/roadbooks/:id/card", async (req, env, m) => { await cardPut(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("GET", "/api/roadbooks/:id", async (req, env, m) => json(await bookGet(env, await viewer(req, env), m.groups!.id)));
 on("PUT", "/api/roadbooks/:id", async (req, env, m) => { await bookUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("DELETE", "/api/roadbooks/:id", async (req, env, m) => { await bookDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
@@ -411,6 +420,18 @@ on("POST", "/api/board", async (req, env, _m, ctx) => {
 });
 // Kudos (IDEAS S-07): a tap of thanks on a friend's run you can see; no text.
 // drive posts and the friends feed (src/drive_posts.ts)
+on("GET", "/api/feed/with", async (req, env) => json(await drivePosts.feedWith(env, await requireMember(req, env), new URL(req.url))));
+// direct messages between friends (messages.ts); /api/messages/m/:id before /:handle so an id is never read as a handle
+on("GET", "/api/messages", async (req, env) => json(await messages.dmList(env, await requireMember(req, env))));
+on("GET", "/api/me/messages/unread", async (req, env) => json(await messages.dmUnread(env, await requireMember(req, env))));
+on("DELETE", "/api/messages/m/:id", async (req, env, m) => { await messages.dmDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
+on("GET", "/api/messages/:handle", async (req, env, m) => json(await messages.dmThread(env, await requireMember(req, env), m.groups!.handle, new URL(req.url))));
+on("POST", "/api/messages/:handle", async (req, env, m, ctx) => {
+  const v = await requireMember(req, env);
+  const r = await messages.dmSend(env, v, m.groups!.handle, req);
+  await later(ctx, afterMessage(env, v, r.to));
+  return json({ id: r.id }, 201);
+});
 on("GET", "/api/feed/week", async (req, env) => json(await drivePosts.feedWeek(env, await requireMember(req, env))));
 on("GET", "/api/feed", async (req, env) => json(await drivePosts.feed(env, await requireMember(req, env), new URL(req.url))));
 on("POST", "/api/posts", async (req, env) => json(await drivePosts.postCreate(env, await requireMember(req, env), req), 201));
@@ -429,6 +450,14 @@ on("POST", "/api/posts/:id/comments", async (req, env, m, ctx) => {
   return json({ id: c.id }, 201);
 });
 on("PUT", "/api/posts/:id/media", async (req, env, m) => json(await mediaPut(env, await requireMember(req, env), m.groups!.id, req)));
+// Developers' drives (src/dev_drives.ts): their phones upload every drive; read back by the internal key only
+on("POST", "/api/dev/drives/:id", async (req, env, m) => json(await devDrivePut(env, await requireMember(req, env), m.groups!.id, req)));
+on("GET", "/api/dev/drives", async (req, env) => json(await devDriveList(env, req, await viewer(req, env))));
+on("GET", "/api/dev/drives/file", async (req, env) => devDriveGet(env, req, await viewer(req, env)));
+// Anonymous drives (src/anon_drives.ts): anyone's phone sends anonymous pieces; this route never reads who is calling
+on("POST", "/api/anon/drives", async (req, env) => { await anonDrivePut(env, req); return noContent(); });
+on("GET", "/api/anon/drives", async (req, env) => json(await anonDriveList(env, req)));
+on("GET", "/api/anon/drives/file", async (req, env) => anonDriveGet(env, req));
 on("GET", "/api/posts/:id/media", async (req, env, m) => mediaGet(env, await requireMember(req, env), m.groups!.id));
 on("DELETE", "/api/comments/:id", async (req, env, m) => { await drivePosts.commentDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 on("POST", "/api/kudos", async (req, env, _m, ctx) => {
@@ -447,6 +476,8 @@ on("GET", "/api/kudos", async (req, env) => json(await kudosReceived(env, await 
 // For you (src/inbox.ts): what happened to you socially, made from what each part already shows you; seen is kept on the phone.
 on("GET", "/api/inbox", async (req, env) => json(await inbox(env, await requireMember(req, env))));
 on("GET", "/api/board/activity", async (req, env) => json(await boardActivity(env, await requireMember(req, env))));
+on("GET", "/api/board/ghosts", async (req, env) => { const u = new URL(req.url);
+  return json(await ghosts(env, await requireMember(req, env), (u.searchParams.get("canons") || "").split(",").filter(Boolean), u.searchParams.get("surface"))); });
 on("GET", "/api/board/:canon", async (req, env, m) => json(await boardFor(env, await requireMember(req, env), m.groups!.canon)));
 
 on("POST", "/api/convoy", async (req, env) => json(await convoyCreate(env, await requireMember(req, env), req), 201));

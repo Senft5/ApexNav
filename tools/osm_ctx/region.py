@@ -10,7 +10,9 @@ by the weekly OSM build (.github/workflows/osm-ctx.yml): Overpass timed out or r
     OUT/osm/v2/places/<bi>_<bj>.json = [[lat, lon, name, {tags}], ...], one file per covered cell (an empty list too)
         named places with hours or contact tags (PKEYS), for a place card's open now, Call and Website (web/place_info.js,
         backend/src/osm_relay.ts placeTags): a cell at a time, so the server reads only the cells a lookup touches
-    OUT/osm/v2/points/<bi>_<bj>.json = {"fuel": [[lat, lon], ...], "schools": [...], "worship": [...]}, one per covered cell
+    OUT/osm/v2/points/<bi>_<bj>.json = {"fuel": [[lat, lon], ...], "schools": [...], "worship": [...],
+                                        "falls": [[lat, lon, name]], "closures": [[lat, lon, {tags}]],
+                                        "cams": [[lat, lon, "a" | "s"]]}, one per covered cell
         fuel stations (web/route_ctx/car.js, the fuel-stop spacing) and schools and places of worship (route_ctx/events.js,
         school-run and church traffic), 5 decimal places, positions only (backend/src/osm_relay.ts pointCells)
     OUT/osm/v2/lines/<bi>_<bj>.json = {"t": {"<i>_<j>": {"lit": [[value, [lat, lon, ...]]], "tunnel": [[...]], "cycle": [[...]]}}}
@@ -134,6 +136,41 @@ def points_by_cell(points, cs) -> dict:
         k = (math.floor(la / STEP), math.floor(lo / STEP))
         if k in by:
             by[k][kind].append([la, lo])
+    return by
+
+
+def read_cams(paths) -> list:
+    """[(lat, lon, "a" | "s")]: plate readers (surveillance:type=ALPR, mapped by DeFlock) and fixed speed cameras
+    (highway=speed_camera), nodes only, as tools/graph_etl/cameras.py and web/cameras.js classify() read them."""
+    out = {}
+    for path in paths:
+        for o in osmium.FileProcessor(path, osmium.osm.NODE):
+            kind = "a" if o.tags.get("surveillance:type") == "ALPR" else "s" if o.tags.get("highway") == "speed_camera" else None
+            if kind and o.location.valid():
+                out[o.id] = (round(o.location.lat, 6), round(o.location.lon, 6), kind)
+    return sorted(out.values())
+
+
+def with_lists(by, falls, closures, cams=()) -> dict:
+    """The waterfalls and the roads with conditional access in each covered cell's points file too, as "falls"
+    [[lat, lon, name]] and "closures" [[lat, lon, {tags}]] (empty lists included): the per-cell form of falls.json and
+    closures.json, which the lower-48 build (osm-ctx-us.yml) has no single file for; and "cams" [[lat, lon, "a" | "s"]],
+    the per-cell form of the region's camera list (cameras.yml region.json) for Avoid cameras. The phone asks the cells along a
+    route (/api/ctx/points), never the whole country's list."""
+    for body in by.values():
+        body["falls"], body["closures"], body["cams"] = [], [], []
+    for la, lo, kind in cams:
+        k = (math.floor(la / STEP), math.floor(lo / STEP))
+        if k in by:
+            by[k]["cams"].append([la, lo, kind])
+    for la, lo, nm in falls:
+        k = (math.floor(la / STEP), math.floor(lo / STEP))
+        if k in by:
+            by[k]["falls"].append([round(la, 5), round(lo, 5), nm])
+    for la, lo, t in closures:
+        k = (math.floor(la / STEP), math.floor(lo / STEP))
+        if k in by:
+            by[k]["closures"].append([round(la, 5), round(lo, 5), t])
     return by
 
 
@@ -272,9 +309,10 @@ def main(argv=None):
         print(f"{a.box or 'the outlines'}: no cell inside the coverage")
         return
     os.makedirs(os.path.join(a.out, "osm", "v2"), exist_ok=True)
+    falls, closures = read(a.pbf), read_closures(a.pbf)
     d = c = None
     if not a.no_lists:
-        d, c = doc(read(a.pbf), cover, cs=cs), closures_doc(read_closures(a.pbf), cover, cs=cs)
+        d, c = doc(falls, cover, cs=cs), closures_doc(closures, cover, cs=cs)
         for name, body in (("falls.json", d), ("closures.json", c)):
             with open(os.path.join(a.out, "osm", "v2", name), "w") as f:
                 json.dump(body, f, separators=(",", ":"), ensure_ascii=False)
@@ -285,10 +323,11 @@ def main(argv=None):
             json.dump(rows, f, separators=(",", ":"), ensure_ascii=False)
     n = sum(len(v) for v in by.values())
     pts = points_by_cell(read_points(a.pbf), cs)
+    with_lists(pts, falls, closures, read_cams(a.pbf))
     os.makedirs(os.path.join(a.out, "osm", "v2", "points"), exist_ok=True)
     for (bi, bj), body in pts.items():
         with open(os.path.join(a.out, "osm", "v2", "points", f"{bi}_{bj}.json"), "w") as f:
-            json.dump(body, f, separators=(",", ":"))
+            json.dump(body, f, separators=(",", ":"), ensure_ascii=False)
     m = {k: sum(len(v[k]) for v in pts.values()) for k in POINTS.values()}
     lb = lines_by_bundle(read_lines(a.pbf), line_tiles(cover))
     os.makedirs(os.path.join(a.out, "osm", "v2", "lines"), exist_ok=True)
@@ -298,7 +337,8 @@ def main(argv=None):
     nl = {k: sum(len(t[k]) for b in lb.values() for t in b["t"].values()) for k in ("lit", "tunnel", "cycle")}
     big = max((os.path.getsize(os.path.join(a.out, "osm", "v2", "lines", f"{bi}_{bj}.json")) for bi, bj in lb), default=0)
     print(f"lines: lit {nl['lit']}, tunnel {nl['tunnel']}, cycle {nl['cycle']} (per tile) in {len(lb)} bundles, largest {big} bytes")
-    lists = f"falls: {len(d['falls'])}, roads with conditional access: {len(c['ways'])}, " if d else ""
+    nf, nc = sum(len(v["falls"]) for v in pts.values()), sum(len(v["closures"]) for v in pts.values())
+    lists = f"falls: {nf}, roads with conditional access: {nc}, cameras: {sum(len(v['cams']) for v in pts.values())}, "
     print(f"{lists}places with hours or contact: {n}, "
           f"fuel {m['fuel']}, schools {m['schools']}, worship {m['worship']}, in {len(cs)} cells")
 

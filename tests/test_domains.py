@@ -25,3 +25,15 @@ def test_share_links_use_vettadrive_app_and_legal_pages_vettadrive_com():
     assert "const LEGAL_SITE = 'https://vettadrive.com';" in cockpit
     assert "ApexRoadLink.url(ApexSync.siteBase, token)" in read("web/analysis_page.js")
     assert "apexnav.senftns.workers.dev/privacy" not in read("web/index.html")
+
+
+def test_the_app_calls_the_worker_on_vettadrive_app():
+    """The app's own calls (page /api, the shell's bridge, sign-in, crash reports, build notices) go to vettadrive.app; old
+    builds keep calling workers.dev, which the Worker still answers (wrangler.jsonc workers_dev)."""
+    assert "const API_BASE = IN_APP ? SITE : '';" in read("web/sync.js")
+    for f in ["ApexNavApp.swift", "ApexBuildNotifier.swift", "ApexCrashReports.swift", "web/errors.js", "web/cameras.js", "web/graph_tiles.js"]:
+        src = read(f)
+        assert "senftns.workers.dev" not in src and "https://vettadrive.app" in src, f
+    csp = read("tools/csp.py")
+    assert '"https://vettadrive.app"' in csp and '"wss://vettadrive.app"' in csp
+    assert '"workers_dev": true' in read("wrangler.jsonc")

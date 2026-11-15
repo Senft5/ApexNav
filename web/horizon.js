@@ -15,7 +15,8 @@
 
   /**
    * lines: [{ coords: [[lon, lat], ...], cls }] (tile pieces are fine: shared ends are joined); me: { lat, lon, heading }.
-   * Returns { coords: [[lon, lat], ...] from you along the road, m: its length, end: 'length' | 'junction' | 'dead end' }
+   * Returns { coords: [[lon, lat], ...] from you along the road, m: its length, end: 'length' | 'junction' | 'dead end',
+   * tee: the junction is one where the road ends and every way on turns off (a T, not a fork) }
    * or null when you are not on a mapped road going along it.
    */
   function ahead(lines, me, maxM = 2000) {
@@ -53,7 +54,7 @@
     }
     if (!best) return null;
     const out = [[best.px, best.py]];
-    let m = 0, prevK = best.from, curK = best.to, end = 'length', cls = best.cls;
+    let m = 0, prevK = best.from, curK = best.to, end = 'length', cls = best.cls, tee = false;
     const seen = new Set([prevK]);
     for (let guard = 0; guard < 4000; guard++) {
       const p0 = out[out.length - 1], p1 = pos.get(curK), seg = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
@@ -72,11 +73,11 @@
         const straight = next.filter((n) => n.turn <= STRAIGHT_DEG), off = next.filter((n) => n.turn >= OFF_DEG);
         if (straight.length === 1 && straight.length + off.length === next.length && (RANK[straight[0].c] ?? 2) >= (RANK[cls] ?? 2) - 1) pick = straight[0];
       }
-      if (!pick) { end = 'junction'; break; }
+      if (!pick) { end = 'junction'; tee = next.length >= 2 && next.every((n) => n.turn >= OFF_DEG); break; }   // tee: every way on turns off
       prevK = curK; curK = pick.k; cls = pick.c;
     }
     if (m < 50) return null;
-    return { coords: out.map(ll), m: Math.round(m), end };
+    return { coords: out.map(ll), m: Math.round(m), end, tee };
   }
 
   const api = { ahead };

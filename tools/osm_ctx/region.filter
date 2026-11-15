@@ -19,3 +19,6 @@ nw/amenity=fuel,school,place_of_worship
 w/lit
 w/tunnel=yes
 r/route=bicycle
+# plate readers and speed cameras (cameras.js Avoid cameras), as tools/graph_etl/cameras.py
+n/surveillance:type=ALPR
+n/highway=speed_camera

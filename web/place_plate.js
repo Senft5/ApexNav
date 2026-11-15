@@ -73,6 +73,22 @@
     return typeof t === 'string' && t.trim() ? t.trim().slice(0, 40) : null;
   }
 
+  /**
+   * Apple's reverse geocode (the iOS shell's CLGeocoder, {type:'placeReversed'}: name, road, house, city, area, county,
+   * state) in the shape of a Nominatim reverse answer, so town() and the pin's name read either: null when Apple had nothing.
+   */
+  function fromApple(msg) {
+    if (!msg || msg.failed) return null;
+    const str = (v) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+    const address = { road: str(msg.road), house_number: str(msg.house), city: str(msg.city), suburb: str(msg.area), county: str(msg.county), state: str(msg.state) };
+    for (const k of Object.keys(address)) if (address[k] === undefined) delete address[k];
+    const name = str(msg.name);
+    if (!name && !Object.keys(address).length) return null;
+    // Apple names an address by its street line ("12 Main St"): that is the place's name only when it isn't the address
+    const street = [address.house_number, address.road].filter(Boolean).join(' ');
+    return { name: name && name !== street ? name : '', address, display_name: [name || street, address.city, address.state].filter(Boolean).join(', ') };
+  }
+
   /** The plate's text, or '' when nothing is known. tempC in Celsius; metric picks the unit shown. */
   function text(p, metric) {
     const parts = [];
@@ -89,6 +105,6 @@
     return { head: all[0] || '', rest: all.slice(1).join(' · ') };
   }
 
-  const api = { sky, weather, pastMm, obsOf, town, text, parts };
+  const api = { sky, weather, pastMm, obsOf, town, fromApple, text, parts };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexPlacePlate = api;
 })(typeof window !== 'undefined' ? window : globalThis);

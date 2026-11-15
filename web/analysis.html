@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov https://itscameras.dot.state.oh.us https://www.trimarc.org https://*.fbcdn.net; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov https://itscameras.dot.state.oh.us https://www.trimarc.org https://*.fbcdn.net; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://vettadrive.app wss://vettadrive.app https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -43,7 +43,9 @@
   <script src="brake_heat.js"></script>
   <script src="drive_view.js"></script>
   <script src="road_surface.js"></script>
+  <script src="ghost_duel.js"></script>
   <script src="drive_card.js"></script>
+  <script src="dna_card.js"></script>      <!-- Your driving DNA: the six skills as one picture to share -->
   <script src="year_review.js"></script>
   <script src="drive_tags.js"></script>
   <script src="flyby.js"></script>
@@ -250,6 +252,9 @@
     .fp-digits { display: inline-flex; gap: 6px; } .fp-digits i { width: 40px; height: 68px; border: 1.5px dashed var(--panel-dim); }   /* three places for the score's figures */
     .fp-ghost .stamp-d { border: 1.5px dashed var(--panel-dim); } .fp-ghost table.fp-index td { border-bottom: 0; }   /* its own class: a drawing of a row is not a row of the index */
     .fp-ghost .ix-road b { font-weight: 500; } .fp-ghost .score { color: var(--panel-dim); }
+    /* the road's shape, in pencil where the drive's own line will be drawn (as on the end card), its start in the one red */
+    .fp-glyph { margin-left: auto; width: 28px; height: 68px; flex: none; }
+    .fp-glyph path { fill: none; stroke: currentColor; stroke-width: 2; stroke-dasharray: 3 4; stroke-linecap: round; } .fp-glyph circle { fill: var(--accent); }
     .fp-head { font: 700 26px/1.1 var(--font-num); margin: 0 0 6px; }
     .fp-line { margin: 0 0 18px; font-size: 16px; line-height: 1.45; color: var(--panel-dim); max-width: 34em; }
     a.btn.fp-go { justify-content: center; height: 52px; font-size: 17px; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.3); }
@@ -407,13 +412,14 @@
       <div class="panel" id="dvFlyby" hidden><h2>Friends on these roads that day</h2><div id="dvFlybyList" class="stack-8"></div></div>
       <div class="panel" id="dvTouch" hidden><h2>Your touch on this drive</h2><div id="dvTouchList" class="stack-8"></div></div>
       <div class="panel" id="dvBest" hidden><h2>Against your records</h2><div id="dvBestList" class="stack-8"></div></div>
+      <div class="panel" id="dvGhost" hidden><h2 id="dvGhostHead"></h2><p class="dv-road-since" id="dvGhostLine"></p><div id="dvGhostRows"></div><div class="dv-ghost-acts" id="dvGhostActs"></div></div>
       <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><p class="dv-road-since" id="dvRoadSince" hidden></p><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
     </section>
 
     <!-- ============================ YOUR DRIVING ============================ -->
     <section id="tab-driving" class="stack-12" hidden>
       <div><a href="#" class="back" data-to="history">‹ Log</a></div>
-      <div class="bar-top"><h1 class="stages-h">Your driving</h1></div>
+      <div class="bar-top"><h1 class="stages-h">Your driving</h1><button type="button" class="linkbtn" id="drivingShare" hidden>Share my DNA</button></div>
       <div id="drivingRoot" class="stack-12"></div>
     </section>
 
@@ -427,12 +433,14 @@
            stays "--": nothing here reads as a result), then the one thing to do -->
       <div class="first-page" id="historyEmpty" hidden>
         <div class="fp-ghost" aria-hidden="true">
-          <div class="hero-score"><span class="fp-digits"><i></i><i></i><i></i></span><small>/1000</small></div>
+          <div class="hero-score"><span class="fp-digits"><i></i><i></i><i></i></span><small>/1000</small>
+            <svg class="fp-glyph" viewBox="0 0 28 68"><path d="M14 6 C 26 16, 2 24, 14 34 S 2 52, 14 62"/><circle cx="14" cy="6" r="3.5"/></svg></div>
           <table class="fp-index"><tr><td class="ix-date"><span class="stamp-d"><b>--</b>---</span></td>
             <td class="l ix-road"><b>The road you drove</b><span class="sub">How far · how many corners</span></td>
             <td class="ix-score"><span class="score">--</span></td></tr></table>
         </div>
         <h2 class="fp-head">Your first drive goes here.</h2>
+        <p class="fp-line">Vetta scores each drive out of 1000.</p>
         <a class="btn solid fp-go" href="index.html">Start a drive</a>
         <a class="fp-alt" href="index.html?drive=dry_ridge&amp;play=1">Watch a replay first</a>
       </div>

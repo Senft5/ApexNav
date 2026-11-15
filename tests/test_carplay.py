@@ -293,7 +293,7 @@ console.log(JSON.stringify({
   offer: C.offerMessage('o3', 'Police reported on your route in 1.2 mi.', 'Police in 1.2 mi', 'Go round', 15000),
   offerSame: C.offerMessage('o4', 'Running 12 min late for home.', 'Running 12 min late for home.', 'Skip Cherohala Skyway', 60000),
   notice: [C.noticeMessage("Couldn't get your location. Type a start or tap the map."), C.noticeMessage('  '),
-    C.noticeMessage("Loops use Vetta's own road map, which covers Ohio, Kentucky and Indiana so far.")],
+    C.noticeMessage("Loops use Vetta's own road map, which covers the 48 mainland US states.")],
   laneGuide: C.guideMessage({ id: 'r', dist: [0, 5000], steps: [{ m: 1200, type: 15, street: 'Deals Gap Road', lanes: [[2, 0, 0], [2, 0, 0], [64, 64, 0]] }] }, 100, 3600, require(process.argv[1] + '/web/directions.js').phrase),
   noLanes: C.guideMessage({ id: 'r', dist: [0, 5000], steps: [{ m: 1200, type: 15, street: 'Deals Gap Road' }] }, 100, 3600, require(process.argv[1] + '/web/directions.js').phrase),
   laneGlyphs: [C.laneGlyphs(require(process.argv[1] + '/web/lanes.js').lanes([[2, 0, 0], [10, 8, 2], [256, 0, 0]])), C.laneGlyphs([{ angle: 0, use: false, ok: false }, { angle: 0 }]),

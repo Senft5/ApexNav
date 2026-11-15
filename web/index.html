@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov https://itscameras.dot.state.oh.us https://www.trimarc.org https://*.fbcdn.net; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov https://itscameras.dot.state.oh.us https://www.trimarc.org https://*.fbcdn.net; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://vettadrive.app wss://vettadrive.app https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
@@ -147,6 +147,7 @@
   <script src="flow.js" defer></script>         <!-- a drive's best run of clean corners, kept in its summary (IDEAS D-30) -->
   <script src="wet_roads.js" defer></script>    <!-- a wet or icy road brings the notes earlier, said once -->
   <script src="road_surface.js" defer></script>   <!-- the drive's road: dry, wet or icy, kept on its record -->
+  <script src="ghost_duel.js" defer></script>   <!-- a friend's run on your stage as a ghost: live time gaps -->
   <script src="flow_live.js" defer></script>    <!-- the run of clean corners counted live, said in the quiet slot (IDEAS D-30) -->
   <script src="recording.js" defer></script>
   <script src="end_line.js" defer></script>
@@ -679,6 +680,8 @@
     .ly-key .k-cam { stroke: var(--signal); stroke-width: 1.5; stroke-linecap: butt; stroke-linejoin: miter; fill: var(--panel); }
     .ly-key .k-hill { stroke: var(--panel-dim); stroke-width: 1.5; fill: var(--hair, transparent); }
     .ly-key .k-meet { stroke: var(--panel-ink); stroke-width: 1.5; fill: var(--panel); }
+    .ly-key .k-driven { stroke: var(--gain); } .ly-key .k-todo { stroke: var(--panel-ink); stroke-dasharray: 3 2.5; stroke-linecap: butt; }
+    .ly-legend b.k-pub::before { background: var(--panel-ink); opacity: 0.5; height: 1.5px; } .ly-legend b.k-driven::before { background: var(--gain); } .ly-legend b.k-todo::before { background: none; border-top: 2px dashed var(--panel-ink); height: 0; }
     .ly-key .k-roadcam { stroke: var(--panel); stroke-width: 1.5; fill: var(--panel-ink); }
     .ly-key .k-friend { stroke: var(--panel-ink); stroke-width: 1.5; fill: var(--panel); } .ly-key .k-friend-in { fill: var(--panel-ink); stroke: none; }
     .sw.ly:not(.on) .ly-key { opacity: 0.45; }
@@ -1510,6 +1513,7 @@
     .profile-foot { gap: 16px; border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 8px; } .profile-foot > :first-child { padding-left: 0; }
     /* a friend's profile opens on the person: their photo, name and what they are doing now, as a social app's would */
     .profile-who { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; } .profile-who .note { margin: 0; }
+    .profile-dna .dna-cmp { display: block; margin: 0 auto; max-width: 100%; height: auto; color: var(--panel-dim); } .dna-cmp .dna-them { fill: var(--accent); fill-opacity: 0.3; stroke: var(--accent); stroke-width: 3; stroke-linejoin: round; } .dna-cmp .dna-you { fill: none; stroke: var(--panel-ink); stroke-width: 2; stroke-dasharray: 5 4; stroke-linejoin: round; } .dna-key { text-align: center; } .profile-dna-head { justify-content: space-between; align-items: center; } .dna-cmp .dna-name { fill: var(--panel-ink); font-size: 12px; font-weight: 600; }
     .profile-who small { display: block; margin-top: 2px; font-size: 13px; color: var(--panel-dim); }
     .profile-who small.live { color: var(--panel-ink); font-weight: 600; }
     .profile-who small.live::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 6px 1px 0; border-radius: 50%; background: var(--accent); }
@@ -1802,6 +1806,9 @@
     .hz-pin, .pin.bump, .pin.crest, .pin.dip, .pin.mark { font: 800 11px var(--font-ui, sans-serif); letter-spacing: 0.06em; padding: 2px 6px 2px 5px; border: 2px solid var(--hz-edge); color: var(--hz-ink); background: var(--hz-bg); white-space: nowrap; }
     .hz-pin::before, .pin.bump::before, .pin.crest::before, .pin.dip::before, .pin.mark::before { content: ""; display: inline-block; width: 0; height: 0; margin-right: 4px; vertical-align: -1px;
       border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--hz-edge); }
+    /* zoomed out, a pin is its mark only (hazard_reports.js pinView): no words to pile up over the map */
+    .hz-pin.hz-mini { font-size: 0; letter-spacing: 0; padding: 2px; border-width: 1.5px; line-height: 0; }
+    .hz-pin.hz-mini::before { margin-right: 0; vertical-align: 0; }
     /* the report sheet's buttons are the plate others will see (REVIEW.md 1.2, Hazard report) */
     .hz-grid .hz-btn { background: var(--hz-bg); color: var(--hz-ink); border: 2px solid var(--hz-edge); text-align: left; padding: 0 14px; display: flex; align-items: center; gap: 10px; }
     .hz-grid .hz-btn::before { content: ""; flex: none; width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 16px solid var(--hz-edge); }
@@ -2040,6 +2047,28 @@
       .cluster-line > .ledger { flex-direction: column; align-items: flex-start; justify-content: center; align-self: stretch; gap: 2px; border-top: 0; margin: 8px 0 0 4px; }
       .cluster-line .ledger > .dna-arch { flex: none; width: 100%; }
       .cluster-line .ledger > .g-score { margin: 0; min-height: 0; } .cluster-line .ledger > .g-score b { line-height: 1.2; }
+    }
+    /* The replay (the owner 2026-11-15, after a real drive: "replay screen is kind of cluttered", "g ball should be more
+       prominent", "the metrics a little confusing"): the g-ball is the hero on the left with what it shows in words under it;
+       the speed and its limit on the right; one ledger line. The ruler (the speed again) and Sight (a look ahead, for a
+       drive) step aside, and the trip drops its odometer zeros. On a drive the panel is as it was. */
+    .dial.dial-g > .g-read { display: none; }
+    @media not ((orientation: landscape) and (max-height: 540px)) {
+      #app.replaying .cluster-line { grid-template-columns: 112px minmax(0, 1fr) auto; grid-template-areas: "g speed read" "g gread gread" "ledger ledger ledger"; column-gap: 16px; align-items: center; }
+      #app.replaying .cluster-line > .dial.dial-g { display: contents; }
+      #app.replaying .cluster-line > .dial.dial-g > svg.g-line { grid-area: g; width: 112px; align-self: start; }
+      #app.replaying .cluster-line > .dial.dial-g > .g-read { grid-area: gread; align-self: start; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 10px 12px; border-radius: var(--r-key, 0); background: var(--raised, transparent); }
+      #app.replaying .cluster-line .gr-cell { display: grid; gap: 2px; min-width: 0; }
+      #app.replaying .cluster-line .gr-cell span { font: 600 13px/1.2 var(--font-ui); color: var(--panel-dim); }
+      #app.replaying .cluster-line .gr-cell b { font: 700 19px/1.15 var(--font-num); color: var(--panel-ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+      #app.replaying .cluster-line > .dial.dial-speed { justify-self: start; max-width: 130px; align-self: end; }
+      #app.replaying .cluster-line > .cluster-center { align-self: end; margin-bottom: 6px; }
+      #app.replaying .cluster-line .ro.ro-sight, #app.replaying .cluster-line > .speed-line { display: none; }
+      #app.replaying .cluster-line .odo-digits .lead { display: none; }
+      /* the night's quiet Trip key is for a drive; a replay is watched, not driven: the trip shows */
+      html[data-mode="night"] #app.replaying #cluster.cluster-line .odo { display: flex; }
+      html[data-mode="night"] #app.replaying #cluster.cluster-line .trip-peek { display: none; }
+      #app.replaying .cluster-line > .ledger { margin-top: 4px; }
     }
     /* 4. the start: the strip and the panel arrive as paper on one curve, once; then stillness */
     @keyframes hud-rise { from { transform: translateY(100%); } }
@@ -2280,6 +2309,8 @@
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><path class="k-hill" d="M2 17 L10 6 L15 12 L19 8 L26 17 Z"/></svg></button>
         <!-- developers only (cockpit.js applyDevFlags: /api/me's developer flag); hidden for everyone else -->
         <button class="sw ly" data-toggle="satellite" id="satSwitch" hidden><i></i><span>Satellite</span><svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"></svg></button>
+        <button class="sw ly" data-toggle="roadbooks"><i></i><span>Roadbooks<small class="ly-legend"><b class="k-driven">Driven</b><b class="k-todo">To drive</b><b class="k-pub">Public</b></small></span>
+          <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><path class="k-driven" d="M3 15 C7 15 8 8 12 8"/><path class="k-todo" d="M15 9 C19 10 20 5 25 5"/></svg></button>
         <button class="sw ly" data-toggle="meets"><i></i><span>Meets<small>Public crews' meets</small></span>
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><rect class="k-meet" x="6" y="3" width="16" height="10"/><path class="k-meet" d="M14 13 V18"/></svg></button>
         <button class="sw ly" data-toggle="friends"><i></i><span>Friends<small>Sharing where they are</small></span>
@@ -2321,6 +2352,14 @@
             <div id="garageRoadFeelBody" class="stack-8"></div>
             <p class="note" id="ambientNote" role="status" aria-live="polite">--</p>
             <button class="ink-btn" id="ambientSignIn" type="button" hidden>Sign in</button>
+            <!-- the owner, 2026-11-15: an anonymous copy of each drive (web/anon_drives.js), on by default -->
+            <div class="row mt-8" style="flex-wrap:wrap">
+              <button class="sw" data-toggle="improve"><i></i><span>Help improve Vetta roads</span></button>
+            </div>
+            <p class="note" style="margin:4px 0 8px">An anonymous copy of each drive: no account, no first or last km, nothing in a privacy zone.</p>
+            <select class="field" id="ageBand" aria-label="Your age, optional, sent with the anonymous copy">
+              <option value="">Age (optional)</option><option>18-24</option><option>25-34</option><option>35-44</option><option>45-54</option><option>55-64</option><option>65+</option>
+            </select>
           </section>
           <section data-panel="garage" data-setting="account" data-title="Account" data-empty-hides>
             <div id="garageAccountBody" class="stack-12" data-fill></div>
@@ -2534,6 +2573,7 @@
         <div class="end-portrait" id="endPortrait" aria-hidden="true" hidden></div>
       </div>
       <div class="stage-bar" id="stageBar" role="status" aria-live="polite" hidden><span id="stageName"></span><b id="stageDelta">--</b><small id="stageCount"></small></div>
+      <div class="stage-bar" id="ghostBar" role="status" hidden><span id="ghostName"></span><b id="ghostGap">--</b><small>Ghost</small></div>
       <div class="stage-bar" id="coachBar" role="status" hidden><span>This stretch</span><b id="coachDelta">--</b><small id="coachCount"></small></div>
       <div class="stage-bar" id="lapBar" role="status" aria-live="polite" hidden><span id="lapName">Track</span><b id="lapTime">--</b><small id="lapInfo"></small><button class="key" id="lapSetBtn" hidden>Start/finish here</button></div>
       <div class="hz-ask" id="hzAsk" role="alertdialog" aria-live="assertive" hidden><span id="hzAskText"></span><button class="key" id="hzStill">Still there</button><button class="key" id="hzGone">Gone</button></div>

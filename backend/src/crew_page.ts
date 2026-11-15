@@ -1,6 +1,7 @@
 // The crew page (docs/design/REVIEW.md roadmap 20, mockup 09-crew-page.html): the crew's face (cover, crest, motto, stripe),
 // its next drive, its Vetta Score board this month and its chat. Members only. Plain livery: the owner sets the motto, a
 // stock crest and one stripe colour; the cover is a photo (photos.ts). Decals and the higher tiers come later (roadmap 22).
+import { dnaOf } from "./dna";
 import type { Viewer } from "./auth";
 import { Env, HttpError, body, num } from "./util";
 import { cleanText } from "./convoy";
@@ -62,7 +63,15 @@ export async function crewPage(env: Env, v: Viewer, crewId: string) {
   const grant = await env.DB.prepare("SELECT share_scores FROM grants WHERE user_id = ? AND audience_type = 'crew' AND audience_id = ?").bind(v.id, crewId).first<{ share_scores: number }>();
   // fair meeting points (crew_meet.ts): whether YOU share your rough home area with this crew; never anyone else's
   const home = await env.DB.prepare("SELECT home_cell FROM crew_members WHERE crew_id = ? AND user_id = ?").bind(crewId, v.id).first<{ home_cell: string | null }>();
+  // the crew's driving DNA (dna.ts): each member who shares scores with this crew (and you), never across a block
+  const dna = (await env.DB.prepare(
+    `SELECT u.handle, (m.user_id = ?1) AS mine, d.body FROM crew_members m JOIN users u ON u.id = m.user_id JOIN driver_dna d ON d.user_id = m.user_id
+      WHERE m.crew_id = ?2 AND (m.user_id = ?1 OR (${NOT_BLOCKED("m.user_id")}
+        AND EXISTS (SELECT 1 FROM grants g WHERE g.user_id = m.user_id AND g.audience_type = 'crew' AND g.audience_id = ?2 AND g.share_scores = 1)))
+      LIMIT 100`).bind(v.id, crewId).all<{ handle: string | null; mine: number; body: string }>()).results
+    .map((r) => ({ handle: r.handle, mine: !!r.mine, skills: dnaOf(JSON.parse(r.body))?.skills ?? null })).filter((r) => r.skills);
   return {
+    dna,
     id: c.id, name: c.name, motto: c.motto, about: c.about, visibility: c.visibility, area_name: c.area_name, members: c.members,
     is_owner: c.owner === v.id, crest: c.crest, stripe: c.stripe, cover_photo_id: c.cover_photo_id,
     invites: c.invites, can_invite: c.owner === v.id || c.invites === "anyone",          // P-07: who can invite, and whether you can
