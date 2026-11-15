@@ -368,7 +368,7 @@
     });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, get ghostRuns() { return drive.ghosts || null; }, refreshSavedDrives: () => refreshSavedDrives(), renameStandInDrives: (m) => renameStandInDrives(m), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), get limitSaid() { return drive.limitSaid ? drive.limitSaid.length : 0; }, horizonFrom: async (coords, tee = false) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; if (tee) t.marks = [ApexRoadMarks.teeMark(t)]; useHorizon(t); return t.id; } };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, say: (text) => say(text, true), get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, get ghostRuns() { return drive.ghosts || null; }, refreshSavedDrives: () => refreshSavedDrives(), renameStandInDrives: (m) => renameStandInDrives(m), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), get limitSaid() { return drive.limitSaid ? drive.limitSaid.length : 0; }, horizonFrom: async (coords, tee = false) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; if (tee) t.marks = [ApexRoadMarks.teeMark(t)]; useHorizon(t); return t.id; } };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -1867,6 +1867,24 @@
     // opts: kind 'hazard' (goes first, may cut off an ordinary line), key (never twice in a row), atM (route metres: dropped once passed).
     // review recordings (.github/workflows/app-review.yml, debug builds only): every line said goes to the system log, a
     // transcript to read beside the video, which has no sound
+    // The drive's own log of what was said (kept with the drive on the phone as `said`, never in an anonymous upload, whose
+    // columns are listed in anon_drives.js): when (s from the drive's start), where (m along it), the line, which voice said
+    // it (pack: the chosen voice's clips; phone: the phone's voice; a prompt style such as a tone when the words were skipped; null: cut off) and, for a note, how far ahead of it the call began, so
+    // a review can see where it fell back to the phone's voice and how early or late each call landed.
+    function saidOnDrive(item) {
+      let rec = null;
+      try { rec = driveActive ? drive.rec : null; } catch (_) { return null; }   // (a line said while the page is still starting)
+      if (!rec || !item || !item.text) return null;
+      const said = rec.said || (rec.said = []);
+      if (said.length >= SAID_MAX) return null;
+      const last = rec.rows.length ? rec.rows[rec.rows.length - 1] : null;   // its newest 5 m row: seconds from the start
+      const t = last && Number.isFinite(last.t_s) ? last.t_s : null;
+      const ahead = Number.isFinite(item.atM) && queueCursor() != null ? Math.round(item.atM - queueCursor()) : null;
+      const x = { t, m: Math.round(rec.dist), line: String(item.text).slice(0, 120), eng: null, ...(ahead != null ? { ahead } : {}) };
+      said.push(x);
+      return x;
+    }
+    const SAID_MAX = 1500;
     function saidLog(text) { if (window.APEX_REVIEW) { try { window.webkit.messageHandlers.apex.postMessage({ cmd: 'said', text: String(text) }); } catch (_) {} } }
     function say(text, force, chain = null, sysToken = null, opts = {}) {
       // a road hazard (not a turn or a crest, which share the urgent speech lane) also alerts on the car's screen
@@ -1958,15 +1976,17 @@
         try { const len = ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, cue, Themes.get(state.theme).sounds)); await new Promise(r => setTimeout(r, len * 1000 + 40)); } catch (_) {}
       }
       const duck = ApexSpeechQueue.ducks(item, isSpirited());
-      let played = false;
+      const said = saidOnDrive(item);   // logged as it starts; which voice said it is filled in once it has played
+      let played = false, voiced = null;   // voiced: the clips this line was given (null: none, so the phone's voice says it)
       try {
         if (state.voiceId !== 'device' && window.ApexVoice) {
           await ApexVoice.load(state.voiceId);
           const own = item.tokens || (item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null);
           // MA-3: the advice's clip in the same breath as the call's (rally words; plain words are spoken whole)
           const tokens = own && item.chain && item.aside && item.aside.kind === 'advice' ? [...own, item.aside.token] : own;
+          voiced = tokens && ApexVoice.covers(tokens) ? tokens : null;
           const promptStyle = await voiceBracket(true, duck);
-          if (promptStyle !== 'normal') { voiceBracket(false); speech.busy = false; speech.followUp = null; pumpSpeech(); return; }   // silent or a tone: skip the words
+          if (promptStyle !== 'normal') { if (said) said.eng = promptStyle; voiceBracket(false); speech.busy = false; speech.followUp = null; pumpSpeech(); return; }   // silent or a tone: skip the words
           try {
             // A call the bank can only voice by joining clips plays as one whole render when the
             // route-load prefetch has it; the join is the audible seam we are avoiding.
@@ -1977,7 +1997,13 @@
           } finally { voiceBracket(false); }
         }
       } catch (_) { /* fall back to the device voice */ }
+      // App health: lines said by the chosen pack's voice, and lines a pack voice was chosen for but the phone's voice said
+      // (no clips for them, or the clips failed), so a fallback that creeps back shows in Garage → Account → App health
+      if (state.voiceId !== 'device') health.bump(played ? 'voice_pack' : 'voice_phone');
+      if (said) said.eng = played ? 'pack' : 'phone';
       if (played) { speech.busy = false; pumpSpeech(); return; }
+      // e2e (VOICE_LOG=1): a line with a pack voice chosen but no clips for it, said by the phone's voice instead
+      if (!voiced && state.voiceId !== 'device' && typeof window.__voiceGap === 'function') { try { window.__voiceGap(String(item.text)); } catch (_) {} }
       deviceSpeak(spokenText(item.text), duck);
       if (speech.queue.hazardWaiting(performance.now(), queueCursor())) preemptForHazard();   // a hazard arrived while the model voice tried
     }
@@ -2446,7 +2472,7 @@
           && (e.type === 'corner' ? spirited : (spirited || noteworthyInCruise(e))));
         const bumpDue = ApexRoadMemory.upcoming(hazardMemory, state.live, 0, quietReach, { has: () => false });
         // a named place: the pack says the line without the name (its clips), the name stays on the screen
-        const bareTokens = quiet.bare && window.ApexVoiceLines ? ApexVoiceLines.compose(quiet.bare) : null;
+        const bareTokens = quiet.bare && window.ApexVoiceLines ? ApexVoiceLines.forText(quiet.bare) || ApexVoiceLines.compose(quiet.bare) : null;
         if (!callDue && !bumpDue) { say(quiet.text, false, null, null, bareTokens ? { tokens: bareTokens, named: true } : {}); if (quiet === limitSay) limitSay = null; else if (quiet === briefSay) briefSay = null; else if (quiet === cornersSay) cornersSay = null; else if (quiet === alongSay) alongSay = null; else if (quiet === brakeSay) brakeSay = null; else if (quiet === sunSay) sunSay = null; else if (quiet === breakSay) breakSay = null; else { flowSay = flowQueue.shift() || null; if (flowSay) flowSay.until = performance.now() + 20000; } }
       }
     }
@@ -3758,7 +3784,9 @@
       // your taste (taste.js) when it moved this route up: the word for what you lean to, never a number
       const tasteLine = (() => { try { const f = t.tasteBonus >= 1 && window.ApexTaste ? ApexTaste.fit(ApexTaste.load(localStorage)) : null;
         if (!f) return ''; const k = ApexTaste.AXES.slice().sort((a, b) => f[b] - f[a])[0]; return `Suits your taste for ${{ tech: 'technical roads', flow: 'flowing roads', smooth: 'smooth surfaces' }[k]} · `; } catch (_) { return ''; } })();
-      $('routeCardSub').textContent = `${tasteLine}${carLine ? carLine + ' · ' : ''}${closed}${missed}${missedPolice}${around}${towns}${sun}${cams}${feel}`.replace(/ · $/, '');
+      // your roadbooks' roads it drives (roadbooks.js alongRoute, attachBooks): the reason a planned road is worth it
+      const booksLine = t.bookRoads && t.bookRoads.length && window.ApexRoadbooks ? `${ApexRoadbooks.routeLine(t.bookRoads)} · ` : '';
+      $('routeCardSub').textContent = `${booksLine}${tasteLine}${carLine ? carLine + ' · ' : ''}${closed}${missed}${missedPolice}${around}${towns}${sun}${cams}${feel}`.replace(/ · $/, '');
       $('routeCardSub').hidden = !$('routeCardSub').textContent;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
@@ -3916,6 +3944,7 @@
       paintStops(t);
       attachWeather(t);
       attachClosures(t);
+      if (typeof attachBooks === 'function') attachBooks(t);
       if (typeof attachWhen === 'function') attachWhen(t);        // (tests evaluate buildRoute on its own)
       if (typeof attachMarksSoon === 'function') attachMarksSoon(t);   // road marks also for a route rebuilt mid-drive
       // the route bar shows this; screen readers hear it (REVIEW.md: the bar is the toast)
@@ -7441,7 +7470,7 @@
       zones: () => privacyZones, planned: () => (plannedRoute && Array.isArray(plannedRoute.lat) && plannedRoute.lat.length > 1 ? plannedRoute : null),
       report: (o) => safety && safety.report(o), changed: () => { if (booksRowCount) booksRowCount(); }, mapUnder,
       stages: () => { try { const l = JSON.parse(localStorage.getItem('apex.segments') || '[]'); return Array.isArray(l) ? l : []; } catch (_) { return []; } },
-      edited: () => { clearTimeout(booksEdited); booksEdited = setTimeout(() => { if (roadbookMap) roadbookMap.forget(); }, 600); },   // a burst of stamps reads the map's books once
+      edited: () => { clearTimeout(booksEdited); booksEdited = setTimeout(() => { if (roadbookMap) roadbookMap.forget(); if (roadbooks) roadbooks.forgetOpened(); }, 600); },   // a burst of stamps reads the map's books once
       // a crew roadbook's road as a crew drive: People's Crews side, the crew's plan form named after the road, the road as
       // its route (shared with the crew as Plan it does with a planned route)
       planCrewDrive: (road, crew) => {
@@ -7490,7 +7519,8 @@
           ownInstructLater(t, r);
           await buildRoute(null, id, name, t);
           const n = (book.road_list || []).length, of = legs.length < n ? ` of its ${n}` : '';
-          cardNote(`${legs.length} roads${of} from ${name}, nearest first: ${ApexUnits.long(totalM(), 1)}`);
+          // only the ones still to stamp (roadbooks.js "Drive the N new"): said as new
+          cardNote(`${legs.length} ${book.onlyNew ? 'new ' : ''}roads${book.onlyNew ? '' : of} from ${name}, nearest first: ${ApexUnits.long(totalM(), 1)}`);
         } catch (_) { toast('Couldn\u2019t route through those roads. Drive them one at a time.'); }
         finally { loopBusy = false; ui.done(); }
       },
@@ -9445,8 +9475,12 @@
     $('playBtn').addEventListener('click', () => { setPlaying(!state.playing); });
     $('jumpCorners').addEventListener('click', () => { const b = $('jumpCorners'); if (b._at == null || !track) return; state.cursorM = b._at; paintReplayEnd(false); render(true); });   // the name is on the plate; the pack's voice is for the road
     document.querySelectorAll('#rateDetents [data-rate]').forEach((b) => b.addEventListener('click', () => {
-      state.rate = Number(b.dataset.rate);
-      document.querySelectorAll('#rateDetents [data-rate]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+      const all = [...document.querySelectorAll('#rateDetents [data-rate]')];
+      // one speed key (index.html, the transport's one row): the chosen speed is the only one shown, and a tap steps on
+      const pick = b.getAttribute('aria-checked') === 'true' && all.every((x) => x === b || !x.getClientRects().length) ? all[(all.indexOf(b) + 1) % all.length] : b;
+      state.rate = Number(pick.dataset.rate);
+      all.forEach((x) => x.setAttribute('aria-checked', String(x === pick)));
+      if (pick !== b) pick.focus({ preventScroll: true });
     }));
     const scrubber = $('scrubber');
     let scrubbing = false;
@@ -10025,6 +10059,16 @@
     }
     // Seasonal and time-of-day closures (conditional_closures.js, IDEAS R-22): OSM conditional access tags on the roads the
     // route uses, read for when you'd get there. A trip over 1° across, or the map offline: nothing said.
+    // the roads of your roadbooks a planned route drives, said on its card (roadbooks.js alongRoute); members, not in a drive
+    async function attachBooks(t) {
+      if (!t || driveActive || !Array.isArray(t.lat) || t.lat.length < 2 || !accountMe || !accountMe.member) return;
+      if (!roadbooks) { if (typeof needSocial !== 'function') return; await needSocial().catch(() => {}); }
+      if (!roadbooks || plannedRoute !== t) return;
+      const found = await roadbooks.alongRoute(t.lat, t.lon).catch(() => []);
+      if (plannedRoute !== t || !found.length) return;
+      t.bookRoads = found;
+      renderRouteCard(t);
+    }
     async function attachClosures(t) {
       $('routeCardClosures').hidden = true;
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2 || !window.ApexConditional) return;
@@ -11072,13 +11116,15 @@
       bar.classList.toggle('ahead', Number.isFinite(r.gap) && r.gap < -0.05); bar.classList.toggle('behind', Number.isFinite(r.gap) && r.gap > 0.05);
       if (!bar.hidden) { $('stageBar').hidden = true; $('coachBar').hidden = true; }
       const words = (x) => (window.ApexPassCoach && ApexPassCoach.spoken ? ApexPassCoach.spoken(x) : `${x.toFixed(1)} seconds`);
+      // the pack says the gap without the stage's or the friend's name (both on the bar): "Stage done. 1.4 seconds up."
+      const bareGap = (gap) => (Math.abs(gap) < 0.05 ? 'Level.' : `${words(Math.abs(gap))} ${gap > 0 ? 'down' : 'up'}.`);
       if (r.state === 'done') {
         const line = Number.isFinite(r.gap) ? `${r.name} done. ${ApexGhostDuel.spoken(r.gap, name, words)}` : `${r.name} done.`;
-        toast(line); if (isSpirited()) sayQuietLine(line);
+        toast(line); if (isSpirited()) sayQuietLine(line, Number.isFinite(r.gap) ? `Stage done. ${bareGap(r.gap)}` : 'Stage done.');
         (drive.ghosts || (drive.ghosts = [])).push({ stage: r.name, who: r.who, gap_s: Number.isFinite(r.gap) ? Math.round(r.gap * 10) / 10 : null });
         return;
       }
-      if (r.say && isSpirited() && Number.isFinite(r.gap)) sayQuietLine(ApexGhostDuel.spoken(r.gap, name, words));
+      if (r.say && isSpirited() && Number.isFinite(r.gap)) sayQuietLine(ApexGhostDuel.spoken(r.gap, name, words), bareGap(r.gap));
     }
     // ---- live coaching against your best pass, on any road driven before (web/pass_coach.js) ---------------------------
     // Each remembered corner you finish is set against its fastest pass (the time gap, owner 2026-11-14) and its best
@@ -11664,6 +11710,7 @@
         // Passenger aboard (For this drive) tags the drive 'Passenger' (drive_tags.js), so the Log knows it too
         { const tags = window.ApexRouteDriver ? ApexRouteDriver.driveTags(ApexRouteDriver.load(localStorage)) : []; if (tags.length) extra.tags = tags; }
         if (laps.length) extra.laps = laps;
+        if (Array.isArray(rec.said) && rec.said.length) extra.said = rec.said;   // what was said, and in which voice (saidOnDrive)
         if (battery) extra.battery = battery;
         { const sf = drive.surface ? drive.surface.value() : null; if (sf) extra.surface = sf; }   // dry, wet or icy (road_surface.js); unknown left out
         // F-04: the card in the frame after End, from the recording as it stands; the drive is parsed, scored and saved in
