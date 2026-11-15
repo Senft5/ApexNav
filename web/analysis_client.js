@@ -132,8 +132,26 @@
   const memo = { key: null, out: null };                         // the cockpit's road memory, until the library changes
   const fullAll = async (sums) => (await Promise.all(sums.map((s) => full(s.id, s)))).filter(Boolean);
 
-  // the corner coach for d against every other drive whose box overlaps it (Core.coach decides what is the same corner)
-  async function coachOf(Core, d, sums) {
+  // d put on the map's road around its corners (road_line.js, our graph tiles, loaded only when asked), kept per drive while
+  // jobs keep asking: Core.coach measures its line against the road's shape (an early apex needs the line itself early).
+  // No tiles or no road_line.js: d as it is, and the coach makes no claim about the line.
+  const roads = new Map();
+  async function onRoad(d) {
+    if (!root.ApexRoadLine && typeof importScripts === 'function') { try { importScripts('road_line.js'); } catch (_) { /* no road */ } }
+    const L = root.ApexRoadLine;
+    if (!L || !d || !d.corners || !d.corners.length) return d;
+    const key = `${d.id}|${d.lat.length}`;
+    if (!roads.has(key)) {
+      if (roads.size > 8) roads.clear();
+      roads.set(key, L.forDrive(d, d.corners).then((x) => (x && x.road_lat ? { road_lat: x.road_lat, road_lon: x.road_lon } : null)).catch(() => null));
+    }
+    const r = await roads.get(key);
+    return r ? { ...d, ...r } : d;
+  }
+  // the corner coach for d against every other drive whose box overlaps it (Core.coach decides what is the same corner);
+  // road: put d on the map's road first (a drive's page, its coaching sentence and its corners; not the Log-wide sweeps)
+  async function coachOf(Core, d, sums, road = false) {
+    if (road) d = await onRoad(d);
     const me = sums.find((s) => s.id === d.id), nearS = sums.filter((s) => s.id !== d.id && overlaps(s.bbox, me && me.bbox));
     // like with like (road_surface.js alike): a wet pass only against your other wet ones, a dry one never against a wet
     // (all: every overlapping pass, wet or dry, for the road's history, which shows each with its surface)
@@ -147,7 +165,7 @@
   async function coachLineOf(Core, id, sums, skip = null) {   // skip: the practised skill, said on its own line beside it
     const me = sums.find((s) => s.id === id), d = me ? await full(id, me) : null;
     if (!d || !root.ApexDriveView) return { coach: null, road: null };
-    const { co, near } = await coachOf(Core, d, sums), P = root.ApexDriverProfile;
+    const { co, near } = await coachOf(Core, d, sums, true), P = root.ApexDriverProfile;
     let road = null;
     try { road = P && P.roadEndLine ? P.roadEndLine(roadOf(Core, d, near), skip) : null; } catch (_) { road = null; }
     return { coach: root.ApexDriveView.plainCoach(d.ds, co, skip) || null, road };
@@ -306,7 +324,7 @@
       const Core = CoreOf(), sums = await Rec().summaries(Core), me = sums.find((s) => s.id === id);
       const d = me ? await full(id, me) : null;
       if (!d) return { missing: true };
-      const { co, near, all } = await coachOf(Core, d, sums);
+      const { co, near, all } = await coachOf(Core, d, sums, true);
       const len = d.dist[d.dist.length - 1], cmp = new Map();
       const compare = (o) => { if (!cmp.has(o.id)) cmp.set(o.id, Core.compareDrives(d, o)); return cmp.get(o.id); };
       let reference = null;
@@ -333,7 +351,7 @@
       const Core = CoreOf(), T = root.ApexCornerTrace, sums = await Rec().summaries(Core), me = sums.find((s) => s.id === id);
       const d = me ? await full(id, me) : null;
       if (!d || !T || !d.corners || !d.corners[k]) { release(); return { trace: null }; }
-      const { co, near } = await coachOf(Core, d, sums), x = co.corners[k];
+      const { co, near } = await coachOf(Core, d, sums, true), x = co.corners[k];
       const b = x && x.best && x.best_from >= 0 ? near[x.best_from] : null;
       let trace = null;
       try { trace = b ? T.trace(Core, d, k, b) : null; } catch (_) { trace = null; }

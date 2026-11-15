@@ -412,7 +412,7 @@ def test_early_apex_is_told_only_when_gps_and_the_motion_sensors_agree():
     v, lon, lat, s, e, a = _early_corner(56, 56)                     # slowest 20 m early, the sensors agree
     m = da.corner_phases(v, lon, lat, s, e, a, 25.0)
     assert m["min_offset_m"] == -20.0 and m["imu_slow_m"] == -20.0
-    assert da._tip(m, None)["kind"] == "early_apex"
+    assert da._tip({**m, "road_off_m": -20.0}, None)["kind"] == "early_apex"
     v, lon, lat, s, e, a = _early_corner(56, 60)                     # GPS says early, the sensors say at the apex
     m = da.corner_phases(v, lon, lat, s, e, a, 25.0)
     assert m["imu_slow_m"] == 0.0 and da._tip(m, None) is None
@@ -420,6 +420,71 @@ def test_early_apex_is_told_only_when_gps_and_the_motion_sensors_agree():
     assert da._tip(da.corner_phases(v, lon, lat, s, e, a, 25.0), None) is None
     v, lon, lat, s, e, a = _early_corner(57, 57)                     # 15 m early is inside one GPS fix of travel (16 m at 16 m/s)
     assert da._tip(da.corner_phases(v, lon, lat, s, e, a, 25.0), None) is None
+
+
+def _road_corner(turn_at, n=120, s=50, e=70, road_at=60):
+    """A left corner on the map centred at bin road_at (a 40 m radius arc over 20 bins, straight either side), and the
+    phone's sideways load, at 15 m/s, centred at bin turn_at."""
+    import math as m
+    v = np.full(n, 15.0)
+    lat_g = np.array([0.55 * max(0.0, 1.0 - abs(i - turn_at) / 10.0) for i in range(n)], dtype=float)
+    x, y, h, la, lo = 0.0, 0.0, 0.0, [], []
+    for i in range(n):
+        la.append(39.0 + y / 110540.0)
+        lo.append(-84.0 + x / (111320.0 * m.cos(m.radians(39.0))))
+        k = (1 / 40.0) * max(0.0, 1.0 - abs(i + 0.5 - road_at) / 10.0)   # curvature rises to the road's apex and falls,
+        x += 5.0 * m.cos(h + k * 2.5)                                    # taken at the middle of each 5 m step
+        y += 5.0 * m.sin(h + k * 2.5)
+        h += k * 5.0
+    return v, lat_g, la, lo, s, e
+
+
+def test_the_line_is_measured_against_the_roads_own_shape():
+    """Nate (2026-11-15): "shouldn't it be drive geometry compared to road geometry?". road_turn_offset_m: the centre of
+    your turning less the centre of the road's under you. On his 13 drives it says median -2 m (no early habit), and backs
+    2 of the 13 corners the speed alone called early. Unknown road: None, never 0."""
+    v, g, la, lo, s, e = _road_corner(56)                             # turned 20 m before the road does
+    assert da.road_turn_offset_m(la, lo, v, g, s, e) == pytest.approx(-20.0, abs=3)
+    v, g, la, lo, s, e = _road_corner(60)                             # turned with the road
+    assert abs(da.road_turn_offset_m(la, lo, v, g, s, e)) < 3
+    v, g, la, lo, s, e = _road_corner(64)                             # later than the road: a late apex
+    assert da.road_turn_offset_m(la, lo, v, g, s, e) == pytest.approx(20.0, abs=3)
+    assert da.road_turn_offset_m(None, None, v, g, s, e) is None
+    la[60] = None                                                     # a bin off the map: the road is not known there
+    assert da.road_turn_offset_m(la, lo, v, g, s, e) is None
+
+
+def test_an_early_apex_needs_the_line_itself_early():
+    """Speed alone (slowest before the tightest) said early on 13 of Nate's corners; against the road his turning was
+    centred within 10 m of the road's on 11. The note now also needs the line early on the map, and with no road known
+    it says nothing about the line. Not softer: a corner whose line is early is still told."""
+    v, lon, lat, s, e, a = _early_corner(56, 56)
+    m = da.corner_phases(v, lon, lat, s, e, a, 25.0)
+    assert da._tip({**m, "road_off_m": -20.0}, None)["kind"] == "early_apex"
+    assert da._tip({**m, "road_off_m": -15.0}, None)["kind"] == "early_apex"
+    assert da._tip({**m, "road_off_m": -5.0}, None) is None           # slowest early, but the line with the road
+    assert da._tip({**m, "road_off_m": None}, None) is None           # no road: no claim
+    assert da._tip(m, None) is None
+
+
+def test_the_line_against_the_road_is_the_same_in_the_app():
+    """web/apex_core.js roadTurnOffsetM is the port of road_turn_offset_m."""
+    import json, shutil, subprocess
+    from pathlib import Path
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not installed")
+    cases = []
+    for t in (56, 60, 64, 52):
+        v, g, la, lo, s, e = _road_corner(t)
+        cases.append({"v": v.tolist(), "g": g.tolist(), "la": la, "lo": lo, "s": s, "e": e})
+    cases.append({**cases[0], "la": [None if i == 60 else x for i, x in enumerate(cases[0]["la"])]})
+    js = "const C = require(process.argv[1]); const k = JSON.parse(process.argv[2]); console.log(JSON.stringify(k.map((c) => C.roadTurnOffsetM(c.la, c.lo, c.v, c.g, c.s, c.e))))"
+    got = json.loads(subprocess.run([node, "-e", js, str(Path(__file__).resolve().parents[1] / "web" / "apex_core.js"), json.dumps(cases)],
+                                    capture_output=True, text=True, check=True).stdout)
+    want = [da.road_turn_offset_m(c["la"], c["lo"], np.asarray(c["v"]), np.asarray(c["g"]), c["s"], c["e"]) for c in cases]
+    assert got[-1] is None and want[-1] is None
+    assert got[:-1] == pytest.approx(want[:-1], abs=1e-6), (got, want)
 
 
 def test_the_motion_sensors_slowest_point_is_the_same_in_the_app():
