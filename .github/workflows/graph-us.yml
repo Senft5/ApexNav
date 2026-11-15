@@ -215,9 +215,15 @@ jobs:
             fi
           done
           ls -la "$WORK/osm"
-      - name: The region's context grid (graph-data ctx/v1), else Cincinnati's
+      - name: The context grid under this job's blocks (the lower 48's from R2), else graph-data's, else Cincinnati's
+        env:
+          JOB: ${{ matrix.job }}
         run: |
-          if git fetch -q --depth 1 origin graph-data && git cat-file -e FETCH_HEAD:ctx/v1/index.json 2>/dev/null; then
+          # the lower 48's grid (ctx-us.yml, about 850 MB): only the bundles under this job's blocks
+          python -m tools.graph_etl.us_plan blocks --job "$JOB" > "$WORK/ctx_blocks.txt"
+          if python -m tools.ctx_etl.fetch --boxes "$WORK/ctx_blocks.txt" --out "$WORK/ctx_us"; then
+            echo "CTX_DIR=$WORK/ctx_us" >> "$GITHUB_ENV"
+          elif git fetch -q --depth 1 origin graph-data && git cat-file -e FETCH_HEAD:ctx/v1/index.json 2>/dev/null; then
             mkdir -p "$WORK/ctx_dl" && git archive FETCH_HEAD ctx | tar -x -C "$WORK/ctx_dl"
             echo "CTX_DIR=$WORK/ctx_dl/ctx/v1" >> "$GITHUB_ENV"
           else

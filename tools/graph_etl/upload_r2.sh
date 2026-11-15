@@ -48,7 +48,13 @@ elif [ -f "$dir/v1/index.json" ]; then
   ( cd "$dir/v1" && ls *.vgr 2>/dev/null | sed "s|.*|$dir/v1/& graph/v1/b/$build/&|" ) | upload || fail=1
   if [ "$fail" = 0 ]; then echo "$dir/v1/index.json graph/v1/index.json" | upload || fail=1; fi
 fi
-if [ -d "$dir/ctx/v1" ]; then
+# the context grid likewise: once the lower 48's (ctx-us.yml, region "us") is live, the region's mirror leaves it alone
+ctx_live=$(curl -fsS "$base/api/ctx/v1/index.json" 2>/dev/null | python3 -c 'import json,sys;print(json.load(sys.stdin).get("region") or "")' 2>/dev/null || true)
+ctx_here=""
+[ -f "$dir/ctx/v1/index.json" ] && ctx_here=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("region") or "")' "$dir/ctx/v1/index.json")
+if [ -d "$dir/ctx/v1" ] && [ "$ctx_live" = "us" ] && [ "$ctx_here" != "us" ]; then
+  echo "context grid: the lower 48's is live; the region's ($ctx_here) is not mirrored over it"
+elif [ -d "$dir/ctx/v1" ]; then
   echo "context grid:"
   ( cd "$dir/ctx/v1" && find 8 -name '*.vcg' 2>/dev/null | sed "s|.*|$dir/ctx/v1/& ctx/v1/&|" ) | upload || fail=1
   [ -f "$dir/ctx/v1/index.json" ] && { echo "$dir/ctx/v1/index.json ctx/v1/index.json" | upload || fail=1; }
