@@ -34,12 +34,13 @@ def main(base: str) -> int:
         j, s = ask(base, "route", {"locations": [a, b], **AUTO, "alternates": 2, "turn_lanes": True})
         km = j["trip"]["summary"]["length"]
         assert km > 50, f"{name}: {km} km"
+        print(f"- route {name}: {km:.0f} km, {s:.2f} s", flush=True)
         rows.append(f"route {name}: {km:.0f} km, {len(j.get('alternates') or [])} alternates, {s:.2f} s")
         if name.startswith("Cincinnati"):
             shape = j["trip"]["legs"][0]["shape"]
     j, s = ask(base, "sources_to_targets", {"sources": [CINCY, COLUMBUS], "targets": [LEXINGTON, INDY, LOUISVILLE], **AUTO})
     cells = [c for row in j["sources_to_targets"] for c in row]
-    assert all(c.get("time") for c in cells), "matrix has a hole"
+    assert all(c.get("time") for c in cells), f"matrix has a hole: {json.dumps(j)[:800]}"
     rows.append(f"sources_to_targets 2x3: {s:.2f} s")
     j, s = ask(base, "trace_attributes", {"encoded_polyline": shape, "costing": "auto", "shape_match": "map_snap",
                                          "filters": {"action": "include", "attributes": ["edge.speed_limit", "edge.road_class", "edge.way_id"]}})

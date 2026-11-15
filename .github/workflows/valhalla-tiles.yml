@@ -75,6 +75,7 @@ jobs:
           sudo chown -R "$(id -u)" work
           echo "tiles: $(du -h work/tiles.tar | cut -f1) in $(( ($(date +%s) - t0) / 60 )) min" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Cut into parts, index
+        shell: bash
         run: |
           build="${{ steps.week.outputs.w }}-$(sha256sum work/tiles.tar | cut -c1-8)"
           d="out/valhalla/v1/b/$build"; mkdir -p "$d"
@@ -83,6 +84,7 @@ jobs:
           rm -f work/*.osm.pbf
           cat out/valhalla/v1/index.json | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Prove the router answers from these parts (1 GiB, like the Container)
+        shell: bash   # -o pipefail: a failed smoke check fails the run, not only the tee behind it
         run: |
           docker build -q -t vetta-router router
           (cd out && python3 -m http.server 8811 >/dev/null 2>&1 &)
