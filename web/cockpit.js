@@ -184,7 +184,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, roadbooks: false, nudge: false, push: false, satellite: false, improve: true }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, events: true, roadbooks: false, nudge: false, push: false, satellite: false, improve: true }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -368,7 +368,7 @@
     });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, get ghostRuns() { return drive.ghosts || null; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), horizonFrom: async (coords, tee = false) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; if (tee) t.marks = [ApexRoadMarks.teeMark(t)]; useHorizon(t); return t.id; } };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, get ghostRuns() { return drive.ghosts || null; }, refreshSavedDrives: () => refreshSavedDrives(), renameStandInDrives: (m) => renameStandInDrives(m), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), horizonFrom: async (coords, tee = false) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; if (tee) t.marks = [ApexRoadMarks.teeMark(t)]; useHorizon(t); return t.id; } };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -1733,6 +1733,32 @@
       el.setAttribute('aria-valuetext', text);
       el.setAttribute('aria-valuenow', String(T > 0 ? Math.round(at / T * 100) : 0));
     }
+    // Jump to the corners (real-drive review 2026-11-15: a free drive's replay opened on twenty minutes of interstate): where
+    // the drive's corners start, the first run of three corners inside 1.5 km (else its first corner), 400 m before it so
+    // the notes have their run-in. Offered while the replay is more than a kilometre short of it; one tap moves there.
+    const HAZARD_NOTE = new Set(['bump', 'crest', 'dip']);   // instruments.js HAZARD_TYPES: the strip's measured hazards
+    const cornerMs = new WeakMap();                                      // a track's corner metres, sorted (nearCorner)
+    function nearCorner(t, m) {
+      if (!t || !Array.isArray(t.events)) return false;
+      let cs = cornerMs.get(t);
+      if (!cs) { cs = t.events.filter((e) => e.type === 'corner' && Number.isFinite(e.dist_m)).map((e) => Number.isFinite(e.start_m) ? e.start_m : e.dist_m).sort((a, b) => a - b); cornerMs.set(t, cs); }
+      let lo = 0, hi = cs.length;                                         // the first corner at or after m - 150
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (cs[mid] < m - 150) lo = mid + 1; else hi = mid; }
+      return lo < cs.length && cs[lo] <= m + 400;
+    }
+    function cornersStartM(t) {
+      const cs = (t && Array.isArray(t.events) ? t.events : []).filter((e) => e.type === 'corner' && Number.isFinite(e.dist_m)).map((e) => Number.isFinite(e.start_m) ? e.start_m : e.dist_m).sort((a, b) => a - b);
+      if (!cs.length) return null;
+      const run = cs.find((m, i) => i + 2 < cs.length && cs[i + 2] - m <= 1500);
+      return Math.max(0, (run != null ? run : cs[0]) - 400);
+    }
+    function paintJump() {
+      const b = $('jumpCorners'); if (!b) return;
+      const at = replayOn && state.mode === 'replay' && track ? cornersStartM(track) : null;
+      const show = at != null && state.cursorM < at - 300;   // a city start: up to 700 m before the corners
+      if (b.hidden === show) b.hidden = !show;
+      b._at = at;
+    }
     function drawScrubber() {
       const r = scrubRect || scrubCanvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
       const w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
@@ -1740,6 +1766,7 @@
       sctx.clearRect(0, 0, w, h);
       if (!track) return;
       paintScrubValue();
+      paintJump();
       const C = look.colors, n = track.dist.length, T = totalM(), step = Math.max(1, Math.floor(n / w)), xOf = (m) => (m / T) * w;
       if (track.elev) {
         let lo = Infinity, hi = -Infinity;
@@ -2186,8 +2213,18 @@
       }
       const firstKey = track && state.firstNoteKey && state.firstNoteKey.startsWith(`${track.id}:`) ? state.firstNoteKey : null;
       const isFirst = (e) => !!firstKey && `${track.id}:${e.type}:${e.index}` === firstKey;
+      // Real-drive review round 2: a measured hazard (bump, crest, dip) shows only inside the voice's own lead for it (twice
+      // the lead, at least 200 m), and one at a time. Two BUMP cards counting down from 0.9 mi on a 35 mph street were noise.
+      let hazardUp = false;
+      const hazardNear = (e) => {
+        if (!HAZARD_NOTE.has(e.type)) return true;
+        if (hazardUp) return false;
+        const ok = noteM(e) - state.cursorM <= Math.max(200, 2 * ApexNoteTiming.leadM({ vMps, text: e.call || 'Bump ahead', reactionS: reactS }));
+        if (ok) hazardUp = true;
+        return ok;
+      };
       const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner' || isFirst(e)).filter(e => noteM(e) - state.cursorM <= 3000)
-        .filter(e => !(e.type === 'corner' && ApexDirections.atJunction(steps, noteM(e)))).slice(0, 3);   // a junction shows once, as the direction
+        .filter(e => !(e.type === 'corner' && ApexDirections.atJunction(steps, noteM(e)))).filter(hazardNear).slice(0, 3);   // a junction shows once, as the direction
       const notes = shown.map(e => {
         const d = distLabel(Math.max(0, noteM(e) - state.cursorM));   // 0 once you're in the corner
         return { key: `${e.type}:${e.index}:${e.dist_m}`, type: e.type, code: e.code, call: state.noteWords === 'plain' && !e.recce ? ApexPlainNotes.plainCall(e) : e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: Math.max(0, noteM(e) - state.cursorM),
@@ -2481,7 +2518,9 @@
       si.sight = sightMps != null ? ApexUnits.speed(sightMps) : null; si.open = sightOpen; si.speed = vMps != null ? ApexUnits.speed(vMps) : null;
       si.limit = limit != null ? ApexUnits.speed(limit) : null; si.unit = ApexUnits.speedU();
       const held = sightHold.step(si, performance.now());
-      paintSight(held.msg, !!live);
+      // Real-drive review round 2: in a replay the plate shows only near a corner (400 m before to 150 m after). On a straight
+      // city street it flipped Open, 65, 55 every few seconds and said nothing a driver could use.
+      paintSight(replayOn && state.mode === 'replay' && !nearCorner(track, state.cursorM) ? ApexCarPlay.sightMessage(null) : held.msg, !!live);
       carLimit(live ? si.limit : null, si.unit);                       // the posted limit's sign on the car's map
       const d = renderIn.cluster;                                       // F-18: one object, refilled each frame (the cluster reads it, keeps nothing)
       // in the chosen units (mph or km/h, U-22); the names are the cluster's
@@ -7558,6 +7597,27 @@
     onSocial(() => { try { meetsMap = window.ApexMeetsMap && crewEvents && crewEvents.meetCard ? ApexMeetsMap.mount({ el, btn, apiCall, jsonOf, map,
       mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; }, mayLookUp: nearLookupOk,
       card: (e, redo) => crewEvents.meetCard(e, redo) }) : null; } catch (e) { console.error('meets map', e); } });
+    // Events on the map (web/event_markers.js; Nate 2026-11-15): the area's time attacks as start gates, the next day's meets
+    // at their meeting points, and a card that rises as you drive up to one (Start / Join). On by default, members only.
+    let eventMarkers = null;
+    onSocial(() => { try { eventMarkers = window.ApexEventMarkers ? ApexEventMarkers.mount({ el, btn, map, apiCall, jsonOf,
+      member: () => !!(accountMe && accountMe.member),
+      here: () => (state.lastPosition && Number.isFinite(state.lastPosition.lat) ? state.lastPosition : null),
+      motion: () => state.lastMotion || null,
+      mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; }, mayLookUp: nearLookupOk,
+      areaPoint: (p) => (window.ApexTimeAttack ? ApexTimeAttack.areaPoint(p) : null),
+      fmtLen: (m) => ApexUnits.long(m, 1),
+      startAttack: async (c) => (timeAttack && timeAttack.go ? timeAttack.go(c) : false),
+      openMeet: (ev) => {
+        if (!crewEvents) return;
+        const ov = el('div', { className: 'overlay show' }), close = () => ov.remove();
+        ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', ev.name);
+        const redo = () => { close(); eventMarkers.refresh(true); };
+        ov.append(el('div', { className: 'stack-8', style: 'max-width:560px' }, ev.own ? crewEvents.card(ev.e, { redo }) : crewEvents.meetCard(ev.e, redo),
+          el('div', { className: 'row' }, btn('Close', close, 'linkbtn'))));
+        ov.addEventListener('click', (x) => { if (x.target === ov) close(); });
+        document.body.append(ov);
+      } }) : null; } catch (e) { console.error('event markers', e); } });
     // Roadbooks on the map (web/roadbook_map.js): the roads of your books, your crews' and the ones you follow, and public
     // books round the view, quieter; a tap opens the book. Only books with a road in view are opened.
     const booksNearAt = new Map();                                       // cell query → the public books there (a promise)
@@ -7623,15 +7683,16 @@
       // Where to? opened before the account came back: its time attack row's peek skipped then, so it goes now (CI 2026-11-12)
       if (accountMe && accountMe.member && $('planPanel').classList.contains('open')) peekTimeAttack();
       // A layer left on stays on (Nate 2026-11-15: "the map layers sometimes reset when I reopen the app"): the account comes
-      // back before the lazy social scripts, so a member's Friends, Meets and Roadbooks load them and draw then; a launch
+      // back before the lazy social scripts, so a member's Friends, Meets, Roadbooks and Events load them and draw then; a launch
       // that reads signed out draws none of them but keeps the choice for the next one signed in.
       if (accountMe && accountMe.member) {
         if (friendsMap) friendsMap.start();
-        if ((state.toggles.friends || state.toggles.meets || state.toggles.roadbooks) && !socialFailed) needSocial().then(() => {
+        if ((state.toggles.friends || state.toggles.meets || state.toggles.roadbooks || state.toggles.events) && !socialFailed) needSocial().then(() => {
           if (!accountMe || !accountMe.member) return;
           if (friendsMap) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
           if (meetsMap && state.toggles.meets) meetsMap.setLayer(true);
           if (roadbookMap && state.toggles.roadbooks) roadbookMap.setLayer(true);
+          if (eventMarkers && state.toggles.events) eventMarkers.setLayer(true);
         }).catch(() => {});
       }
       if (feedbackUi) feedbackUi.refresh();
@@ -9209,6 +9270,32 @@
       e.target.value = '';
     });
     document.querySelector('.tab[data-view="garage"]') && document.querySelector('.tab[data-view="garage"]').addEventListener('click', renderMyData);
+    // Nate's drives (round 2): drives saved before drives were named after their twistiest road keep a date ("Drive
+    // 11/14/2026 9:35 PM") or a destination ("To 10069 Pebble Ridge Ln"). Off the start, a few at a time, the map's own tiles
+    // name them as an import is named (road_names.js roadOfTrack). A name the driver gave a drive never matches either, so it
+    // is never touched; a drive the tiles name nothing for is not asked again.
+    const RENAMED_KEY = 'vetta.renamedDrives';
+    async function renameStandInDrives(max = 4) {
+      if (!window.ApexRoadNames || !window.ApexStages || !window.ApexRecording || !ApexRoadNames.isDestinationName) return 0;
+      let tried; try { tried = new Set(JSON.parse(localStorage.getItem(RENAMED_KEY) || '[]')); } catch (_) { tried = new Set(); }
+      const sums = await ApexRecording.summaries(null);
+      const want = sums.filter((x) => x && x.id && !tried.has(x.id) && (ApexRoadNames.isStandInName(x.name) || ApexRoadNames.isDestinationName(x.name))).reverse().slice(0, max);
+      let n = 0;
+      for (const x of want) {
+        if (state.mode === 'live') break;                              // never during a drive
+        const d = await ApexRecording.get(x.id);
+        if (!d || !Array.isArray(d.lat)) { tried.add(x.id); continue; }
+        const feats = await RouteLoading.optional(ApexStages.namesAlong(d, 48), 10000);
+        if (!feats || !feats.length) continue;                          // offline: asked again next time
+        tried.add(x.id);
+        const road = ApexRoadNames.roadOfTrack(feats, d);
+        if (road && road !== x.name) { await ApexRecording.patch(x.id, { name: road }); n++; }
+      }
+      try { localStorage.setItem(RENAMED_KEY, JSON.stringify([...tried].slice(-500))); } catch (_) {}
+      if (n) refreshSavedDrives().catch(() => {});
+      return n;
+    }
+    setTimeout(() => { if (state.mode !== 'live') renameStandInDrives().catch(() => {}); }, 8000);
 
     // Privacy zones (Settings): a circle at where you are or at the map's centre; remove any. Phone only.
     let zoneR = 500;
@@ -9352,7 +9439,8 @@
     function renderCamList() { document.querySelectorAll('[data-cam]').forEach(b => b.classList.toggle('on', b.dataset.cam === state.camFeel)); }
     document.querySelectorAll('[data-cam]').forEach(b => b.addEventListener('click', () => { state.camFeel = b.dataset.cam; renderCamList(); savePrefs(); }));
     renderCamList();
-    $('playBtn').addEventListener('click', () => { setPlaying(!state.playing); });   // the name is on the plate; the pack's voice is for the road
+    $('playBtn').addEventListener('click', () => { setPlaying(!state.playing); });
+    $('jumpCorners').addEventListener('click', () => { const b = $('jumpCorners'); if (b._at == null || !track) return; state.cursorM = b._at; paintReplayEnd(false); render(true); });   // the name is on the plate; the pack's voice is for the road
     document.querySelectorAll('#rateDetents [data-rate]').forEach((b) => b.addEventListener('click', () => {
       state.rate = Number(b.dataset.rate);
       document.querySelectorAll('#rateDetents [data-rate]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
@@ -9410,6 +9498,10 @@
           let seen = false; try { seen = localStorage.getItem('apex.friendsExplained') === '1'; localStorage.setItem('apex.friendsExplained', '1'); } catch (_) {}
           if (state.toggles.friends && !seen && friendsMap) friendsMap.sheet();
         });
+      }
+      if (k === 'events') {   // time attacks and meets as you drive near (event_markers.js)
+        if (!accountMe || !accountMe.member) { state.toggles.events = false; paintSwitches(); askSignIn('see time attacks and meets on the map'); return; }
+        needSocial().then(() => { if (eventMarkers) eventMarkers.setLayer(state.toggles.events); });
       }
       if (k === 'meets') {   // S-13: public crews' meets near the map
         if (!accountMe || !accountMe.member) { state.toggles.meets = false; paintSwitches(); askSignIn('see car meets on the map'); return; }
@@ -9479,7 +9571,7 @@
     // =======================================================================
     // 10b. DRIVE MODE (web): real GPS + motion, recorded to this device. REPLAY plays a saved drive; the two never mix.
     // =======================================================================
-    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0, rest: null, brakes: null, descentSaid: null, flow: null, wet: null };
+    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, turns: {}, roadIdx: 0, rest: null, brakes: null, descentSaid: null, flow: null, wet: null };
     const NATIVE_SHELL = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex);
     // Film the drive (big bet 5, DriveCam.swift): only the app has a camera to film with; on the web the setting is not offered
     // (its row hides when #driveCamRow is empty). On while a drive runs with the switch set; the shell says what it is doing.
@@ -9620,7 +9712,11 @@
         let feats = [];
         try { feats = map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation_name' }); } catch (_) { /* style not loaded */ }
         const name = ApexRoadNames.nearestRoadName(feats, x.lat, x.lon);
-        if (name) drive.roads[name] = (drive.roads[name] || 0) + 150;
+        if (name) {
+          drive.roads[name] = (drive.roads[name] || 0) + 150;
+          // how much it turned on this road (the drive is named after its twistiest road, road_names.js driveRoad)
+          if (ApexRoadNames.turnDeg) { const seg = r.rows.slice(Math.max(0, drive.roadIdx - 31), drive.roadIdx); drive.turns[name] = (drive.turns[name] || 0) + ApexRoadNames.turnDeg(seg.map((q) => q.lat), seg.map((q) => q.lon)); }
+        }
       }
     }
     // Break cue (IDEAS D-16, live): ApexRoadMemory.restTick keeps the clock (restarted by 15 min standing still); once an
@@ -11101,7 +11197,7 @@
       startStageWatch(); startCoach(); drive.ghosts = null; startGhostWatch(null);
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); drive.surface = window.ApexRoadSurface ? ApexRoadSurface.createLog() : null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.turns = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); drive.surface = window.ApexRoadSurface ? ApexRoadSurface.createLog() : null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
@@ -11523,11 +11619,14 @@
       if (out === 'saved') toast('Card saved.');
     });
     // U-75: a drive on a planned route is named after the route the driver chose (they will look for it under that name); a
-    // free drive after the road that carried most of it (road_names.js), else the date and time
+    // free drive after its twistiest road (road_names.js driveRoad), else the date and time. A route named only for where it
+    // went ("To 10069 Pebble Ridge Ln", a house address on the Log and on a share; Nate's drives, round 2) gives way to the road
     function driveName(road, when) {
       const routeName = track && track.kind === 'route' && typeof track.name === 'string' ? track.name.trim() : '';
-      return routeName || road || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}`;
+      const dest = window.ApexRoadNames && ApexRoadNames.isDestinationName ? ApexRoadNames.isDestinationName(routeName) : false;
+      return (dest ? road : routeName || road) || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}`;
     }
+    const roadOfDrive = () => (window.ApexRoadNames && drive.rec ? (ApexRoadNames.driveRoad ? ApexRoadNames.driveRoad(drive.roads, drive.turns) : ApexRoadNames.mainRoad(drive.roads, drive.rec.km * 1000)) : null);
     // ended: why a drive ended itself ('car', 'parked'; drive_keep.js EndWatch), or nothing for End
     async function leaveDrive(save, ended) {
       if (pendingEnd) { clearTimeout(pendingEnd.timer); pendingEnd = null; paintEndUndo(); }   // I-3: any other way out ends it now
@@ -11545,7 +11644,7 @@
       // In the app the mounted phone's own stream (feedAmbient) carries a recorded drive's road feel. When it ran during
       // this drive, the drive is shared (or waits for signal), so the Log doesn't offer it again by hand.
       const nativeShared = (() => { const a = drive.native && ambient.allowed ? ambientStats() : null; return !!(a && (a.active || a.trips > (drive.ambientTrips || 0))); })();
-      const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec && window.ApexRoadNames ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
+      const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec ? roadOfDrive() : null;
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off'; drive.native = false;
       if (sensors) sensors.stop();
       state.live = null;
@@ -12058,7 +12157,7 @@
     function keepMeta() {
       const c = routingCar();
       return { routeName: track && track.kind === 'route' && typeof track.name === 'string' ? track.name.trim() : '',
-               road: window.ApexRoadNames && drive.rec ? ApexRoadNames.mainRoad(drive.roads, drive.rec.km * 1000) : null,
+               road: roadOfDrive(),
                car: c ? { label: c.label, mu: Core.carGrip(c) } : null };
     }
     /** A checkpoint now (one at a time, in order; a second ask while one is written runs once after it). */
@@ -12129,7 +12228,7 @@
         if (ApexDriveKeep.keepable(rec)) {
           try {
             const meta = (k.head && k.head.meta) || {};
-            const job = driveJob(rec, (when) => meta.routeName || meta.road || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}`);
+            const job = driveJob(rec, (when) => (window.ApexRoadNames && ApexRoadNames.isDestinationName && ApexRoadNames.isDestinationName(meta.routeName) ? null : meta.routeName) || meta.road || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}`);
             const extra = { ended: j && j.active ? end.why : 'recovered' };   // (one the shell is still on was over while the page slept)
             if (meta.car && Number.isFinite(meta.car.mu)) extra.car = meta.car;
             // parsed, scored and saved in the analysis worker, as End does it (F-04): the launch is not held by a drive

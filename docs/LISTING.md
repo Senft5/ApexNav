@@ -62,11 +62,10 @@ Anyone can make an account (Sign in with Apple or Google) to add friends and joi
 |---|---|
 | Support URL | https://vettadrive.com (the info page, with the contact address hello@vettadrive.com once Email Routing is on) |
 | Marketing URL | https://vettadrive.com |
-| Privacy policy URL | https://vettadrive.app/privacy.html |
+| Privacy policy URL | https://vettadrive.com/privacy |
 
 The domains are Nate's (Cloudflare Registrar, 2026-11-14): vettadrive.com is the info page, vettadrive.app the web app and
-API. Until the round-two thread has pointed them at the Worker, the same pages answer at apexnav.senftns.workers.dev; paste
-the vettadrive URLs only once they load.
+API. All three URLs above load (checked 2026-11-14).
 
 ## Category
 
