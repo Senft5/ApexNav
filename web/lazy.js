@@ -11,6 +11,7 @@
       'convoy.js', 'convoy_voice.js', 'convoy_ui.js'],
     g2p: ['g2p.js'],                 // the neural voice's phonemizer (voice.js), only when a neural voice first speaks
     dev: ['dev_panel.js'],
+    devdrives: ['dev_drives.js'],   // developers' drives upload (cockpit.js devDrivesSync): only on a developer's phone
     clips: ['corner_clip.js', 'dashcam.js'],
     roadcams: ['road_cams.js'],     // Ohio's traffic cameras, the Road cameras layer (cockpit.js), only once switched on   // a drive's best corner clip off the Log (best_clip.js), e.g. the end card's post
     // the route-context providers that only answer a plan (cockpit.js needCtx: once the map is idle after the launch, or

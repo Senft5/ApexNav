@@ -29,6 +29,7 @@ import { itemsDelete, itemsGet, itemsPut } from "./member_items";
 import { dnaPut } from "./dna";
 import * as drivePosts from "./drive_posts";
 import { mediaGet, mediaPut } from "./post_media";
+import { devDriveGet, devDriveList, devDrivePut } from "./dev_drives";
 import { afterCrewDrive, afterDuel, afterFriend, afterKudos, afterPassed, afterTopped, bestBefore, afterPostComment, afterPostKudos, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewBadge, crewFeed, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
@@ -436,6 +437,10 @@ on("POST", "/api/posts/:id/comments", async (req, env, m, ctx) => {
   return json({ id: c.id }, 201);
 });
 on("PUT", "/api/posts/:id/media", async (req, env, m) => json(await mediaPut(env, await requireMember(req, env), m.groups!.id, req)));
+// Developers' drives (src/dev_drives.ts): their phones upload every drive; read back by the internal key only
+on("POST", "/api/dev/drives/:id", async (req, env, m) => json(await devDrivePut(env, await requireMember(req, env), m.groups!.id, req)));
+on("GET", "/api/dev/drives", async (req, env) => json(await devDriveList(env, req, await viewer(req, env))));
+on("GET", "/api/dev/drives/file", async (req, env) => devDriveGet(env, req, await viewer(req, env)));
 on("GET", "/api/posts/:id/media", async (req, env, m) => mediaGet(env, await requireMember(req, env), m.groups!.id));
 on("DELETE", "/api/comments/:id", async (req, env, m) => { await drivePosts.commentDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 on("POST", "/api/kudos", async (req, env, _m, ctx) => {
