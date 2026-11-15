@@ -415,6 +415,25 @@ def test_no_highway_free_way_in_a_sensible_time():
     assert r["quickPick"] > 8, "Quick: the motorway"
 
 
+def test_a_road_trip_takes_the_highway_it_must_to_stay_inside_the_levels_budget():
+    """2026-11-15: Denver to Ouray at Fun was 12 h highway-free against 5.5 h, so the card answered with Quick. A road trip
+    whose highway-free way costs more than HWY_FIT_S past the budget takes the motorway to the good road and the good road
+    on, inside the budget; the same trip a quarter of an hour long keeps off the highway as before."""
+    r = case("levelsHighway")["trip"]
+    for lv in ("fun", "max"):
+        x = r[lv]
+        assert x["mode"] == "link" and x["fit"] and not x["absurd"], (lv, x)
+        assert "Pass Road" in x["names"] and "Loop Road" not in x["names"] and x["hwyKm"] > 0, (lv, x)
+        assert x["timeS"] <= x["limitS"] and x["timeS"] < 1.4 * x["quickS"], (lv, x)
+    assert r["short"]["mode"] == "free" and r["short"]["hwyKm"] == 0 and "Loop Road" in r["short"]["names"], r["short"]
+
+
+def test_a_broken_edge_time_does_not_blind_the_search():
+    """2026-11-15: one 60 m Ohio edge timed at 0.5 s (430 km/h) set the A* bound's top speed, every search in its view was
+    3 x as blind, and Long way from Cincinnati to Deals Gap ran out of search before reaching it."""
+    assert 0 < case("levelsHighway")["vmax"] <= 40
+
+
 def test_an_expressway_below_trunk_class_is_a_highway_to_the_levels():
     """A limited-access expressway mapped as `primary` (motorroad=yes / expressway=yes: the tiles' expressway flag) beside
     a plain back road. Flagged: Quick drives it, Fun and Long way never (the plan, its first route, every route of the
