@@ -161,7 +161,7 @@ Google setup (owner, free): Google Cloud console → OAuth consent screen (Exter
 ## 8. Deployment and distribution
 | Piece | Choice |
 |---|---|
-| Web app + API | One Cloudflare Worker `apexnav` (`wrangler.jsonc`): static files from `web/`, `/api/*` to `backend/src/index.ts`. Live at https://apexnav.senftns.workers.dev/ |
+| Web app + API | One Cloudflare Worker `apexnav` (`wrangler.jsonc`): static files from `web/`, `/api/*` to `backend/src/index.ts`. Live at https://vettadrive.app/ (and https://apexnav.senftns.workers.dev/, which builds from before 2026-11-14 call) |
 | Database | D1 `apexnav-db` (US East); previews use a separate empty `apexnav-preview-db` (`previews` block in wrangler.jsonc; apply every migration to both). Migrations in `backend/migrations`; applied through the Cloudflare connection; CI runs the same SQL in tests |
 | Status checks | `.github/workflows/status.yml` every 30 min: site, `/api/health` (Worker + D1) and the free routing, tile and elevation services; a core failure opens an `outage` issue: docs/STATUS.md |
 | Backups | D1 Time Travel (7 days) plus a monthly `wrangler d1 export` kept by the owner, restore drill every 3 months: docs/BACKUPS.md |
@@ -205,7 +205,7 @@ Phone side: `web/contributor.js` (map-match with Valhalla, way geometry from Ove
 
 ## iOS app access (ios-api, 2026-10-26)
 The app serves `web/` from `apexnav://app`, so `/api` is cross-origin to the Worker. `web/sync.js` `ApexSync.apiFetch` sends
-`https://apexnav.senftns.workers.dev` + path with `Authorization: Bearer <session token>` in the app and the same-origin cookie on the web.
+`https://vettadrive.app` + path with `Authorization: Bearer <session token>` in the app and the same-origin cookie on the web.
 The Worker answers CORS only for `Origin: apexnav://app` (no credentials); writes from that origin need the bearer token (no cookie CSRF path).
 Sign-in: Google refuses embedded web views, so the shell opens `ASWebAuthenticationSession` on `/api/auth/google/start?app_challenge=<S256 of verifier>`;
 the callback redirects to `apexnav://auth?code=…` (single use, 2 min, stored hashed in `app_auth_codes`) and the shell trades
