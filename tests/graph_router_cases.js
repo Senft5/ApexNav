@@ -92,6 +92,28 @@ const CASES = {
       return { routed: !!(r && r.routes.length), names: r && r.routes.length ? r.routes[0].names.map((x) => x.name) : [] };
     } finally { R.K.LIVE_NODES = keep; }
   },
+  async longTrip() {
+    // a 340 km trip on one long road, with a good road 160 km north of it: the plan loads a band round the quickest way
+    // (corridorOf), never the corridor ellipse's far tiles, and still routes
+    const nodes = [], edges = [];
+    for (let k = 0; k <= 80; k++) nodes.push(at(39.3, -86 + k * 0.05));
+    for (let k = 0; k < 80; k++) two(edges, k, k + 1, { quality: 0.5, cls: 3, name: 'Main Road', t: 200 });
+    const n0 = nodes.length;
+    for (let k = 0; k <= 40; k++) nodes.push(at(40.75, -85 + k * 0.05));
+    for (let k = 0; k < 40; k++) two(edges, n0 + k, n0 + k + 1, { quality: 0.9, cls: 4, name: 'Far Road', t: 150, fun: 40 });
+    const T = H.tiles(nodes, edges), asked = new Set();
+    const env = { load: (i, j) => { asked.add(`${i}_${j}`); return T.tiles.find((t) => t.tile.i === i && t.tile.j === j) || null; }, index: null };
+    const from = { lat: 39.3, lon: -85.99 }, to = { lat: 39.3, lon: -82.01 };
+    const out = {};
+    for (const level of ['fun', 'max']) {
+      asked.clear();
+      const m = await R.host(env).handle({ id: 1, type: 'plan', from, to, level, geometry: false });
+      const rows = [...asked].map((k) => +k.split('_')[1]);
+      out[level] = { routed: !!(m.result && m.result.routes.length), error: m.error || null, asked: asked.size, ellipse: R.tilesFor(from, to, level).length,
+        northmost: Math.max(...rows), farRow: R.tileOf(40.75, -85).j };
+    }
+    return out;
+  },
   dirtStage() {
     // two good roads with corners, one of them gravel: with unpaved roads avoided (the app's default) the gravel road is
     // never a stage a loop is built round

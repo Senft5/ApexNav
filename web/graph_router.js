@@ -97,6 +97,12 @@
     LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 12, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_MAX_RETRACED: 0.4, LOOP_DIRT_KM: 2,
     LOOP_CONN_FACTOR: 1.7, LOOP_CONN_A: 3, LOOP_MAX_OFF: 0.6, LOOP_NEAR_OFF: 0.15, LOOP_RING_OFF: 0.3, LOOP_RETRIES: 4, LOOP_REFITS: 2, LOOP_CONN_A_SHORT: 1, LOOP_CONN_A_LONG: 6, LOOP_FIT_OFF: 0.12,   // a connector's road length over its crow line, the router's detours to good road in it (Cincinnati, 2026-11-04)
     SNAP_M: 1500, GRID_DEG: 0.01, LIVE_NODES: 200, LIVE_TRIES: 4,   // a snap's road reaches LIVE_NODES or it's an island (snapLive)
+    // long trips (2026-11-15): a corridor over LONG_TILES tiles (about 150 km crow at Fun, 100 at Long way) is cut to a
+    // band of BAND_M round a spine, the quickest way on a band of SPINE_M (SPINE_SHARE x the crow line) round the straight
+    // line. Cincinnati to Asheville at Fun: 580 tiles (258 MB) and 39 s became 72 tiles and 6 s; Long way's 1,271 tiles
+    // found nothing at all. The search's own ellipse is unchanged inside the band
+    LONG_TILES: 120, SPINE_SHARE: 0.15, SPINE_MIN_M: 20000, SPINE_MAX_M: 40000, BAND_M: { quick: 15000, fun: 20000, max: 30000 },
+    LONG_KM: 150, LONG_TOL: 0.4,
     OUT_BACK_KM: 2,          // Best roads nearby: a dead-end run of good road this long stays (driven there and back); the stage minimum
   };
 
@@ -1165,6 +1171,41 @@
     }
     return out;
   }
+  /**
+   * The tiles within m metres of a line (points [{ lat, lon }], sampled every 2 km): the long trip's band (corridorOf).
+   * A tile is in when the nearest point of its rectangle to a sample is within m.
+   */
+  function bandTiles(points, m) {
+    const out = new Map(), at = [];
+    for (let k = 0; k < points.length; k++) {
+      if (k) {
+        const p = points[k - 1], q = points[k], n = Math.ceil(distM(p.lat, p.lon, q.lat, q.lon) / 2000);
+        for (let s = 1; s < n; s++) at.push({ lat: p.lat + (q.lat - p.lat) * s / n, lon: p.lon + (q.lon - p.lon) * s / n });
+      }
+      at.push(points[k]);
+    }
+    for (const p of at) {
+      const dLat = m / 110540, dLon = m / (111320 * Math.cos(p.lat * RAD));
+      const sw = tileOf(p.lat - dLat, p.lon - dLon), ne = tileOf(p.lat + dLat, p.lon + dLon);
+      for (let i = sw.i; i <= ne.i; i++) for (let j = sw.j; j <= ne.j; j++) {
+        const k = keyOf(i, j);
+        if (out.has(k)) continue;
+        const la = Math.min(Math.max(p.lat, j * TILE_DEG - 90), (j + 1) * TILE_DEG - 90), lo = Math.min(Math.max(p.lon, i * TILE_DEG - 180), (i + 1) * TILE_DEG - 180);
+        if (distM(la, lo, p.lat, p.lon) <= m) out.set(k, { i, j });
+      }
+    }
+    return [...out.values()];
+  }
+  /** A route's line ([[lon, lat]]) as points about every 2 km, for bandTiles. */
+  function spineOf(coords) {
+    const out = [];
+    let last = null;
+    for (let k = 0; k < coords.length; k++) {
+      const p = { lat: coords[k][1], lon: coords[k][0] };
+      if (!last || k === coords.length - 1 || distM(last.lat, last.lon, p.lat, p.lon) >= 2000) { out.push(p); last = p; }
+    }
+    return out;
+  }
   /** The tiles under the straight line from a to b (sampled every 2 km), the ends' first. */
   function lineTiles(a, b) {
     const n = Math.max(1, Math.ceil(distM(a.lat, a.lon, b.lat, b.lon) / 2000)), out = [], seen = new Set();
@@ -1306,6 +1347,9 @@
     const keep = (r) => { if (r && !found.some((x) => sameRoute(x, r))) found.push(r); return r; };
     // bisect the goodness weight (log steps): the largest a whose route is inside the budget
     let lo = 0, hi = typeof K.A_MAX === 'number' ? K.A_MAX : (K.A_MAX[level] || 40), best = base, tries = 0;
+    // a long trip (LONG_KM crow): each search crosses hundreds of km, so the weight is found more coarsely and the cheaper
+    // end of the spectrum (LOWER) is one try, not two
+    const long = distM(req.from.lat, req.from.lon, req.to.lat, req.to.lon) > K.LONG_KM * 1000;
     let a = K.A_FIRST[level] || 1, first = null;
     // no highway-free way in a sensible time: that way alone (and the quickest, for Quick's card); nothing longer
     if (hwy.absurd) tries = K.BISECT;
@@ -1314,13 +1358,13 @@
       const r = run(a);
       if (!first) first = r;
       if (r && r.timeS <= limitS) { lo = a; best = r; keep(r); } else hi = a;
-      if (hi - lo < 0.15 * Math.max(lo, 0.25)) break;
+      if (hi - lo < (long ? K.LONG_TOL : 0.15) * Math.max(lo, 0.25)) break;
       a = lo > 0 ? Math.sqrt(lo * hi) : hi / 4;
     }
     // and the cheaper end of the spectrum: the bisection only tries weights from its first one up, so the routes that buy a
     // little good road for a little time were never offered, only the one that spends the whole budget (live 2026-11-04,
     // a cross-suburb trip at Fun: a 9-minute I-275 loop came back and the 7-minute way to the same county road didn't)
-    for (const k of K.LOWER) if (lo * k > 0.05) { const r = run(lo * k); if (r && r.timeS <= limitS) keep(r); }
+    for (const k of long ? K.LOWER.slice(-1) : K.LOWER) if (lo * k > 0.05) { const r = run(lo * k); if (r && r.timeS <= limitS) keep(r); }
     best.why.role = best === quick ? 'quickest' : best === base ? 'quickest-free' : 'best';
     // alternates by the penalty method: the chosen route's edges cost more, until a route differs by ALT_MIN_DIFF
     const alts = [], chosen = [best];
@@ -1976,6 +2020,27 @@
       last = { keys: new Set(v.keys), v };
       return v;
     }
+    // A trip's corridor (tilesFor), or for a long one (over K.LONG_TILES) the band round its spine: the quickest way on a
+    // band round the straight line (its view not kept), remembered for the trip's next ask (Fun, then Long way)
+    let spine = null;
+    async function corridorOf(from, to, level, msg) {
+      const full = tilesFor(from, to, level);
+      if (full.length <= K.LONG_TILES) return full;
+      const key = [from.lat, from.lon, to.lat, to.lon].map((x) => x.toFixed(4)).join(',');
+      if (!spine || spine.key !== key) {
+        const crow = distM(from.lat, from.lon, to.lat, to.lon), have = await keys();
+        const m = Math.min(K.SPINE_MAX_M, Math.max(K.SPINE_MIN_M, K.SPINE_SHARE * crow));
+        const want = bandTiles([from, to], m).filter((t) => !have.size || have.has(keyOf(t.i, t.j)));
+        const got = (await Promise.all(want.map(load))).filter(Boolean);
+        let r = null;
+        try { r = got.length ? quickest(view(got), { ...msg, from, to, level: 'quick', heading: null, crowd: null }) : null; } catch (_) { r = null; }
+        if (!r) return full;                                             // no way on the band: the whole corridor, as before
+        spine = { key, line: spineOf(r.route.coords) };
+      }
+      const band = bandTiles(spine.line, K.BAND_M[level] || K.BAND_M.fun), seen = new Set(band.map((t) => keyOf(t.i, t.j)));
+      for (const p of [from, to]) { const t = tileOf(p.lat, p.lon); if (!seen.has(keyOf(t.i, t.j))) band.push(t); }
+      return band;
+    }
     let inflight = 0;
     async function handle(msg) {
       const busy = msg && msg.type !== 'preload' && msg.type !== 'covers' && msg.type !== 'keep';
@@ -2001,7 +2066,7 @@
           const t1 = Date.now();
           let r = null;
           try { r = quickest(v, msg); } catch (_) { r = null; }
-          if (!r) { v = await viewFor(tilesFor(msg.from, msg.to, msg.level)); r = quickest(v, msg); }   // the line alone had no way
+          if (!r) { v = await viewFor(await corridorOf(msg.from, msg.to, msg.level, msg)); r = quickest(v, msg); }   // the line alone had no way
           return { id, result: { route: plain(r), loadMs: t1 - t0, ms: Date.now() - t1, tiles: v.keys } };
         }
         if (type === 'through') {
@@ -2069,7 +2134,7 @@
           // scope 'first': with the corridor's tiles not all in yet, the plan is made on those under the straight line
           // (as the first route was) and says so (partial); the page asks again for the whole corridor meanwhile
           await quickBusy;
-          const corridor = tilesFor(msg.from, msg.to, msg.level), have = await keys();
+          const corridor = await corridorOf(msg.from, msg.to, msg.level, msg), have = await keys();
           const notReady = () => corridor.filter((t) => (!have.size || have.has(keyOf(t.i, t.j))) && !ready.has(keyOf(t.i, t.j)));
           let missing = notReady();
           // (waitMs: the corridor's tiles get that long to come in first: the app's own and IndexedDB's are a few hundred ms
@@ -2097,7 +2162,7 @@
           } finally { v.crowd = null; }
         }
         if (type === 'round') {
-          const v = await viewFor(tilesFor(msg.from, msg.to, msg.level === 'quick' ? 'fun' : msg.level));
+          const v = await viewFor(await corridorOf(msg.from, msg.to, msg.level === 'quick' ? 'fun' : msg.level, msg));
           const r = roundTrip(v, msg);
           return { id, result: { ...strip({ routes: r.routes, quick: r.quick }), outTimeS: r.out ? r.out.timeS : null, ms: r.ms, tiles: v.keys } };
         }
@@ -2151,7 +2216,11 @@
       return inline;
     };
     const PLAN_MS = { fun: 12000, max: 20000 };
-    const planMs = (level) => Math.max(o.timeoutMs || 8000, PLAN_MS[level] || 0);
+    // a long trip searches a longer band: LONG_MS_KM more per crow km past LONG_FROM_KM (Cincinnati to Asheville, 450 km:
+    // 18 s more), so it isn't cut off for being long
+    const LONG_FROM_KM = 150, LONG_MS_KM = 60;
+    const longMs = (req) => { const a = req && req.from, b = req && req.to; if (!a || !b) return 0; const km = distM(a.lat, a.lon, b.lat, b.lon) / 1000; return km > LONG_FROM_KM ? (km - LONG_FROM_KM) * LONG_MS_KM : 0; };
+    const planMs = (level, req) => Math.max(o.timeoutMs || 8000, PLAN_MS[level] || 0) + longMs(req);
     function ask(msg, timeoutMs = o.timeoutMs || 8000) {
       const id = ++seq;
       const full = { ...msg, id };
@@ -2172,8 +2241,8 @@
       ready: () => ask({ type: 'covers', points: [] }, 10000).then(() => true),
       // Fun and Long way search a wider corridor with more weights than Quick (a 25 km Long way plan: 1.5x a Fun one's
       // time); on a slow phone one outlasted the page's 6 s and failed with no route (service check, 2026-11-12/13)
-      plan: (req) => ask({ type: 'plan', ...req }, planMs(req && req.level)).then((m) => m.result),
-      quick: (req) => ask({ type: 'quick', ...req }).then((m) => m.result),
+      plan: (req) => ask({ type: 'plan', ...req }, planMs(req && req.level, req)).then((m) => m.result),
+      quick: (req) => ask({ type: 'quick', ...req }, (o.timeoutMs || 8000) + longMs(req)).then((m) => m.result),
       through: (req) => ask({ type: 'through', ...req }).then((m) => m.result),
       score: (lines) => ask({ type: 'score', lines }, 3000).then((m) => m.result),
       preload: (at) => ask({ type: 'preload', ...at }, 20000).then((m) => m.result),
@@ -2182,13 +2251,13 @@
       times: (req) => ask({ type: 'times', ...req }).then((m) => m.result),
       // a loop loads every tile its length can reach and searches them all: on a phone a long one outlasted 8 s (2026-11-12)
       loop: (req) => ask({ type: 'loop', ...req }, 20000).then((m) => m.result),
-      round: (req) => ask({ type: 'round', ...req }, 12000).then((m) => m.result),
+      round: (req) => ask({ type: 'round', ...req }, 12000 + longMs(req)).then((m) => m.result),
       close: () => { try { if (w) w.terminate(); } catch (_) { /* gone */ } w = null; },
     };
   }
 
   const api = { VERSION: 1, K, withTune, BUILT_READ, builtAgreeOf, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, times, streetEdge, deadEndAt, junctionAt, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
-    assemble, through, overlap, sameRoute, tilesFor, loopTiles, plan, pick, loop, roundTrip, hwyOf, isHwyEdge, snapOff, freeQuickest, indexKeys, covers, host, client, edgeId, twin, turnCost };
+    assemble, through, overlap, sameRoute, tilesFor, bandTiles, spineOf, loopTiles, plan, pick, loop, roundTrip, hwyOf, isHwyEdge, snapOff, freeQuickest, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;
 })(typeof window !== 'undefined' ? window : globalThis);
