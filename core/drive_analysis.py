@@ -278,6 +278,9 @@ TIP_GAIN_S = 0.20            # a corner worth less than this is not an opportuni
 SOLO_COAST_M = 20.0          # without a better pass: this much coasting after braking is worth a note
 SOLO_EARLY_APEX_M = -15.0    # ...slowest point this far before the apex
 SOLO_LATE_BRAKE_G = 0.25     # ...braking this hard after the apex
+ROAD_EARLY_M = -15.0         # ...and your turning centred this far before the road's own (road_turn_offset_m): the line itself
+ROAD_PAD = 12                # bins either side of a corner the road's shape is read over...
+ROAD_SPAN = 4                # ...and either side its turning (and yours) is weighed over
 TOP_OPPORTUNITIES = 3
 
 
@@ -320,6 +323,44 @@ def corner_phases(speed_mps, lon_g, lat_g, start: int, end: int, apex: int, apex
     return {**m, "brake_m": None if r0 is None else (apex - r0) * 5.0, "trail_m": trail * 5.0, "coast_m": coast * 5.0,
             "throttle_m": None if k_thr is None else (k_thr - apex) * 5.0, "late_brake_g": late,
             "apex_mps_driven": float(v[apex]), "imu_slow_m": _imu_slow_m(v, lon, lat, start, end)}
+
+
+def road_turn_offset_m(road_lat, road_lon, speed_mps, lat_g, start: int, end: int):
+    """Where you turned against where the road turns (Nate, 2026-11-15: "shouldn't it be drive geometry compared to road
+    geometry?"), in metres: the centre of your turning (a_lat / v^2 from the motion sensors, weighted over the corner) less
+    the centre of the road's (the curvature of the map's road under you, road_lat / road_lon: each bin of the drive put on
+    the road, graph tiles). < 0 your turning came before the road's: an early apex in the line itself, not the speed.
+    Single tightest points are 20 m noisy on a phone; centres repeat to about 10 m (Nate's 13 drives). None when the road
+    is not known over the corner, or either turning is not there."""
+    n = len(speed_mps)
+    a, b = max(0, start - ROAD_PAD), min(n - 1, end + ROAD_PAD)
+    if road_lat is None or road_lon is None or b - a < 6:
+        return None
+    la = [road_lat[k] for k in range(a, b + 1)]
+    lo = [road_lon[k] for k in range(a, b + 1)]
+    if not all(x is not None and math.isfinite(float(x)) for x in la + lo):
+        return None
+    rk, _ = rd.compute_curvature(np.asarray(la, dtype=float), np.asarray(lo, dtype=float))
+    lo_k, hi_k = max(a, start - ROAD_SPAN), min(b, end + ROAD_SPAN)
+    sg = 1.0 if sum(float(rk[k - a]) for k in range(lo_k, hi_k + 1)) >= 0 else -1.0
+
+    def centre(f):
+        w = wq = 0.0
+        for k in range(lo_k, hi_k + 1):
+            x = f(k)
+            if x is not None and math.isfinite(x) and x > 0:
+                w += x
+                wq += x * k
+        return wq / w if w > 0 else None
+
+    def you(k):
+        v, g = speed_mps[k], lat_g[k]
+        if v is None or g is None or not math.isfinite(float(v)) or not math.isfinite(float(g)):
+            return None
+        return sg * float(g) * G / max(float(v), 3.0) ** 2
+
+    r, y = centre(lambda k: sg * float(rk[k - a])), centre(you)
+    return None if r is None or y is None else (y - r) * 5.0
 
 
 IMU_SLOW_LEAD = 10           # bins before the corner the IMU's slowest point is looked for...
@@ -440,9 +481,12 @@ def _tip(m: dict, ref: dict | None):
         return {"kind": "brake_after_apex", "value": m["late_brake_g"], "vs_best": False}
     if m["brake_m"] is not None and m["coast_m"] >= SOLO_COAST_M:     # dead time between brake and throttle
         return {"kind": "coast", "value": m["coast_m"], "vs_best": False}
-    # past what the phone can tell: more than a GPS fix early, a real dip, and the motion sensors agreeing (_imu_slow_m)
+    # past what the phone can tell: more than a GPS fix early, a real dip, the motion sensors agreeing (_imu_slow_m), and
+    # the line itself early against the road's shape (road_turn_offset_m; no road known, no claim about the line). Speed
+    # alone said early on 13 of Nate's corners; the road agreed on 2 (2026-11-15).
     if (m["min_offset_m"] <= min(SOLO_EARLY_APEX_M, -m["min_mps"] * GPS_FIX_S) and m["apex_mps_driven"] - m["min_mps"] >= SOLO_APEX_DIP_MPS
-            and m.get("imu_slow_m") is not None and m["imu_slow_m"] <= SOLO_EARLY_APEX_M):
+            and m.get("imu_slow_m") is not None and m["imu_slow_m"] <= SOLO_EARLY_APEX_M
+            and m.get("road_off_m") is not None and m["road_off_m"] <= ROAD_EARLY_M):
         return {"kind": "early_apex", "value": -m["min_offset_m"], "vs_best": False}
     return None
 
@@ -590,6 +634,7 @@ def coach(a: dict, others: list) -> dict:
             out.append({"apex": c["apex"], "m": None, "best": None, "gain_s": None, "tip": None, "passes": 0})
             continue
         ma = corner_phases(a["speed_mps"], a["lon_g"], a["lat_g"], c["start"], c["end"], c["apex"], c["apex_mps"])
+        ma["road_off_m"] = road_turn_offset_m(a.get("road_lat"), a.get("road_lon"), a["speed_mps"], a["lat_g"], c["start"], c["end"])
         if ma["min_mps"] < STOPPED_MPS:
             out.append({"apex": c["apex"], "m": ma, "best": None, "gain_s": None, "tip": None, "passes": 0})
             continue

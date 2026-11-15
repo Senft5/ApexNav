@@ -741,7 +741,8 @@
   // Corner coach — port of core/drive_analysis.coach (parity-tested). Phases of each corner and the
   // time lost to the person's own best clean pass of it; passes over the sane limit never count as best.
   const COAST_G = 0.05, THROTTLE_G = 0.05, TRAIL_LAT_G = 0.20, BRAKE_GAP = 20, SOLO_APEX_DIP_MPS = 1.0, GPS_FIX_S = 1.0, THROTTLE_LOOKAHEAD = 20, TIP_SPEED_MPS = 0.9, TIP_BRAKE_M = 10,
-    TIP_COAST_M = 15, TIP_GAIN_S = 0.20, SOLO_COAST_M = 20, SOLO_EARLY_APEX_M = -15, SOLO_LATE_BRAKE_G = 0.25, TOP_OPPORTUNITIES = 3;
+    TIP_COAST_M = 15, TIP_GAIN_S = 0.20, SOLO_COAST_M = 20, SOLO_EARLY_APEX_M = -15, SOLO_LATE_BRAKE_G = 0.25, TOP_OPPORTUNITIES = 3,
+    ROAD_EARLY_M = -15, ROAD_PAD = 12, ROAD_SPAN = 4;
   function cornerPhases(v, lonG, latG, start, end, apex, apexMps) {
     const m = cornerMetrics(v, lonG, latG, start, end, apex, apexMps), n = v.length;
     const lo = Math.max(0, apex - BRAKE_LOOKBACK);
@@ -786,6 +787,32 @@
       if (a < 0 && b >= 0 && (zc < 0 || Math.abs(q - kp) < Math.abs(zc - kp))) zc = q;
     }
     return zc < 0 ? null : (zc - kp) * 5;
+  }
+  // Where you turned against where the road turns — port of core/drive_analysis.road_turn_offset_m (Nate, 2026-11-15:
+  // "drive geometry compared to road geometry"). m: the centre of your turning (a_lat / v^2, weighted over the corner) less
+  // the centre of the road's (the curvature of road_lat / road_lon, the drive put on the map's road, road_line.js); < 0 your
+  // turning came first, an early apex in the line itself. null when the road is not known over the corner.
+  function roadTurnOffsetM(roadLat, roadLon, v, latG, start, end) {
+    const n = v.length, a = Math.max(0, start - ROAD_PAD), b = Math.min(n - 1, end + ROAD_PAD);
+    if (!roadLat || !roadLon || b - a < 6) return null;
+    const la = [], lo = [];
+    for (let k = a; k <= b; k++) {
+      if (typeof roadLat[k] !== 'number' || typeof roadLon[k] !== 'number' || !Number.isFinite(roadLat[k]) || !Number.isFinite(roadLon[k])) return null;
+      la.push(roadLat[k]); lo.push(roadLon[k]);
+    }
+    const rk = computeCurvature(la, lo).kappa, k0 = Math.max(a, start - ROAD_SPAN), k1 = Math.min(b, end + ROAD_SPAN);
+    let s = 0;
+    for (let k = k0; k <= k1; k++) s += rk[k - a];
+    const sg = s >= 0 ? 1 : -1;
+    const centre = (f) => {
+      let w = 0, wq = 0;
+      for (let k = k0; k <= k1; k++) { const x = f(k); if (x !== null && Number.isFinite(x) && x > 0) { w += x; wq += x * k; } }
+      return w > 0 ? wq / w : null;
+    };
+    const you = (k) => (typeof v[k] === 'number' && typeof latG[k] === 'number' && Number.isFinite(v[k]) && Number.isFinite(latG[k])
+      ? sg * latG[k] * G_STD / Math.max(v[k], 3) ** 2 : null);
+    const r = centre((k) => sg * rk[k - a]), y = centre(you);
+    return r === null || y === null ? null : (y - r) * 5;
   }
   function knownRun(d, start, end, apex) {
     const v = d.speed_mps, gk = d.g_known, n = v.length;
@@ -840,7 +867,8 @@
     // one fix of travel (a second) before the apex it is not early; a dip under 1 m/s (SLOW_DIP_MPS) is GPS noise, not slowing;
     // and the motion sensors must say so too (imuSlowM), or the two disagree and nothing is told.
     if (m.min_offset_m <= Math.min(SOLO_EARLY_APEX_M, -m.min_mps * GPS_FIX_S) && m.apex_mps_driven - m.min_mps >= SOLO_APEX_DIP_MPS
-      && m.imu_slow_m !== null && m.imu_slow_m !== undefined && m.imu_slow_m <= SOLO_EARLY_APEX_M) return { kind: 'early_apex', value: -m.min_offset_m, vs_best: false };
+      && m.imu_slow_m !== null && m.imu_slow_m !== undefined && m.imu_slow_m <= SOLO_EARLY_APEX_M
+      && m.road_off_m !== null && m.road_off_m !== undefined && m.road_off_m <= ROAD_EARLY_M) return { kind: 'early_apex', value: -m.min_offset_m, vs_best: false };
     return null;
   }
   // How repeatably a corner is driven over your clean passes (port of drive_analysis._marks/_spread, IDEAS D-07).
@@ -918,6 +946,7 @@
     for (const c of a.corners) {
       if (!Number.isFinite(c.apex_mps) || !knownRun(a, c.start, c.end, c.apex)) { out.push({ apex: c.apex, m: null, best: null, gain_s: null, tip: null, passes: 0 }); continue; }
       const ma = cornerPhases(a.speed_mps, a.lon_g, a.lat_g, c.start, c.end, c.apex, c.apex_mps);
+      ma.road_off_m = roadTurnOffsetM(a.road_lat, a.road_lon, a.speed_mps, a.lat_g, c.start, c.end);
       if (ma.min_mps < STOPPED_MPS) { out.push({ apex: c.apex, m: ma, best: null, gain_s: null, tip: null, passes: 0 }); continue; }
       let best = ma, bestFrom = -1, passes = 1;
       let prior = null, priorFrom = -1;                                 // your fastest other pass, within the grip ceiling
@@ -1328,7 +1357,7 @@
     driverScore, techniqueScore, cornerTechnique, carGrip, cornersForCar, fatigue, spreadBy, turnIn, segmentPass, segmentWindow, segmentWindows,
     removeSpurs, retracedShare,
     compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector, abruptMoments,
-    knownRun, passMarks, imuSlowM, matchWindow, nearestIndexWin, meanSe, BRAKE_G, BRAKE_LOOKBACK, BRAKE_GAP, STOPPED_MPS, TURN_LEAD, PACE_CEILING, paceCredit,   // driver_profile.js reads corners as the coach does
+    knownRun, passMarks, imuSlowM, roadTurnOffsetM, matchWindow, nearestIndexWin, meanSe, BRAKE_G, BRAKE_LOOKBACK, BRAKE_GAP, STOPPED_MPS, TURN_LEAD, PACE_CEILING, paceCredit,   // driver_profile.js reads corners as the coach does
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,
     movingAverage, gradient, unwrap, localXY, resamplePolyline,
     computeCurvature, apexSpeedMps, effectiveMu, brakingEnvelopeMps, sightDistanceM, sightSpeedMps, SIGHT_MAX_M,
