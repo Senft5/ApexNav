@@ -184,7 +184,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, roadbooks: false, nudge: false, push: false, satellite: false, improve: true }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, events: true, roadbooks: false, nudge: false, push: false, satellite: false, improve: true }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -7597,6 +7597,27 @@
     onSocial(() => { try { meetsMap = window.ApexMeetsMap && crewEvents && crewEvents.meetCard ? ApexMeetsMap.mount({ el, btn, apiCall, jsonOf, map,
       mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; }, mayLookUp: nearLookupOk,
       card: (e, redo) => crewEvents.meetCard(e, redo) }) : null; } catch (e) { console.error('meets map', e); } });
+    // Events on the map (web/event_markers.js; Nate 2026-11-15): the area's time attacks as start gates, the next day's meets
+    // at their meeting points, and a card that rises as you drive up to one (Start / Join). On by default, members only.
+    let eventMarkers = null;
+    onSocial(() => { try { eventMarkers = window.ApexEventMarkers ? ApexEventMarkers.mount({ el, btn, map, apiCall, jsonOf,
+      member: () => !!(accountMe && accountMe.member),
+      here: () => (state.lastPosition && Number.isFinite(state.lastPosition.lat) ? state.lastPosition : null),
+      motion: () => state.lastMotion || null,
+      mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; }, mayLookUp: nearLookupOk,
+      areaPoint: (p) => (window.ApexTimeAttack ? ApexTimeAttack.areaPoint(p) : null),
+      fmtLen: (m) => ApexUnits.long(m, 1),
+      startAttack: async (c) => (timeAttack && timeAttack.go ? timeAttack.go(c) : false),
+      openMeet: (ev) => {
+        if (!crewEvents) return;
+        const ov = el('div', { className: 'overlay show' }), close = () => ov.remove();
+        ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', ev.name);
+        const redo = () => { close(); eventMarkers.refresh(true); };
+        ov.append(el('div', { className: 'stack-8', style: 'max-width:560px' }, ev.own ? crewEvents.card(ev.e, { redo }) : crewEvents.meetCard(ev.e, redo),
+          el('div', { className: 'row' }, btn('Close', close, 'linkbtn'))));
+        ov.addEventListener('click', (x) => { if (x.target === ov) close(); });
+        document.body.append(ov);
+      } }) : null; } catch (e) { console.error('event markers', e); } });
     // Roadbooks on the map (web/roadbook_map.js): the roads of your books, your crews' and the ones you follow, and public
     // books round the view, quieter; a tap opens the book. Only books with a road in view are opened.
     const booksNearAt = new Map();                                       // cell query → the public books there (a promise)
@@ -7662,15 +7683,16 @@
       // Where to? opened before the account came back: its time attack row's peek skipped then, so it goes now (CI 2026-11-12)
       if (accountMe && accountMe.member && $('planPanel').classList.contains('open')) peekTimeAttack();
       // A layer left on stays on (Nate 2026-11-15: "the map layers sometimes reset when I reopen the app"): the account comes
-      // back before the lazy social scripts, so a member's Friends, Meets and Roadbooks load them and draw then; a launch
+      // back before the lazy social scripts, so a member's Friends, Meets, Roadbooks and Events load them and draw then; a launch
       // that reads signed out draws none of them but keeps the choice for the next one signed in.
       if (accountMe && accountMe.member) {
         if (friendsMap) friendsMap.start();
-        if ((state.toggles.friends || state.toggles.meets || state.toggles.roadbooks) && !socialFailed) needSocial().then(() => {
+        if ((state.toggles.friends || state.toggles.meets || state.toggles.roadbooks || state.toggles.events) && !socialFailed) needSocial().then(() => {
           if (!accountMe || !accountMe.member) return;
           if (friendsMap) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
           if (meetsMap && state.toggles.meets) meetsMap.setLayer(true);
           if (roadbookMap && state.toggles.roadbooks) roadbookMap.setLayer(true);
+          if (eventMarkers && state.toggles.events) eventMarkers.setLayer(true);
         }).catch(() => {});
       }
       if (feedbackUi) feedbackUi.refresh();
@@ -9476,6 +9498,10 @@
           let seen = false; try { seen = localStorage.getItem('apex.friendsExplained') === '1'; localStorage.setItem('apex.friendsExplained', '1'); } catch (_) {}
           if (state.toggles.friends && !seen && friendsMap) friendsMap.sheet();
         });
+      }
+      if (k === 'events') {   // time attacks and meets as you drive near (event_markers.js)
+        if (!accountMe || !accountMe.member) { state.toggles.events = false; paintSwitches(); askSignIn('see time attacks and meets on the map'); return; }
+        needSocial().then(() => { if (eventMarkers) eventMarkers.setLayer(state.toggles.events); });
       }
       if (k === 'meets') {   // S-13: public crews' meets near the map
         if (!accountMe || !accountMe.member) { state.toggles.meets = false; paintSwitches(); askSignIn('see car meets on the map'); return; }
