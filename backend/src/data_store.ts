@@ -7,6 +7,7 @@
 //
 // Keys:  graph/v1/index.json            the live index (its `build` names the tile set)
 //        graph/v1/b/<build>/<i>_<j>.vgr  one build's tiles: a new build is written beside the old, then the index switches
+//        roads/v1/<road id>.jpg         a road library page's link card (.github/workflows/road-cards.yml)
 //        ctx/v1/index.json, ctx/v1/8/<x>/<y>.vcg, cameras/v1/region.json, osm/v2/<bi>_<bj>.bin (+ index.json, falls.json, closures.json)
 //        valhalla/v1/index.json, valhalla/v1/b/<build>/part-NNN   our own router's tile tar in 45 MB parts (src/valhalla.ts),
 //                                       read only by its container; the index goes live when every part is there
@@ -20,6 +21,7 @@ const KEYS = [
   /^ctx\/v1\/(index\.json|8\/\d{1,3}\/\d{1,3}\.vcg)$/,
   /^cameras\/v1\/region\.json$/,
   /^valhalla\/v1\/(index\.json|b\/[\w.:-]{1,64}\/part-\d{3})$/,   // our own router's tiles (.github/workflows/valhalla-tiles.yml)
+  /^roads\/v1\/[a-z0-9-]{1,80}\.jpg$/,                              // the road library's link cards (tools/road_cards.js, road_library.ts)
   /^osm\/v2\/(index\.json|falls\.json|closures\.json|-?\d{1,4}_-?\d{1,4}\.bin|(places|points|lines)\/-?\d{1,4}_-?\d{1,4}\.json)$/,   // the OSM route context bundles (tools/osm_ctx/build.py, osm_relay.ts)
 ];
 export const MAX_BYTES = 50 * 1024 * 1024;   // a graph tile is about 0.4 MB, the largest bundle a few MB
@@ -68,7 +70,9 @@ export async function dataPut(req: Request, env: Env, ctx?: ExecutionContext): P
   if (key === "valhalla/v1/index.json") previous = await checkValhallaIndex(env, bytes);
   const had = await env.DATA.head(key);
   if (had && had.customMetadata?.sha256 === sha) return json({ key, same: true });
-  const type = key.endsWith(".json") ? "application/json" : "application/octet-stream";
+  const type = key.endsWith(".json") ? "application/json" : key.endsWith(".jpg") ? "image/jpeg" : "application/octet-stream";
+  // a card must be a JPEG (its first bytes), not whatever a run happened to send
+  if (key.endsWith(".jpg") && !(new Uint8Array(bytes.slice(0, 3)).every((b, i) => b === [0xff, 0xd8, 0xff][i]))) throw new HttpError(400, "not_jpeg");
   await env.DATA.put(key, bytes, { httpMetadata: { contentType: type }, customMetadata: { sha256: sha, run: claims.run_id, sha: claims.sha.slice(0, 12) } });
   console.log(JSON.stringify({ event: "data_put", key, bytes: bytes.byteLength, workflow: claims.workflow, run: claims.run_id }));
   if (key === "graph/v1/index.json") {

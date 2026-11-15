@@ -1,0 +1,55 @@
+# The road library's link cards (big bet #6): a 1200 x 630 picture of each road on the map (tools/road_cards.js), put in
+# our R2 bucket as roads/v1/<road id>.jpg through the Worker (backend/src/data_store.ts), which the road's page then names
+# for link previews (backend/src/road_library.ts). Runs when the library changes on main, and on demand. No secret: the
+# Worker checks this run's GitHub OIDC token (main branch of this repository only). An unchanged card is not rewritten.
+name: Road library cards
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["web/data/road_library.json", "tools/road_cards.js"]
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: road-cards
+  cancel-in-progress: true
+jobs:
+  cards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.63.0
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-1.63.0-chromium-shell
+      - run: npx playwright install --only-shell chromium
+      - name: Draw the cards
+        run: node tools/road_cards.js cards | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=https://apexnav.senftns.workers.dev
+          tok() { curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=vetta-data" | python3 -c 'import json,sys;print(json.load(sys.stdin)["value"])'; }
+          sent=0; bad=0; n=0
+          for f in cards/*.jpg; do
+            # a fresh token every 150 cards, so it never expires mid-run
+            if [ $((n % 150)) -eq 0 ]; then TOKEN=$(tok); fi
+            n=$((n + 1)); k="roads/v1/$(basename "$f")"
+            s=000
+            for i in 1 2 3; do
+              s=$(curl -sS -o /dev/null -w '%{http_code}' -X PUT --data-binary "@$f" -H "authorization: Bearer $TOKEN" \
+                -H "origin: $base" -H "x-apexnav: 1" -H "content-type: image/jpeg" "$base/api/ops/data?key=$k" || echo 000)
+              case "$s" in 2??|4??) break;; esac
+              sleep $((i * 3))
+            done
+            case "$s" in 2??) sent=$((sent + 1));; *) bad=$((bad + 1)); echo "$s $k";; esac
+          done
+          echo "$sent of $n cards sent" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$bad" -eq 0 ]

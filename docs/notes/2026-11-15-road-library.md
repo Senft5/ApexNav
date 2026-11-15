@@ -15,3 +15,8 @@
 - What: pages say "Near Cincinnati, OH", and ids are name + area (`ky-22-cincinnati`).
 - Why: the graph has no state boundaries; a road found from Cincinnati may be in Kentucky.
 - Undo: add a state lookup to tools/road_library.js.
+
+## 2026-11-15 (road library cards): a shared road's link shows the road on the map
+- What: `tools/road_cards.js` draws a 1200 x 630 JPEG per road (OpenFreeMap's dark map, the road in red on a white casing, name, miles, corners, near, VETTA). `.github/workflows/road-cards.yml` runs it when the library changes on main (or on demand) and uploads each card to R2 `roads/v1/<id>.jpg` through `PUT /api/ops/data` (GitHub OIDC, JPEG only). `/roads/<id>.jpg` serves it; the road's page names it as og:image (summary_large_image) when R2 has it, else the app icon.
+- The library's lines are now Douglas-Peucker in metres (8 m, at most 160 points) instead of 60 even points, so hairpins keep their shape on the page and the card.
+- Undo: delete the workflow; pages fall back to the icon by themselves.

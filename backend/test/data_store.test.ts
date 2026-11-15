@@ -65,6 +65,16 @@ describe("map data in R2", () => {
     expect((await DATA.list()).objects).toHaveLength(0);
   });
 
+  it("takes a road library card only as a JPEG, under its road's key, and stores it as one", async () => {
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+    expect((await put("roads/v1/cherohala-skyway-tellico-plains.jpg", new Uint8Array([1, 2, 3, 4]))).status).toBe(400);
+    expect((await put("roads/v1/../x.jpg", jpeg)).status).toBe(400);
+    expect((await put("roads/v1/Bad_Name.jpg", jpeg)).status).toBe(400);
+    expect((await put("roads/v1/cherohala-skyway-tellico-plains.jpg", jpeg)).status).toBe(201);
+    const o = await DATA.head("roads/v1/cherohala-skyway-tellico-plains.jpg");
+    expect(o?.httpMetadata?.contentType).toBe("image/jpeg");
+  });
+
   it("switches the index only once every tile is there, then serves R2 first and drops builds older than the last two", async () => {
     expect((await put("graph/v1/b/b1/10_20.vgr", tileBytes)).status).toBe(201);
     const early = await put("graph/v1/index.json", index("b1"));

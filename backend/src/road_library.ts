@@ -11,6 +11,7 @@ export interface LibArea { id: string; name: string; state: string; lat: number;
 export interface Library { built: string; graph: string; areas: LibArea[]; roads: LibRoad[] }
 
 const DATA_PATH = "/data/road_library.json";
+export const cardKey = (id: string) => `roads/v1/${id}.jpg`;
 const ID_RE = /^[a-z0-9-]{1,80}$/;
 export const STATES: Record<string, string> = {
   AL: "Alabama", AR: "Arkansas", AZ: "Arizona", CA: "California", CO: "Colorado", CT: "Connecticut", GA: "Georgia", ID: "Idaho",
@@ -73,13 +74,14 @@ ul.roads a:hover b{color:var(--red)}ul.roads b{font-weight:600;overflow-wrap:any
 footer{border-top:1px solid var(--hair);padding:28px 0 calc(28px + env(safe-area-inset-bottom,0px));color:var(--dim);font-size:14px}
 footer .wrap{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center}footer a{color:var(--ink);text-decoration:none}`;
 
-interface Head { title: string; description: string; url: string }
+interface Head { title: string; description: string; url: string; image?: string }
 function page(h: Head, body: string): string {
   const m = (attr: string, k: string, v: string) => `<meta ${attr}="${k}" content="${esc(v)}" />`;
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />`
     + `<meta name="theme-color" content="#0A0A0B" /><title>${esc(h.title)}</title>${m("name", "description", h.description)}<link rel="canonical" href="${esc(h.url)}" />`
     + m("property", "og:site_name", "Vetta") + m("property", "og:type", "website") + m("property", "og:title", h.title) + m("property", "og:description", h.description)
-    + m("property", "og:url", h.url) + m("property", "og:image", "https://vettadrive.app/brand/icon-1024.png") + m("name", "twitter:card", "summary")
+    + m("property", "og:url", h.url) + m("property", "og:image", h.image || "https://vettadrive.app/brand/icon-1024.png")
+    + (h.image ? m("property", "og:image:width", "1200") + m("property", "og:image:height", "630") + m("name", "twitter:card", "summary_large_image") : m("name", "twitter:card", "summary"))
     + `<link rel="icon" href="/brand/mark.svg" type="image/svg+xml" /><link rel="apple-touch-icon" href="/brand/icon-180.png" /><link rel="stylesheet" href="/fonts/fonts.css" />`
     + `<style>${CSS}</style></head><body>${MARK}<nav aria-label="Vetta"><div class="wrap"><a class="brand" href="/roads"><svg aria-hidden="true"><use href="#mark"/></svg><b>VETTA</b></a>`
     + `<div class="links"><a href="/roads">Roads</a><a class="btn" href="https://vettadrive.com/">Get Vetta</a></div></div></nav><main><div class="wrap">${body}</div></main>`
@@ -111,7 +113,7 @@ export function indexPage(lib: Library, origin: string, state?: string): string 
 }
 
 /** /roads/<id>: one road. */
-export function roadPage(lib: Library, origin: string, r: LibRoad): string {
+export function roadPage(lib: Library, origin: string, r: LibRoad, card = false): string {
   const a = lib.areas.find((x) => x.id === r.area)!;
   const mi = miles(r.km), perMi = r.corners / (r.km / 1.609344);
   const d = shapePath(r.line), first = d.match(/^M([\d.]+) ([\d.]+)/), last = d.match(/L([\d.]+) ([\d.]+)$/);
@@ -123,7 +125,8 @@ export function roadPage(lib: Library, origin: string, r: LibRoad): string {
     + (first ? `<circle cx="${first[1]}" cy="${first[2]}" r="9"/>` : "") + (last ? `<circle cx="${last[1]}" cy="${last[2]}" r="9"/>` : "") + `</svg>`
     + `<a class="btn" href="${esc(drive)}">Drive it in Vetta</a>`
     + (others.length ? `<h2>More near ${esc(a.name)}</h2><ul class="roads">${others.map(roadRow).join("")}</ul>` : "");
-  return page({ title: `${r.name} · near ${near(a)} · Vetta`, description: `${mi} miles and ${r.corners} corners near ${near(a)}. Drive it with Vetta calling every corner.`, url: `${origin}/roads/${r.id}` }, body);
+  return page({ title: `${r.name} · near ${near(a)} · Vetta`, description: `${mi} miles and ${r.corners} corners near ${near(a)}. Drive it with Vetta calling every corner.`, url: `${origin}/roads/${r.id}`,
+    ...(card ? { image: `${origin}/roads/${r.id}.jpg` } : {}) }, body);
 }
 
 /** /roads/sitemap.xml: every page here, for search engines. */
@@ -147,7 +150,17 @@ export async function roadLibrary(env: Env, url: URL): Promise<Response | null> 
   if (rest === "sitemap.xml") return new Response(sitemap(lib, url.origin), { headers: { "content-type": "application/xml", "cache-control": "public, max-age=3600" } });
   const code = rest.toUpperCase();
   if (/^[a-z]{2}$/.test(rest) && lib.areas.some((a) => a.state === code)) return html(indexPage(lib, url.origin, code));
+  // a road's link card: the picture tools/road_cards.js made, from R2 (none yet: 404, and its page names the app icon)
+  const jpg = rest.match(/^([a-z0-9-]{1,80})\.jpg$/);
+  if (jpg) {
+    const o = lib.roads.some((x) => x.id === jpg[1]) && env.DATA ? await env.DATA.get(cardKey(jpg[1])).catch(() => null) : null;
+    if (!o) return new Response("Not found", { status: 404 });
+    return new Response(o.body, { headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=86400" } });
+  }
   const r = ID_RE.test(rest) ? lib.roads.find((x) => x.id === rest) : undefined;
-  if (r) return html(roadPage(lib, url.origin, r));
+  if (r) {
+    const card = env.DATA ? !!(await env.DATA.head(cardKey(r.id)).catch(() => null)) : false;
+    return html(roadPage(lib, url.origin, r, card));
+  }
   return html(page({ title: "Not found · Vetta", description: "", url: `${url.origin}/roads` }, `<p class="eyebrow">Great roads</p><h1>No road here</h1><a class="btn" href="/roads">All roads</a>`), 404);
 }

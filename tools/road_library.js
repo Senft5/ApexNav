@@ -20,7 +20,7 @@ const RoadLink = require(path.join(ROOT, 'web/road_link.js'));
 const BASE = (process.env.BASE || 'https://apexnav.senftns.workers.dev').replace(/\/$/, '');
 const OUT = process.env.OUT || path.join(require('os').tmpdir(), 'road_library');
 const FILE = path.join(ROOT, 'web/data/road_library.json');
-const MAX_S = 2700, PER_AREA = 10, MIN_KM = 5, LINE_PTS = 60, LINK_PTS = 11, PAD_KM = 70;
+const MAX_S = 2700, PER_AREA = 10, MIN_KM = 5, LINE_MAX = 160, TOL_M = 8, LINK_PTS = 11, PAD_KM = 70;
 
 // Areas riders drive to, and the places most members live. id, name (the page's "near"), state, centre.
 const AREAS = [
@@ -91,6 +91,26 @@ function along(lat, lon, n) {
   return out;
 }
 
+/** The road's line for its page and card: Douglas-Peucker in metres, as loose as needed to keep at most `max` points
+ *  (from TOL_M up), so a hairpin keeps its shape and a straight costs two points. */
+function simplify(lat, lon, max = LINE_MAX, tol = TOL_M) {
+  const k = Math.cos(lat[0] * Math.PI / 180), x = lon.map((v) => v * 111320 * k), y = lat.map((v) => v * 110540);
+  for (;; tol *= 1.4) {
+    const keep = new Uint8Array(lat.length); keep[0] = keep[lat.length - 1] = 1;
+    const stack = [[0, lat.length - 1]];
+    while (stack.length) {
+      const [a, b] = stack.pop(); let far = -1, fd = tol;
+      const dx = x[b] - x[a], dy = y[b] - y[a], L = Math.hypot(dx, dy);
+      // (a loop road's two ends are one place: its distance from that place)
+      for (let i = a + 1; i < b; i++) { const d = L > 0.5 ? Math.abs(dy * (x[i] - x[a]) - dx * (y[i] - y[a])) / L : Math.hypot(x[i] - x[a], y[i] - y[a]); if (d > fd) { fd = d; far = i; } }
+      if (far >= 0) { keep[far] = 1; stack.push([a, far], [far, b]); }
+    }
+    const out = [];
+    for (let i = 0; i < lat.length; i++) if (keep[i]) out.push(r4([lat[i], lon[i]]));
+    if (out.length <= max) return out;
+  }
+}
+
 /** Corners as the route card counts them (cockpit.js trackFromPolyline: 5 m resample, curvature, detectCorners). */
 function cornerCount(lat, lon) {
   const rs = Core.resamplePolyline(lat, lon, 5);
@@ -118,7 +138,7 @@ function area([id, name, state, lat, lon], index) {
     // a road on several numbered routes is named by all of them ("US 19;US 129;GA 11"): shown "US 19 / US 129 / GA 11"
     const name = s.name.split(';').map((x) => x.trim()).filter(Boolean).join(' / ');
     roads.push({ name, area: id, km: Math.round(s.km * 10) / 10, corners: cornerCount(s.lat, s.lon), score: s.score,
-      line: along(s.lat, s.lon, LINE_PTS).map(r4), link: RoadLink.encode(along(s.lat, s.lon, LINK_PTS).map(([la, lo]) => ({ lat: la, lon: lo })), name) });
+      line: simplify(s.lat, s.lon), link: RoadLink.encode(along(s.lat, s.lon, LINK_PTS).map(([la, lo]) => ({ lat: la, lon: lo })), name) });
     if (roads.length >= PER_AREA) break;
   }
   return { id, roads };
@@ -168,4 +188,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { AREAS, slug, along, cornerCount, sameRoad };
+module.exports = { AREAS, slug, along, simplify, cornerCount, sameRoad };
