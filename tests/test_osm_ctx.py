@@ -313,3 +313,20 @@ def test_cameras_in_each_cells_points_file(tmp_path):
     assert got == [(39.12, -84.6, "a"), (39.13, -84.4, "s")]
     by = F.with_lists(F.points_by_cell([], [[156, -339], [156, -338]]), [], [], got)
     assert by[(156, -339)]["cams"] == [[39.12, -84.6, "a"]] and by[(156, -338)]["cams"] == [[39.13, -84.4, "s"]]
+
+
+def test_us_build_keeps_one_version_and_can_rebuild_chunks_without_geofabrik():
+    """osm-ctx-us.yml: states' extracts from different days give a border relation twice, which stops osmium extract
+    -s smart (2026-11-15), so the merge keeps every version and time-filter keeps the newest. A failed chunk is built
+    again from an earlier run's extracts (osm_from, bands) without asking Geofabrik, which refuses a second daily run."""
+    import yaml
+    wf = open(os.path.join(ROOT, ".github", "workflows", "osm-ctx-us.yml")).read()
+    y = yaml.safe_load(wf)
+    inputs = y[True]["workflow_dispatch"]["inputs"] if True in y else y["on"]["workflow_dispatch"]["inputs"]
+    assert {"only", "bands", "osm_from"} <= set(inputs)
+    assert y["jobs"]["osm"]["if"] == "${{ !inputs.osm_from }}" and y["jobs"]["osm-again"]["if"] == "${{ !inputs.osm_from }}"
+    assert 'osmium merge --overwrite -H -o "$WORK/merged.osm.pbf"' in wf
+    assert 'osmium time-filter --overwrite -o "$WORK/region.osm.pbf" "$WORK/merged.osm.pbf"' in wf
+    assert wf.index("osmium time-filter") < wf.index("osmium extract --overwrite -s smart")
+    assert 'gh run download "$FROM"' in wf and "FROM: ${{ inputs.osm_from || github.run_id }}" in wf
+    assert 'keep = {x for x in os.environ.get("IN_BANDS", "").split(",") if x}' in wf
