@@ -156,22 +156,27 @@
   /**
    * Your ideal run of a stage: the quickest of your passes over each stretch between the same cuts, put together. passes
    * [{ fine, lo, hi, apexes }] (fine: 25 m splits; apexes: the drive's corner apexes, sample indices); the stretches are
-   * cut at the quickest pass's corners (cutsOf), so a stretch always holds a corner. { time_s, best_s, stretches, runs }
-   * or null under two passes with whole splits.
+   * cut at the quickest pass's corners (cutsOf), so a stretch always holds a corner. { time_s, best_s, stretches, runs,
+   * most } or null under two passes with whole splits; most: the stretch where your best gave away the most to another
+   * run, { k, of, a, b, gain_s } (as worstOf's), null under IDEAL_MOST_S (splits are kept to a tenth).
    */
   function idealOf(passes) {
     const ok = (passes || []).filter((p) => p && Array.isArray(p.fine) && p.fine.length && finite(timeAt(p.fine, 1)));
     if (ok.length < 2) return null;
     const best = ok.reduce((a, b) => (timeAt(b.fine, 1) < timeAt(a.fine, 1) ? b : a));
     const cuts = cutsOf(best.lo, best.hi, best.apexes), used = new Set();
-    let sum = 0, q0 = 0;
-    for (const q of cuts) {
+    let sum = 0, q0 = 0, most = null;
+    cuts.forEach((q, k) => {
       let m = Infinity, who = -1;
       ok.forEach((p, i) => { const d = timeAt(p.fine, q) - timeAt(p.fine, q0); if (finite(d) && d < m) { m = d; who = i; } });
-      if (!finite(m)) return null;
+      if (!finite(m)) { sum = NaN; return; }
+      const gain = timeAt(best.fine, q) - timeAt(best.fine, q0) - m;            // what your best gave away on this stretch
+      if (gain >= IDEAL_MOST_S && (!most || gain > most.gain_s)) most = { k: k + 1, of: cuts.length, a: q0, b: q, gain_s: gain };
       sum += m; used.add(who); q0 = q;
-    }
-    return { time_s: r1(sum), best_s: r1(timeAt(best.fine, 1)), stretches: cuts.length, runs: used.size };
+    });
+    if (!finite(sum)) return null;
+    if (most) most.gain_s = r1(most.gain_s);
+    return { time_s: r1(sum), best_s: r1(timeAt(best.fine, 1)), stretches: cuts.length, runs: used.size, most };
   }
 
   /** "+0.3 vs @sam", "−1.2 vs @sam", "level with @sam" ("vs your best" for your own ghost, self); "--" when nothing compares yet. */
@@ -210,14 +215,16 @@
    * the road's own): "Lost the most early on." / "in the middle." / "late on." / "in the run to the finish." Not "most of
    * it": on Nate's roads the worst stretch held under half the gap a third of the time (2026-11-15).
    */
-  function worstSaid(w) {
+  /** Where a corner stretch { k, of, a, b } is on the stage: "early on", "in the middle", "late on", "in the run to the finish". */
+  function whereOf(w) {
     if (!w || !finite(w.a) || !finite(w.b)) return null;
-    if (w.k >= w.of) return 'Lost the most in the run to the finish.';
+    if (w.k >= w.of) return 'in the run to the finish';
     const m = (w.a + w.b) / 2;
-    return `Lost the most ${m < 1 / 3 ? 'early on' : m < 2 / 3 ? 'in the middle' : 'late on'}.`;
+    return m < 1 / 3 ? 'early on' : m < 2 / 3 ? 'in the middle' : 'late on';
   }
+  function worstSaid(w) { const at = whereOf(w); return at ? `Lost the most ${at}.` : null; }
 
-  const ENTRY_M = 30, HEADING_DEG = 60, NEAR_M = 25, PAST_M = 12, SAY_EVERY = 2, WORST_S = 0.3;
+  const ENTRY_M = 30, HEADING_DEG = 60, NEAR_M = 25, PAST_M = 12, SAY_EVERY = 2, WORST_S = 0.3, IDEAL_MOST_S = 0.5;
   /**
    * Follows the live 5 m rows ({ lat, lon, t_s }) against ghosts [{ stage: { id, name, start, end, length_m, geom }, who,
    * splits, time_s }]. update(rows) → null outside a stage, { state: 'in', name, who, gap, q, elapsed_s } inside (and
@@ -311,6 +318,6 @@
     return 'Couldn\u2019t send it. Try again.';
   }
 
-  const api = { cutsOf, splitsOf, bestOwn, idealOf, worstOf, worstSaid, timeAt, qAt, pointAt, gapAt, cornerSplits, standout, label, spoken, createTracker, countFor, MAX, challengeKey, challengeSaid };
+  const api = { cutsOf, splitsOf, bestOwn, idealOf, worstOf, whereOf, worstSaid, timeAt, qAt, pointAt, gapAt, cornerSplits, standout, label, spoken, createTracker, countFor, MAX, challengeKey, challengeSaid };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexGhostDuel = api;
 })(typeof window !== 'undefined' ? window : globalThis);
