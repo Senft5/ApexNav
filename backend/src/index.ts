@@ -448,6 +448,7 @@ on("POST", "/api/posts/:id/kudos", async (req, env, m, ctx) => {
   if (k) await later(ctx, afterPostKudos(env, v, m.groups!.id, k.author, k.title));
   return noContent();
 });
+on("DELETE", "/api/posts/:id/tag", async (req, env, m) => { await drivePosts.postUntag(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 on("DELETE", "/api/posts/:id/kudos", async (req, env, m) => { await drivePosts.postKudos(env, await requireMember(req, env), m.groups!.id, false); return noContent(); });
 on("POST", "/api/posts/:id/comments", async (req, env, m, ctx) => {
   const v = await requireMember(req, env), c = await drivePosts.commentCreate(env, v, m.groups!.id, req);

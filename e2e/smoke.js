@@ -5921,6 +5921,17 @@ flow('roadbooks: Drive them all routes from where you are through the book\'s ro
   const one = await page.evaluate(() => ({ toast: document.getElementById('toast').textContent, lat: [apexDebug.track.lat[0], apexDebug.track.lat[apexDebug.track.lat.length - 1]] }));
   check(lead.length === 2 && near(lead[0], [-83.8, 35.6]) && near(lead[1], B[0]) && Math.abs(one.lat[0] - 35.6) < 1e-3 && Math.abs(one.lat[1] - B[B.length - 1][1]) < 1e-4
     && /^Road B, from Smokies day out: [\d.]+ (mi|km) to the start, then [\d.]+ (mi|km) of it\.$/.test(one.toast), 'one road: from you to its start, then all of it: ' + JSON.stringify({ lead, one }));
+  // (2026-11-15) with Road A driven, the key is the ones still to stamp, and All stays beside it
+  book.road_list[2].stamped = true; asked.length = 0;
+  await page.goto(base + '/index.html?roadbook=BBBBBBBBBBBBBBBB');
+  await page.waitForSelector('.rb-pop.open button:has-text("Drive the 3 new")', { timeout: 15000 });
+  check(!!(await page.$('.rb-pop.open button[aria-label="Drive all 4 roads"]')) && !(await page.$('.rb-pop.open button:has-text("Drive them all")')), 'Drive the 3 new, and All beside it');
+  await page.click('.rb-pop.open button:has-text("Drive the 3 new")');
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.id === 'roadbook_all_BBBBBBBBBBBBBBBB', null, { timeout: 20000 });
+  const newLocs = asked.find((l) => Array.isArray(l) && l.length > 3) || [];
+  const newNote = await page.evaluate(() => document.getElementById('routeProgress').textContent);
+  check(/^2 new roads from Smokies day out, nearest first: /.test(newNote), 'the card says new: ' + newNote);
+  check(newLocs.length > 3 && !newLocs.some((l) => near(l, A[0]) || near(l, A[A.length - 1])) && newLocs.some((l) => near(l, B[0])), 'the drive leaves out the road already driven: ' + newLocs.length);
 }, { geolocation: { latitude: 35.6, longitude: -83.8 }, permissions: ['geolocation'] });
 
 flow('crash check: a hard impact then a stop asks "Are you OK?"; no answer offers a call and a text to the contact (IDEAS D-17)', async (page, base) => {
@@ -7480,12 +7491,20 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
     'a crew drive today picks its crew and names who came');
   await page.click('.post-sheet [role="radiogroup"] button:has-text("Friends")');
   check(await page.$eval('.post-sheet .post-with', (n) => n.hidden), 'to friends: no names');
+  // (2026-11-15) to friends: who came is yours to tag, up to five friends
+  await page.waitForSelector('.post-sheet .post-tags:not([hidden]) button:text-is("@bob")');
+  check(await page.textContent('.post-sheet .post-tags small') === 'Who came? (optional)', 'the tag row asks, once');
+  await page.click('.post-sheet .post-tags button:text-is("@bob")');
+  check(await page.textContent('.post-sheet .post-tags small') === 'With @bob' && await page.getAttribute('.post-sheet .post-tags button:text-is("@bob")', 'aria-pressed') === 'true', 'tapped: the post will say With @bob');
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/post-tags.png` });
   await page.click('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")');
+  check(await page.$eval('.post-sheet .post-tags', (n) => n.hidden), 'to a crew: no tags, the crew drive says who came');
   await page.fill('.post-sheet textarea', 'First run with the crew.');
   await page.click('.post-sheet button:text-is("Post")');
   await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Posted');
   const p = JSON.parse(sent.filter((x) => x.p === '/api/posts').pop().b);
   const first = (() => { const s = p.line; let i = 0, r = 0, sh = 0, b; do { b = s.charCodeAt(i++) - 63; r |= (b & 31) << sh; sh += 5; } while (b >= 32); return (r & 1 ? ~(r >> 1) : r >> 1) / 1e5; })();
+  check(p.tags === undefined, 'a crew post sends no tags');
   check(p.crew_id === 'k1' && p.caption === 'First run with the crew.' && p.score === 790 && p.title === 'Cherohala Skyway' && first > 35.36 + 0.0044,
     'the post: to the crew, the caption, the Score, and the line starting 500 m in: ' + JSON.stringify({ ...p, line: p.line.length, first }));
 });

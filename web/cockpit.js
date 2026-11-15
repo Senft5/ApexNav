@@ -7516,7 +7516,8 @@
           ownInstructLater(t, r);
           await buildRoute(null, id, name, t);
           const n = (book.road_list || []).length, of = legs.length < n ? ` of its ${n}` : '';
-          cardNote(`${legs.length} roads${of} from ${name}, nearest first: ${ApexUnits.long(totalM(), 1)}`);
+          // only the ones still to stamp (roadbooks.js "Drive the N new"): said as new
+          cardNote(`${legs.length} ${book.onlyNew ? 'new ' : ''}roads${book.onlyNew ? '' : of} from ${name}, nearest first: ${ApexUnits.long(totalM(), 1)}`);
         } catch (_) { toast('Couldn\u2019t route through those roads. Drive them one at a time.'); }
         finally { loopBusy = false; ui.done(); }
       },

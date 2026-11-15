@@ -61,6 +61,8 @@ export async function exportMyData(env: Env, v: Viewer): Promise<Record<string, 
     // drive posts (drive_posts.ts): yours, and the comments you wrote (on whose post, by handle)
     drive_posts: q(`SELECT p.title, p.caption, p.driven_on, p.length_m, p.score, p.roads, p.stages, p.line, c.name AS crew, p.created_at
                       FROM drive_posts p LEFT JOIN crews c ON c.id = p.crew_id WHERE p.author = ?`),
+    drive_post_tags: q(`SELECT u.handle AS on_post_by, p.title AS post, t.created_at FROM drive_post_tags t JOIN drive_posts p ON p.id = t.post_id
+                         JOIN users u ON u.id = p.author WHERE t.user_id = ?`),
     drive_post_comments: q(`SELECT u.handle AS on_post_by, p.title AS post, dc.body, dc.created_at FROM drive_comments dc JOIN drive_posts p ON p.id = dc.post_id
                       JOIN users u ON u.id = p.author WHERE dc.author = ?`),
     drive_post_kudos_given: q(`SELECT u.handle AS on_post_by, p.title AS post, k.created_at FROM drive_post_kudos k JOIN drive_posts p ON p.id = k.post_id
