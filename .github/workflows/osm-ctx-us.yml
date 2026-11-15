@@ -22,6 +22,14 @@ on:
         description: "Pilot: Geofabrik state ids, comma separated (empty: the lower 48)"
         required: false
         default: ""
+      bands:
+        description: "Only these chunks of the plan, by name, comma separated (e.g. 35_-92,36_-92), each with all its states"
+        required: false
+        default: ""
+      osm_from:
+        description: "A run id whose state extracts (osm-* artifacts, 2 days) to build from instead of asking Geofabrik again"
+        required: false
+        default: ""
   push:
     branches: [claude/roam-c-osm-ctx-us]
     paths:
@@ -55,6 +63,7 @@ jobs:
         id: plan
         env:
           IN_ONLY: ${{ inputs.only || '' }}
+          IN_BANDS: ${{ inputs.bands || '' }}
         run: |
           only="$IN_ONLY"
           if [ "${{ github.event_name }}" = "push" ]; then only=$(sed -n 's/^only=//p' tools/osm_ctx/US_BUILD | head -1); fi
@@ -63,7 +72,12 @@ jobs:
           python -m tools.osm_ctx.us_outlines --index index-v1.json --out polys
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
+          import os
           m = json.load(open("matrix.json"))
+          keep = {x for x in os.environ.get("IN_BANDS", "").split(",") if x}
+          if keep:
+              m["include"] = [j for j in m["include"] if j["name"] in keep]
+              json.dump(m, open("matrix.json", "w"))
           from tools.graph_etl.us_plan import urls
           ix = urls(json.load(open("index-v1.json")))
           states = sorted({s for j in m["include"] for s in j["states"].split()})
@@ -81,6 +95,7 @@ jobs:
 
   osm:
     needs: plan
+    if: ${{ !inputs.osm_from }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -110,6 +125,7 @@ jobs:
 
   osm-again:
     needs: [plan, osm]
+    if: ${{ !inputs.osm_from }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -172,13 +188,14 @@ jobs:
       - name: The states under this job's blocks, and their outlines
         env:
           GH_TOKEN: ${{ github.token }}
+          FROM: ${{ inputs.osm_from || github.run_id }}
         run: |
           mkdir -p "$WORK/osm" "$WORK/polys"
           gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n osm-us-polys -D "$WORK/polys"
           for s in ${{ matrix.states }}; do
-            for k in 1 2 3; do gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n "osm-$s" -D "$WORK/osm" && break; sleep 15; done
+            for k in 1 2 3; do gh run download "$FROM" -R "${{ github.repository }}" -n "osm-$s" -D "$WORK/osm" && break; sleep 15; done
             if [ ! -s "$WORK/osm/$s.osm.pbf" ]; then
-              [ -d "$WORK/again" ] || gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n osm-again -D "$WORK/again" || true
+              [ -d "$WORK/again" ] || gh run download "$FROM" -R "${{ github.repository }}" -n osm-again -D "$WORK/again" || true
               cp "$WORK/again/$s/$s.osm.pbf" "$WORK/osm/" || { echo "::error::no extract for $s"; exit 1; }
             fi
           done
@@ -187,7 +204,12 @@ jobs:
         env:
           JOB: ${{ matrix.job }}
         run: |
-          osmium merge --overwrite -o "$WORK/region.osm.pbf" "$WORK"/osm/*.osm.pbf
+          # two states' extracts can be cut from different days, so a road or relation over their border comes in two
+          # versions and osmium extract -s smart stops on "Relation ID twice" (35_-92, 2026-11-15): merge keeping every
+          # version, then keep each object's newest
+          osmium merge --overwrite -H -o "$WORK/merged.osm.pbf" "$WORK"/osm/*.osm.pbf
+          osmium time-filter --overwrite -o "$WORK/region.osm.pbf" "$WORK/merged.osm.pbf"
+          rm -f "$WORK/merged.osm.pbf"
           rm -rf "$WORK/osm"
           polys=""; for s in ${{ matrix.states }}; do polys="$polys --poly $WORK/polys/$s.poly"; done
           python -m tools.graph_etl.us_plan blocks --job "$JOB" > "$WORK/blocks.txt"
