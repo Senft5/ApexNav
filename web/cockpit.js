@@ -1736,6 +1736,16 @@
     // Jump to the corners (real-drive review 2026-11-15: a free drive's replay opened on twenty minutes of interstate): where
     // the drive's corners start, the first run of three corners inside 1.5 km (else its first corner), 400 m before it so
     // the notes have their run-in. Offered while the replay is more than a kilometre short of it; one tap moves there.
+    const HAZARD_NOTE = new Set(['bump', 'crest', 'dip']);   // instruments.js HAZARD_TYPES: the strip's measured hazards
+    const cornerMs = new WeakMap();                                      // a track's corner metres, sorted (nearCorner)
+    function nearCorner(t, m) {
+      if (!t || !Array.isArray(t.events)) return false;
+      let cs = cornerMs.get(t);
+      if (!cs) { cs = t.events.filter((e) => e.type === 'corner' && Number.isFinite(e.dist_m)).map((e) => Number.isFinite(e.start_m) ? e.start_m : e.dist_m).sort((a, b) => a - b); cornerMs.set(t, cs); }
+      let lo = 0, hi = cs.length;                                         // the first corner at or after m - 150
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (cs[mid] < m - 150) lo = mid + 1; else hi = mid; }
+      return lo < cs.length && cs[lo] <= m + 400;
+    }
     function cornersStartM(t) {
       const cs = (t && Array.isArray(t.events) ? t.events : []).filter((e) => e.type === 'corner' && Number.isFinite(e.dist_m)).map((e) => Number.isFinite(e.start_m) ? e.start_m : e.dist_m).sort((a, b) => a - b);
       if (!cs.length) return null;
@@ -1745,7 +1755,7 @@
     function paintJump() {
       const b = $('jumpCorners'); if (!b) return;
       const at = replayOn && state.mode === 'replay' && track ? cornersStartM(track) : null;
-      const show = at != null && state.cursorM < at - 1000;
+      const show = at != null && state.cursorM < at - 300;   // a city start: up to 700 m before the corners
       if (b.hidden === show) b.hidden = !show;
       b._at = at;
     }
@@ -2203,8 +2213,18 @@
       }
       const firstKey = track && state.firstNoteKey && state.firstNoteKey.startsWith(`${track.id}:`) ? state.firstNoteKey : null;
       const isFirst = (e) => !!firstKey && `${track.id}:${e.type}:${e.index}` === firstKey;
+      // Real-drive review round 2: a measured hazard (bump, crest, dip) shows only inside the voice's own lead for it (twice
+      // the lead, at least 200 m), and one at a time. Two BUMP cards counting down from 0.9 mi on a 35 mph street were noise.
+      let hazardUp = false;
+      const hazardNear = (e) => {
+        if (!HAZARD_NOTE.has(e.type)) return true;
+        if (hazardUp) return false;
+        const ok = noteM(e) - state.cursorM <= Math.max(200, 2 * ApexNoteTiming.leadM({ vMps, text: e.call || 'Bump ahead', reactionS: reactS }));
+        if (ok) hazardUp = true;
+        return ok;
+      };
       const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner' || isFirst(e)).filter(e => noteM(e) - state.cursorM <= 3000)
-        .filter(e => !(e.type === 'corner' && ApexDirections.atJunction(steps, noteM(e)))).slice(0, 3);   // a junction shows once, as the direction
+        .filter(e => !(e.type === 'corner' && ApexDirections.atJunction(steps, noteM(e)))).filter(hazardNear).slice(0, 3);   // a junction shows once, as the direction
       const notes = shown.map(e => {
         const d = distLabel(Math.max(0, noteM(e) - state.cursorM));   // 0 once you're in the corner
         return { key: `${e.type}:${e.index}:${e.dist_m}`, type: e.type, code: e.code, call: state.noteWords === 'plain' && !e.recce ? ApexPlainNotes.plainCall(e) : e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: Math.max(0, noteM(e) - state.cursorM),
@@ -2498,7 +2518,9 @@
       si.sight = sightMps != null ? ApexUnits.speed(sightMps) : null; si.open = sightOpen; si.speed = vMps != null ? ApexUnits.speed(vMps) : null;
       si.limit = limit != null ? ApexUnits.speed(limit) : null; si.unit = ApexUnits.speedU();
       const held = sightHold.step(si, performance.now());
-      paintSight(held.msg, !!live);
+      // Real-drive review round 2: in a replay the plate shows only near a corner (400 m before to 150 m after). On a straight
+      // city street it flipped Open, 65, 55 every few seconds and said nothing a driver could use.
+      paintSight(replayOn && state.mode === 'replay' && !nearCorner(track, state.cursorM) ? ApexCarPlay.sightMessage(null) : held.msg, !!live);
       carLimit(live ? si.limit : null, si.unit);                       // the posted limit's sign on the car's map
       const d = renderIn.cluster;                                       // F-18: one object, refilled each frame (the cluster reads it, keeps nothing)
       // in the chosen units (mph or km/h, U-22); the names are the cluster's

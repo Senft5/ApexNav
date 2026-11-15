@@ -6744,6 +6744,27 @@ flow('the Log draws one rule between the drive list and Score over time, not two
   check(!r.quiet && (r.row === 0 && r.panel === 1), 'one rule between the list and the panel: ' + JSON.stringify(r));
 });
 
+flow('the Log after a real week: short drives with no corners fold away, Score over time names each day once, the hero names no address (real-drive review round 2)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async (src) => { const gen = eval(src);
+    for (let k = 0; k < 3; k++) await ApexRecording.store(ApexRecording.parse(ApexCore, gen('saw', k), 'W' + k + '.csv', { id: 'W' + k, name: 'To 10069 Pebble Ridge Ln', date: `2026-10-30T1${k}:00`, source: 'web-gps' }));
+    const lat = [], lon = []; for (let i = 0; i < 60; i++) { lat.push(39.10 + i * 5 / 110540); lon.push(-84.52); }   // 0.3 km, straight
+    await ApexRecording.store({ id: 'Wshort', name: 'To the shop', date: '2026-10-31T09:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 12),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, elev: null, hz: 1, source: 'web-gps', events: [] }); }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#trendPanel:not([hidden])', { timeout: 20000 });
+  const r = await page.evaluate(() => ({ rows: [...document.querySelectorAll('#historyTable tr.row-link')].map((t) => t.dataset.drive),
+    fold: (document.getElementById('showShorts') || {}).textContent || null, hero: document.getElementById('historyCards').textContent,
+    labels: [...document.querySelectorAll('#trend svg text[text-anchor="middle"]')].map((t) => t.textContent) }));
+  check(!r.rows.includes('Wshort') && r.rows.length === 3 && r.fold === 'Short drives (1)', 'the short drive folds away: ' + JSON.stringify(r));
+  check(!/Pebble|10069/.test(r.hero), 'the hero names no address: ' + r.hero);
+  check(r.labels.length === new Set(r.labels).size && r.labels.length >= 1, 'each day labelled once: ' + JSON.stringify(r.labels));
+  await page.click('#showShorts');
+  await page.waitForSelector('#historyTable tr[data-drive="Wshort"]', { timeout: 5000 });
+});
+
 flow('a drive\'s corners on a road driven four times: each says your cleanest pass there, and a tap opens the drive that holds it (driver_profile.js roadRecords rows)', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
