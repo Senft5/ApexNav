@@ -1310,7 +1310,7 @@ flow('landscape: a planned route is its card alone, a column beside the map with
       return { panelR: Math.round(p.right), mapR: Math.round(c.right), minX: Math.round(Math.min(...xs)), maxX: Math.round(Math.max(...xs)), w: Math.round(p.width), mapW: Math.round(c.width) }; });
     check(side.w < side.mapW * 0.7 && side.minX > side.panelR && side.maxX < side.mapR, 'a column, the route beside it on the map: ' + JSON.stringify(side));
   } finally { graphDir = null; }
-}, { viewport: { width: 320, height: 568 }, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+}, { viewport: { width: 844, height: 390 }, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
 flow('design pass 2: the route card\'s last row is one ruled strip of keys, and the map\'s credit is a plate on the look\'s own tokens (IDEAS U-53)', async (page, base) => {
   graphDir = graphFixture();
@@ -7228,7 +7228,7 @@ flow('landscape mount: the map takes the left, the instruments a column on the r
   await page.waitForTimeout(300);
   const dn = await box('#notes'), db = await box('#driveBar'), ds = await box('.stage');
   check(db.h > 0 && db.x >= ds.x + ds.w - 1 && db.y < dn.y + dn.h && dn.x + dn.w <= ds.x + ds.w + 1 && ds.y + ds.h >= 389, 'driving on its side: ' + JSON.stringify({ dn, db, ds }));
-}, { viewport: { width: 320, height: 568 } });
+}, { viewport: { width: 844, height: 390 } });
 
 flow('drive posts: Drive it on a friend\'s post lays a route along their line, through stops on their roads, and names it for them (free roamer B, 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
