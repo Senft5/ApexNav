@@ -3960,6 +3960,7 @@ flow('roadbooks on the map: off by default; on, only the books with a road in vi
     if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (p === '/api/roadbooks') return json({ mine: [{ ...near, road_list: near.road_list.map((r) => ({ id: r.id, name: r.name, box: box(r.geom), stamped: r.stamped })) }], crews: [],
       following: [{ ...away, road_list: away.road_list.map((r) => ({ id: r.id, name: r.name, box: box(r.geom), stamped: false })) }] });
+    if (p === '/api/roadbooks/NEARNEARNEARNEAR/roads/r2' && route.request().method() === 'DELETE') { near.road_list = near.road_list.filter((r) => r.id !== 'r2'); return route.fulfill({ status: 204, body: '' }); }
     if (p === '/api/roadbooks/NEARNEARNEARNEAR') { opened.push('near'); return json(near); }
     if (p === '/api/roadbooks/FARFARFARFARFARF') { opened.push('far'); return json(away); }
     return json([]);
@@ -3983,6 +3984,10 @@ flow('roadbooks on the map: off by default; on, only the books with a road in vi
   await page.mouse.click(pt.x, pt.y);
   await page.waitForSelector('.rb-pop.open .rb-road', { timeout: 8000 });
   check(/Smokies classics/.test(await page.textContent('.rb-pop.open h3')), 'the tap opened the road\'s roadbook');
+  // a road taken out of the book leaves the map too (the book is read again after a write)
+  await page.click('.rb-pop.open [aria-label="Remove Cherohala"]');
+  await page.waitForFunction(() => { const d = apexDebug.map.getSource('apex-books-src').serialize().data; return d.features.length === 1 && d.features[0].properties.name === 'The Dragon'; }, null, { timeout: 10000 });
+  check(opened.filter((o) => o === 'near').length === 3, 'the map, the book\'s page, then the map again after the edit: ' + JSON.stringify(opened));
 });
 
 flow('drive ended: your best on this road on the card, and the pack closes with the score from its own clips (REVIEW.md 4.4)', async (page, base) => {
