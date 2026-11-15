@@ -4006,6 +4006,38 @@ flow('roadbooks on the map: off by default; on, only the books with a road in vi
   check(await page.evaluate(() => apexDebug.map.getSource('apex-books-src').serialize().data.features.some((f) => f.properties.name === 'Foothills Parkway' && f.properties.p === 1)), 'the public book stays on the map after the edit');
 });
 
+flow('roadbooks on the route card: a planned route that drives a road of your roadbooks names it, and says when it is new to you (free roamer B, 2026-11-15)', async (page, base) => {
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  // the stub's own line between the two ends, points 120 to 220: a road on it
+  const a = { lat: 35.9606, lon: -83.9207 }, b = { lat: 36.06, lon: -83.80 };
+  const at = (i) => { const t = i / 400, wig = Math.sin(t * Math.PI * 9) * 0.004 * Math.sin(t * Math.PI); return [+(a.lon + (b.lon - a.lon) * t + wig).toFixed(6), +(a.lat + (b.lat - a.lat) * t + wig).toFixed(6)]; };
+  const geom = Array.from({ length: 101 }, (_, k) => at(120 + k));
+  const lats = geom.map((q) => q[1]), lons = geom.map((q) => q[0]);
+  const box = [Math.min(...lats), Math.max(...lats), Math.min(...lons), Math.max(...lons)];
+  const book = { id: 'ROUTEROUTEROUTER', name: 'Smokies classics', mine: true, visibility: 'private', by: 'me', roads: 1, length_m: 9000,
+    road_list: [{ id: 'r1', name: 'Hollow Creek Road', geom, length_m: 9000, stamps: 0, stamped: false }] };
+  const opened = [];
+  await page.route(base + '/api/**', (route) => {
+    const p = new URL(route.request().url()).pathname, json = (x) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(x) });
+    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (p === '/api/roadbooks') return json({ mine: [{ ...book, road_list: [{ id: 'r1', name: 'Hollow Creek Road', box, stamped: false }] }], following: [], crews: [] });
+    if (p === '/api/roadbooks/ROUTEROUTEROUTER') { opened.push(p); return json(book); }
+    return json([]);
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.signedIn', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.waitForTimeout(1500);                                                        // the account is known
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.9606, lon: -83.9207 }, { lat: 36.06, lon: -83.80 }], 'to_x', 'To the ridge'));
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 20000 });
+  await page.waitForFunction(() => /Drives Hollow Creek Road from Smokies classics, new to you/.test(document.getElementById('routeCardSub').textContent), null, { timeout: 15000 })
+    .catch(async () => { throw new Error('card: ' + await page.textContent('#routeCardSub')); });
+  check(opened.length === 1, 'only the book whose road meets the route was opened: ' + opened.length);
+});
+
 flow('roadbooks: sharing your public roadbook sends its link card, its roads on the map as a 1200 x 630 JPEG, once until it changes (free roamer B, 2026-11-15)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     // the real map under the roads (post_map.js) needs tiles; here a plain picture stands in for it

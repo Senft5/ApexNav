@@ -70,6 +70,9 @@ and in random batches so a trace cannot be re-assembled.
   with a road in the map's view are opened, chosen on the phone from the road boxes it already holds. Public books round
   the view are drawn too, thin and faint (legend: Public), found by the coarse cell of the map's centre as Roadbooks near
   you asks (never from inside a privacy zone, once a cell a page); a tap opens one, where Follow is.
+- **On the route card** (2026-11-15): a planned route that drives a road of your books (yours, followed, your crews')
+  says so on its card: "Drives The Dragon from Smokies classics, new to you", or a count for more than one. By the
+  stamp's own measure (85% of the road within reach); only books with a road whose box meets the route's are opened.
 - **Link cards** (2026-11-15, backend/src/link_preview.ts): a public book's link pasted into a chat shows a large card,
   its roads on the real map with its name and facts, made on the owner's phone when they press Share (sent again only
   when the name, facts or roads change); other links show what kind they are; the picture is otherwise the app icon.

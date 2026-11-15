@@ -8,7 +8,7 @@
   'use strict';
   const fin = Number.isFinite;
   const TRIM_M = 400, MAX_POINTS = 600, MIN_ROAD_M = 300, LOOP_M = 600;
-  const COVER_TOL_M = 45, COVER_GAP_M = 250, STAMP_AT = 0.85, SCAN_DRIVES = 12;
+  const COVER_TOL_M = 45, COVER_GAP_M = 250, STAMP_AT = 0.85, SCAN_DRIVES = 12, ALONG_OPEN = 6;
   const CACHE_KEY = 'apex.roadbooks', DATES_KEY = 'apex.roadbookStamps';
   const VIS = { private: 'Only you', friends: 'Friends', public: 'Public' };
   const metres = (aLat, aLon, bLat, bLon) => Math.hypot((bLat - aLat) * 110540, (bLon - aLon) * 111320 * Math.cos(((aLat + bLat) / 2) * Math.PI / 180));
@@ -154,6 +154,34 @@
     }
     return out;
   }
+  /**
+   * The roads of these books (opened: [{ id, name, road_list: [{ id, name, geom, stamped }] }]) that a planned route
+   * (lat, lon) drives, by the same measure as a stamp (STAMP_AT of the road within reach of the route), each road once,
+   * in the books' order: [{ book, bookName, road, name, stamped }].
+   */
+  function onRoute(books, lat, lon) {
+    const box = boxOf(lat, lon), out = [], seen = new Set();
+    if (!box) return out;
+    for (const b of Array.isArray(books) ? books : []) {
+      for (const r of (b && b.road_list) || []) {
+        if (!r || seen.has(r.id) || !Array.isArray(r.geom) || r.geom.length < 2) continue;
+        const g = r.geom.filter((q) => Array.isArray(q) && fin(q[0]) && fin(q[1]));
+        if (!overlaps(boxOf(g.map((q) => q[1]), g.map((q) => q[0])), box) || coverage(g, lat, lon) < STAMP_AT) continue;
+        seen.add(r.id);
+        out.push({ book: b.id, bookName: String(b.name || ''), road: r.id, name: String(r.name || 'A road'), stamped: !!r.stamped });
+      }
+    }
+    return out;
+  }
+  /** The route card's words for them: one road by name and its book, more by count; '' for none. */
+  function routeLine(found) {
+    const f = Array.isArray(found) ? found : [];
+    if (!f.length) return '';
+    if (f.length === 1) return `Drives ${f[0].name} from ${f[0].bookName}${f[0].stamped ? '' : ', new to you'}`;
+    const fresh = f.filter((x) => !x.stamped).length;
+    return `Drives ${f.length} roads from your roadbooks${fresh ? `, ${fresh} new to you` : ''}`;
+  }
+
   const link = (origin, id) => `${String(origin || '').replace(/\/+$/, '')}/?roadbook=${encodeURIComponent(id)}`;
 
   /**
@@ -704,9 +732,25 @@
 
     /** Has this member any book of their own or followed (as last read, or as this phone kept it)? People shows the row then. */
     const hasAny = () => { const l = lists || readJson(CACHE_KEY, null); return !!l && ((l.books && l.books.length > 0) || (l.mine && (l.mine.length + l.following.length + (l.crews || []).length) > 0)); };
-    return { section, nearSection, open, addPart, keep, ofFriend, ofCrew, countLine, afterDrive, scanLog, hasAny, lists: () => lists, reload: loadLists };
+    /** A planned route: the roads of your books (yours, followed, your crews') it drives. Opens only the books with a road
+     *  whose box meets the route's, at most ALONG_OPEN, each once a page. → onRoute's list. */
+    const opened = new Map();
+    async function alongRoute(lat, lon) {
+      if (!member()) return [];
+      const l = lists || await loadLists().catch(() => null);
+      if (!l) return [];
+      const box = boxOf(lat, lon);
+      const books = [...l.mine, ...(l.crews || []), ...l.following].filter((b) => b && (b.road_list || []).some((r) => overlaps(r.box, box))).slice(0, ALONG_OPEN);
+      await Promise.all(books.filter((b) => !opened.has(b.id)).map(async (b) => {
+        const r = await call('GET', `/api/roadbooks/${encodeURIComponent(b.id)}`);
+        if (r.ok && r.data && Array.isArray(r.data.road_list)) opened.set(b.id, r.data);
+      }));
+      return onRoute(books.map((b) => opened.get(b.id)).filter(Boolean), lat, lon);
+    }
+
+    return { section, nearSection, open, addPart, keep, ofFriend, ofCrew, countLine, afterDrive, scanLog, hasAny, alongRoute, forgetOpened: () => opened.clear(), lists: () => lists, reload: loadLists };
   }
 
-  const api = { fromTrack, fromStage, coverage, overlaps, boxOf, lengthM, progress, bookLine, cardLines, CARD, overview, overviewFrame, tour, link, mount, TOUR_MAX, STAMP_AT, TRIM_M, MAX_POINTS, MIN_ROAD_M };
+  const api = { onRoute, routeLine, fromTrack, fromStage, coverage, overlaps, boxOf, lengthM, progress, bookLine, cardLines, CARD, overview, overviewFrame, tour, link, mount, TOUR_MAX, STAMP_AT, TRIM_M, MAX_POINTS, MIN_ROAD_M };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadbooks = api;
 })(typeof window !== 'undefined' ? window : globalThis);
