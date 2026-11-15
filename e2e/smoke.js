@@ -205,6 +205,54 @@ async function clippedText(page) {
   }).catch(() => []);
 }
 
+// Text drawn over other text, on every flow's last screen (2026-11-15): two lines of words from different boxes that
+// cross by more than a third of the smaller one's height and a few px of width, both showing (nothing opaque between the
+// lower one and the eye). A badge on a label, a value over its caption, a stacked toast over a note. OVERLAP_LOG=1 lists.
+async function overlappingText(page) {
+  return page.evaluate(() => {
+    const where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).slice(0, 3).join('.') : '');
+    const W = innerWidth, H = innerHeight, runs = [];
+    const clear = (c) => { const m = /rgba?\(([^)]+)\)/.exec(c); if (!m) return c === 'transparent'; const a = m[1].split(/[ ,/]+/).filter(Boolean); return a.length > 3 && +a[3] < 0.5; };
+    const ctx = document.createElement('canvas').getContext('2d');
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let t = walker.nextNode(); t && runs.length < 600; t = walker.nextNode()) {
+      if (!t.nodeValue.trim()) continue;
+      const el = t.parentElement; if (!el || el.closest('svg, script, style, .maplibregl-marker, .maplibregl-ctrl-attrib')) continue;
+      let hidden = false; for (let n = el; n && n.nodeType === 1; n = n.parentElement) { if (n.hidden || n.inert || n.getAttribute('aria-hidden') === 'true') { hidden = true; break; } }
+      if (hidden) continue;
+      const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || +cs.opacity === 0 || clear(cs.color)) continue;
+      const range = document.createRange(); range.selectNodeContents(t);
+      // the ink, not the line box: a big display numeral's box is mostly air above and below its digits
+      ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      const m = ctx.measureText(t.nodeValue.trim()), up = m.actualBoundingBoxAscent, down = m.actualBoundingBoxDescent, base = m.fontBoundingBoxDescent;
+      for (const box of range.getClientRects()) {
+        const r = { left: box.left, right: box.right, top: box.bottom - base - up, bottom: box.bottom - base + down, width: box.width, height: up + down };
+        if (r.width < 2 || r.height < 4 || r.bottom < 0 || r.top > H || r.right < 0 || r.left > W) continue;
+        // showing: every box above this text at its middle is see-through (or holds it)
+        const x = Math.min(Math.max(r.left + r.width / 2, 0), W - 1), y = Math.min(Math.max(r.top + r.height / 2, 0), H - 1);
+        let shows = false;
+        for (const n of document.elementsFromPoint(x, y)) {
+          if (n === el || el.contains(n)) { shows = true; break; }
+          if (n.contains(el)) continue;
+          const c = getComputedStyle(n);
+          if (!clear(c.backgroundColor) || c.backgroundImage !== 'none' || (c.backdropFilter && c.backdropFilter !== 'none') || n.tagName === 'IMG' || n.tagName === 'CANVAS' || n.tagName === 'VIDEO') break;
+        }
+        if (shows) runs.push({ el, r, text: t.nodeValue.trim().slice(0, 30) });
+      }
+    }
+    const hits = [], seen = new Set();
+    for (let i = 0; i < runs.length; i++) for (let j = i + 1; j < runs.length; j++) {
+      const a = runs[i], b = runs[j]; if (a.el === b.el || a.el.contains(b.el) || b.el.contains(a.el)) continue;
+      const w = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left), h = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
+      if (w > 3 && h > Math.min(a.r.height, b.r.height) / 3) {
+        const k = where(a.el) + '|' + where(b.el); if (seen.has(k)) continue; seen.add(k);
+        hits.push(`${where(a.el)} "${a.text}" over ${where(b.el)} "${b.text}" (${Math.round(w)}x${Math.round(h)} px)`);
+      }
+    }
+    return hits.slice(0, 12);
+  }).catch(() => []);
+}
+
 // A key too small to hit, on every flow's last screen (2026-11-14): a button, link, switch, tab or field in view, on top,
 // under 24 x 24 px (WCAG 2.5.8; Apple asks 44 pt, and the drive's keys are bigger still). A link inside a sentence, the
 // map's own markers and a flow's own test fields (#e2e*) are left out. TAP_LOG=1 lists them instead of failing.
@@ -9267,11 +9315,11 @@ flow('contrast in every look: the welcome, the map, People, the Garage and the L
 
 // U-15 / IN-1: the main screens at the phone's larger text sizes (1.5x and the largest, 2x): no text cut off by its box
 // or the screen's edge, no key too small to hit; the checks every flow runs on its last screen at the default size
-flow('large text on every screen: the welcome, the map, a route card, People, the Garage and the Log (empty and with drives) cut nothing at 1.5x and 2x (IDEAS U-15, IN-1)', async (page, base) => {
+flow('large text on every screen: the welcome, the map, a route card, People, the Garage and the Log (empty and with drives) cut nothing and draw no words over others at 1.5x and 2x (IDEAS U-15, IN-1)', async (page, base) => {
   graphDir = graphFixture();
   const found = [];
   const read = async (p, where) => { await p.evaluate(() => { const st = document.querySelector('.stage'); if (st) st.scrollLeft = 0; });
-    found.push(...(await clippedText(p)).map((h) => `${where}: ${h}`), ...(await smallTargets(p)).map((h) => `${where}: small key ${h}`));
+    found.push(...(await clippedText(p)).map((h) => `${where}: ${h}`), ...(await smallTargets(p)).map((h) => `${where}: small key ${h}`), ...(await overlappingText(p)).map((h) => `${where}: ${h}`));
     const wide = await p.evaluate(() => Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth);
     if (wide > 1) found.push(`${where}: the page is ${wide} px wider than the phone`); };
   try {
@@ -13833,6 +13881,9 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
       const cut = await clippedText(page);
       if (process.env.CLIP_LOG) for (const h of cut) console.log(`CLIP ${name} | ${h}`);
       else check(!cut.length, `text in view cut off by its box or the screen's edge:\n  ${cut.join('\n  ')}`);
+      const crossed = await overlappingText(page);
+      if (process.env.OVERLAP_LOG) for (const h of crossed) console.log(`OVERLAP ${name} | ${h}`);
+      else check(!crossed.length, `text in view drawn over other text:\n  ${crossed.join('\n  ')}`);
       const faint = await lowContrast(page);
       if (process.env.CONTRAST_LOG) for (const h of faint) console.log(`CONTRAST ${name} | ${h}`);
       else check(!faint.length, `text in view under the contrast floor:\n  ${faint.join('\n  ')}`);
