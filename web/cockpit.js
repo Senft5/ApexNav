@@ -75,7 +75,11 @@
       const crests = ApexContributor.crestEvents ? ApexContributor.crestEvents(t, m.crowdCrests || [], t.events) : [];
       t.crowdCrests = crests.length;
       add.push(...crests);
-      if (!add.length) return false;
+      // and broken pavement two or more members measured (contributor.js roughFrom): "Rough road" with the road marks
+      const rough = ApexContributor.roughMarks ? ApexContributor.roughMarks(t, m.crowdRough || [], t.marks) : [];
+      t.crowdRough = rough.length;
+      if (rough.length) t.marks = window.ApexRoadMarks ? ApexRoadMarks.union(t.marks, rough) : [...(t.marks || []), ...rough];
+      if (!add.length) return rough.length > 0;
       t.events = [...t.events, ...add].sort((a, b) => a.dist_m - b.dist_m);
       Core.linkNotes(t.events);
       if (t.marks && window.ApexRoadMarks) t.marks = ApexRoadMarks.unfelt(t.marks, t.events);   // a mapped hump they felt: one call
@@ -2962,6 +2966,8 @@
       if (!applyCrowdBumps(t, ApexContributor.feelFromWays(t, spans, roads, lines))) return;
       const cos = Math.cos(t.lat[0] * Math.PI / 180);
       for (const e of t.events) if (e.crowd && (free.feelSaid || []).some((k) => k.type === e.type && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 25)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
+      for (const e of t.marks || []) if (e.crowd && (free.marksSaid || []).some((k) => k.code === e.code && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 40)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
+      if (t.crowdRough) rebuildPins();
       render(false);
     }
     // seamless (a new route while driving: a reroute, a traffic detour, the way home): the new line replaces the old in one

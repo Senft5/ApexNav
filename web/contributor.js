@@ -461,7 +461,8 @@
     if (!roads) return null;
     const runs = locate({ drive: route, match, ways }), s = seriesFrom(runs, roads, route.lat.length);
     // the driven curvature along it (IDEAS Q-04), per sample, for correcting the map's corners
-    return { ...summarize(runs, roads, route.lat.length), crowdK: s.k, crowdKn: s.kn, crowdBumps: s.bumps, crowdCrests: crestsFrom(s.crest, s.crn) };
+    return { ...summarize(runs, roads, route.lat.length), crowdK: s.k, crowdKn: s.kn, crowdBumps: s.bumps, crowdCrests: crestsFrom(s.crest, s.crn),
+      crowdRough: Array.isArray(route.dist) ? roughFrom(s.rough, s.n, route.dist) : [] };
   }
   /**
    * Members' bumps and crests along a free drive's road ahead (no map match: the road context already knows the way under
@@ -482,7 +483,7 @@
       if (sp && sp.fromM <= d + 2.5) { match[i] = { way: sp.label, cls: sp.cls || null }; ways[sp.label] = (lines && Array.isArray(lines[sp.label]) && lines[sp.label].length > 1 ? lines[sp.label] : null) || sp.geom; }
     }
     const runs = locate({ drive: track, match, ways }), s = seriesFrom(runs, roads, n);
-    return { crowdBumps: s.bumps, crowdCrests: crestsFrom(s.crest, s.crn) };
+    return { crowdBumps: s.bumps, crowdCrests: crestsFrom(s.crest, s.crn), crowdRough: roughFrom(s.rough, s.n, track.dist) };
   }
   /**
    * Per-sample measured series along a route: { cam[], rough[], n[], cn[], csd[], rsd[], k[], kn[] } with null where no member has measured
@@ -511,6 +512,41 @@
     }
     bumps.sort((a, b) => a.index - b.index);
     return { cam, rough, n, cn, csd, rsd, k, kn, crest, crn, bumps };
+  }
+
+  /**
+   * Broken pavement members measured (IDEAS Q-01 data): runs where two or more passes measured the roughness and its mean is
+   * ROUGH_G (0.30 g rms, the route card's "rough") or more, ROUGH_RUN_M (100 m) long at least, runs less than ROUGH_GAP_M
+   * (300 m) apart as one (a patched bit is no new surface): [{ index, endIndex }]. One pass, or untested, is no rough road.
+   */
+  const ROUGH_RUN_M = 100, ROUGH_GAP_M = 300;
+  function roughFrom(rough, n, dist) {
+    const out = [];
+    if (!Array.isArray(rough) || !Array.isArray(dist)) return out;
+    const hit = (i) => finite(rough[i]) && rough[i] >= ROUGH_G && Array.isArray(n) && finite(n[i]) && n[i] >= 2;
+    let run = null, cur = null;
+    const close = () => { if (run && dist[run.endIndex] - dist[run.index] >= ROUGH_RUN_M) out.push(run); };
+    const end = (c) => { if (run && dist[c.index] - dist[run.endIndex] < ROUGH_GAP_M) run.endIndex = c.endIndex; else { close(); run = c; } };
+    for (let i = 0; i < Math.min(rough.length, dist.length); i++) {
+      if (hit(i)) { if (cur) cur.endIndex = i; else cur = { index: i, endIndex: i }; continue; }
+      if (cur) { end(cur); cur = null; }
+    }
+    if (cur) end(cur);
+    close();
+    return out;
+  }
+  /**
+   * "Rough road" marks (road_marks.js kind rough) where members measured broken pavement along track ({ lat, lon, dist }),
+   * from roughFrom's runs; not at the very start (the car is already on it), and not where the track's marks already have
+   * one within 40 m (the map's smoothness tag: one call).
+   */
+  function roughMarks(track, runs, marks) {
+    const have = (Array.isArray(marks) ? marks : []).filter((m) => m && m.code === 'ROUGH').map((m) => m.dist_m);
+    const d = track && track.dist;
+    return (Array.isArray(runs) ? runs : []).filter((r) => r && Number.isInteger(r.index) && d && finite(d[r.index]) && r.index > 0)
+      .filter((r) => !have.some((m) => Math.abs(m - d[r.index]) < 40))
+      .map((r) => ({ type: 'mark', kind: 'rough', code: 'ROUGH', call: 'Rough road', index: r.index, dist_m: d[r.index],
+        end_m: finite(d[r.endIndex]) ? d[r.endIndex] : d[r.index], lat: track.lat[r.index], lon: track.lon[r.index], crowd: true }));
   }
 
   /**
@@ -656,6 +692,6 @@
     return Math.round(100 * (1 - Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30))));
   }
 
-  const api = { CAM_V, binFlow, bumpEvidence, binBump, bumpEvents, crestsFrom, crestEvents, feelFromWays, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, wayTiles, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { CAM_V, binFlow, bumpEvidence, binBump, bumpEvents, crestsFrom, crestEvents, roughFrom, roughMarks, feelFromWays, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, wayTiles, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);
