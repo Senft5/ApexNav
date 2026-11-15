@@ -157,13 +157,27 @@ def _pass(corner_v=14.0, brake_from=65, throttle_at=None, lat_from=80):
     return d
 
 
+def _coast(d, b=96, drop=0.1):
+    """Off the brakes at bin 80 and rolling down to the corner speed by bin b: a car off the gas loses speed (drop m/s a
+    bin, ~0.03 g, as the motion sensors say too). Held speed is part throttle, not coasting."""
+    v, lon = np.asarray(d["speed_mps"], dtype=float).copy(), np.asarray(d["lon_g"], dtype=float).copy()
+    vc = v[b]
+    for k in range(75, b + 1):
+        v[k] = vc + drop * (b - k)
+    for k in range(80, b + 1):
+        lon[k] = -drop * v[k] / 5.0 / da.G_STD
+    return dict(d, speed_mps=v, lon_g=lon)
+
+
 def test_corner_phases_read_trail_coast_and_throttle():
-    d = _pass(throttle_at=92, lat_from=75)
+    d = _coast(_pass(throttle_at=92, lat_from=75), b=91)
     m = da.corner_phases(d["speed_mps"], d["lon_g"], d["lat_g"], 80, 96, 88, 15.0)
     assert m["brake_m"] == pytest.approx(115.0)
     assert m["trail_m"] == pytest.approx(25.0), "braking with lateral load on: bins 75-79"
     assert m["throttle_m"] == pytest.approx(20.0), "back on the throttle 20 m after the apex"
-    assert m["coast_m"] == pytest.approx(60.0), "bins 80-91: off the brake, not yet on the throttle"
+    assert m["coast_m"] == pytest.approx(60.0), "bins 80-91: off the brake, not yet on the throttle, slowing"
+    held = _pass(throttle_at=92, lat_from=75)                # the same corner at a held speed: part throttle
+    assert da.corner_phases(held["speed_mps"], held["lon_g"], held["lat_g"], 80, 96, 88, 15.0)["coast_m"] == 0.0
     none = da.corner_phases(*(lambda p: (p["speed_mps"], p["lon_g"], p["lat_g"]))(_pass()), 80, 96, 88, 15.0)
     assert none["throttle_m"] is None and none["trail_m"] == 0.0
 
@@ -205,9 +219,10 @@ def test_coach_leaves_out_stops_and_unmeasured_g():
 
 
 def test_coach_alone_still_names_the_habit():
-    a = _pass()                                         # off the brake at 80, never back on the throttle
+    a = _coast(_pass())                                 # off the brake at 80, never back on the throttle, rolling down
     tip = da.coach(a, [])["corners"][0]["tip"]
     assert tip["kind"] == "coast" and tip["value"] >= da.SOLO_COAST_M
+    assert da.coach(_pass(), [])["corners"][0]["tip"] is None, "the corner at a held speed: no coasting to tell"
     late = _pass(throttle_at=84)
     late["lon_g"][90:94] = -0.35                        # braking after the apex
     assert da.coach(late, [])["corners"][0]["tip"]["kind"] == "brake_after_apex"
@@ -244,7 +259,7 @@ def test_corner_phases_ignore_braking_for_an_earlier_corner():
 
 
 def test_coach_says_whether_a_tip_is_against_the_best_pass():
-    a, b = _pass(corner_v=14.0), _pass(corner_v=14.1)   # a quicker pass, but by less than TIP_GAIN_S
+    a, b = _coast(_pass(corner_v=14.0)), _coast(_pass(corner_v=14.1))   # a quicker pass, but by less than TIP_GAIN_S
     c = da.coach(a, [b])["corners"][0]
     assert c["best"] is not None and c["gain_s"] < da.TIP_GAIN_S
     assert c["tip"]["kind"] == "coast" and c["tip"]["vs_best"] is False, "both coasted 85 m: this is the pass's own number"

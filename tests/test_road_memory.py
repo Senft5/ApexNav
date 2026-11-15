@@ -48,9 +48,15 @@ const col = (k) => d.rows.map((r) => r[f[k]]);
 const csv = (scale) => ['distance_m,lat,lon,speed_mph,lon_g,lat_g,camber_deg,roughness_rms',
   ...d.rows.map((r, i) => [r[f.distance_m], r[f.lat], r[f.lon], r[f.speed_mph] * scale, r[f.lon_g], r[f.lat_g], r[f.camber_deg], r[f.roughness_rms]].join(','))].join('\n');
 const recs = [R.parse(Core, csv(1), 'a.csv', { id: 'a', date: '2026-10-02' }), R.parse(Core, csv(0.97), 'b.csv', { id: 'b', date: '2026-10-03' })];
+// the newest pass off the gas into each corner, as a car rolls when it coasts (0.1 m/s a bin, the g saying so too): the
+// sample's corners are taken at a held speed, which is part throttle, not coasting (2026-11-15), and give no tip at all
+const coasted = (d) => { const v = d.speed_mps.slice(), g = d.lon_g.slice();
+  for (const { apex } of R.cornersOf(d)) for (let k = apex - 12; k <= apex; k++) { v[k] = d.speed_mps[apex] + 0.1 * (apex - k); g[k] = -0.1 * v[k] / 5 / 9.80665; }
+  return { ...d, speed_mps: v, lon_g: g }; };
+recs[1] = coasted(recs[1]);
 const real = M.build(Core, recs, R.cornersOf);
 out.realPair = real.length;
-const solo = M.build(Core, [recs[0]], R.cornersOf);
+const solo = M.build(Core, [recs[1]], R.cornersOf);
 out.realKinds = [...new Set(solo.map((n) => n.kind))];
 out.realCount = solo.length;
 out.longest = Math.max(...Object.values(M.SPOKEN).map((t) => t.length));

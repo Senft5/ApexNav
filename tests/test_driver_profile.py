@@ -24,8 +24,8 @@ def make_drive(seed, corners=30, fault=None, noise=True, cruise=22.0, uphill=Non
     """A drive of `corners` corners 400 m apart, alternating left and right and cycling tight, medium, fast: the car
     brakes once on the straight, holds the corner speed to the apex and drives out. fault(i, way, size) names what goes
     wrong in corner i: 'saw' (two steering corrections), 'stab' (braking in two goes), 'late' (braking after the apex),
-    'lift' (a second slowing mid-corner), 'early' (slowest 35 m before the apex) or 'coast' (50 m between brakes and
-    throttle). uphill(i): True climbs through corner i, False descends, None is level."""
+    'lift' (a second slowing mid-corner), 'early' (slowest 35 m before the apex) or 'coast' (off the brakes 60 m before the slowest
+    point, rolling down to it off the gas). uphill(i): True climbs through corner i, False descends, None is level."""
     rng = np.random.default_rng(seed)
     block, half = 80, 7
     n = corners * block + 40
@@ -42,13 +42,12 @@ def make_drive(seed, corners=30, fault=None, noise=True, cruise=22.0, uphill=Non
         f = fault(i, way, size) if fault else None
         low = apex - 7 if f == "early" else apex            # where the car is slowest
         bins = 12                                           # 60 m of braking, off the brakes 10 m before the slowest point
-        b1 = low - 2
+        gap = 10 if f == "coast" else 0                     # coast: off the brakes 60 m early, rolling down 1 m/s off the gas
+        b1 = low - 2 - gap
         b0 = b1 - bins
-        v[b0:b1 + 1] = np.linspace(cruise, vc, bins + 1)
-        v[b1:low + 1] = vc
-        gap = 10 if f == "coast" else 0
-        v[low:low + gap + 1] = vc
-        up = low + gap
+        v[b0:b1 + 1] = np.linspace(cruise, vc + (1.0 if gap else 0.0), bins + 1)
+        v[b1:low + 1] = np.linspace(v[b1], vc, low - b1 + 1)
+        up = low
         v[up:up + 14] = np.linspace(vc, cruise, 14)
         if f == "stab":                                     # off the brakes for 20 m half-way, then on again harder
             mid = b0 + 4
