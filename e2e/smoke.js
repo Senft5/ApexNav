@@ -12380,11 +12380,16 @@ flow('the Garage on a phone: the looks are a shelf turned sideways (one in view,
     .catch(async () => { throw new Error('a turn of the thumb brings the next look: ' + JSON.stringify(await shelf())); });
   await swipe(cdp, 80, y, 260, 4, 250);
   await page.waitForFunction(() => document.getElementById('themeCards').scrollLeft < 4, null, { timeout: 5000 });
+  // the shelf at rest first: the swipe's snap animation can still be running at 3 px, and a scroll it then lands
+  // overwrites the one set below (CI 2026-11-15: the chosen look's shelf back at 0 after Use, on a loaded runner)
+  await page.evaluate(() => new Promise((done) => { const c = document.getElementById('themeCards'); let last = -1, same = 0;
+    const tick = () => { if (c.scrollLeft === last) same++; else { same = 0; last = c.scrollLeft; } if (same >= 10) done(); else requestAnimationFrame(tick); }; tick(); }));
   check((await shelf()).open, 'turning the shelf back to the right does not close the Garage');
   // Use on the second look: it is in use, and the shelf stays where the thumb left it
   await page.evaluate(() => { const c = document.getElementById('themeCards'); c.scrollLeft = c.children[1].offsetLeft - c.children[0].offsetLeft; });
   await page.click('#themeCards .theme-card:nth-child(2) .tc-head .ink-btn');
   await page.waitForFunction(() => /tapedeck/.test(document.documentElement.dataset.theme || ''));
+  await page.waitForFunction(() => { const c = document.getElementById('themeCards'); return Math.abs(c.children[1].getBoundingClientRect().left - 16) <= 1; }, null, { timeout: 3000 }).catch(() => {});
   const s1 = await shelf();
   check(s1.cards[1].l === 16 && s1.left > 100, 'the look you chose stays in view: ' + JSON.stringify(s1.cards));
   // large text keeps the stack: every word of a card whole
