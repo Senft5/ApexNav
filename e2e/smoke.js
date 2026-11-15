@@ -6237,8 +6237,11 @@ flow('your own ghost: on a stage you have driven before (no friend, not signed i
       la += 5 * Math.cos(h) / 110540; lo += 5 * Math.sin(h) / (111320 * Math.cos(35.6 * Math.PI / 180)); lat.push(la); lon.push(lo); }
     const { kappa } = Core.computeCurvature(lat, lon);
     const v = kappa.map((k) => Math.max(9, 22 - 300 * Math.abs(k || 0)));
+    const MPH = 2.2369362921, latG = v.map((x, i) => x * x * (kappa[i] || 0) / 9.80665), lonG = v.map((x, i) => (i ? (x * x - v[i - 1] ** 2) / 10 / 9.80665 : 0));
+    const prof = Core.profileRecording({ lat, lon, distance_m: lat.map((_, i) => i * 5), speed_mph: v.map((x) => x * MPH), lon_g: lonG, lat_g: latG });
+    // its corners (events) too: the ghost's stretches are cut at them, for where a stage was lost
     await ApexRecording.store({ id: 'e2e_best', name: 'Esses run', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: v,
-      lon_g: v.map(() => 0), lat_g: v.map(() => 0), g_known: null, events: [], elev: null, hz: 1 });
+      lon_g: lonG, lat_g: latG, g_known: null, events: prof.events, elev: null, hz: 1 });
     const a = 110, b = 690;
     localStorage.setItem('apex.segments', JSON.stringify([{ id: 'seg_mine', name: 'Esses', lat0: lat[a], lon0: lon[a], lat1: lat[b], lon1: lon[b], length_m: (b - a) * 5,
       geom: JSON.stringify(Array.from({ length: 60 }, (_, k) => { const i = a + Math.round(k * (b - a) / 59); return [lat[i], lon[i]]; })) }]));
@@ -6284,8 +6287,8 @@ flow('your own ghost: on a stage you have driven before (no friend, not signed i
     await page.waitForTimeout(1000);
   }
   const said = await page.evaluate(() => window.__said.filter((t) => /your best/.test(t)));
-  check(said.filter((t) => /^Esses done\. .+ down on your best\. Most of it (early on|in the middle|late on|in the run to the finish)\.$/.test(t)).length === 1,
-    'the co-driver says it at the finish, once, and where most of it went: ' + JSON.stringify(said));
+  check(said.filter((t) => /^Esses done\. .+ down on your best\. Lost the most (early on|in the middle|late on|in the run to the finish)\.$/.test(t)).length === 1,
+    'the co-driver says it at the finish, once, and where it lost the most: ' + JSON.stringify(said));
 });
 
 flow('your best pass on a wet road: an ODOT sensor reads the road wet, so your dry best is no time to chase: said once, no gap, no "brake later" (pass_coach.js setSurface)', async (page, base) => {

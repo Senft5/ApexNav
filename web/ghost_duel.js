@@ -195,7 +195,7 @@
    * read at each cut by distance along the pass). Null when no stretch lost WORST_S or more, or the clock has a gap.
    */
   function worstOf(rows, entry, end, t0, cut) {
-    if (!Array.isArray(cut) || !cut.length || !(end > entry)) return null;
+    if (!Array.isArray(cut) || cut.length < 2 || !(end > entry)) return null;     // one stretch is the whole stage: nothing to point at
     const mine = [];
     for (const [q] of cut) {
       const x = entry + q * (end - entry), i = Math.floor(x), f = x - i, a = rows[i] && rows[i].t_s, b = rows[Math.min(end, i + 1)] && rows[Math.min(end, i + 1)].t_s;
@@ -207,13 +207,14 @@
   }
   /**
    * What the co-driver adds at the finish, where on the stage it went (the stretch's middle; a corner number would not be
-   * the road's own): "Most of it early on." / "in the middle." / "late on." / "in the run to the finish."
+   * the road's own): "Lost the most early on." / "in the middle." / "late on." / "in the run to the finish." Not "most of
+   * it": on Nate's roads the worst stretch held under half the gap a third of the time (2026-11-15).
    */
   function worstSaid(w) {
     if (!w || !finite(w.a) || !finite(w.b)) return null;
-    if (w.k >= w.of) return 'Most of it in the run to the finish.';
+    if (w.k >= w.of) return 'Lost the most in the run to the finish.';
     const m = (w.a + w.b) / 2;
-    return `Most of it ${m < 1 / 3 ? 'early on' : m < 2 / 3 ? 'in the middle' : 'late on'}.`;
+    return `Lost the most ${m < 1 / 3 ? 'early on' : m < 2 / 3 ? 'in the middle' : 'late on'}.`;
   }
 
   const ENTRY_M = 30, HEADING_DEG = 60, NEAR_M = 25, PAST_M = 12, SAY_EVERY = 2, WORST_S = 0.3;
@@ -272,7 +273,7 @@
           if (cur.endMin.m <= NEAR_M && me > cur.endMin.m + PAST_M) {
             const e = rows[cur.endMin.i], time = finite(e.t_s) ? e.t_s - cur.t0 : null;
             const out = { state: 'done', name: cur.g.stage.name, who: cur.g.who, self: !!cur.g.self, stageId: cur.g.stage.id, q: 1, time_s: time,
-                          gap: finite(time) ? time - cur.g.time_s : cur.gap, say: true, worst: worstOf(rows, cur.entry, cur.endMin.i, cur.t0, cur.g.corners || cur.g.splits) };
+                          gap: finite(time) ? time - cur.g.time_s : cur.gap, say: true, worst: worstOf(rows, cur.entry, cur.endMin.i, cur.t0, cur.g.self ? cur.g.corners : cur.g.corners || cur.g.splits) };   // your own 25 m splits are no corner stretches
             cur = null; scanned = i + 1;
             return out;
           }
