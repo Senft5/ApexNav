@@ -7205,6 +7205,7 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
     if (u.pathname === '/api/crews') return json([{ id: 'k1', name: 'Ridge Runners', role: 'member', visibility: 'private', members: 3 }]);
     if (u.pathname === '/api/feed') return json([bobPost]);
     if (u.pathname === '/api/feed/week') return json([{ handle: 'bob', photo_id: null, you: false, drives: 2, length_m: 48280, best: 812 }, { handle: 'me', photo_id: null, you: true, drives: 1, length_m: 16093, best: null }]);
+    if (u.pathname === '/api/feed/with') return json([{ crew_id: 'k1', crew: 'Ridge Runners', title: 'Skyway run', with: ['bob'] }]);   // a crew drive you were at today
     if (u.pathname === '/api/posts/P1AAAAAAAAAAAAAA') return json({ ...bobPost, comment_list: [{ id: 'C1AAAAAAAAAAAAAA', body: 'Was that you at the overlook?', created_at: bobPost.created_at, handle: 'cara', photo_id: null, mine: false, can_delete: false }],
       kudos_from: [{ handle: 'cara', photo_id: null }, { handle: 'dan', photo_id: null }] });
     return json([]);
@@ -7296,6 +7297,12 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   // ··· beside it: the sheet, for a caption or a crew
   await page.click('#endPostMore');
   await page.waitForSelector('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")');
+  // (2026-11-15) you were at a Ridge Runners drive today: that crew is picked, and the sheet says who the post will name
+  await page.waitForSelector('.post-sheet .post-with:not([hidden])');
+  check(await page.getAttribute('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")', 'aria-checked') === 'true' && await page.textContent('.post-sheet .post-with') === 'With @bob',
+    'a crew drive today picks its crew and names who came');
+  await page.click('.post-sheet [role="radiogroup"] button:has-text("Friends")');
+  check(await page.$eval('.post-sheet .post-with', (n) => n.hidden), 'to friends: no names');
   await page.click('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")');
   await page.fill('.post-sheet textarea', 'First run with the crew.');
   await page.click('.post-sheet button:text-is("Post")');

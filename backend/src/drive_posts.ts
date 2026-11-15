@@ -174,6 +174,23 @@ export async function feed(env: Env, v: Viewer, url: URL) {
   return rows.map((r) => shape(r, v.id));
 }
 
+/** GET /api/feed/with?day=YYYY-MM-DD (the Post sheet): the crew drives you were marked at on that day (the phone's, within
+ *  14 h of the drive's UTC start), each with its crew and who else was marked there (WITH_N at most, never across a block),
+ *  so the sheet can pick that crew and say who the post will name. Only crews you are still in; newest drive first. */
+export async function feedWith(env: Env, v: Viewer, url: URL) {
+  const day = url.searchParams.get("day") || "";
+  if (!DATE_RE.test(day)) throw new HttpError(400, "bad_day");
+  const rows = (await env.DB.prepare(
+    `SELECT e.crew_id, c.name AS crew, e.title,
+            (SELECT group_concat(handle, ',') FROM (SELECT wu.handle FROM crew_event_attendance a2 JOIN users wu ON wu.id = a2.user_id
+               WHERE a2.event_id = e.id AND a2.user_id <> ?1 AND wu.handle IS NOT NULL AND ${NOT_BLOCKED("a2.user_id")} ORDER BY wu.handle LIMIT ${WITH_N})) AS with_handles
+       FROM crew_events e JOIN crew_event_attendance a ON a.event_id = e.id AND a.user_id = ?1
+       JOIN crews c ON c.id = e.crew_id JOIN crew_members m ON m.crew_id = e.crew_id AND m.user_id = ?1
+      WHERE e.cancelled = 0 AND ?2 BETWEEN date(e.starts_at, '-14 hours') AND date(e.starts_at, '+14 hours')
+      ORDER BY e.starts_at DESC LIMIT 5`).bind(v.id, day).all<{ crew_id: string; crew: string; title: string; with_handles: string | null }>()).results;
+  return rows.map((r) => ({ crew_id: r.crew_id, crew: r.crew, title: r.title, with: r.with_handles ? r.with_handles.split(",").filter(Boolean) : [] }));
+}
+
 /** GET /api/feed/week: this week (from Monday) on the Feed, per driver: drives posted, how far, the best Score; you and
  *  whoever's posts you can see (POST_SEEN), most distance first, ten at most. A drive posted to friends and a crew counts once. */
 export async function feedWeek(env: Env, v: Viewer) {

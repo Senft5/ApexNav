@@ -104,3 +104,15 @@ console.log(JSON.stringify({ shop, house, rural, town: P.town(shop), ruralTown: 
     assert 'cmd == "placeReverse"' in swift and "CLGeocoder().reverseGeocodeLocation" in swift and '"placeReversed"' in swift
     js = open(os.path.join(ROOT, "web", "cockpit.js")).read()
     assert "msg.type === 'placeReversed'" in js and "cmd: 'placeReverse'" in js
+
+
+def test_typed_search_asks_apple_first_in_the_app():
+    """Where to? text sent without tapping a suggestion asks Apple's MKLocalSearch in the app (placeSearch → placeFound),
+    near the phone, and Nominatim only when Apple has no match or on the website."""
+    swift = open(os.path.join(ROOT, "ApexNavApp.swift")).read()
+    assert 'cmd == "placeSearch"' in swift and "request.naturalLanguageQuery = q" in swift and 'type: "placeFound"' in swift
+    js = open(os.path.join(ROOT, "web", "cockpit.js")).read()
+    body = js[js.index("async function resolvePlace("):]
+    body = body[:body.index("\n    }\n")]
+    assert body.index("cmd: 'placeSearch'") < body.index("nominatim.openstreetmap.org/search"), "Apple first, Nominatim after"
+    assert "msg.type === 'placeFound'" in js
