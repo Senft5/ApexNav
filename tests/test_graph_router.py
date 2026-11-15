@@ -434,6 +434,14 @@ def test_a_broken_edge_time_does_not_blind_the_search():
     assert 0 < case("levelsHighway")["vmax"] <= 40
 
 
+def test_a_pass_road_that_winds_out_of_the_corridor_is_still_found():
+    """2026-11-15: Estes Park to Grand Lake at Quick said "no route": Trail Ridge Road winds 78 km for a 28 km crow line and
+    left Quick's corridor ellipse by 1.4 km. A level whose ellipse holds no way tries a wider one, then none."""
+    r = case("outOfEllipse")
+    for k in ("quick", "fun", "max", "quickest", "through"):
+        assert r[k]["ok"], (k, r[k])
+
+
 def test_a_long_trip_search_follows_its_corridor_and_finds_the_same_route():
     """2026-11-15: Cincinnati to Deals Gap's searches settled 1.5 to 4 million edges each by the crow-line bound. Past
     LONG_KM the plan bounds them by one backward Dijkstra on the edge times (timeTo): the same route, far fewer edges."""
