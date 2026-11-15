@@ -461,7 +461,7 @@
     if (!roads) return null;
     const runs = locate({ drive: route, match, ways }), s = seriesFrom(runs, roads, route.lat.length);
     // the driven curvature along it (IDEAS Q-04), per sample, for correcting the map's corners
-    return { ...summarize(runs, roads, route.lat.length), crowdK: s.k, crowdKn: s.kn, crowdBumps: s.bumps };
+    return { ...summarize(runs, roads, route.lat.length), crowdK: s.k, crowdKn: s.kn, crowdBumps: s.bumps, crowdCrests: crestsFrom(s.crest, s.crn) };
   }
   /**
    * Per-sample measured series along a route: { cam[], rough[], n[], cn[], csd[], rsd[], k[], kn[] } with null where no member has measured
@@ -470,7 +470,7 @@
    */
   function seriesFrom(runs, roads, total) {
     const blank = () => new Array(total).fill(null);
-    const cam = blank(), rough = blank(), n = blank(), cn = blank(), csd = blank(), rsd = blank(), k = blank(), kn = blank(), bumps = [];
+    const cam = blank(), rough = blank(), n = blank(), cn = blank(), csd = blank(), rsd = blank(), k = blank(), kn = blank(), crest = blank(), crn = blank(), bumps = [];
     const at = (a, j) => (a && a[j] != null ? a[j] : null);
     for (const run of runs) {
       const d = roads[run.way] && roads[run.way][run.dir]; if (!d) continue;
@@ -479,7 +479,7 @@
         const j = idx.get(p.bin); if (j == null) continue;
         cam[p.i] = d.cam[j]; rough[p.i] = d.rough[j]; n[p.i] = d.n[j];
         cn[p.i] = d.cn ? d.cn[j] : null; csd[p.i] = at(d.csd, j); rsd[p.i] = at(d.rsd, j);
-        k[p.i] = at(d.k, j); kn[p.i] = at(d.kn, j);
+        k[p.i] = at(d.k, j); kn[p.i] = at(d.kn, j); crest[p.i] = at(d.crest, j); crn[p.i] = at(d.crn, j);
       }
       // crowd-verified bumps (IDEAS Q-02, roads.ts verifiedBumps): [bin, posterior] on this road+direction, at the first
       // sample of the route in that bin
@@ -489,7 +489,48 @@
       }
     }
     bumps.sort((a, b) => a.index - b.index);
-    return { cam, rough, n, cn, csd, rsd, k, kn, bumps };
+    return { cam, rough, n, cn, csd, rsd, k, kn, crest, crn, bumps };
+  }
+
+  /**
+   * Crests members' phones felt (IDEAS Q-08 data, ROAD_INTELLIGENCE 3.2): where two or more passes measured the crest and
+   * their mean peak unweighting is CREST_G (0.15 g, roads.ts) or more, as [{ index, g }] at the lightest sample of each run;
+   * runs less than SAME_CREST_M apart are one crest. One pass, or a server that doesn't send crn, is no crest.
+   */
+  const CREST_G = 0.15, SAME_CREST_M = 30;
+  function crestsFrom(crest, crn) {
+    const out = [];
+    if (!Array.isArray(crest) || !Array.isArray(crn)) return out;
+    let run = null;
+    const close = () => { if (run) out.push({ index: run.index, g: +run.g.toFixed(3) }); run = null; };
+    for (let i = 0; i < crest.length; i++) {
+      const ok = finite(crest[i]) && crest[i] >= CREST_G && crn[i] >= 2;
+      if (ok) {
+        if (run && (i - run.last) * BIN_M < SAME_CREST_M) { run.last = i; if (crest[i] > run.g) { run.g = crest[i]; run.index = i; } }
+        else { close(); run = { index: i, g: crest[i], last: i }; }
+      }
+    }
+    close();
+    return out;
+  }
+  /**
+   * The route's pace-note events for crests members felt: one 'crest' event per crest on the track ({ lat[], lon[], dist[] }),
+   * marked `crowd` with its mean unweighting, none within SAME_CREST_M of a crest the track already has. Called with the
+   * notes awake (a crest is a fun-driving note, not a hazard to wake cruise for).
+   */
+  function crestEvents(track, crests, existing = []) {
+    if (!track || !Array.isArray(track.lat) || !Array.isArray(crests)) return [];
+    const dist = track.dist || track.lat.map((_, i) => i * BIN_M), out = [];
+    const taken = (existing || []).filter((e) => e && e.type === 'crest' && finite(e.dist_m)).map((e) => e.dist_m);
+    for (const c of crests) {
+      const i = c && c.index;
+      if (!Number.isInteger(i) || i < 0 || i >= track.lat.length || !finite(dist[i])) continue;
+      if (taken.some((m) => Math.abs(m - dist[i]) < SAME_CREST_M)) continue;
+      taken.push(dist[i]);
+      out.push({ type: 'crest', code: 'CREST', call: 'Crest', index: i, dist_m: dist[i], start_m: dist[i], end_m: dist[i],
+                 lat: track.lat[i], lon: track.lon[i], severity_g: finite(c.g) ? c.g : null, crowd: { g: finite(c.g) ? c.g : null } });
+    }
+    return out;
   }
 
   /**
@@ -594,6 +635,6 @@
     return Math.round(100 * (1 - Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30))));
   }
 
-  const api = { CAM_V, binFlow, bumpEvidence, binBump, bumpEvents, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, wayTiles, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { CAM_V, binFlow, bumpEvidence, binBump, bumpEvents, crestsFrom, crestEvents, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, wayTiles, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);
