@@ -4,8 +4,8 @@ import XCTest
 /// in Chromium (TYPE_AT in e2e/smoke.js); this is the one place the real path runs: iOS's content size category ->
 /// WebKit's `-apple-system-body` -> web/format.js applyTypeScale -> the reading pages zoom.
 ///
-/// At the largest accessibility size the Units sheet's "Kilometres and metres" key grows past twice its 1x height
-/// (a 44 pt key at 1x; at 2x it zooms and wraps, #932), so one launch at that size is enough to tell.
+/// At the largest accessibility size the Garage zooms 2x: its Haptics switch row, 48 pt at 1x, is about 96 pt, so one
+/// launch at that size is enough to tell.
 final class DynamicTypeTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
@@ -29,20 +29,15 @@ final class DynamicTypeTests: XCTestCase {
         XCTAssertTrue(garage.waitForExistence(timeout: 45), "cockpit JS did not boot")
         garage.tap()
 
-        let gear = web.buttons["Settings"]
-        XCTAssertTrue(gear.waitForExistence(timeout: 10), "the Garage's Settings key is missing")
-        gear.tap()
-        let units = web.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Units'")).firstMatch
-        XCTAssertTrue(units.waitForExistence(timeout: 10), "Settings has no Units row")
-        units.tap()
-
-        let km = web.buttons.matching(NSPredicate(format: "label CONTAINS 'Kilometres'")).firstMatch
-        XCTAssertTrue(km.waitForExistence(timeout: 10), "the Units sheet has no Kilometres key")
+        // the Garage's Haptics switch: a 48 pt row at 1x; at 2x the sheet zooms it to about 96 (seen on the simulator,
+        // 2026-11-15: every key in the Garage was twice its height)
+        let haptics = web.switches["Haptics"]
+        XCTAssertTrue(haptics.waitForExistence(timeout: 10), "the Garage has no Haptics switch")
         let shot = XCTAttachment(screenshot: app.screenshot())
-        shot.name = "units-at-largest-text"
+        shot.name = "garage-at-largest-text"
         shot.lifetime = .keepAlways
         add(shot)
-        XCTAssertGreaterThan(km.frame.height, 70, "at the largest text size the Kilometres key is \(km.frame.height) pt tall: the page did not zoom")
-        XCTAssertLessThanOrEqual(km.frame.maxX, app.frame.maxX + 1, "the Kilometres key runs off the screen")
+        XCTAssertGreaterThan(haptics.frame.height, 70, "at the largest text size the Haptics row is \(haptics.frame.height) pt tall: the page did not zoom")
+        XCTAssertLessThanOrEqual(haptics.frame.maxX, app.frame.maxX + 1, "the Haptics row runs off the screen")
     }
 }
