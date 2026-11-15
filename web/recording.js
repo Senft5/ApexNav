@@ -87,6 +87,7 @@
     if (sum) t.objectStore('summaries').put(sum); else t.objectStore('summaries').delete(d.id);   // rebuilt when next listed
     await done(t);
     keepStorage();
+    try { const ch = new BroadcastChannel('apex-drives'); ch.postMessage({ stored: d.id }); ch.close(); } catch (_) { /* a developer's phone sends it at the next launch */ }
     return sum;
   }
   // a kept drive asks the browser, once a session, to keep the storage under pressure (it is the person's own data); best-effort

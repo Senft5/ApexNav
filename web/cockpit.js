@@ -703,6 +703,7 @@
       applyDevTune();
       paintDevRow();
       if (devAccess) { const d = devSettings(); if (d && (d.offline || d.lines)) devPanel().catch(() => {}); }   // their switches, without the panel open
+      if (devAccess) devDrivesSync();                                    // their drives go up to Vetta (web/dev_drives.js)
       else if (window.ApexDevPanel) ApexDevPanel.unmount();
     }
     // Dev mode (the owner, 2026-11-09: "a dev mode in the app that shows all routing parameters and other debug info for only
@@ -733,6 +734,18 @@
       if (!devAccess || !window.ApexLazy) return Promise.resolve(null);
       return devPanelP || (devPanelP = ApexLazy.load('dev').then(() => (window.ApexDevPanel ? ApexDevPanel.mount(devHost) : null)).catch((e) => { devPanelP = null; throw e; }));
     }
+    // Developers' drives (the owner, 2026-11-15; web/dev_drives.js, backend/src/dev_drives.ts): on a developer's phone only,
+    // every drive (the ones from before too) uploads whole for internal review: at /api/me, when a drive is saved (recording.js
+    // says so on the 'apex-drives' channel) and when the app comes back to the front. Anyone else's phone never loads it.
+    let devDrivesStat = null;
+    function devDrivesSync() {
+      if (!devAccess || !window.ApexLazy || !window.ApexRecording || !window.ApexSync) return;
+      ApexLazy.load('devdrives').then(() => ApexDevDrives.sync({ ids: () => ApexRecording.ids(), get: (id) => ApexRecording.get(id),
+        apiFetch: ApexSync.apiFetch, store: localStorage, allowed: () => devAccess }))
+        .then((r) => { devDrivesStat = r; paintDevRow(); }).catch((e) => console.error('dev drives', e));
+    }
+    try { const ch = new BroadcastChannel('apex-drives'); ch.onmessage = () => devDrivesSync(); } catch (_) { /* no channel: the next launch sends it */ }
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') devDrivesSync(); });
     // the Garage's Settings row (index.html section data-setting="dev"): empty, so hidden, unless this is a developer
     function paintDevRow() {
       const b = $('garageDevBody');
@@ -743,7 +756,9 @@
         const o = document.createElement('button'); o.type = 'button'; o.className = 'ink-btn'; o.id = 'devOpenBtn'; o.textContent = 'Open the Dev panel';
         o.addEventListener('click', () => { if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.close(); showView('map');
           devPanel().then((p) => p && p.open()).catch((e) => { console.error('dev panel', e); toast('Couldn\'t load the Dev panel.'); }); });
-        b.append(p, o);
+        const sy = document.createElement('p'); sy.className = 'note'; sy.id = 'devDrivesNote';
+        sy.textContent = devDrivesStat ? `Dev: drives sync to Vetta (${devDrivesStat.total - devDrivesStat.pending} of ${devDrivesStat.total} sent)` : 'Dev: drives sync to Vetta';
+        b.append(p, o, sy);
       }
       try { if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.refresh(); } catch (_) { /* drawn at the next open */ }
     }
