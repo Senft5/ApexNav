@@ -67,6 +67,7 @@ main{padding:40px 0 64px}.eyebrow{font:700 14px/1 var(--num);letter-spacing:.22e
 .shape{display:block;width:100%;height:auto;background:var(--bg2);border:1px solid var(--hair);border-radius:20px;margin:0 0 26px}
 .shape .asphalt{fill:none;stroke:var(--raised);stroke-width:26;stroke-linecap:round;stroke-linejoin:round}
 .shape .line{fill:none;stroke:var(--red);stroke-width:5;stroke-linecap:round;stroke-linejoin:round}.shape circle{fill:var(--ink)}
+.map{display:block;aspect-ratio:1200/470;overflow:hidden;border:1px solid var(--hair);border-radius:20px;margin:0 0 26px;background:var(--bg2)}.map img{display:block;width:100%;height:auto}
 h2{font:800 28px/1 var(--num);text-transform:uppercase;letter-spacing:.04em;margin:44px 0 14px}
 h3{font:700 15px/1.2 var(--num);text-transform:uppercase;letter-spacing:.16em;color:var(--dim);margin:28px 0 8px}
 ul.roads{list-style:none;margin:0;padding:0;border-top:1px solid var(--hair)}ul.roads li{border-bottom:1px solid var(--hair)}
@@ -123,8 +124,10 @@ export function roadPage(lib: Library, origin: string, r: LibRoad, card = false)
   const drive = r.link ? `${origin}/#road=${r.link}` : `${origin}/`;
   const body = `<p class="eyebrow"><a href="/roads/${stateSlug(a.state)}">Near ${esc(near(a))}</a></p><h1>${esc(r.name)}</h1>`
     + `<div class="facts"><div><b>${mi}</b><span>miles</span></div><div><b>${r.corners}</b><span>corners</span></div><div><b>${perMi.toFixed(1)}</b><span>corners a mile</span></div></div>`
-    + `<svg class="shape" viewBox="0 0 1000 560" role="img" aria-label="The shape of ${esc(r.name)}, north up"><path class="asphalt" d="${d}"/><path class="line" d="${d}"/>`
-    + (first ? `<circle cx="${first[1]}" cy="${first[2]}" r="9"/>` : "") + (last ? `<circle cx="${last[1]}" cy="${last[2]}" r="9"/>` : "") + `</svg>`
+    // the road on the real map (its link card, cropped above the card's own name bar), or its shape when there is no card yet
+    + (card ? `<div class="map"><img src="/roads/${r.id}.jpg" width="1200" height="630" alt="${esc(r.name)} on the map"></div>`
+      : `<svg class="shape" viewBox="0 0 1000 560" role="img" aria-label="The shape of ${esc(r.name)}, north up"><path class="asphalt" d="${d}"/><path class="line" d="${d}"/>`
+        + (first ? `<circle cx="${first[1]}" cy="${first[2]}" r="9"/>` : "") + (last ? `<circle cx="${last[1]}" cy="${last[2]}" r="9"/>` : "") + `</svg>`)
     + `<a class="btn" href="${esc(drive)}">Drive it in Vetta</a>`
     + (others.length ? `<h2>More near ${esc(a.name)}</h2><ul class="roads">${others.map(roadRow).join("")}</ul>` : "");
   return page({ title: `${r.name} · near ${near(a)} · Vetta`, description: `${mi} miles and ${r.corners} corners near ${near(a)}. Drive it with Vetta calling every corner.`, url: `${origin}/roads/${r.id}`,
