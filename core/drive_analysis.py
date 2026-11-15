@@ -903,3 +903,61 @@ def fatigue(speed_mps, lon_g, lat_g, corners, g_known=None) -> dict | None:
         if change >= floor and change >= FATIGUE_SE * math.sqrt(se ** 2 + sl ** 2):
             out["cues"].append(cue)
     return out
+
+
+# The motion sensors against GPS, per drive (Nate's drives, 2026-11-15): builds before Nov 14 placed the phone's g up to 10 m
+# ahead of where GPS put the car, so braking read as done earlier than it was. web/apex_core.js imuLagBins / alignImu, the same.
+IMU_LAG_MAX = 4              # bins either way the lag is looked for
+IMU_LAG_MIN_R = 0.5          # both a_lon ~ GPS dv/dt and a_lat ~ v^2 kappa must correlate this well at the lag kept...
+IMU_LAG_GAIN = 0.03          # ...and together beat no shift by this much
+
+
+def imu_lag_bins(drive: dict) -> int:
+    """The shift (bins) that puts the drive's g on GPS's places: lat_g'[i] = lat_g[i + lag]; 0 when not clearly better."""
+    v, lon, lat = drive.get("speed_mps"), drive.get("lon_g"), drive.get("lat_g")
+    n = len(v) if v is not None else 0
+    if not n or lon is None or lat is None or drive.get("lat") is None or drive.get("lon") is None or n < 40:
+        return 0
+    kappa, _ = rd.compute_curvature(np.asarray(drive["lat"], dtype=float), np.asarray(drive["lon"], dtype=float))
+
+    def num(x):
+        return x is not None and math.isfinite(float(x))
+
+    def r(L):
+        axy = axx = ayy = bxy = bxx = byy = 0.0
+        for i in range(4, n - 4):
+            j = i + L
+            if not (num(v[i]) and num(v[i - 2]) and num(v[i + 2]) and v[i] > 5 and v[i - 2] > 3 and v[i + 2] > 3) or j < 0 or j >= n:
+                continue
+            a = (float(v[i + 2]) - float(v[i - 2])) / (20.0 / float(v[i])) / G
+            c = float(v[i]) * float(v[i]) * float(kappa[i]) / G
+            if num(lon[j]):
+                x = float(lon[j]); axy += a * x; axx += a * a; ayy += x * x
+            if num(lat[j]) and math.isfinite(c):
+                y = float(lat[j]); bxy += c * y; bxx += c * c; byy += y * y
+        return (axy / math.sqrt(axx * ayy) if axx > 0 and ayy > 0 else 0.0, bxy / math.sqrt(bxx * byy) if bxx > 0 and byy > 0 else 0.0)
+
+    at0 = r(0)
+    best, best_r = 0, at0
+    for L in range(-IMU_LAG_MAX, IMU_LAG_MAX + 1):
+        if L == 0:
+            continue
+        x = r(L)
+        if x[0] + x[1] > best_r[0] + best_r[1]:
+            best, best_r = L, x
+    if best == 0 or best_r[0] < IMU_LAG_MIN_R or best_r[1] < IMU_LAG_MIN_R or best_r[0] + best_r[1] - at0[0] - at0[1] < IMU_LAG_GAIN:
+        return 0
+    return best
+
+
+def align_imu(drive: dict, lag: int) -> dict:
+    """The drive with its g (lon_g, lat_g, g_known) moved by lag bins onto GPS's places; past the ends is unknown."""
+    if not lag:
+        return drive
+    n = len(drive["speed_mps"])
+
+    def mv(a, fill):
+        return None if a is None else [a[i + lag] if 0 <= i + lag < len(a) else fill for i in range(n)]
+
+    return {**drive, "lon_g": mv(drive.get("lon_g"), None), "lat_g": mv(drive.get("lat_g"), None),
+            "g_known": mv(drive.get("g_known"), 0) if drive.get("g_known") is not None else drive.get("g_known")}

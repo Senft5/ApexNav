@@ -250,6 +250,8 @@
    */
   function repair(Core, d) {
     if (!d || !Array.isArray(d.events)) return d;
+    // its g on GPS's places (Core.imuLagBins: builds before Nov 14 put the g up to 10 m ahead); once, marked imu_lag
+    if (d.imu_lag === undefined && Core.imuLagBins && Array.isArray(d.speed_mps)) { const lag = Core.imuLagBins(d); if (lag) d = { ...Core.alignImu(d, lag), imu_lag: lag }; }
     const measuredHazards = [d.crest, d.vpeak].some((a) => Array.isArray(a) && a.some(Number.isFinite));
     const stale = d.hz !== HAZARD_VERSION && measuredHazards;        // saved before hazards were found on phone drives
     if (!stale && d.events.every((e) => e.type !== 'corner' || Number.isFinite(e.apex_mph))) return d;

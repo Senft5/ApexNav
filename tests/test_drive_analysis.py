@@ -439,3 +439,39 @@ def test_the_motion_sensors_slowest_point_is_the_same_in_the_app():
                                     capture_output=True, text=True, check=True).stdout)
     want = [da._imu_slow_m(np.asarray(c["v"]), np.asarray([np.nan if x is None else x for x in c["lon"]]), np.asarray(c["lat"]), c["s"], c["e"]) for c in cases]
     assert got == want and want[:2] == [-20.0, 0.0], (got, want)
+
+
+def _drive_with_g_ahead(ahead):
+    """A winding drive whose phone g runs `ahead` bins ahead of GPS (as builds before Nov 14 recorded it)."""
+    import math as m
+    n = 400
+    x = np.arange(n) * 5.0
+    lat = (39.0 + (12.0 * np.sin(x / 25.0)) / 110540.0).tolist()
+    lon = (-84.0 + x / (111320.0 * m.cos(m.radians(39.0)))).tolist()
+    v = (18.0 + 4.0 * np.sin(x / 30.0)).tolist()
+    kappa, _ = da.rd.compute_curvature(np.asarray(lat), np.asarray(lon))
+    true_lat = [v[i] * v[i] * kappa[i] / da.G for i in range(n)]
+    true_lon = [((v[min(n - 1, i + 1)] - v[max(0, i - 1)]) / (10.0 / v[i])) / da.G for i in range(n)]
+    sh = lambda a: [a[min(n - 1, i + ahead)] for i in range(n)]
+    return {"lat": lat, "lon": lon, "speed_mps": v, "lon_g": sh(true_lon), "lat_g": sh(true_lat), "g_known": [1] * n}
+
+
+def test_the_phones_g_is_put_back_on_gps_places():
+    """Nate's drives (2026-11-15): builds before Nov 14 put g 2 bins ahead of GPS, so braking read as done 10 m early. The lag
+    is read from the drive (a_lon against GPS dv/dt, a_lat against v^2 kappa) and undone; a drive in step is left alone."""
+    import json, shutil, subprocess
+    from pathlib import Path
+    d = _drive_with_g_ahead(2)
+    assert da.imu_lag_bins(d) == -2
+    fixed = da.align_imu(d, -2)
+    assert da.imu_lag_bins(fixed) == 0 and fixed["lat_g"][:2] == [None, None] and fixed["g_known"][:2] == [0, 0]
+    assert fixed["lat_g"][100] == d["lat_g"][98]
+    assert da.imu_lag_bins(_drive_with_g_ahead(0)) == 0
+    node = shutil.which("node")
+    if node is None:
+        return
+    js = "const C = require(process.argv[1]); const k = JSON.parse(process.argv[2]); console.log(JSON.stringify(k.map((d) => C.imuLagBins(d))))"
+    got = json.loads(subprocess.run([node, "-e", js, str(Path(__file__).resolve().parents[1] / "web" / "apex_core.js"),
+                                     json.dumps([_drive_with_g_ahead(2), _drive_with_g_ahead(0), _drive_with_g_ahead(-1)])],
+                                    capture_output=True, text=True, check=True).stdout)
+    assert got == [-2, 0, da.imu_lag_bins(_drive_with_g_ahead(-1))]
