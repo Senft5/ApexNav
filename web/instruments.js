@@ -174,6 +174,7 @@
       if (note.type === 'mark' && note.code === 'NARROW') body += `<path d="M32 76 L42 50 L42 24 M68 76 L58 50 L58 24" fill="none" stroke="${accent}" stroke-width="3.4" stroke-linejoin="round" stroke-linecap="round"/>`;
       if (note.type === 'mark' && note.code === 'JUNC') body += `<path d="M44 80 L44 20 M44 52 L76 34" fill="none" stroke="${accent}" stroke-width="3.4" stroke-linecap="round"/>`;
       if (note.type === 'mark' && note.code === 'SCHOOL') body += `<path d="M30 74 L50 26 L70 74 Z M40 62 L60 62" fill="none" stroke="${accent}" stroke-width="3" stroke-linejoin="round"/>`;
+      if (note.type === 'mark' && note.code === 'ICE') body += `<path d="M64 24 L64 56 M50 32 L78 48 M50 48 L78 32" stroke="${accent}" stroke-width="3" stroke-linecap="round"/><path d="M28 74 Q50 60 72 74" fill="none" stroke="${accent}" stroke-width="3"/>`;   // a snowflake over a bridge's arch
       if (note.type === 'mark' && note.code === 'ROUGH') body += `<path d="M28 62 L36 54 L44 64 L52 52 L60 64 L68 55 L74 62" fill="none" stroke="${accent}" stroke-width="3.4" stroke-linejoin="round"/>`;
       if (note.type === 'alpr') body += `<rect x="62" y="38" width="22" height="14" fill="none" stroke="${accent}" stroke-width="2.6"/><circle cx="73" cy="45" r="3.5" fill="${accent}"/><path d="M62 45 L54 45" stroke="${accent}" stroke-width="2.6"/>`;
     }

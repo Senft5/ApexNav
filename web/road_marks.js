@@ -2,7 +2,8 @@
 // osm_overpass.js): a stop sign that applies to the route, a railway level crossing, a one-lane bridge on a two-way road,
 // speed bumps (one call for a run of them), a mapped deer (or other animal) crossing, horse-drawn buggies, a
 // covered bridge, a ford (the road through water), where the road turns unpaved or rough, where it narrows to a single
-// track (room for one car), and a side road joining where you can't see it coming (a blind bend). On a back road picked for its corners these are what catch a driver out:
+// track (room for one car), a side road joining where you can't see it coming (a blind bend), and in the cold a bridge
+// (its deck freezes before the road: said only at 3 °C or colder, cockpit.js allEvents, bridgeCold). On a back road picked for its corners these are what catch a driver out:
 // a stop sign over a crest, a hump at the end of a fast straight. Each becomes a note event on the track (type 'mark'),
 // read with the pace notes when they are on and drawn on the strip and the map; a stop sign's call distance includes
 // braking to a stop (cockpit.js apexMpsOf). Only what the map has: a mark the map lacks is not invented, and with no route
@@ -24,11 +25,16 @@
     single_track: { code: 'NARROW', call: 'Narrow road' },
     side_road: { code: 'JUNC', call: 'Hidden junction' },
     school: { code: 'SCHOOL', call: 'School zone' },        // said only in a school run (cockpit.js, events.js schoolRunAt)   // only where you can't see it coming (events: hidden)
+    icy_bridge: { code: 'ICE', call: 'Bridge may be icy', many: 'Bridges may be icy' },   // said only in the cold (bridgeCold)
     tee: { code: 'TJUNC', call: 'T-junction' },   // the road ahead ends (free driving: horizon.js tee), not from Overpass
   };
   // a mapped animal-crossing sign names its animal (osm_overpass.js hazardOf label); deer is the one on these roads
   const animalCall = (label) => { const a = String(label || 'animals').toLowerCase(); return a === 'deer' ? 'Deer crossing' : /^(horse|horses)$/.test(a) ? 'Horse crossing' : /^(cow|cows|cattle)$/.test(a) ? 'Cattle crossing' : 'Animal crossing'; };
   const BUMPS = new Set(['bump', 'hump', 'table', 'cushion', 'yes', 'dip', 'rumble_strip']);   // not chicanes, islands or chokers
+  // bridges less than 500 m apart are one call (a creek crossed twice, a viaduct mapped as pieces). The air at 3 °C or
+  // colder: a bridge deck, cooled from above and below with no ground under it, can freeze while the road is still
+  // above it (the "Bridge ices before road" sign; road weather stations read decks a few degrees under the air on clear nights)
+  const BRIDGE_RUN_M = 500, ICY_BRIDGE_C = 3;
   const RUN_M = 200, SAME_M = 40, SNAP_M = 30, UNPAVED_MIN_M = 50, ROUGH_MIN_M = 100, SURFACE_GAP_M = 300, NARROW_MIN_M = 200, HIDDEN_M = 80;
 
   /** Where along a corridor ({lat, lon, distM}) metre m lies, as [lat, lon], or null. */
@@ -56,12 +62,18 @@
       else if (p.kind === 'animal_crossing') raw.push({ kind: p.kind, atM: p.atM, call: animalCall(p.label) });
       else if (p.kind === 'calming' && BUMPS.has(String(p.label || 'yes'))) raw.push({ kind: 'calming', atM: p.atM });
     }
-    for (const s of Array.isArray(ctx.spans) ? ctx.spans : []) if (s && (s.kind === 'one_lane_bridge' || s.kind === 'covered_bridge' || s.kind === 'ford') && finite(s.fromM)) raw.push({ kind: s.kind, atM: s.fromM });
+    const spans = Array.isArray(ctx.spans) ? ctx.spans : [];
+    for (const s of spans) if (s && (s.kind === 'one_lane_bridge' || s.kind === 'covered_bridge' || s.kind === 'ford') && finite(s.fromM)) raw.push({ kind: s.kind, atM: s.fromM });
+    // a bridge off the motorways (osm_overpass.js road_bridge): the cold-weather call, except where a one-lane or covered
+    // bridge is the call
+    const ownCall = spans.filter((s) => s && (s.kind === 'one_lane_bridge' || s.kind === 'covered_bridge') && finite(s.fromM)).map((s) => s.fromM);
+    for (const s of spans) if (s && s.kind === 'road_bridge' && finite(s.fromM) && !ownCall.some((m) => Math.abs(m - s.fromM) < SAME_M)) raw.push({ kind: 'icy_bridge', atM: s.fromM });
     raw.sort((a, b) => a.atM - b.atM);
     const out = [], last = {};
     for (const r of raw) {
       const prev = last[r.kind];
-      if (prev && r.atM - prev.endM < (r.kind === 'calming' || r.kind === 'school' ? RUN_M : SAME_M)) { prev.endM = r.atM; prev.n++; continue; }
+      const gap = r.kind === 'calming' || r.kind === 'school' ? RUN_M : r.kind === 'icy_bridge' ? BRIDGE_RUN_M : SAME_M;
+      if (prev && r.atM - prev.endM < gap) { if (r.kind !== 'icy_bridge' || r.atM - prev.endM >= SAME_M) prev.n++; prev.endM = r.atM; continue; }
       const m = { kind: r.kind, atM: r.atM, endM: r.atM, n: 1, ...(r.call ? { call: r.call } : {}) };
       out.push(m); last[r.kind] = m;
     }
@@ -180,7 +192,11 @@
    */
   const DUSK_RAD = 6 * Math.PI / 180;
   const cruiseWorthy = (m, sunAltRad) => !!m && m.type === 'mark' && ((m.kind === 'animal_crossing' && finite(sunAltRad) && sunAltRad < DUSK_RAD)
-    || m.kind === 'school');   // a school zone only reaches the notes in a school run (cockpit.js allEvents): said at any pace
+    || m.kind === 'school'      // a school zone only reaches the notes in a school run (cockpit.js allEvents): said at any pace
+    || m.kind === 'icy_bridge');   // and a bridge only in the cold (bridgeCold): ice on a straight road is no less ice
+
+  /** Whether a bridge may be icy at an air temperature (°C): 3 °C or colder. Unknown temperature: false (no call it can't back). */
+  const bridgeCold = (tempC) => finite(tempC) && tempC <= ICY_BRIDGE_C;
 
   /**
    * The T-junction where the road ahead ends (free driving: horizon.js says the road ends and every way on turns off), as
@@ -198,6 +214,6 @@
     return marks.filter((m) => m.kind !== 'tee' || !stops.some((d) => Math.abs(d - m.dist_m) < SAME_M));
   }
 
-  const api = { hidden, marksOf, events, unfelt, union, mapAnswered, cruiseWorthy, placeAt, teeMark, noTeeAtStop, KINDS };
+  const api = { bridgeCold, ICY_BRIDGE_C, hidden, marksOf, events, unfelt, union, mapAnswered, cruiseWorthy, placeAt, teeMark, noTeeAtStop, KINDS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadMarks = api;
 })(typeof window !== 'undefined' ? window : globalThis);

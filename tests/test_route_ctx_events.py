@@ -181,4 +181,4 @@ def test_a_school_by_the_road_is_a_mark_said_only_in_a_school_run():
     assert out["saturday"] is False and out["july"] is False and out["nowhere"] is None   # Washington: no school year known
     assert out["cruise"] is True
     js = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
-    assert "(track.marks || []).filter((m) => m.kind !== 'school' || schoolRun(m))" in js
+    assert "(track.marks || []).filter((m) => (m.kind !== 'school' || schoolRun(m)) && (m.kind !== 'icy_bridge' || bridgeCold()))" in js

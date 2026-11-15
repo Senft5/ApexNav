@@ -83,10 +83,10 @@ def test_nothing_invented_or_off_the_road(out):
 
 
 def test_each_mark_has_its_own_glyph_on_the_strip():
-    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'ANIMAL', 'BUGGY', 'COVERED', 'GRAVEL', 'ROUGH', 'FORD', 'NARROW', 'JUNC', 'SCHOOL', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
+    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'ANIMAL', 'BUGGY', 'COVERED', 'GRAVEL', 'ROUGH', 'FORD', 'NARROW', 'JUNC', 'SCHOOL', 'ICE', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
     svgs = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
     assert "<polygon" in svgs[0] and "M58 32 L80 54" in svgs[1] and "M36 30" in svgs[2] and "Q50 34" in svgs[3]
-    assert len(set(svgs[:13])) == 13 and all(s.count("#f70") == 0 for s in svgs[13:])   # an unknown code: the bare hazard straight
+    assert len(set(svgs[:14])) == 14 and all(s.count("#f70") == 0 for s in svgs[14:])   # an unknown code: the bare hazard straight
 
 
 def test_rural_signs_deer_buggies_and_a_covered_bridge(out):
@@ -221,3 +221,36 @@ def test_a_hidden_junction_where_a_side_road_joins_out_of_sight():
     assert out["hidden"] == [True, False, False]
     js = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
     assert "(e.type === 'corner' || e.kind === 'side_road') && ApexDirections.atJunction(steps, noteM(e))" in js   # the route's own turn is the direction
+
+
+ICY = r"""
+const R = process.argv[1];
+const O = require(R + '/web/route_ctx/osm_overpass.js'), M = require(R + '/web/road_marks.js'), Core = require(R + '/web/apex_core.js');
+const n = 161, lat0 = 39, lon0 = -84.5, dLon = 25 / (111320 * Math.cos(39 * Math.PI / 180));   // 4 km east-west, 25 m samples
+const c = { id: 's', lat: Float64Array.from({ length: n }, () => lat0), lon: Float64Array.from({ length: n }, (_, i) => lon0 + i * dLon), distM: Float64Array.from({ length: n }, (_, i) => i * 25) };
+const at = (i) => [lat0, lon0 + i * dLon];
+const way = (id, tags, a, b) => ({ type: 'way', id, tags, nodes: [id * 10, id * 10 + 1], geometry: [at(a), at(b)].map(([la, lo]) => ({ lat: la, lon: lo })) });
+const road = { highway: 'tertiary' };
+const ctx = O.aggregate(c, O.parse({ elements: [way(1, road, -1, 20), way(2, { ...road, bridge: 'yes', name: 'Mill Creek Bridge' }, 20, 22), way(3, road, 22, 30),
+  way(4, { ...road, bridge: 'yes' }, 30, 31), way(5, road, 31, 80), way(6, { ...road, bridge: 'yes', lanes: '1' }, 80, 82), way(7, road, 82, 120),
+  way(8, { ...road, bridge: 'yes' }, 120, 122), way(9, road, 122, 161)] }), new Uint8Array(n).fill(1));
+const t = { lat: Array.from(c.lat), lon: Array.from(c.lon), dist: Array.from(c.distM) };
+// our tiles' bridge spans (osm_tiles.js 'bridge', motorways too) are not read; a second answer of the same bridge is one
+const twice = { ...ctx, spans: [...ctx.spans, { kind: 'bridge', fromM: 1800, toM: 1850 }, { kind: 'road_bridge', fromM: 3010, toM: 3050 }] };
+const mway = O.aggregate(c, O.parse({ elements: [way(1, { highway: 'motorway', oneway: 'yes' }, -1, 60), way(2, { highway: 'motorway', oneway: 'yes', bridge: 'yes' }, 60, 62), way(3, { highway: 'motorway', oneway: 'yes' }, 62, 161)] }), new Uint8Array(n).fill(1));
+console.log(JSON.stringify({ mway: M.events(mway, c, t, (a, b, la, lo) => Core.nearestIndex(a, b, la, lo, -1)).length, spans: ctx.spans.filter((s) => s.kind === 'road_bridge').map((s) => [s.fromM, s.label || null]),
+  ev: M.events(twice, c, t, (a, b, la, lo) => Core.nearestIndex(a, b, la, lo, -1)).map((e) => [e.code, e.call, e.dist_m]),
+  cold: [3, 0, -10, 3.5, 12, null, undefined, NaN].map(M.bridgeCold), cruise: M.cruiseWorthy({ type: 'mark', kind: 'icy_bridge' }, 1) }));
+"""
+
+
+def test_a_bridge_may_be_icy_in_the_cold():
+    """Any bridge on the road is a cold-weather call, "Bridge may be icy": bridges less than 500 m apart are one call
+    (plural), a one-lane bridge keeps its own call, and the same bridge from two answers is one. Not on motorways or trunk
+    roads. Said only at 3 C or colder."""
+    out = json.loads(subprocess.run([NODE, "-e", ICY, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["spans"][0] == [525, "Mill Creek Bridge"] and len(out["spans"]) == 4
+    assert out["ev"] == [["ICE", "Bridges may be icy", 525], ["BRIDGE", "One-lane bridge", 2025], ["ICE", "Bridge may be icy", 3000]]
+    assert out["cold"] == [True, True, True, False, False, False, False, False]
+    assert out["cruise"] is True                                          # in the cold, at any pace: ice on a straight is ice
+    assert out["mway"] == 0                                               # not a motorway's bridges: one every mile

@@ -40,7 +40,8 @@
 //   road crosses water at a node on it), 'side_road' (a public road joins the route's road at a node of it).
 // Spans: 'roundabout', 'one_lane_bridge' (bridge with lanes=1, two-way), 'single_track' (a two-way road, not a bridge, with
 //   lanes=1: room for one car, so an oncoming one means someone pulls over; label name), 'covered_bridge', 'access_private',
-//   'access_destination', 'cycle_route' (label route name), 'byway' (label byway name), 'divided', 'ford' (a way through water).
+//   'access_destination', 'cycle_route' (label route name), 'byway' (label byway name), 'divided', 'ford' (a way through water),
+//   'road_bridge' (a bridge the route is on, not a motorway's or trunk road's; label its name).
 (function (root) {
   'use strict';
   const G = root.ApexOsmCommon || (typeof require === 'function' ? require('./osm_common.js') : null);
@@ -345,6 +346,9 @@
     span('single_track', (i) => !!(match[i] && !(match[i].tags.bridge && match[i].tags.bridge !== 'no') && lanesOf(match[i].tags) === 1 && !isOneway(match[i].tags) && SINGLE_TRACK_RE.test(match[i].tags.highway || '')), (i) => match[i].tags.name);
     span('covered_bridge', (i) => !!(match[i] && (match[i].tags.bridge === 'covered' || (match[i].tags.bridge && match[i].tags.covered === 'yes'))), (i) => match[i].tags['bridge:name'] || match[i].tags.name);
     span('ford', (i) => !!(match[i] && match[i].tags.ford && match[i].tags.ford !== 'no'));
+    // a bridge the route crosses off the motorways and trunk roads (road_marks.js: "Bridge may be icy" in the cold; a deck
+    // freezes before the road). Not those: an interstate crosses a bridge every mile or so, and they are treated first
+    span('road_bridge', (i) => !!(match[i] && match[i].tags.bridge && match[i].tags.bridge !== 'no' && !/^(motorway|trunk)(_link)?$/.test(match[i].tags.highway || '')), (i) => match[i].tags['bridge:name'] || match[i].tags.name);
     span('access_private', (i) => ch.access_level[i] === 2);
     span('access_destination', (i) => ch.access_level[i] === 1);
     span('divided', (i) => ch.divided[i] === 1);
