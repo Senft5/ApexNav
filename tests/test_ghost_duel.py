@@ -168,6 +168,7 @@ def test_your_own_best_is_a_ghost_on_a_road_like_todays():
     r = json.loads(subprocess.run([NODE, "-e", OWN_RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
     assert r["dry"]["time_s"] == 50 and r["dry"]["surface"] is None and r["n"] == 40        # 20 m/s unknown beats 18 m/s dry; no splits, no ghost
     assert r["wet"]["time_s"] == 40 and r["wet"]["surface"] == "wet" and r["ice"]["time_s"] == 25
+    assert r["dry"]["pass"]["time_s"] == 50 and r["dry"]["pass"]["surface"] is None   # which pass it is (the drive page dates it)
     assert r["none"] == [None, None, None]
     assert r["selfs"] and all(r["selfs"]) and r["done"] == [13]                              # 62.5 s against 50: 12.5 down (rounded up)
     assert r["labels"] == ["+0.3 s vs your best", "−1.2 s vs your best", "level with your best"]
