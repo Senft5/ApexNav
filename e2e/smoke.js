@@ -3286,12 +3286,15 @@ flow('one red that means act now: Sight is ink until you are over it, then colou
   check(loud.grey !== calm.grey || loud.label !== calm.label, 'in greyscale the alarm still differs from the reading');
   await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'); return t && !t.hidden && t.classList.contains('short'); }, null, { timeout: 8000 });
   check(/^SLOW\d+$/.test((await page.textContent('.sight-tag')).trim()), 'the plate says SLOW: ' + await page.textContent('.sight-tag'));
-  // PR-1: in a replay a tap on Sight, then the Score, says what it is; Done closes it
-  await page.click('#cluster .ro-sight');
+  // PR-1: in a replay a tap on the g-ball, then the Score, says what it is; Done closes it. The replay's panel (the owner
+  // 2026-11-15: "cluttered", "g ball should be more prominent") leaves Sight to the plate under the arrow, so its cell is
+  // read above for its colours but not tapped here
+  check(await page.evaluate(() => getComputedStyle(document.querySelector('#cluster .ro-sight')).display === 'none'), 'a replay leaves Sight to the plate on the map');
+  await page.click('#cluster .g-read');
   await page.waitForSelector('#explainCard.show', { timeout: 3000 });
   const sheet = await page.evaluate(() => ({ title: document.getElementById('explainTitle').textContent, what: document.getElementById('explainWhat').textContent,
     how: document.getElementById('explainHow').textContent, now: document.getElementById('explainNow').textContent }));
-  check(sheet.title === 'Sight' && /never a target/.test(sheet.what) && /SLOW/.test(sheet.how) && /^Now: \d+ (mph|km\/h)$/.test(sheet.now), 'the Sight sheet: ' + JSON.stringify(sheet));
+  check(sheet.title === 'Grip ball and Bank' && /rolls forward under braking/.test(sheet.what) && /^Now: BANK --$/.test(sheet.now), 'the g-ball sheet: ' + JSON.stringify(sheet));
   await page.click('#explainDone');
   // waited for, not read once: on a busy runner the class can come off a frame after the click returns (CI 2026-11-11)
   check(await page.waitForFunction(() => !document.getElementById('explainCard').classList.contains('show'), null, { timeout: 2000 }).then(() => true, () => false), 'Done closes it');
@@ -3630,6 +3633,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   const crewPage = { id: 'k1', name: 'Ridge Runners', motto: 'Slow in, smooth out.', visibility: 'private', area_name: null, members: 3, is_owner: true,
     crest: null, crest_photo_id: null, stripe: null, cover_photo_id: null, livery: 'plain', sharing_scores: true,
     board: [{ handle: 'sam', score: 811, car: 'Mazda MX-5', mine: false }, { handle: 'me', score: null, car: null, mine: true }],
+    dna: [{ handle: 'sam', mine: false, skills: { squeeze: 81, brake: 64, arc: 92, entry: 77, line: 58, exit: 70 } }, { handle: 'me', mine: true, skills: { squeeze: 80, brake: 75, arc: 70, entry: 76, line: 60, exit: 72 } }],
     next: { id: 'e1', title: 'Dawn run', starts_at: soon, meet_name: 'The Hardee\'s', going: ['sam'], my_rsvp: null } };
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method();
@@ -3698,6 +3702,10 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
     return { body, panes: Object.fromEntries([...document.querySelectorAll('.cp-pane')].map((p) => [p.id, [...p.children].map(name).filter(Boolean)])) }; });
   check(JSON.stringify(order.body) === '["title","tabs"]' && JSON.stringify(order.panes['cpPane-drives'].slice(0, 2)) === '["run","Members"]'
     && order.panes['cpPane-chat'].length === 1 && order.panes['cpPane-board'][0] === 'Vetta Score board', 'the page in order: ' + JSON.stringify(order));
+  // the crew's DNA under the board (dna_card.js crewLeaders): who is cleanest at each skill, your level beside it
+  const dnaRows = await page.$$eval('#cpPane-board .cp-dna-row', (r) => r.map((x) => [...x.children].map((c) => c.textContent).filter(Boolean).join(' ')));
+  check(order.panes['cpPane-board'].includes('Cleanest in the crew') && dnaRows.length === 6 && dnaRows[0] === 'One braking @sam 81 you 80' && dnaRows[1] === 'Brakes done You 75',
+    'cleanest in the crew, skill by skill: ' + JSON.stringify(dnaRows));
   check(await page.evaluate(() => ![...document.querySelectorAll('#cpPane-chat h3')].some((h) => h.textContent === 'Chat')), 'the Chat tab names the chat: no second "Chat" heading under it');
   check(!(await page.$$('.crew-page .cp-livery, .crew-page .cp-meter')).length, 'no livery box or meter on the page (they are in Edit livery)');
   check(!/Convoy/.test(await page.$$eval('#crewsBody h3', (h) => h.map((x) => x.textContent).join('|'))), 'no Convoy heading on Crews');
@@ -7455,6 +7463,60 @@ flow('post media: a friend\'s photo shows on their post in the Feed, and Add a p
   check(order[0] === 'POST /api/posts application/json' && order[1] === 'PUT /api/posts/P2AAAAAAAAAAAAAA/media image/jpeg' && posts[1].n > 100, 'the post, then its photo as a JPEG: ' + JSON.stringify(order));
   check(/Posted to your friends\./.test(await page.textContent('#toast')), 'and it says where it went');
 });
+flow('messages: People has Messages with what is unread; a conversation is bubbles and a field, Return sends; Report theirs, Unsend yours; a profile has Message; a push opens it (Worker stubbed, 2026-11-14)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const sent = [];
+  let thread = [{ id: 'M1', body: 'Skyway Saturday?', at: '2026-11-14 11:00:00', mine: false }], unread = 1;
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/me/messages/unread') return json({ unread });
+    if (u.pathname === '/api/messages') return json(thread.length ? [{ handle: 'bob', photo_id: null, at: thread[thread.length - 1].at, unread, last: thread[thread.length - 1].body, mine: thread[thread.length - 1].mine, friend: true }] : []);
+    if (u.pathname === '/api/messages/bob' && m === 'GET') { unread = 0; return json({ with: { handle: 'bob', photo_id: null, friend: true }, messages: thread }); }
+    if (u.pathname === '/api/messages/bob' && m === 'POST') { const b = JSON.parse(route.request().postData()); sent.push(b); thread = [...thread, { id: 'M2', body: b.body, at: '2026-11-14 11:01:00', mine: true, seen: false }]; return json({ id: 'M2' }, 201); }
+    if (u.pathname === '/api/messages/m/M2' && m === 'DELETE') { sent.push({ unsent: 'M2' }); thread = thread.filter((x) => x.id !== 'M2'); return route.fulfill({ status: 204 }); }
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=friends');
+  await page.waitForSelector('#accountBody .dm-nav', { timeout: 15000 });
+  await page.waitForFunction(() => (document.querySelector('#accountBody .dm-nav small') || {}).textContent === '1');
+  await page.waitForFunction(() => /1 unread message/.test((document.querySelector('#crewTab .badge') || { getAttribute: () => '' }).getAttribute('aria-label') || ''));
+  await page.click('#accountBody .dm-nav');
+  await page.waitForSelector('.people-pop.open .dm-row');
+  const row = await page.textContent('.people-pop.open .dm-row .dm-who');
+  check(/@bob/.test(row) && /Skyway Saturday\?/.test(row) && !!(await page.$('.people-pop.open .dm-row.unread .dm-dot')), 'the list: who, their last line, unread marked: ' + row);
+  await page.click('.people-pop.open .dm-row');
+  await page.waitForSelector('.dm-pop.open .dm-msg');
+  check(await page.$$eval('.dm-pop.open .dm-msg', (l) => l.map((b) => [b.textContent, b.classList.contains('mine')]).join('|')) === 'Skyway Saturday?,false', 'their message, on the left');
+  await page.fill('.dm-pop.open textarea', 'Yes, 8 at the overlook');
+  await page.press('.dm-pop.open textarea', 'Enter');
+  await page.waitForFunction(() => document.querySelectorAll('.dm-pop.open .dm-msg').length === 2);
+  check(JSON.stringify(sent[0]) === '{"body":"Yes, 8 at the overlook"}' && await page.inputValue('.dm-pop.open textarea') === '' && await page.$eval('.dm-pop.open .dm-msg:last-of-type', (b) => b.classList.contains('mine')),
+    'Return sends it; yours on the right; the field clears: ' + JSON.stringify(sent));
+  // theirs: Report; yours: Unsend
+  await page.click('.dm-pop.open .dm-msg:not(.mine) .dm-more');
+  check(await page.$$eval('.dm-menu button', (l) => l.map((b) => b.textContent).join()) === 'Report,Cancel', 'a tap on theirs: Report');
+  await page.click('.dm-menu button:has-text("Cancel")');
+  await page.click('.dm-pop.open .dm-msg.mine .dm-more');
+  await page.click('.dm-menu button:has-text("Unsend")');
+  await page.waitForFunction(() => document.querySelectorAll('.dm-pop.open .dm-msg').length === 1);
+  check(sent.some((x) => x.unsent === 'M2'), 'Unsend takes yours back');
+  await page.click('.dm-pop.open .side-pop-head button:has-text("Done")');
+  check(!(await page.$('.dm-pop')), 'Done closes the conversation');
+  // a friend's profile: Message first
+  await page.click('.people-pop.open .side-pop-head button:has-text("Done")');
+  await page.click('#accountBody .friend-head:has-text("@bob")');
+  await page.waitForSelector('.people-pop.open .profile-keys button');
+  check(await page.textContent('.people-pop.open .profile-keys button:first-child') === 'Message', 'Message is the first key on a friend');
+  await page.click('.people-pop.open .profile-keys button:has-text("Message")');
+  await page.waitForSelector('.dm-pop.open .dm-msg');
+  await page.click('.dm-pop.open .side-pop-head button:has-text("Done")');
+  // a push's tap (backend/src/push.ts PUSH.message): the conversation
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { view: 'friends', chat: 'bob' } }));
+  await page.waitForSelector('.dm-pop.open[aria-label="Messages with @bob"] .dm-msg', { timeout: 8000 });
+});
+
 flow('the full Feed picks whose posts (All, Friends or one crew) and mutes a driver (Worker stubbed, 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   const asked = [];
@@ -7610,7 +7672,7 @@ flow('push notifications: Garage > Notifications asks iOS only at the switch, ha
   // (2026-11-14) each kind has its own switch under it, as the server keeps them (duels off here)
   await page.waitForSelector('.garage-pop.open #pushKinds:not([hidden]) .sw');
   const sw = await page.$$eval('.garage-pop.open #pushKinds .sw', (l) => l.map((b) => [b.textContent, b.getAttribute('aria-checked')]));
-  check(JSON.stringify(sw) === JSON.stringify([['Friend requests', 'true'], ['Kudos', 'true'], ['Comments and mentions', 'true'], ['Duels', 'false'], ['Someone beat you', 'true'], ['Crew drives', 'true']]), 'one switch per kind: ' + JSON.stringify(sw));
+  check(JSON.stringify(sw) === JSON.stringify([['Friend requests', 'true'], ['Kudos', 'true'], ['Comments and mentions', 'true'], ['Duels', 'false'], ['Someone beat you', 'true'], ['Crew drives', 'true'], ['Messages', 'true']]), 'one switch per kind: ' + JSON.stringify(sw));
   await page.click('.garage-pop.open #pushKinds .sw:has-text("Kudos")');
   for (let i = 0; i < 40 && !kinds.length; i++) await page.waitForTimeout(50);
   check(JSON.stringify(kinds) === '[["duels","kudos"]]' && await page.getAttribute('.garage-pop.open #pushKinds .sw:has-text("Kudos")', 'aria-checked') === 'false', 'Kudos off is kept on the server: ' + JSON.stringify(kinds));
@@ -7643,7 +7705,9 @@ flow('friend profile: a friend on People → Profile shows what the friend share
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
     if (u.pathname === '/api/friends/U1/profile') return json({ handle: 'bob', name: 'Bob <b>S</b>', friends_since: '2026-09-01', crews: ['Ridge Runners'], cars: [],
-      stages: [{ stage: 'Esses', best: 812, days_month: 3, last: '2026-10-27' }], totals: { stages: 1, days_month: 3, best: 812 } });
+      stages: [{ stage: 'Esses', best: 812, days_month: 3, last: '2026-10-27' }], totals: { stages: 1, days_month: 3, best: 812 },
+      dna: { theirs: { skills: { squeeze: 81, brake: 64, arc: 92, entry: 77, line: 58, exit: 70 }, style: ['Trail-braker', 'Late apex'], size: 'fast', corners: 212, drives: 14 },
+             mine: { skills: { squeeze: 80, brake: 75, arc: 70, entry: 77, line: 60, exit: 72 }, style: [], size: null, corners: 90, drives: 6 } } });
     if (u.pathname === '/api/points') return json({ total: 0 });
     if (u.pathname === '/api/roadbooks/friends') return json([{ id: 'BOBBOOKAAAAAAAAA', name: 'Bob\'s Kentucky', visibility: 'friends', by: 'bob', mine: false, roads: 4, length_m: 30000, followers: 0, following: false },
       { id: 'CARABOOKAAAAAAAA', name: 'Cara\'s set', visibility: 'public', by: 'cara', mine: false, roads: 2, length_m: 9000, followers: 0, following: false }]);
@@ -7658,6 +7722,16 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   const t = await page.textContent('.profile-view');
   check(t.includes('@bob') && /Bob <b>S<\/b> · friends since September( 2026)?/.test(t) && t.includes('Esses · best 812 · 3 days this month') && t.includes('Ridge Runners'), 'the profile, as text: ' + t);
   check(!/Times are never shown|on them this month/.test(t), 'no line saying what is not shown, and "this month" once under its head: ' + t);
+  // their driving DNA beside yours (dna_card.js): the two hexagons and where each of you leads
+  const dna = await page.evaluate(() => { const d = document.querySelector('.profile-view .profile-dna'); return d && { text: d.innerText, shapes: d.querySelectorAll('svg .dna-them, svg .dna-you').length,
+    w: d.querySelector('svg').getBoundingClientRect().width, label: d.querySelector('svg').getAttribute('aria-label') }; });
+  check(dna && dna.shapes === 2 && dna.w >= 150 && /@bob filled · you outlined/.test(dna.text) && /@bob leads at One arc: 92 to your 70/.test(dna.text) && /You lead at Brakes done: 75 to 64/.test(dna.text)
+    && /One arc 92, you 70/.test(dna.label), 'their DNA beside yours: ' + JSON.stringify(dna));
+  if (process.env.SHOTS) { await page.evaluate(() => document.querySelector('.profile-view .profile-dna').scrollIntoView()); await page.screenshot({ path: `${process.env.SHOTS}/friend-dna.png` }); }
+  // Share us: me against them as one 9:16 picture, sent the way the drive card is
+  const [vsDl] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.click('.profile-view .profile-dna button:has-text("Share us")')]);
+  check(vsDl.suggestedFilename() === 'dna-me-vs-bob.png', 'me against them saves as a picture: ' + vsDl.suggestedFilename());
+  if (process.env.SHOTS) await vsDl.saveAs(`${process.env.SHOTS}/dna-me-vs-bob.png`);
   // their roadbooks you may open, on their profile (free roamer B, 2026-11-14): Bob's only
   await page.waitForSelector('.profile-view .rb-of-friend:not([hidden]) .rb-row', { timeout: 8000 });
   const rbs = await page.locator('.profile-view .rb-of-friend .rb-row b').allInnerTexts();
@@ -7668,7 +7742,7 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   check(who && who.photo && who.live && who.first && /friends since September/.test(who.text) && /On the road · Dry Ridge Rd/.test(who.text), 'the profile opens on the person, photo and status: ' + JSON.stringify(who));
   const pk = await page.evaluate(() => ({ keys: [...document.querySelectorAll('.profile-view .profile-keys button')].map((b) => b.textContent), foot: [...document.querySelectorAll('.profile-view .profile-foot button')].map((b) => b.textContent),
     last: document.querySelector('.profile-view > :last-child').className }));
-  check(JSON.stringify(pk.keys) === '["On the map","Share a route","Invite to a drive","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
+  check(JSON.stringify(pk.keys) === '["Message","On the map","Share a route","Invite to a drive","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
   await page.click('.profile-view button:has-text("Friends")');   // one back glyph and where it goes (REVIEW2.md)
   await page.waitForSelector('.side-pop.open .profile-view', { state: 'detached', timeout: 3000 }).catch(() => {});
   check(await page.evaluate(() => !document.querySelector('.side-pop.open') && !!document.querySelector('#accountBody .friend-head:not(.you-row)')), 'Back returns to the friends list');
@@ -7888,7 +7962,8 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   // P-05: the request is a card on top; P-23: you next; then the friends, live first, a friend who shares nothing under their name (P-15)
   // (what is on screen: an empty, hidden place for duel cards (SOCIAL 2.7) isn't a part of the order)
   const order = await page.$$eval('#accountBody > *', (k) => k.filter((x) => !x.hidden).map((x) => x.className));
-  check(/request-card/.test(order[0]) && /you-row/.test(order[1]) && /friend-list/.test(order[2]), 'request card, You, friends: ' + JSON.stringify(order));
+  // (2026-11-14) Messages, the inbox, sits under the requests, as on any social app
+  check(/request-card/.test(order[0]) && /nav-rows/.test(order[1]) && /you-row/.test(order[2]) && /friend-list/.test(order[3]), 'request card, Messages, You, friends: ' + JSON.stringify(order));
   check(/@dan wants to be your friend/.test(await page.textContent('#accountBody .request-card')), 'the request card names who asks');
   await page.waitForFunction(() => /You · @me/.test(document.querySelector('.you-row').textContent) && /Friends see where you are/.test(document.querySelector('.you-row small').textContent));
   const rows = await page.$$eval('#accountBody .friend-list .friend-head', (r) => r.map((x) => [x.querySelector('.friend-who b').textContent, x.querySelector('.friend-who small').textContent, x.querySelector('.friend-who small').classList.contains('live')]));
@@ -7899,7 +7974,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   check(JSON.stringify(keys) === '["Invite or add a friend"]', 'one Invite key on Friends: ' + JSON.stringify(keys));
   const navs = await page.$$eval('#accountBody > .nav-rows .nav-row > span', (s) => s.map((x) => x.textContent));
   // Roadbooks (SOCIAL 2.6, 2026-11-10) join From friends in the one list under the friends; nothing else does
-  check(JSON.stringify(navs) === '["From friends","Roadbooks"]', 'then what friends shared and the roadbooks, nothing else: ' + JSON.stringify(navs));
+  check(JSON.stringify(navs) === '["Messages","From friends","Roadbooks"]', 'Messages on top; then what friends shared and the roadbooks, nothing else: ' + JSON.stringify(navs));
   // Nate 2026-11-12 (as easy as a big social app): the row is the friend; a tap opens their profile, which holds what you
   // can do with them, their last share and what they see of you (the row used to open five keys and a grants drawer)
   check(!(await page.$('#accountBody .friend .crew-detail, #accountBody .friend button.ink-btn')), 'a friend row is one line, no keys in the list');
@@ -7907,14 +7982,15 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
     const k = await page.$$eval('.people-pop.open .profile-keys button', (b) => b.map((x) => x.textContent)); return k; };
   const back = () => page.click('.people-pop.open .profile-view button:has-text("Friends")');
   const acts = await profileOf('@cara');
-  check(JSON.stringify(acts) === '["On the map","Share a route","Invite to a drive","Challenge on a stage"]', 'her profile opens on what you can do with her: ' + JSON.stringify(acts));
+  check(JSON.stringify(acts) === '["Message","On the map","Share a route","Invite to a drive","Challenge on a stage"]' && await page.evaluate(() => getComputedStyle(document.querySelector('.people-pop.open .profile-keys > :last-child')).gridColumnEnd) === '-1',
+    'her profile opens on what you can do with her, Message first; an odd last key spans the row: ' + JSON.stringify(acts));
   const cara = await page.textContent('.people-pop.open .profile-view');
   check(/Shared Cherohala loop · /.test(cara) && /What @cara sees of you\s*Scores/.test(cara) && /Couldn’t load the rest/.test(cara) && !/No scores shared/.test(cara), 'her last share and what she sees of you; offline, nothing guessed: ' + cara);
   await back();
   check((await profileOf('@bob')).includes('On the map'), 'bob shares a delayed position: On the map too');
   await back();
   const eve = await profileOf('@eve');
-  check(!eve.includes('On the map') && eve.length === 3 && await page.evaluate(() => getComputedStyle(document.querySelector('.people-pop.open .profile-keys > :last-child')).gridColumnEnd) === '-1', 'no On the map for a friend who shares nothing; an odd last key spans the row: ' + JSON.stringify(eve));
+  check(!eve.includes('On the map') && eve.length === 4, 'no On the map for a friend who shares nothing: ' + JSON.stringify(eve));
   await back();
   // P-09: Who sees what, from her profile, her line marked
   await profileOf('@cara');
@@ -8494,6 +8570,45 @@ flow('satellite: a developer gets a Satellite switch in Layers that lays USGS im
   check(tiles.length > 0 && tiles.every((u) => u.startsWith('https://basemap.nationalmap.gov/')), 'its tiles are asked for: ' + tiles.length);
   await page.click('#satSwitch');
   await page.waitForFunction(() => !window.apexDebug.map.getLayer('apex-satellite') && !window.apexDebug.map.getSource('apex-satellite-src'));
+});
+// Nate (2026-11-15, a real drive): "the map layers sometimes reset certain things when I reopen the app". Every layer left on
+// comes back on after a reopen: with the account still on its way, after a launch that read signed out, and after another
+// setting was saved in between. Friends, Meets and Roadbooks (lazy social scripts) are drawn once the account says member.
+flow('map layers: every layer left on is still on after the app is reopened, signed out or in, and the social ones draw (Nate 2026-11-15)', async (page, base) => {
+  const LAYERS = ['twisty', 'coverage', 'lpr', 'roadcams', 'terrain', 'satellite', 'roadbooks', 'meets', 'friends'];
+  let me = { signed_in: true, member: true, handle: 'me', developer: true };
+  const asked = [];
+  await page.route('https://tiles.openfreemap.org/**', satStyle);
+  await page.route('https://basemap.nationalmap.gov/**', (route) => route.fulfill({ contentType: 'image/png', body: PNG1 }));
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()); asked.push(u.pathname);
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json(me);
+    if (u.pathname === '/api/traffic/v1/cameras.json') return json({ sources: ['KYTC'], failed: [], cams: [] });
+    return json({ error: 'not_found' }, 404);
+  });
+  await page.addInitScript((layers) => { try { localStorage.setItem('apex.onboarded', '1');
+    if (!localStorage.getItem('apex.prefs')) localStorage.setItem('apex.prefs', JSON.stringify({ toggles: Object.fromEntries(layers.map((k) => [k, true])), twistyV: 2 })); } catch (_) {} }, LAYERS);
+  const open = async () => {
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.getLayer('apex-twisty'), null, { timeout: 15000 });
+    await page.waitForTimeout(2500);                                   // /api/me has answered, the social scripts have had their chance
+  };
+  const kept = () => page.evaluate((layers) => { const t = (JSON.parse(localStorage.getItem('apex.prefs') || '{}').toggles) || {};
+    return layers.filter((k) => t[k] !== true); }, LAYERS);
+  const shown = () => page.evaluate((layers) => layers.filter((k) => document.querySelector(`[data-toggle="${k}"]`).getAttribute('aria-checked') !== 'true'), LAYERS);
+  const save = () => page.evaluate(() => { const v = document.querySelector('[data-toggle="voice"]'); v.click(); v.click(); });   // another setting saved
+  await open(); await save();
+  check((await kept()).length === 0 && (await shown()).length === 0, 'signed in, every layer still on: lost ' + JSON.stringify({ saved: await kept(), switches: await shown() }));
+  const social = await page.evaluate(() => ({ socialIn: !!window.ApexFriendsMap, }));
+  check(social.socialIn, 'the social layers loaded their scripts to draw: ' + JSON.stringify(social));
+  me = { signed_in: false };                                           // a launch that reads signed out (a token being renewed)
+  await open(); await save();
+  check((await kept()).length === 0, 'a signed-out launch keeps every choice: lost ' + JSON.stringify(await kept()));
+  me = { signed_in: true, member: true, handle: 'me', developer: true };
+  await open();
+  check((await kept()).length === 0 && (await shown()).length === 0, 'signed in again, all of them on: lost ' + JSON.stringify({ saved: await kept(), switches: await shown() }));
+  check(await page.evaluate(() => !!window.apexDebug.map.getLayer('apex-satellite')), 'the developer\'s Satellite is drawn again');
 });
 flow('satellite: anyone else never sees the switch, and one left on in localStorage draws nothing (the owner 2026-11-04)', async (page, base) => {
   const prefs = { toggles: { satellite: true, twisty: true } };
@@ -9128,8 +9243,12 @@ flow('theme contract on the page: the hazard plate, the speed, the call and the 
     // night is a mode (REVIEW2.md U-36): a 46 px numeral, Limit and Sight on one row, the trip behind its Trip key
     const nm = await page.evaluate(() => { const d = document.querySelector('.dial-speed .dial-digital'), vis = (q) => { const e = document.querySelector(q); return !!e && e.getClientRects().length > 0; };
       const l = document.querySelector('.ro-limit').getBoundingClientRect(), g = document.querySelector('.ro-sight').getBoundingClientRect();
-      return { px: Math.round(parseFloat(getComputedStyle(d).fontSize) * d.getScreenCTM().a), oneRow: Math.abs(l.top - g.top) < 12, odo: vis('#cluster .odo'), key: vis('#cluster .trip-peek') }; });
-    if (night) {
+      return { px: Math.round(parseFloat(getComputedStyle(d).fontSize) * d.getScreenCTM().a), oneRow: Math.abs(l.top - g.top) < 12, odo: vis('#cluster .odo'), key: vis('#cluster .trip-peek'),
+        replay: document.getElementById('app').classList.contains('replaying'), sight: vis('#cluster .ro-sight') }; });
+    if (night && nm.replay) {
+      // a replay is watched, not driven (the owner 2026-11-15): the g-ball leads, Sight is left to the map's plate, the trip shows
+      check(nm.px >= 46 && !nm.sight && nm.odo && !nm.key, 'night replay: a 46 px numeral, Sight on the map, the trip in view: ' + JSON.stringify(nm));
+    } else if (night) {
       check(nm.px >= 46 && nm.oneRow && !nm.odo && nm.key, 'night: a 46 px numeral, Limit and Sight in a row, the trip behind its key: ' + JSON.stringify(nm));
       await page.click('#cluster .trip-peek');
       check(await page.evaluate(() => document.querySelector('#cluster .odo').getClientRects().length > 0), 'night: the Trip key shows the trip');
@@ -12380,11 +12499,16 @@ flow('the Garage on a phone: the looks are a shelf turned sideways (one in view,
     .catch(async () => { throw new Error('a turn of the thumb brings the next look: ' + JSON.stringify(await shelf())); });
   await swipe(cdp, 80, y, 260, 4, 250);
   await page.waitForFunction(() => document.getElementById('themeCards').scrollLeft < 4, null, { timeout: 5000 });
+  // the shelf at rest first: the swipe's snap animation can still be running at 3 px, and a scroll it then lands
+  // overwrites the one set below (CI 2026-11-15: the chosen look's shelf back at 0 after Use, on a loaded runner)
+  await page.evaluate(() => new Promise((done) => { const c = document.getElementById('themeCards'); let last = -1, same = 0;
+    const tick = () => { if (c.scrollLeft === last) same++; else { same = 0; last = c.scrollLeft; } if (same >= 10) done(); else requestAnimationFrame(tick); }; tick(); }));
   check((await shelf()).open, 'turning the shelf back to the right does not close the Garage');
   // Use on the second look: it is in use, and the shelf stays where the thumb left it
   await page.evaluate(() => { const c = document.getElementById('themeCards'); c.scrollLeft = c.children[1].offsetLeft - c.children[0].offsetLeft; });
   await page.click('#themeCards .theme-card:nth-child(2) .tc-head .ink-btn');
   await page.waitForFunction(() => /tapedeck/.test(document.documentElement.dataset.theme || ''));
+  await page.waitForFunction(() => { const c = document.getElementById('themeCards'); return Math.abs(c.children[1].getBoundingClientRect().left - 16) <= 1; }, null, { timeout: 3000 }).catch(() => {});
   const s1 = await shelf();
   check(s1.cards[1].l === 16 && s1.left > 100, 'the look you chose stays in view: ' + JSON.stringify(s1.cards));
   // large text keeps the stack: every word of a card whole
@@ -12846,6 +12970,9 @@ flow('the drive screen, Vetta Line: one hero speed over a ruled line, Limit, Sig
     await page.setViewportSize({ width: w, height: h });
     await page.waitForTimeout(300);
     await page.evaluate(() => { const d = document.querySelector('#cluster .dna-arch'); d.hidden = false; d.textContent = 'Road: Northwest Expressway'; });
+    // the panel's own resize pass can land after 300 ms on a loaded runner (CI 2026-11-15, 320x568: fits false once, whole
+    // on its re-run): give it up to 3 s to settle, then judge it as it stands
+    await page.waitForFunction((src) => { const s = (0, eval)(src)(); return !s.out.length && s.fits; }, '(' + boxes.toString() + ')', { timeout: 3000 }).catch(() => {});
     const s = await page.evaluate(boxes);
     check(!s.out.length && s.px >= 64 && s.fits && s.side <= 0, `${w}x${h}: a 64 px numeral or more, nothing overprints, the cluster whole on screen: ` + JSON.stringify(s));
   }

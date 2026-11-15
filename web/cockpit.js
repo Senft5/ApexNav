@@ -184,7 +184,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, roadbooks: false, nudge: false, push: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, roadbooks: false, nudge: false, push: false, satellite: false, improve: true }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -697,13 +697,15 @@
       if (!me || typeof me.signed_in !== 'boolean') return;
       devAccess = !!(me.signed_in && me.member && me.developer === true);
       $('satSwitch').hidden = !devAccess;
-      if (!devAccess && state.toggles.satellite) { state.toggles.satellite = false; savePrefs(); paintSwitches(); }
+      // a launch that reads signed out (a token being renewed) draws no imagery (applySatellite) but keeps the developer's choice
       applySatellite();
       devCache = undefined;                                              // read again for this account (or none)
       applyDevTune();
       paintDevRow();
       if (devAccess) { const d = devSettings(); if (d && (d.offline || d.lines)) devPanel().catch(() => {}); }   // their switches, without the panel open
       else if (window.ApexDevPanel) ApexDevPanel.unmount();
+      if (devAccess) devDrivesSync();                                    // their drives go up to Vetta (web/dev_drives.js)
+      meAnswered = true; anonDrivesSync();                               // or, anyone else, the anonymous copies (web/anon_drives.js)
     }
     // Dev mode (the owner, 2026-11-09: "a dev mode in the app that shows all routing parameters and other debug info for only
     // me and my codev to mess with"), behind the Satellite layer's gate: a fresh /api/me with developer true. Its settings
@@ -733,6 +735,34 @@
       if (!devAccess || !window.ApexLazy) return Promise.resolve(null);
       return devPanelP || (devPanelP = ApexLazy.load('dev').then(() => (window.ApexDevPanel ? ApexDevPanel.mount(devHost) : null)).catch((e) => { devPanelP = null; throw e; }));
     }
+    // Developers' drives (the owner, 2026-11-15; web/dev_drives.js, backend/src/dev_drives.ts): on a developer's phone only,
+    // every drive (the ones from before too) uploads whole for internal review: at /api/me, when a drive is saved (recording.js
+    // says so on the 'apex-drives' channel) and when the app comes back to the front. Anyone else's phone never loads it.
+    let devDrivesStat = null;
+    function devDrivesSync() {
+      if (!devAccess || !window.ApexLazy || !window.ApexRecording || !window.ApexSync) return;
+      ApexLazy.load('devdrives').then(() => ApexDevDrives.sync({ ids: () => ApexRecording.ids(), get: (id) => ApexRecording.get(id),
+        apiFetch: ApexSync.apiFetch, store: localStorage, allowed: () => devAccess }))
+        .then((r) => { devDrivesStat = r; paintDevRow(); }).catch((e) => console.error('dev drives', e));
+    }
+    // Help improve Vetta roads (the owner, 2026-11-15; web/anon_drives.js, backend/src/anon_drives.ts): on by default, Garage →
+    // Settings → Road feel. Everyone but a developer (whose whole drives go above) sends an anonymous copy of each drive: no
+    // account, name or clock time, the first and last 1 to 1.5 km and every privacy zone left out. Only once /api/me has
+    // answered, so a developer's phone never sends both. The driver's own drive is never changed.
+    let meAnswered = false;
+    { const ab = $('ageBand');                                          // its optional age band, on this phone only (sent with each copy)
+      if (ab) { try { ab.value = localStorage.getItem('apex.ageBand') || ''; } catch (_) {}
+        ab.addEventListener('change', () => { try { if (ab.value) localStorage.setItem('apex.ageBand', ab.value); else localStorage.removeItem('apex.ageBand'); } catch (_) {} }); } }
+    function anonDrivesSync() {
+      if (!meAnswered || devAccess || !state.toggles.improve || !window.ApexLazy || !window.ApexRecording || !window.ApexSync) return;
+      ApexLazy.load('anondrives').then(() => ApexAnonDrives.sync({ ids: () => ApexRecording.ids(), get: (id) => ApexRecording.get(id),
+        post: async (bytes) => { const r = await ApexSync.apiFetch('/api/anon/drives', { method: 'POST', headers: { 'content-type': 'application/gzip' }, body: bytes }); return !!(r && r.ok); },
+        store: localStorage, allowed: () => !devAccess && !!state.toggles.improve,
+        inZone: (lat, lon) => { try { return !!ApexPrivacyZones.zoneAt(ApexPrivacyZones.load(localStorage), lat, lon); } catch (_) { return true; } } }))
+        .catch((e) => console.error('anon drives', e));
+    }
+    try { const ch = new BroadcastChannel('apex-drives'); ch.onmessage = () => { devDrivesSync(); anonDrivesSync(); }; } catch (_) { /* no channel: the next launch sends it */ }
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { devDrivesSync(); anonDrivesSync(); } });
     // the Garage's Settings row (index.html section data-setting="dev"): empty, so hidden, unless this is a developer
     function paintDevRow() {
       const b = $('garageDevBody');
@@ -743,7 +773,9 @@
         const o = document.createElement('button'); o.type = 'button'; o.className = 'ink-btn'; o.id = 'devOpenBtn'; o.textContent = 'Open the Dev panel';
         o.addEventListener('click', () => { if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.close(); showView('map');
           devPanel().then((p) => p && p.open()).catch((e) => { console.error('dev panel', e); toast('Couldn\'t load the Dev panel.'); }); });
-        b.append(p, o);
+        const sy = document.createElement('p'); sy.className = 'note'; sy.id = 'devDrivesNote';
+        sy.textContent = devDrivesStat ? `Dev: drives sync to Vetta (${devDrivesStat.total - devDrivesStat.pending} of ${devDrivesStat.total} sent)` : 'Dev: drives sync to Vetta';
+        b.append(p, o, sy);
       }
       try { if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.refresh(); } catch (_) { /* drawn at the next open */ }
     }
@@ -7452,7 +7484,7 @@
       const tab = $('crewTab'), old = tab.querySelector('.badge'); if (old) old.remove();
       // friend requests from For you once it has answered (it may know of a newer one), else from /api/me
       const req = inboxBadge ? inboxBadge.data.items.filter((i) => i.kind === 'request').length : peopleRequests;
-      const parts = [[req, 'friend request'], ...peopleAsks, ...(inboxBadge && inboxBadge.n - req > 0 ? [[inboxBadge.n - req, 'new for you']] : [])].filter(([k]) => k > 0);
+      const parts = [[req, 'friend request'], ...peopleAsks, [dmUnread, 'unread message'], ...(inboxBadge && inboxBadge.n - req > 0 ? [[inboxBadge.n - req, 'new for you']] : [])].filter(([k]) => k > 0);
       const n = parts.reduce((a, [k]) => a + k, 0);
       if (!n) return;
       const b = el('span', { className: 'badge', textContent: String(n) });
@@ -7473,6 +7505,12 @@
     onSocial(() => { try { peopleSuggest = window.ApexPeopleSuggest ? ApexPeopleSuggest.mount({ el, btn, toast, apiCall, jsonOf,
       avatar: (id, h, px) => (window.ApexPhotos ? ApexPhotos.avatar(id, h, px) : el('span')),
       sent: (h) => { try { const l = JSON.parse(localStorage.getItem('apex.sentRequests') || '[]'); localStorage.setItem('apex.sentRequests', JSON.stringify([...(Array.isArray(l) ? l : []).filter((x) => x !== h), h].slice(-30))); } catch (_) {} } }) : null; } catch (e) { console.error('suggest', e); } });
+    // Messages (web/messages.js, backend/src/messages.ts): friend to friend; People's row, a profile's Message, a push's tap
+    let messages = null, dmUnread = 0;
+    onSocial(() => { try { messages = window.ApexMessages ? ApexMessages.mount({ el, btn, toast, apiCall, jsonOf,
+      avatar: (id, h, px) => (window.ApexPhotos ? ApexPhotos.avatar(id, h, px) : el('span')),
+      report: (o) => (safety ? safety.report(o) : null),
+      badge: (n) => { if (n !== dmUnread) { dmUnread = n; paintPeopleBadge(); } } }) : null; } catch (e) { console.error('messages', e); } });
     // Drive posts and the Feed (web/drive_posts.js, docs/SOCIAL.md 2.13): Post on the drive's card; the Feed on People → Friends
     let drivePosts = null;
     onSocial(() => { try { drivePosts = window.ApexDrivePosts ? ApexDrivePosts.mount({ el, btn, toast, apiCall, jsonOf,
@@ -7584,12 +7622,18 @@
       paintPushState();
       // Where to? opened before the account came back: its time attack row's peek skipped then, so it goes now (CI 2026-11-12)
       if (accountMe && accountMe.member && $('planPanel').classList.contains('open')) peekTimeAttack();
-      if (friendsMap && accountMe && accountMe.member) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
-      else if (state.toggles.friends) { state.toggles.friends = false; paintSwitches(); }
-      if (meetsMap && accountMe && accountMe.member) { if (state.toggles.meets) meetsMap.setLayer(true); }
-      if (roadbookMap && accountMe && accountMe.member) { if (state.toggles.roadbooks) roadbookMap.setLayer(true); }
-      else if (state.toggles.roadbooks && socialIn) { state.toggles.roadbooks = false; paintSwitches(); }
-      else if (state.toggles.meets && socialIn) { state.toggles.meets = false; paintSwitches(); }
+      // A layer left on stays on (Nate 2026-11-15: "the map layers sometimes reset when I reopen the app"): the account comes
+      // back before the lazy social scripts, so a member's Friends, Meets and Roadbooks load them and draw then; a launch
+      // that reads signed out draws none of them but keeps the choice for the next one signed in.
+      if (accountMe && accountMe.member) {
+        if (friendsMap) friendsMap.start();
+        if ((state.toggles.friends || state.toggles.meets || state.toggles.roadbooks) && !socialFailed) needSocial().then(() => {
+          if (!accountMe || !accountMe.member) return;
+          if (friendsMap) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
+          if (meetsMap && state.toggles.meets) meetsMap.setLayer(true);
+          if (roadbookMap && state.toggles.roadbooks) roadbookMap.setLayer(true);
+        }).catch(() => {});
+      }
       if (feedbackUi) feedbackUi.refresh();
       if (me && !me.signed_in) setRoutingCars(null);
       else if (me && me.member) apiCall('GET', '/api/garage').then(r => (r.ok ? r.json() : null)).then(list => { if (list) setRoutingCars(list); }).catch(() => {});
@@ -7794,6 +7838,11 @@
       // For you (inbox.js): what happened to you lately, one sentence a row (a new account's page stays its three parts)
       if (inbox && !empty) body.append(inbox.section());
       // the Feed (drive_posts.js): the newest drives your friends and crews posted, kudos and comments one tap in
+      // Messages: your conversations with friends, one row (its count is what you haven't read) over a sheet of them
+      if (messages && accepted.length) {
+        const mpop = popSheet('Messages'); pops.push(mpop);
+        body.append(el('div', { className: 'nav-rows' }, messages.row(() => { mpop.replaceChildren(mpop.firstElementChild, messages.list()); mpop.classList.add('open'); })));
+      }
       if (drivePosts && !empty) {
         const fpop = popSheet('Feed'); pops.push(fpop);
         body.append(drivePosts.section(() => { if (!fpop._filled) { fpop.append(drivePosts.full()); fpop._filled = true; } fpop.classList.add('open'); }));
@@ -7828,6 +7877,7 @@
         if (r.ok) closeSheet();
       };
       const keysFor = (f) => [
+        ...(messages && f.handle ? [['Message', () => { closeProfile(); messages.open(f.handle); }]] : []),
         ...(where.get(f.handle) && friendsMap ? [['On the map', () => seeOnMap(f)]] : []),
         ['Share a route', () => { closeProfile(); shareRouteWith(f.handle); }],
         ...(convoy ? [['Invite to a drive', () => driveWith(f)]] : []),
@@ -8915,7 +8965,7 @@
       paintPushKinds();
     }
     // each kind its own switch, under the main one while it is on (the server keeps which are off: GET/PUT /api/push/kinds)
-    const PUSH_KINDS = [['friends', 'Friend requests'], ['kudos', 'Kudos'], ['comments', 'Comments and mentions'], ['duels', 'Duels'], ['beaten', 'Someone beat you'], ['crews', 'Crew drives']];
+    const PUSH_KINDS = [['friends', 'Friend requests'], ['kudos', 'Kudos'], ['comments', 'Comments and mentions'], ['duels', 'Duels'], ['beaten', 'Someone beat you'], ['crews', 'Crew drives'], ['messages', 'Messages']];
     let pushOff = null;
     function paintPushKinds() {
       const box = $('pushKinds'); if (!box) return;
@@ -9066,6 +9116,7 @@
       const box = $('themeCards'); if (!box) return;
       if (themeCards.size !== Object.keys(Themes.THEMES).length) {
         themeCards.clear();
+        box._at = null;                                                  // new cards start the shelf at 0: turn it to the look in use again
         box.replaceChildren(...Object.values(Themes.THEMES).map((t) => {
           const card = el('div', { className: 'theme-card' });
           const ok = () => themeAllowed(t.id);
@@ -9338,6 +9389,10 @@
       state.toggles[k] = !state.toggles[k];
       paintSwitches();
       if (k === 'lpr') updatePins();
+      if (k === 'improve') {                                           // Help improve Vetta roads: on again, only drives from now on go
+        try { if (state.toggles.improve) localStorage.setItem('apex.anonDrives.since', new Date().toISOString()); } catch (_) {}
+        anonDrivesSync();
+      }
       if (k === 'satellite') {                                         // developers only (applyDevFlags); anyone else: stays off
         if (!devAccess) { state.toggles.satellite = false; paintSwitches(); return; }
         applySatellite();
@@ -10372,9 +10427,27 @@
         if (reported.pins.has(h.id)) continue;
         const el = document.createElement('div'); el.className = h.official ? 'hz-pin hz-dot' : 'hz-pin';   // a DOT's event: its own word
         el.textContent = ((h.official && h.label) || ApexHazardReports.LABEL[h.kind] || 'Hazard').toUpperCase();
-        reported.pins.set(h.id, new maplibregl.Marker({ element: el }).setLngLat([h.lon, h.lat]).addTo(map));
+        el.setAttribute('aria-label', el.textContent.toLowerCase());
+        const mk = new maplibregl.Marker({ element: el }).setLngLat([h.lon, h.lat]).addTo(map);
+        mk.hz = h; reported.pins.set(h.id, mk);
+      }
+      placePins();
+    }
+    // Which pins show, and how (hazard_reports.js pinView): only in view, a mark zoomed out, a tag closer in, never piled up
+    let pinsQueued = false;
+    function placePins() {
+      if (!reported.pins.size || !mapReady) return;
+      const c = map.getCanvas(), w = c.clientWidth, h = c.clientHeight, list = [];
+      for (const [id, mk] of reported.pins) { const ll = mk.getLngLat(), pt = map.project(ll), hz = mk.hz || {};
+        list.push({ id, x: pt.x, y: pt.y, kind: hz.kind, label: mk.getElement().textContent }); }
+      const how = ApexHazardReports.pinView(list, { width: w, height: h, zoom: map.getZoom() });
+      for (const [id, mk] of reported.pins) {
+        const e = mk.getElement(), v = how.get(id);
+        e.style.display = v ? '' : 'none';
+        e.classList.toggle('hz-mini', v === 'mark');
       }
     }
+    if (map) map.on('move', () => { if (pinsQueued) return; pinsQueued = true; requestAnimationFrame(() => { pinsQueued = false; placePins(); }); });
     // Each fresh fix while driving: call the next reported hazard ahead, and after passing one ask if it's still there.
     // ---- crash check (IDEAS D-17; web/incident.js): impact + stop asks "Are you OK?"; the contact is local only ----------
     const CRASH_KEY = 'apex.crashContact';
@@ -11907,6 +11980,7 @@
       // a push's tap (backend/src/push.ts): the post it is about, or the friend, or People's side
       showView(ok(p.crew) || ok(p.convoy) || p.view === 'crews' ? 'crews' : 'friends');
       if (ok(p.post)) needSocial().then(() => { if (drivePosts) drivePosts.open(p.post); });
+      if (ok(p.chat) && /^[A-Za-z0-9_]{1,20}$/.test(p.chat)) needSocial().then(() => { if (messages) messages.open(p.chat); });
       if (ok(p.friend) && /^[A-Za-z0-9_]{3,20}$/.test(p.friend)) window.apexOpenFriend(p.friend.toLowerCase()); else renderAccount();
     }
     // Siri: go=to with the place said (q, base64url UTF-8: ApexIntents.swift linkWords), go=loop60 for "Find a 1 hour loop".

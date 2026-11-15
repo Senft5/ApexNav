@@ -186,7 +186,7 @@ def test_a_publish_can_take_an_earlier_runs_bands():
     wf = open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "graph-us.yml")).read()
     for job in ("osm", "osm-again", "band"):
         part = wf[wf.index(f"\n  {job}:"):]
-        assert part.index("if: needs.plan.outputs.reuse == ''") < part.index("steps:"), job
+        assert part.index("needs.plan.outputs.reuse == ''") < part.index("steps:"), job
     pub = wf[wf.index("\n  publish:"):]
     assert "needs.plan.outputs.reuse != '' && needs.band.result == 'skipped'" in pub
     # download-artifact sees only 100 of another run's artifacts (100 of 141 bands went live, 2026-11-14): by id, paginated
@@ -194,6 +194,20 @@ def test_a_publish_can_take_an_earlier_runs_bands():
     assert 'gh api --paginate "repos/${{ github.repository }}/actions/runs/$RUN/artifacts?per_page=100"' in pub
     assert "not every band of run $RUN has its artifact" in pub
     assert "python -m tools.graph_etl.check" not in pub, "the spot roads are Cincinnati's: graph-region.yml checks them"
+
+
+def test_a_rescore_takes_an_earlier_runs_extracts():
+    """2026-11-15: the lower-48 context grid went live after the bands were built. osm_from rebuilds and rescores the
+    bands from an earlier run's OSM artifacts, with no new Geofabrik download."""
+    wf = open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "graph-us.yml")).read()
+    assert "osm_from:" in wf
+    for job in ("osm", "osm-again"):
+        part = wf[wf.index(f"\n  {job}:"):]
+        assert part.index("inputs.osm_from == ''") < part.index("steps:"), job
+    band = wf[wf.index("\n  band:"):]
+    assert band.index("inputs.osm_from != '' && needs.osm-again.result == 'skipped'") < band.index("steps:")
+    assert "needs.plan.outputs.osmrun" in band
+    assert "github.run_id" not in band[band.index("gh run download"):band.index("gh run download") + 400]
 
 
 def test_a_reused_publish_never_asks_geofabrik():

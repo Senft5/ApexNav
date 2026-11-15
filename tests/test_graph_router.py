@@ -335,6 +335,15 @@ def test_a_gravel_road_is_no_stage_when_unpaved_is_avoided():
     assert r == {"avoided": ["Paved Road"], "allowed": ["Gravel Road", "Paved Road"]}, r
 
 
+def test_a_long_good_road_is_one_stage_across_tiles_and_among_many_lanes():
+    """2026-11-15: from Robbinsville neither the Cherohala Skyway nor the Dragon was a stage (Best roads nearby, loops):
+    a chain broke at a tile's edge (a name's index is its tile's own), stopped at 15 km, and only the first 36 chains of
+    short twisty lanes were ever built. Now the Skyway is one stage of its length, up to K.STAGE_KM."""
+    r = case("longStage")
+    assert r["tiles"] >= 2, r
+    assert len(r["skyway"]) == 1 and 25 <= r["skyway"][0] <= r["cap"], r
+
+
 def test_loops_keep_off_unpaved_road_when_it_is_avoided():
     """2026-11-14 (a survey of rider towns): with unpaved avoided (the app's default) Sturgis loops drove 15 to 31 km of
     gravel and Stowe's 20 km. A loop leg first keeps off unpaved road entirely, and a loop with more than LOOP_DIRT_KM
@@ -573,3 +582,32 @@ def test_loops_land_near_the_length_asked_on_real_tiles():
         assert c["offs"], c
         assert min(abs(o) for o in c["offs"]) <= 0.2, c
         assert all(abs(o) <= 0.6 for o in c["offs"]) and all(r <= 0.4 for r in c["retraced"]), c
+
+
+def test_a_long_trip_loads_a_band_round_the_quickest_way_not_the_whole_ellipse():
+    """Cincinnati to Asheville at Fun loaded 580 tiles (258 MB) and took 39 s, and Long way found nothing: a trip whose
+    corridor is over K.LONG_TILES tiles is planned on a band round its quickest way, so the far tiles are never asked."""
+    r = case("longTrip")
+    for level in ("fun", "max"):
+        x = r[level]
+        assert x["routed"], x
+        assert x["northmost"] < x["farRow"], x
+        assert x["asked"] < x["ellipse"] / 2, x
+
+
+def test_a_long_trips_second_ask_reuses_the_tiles_the_first_decoded():
+    """Fun, then Long way, on one long trip: at the old 64 tiles Cincinnati to Asheville decoded 152 tiles for 65, half
+    of its 10 s. The kept tiles are a real least-recently-used cache of K.TILE_CACHE."""
+    r = case("tileCache")
+    fun, mx = r["kept"]
+    assert fun["routed"] and mx["routed"], r
+    assert mx["loads"] < mx["tiles"], r
+    assert r["tiny"][1]["loads"] > mx["loads"], r
+
+
+def test_a_plan_past_its_soft_time_answers_with_what_it_has():
+    """On a slow phone a long trip's refinement (more bisection steps, alternates, the spread) stops at K.PLAN_SOFT_MS;
+    the plan still answers with a route rather than running into the page's timeout."""
+    r = case("softBudget")
+    assert r["cutHasPick"] and r["cut"] >= 1, r
+    assert r["full"] >= r["cut"], r
