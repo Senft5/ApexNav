@@ -75,6 +75,22 @@ describe("GET /api/data/v1/roads.geojson", () => {
     expect(a.features[0].properties.confidence).toBe("good");
   });
 
+  it("floor=app (internal only): the members' app rule, for the owner's review; a partner key gets the ten-driver floor anyway", async () => {
+    await road(1, "secondary", 1);              // a through road from its first driver (the app's open-road rule)
+    await road(2, "residential", 1);            // a lane, one driver: still hidden, as in the app
+    await road(3, "residential", 2);            // a lane two drivers drove: shown, as in the app
+    const j = await (await ok(get(INTERNAL, `${BOX}&floor=app`))).json() as { floor: string; features: { properties: Record<string, unknown> }[] };
+    expect(j.floor).toBe("app");
+    expect(j.features.map((f) => f.properties.way).sort()).toEqual([1, 3]);
+    expect(j.features[0].properties.confidence).toBe("low");
+    expect((await (await ok(get(INTERNAL))).json() as { features: unknown[] }).features).toEqual([]);
+    const opened = { ...env, FLAGS: JSON.stringify({ road_data_partners: { on: true } }) } as unknown as Env;
+    const { insightRoads } = await import("../src/road_insights");
+    const p = await insightRoads(opened, new URL(`https://x/?${BOX}&floor=app`), "partner");
+    expect(p.floor).toBe("k");
+    expect(p.features).toEqual([]);
+  });
+
   it("refuses a box over one degree a side", async () => {
     expect((await get(INTERNAL, "bbox=39,-85,40.5,-84")).status).toBe(400);
     expect((await get(INTERNAL, "bbox=nope")).status).toBe(400);

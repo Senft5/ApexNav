@@ -70,6 +70,8 @@
     .rules li { margin: 4px 0; color: var(--dim); font-size: 13px; }
     .rules { padding-left: 18px; margin: 0; }
     .foot { padding: 10px 18px; border-top: 1px solid var(--hair); font-size: 11px; color: var(--dim); }
+    .thin { display: flex; gap: 8px; align-items: flex-start; }
+    .thin input { flex: none; min-height: 0; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--red); }
     [hidden] { display: none !important; }
     .maplibregl-ctrl-attrib { font-size: 11px; }
     @media (max-width: 720px) {
@@ -103,6 +105,7 @@
         <div class="label">Road</div>
         <div id="road" class="road"><p class="hint" style="margin:0">Tap a road to see its figures.</p></div>
         <p class="hint" id="note"></p>
+        <label class="thin hint" id="thinwrap" hidden><input type="checkbox" id="thin" checked /> Include roads under 10 drivers (internal key only; partners never see these)</label>
       </section>
       <section id="pane-api" role="tabpanel" aria-labelledby="tab-api" hidden>
         <div class="label">Rules every figure passes</div>

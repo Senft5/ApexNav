@@ -111,4 +111,7 @@ trust risk: "Vetta sells how fast you take corners" is a bad headline. Pavement 
 - **Keys:** `python tools/data_key.py` makes one. Its sha256 goes in `DATA_OWNER_KEYS` (internal, works now) or
   `DATA_API_KEYS` (a partner: refused with `partner_access_not_open` until the `road_data_partners` flag is turned on,
   which waits for §4).
+- **Owner's review view:** an internal key with `&floor=app` (the viewer's "Include roads under 10 drivers" box, on by
+  default for internal keys) uses the members' app rule instead of the 10-driver floor, so the owner sees the product's
+  shape before roads reach 10 drivers. A partner key ignores it. The owner's key hash is in wrangler.jsonc vars.
 - **Not yet:** per-section (5 m) figures, IRI calibration, hour of day, age bands, per-key usage metering.
