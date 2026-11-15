@@ -41,7 +41,8 @@
 // Spans: 'roundabout', 'one_lane_bridge' (bridge with lanes=1, two-way), 'single_track' (a two-way road, not a bridge, with
 //   lanes=1: room for one car, so an oncoming one means someone pulls over; label name), 'covered_bridge', 'access_private',
 //   'access_destination', 'cycle_route' (label route name), 'byway' (label byway name), 'divided', 'ford' (a way through water),
-//   'road_bridge' (a bridge the route is on, not a motorway's or trunk road's; label its name).
+//   'road_bridge' (a bridge the route is on, not a motorway's or trunk road's; label its name), and with opts.ways only
+//   'osm_way' (the way under the stretch: label its id, cls its highway tag, geom its full line [[lat, lon], ...]).
 (function (root) {
   'use strict';
   const G = root.ApexOsmCommon || (typeof require === 'function' ? require('./osm_common.js') : null);
@@ -185,7 +186,7 @@
    * The contract's result for one corridor from parsed elements. `known[i]` (array-like of 0/1): the sample's stretch
    * was queried. Unknown samples stay NaN in every channel and carry no points.
    */
-  function aggregate(c, els, known) {
+  function aggregate(c, els, known, opts = {}) {
     const n = c.lat.length;
     const res = G.emptyResult(n, CHANNELS, 'unavailable');
     let nKnown = 0; for (let i = 0; i < n; i++) if (known[i]) nKnown++;
@@ -355,6 +356,18 @@
     const relSpan = (kind, chan, map) => { for (const s of G.runs(c.distM, (i) => chan[i] > 0)) { const w = match[s.from]; const r = w && map.get(w.id); res.spans.push({ fromM: Math.round(s.fromM), toM: Math.round(s.toM), kind, value: chan[s.from], label: (r && r.name) || undefined }); } };
     relSpan('cycle_route', ch.cycle_route, cyc);
     relSpan('byway', ch.byway, byw);
+    // opts.ways (a free drive's road ahead, for members' road feel on it): the OSM way under each stretch, with its id
+    // (label, a string: ids pass 2^24, so never a Float32 channel), road class and full line (the bins are counted from
+    // its first node, contributor.js locate)
+    if (opts.ways) {
+      for (let i = 0; i < n;) {
+        const w = known[i] ? match[i] : null;
+        let j = i + 1;
+        while (j < n && known[j] && match[j] === w) j++;
+        if (w && w.g.length > 1) res.spans.push({ fromM: Math.round(c.distM[i]), toM: Math.round(c.distM[j - 1]), kind: 'osm_way', label: String(w.id), cls: w.tags.highway || null, geom: w.g });
+        i = j;
+      }
+    }
     return res;
   }
 
@@ -562,7 +575,7 @@
         }
       }
       corridors.forEach((c, ci) => {
-        try { out[c.id] = aggregate(c, els, covered[ci]); } catch (e) { out[c.id] = G.emptyResult(c.lat.length, CHANNELS, 'unavailable', String(e && e.message || e)); }
+        try { out[c.id] = aggregate(c, els, covered[ci], { ways: opts.ways === true }); } catch (e) { out[c.id] = G.emptyResult(c.lat.length, CHANNELS, 'unavailable', String(e && e.message || e)); }
       });
     } catch (e) {
       for (const c of corridors) out[c.id] = G.emptyResult(c.lat.length, CHANNELS, 'unavailable', String(e && e.message || e));

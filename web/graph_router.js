@@ -89,6 +89,15 @@
     // budget never shuts out the highway-free quickest (+ HWY_FREE_SLACK_S). A point snapped onto a highway moves to the
     // nearest other road within HWY_SNAP_M (a car on the highway, heading given and within HWY_ON_M of it, stays on it)
     NO_HWY: { fun: true, max: true }, TRUNK_FUN_KM: 1.5, HWY_LINK_X: 25, HWY_ABSURD: 2, HWY_FREE_SLACK_S: 60, HWY_SNAP_M: 150, HWY_ON_M: 25,
+    // a road trip (2026-11-15): where keeping off the highways costs more than HWY_FIT_S past the level's own budget
+    // (Denver to Ouray at Fun: 12 h highway-free against 5.5 h, so the card fell back to Quick; Cincinnati to Deals Gap:
+    // 8.4 h against 5 h with one bridge of interstate), the level takes highway where it must to stay inside its budget:
+    // each highway second costs the largest of HWY_FIT_X that fits, so the twisty roads stay and the long straight
+    // transit goes on the highway. A short ride is untouched: its highway-free way is rarely that much longer.
+    HWY_FIT_S: 1200, HWY_FIT_X: [8, 4, 2.5, 1.6, 1.25],
+    // the A* bound's top speed (view): the fastest edge of at least VMAX_MIN_M, at most VMAX_MPS (the 85 mph of Texas 130,
+    // as the tiles time it: the limit x 1.05 flow, 40 m/s)
+    VMAX_MIN_M: 200, VMAX_MPS: 40,
     // loops (loop()): at Quick motorway and trunk cost x LOOP_HWY_X on every leg (a short link to good roads, never the
     // bulk), at Fun and Long way they are never driven (NO_HWY, the same exception); the
     // stages within reach of half the length at LOOP_REACH_MS; at most LOOP_STAGES of them chained, LOOP_TRIES loops
@@ -205,8 +214,11 @@
         name[g] = ed.name && ed.name[e] !== NO_NAME ? ed.name[e] : -1;
         if (ed.hIn && ed.hOut) { hIn[g] = ed.hIn[e] / 256 * 2 * Math.PI; hOut[g] = ed.hOut[e] / 256 * 2 * Math.PI; }
         if (ed.ch) for (const k in ed.ch) roadCh[k][g] = ed.ch[k][e];
+        // the A* bound's top speed: from edges long enough for their time to be measured, never past VMAX_MPS (2026-11-15:
+        // one 60 m edge in Ohio timed at 0.5 s, 430 km/h, made every search in its view 3 x as blind, and Long way from
+        // Cincinnati to Deals Gap ran out of search before reaching it; a 4 m edge rounds to 0.1 s, 43 m/s)
         const v = len[g] / time[g];
-        if (v > vmax) vmax = v;
+        if (v > vmax && len[g] >= K.VMAX_MIN_M) vmax = Math.min(v, K.VMAX_MPS);
       }
     });
     first[N] = E;
@@ -830,6 +842,62 @@
       hk: new Float64Array(1024), hv: new Int32Array(1024), hn: 0 };
     return v.scratch;
   }
+  /**
+   * The search's lower bound on the time from each node to the goal (dst: snaps), by one backward Dijkstra on the edge
+   * times inside the corridor ellipse: turn costs, restrictions, bans and the objective's factors left out, so it never
+   * overestimates (every edge costs at least its time x exp(a x minBad)). Infinity: no way to the goal inside the
+   * ellipse. A long trip's searches then go along the corridor instead of flooding it (2026-11-15: Cincinnati to Deals
+   * Gap's searches settled 1.5 to 4 million edges each by the crow-line bound). Kept on the view for the goal (v.tt).
+   */
+  function timeTo(v, dst, el, ban = null, fwd = false) {
+    const key = (fwd ? 'f' : 'b') + dst.map((d) => `${d.edge}:${d.frac}`).join(',') + (el ? `|${el.a.lat},${el.a.lon},${el.b.lat},${el.b.lon},${el.major}` : '') + (ban ? `|ban${banId(ban)}` : '');
+    // three kept (to the goal, to it off the highways, and from the start: fwd, the same from the snaps `dst` given as
+    // the start), the oldest reused
+    const kept = v.tt || (v.tt = []);
+    const hit = kept.find((x) => x.key === key);
+    if (hit) return hit.t;
+    const N = v.N, old = kept.length >= 3 ? kept.shift() : null;
+    const T = old && old.t.length === N ? old.t : new Float32Array(N), seen = old && old.in.length === N ? old.in : new Uint8Array(N);
+    T.fill(Infinity); seen.fill(0);
+    const inside = el ? (n) => { if (!seen[n]) seen[n] = distM(v.lat[n], v.lon[n], el.a.lat, el.a.lon) + distM(v.lat[n], v.lon[n], el.b.lat, el.b.lon) <= el.major ? 1 : 2; return seen[n] === 1; } : () => true;
+    let hk = new Float64Array(1024), hv = new Int32Array(1024), hn = 0;
+    const push = (k, n) => {
+      if (hn >= hk.length) { const a = new Float64Array(hk.length * 2); a.set(hk); hk = a; const b = new Int32Array(hv.length * 2); b.set(hv); hv = b; }
+      let i = hn++;
+      while (i > 0) { const p = (i - 1) >> 1; if (hk[p] <= k) break; hk[i] = hk[p]; hv[i] = hv[p]; i = p; }
+      hk[i] = k; hv[i] = n;
+    };
+    // (keys as stored: T is a Float32Array, and a 64-bit key a hair over its rounded copy would read as stale)
+    for (const d of dst) { const n = fwd ? v.to[d.edge] : v.tail[d.edge], c = Math.fround((fwd ? 1 - d.frac : d.frac) * v.time[d.edge]); if (n >= 0 && c < T[n]) { T[n] = c; push(c, n); } }
+    while (hn > 0) {
+      const k = hk[0], m = hv[0], lk = hk[--hn], lm = hv[hn];
+      let i = 0;
+      for (;;) { let c = 2 * i + 1; if (c >= hn) break; if (c + 1 < hn && hk[c + 1] < hk[c]) c++; if (hk[c] >= lk) break; hk[i] = hk[c]; hv[i] = hv[c]; i = c; }
+      hk[i] = lk; hv[i] = lm;
+      if (k > T[m]) continue;
+      if (fwd) {
+        for (let e = v.first[m]; e < v.first[m + 1]; e++) {
+          const n = v.to[e];
+          if (n < 0 || (ban && ban[e])) continue;
+          const c = Math.fround(k + v.time[e]);
+          if (c < T[n] && inside(n)) { T[n] = c; push(c, n); }
+        }
+      } else {
+        for (let r = v.rfirst[m]; r < v.rfirst[m + 1]; r++) {
+          const e = v.redge[r];
+          if (ban && ban[e]) continue;
+          const n = v.tail[e], c = Math.fround(k + v.time[e]);
+          if (c < T[n] && inside(n)) { T[n] = c; push(c, n); }
+        }
+      }
+    }
+    kept.push({ key, t: T, in: seen });
+    return T;
+  }
+  // a ban array's id for timeTo's key (the same array, the same id)
+  const banIds = new WeakMap();
+  let banN = 0;
+  function banId(b) { if (!banIds.has(b)) banIds.set(b, ++banN); return banIds.get(b); }
   /** Seconds a turn from edge p onto edge e costs at their node (time, not scaled); Infinity when it isn't allowed. */
   function turnCost(v, p, e, obj) {
     const B = v.bits, node = v.to[p];
@@ -898,7 +966,14 @@
     const { bad, mult, add, minBad } = obj;
     const tgt = dst[0];
     const hMul = Math.exp(a * minBad) / v.vmax * 0.995;
-    const H = (n) => { if (hs[n] !== S.qid) { hs[n] = S.qid; h[n] = distM(v.lat[n], v.lon[n], tgt.lat, tgt.lon) * hMul; } return h[n]; };
+    // opts.timeTo: the backward bound (timeTo) when the plan has one, else the crow line at the top speed
+    const tt = opts.timeTo ? timeTo(v, dst, opts.ellipse || null, opts.ban || null) : null, tMul = Math.exp(a * minBad) * 0.995;
+    // opts.limitS (with the bound): a node no route can pass inside the plan's budget (the same bound from the start,
+    // then the bound to the goal) is never entered; a route through it would be over the budget anyway
+    const lim = tt && opts.limitS ? opts.limitS : 0, tf = lim ? timeTo(v, src, opts.ellipse || null, opts.ban || null, true) : null;
+    const late = lim ? (n) => tf[n] + tt[n] > lim : null;
+    const H = tt ? (n) => { if (hs[n] !== S.qid) { hs[n] = S.qid; h[n] = Math.max(distM(v.lat[n], v.lon[n], tgt.lat, tgt.lon) * hMul, tt[n] * tMul); } return h[n]; }
+      : (n) => { if (hs[n] !== S.qid) { hs[n] = S.qid; h[n] = distM(v.lat[n], v.lon[n], tgt.lat, tgt.lon) * hMul; } return h[n]; };
     const ban = opts.ban || null, hx = opts.hwyX || null, stopX = Math.max(-1, (Number.isFinite(K.STOP_AVOID_X) ? K.STOP_AVOID_X : 1) - 1);
     const base = hx ? (e) => (v.time[e] * Math.exp(a * bad[e]) * mult[e] + add[e]) * (penal ? penal[e] : 1) * (hx.is[e] ? hx.x : 1)
       : (e) => (v.time[e] * Math.exp(a * bad[e]) * mult[e] + add[e]) * (penal ? penal[e] : 1);
@@ -956,7 +1031,7 @@
         // the ellipse bounds where the search goes on from, not the goal: a target edge whose far end is outside it (a 6 km
         // mountain edge with no junction, the goal 60 m along it) is still reached (2026-11-14: every Robbinsville loop
         // failed on such a leg)
-        const out = bound && !bound(head);
+        const out = (bound && !bound(head)) || (late && late(head));
         if (out && !dstMap.has(e)) continue;
         let tc = turnCost(v, p, e, obj);
         if (tc === Infinity) continue;
@@ -1294,6 +1369,29 @@
     const l = search(v, obj, src, dst, 0, null, { ...opts, ...xl });
     return l ? { r: l, mode: 'link', src, dst, xo: xl } : null;
   }
+  /**
+   * A road trip's level quickest inside the budget (HWY_FIT_S): the route that keeps off the highways the most while its
+   * time stays at most fitS, each highway second costing the largest HWY_FIT_X that fits. Returns { route, x, src, dst,
+   * xo } or null (not even the cheapest fits: the level keeps its highway-free way).
+   */
+  function fitHighway(v, obj, src, dst, opts, is, fitS, level) {
+    // a binary search over HWY_FIT_X (largest first): each try crosses the whole trip, so two or three, not five
+    const X = K.HWY_FIT_X, at = new Map();
+    const tryX = (i) => {
+      if (!at.has(i)) {
+        const x = X[i], xo = { hwyX: { is, x } }, r = search(v, obj, src, dst, 0, null, { ...opts, ...xo, ...(opts.timeTo ? { limitS: fitS } : {}) });
+        const route = r ? assemble(v, r, obj, { level, role: 'quickest', a: 0 }) : null;
+        at.set(i, route && route.timeS <= fitS ? { route, x, src, dst, xo } : null);
+      }
+      return at.get(i);
+    };
+    let lo = 0, hi = X.length - 1, best = null;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1, g = tryX(mid);
+      if (g) { best = g; hi = mid - 1; } else lo = mid + 1;
+    }
+    return best;
+  }
   /** Why a route with the exception drives a highway: it starts on one, ends on one, or there is no other way across. */
   function hwyReason(v, r) {
     const E = r.edgeIdx;
@@ -1329,7 +1427,9 @@
     const snaps = snapBoth(v, req.from, req.to);
     let { src, dst } = snaps;
     const sc = startCostFor(v, req.from.heading != null ? req.from.heading : req.heading);
-    const opts0 = { ...(sc ? { startCost: sc } : {}), ellipse: ellipseFor(req.from, req.to, level) };
+    // a long trip (LONG_KM crow): the searches use the backward bound (timeTo), one Dijkstra per goal
+    const crowM = distM(req.from.lat, req.from.lon, req.to.lat, req.to.lon);
+    const opts0 = { ...(sc ? { startCost: sc } : {}), ellipse: ellipseFor(req.from, req.to, level), ...(crowM > K.LONG_KM * 1000 ? { timeTo: true } : {}) };
     let opts = opts0;
     const run = (a, penal = null, role = 'step') => { const r = search(v, obj, src, dst, a, penal, opts); return r ? assemble(v, r, obj, { level, role, a }) : null; };
     const free = noHighway(level);
@@ -1350,9 +1450,21 @@
       base = f.r ? assemble(v, f.r, obj, { level, role: 'quickest', a: 0 }) : quick;
       if (base !== quick) quick.why.role = 'quickest-highway';
       hwy = { mode: f.mode, absurd: f.mode === 'free' && base.timeS > K.HWY_ABSURD * quick.timeS, quickS: quick.timeS, freeS: f.mode === 'free' ? base.timeS : null };
+      const fitS = quick.timeS * (1 + L.budget) + L.slackS;
+      if (base !== quick && base.timeS > fitS + K.HWY_FIT_S) {
+        const g = fitHighway(v, obj, snaps.src, snaps.dst, opts0, is, fitS, level);
+        if (g) {
+          ({ src, dst } = g);
+          opts = { ...opts0, ...g.xo };
+          hwy = { mode: 'link', fit: g.x, absurd: false, quickS: quick.timeS, freeS: hwy.freeS };
+          base = g.route;
+        }
+      }
     }
     // the budget over the quickest; never so tight it shuts out the level's own quickest (a highway-free way)
     const limitS = Math.max(quick.timeS * (1 + L.budget) + L.slackS, base === quick ? 0 : base.timeS + K.HWY_FREE_SLACK_S);
+    // (a long trip: the searches below never enter a node no route inside the budget can pass)
+    if (opts.timeTo) opts = { ...opts, limitS };
     const found = [base];
     const keep = (r) => { if (r && !found.some((x) => sameRoute(x, r))) found.push(r); return r; };
     // bisect the goodness weight (log steps): the largest a whose route is inside the budget

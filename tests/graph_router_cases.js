@@ -851,6 +851,37 @@ const CASES = {
         rankHwy: ranked.map((c) => c.route.hwyKm), rankAbsurd: ranked.map((c) => !!c.hwyAbsurd), why: (E.whyHighway(ranked[0]) || {}).text || null,
         quickPick: FunRoute.rank(cands, 'quick')[0].route.hwyKm };
     }
+    // (3b) a road trip (2026-11-15): the motorway is 4 h; off it the only way to the Pass Road is a 5 h Loop Road, so the
+    // highway-free way is twice the quickest. Fun takes the motorway to the Pass Road and the Pass Road on, inside its
+    // budget (HWY_FIT_S), instead of the highway-free way the card used to answer with Quick
+    {
+      const y = 39.70, nodes = [], edges = [];
+      const n = (lat, lon) => { nodes.push(at(lat, lon)); return nodes.length - 1; };
+      const s0 = n(y, -84.704), S = n(y, -84.70), M1 = n(y, -84.66), T = n(y, -84.60), t0 = n(y, -84.596), L1 = n(y + 0.03, -84.68);
+      two(edges, s0, S, { name: 'Start Lane', t: 30, cls: 5 }); two(edges, T, t0, { name: 'End Lane', t: 30, cls: 5 });
+      two(edges, S, M1, { name: 'I-71', cls: 0, flags: 64, quality: 0.82, fun: 0, t: 3600 });
+      two(edges, M1, T, { name: 'I-71', cls: 0, flags: 64, quality: 0.82, fun: 0, t: 10800 });
+      two(edges, M1, T, { name: 'Pass Road', cls: 4, quality: 0.85, scenery: 0.8, fun: 3, t: 12000 });
+      two(edges, S, L1, { name: 'Loop Road', cls: 4, quality: 0.6, fun: 0.5, t: 9000 }); two(edges, L1, M1, { name: 'Loop Road', cls: 4, quality: 0.6, fun: 0.5, t: 9000 });
+      const v = R.view(H.tiles(nodes, edges).tiles);
+      const from = { lat: y, lon: -84.702 }, to = { lat: y, lon: -84.598 };
+      out.trip = {};
+      for (const level of ['fun', 'max']) {
+        const p = R.plan(v, { from, to, level }), b = p.routes[0];
+        out.trip[level] = { mode: p.hwy.mode, fit: p.hwy.fit || null, absurd: p.hwy.absurd, hwyKm: b.hwyKm, names: names(b), timeS: b.timeS, limitS: p.limitS, quickS: p.quick.timeS };
+      }
+      // the same trip a quarter of an hour long (every time / 16): the highway-free way, 32 min against 16, is under
+      // HWY_FIT_S past the budget, so Fun keeps off the highway as before
+      const e4 = edges.map((e) => ({ ...e, t: e.t / 16 }));
+      const p4 = R.plan(R.view(H.tiles(nodes, e4).tiles), { from, to, level: 'fun' });
+      out.trip.short = { mode: p4.hwy.mode, hwyKm: p4.routes[0].hwyKm, names: names(p4.routes[0]) };
+    }
+    // (3c) the A* bound's top speed (view vmax): a 60 m edge timed at 0.5 s (a broken time in the map) doesn't set it
+    {
+      const nodes = [at(39.8, -84.70), at(39.8, -84.6993), at(39.8, -84.60)], edges = [];
+      two(edges, 0, 1, { name: 'Glitch Lane', cls: 4, t: 0.5 }); two(edges, 1, 2, { name: 'Main Road', cls: 2, t: 400 });
+      out.vmax = R.view(H.tiles(nodes, edges).tiles).vmax;
+    }
     // (4) Quick on the city grid: the plan's budget is the quickest + 60 s, every route inside it
     {
       const g = H.grid({ seed: 3, nx: 30, ny: 30, holes: 0.05, oneway: 0.05, signals: 0.15, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
@@ -1258,6 +1289,21 @@ const CASES = {
   },
 
   // the Cincinnati-size synthetic network: 16 tiles, ~150k edges; per query and per full plan
+  // a long trip (2026-11-15): the backward bound (timeTo) finds the same quickest as the crow line, and settles far less
+  longBound() {
+    const g = H.grid({ seed: 7, nx: 60, ny: 60, stepDeg: 0.03, lat0: 38.5, lon0: -86.0, holes: 0.05, oneway: 0.05, signals: 0.1 });
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles), obj = R.objective(v, {});
+    const from = { lat: 38.52, lon: -85.97 }, to = { lat: 40.25, lon: -83.75 };
+    const src = R.snap(v, from.lat, from.lon), dst = R.snap(v, to.lat, to.lon);
+    const out = { crowKm: R.distM(from.lat, from.lon, to.lat, to.lon) / 1000, runs: [] };
+    for (const a of [0, 3]) {
+      const crow = R.search(v, obj, src, dst, a), bound = R.search(v, obj, src, dst, a, null, { timeTo: true });
+      out.runs.push({ a, same: crow.edges.join() === bound.edges.join(), cost: [crow.cost, bound.cost], settled: [crow.settled, bound.settled] });
+    }
+    const p = R.plan(v, { from, to, level: 'fun' });
+    out.plan = { routes: p.routes.length, ok: p.routes.every((r) => r.timeS <= p.limitS + 1e-6) };
+    return out;
+  },
   perf() {
     const t0 = Date.now();
     const g = H.grid({ seed: 5, nx: 194, ny: 220, stepDeg: 0.0039, lat0: 39.001, lon0: -84.999, holes: 0.05, oneway: 0.05, signals: 0.1 });
