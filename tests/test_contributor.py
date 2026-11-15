@@ -611,3 +611,36 @@ def test_a_free_drive_gets_members_bumps_and_crests_from_the_road_context():
     assert "horizonFeel(t, c).catch(() => {});" in js and "{ placesOnly: true, ways: true }" in js
     assert "(t.kind !== 'route' && t.kind !== 'horizon')" in js and "free.feelSaid = null;" in js
     assert "routeCtxOpts().lookupCells" in js and "/api/roads?ways=${ids" not in js[js.index("async function horizonFeel"):js.index("async function horizonFeel") + 3000], "by cells, never way ids (VI-1)"
+
+
+ROUGH = r"""
+const C = require(process.argv[1] + '/web/contributor.js');
+const n = 400, dist = Array.from({ length: n }, (_, i) => i * 5), lat = dist.map((d) => 35 + d / 110540), lon = dist.map(() => -84);
+const rough = new Array(n).fill(null), np = new Array(n).fill(null);
+const set = (a, b, v, k) => { for (let i = a; i <= b; i++) { rough[i] = v; np[i] = k; } };
+set(20, 50, 0.4, 2);      // 150 m broken, two passes: a rough road
+set(70, 90, 0.35, 3);     // 100 m more after a 100 m smooth patch: the same stretch
+set(150, 200, 0.5, 1);    // one pass only: none
+set(250, 260, 0.6, 4);    // 50 m: too short
+set(300, 340, 0.2, 5);    // measured, not broken
+const runs = C.roughFrom(rough, np, dist);
+const t = { lat, lon, dist };
+console.log(JSON.stringify({ runs,
+  marks: C.roughMarks(t, runs, []).map((m) => [m.code, m.call, m.dist_m, m.end_m, m.crowd]),
+  mapped: C.roughMarks(t, runs, [{ code: 'ROUGH', dist_m: 120 }]).length,
+  start: C.roughFrom([0.5, 0.5, 0.5, ...new Array(30).fill(0.5)], new Array(33).fill(2), dist.slice(0, 33)).length,
+  startMarks: C.roughMarks(t, C.roughFrom([0.5, 0.5, 0.5, ...new Array(30).fill(0.5)], new Array(33).fill(2), dist.slice(0, 33)), []).length }));
+"""
+
+
+def test_rough_road_where_two_or_more_members_measured_broken_pavement():
+    """"Rough road" where two or more passes measured broken pavement (0.30 g rms or more, the route card's "rough") for
+    100 m or more; a short patch between is the same stretch; one pass, a short bit or a fair road is none; the map's own
+    smoothness mark there is one call; not at the very start, where the car already is."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    o = json.loads(subprocess.run([NODE, "-e", ROUGH, root], capture_output=True, text=True, check=True).stdout)
+    assert o["runs"] == [{"index": 20, "endIndex": 90}]
+    assert o["marks"] == [["ROUGH", "Rough road", 100, 450, True]]
+    assert o["mapped"] == 0 and o["start"] == 1 and o["startMarks"] == 0
+    js = open(os.path.join(root, "web", "cockpit.js")).read()
+    assert "ApexContributor.roughMarks(t, m.crowdRough || [], t.marks)" in js
