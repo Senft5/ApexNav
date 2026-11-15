@@ -694,12 +694,27 @@
         // who sees it: one slide switch (Friends, or a crew), as every pick of one in the app; stamps past three
         const chips = el('div', { className: opts.length <= 3 ? 'switch' : 'stamps', role: 'radiogroup' });
         chips.setAttribute('aria-label', 'Post to');
-        const paint = () => chips.querySelectorAll('button').forEach((b, i) => { const on = opts[i][0] === to; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+        // a crew drive you were marked at that day: that crew is picked, and the post will say who came (GET /api/feed/with)
+        let along = null, picked = false;
+        const withNote = el('p', { className: 'feed-with post-with', hidden: true });
+        const paint = () => {
+          chips.querySelectorAll('button').forEach((b, i) => { const on = opts[i][0] === to; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+          const show = !!(along && to === along.crew_id && along.with.length);
+          withNote.hidden = !show; withNote.textContent = show ? withLine(along.with, null) : '';
+        };
         for (const [id, label] of opts) {
-          const b = btn(label, () => { to = id; paint(); }, 'chip'); b.setAttribute('role', 'radio'); chips.append(b);
+          const b = btn(label, () => { to = id; picked = true; paint(); }, 'chip'); b.setAttribute('role', 'radio'); chips.append(b);
         }
         paint();
         const say = el('textarea', { className: 'field', maxLength: 280, placeholder: 'How was it? (optional)', 'aria-label': 'Caption' });
+        if (crews.length && typeof d.driven_on === 'string') apiCall('GET', `/api/feed/with?day=${encodeURIComponent(d.driven_on)}`)
+          .then((r) => (r && r.ok ? jsonOf(r) : null)).then((rows) => {
+            const m = Array.isArray(rows) ? rows.find((x) => x && opts.some((o) => o[0] === x.crew_id)) : null;
+            if (!m || !s.box.isConnected) return;
+            along = { crew_id: m.crew_id, with: Array.isArray(m.with) ? m.with : [] };
+            if (!picked) to = m.crew_id;                                    // only while the driver hasn't picked yet
+            paint();
+          }).catch(() => {});
         // the clip that came with it, or a photo the driver adds (redrawn as a JPEG on the phone, so no EXIF leaves it)
         let media = d.media && d.media.blob ? d.media : null;
         const mrow = el('div', { className: 'post-media' });
@@ -747,7 +762,7 @@
           toast(where);
         }, 'ink-btn solid');
         const cancel = btn('Cancel', () => { s.close(); done(false); }, 'linkbtn');
-        s.box.append(el('h2', { textContent: 'Post this drive' }), chips, say, mrow,
+        s.box.append(el('h2', { textContent: 'Post this drive' }), chips, withNote, say, mrow,
           el('p', { className: 'note', textContent: line ? 'Its start and end stay off the line.' : 'No line: too short to show without its start and end.' }),
           el('div', { className: 'row' }, post, cancel));
       });

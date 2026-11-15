@@ -110,3 +110,32 @@ globalThis.ApexCameras = { SERVERS: ['x'], fetchFirst: async (f, body) => { over
     assert len(r["asked"]) == 3 and r["asked"][1].count("p=") == 2, "one request for the list"
     assert r["far"]["opening_hours"] == "24/7" and r["noApi"][0]["opening_hours"] == "24/7" and r["over"] == 2, "outside: Overpass as before"
     assert r["path"] == "/api/ctx/places?p=39.100000%2C-84.500000%2CA%20%26%20B"
+
+
+def test_apples_phone_and_website_fill_only_what_osm_lacks():
+    """In the app, Apple's map (ApexNavApp.swift placeContact) fills a place card's phone or website when OpenStreetMap has
+    none; OSM's own values win, a failed or empty answer changes nothing, and a non-web URL is never a key."""
+    js = r"""
+    const P = require(process.argv[1] + '/web/place_info.js');
+    const apple = { type: 'placeContact', phone: '(513) 555-0101', url: 'https://example.com/' };
+    console.log(JSON.stringify({
+      fill: P.withApple({ name: 'Skyline Chili', opening_hours: '24/7' }, apple),
+      keep: P.withApple({ phone: '+1 513 555 0199', website: 'https://osm.example/' }, apple),
+      none: P.withApple(null, apple),
+      failed: P.withApple({ name: 'X' }, { failed: true, phone: '1' }),
+      nothing: P.withApple(null, { failed: true }),
+      badUrl: P.withApple({}, { phone: '', url: 'javascript:alert(1)' }),
+      card: P.contact(P.withApple(null, apple), new Date(2026, 10, 16, 9)),
+    }));
+    """
+    r = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["fill"] == {"name": "Skyline Chili", "opening_hours": "24/7", "phone": "(513) 555-0101", "website": "https://example.com/"}
+    assert r["keep"] == {"phone": "+1 513 555 0199", "website": "https://osm.example/"}
+    assert r["none"] == {"phone": "(513) 555-0101", "website": "https://example.com/"}
+    assert r["failed"] == {"name": "X"} and r["nothing"] is None and r["badUrl"] is None
+    assert r["card"]["phone"]["href"] == "tel:5135550101" and r["card"]["web"]["text"] == "example.com"
+    swift = open(os.path.join(ROOT, "ApexNavApp.swift")).read()
+    assert 'cmd == "placeContact"' in swift and '"type": "placeContact"' in swift
+    assert "best?.phoneNumber" in swift and "best?.url?.absoluteString" in swift
+    cockpit = open(os.path.join(ROOT, "web", "cockpit.js")).read()
+    assert "cmd: 'placeContact'" in cockpit and "msg.type === 'placeContact'" in cockpit

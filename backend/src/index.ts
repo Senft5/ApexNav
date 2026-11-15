@@ -414,6 +414,7 @@ on("POST", "/api/board", async (req, env, _m, ctx) => {
 });
 // Kudos (IDEAS S-07): a tap of thanks on a friend's run you can see; no text.
 // drive posts and the friends feed (src/drive_posts.ts)
+on("GET", "/api/feed/with", async (req, env) => json(await drivePosts.feedWith(env, await requireMember(req, env), new URL(req.url))));
 on("GET", "/api/feed/week", async (req, env) => json(await drivePosts.feedWeek(env, await requireMember(req, env))));
 on("GET", "/api/feed", async (req, env) => json(await drivePosts.feed(env, await requireMember(req, env), new URL(req.url))));
 on("POST", "/api/posts", async (req, env) => json(await drivePosts.postCreate(env, await requireMember(req, env), req), 201));
