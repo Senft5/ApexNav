@@ -56,7 +56,7 @@ const country = {
   address_per_km: () => 3, business_per_km: () => 0, canopy_pct: () => 65, open_country: (k) => (k < 6 ? 0.7 : 0.2), signals_per_km: () => 0,
   stops_per_km: (k) => (k < 3 || k > 8 ? 1.5 : 0),
 };
-const countryWet = { ...country, crowd_rough_g: between(5, 10, 0.06), crowd_flow: between(5, 10, 0.82), crowd_bank_deg: NaN_, loved: NaN_,
+const countryWet = { ...country, crowd_rough_g: between(5, 10, 0.03), crowd_flow: between(5, 10, 0.82), crowd_bank_deg: NaN_, loved: NaN_,
   precip_6h_mm: () => 3, deer_risk: () => 4, deer_time_risk: () => 1, light: () => 0 };
 const steps = [{ m: 0, street: 'Struble Road' }, { m: 5000, street: 'Day Road' }];
 const out = {};
@@ -84,7 +84,7 @@ out.glare = story(cand(10, [3, 8], country, { spans: [{ kind: 'closure', fromM: 
 // a class estimate is not a limit: no speed said; the good road the whole way says so
 out.estimate = story(cand(10, [0.5, 9.5], { ...country, speed_limit_kph: NaN_, speed_limit_est_kph: () => 88, stops_per_km: () => 0, access_per_km: () => 4, aadt: () => 600 }), { steps });
 // members measured 2 km with no street names known
-out.crowdNoName = story(cand(10, [3, 8], { ...country, crowd_rough_g: between(4, 6, 0.3) }));
+out.crowdNoName = story(cand(10, [3, 8], { ...country, crowd_rough_g: between(4, 6, 0.09) }));
 // fitted on the public Cincinnati trips (2026-11-09): two lanes each way is not a two-lane road; a city's glow over open
 // ground is not suburbs; a best part over five roads names none as the whole of it; houses beside good road aren't slow
 out.fourLane = story(cand(10, [3, 8], { ...country, lanes: () => 2 }), { steps });

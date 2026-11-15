@@ -23,7 +23,7 @@ console.log(JSON.stringify({
   small: C.boxFor({ s: 35.5, w: -83.6, n: 35.6, e: -83.5, zoom: 12 }),
   inside: [C.inside([35.52, -83.58, 35.58, -83.52], [[35.5, -83.6, 35.6, -83.5]]), C.inside([35.4, -83.6, 35.6, -83.5], [[35.5, -83.6, 35.6, -83.5]])],
   first, again, more, gj: C.geojson(cache),
-  surface: [null, -1, 0, 0.05, 0.0999, 0.1, 0.16, 0.22, 0.2201, 0.6, NaN].map(C.surface),
+  surface: [null, -1, 0, 0.02, 0.034, 0.0341, 0.05, 0.0679, 0.068, 0.15, NaN].map(C.surface),
   readings: {
     surer: C.reading({ conf: [1, 3], rough: [0.3, 0.08], banked: [null, 0.25], offCamber: [0.5, 0.02] }),
     tie: C.reading({ conf: [2, 2], rough: [0.1, 0.2], banked: [0.2, null], offCamber: [null, null] }),
@@ -32,9 +32,9 @@ console.log(JSON.stringify({
     none: C.reading({ conf: [0, 0], rough: [null, null] }),
   },
   says: [
-    C.describe({ conf: [1, 3], rough: [0.3, 0.071], banked: [null, 0.304], offCamber: [0.5, 0.02] }),
-    C.describe({ conf: [1, 0], rough: [0.31, null], banked: [0.05, null], offCamber: [0.12, null] }),
-    C.describe({ conf: [2, 0], rough: [0.15, null], banked: [null, null], offCamber: [null, null] }),
+    C.describe({ conf: [1, 3], rough: [0.3, 0.02], banked: [null, 0.304], offCamber: [0.5, 0.02] }),
+    C.describe({ conf: [1, 0], rough: [0.09, null], banked: [0.05, null], offCamber: [0.12, null] }),
+    C.describe({ conf: [2, 0], rough: [0.05, null], banked: [null, null], offCamber: [null, null] }),
     C.describe({ conf: [2, 0] }),
     C.describe({ conf: [0, 0], rough: [null, null] }),
     C.describe(undefined),
@@ -69,16 +69,27 @@ def test_lines_for_the_map(out):
 
 
 def test_pavement_class_from_measured_roughness(out):
-    """IDEAS U-13: smooth under 0.10 g, rough over 0.22 g, fair between; not measured is no class at all (never 'smooth')."""
+    """IDEAS U-13: smooth at or under roughness.js SMOOTH_G, rough at or over ROUGH_G, fair between; not measured is no class at all (never 'smooth')."""
     assert out["surface"] == [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 0]
-    assert out["scale"] == [0.10, 0.22]
+    assert out["scale"] == [0.034, 0.068]
 
 
 def test_the_scale_is_the_route_overviews():
-    """One scale for "smooth" and "rough" in the app: the route overview's words (route_story.js) use the same two numbers."""
-    with open(os.path.join(ROOT, "web", "route_story.js"), encoding="utf-8") as f:
-        src = f.read()
-    assert "r < 0.1) traits.push('smooth')" in src and "r > 0.22) traits.push('rough')" in src
+    """One scale for "smooth" and "rough" in the app (roughness.js, roamer A 2026-11-15: real bins never reached the old
+    0.22 / 0.30 g lines): the map, the route overview's words, the route card, the Rough road call and the ranking all read it,
+    and no file keeps a roughness number of its own."""
+    import re
+    for f in ("coverage.js", "route_story.js", "contributor.js", "measured_stages.js"):
+        with open(os.path.join(ROOT, "web", f), encoding="utf-8") as fh:
+            src = fh.read()
+        assert "require('./roughness.js')" in src and "root.ApexRoughness" in src, f
+        assert not re.search(r"(SMOOTH|ROUGH)_G\s*=\s*0\.", src), f + ": a roughness number of its own"
+    with open(os.path.join(ROOT, "web", "route_story.js"), encoding="utf-8") as fh:
+        assert "RS.level(r)" in fh.read()
+    for page, before in (("index.html", "measured_stages.js"), ("analysis.html", "contributor.js")):
+        with open(os.path.join(ROOT, "web", page), encoding="utf-8") as fh:
+            h = fh.read()
+        assert h.index('src="roughness.js"') < h.index(f'src="{before}"'), page
 
 
 def test_a_line_reads_its_surer_direction(out):
@@ -92,9 +103,9 @@ def test_a_line_reads_its_surer_direction(out):
 
 def test_a_tapped_road_in_words(out):
     assert out["says"] == [
-        "Smooth pavement (0.07 g) · many passes · 30% of it banked",
-        "Rough pavement (0.31 g) · one pass so far · 12% off-camber",
-        "Fair pavement (0.15 g) · a few passes",
+        "Smooth pavement (0.02 g) · many passes · 30% of it banked",
+        "Rough pavement (0.09 g) · one pass so far · 12% off-camber",
+        "Fair pavement (0.05 g) · a few passes",
         "Measured · a few passes",
         "",
         "",

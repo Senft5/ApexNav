@@ -3,7 +3,8 @@
 // coverage map, IDEAS Q-14). Never your position, your path, speeds or times.
 // The pure part (buildContributions) is deterministic and unit-tested; matchDrive/fetchWays/contributeDrive are the thin network shell.
 (function (root) {
-  const SMOOTH_G = 0.08, ROUGH_G = 0.30, MAX_LOOKUP_WAYS = 150;   // roughness g rms: smooth at or under, broken at or over
+  const RS = (root.ApexRoughness || (typeof module !== 'undefined' && typeof require === 'function' ? require('./roughness.js') : null));   // the one roughness scale (roughness.js): smooth at or under, broken at or over
+  const SMOOTH_G = RS.SMOOTH_G, ROUGH_G = RS.ROUGH_G, MAX_LOOKUP_WAYS = 150;
   const BIN_M = 5, MIN_BINS = 20, MAX_BINS = 2000, MAX_OFF_ROAD_M = 25, MAX_AGE_DAYS = 13;
   const SKIP_CLASSES = new Set(['residential', 'service_other', 'unclassified_service', 'service']);   // private-feeling roads are never contributed
   const M_LAT = 110540;
@@ -545,7 +546,7 @@
   }
   /**
    * Broken pavement members measured (IDEAS Q-01 data): runs where two or more passes measured the roughness and its mean is
-   * ROUGH_G (0.30 g rms, the route card's "rough") or more, ROUGH_RUN_M (100 m) long at least, runs less than ROUGH_GAP_M
+   * ROUGH_G (roughness.js, the route card's "rough") or more, ROUGH_RUN_M (100 m) long at least, runs less than ROUGH_GAP_M
    * (300 m) apart as one (a patched bit is no new surface): [{ index, endIndex }]. One pass, or untested, is no rough road.
    */
   const ROUGH_RUN_M = 100, ROUGH_GAP_M = 300;
@@ -706,8 +707,8 @@
     let adj = 0;
     if (m.roughness != null) {
       const w = weight(m.roughCoverage) * passes;
-      adj -= 8 * w * Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30));
-      adj += 3 * w * Math.max(0, Math.min(1, (SMOOTH_G - m.roughness) / 0.03));
+      adj -= 8 * w * RS.badness(m.roughness);
+      adj += 3 * w * RS.glass(m.roughness);
     }
     if (m.km > 0) {
       const share = (km) => (km > 0 ? Math.min(2, (km / m.km) * 20) : 0);
@@ -718,7 +719,7 @@
   /** Surface 0–100 from measured roughness (100 = glass), or null when under a fifth of the route is measured. */
   function surfaceScore(m) {
     if (!m || m.roughness == null || !((m.roughCoverage ?? m.coverage) >= 0.2)) return null;
-    return Math.round(100 * (1 - Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30))));
+    return RS.surface(m.roughness);
   }
 
   const api = { CAM_V, binFlow, bumpEvidence, binBump, bumpEvents, crestsFrom, crestEvents, camFrom, camberMods, roughFrom, roughMarks, feelFromWays, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, wayTiles, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };

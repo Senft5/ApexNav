@@ -20,9 +20,9 @@ const stage = (lon, score, name) => ({ name, score, lat: Array.from({ length: 40
 const A = stage(-83.00, 10, 'rough'), B = stage(-82.989, 9, 'smooth'), C = stage(-82.978, 8, 'nobody');
 const line = (lon, from = 0, to = 2000) => [[35 + from / M_LAT, lon], [35 + to / M_LAT, lon]];
 const ways = [
-  { way: 1, line: line(-83.00 + 0.00005), passes: [2, 0], rough: [0.45, null], banked: [0, null], offCamber: [0.1, null] },   // 4 m off the stage
-  { way: 2, line: line(-82.989), passes: [3, 2], rough: [0.05, 0.06], banked: [0.4, 0.3], offCamber: [0, 0] },
-  { way: 3, line: line(-82.95), passes: [5, 5], rough: [0.5, 0.5], banked: [0, 0], offCamber: [0, 0] },                      // on no stage
+  { way: 1, line: line(-83.00 + 0.00005), passes: [2, 0], rough: [0.1, null], banked: [0, null], offCamber: [0.1, null] },   // 4 m off the stage
+  { way: 2, line: line(-82.989), passes: [3, 2], rough: [0.02, 0.025], banked: [0.4, 0.3], offCamber: [0, 0] },
+  { way: 3, line: line(-82.95), passes: [5, 5], rough: [0.12, 0.12], banked: [0, 0], offCamber: [0, 0] },                      // on no stage
 ];
 const ranked = M.rescore([A, B, C], ways, []);
 const partial = M.measuredOn(stage(-83.00, 10), [{ ...ways[0], line: line(-83.00, 0, 300) }]);   // 15 % measured: not enough
@@ -34,9 +34,9 @@ console.log(JSON.stringify({
   C: ranked.find((s) => s.name === 'nobody'), sameC: ranked.find((s) => s.name === 'nobody') === C, partial, half,
   haz: withHaz.map((s) => [s.name, s.score, s.hazards || null]), noData: M.rescore([A, B], null, null).map((s) => s.score),
   boxes: M.boxesFor({ lat: 35, lon: -83 }, 14), big: M.boxesFor({ lat: 35, lon: -83 }, 120),
-  // crests and verified bumps: two stages alike but a point apart, measured alike (rough 0.1 g) on both
+  // crests and verified bumps: two stages alike but a point apart, measured alike (rough 0.05 g) on both
   crest: (() => {
-    const F = stage(-83.00, 9, 'flat'), K = stage(-82.989, 8.5, 'crested'), wy = (way, lon, o) => ({ way, line: line(lon), passes: [3, 3], rough: [0.1, 0.1], banked: [0, 0], offCamber: [0, 0], ...o });
+    const F = stage(-83.00, 9, 'flat'), K = stage(-82.989, 8.5, 'crested'), wy = (way, lon, o) => ({ way, line: line(lon), passes: [3, 3], rough: [0.05, 0.05], banked: [0, 0], offCamber: [0, 0], ...o });
     const plain = M.rescore([F, K], [wy(1, -83.00, {}), wy(2, -82.989, {})], []).map((s) => s.name);
     const crested = M.rescore([F, K], [wy(1, -83.00, { crested: [0.02, 0.0] }), wy(2, -82.989, { crested: [0.2, 0.15] })], []);
     const bumped = M.rescore([F, K], [wy(1, -83.00, { crested: [0.02, 0.0] }), wy(2, -82.989, { crested: [0.2, 0.15], bumps: [2, 1] })], []);
@@ -55,9 +55,9 @@ def run():
 def test_measurements_reorder_stages():
     r = run()
     assert r["order"] == ["smooth", "nobody", "rough"]                     # broken pavement falls below a decent unmeasured road
-    assert r["A"]["measured"]["share"] == 1 and r["A"]["measured"]["rough"] == pytest.approx(0.45)
+    assert r["A"]["measured"]["share"] == 1 and r["A"]["measured"]["rough"] == pytest.approx(0.1)
     assert r["A"]["score"] == pytest.approx(10 - 5 - 0.33, abs=0.01)     # half its score for broken pavement, a bit for off-camber
-    assert r["B"]["score"] > 9 and r["B"]["measuredAdj"] == pytest.approx(2 * (0.08 - 0.055) / 0.03 + 1, abs=0.01)
+    assert r["B"]["score"] > 9 and r["B"]["measuredAdj"] == pytest.approx(2 * (0.034 - 0.0225) / 0.017 + 1, abs=0.01)   # roughness.js glass, by the smooth line
     assert r["sameC"] and "measured" not in r["C"]                         # unmeasured: untouched, never guessed
     assert r["partial"] is None and r["half"]["share"] == pytest.approx(0.5, abs=0.02)
 
