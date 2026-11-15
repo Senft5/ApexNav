@@ -7430,7 +7430,7 @@ flow('the full Feed picks whose posts (All, Friends or one crew) and mutes a dri
     if (u.pathname === '/api/crews') return json([{ ...rr, role: 'member', visibility: 'private', members: 3 }]);
     if (u.pathname === '/api/feed') {
       asked.push(u.search);
-      const all = [post(5, rr), post(4, null), post(3, rr), post(2, null), post(1, null)];
+      const all = [{ ...post(5, rr), with: ['me', 'cara'] }, post(4, null), post(3, rr), post(2, null), post(1, null)];
       return json(u.searchParams.get('friends') === '1' ? all.filter((p) => !p.crew) : u.searchParams.get('crew') === 'k1' ? all.filter((p) => p.crew) : all);
     }
     return json([]);
@@ -7443,6 +7443,8 @@ flow('the full Feed picks whose posts (All, Friends or one crew) and mutes a dri
   const pick = await page.$$eval('.people-pop.open .feed-pick button', (l) => l.map((b) => `${b.textContent}${b.getAttribute('aria-checked') === 'true' ? '*' : ''}`));
   check(JSON.stringify(pick) === JSON.stringify(['All*', 'Friends', 'Ridge Runners']), 'the pick: All, Friends, each crew; All on: ' + JSON.stringify(pick));
   check(/Drive 5.*Drive 1/.test(await titles()), 'All: every post: ' + await titles());
+  const along = await page.$$eval('.people-pop.open .feed-card .feed-with', (l) => l.map((x) => x.textContent));
+  check(JSON.stringify(along) === '["With you and @cara"]', 'who came, on the crew post only, you first: ' + JSON.stringify(along));
   await page.click('.people-pop.open .feed-pick button:has-text("Friends")');
   await page.waitForFunction(() => [...document.querySelectorAll('.people-pop.open .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 4,Drive 2,Drive 1');
   await page.click('.people-pop.open .feed-pick button:has-text("Ridge Runners")');
@@ -10783,7 +10785,8 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   await openSetting(page, 'data');
   const g = await page.evaluate(() => { const s = document.getElementById('sheet'), e = getComputedStyle(document.getElementById('myEraseBtn'));
     return { title: s.querySelector('h2').textContent, themes: document.querySelectorAll('#themeCards > *').length, how: document.querySelectorAll('[data-panel~="garage"] details.how').length, bare: [...document.querySelectorAll('[data-panel~="garage"] > p.note')].filter((p) => !p.id && p.textContent.trim().length >= 140).length, octane: /Octane/.test(document.body.innerText), erase: e.color + '/' + e.textDecorationLine + '/' + e.borderTopStyle }; });
-  check(g.title === 'Garage' && g.themes === 3 && g.how >= 1 && g.bare === 0 && !g.octane && g.erase === 'rgb(224, 16, 42)/none/none', 'Garage: ' + JSON.stringify(g));
+  // Vetta's grouped list: Erase's red takes 15% of the ink on the raised grey (4.5:1, system.css), still plain red text
+  check(g.title === 'Garage' && g.themes === 3 && g.how >= 1 && g.bare === 0 && !g.octane && /^color\(srgb 0\.75\d* 0\.0[56]\d* 0\.14\d*\)\/none\/none$/.test(g.erase), 'Garage: ' + JSON.stringify(g));
   // 2026-11-10: Your data is the Settings list's rows in three groups (it was eight keys of eight widths): one left edge, one width
   const rowsOf = await page.evaluate(() => { const box = document.querySelector('.data-rows'); return { groups: [...box.querySelectorAll('.nav-group')].map((h) => h.textContent),
     rows: [...box.querySelectorAll('.nav-row')].filter((r) => !r.hidden).map((r) => {   // signed out: no Delete account row
