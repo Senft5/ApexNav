@@ -581,6 +581,22 @@ const CASES = {
 
   // unpaved road avoided: a loop's legs keep off it where they can, and a loop with more than LOOP_DIRT_KM of it goes
   // when others don't need it (Sturgis loops drove 15 to 31 km of gravel)
+  valleyLoop() {
+    // a mountain town (Ouray, 2026-11-15): one paved pass road up the valley, and the only way round back over a gravel
+    // pass. With unpaved avoided, the pass road there and back (kind outBack), not the loop over the gravel
+    const nodes = [], edges = [];
+    for (let k = 0; k <= 20; k++) nodes.push(at(38.0 + k * 0.009, -107.67 + 0.002 * Math.sin(k)));
+    for (let k = 0; k < 20; k++) two(edges, k, k + 1, { quality: 0.85, cls: 2, name: 'Pass Road', t: 60, fun: 3 });
+    const g0 = nodes.length;
+    for (let k = 0; k <= 20; k++) nodes.push(at(38.18 - k * 0.009, -107.62 + 0.002 * Math.cos(k)));
+    two(edges, 20, g0, { quality: 0.7, cls: 5, name: 'Gravel Pass', t: 200, fun: 2, flags: 8 });
+    for (let k = 0; k < 20; k++) two(edges, g0 + k, g0 + k + 1, { quality: 0.7, cls: 5, name: 'Gravel Pass', t: 90, fun: 2, flags: 8 });
+    two(edges, g0 + 20, 0, { quality: 0.7, cls: 5, name: 'Gravel Pass', t: 200, fun: 2, flags: 8 });
+    const v = R.view(H.tiles(nodes, edges).tiles);
+    const run = (avoid) => R.loop(v, { start: { lat: 38.0, lon: -107.67 }, km: 40, level: 'fun', avoid }).routes
+      .map((r) => ({ kind: r.kind, km: Math.round(r.distM / 1000), dirt: +(r.why.unpavedKm || 0).toFixed(1) }));
+    return { avoided: run({ unpaved: true }), allowed: run({ unpaved: false }) };
+  },
   loopsDirt() {
     const g = H.grid({ seed: 9, nx: 28, ny: 28, holes: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
     const rnd = H.rng(5);
