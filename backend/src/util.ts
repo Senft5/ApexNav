@@ -29,6 +29,8 @@ export interface Env {
   OHGO_API_KEY?: string;    // secret: ODOT OHGO public API key (src/traffic.ts, and ohgoApiKey in /api/ctx/keys when CTX_KEYS has none)
   OSM?: KVNamespace;        // optional: the OSM relay's tiles (src/osm_relay.ts), a week each; the Cache API does without it
   CTX?: KVNamespace;        // context-grid bundles, key v1/... (src/context_grid.ts); bound once the owner creates it
+  DATA_OWNER_KEYS?: string;   // road insights API (src/road_insights.ts): sha256 hex of internal keys, comma-separated
+  DATA_API_KEYS?: string;     // ...and of partner keys, which work only while the road_data_partners flag is on
   FLAGS?: string;           // feature flags JSON (src/flags.ts), set in the dashboard to change a rollout without a release
   DEV_FINGERPRINTS?: string;   // more developers by email fingerprint, comma-separated (src/developers.ts)
   QUERY_LIMIT?: string;     // tests only: a request past this many D1 queries fails, as Workers Free's 50 does (src/query_budget.ts)

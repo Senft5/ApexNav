@@ -27,6 +27,9 @@ export const DEFAULT_FLAGS: Record<string, Rule> = {
   // asks Overpass only for a border tile; a tile it can't answer is a 504 at once and the phone asks Overpass itself, off the
   // plan's clock, as before. Turn off: FLAGS {"osm_relay":{"on":false}}
   osm_relay: { on: true },
+  // Road insights API partner keys (src/road_insights.ts, docs/ROAD_INSIGHTS.md): OFF until the sold-data opt-in and the
+  // privacy text exist (§4) and the owner opens it. Internal keys work regardless. Turn on: FLAGS {"road_data_partners":{"on":true}}
+  road_data_partners: { on: false },
 };
 
 /** A flag as the server itself obeys it (no build, platform or share: those pick phones, not the server's own behaviour). */
