@@ -58,4 +58,38 @@ def test_wired_through_the_quiet_gate_on_the_planned_route():
     js = open(os.path.join(ROOT, "web", "cockpit.js")).read()
     assert "track === plannedRoute && window.ApexCornersAhead && state.notesMode !== 'quiet'" in js
     assert "const quiet = limitSay || briefSay || cornersSay || alongSay || brakeSay" in js and "cornersSay = null; drive.sectionsSaid = null;" in js
-    assert '<script src="corners_ahead.js" defer></script>' in open(os.path.join(ROOT, "web", "index.html")).read()
+    assert "'corners_ahead.js'" in open(os.path.join(ROOT, "web", "lazy.js")).read()   # lazy: the 'ahead' group
+
+
+FREE = r"""
+const C = require(process.argv[1] + '/web/corners_ahead.js'), L = require(process.argv[1] + '/web/voice_lines.js');
+const corner = (m) => ({ type: 'corner', dist_m: m, start_m: m - 40 });
+const run = (from, n, step) => Array.from({ length: n }, (_, k) => corner(from + k * step));
+const sec = run(800, 8, 200);                                                    // 800-2200 m of a 3 km road ahead
+// the tracker: 1.5 km past a corner on one road ahead, then a new one built at the car and driven 600 m more
+const tk = C.tracker(), a = { events: [corner(100)] }, b = { events: [] };
+const q = [tk.update(a, 0), tk.update(a, 100), tk.update(a, 1600), tk.update(b, 0), tk.update(b, 600)];
+console.log(JSON.stringify({
+  quiet: C.ahead(sec, 0, 1500, 3000),                                            // 1.5 km behind + 760 m ahead: quiet enough
+  short: C.ahead(sec, 0, 900, 2500),                                             // 900 + 760 < 2 km: still in the twisty bit
+  lone: C.ahead([corner(200), ...sec], 0, 5000, 2500),                           // a lone corner 560 m before it breaks the quiet
+  far: C.ahead([corner(200), ...run(2900, 8, 200)], 0, 0, 5000),                // the lone corner, then 2.7 km of quiet: a section
+  open: C.ahead(run(800, 8, 200), 0, 3000, 2300),                                // runs on past the end of the road ahead
+  few: C.ahead(run(800, 4, 200), 0, 3000, 2500), none: C.ahead(sec, 0, null, 2500),
+  q, openText: C.text({ startM: 800, endM: 2200, corners: 8, open: true }), clip: L.compose('Twisty section ahead.'),
+}));
+"""
+
+
+def test_a_twisty_section_on_a_free_drive():
+    """No route: the road ahead is ~2.5 km from the car, so the quiet stretch counts what you have driven since your last
+    corner. A section that runs past the end of the road ahead is said without a count (its corners aren't all known)."""
+    out = json.loads(subprocess.run([NODE, "-e", FREE, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["quiet"] == {"startM": 760, "endM": 2200, "corners": 8, "open": False}
+    assert out["short"] is None and out["lone"] is None and out["few"] is None and out["none"] is None
+    assert out["far"]["startM"] == 2860 and out["open"]["open"] is True
+    assert out["q"] == [0, 0, 1500, 1500, 2100]
+    assert out["openText"] == "Twisty section ahead." and out["clip"]
+    js = open(os.path.join(ROOT, "web", "cockpit.js")).read()
+    assert "track.kind === 'horizon' && window.ApexCornersAhead && ApexCornersAhead.tracker" in js
+    assert "free.twisty = null; free.twistySaid = null;" in js

@@ -2449,6 +2449,20 @@
         const said = drive.sectionsSaid || (drive.sectionsSaid = new Set()), sec = ApexCornersAhead.next(track.sections, state.cursorM, said);
         if (sec && ApexCornersAhead.due(sec, state.cursorM, vMps)) { said.add(sec.startM); cornersSay = { text: ApexCornersAhead.text(sec), until: performance.now() + 15000 }; }
       }
+      // The same on a free drive (no route): from the road ahead, counting how far you have driven since your last corner.
+      // A road ahead is rebuilt over itself, so a section is said once per place (within 150 m).
+      if (live && track && track.kind === 'horizon' && window.ApexCornersAhead && ApexCornersAhead.tracker) {
+        const quietM = (free.twisty || (free.twisty = ApexCornersAhead.tracker())).update(track, state.cursorM);
+        if (!cornersSay && state.notesMode !== 'quiet' && vMps != null && quietM != null) {
+          const sec = ApexCornersAhead.ahead(track.events, state.cursorM, quietM, track.dist[track.dist.length - 1]);
+          const i = sec ? Math.max(0, track.dist.findIndex((d) => d >= sec.startM)) : -1, cos = Math.cos(track.lat[0] * Math.PI / 180);
+          const near = sec && (free.twistySaid || []).some((p) => Math.hypot((p.lat - track.lat[i]) * 110540, (p.lon - track.lon[i]) * 111320 * cos) < 150);
+          if (sec && !near && ApexCornersAhead.due(sec, state.cursorM, vMps)) {
+            free.twistySaid = [...(free.twistySaid || []), { lat: track.lat[i], lon: track.lon[i] }].slice(-20);
+            cornersSay = { text: ApexCornersAhead.text(sec), until: performance.now() + 15000 };
+          }
+        }
+      }
       if (cornersSay && (performance.now() > cornersSay.until || state.notesMode === 'quiet')) cornersSay = null;
       // The places along the planned route (along_ahead.js, from the route card's t.scenic): the last fuel before a long
       // stretch with none, in any notes mode; a viewpoint or waterfall at most every 5 minutes, not in Quiet notes.
@@ -11225,7 +11239,7 @@
     async function enterDrive() {
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
-      driveActive = true; health.bump('drives'); drive.startedAt = performance.now(); pushQuiet(true);
+      driveActive = true; ApexLazy.load('ahead').catch(() => {}); health.bump('drives'); drive.startedAt = performance.now(); pushQuiet(true);
       driveCam(true);                                                  // Film the drive (DriveCam.swift): the app films the road
       leaveAtMs = null; whenReset();                                                     // driving it now: the plan's hour is this one
       learnFromPick();                                                 // a route you chose over Vetta's first: your taste (taste.js)
@@ -11248,7 +11262,7 @@
       startStageWatch(); startCoach(); drive.ghosts = null; startGhostWatch(null);
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.turns = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); drive.surface = window.ApexRoadSurface ? ApexRoadSurface.createLog() : null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.turns = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; free.twisty = null; free.twistySaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); drive.surface = window.ApexRoadSurface ? ApexRoadSurface.createLog() : null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
@@ -12473,7 +12487,7 @@
     if (['convoy', 'crew', 'invite', 'add', 'roadbook'].some((k) => params.has(k))) needSocial();
     else { let asked = false; const go = () => { if (!asked) { asked = true; idle(needSocial); } }; map.once('idle', () => setTimeout(go, 300)); setTimeout(go, 6000); }
     // the route-context providers (web/lazy.js 'ctx') likewise, so the first plan finds them in; a plan before then loads them
-    { let warm = false; const goCtx = () => { if (!warm) { warm = true; idle(needCtx); } }; map.once('idle', () => setTimeout(goCtx, 600)); setTimeout(goCtx, 6500); }
+    { let warm = false; const goCtx = () => { if (!warm) { warm = true; idle(needCtx); ApexLazy.load('ahead').catch(() => {}); } }; map.once('idle', () => setTimeout(goCtx, 600)); setTimeout(goCtx, 6500); }
     if (document.fonts) document.fonts.ready.then(() => render(true));
     // Native speed (big bet #10): the cover lifts on the first frames of the built cockpit, not when the map's first tile has
     // come in over the network (up to 3 s later on a cold start). The map waits on its own paper until that tile draws (U-68,

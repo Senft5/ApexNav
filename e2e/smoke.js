@@ -12622,6 +12622,37 @@ flow('a limit that drops on the road ahead: a free drive with no route hears "Li
   check((await lim()).length === 1 && await page.evaluate(() => apexDebug.limitSaid) === 1, 'not again on the next road ahead: ' + JSON.stringify([await lim(), await page.evaluate(() => apexDebug.limitSaid)]));
 });
 
+flow('a twisty section on a free drive: after 2 km without a corner, "Twisty section ahead." about 30 s out, once (corners_ahead.js ahead)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [] }) }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexCornersAhead);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const KY = 110540, LON = -83.9, kx = 111320 * Math.cos(35.5 * Math.PI / 180), lat = (m) => 35.5 + m / KY;
+  // north: straight to 3.3 km, then a road that snakes (a bend every 100 m) for 1.2 km
+  const pt = (m) => [LON + (m > 3300 ? 40 * Math.sin((m - 3300) * Math.PI / 100) : 0) / kx, lat(m)];
+  const road = (a, b) => { const o = []; for (let m = a; m <= b; m += 10) o.push(pt(m)); return o; };
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 25, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const twisty = () => page.evaluate(() => window.__said.filter((s) => /^Twisty section ahead/.test(s)));
+  await page.evaluate((c) => apexDebug.horizonFrom(c), road(0, 2500));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon');
+  for (let i = 0, end = await iAt(2000); i <= end; i += 5) { await at(i); await page.waitForTimeout(40); }   // 2 km of straight road
+  check(!(await twisty()).length, 'nothing on the straight: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  await page.evaluate((c) => apexDebug.horizonFrom(c), road(2000, 4500));
+  await page.waitForFunction(() => apexDebug.track.lat[0] > 35.518 && apexDebug.track.events.filter((e) => e.type === 'corner').length >= 6, null, { timeout: 15000 })
+    .catch(async () => { throw new Error('no corners on the road ahead: ' + JSON.stringify(await page.evaluate(() => apexDebug.track.events.map((e) => [e.type, Math.round(e.dist_m)])))); });
+  for (let i = 0, end = await iAt(1100); i <= end && !(await twisty()).length; i += 2) { await at(i); await page.waitForTimeout(60); }
+  const first = await page.evaluate(() => { const c = apexDebug.track.events.find((e) => e.type === 'corner'); return c && (Number.isFinite(c.start_m) ? c.start_m : c.dist_m); });
+  const when = await page.evaluate(() => apexDebug.state.cursorM);
+  check((await twisty()).length === 1 && first - when >= 200 && first - when <= 800, 'said once, about 30 s before the bends: ' + JSON.stringify([await twisty(), Math.round(first - when)]));
+});
+
 flow('road marks on a route set during a drive: the map is asked for this route alone (road_marks.js, attachMarksSoon)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const KY = 110540, lat = (m) => 35.5 + m / KY, LON = -83.9, kx = 111320 * Math.cos(35.5 * Math.PI / 180);

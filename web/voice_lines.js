@@ -229,6 +229,7 @@
       if (m[4]) { const h = nums(+m[4]); if (!h) return null; out.push(...h, m[5] === 'hairpin' ? 'frag:hairpin' : 'frag:hairpins'); }
       return out;
     }
+    if (t === 'Twisty section ahead.') return ['frag:twisty'];   // its corners run on past the road ahead (free drive)
     if ((m = /^Twisty section ahead\. (\d+) corners\.$/.exec(t))) { const c = nums(+m[1]); return c ? ['frag:twisty', ...c, 'frag:corners'] : null; }
     if ((m = /^(.+) ahead\.?$/.exec(t)) && DOT[m[1].toLowerCase()]) return [DOT[m[1].toLowerCase()]];
     // live coaching (pass_coach.js line): the gap to your fastest pass, in tenths or seconds, or points on a stretch

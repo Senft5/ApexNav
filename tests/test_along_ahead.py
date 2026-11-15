@@ -75,4 +75,4 @@ def test_wired_through_the_quiet_gate_on_the_planned_route():
     assert "track === plannedRoute && Array.isArray(track.scenic) && window.ApexAlongAhead" in js
     assert "lastViewS: state.notesMode === 'quiet' ? nowS : drive.viewAt" in js
     assert "alongSay = null; drive.alongSaid = null; drive.viewAt = null;" in js
-    assert '<script src="along_ahead.js" defer></script>' in open(os.path.join(ROOT, "web", "index.html")).read()
+    assert "'along_ahead.js'" in open(os.path.join(ROOT, "web", "lazy.js")).read()   # lazy: the 'ahead' group
