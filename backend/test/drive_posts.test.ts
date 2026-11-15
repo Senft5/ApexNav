@@ -224,3 +224,39 @@ describe("editing a post", () => {
     expect((await feedOf(b))[0]).toMatchObject({ title: "Skyway at dawn", caption: null });
   });
 });
+
+describe("who came, on a crew post", () => {
+  it("names the others marked at a crew drive of that crew the author was at that day; never across a block; none on a post to friends", async () => {
+    const [a, b, c, d] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara"), await makeUser("dan")];
+    await befriend(a, b);
+    const crew = (await json(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).id;
+    for (const u of [b, c, d]) await ok(api(u, "POST", "/api/crews/join", { token: (await json(api(a, "POST", `/api/crews/${crew}/invite`))).token }));
+    const at = `${today} 14:00:00`, ev = (id: string, cancelled = 0) => env.DB.prepare(
+      "INSERT INTO crew_events (id, crew_id, created_by, title, starts_at, meet_lat, meet_lon, cancelled) VALUES (?1, ?2, ?3, 'Skyway run', ?4, 35, -84, ?5)").bind(id, crew, a.id, at, cancelled);
+    const came = (e: string, u: TestUser) => env.DB.prepare("INSERT INTO crew_event_attendance (event_id, user_id) VALUES (?1, ?2)").bind(e, u.id);
+    await env.DB.batch([ev("e1"), ev("e2", 1), came("e1", a), came("e1", b), came("e1", c), came("e2", a), came("e2", d)]);
+    const { id } = await post(a, { crew_id: crew });
+    await post(a, { title: "To friends" });
+    const mine = await feedOf(a);
+    expect(mine.find((p: any) => p.id === id).with).toEqual(["bob", "cara"]);   // dan was only at the cancelled one
+    expect(mine.find((p: any) => p.title === "To friends").with).toEqual([]);
+    expect((await feedOf(b)).find((p: any) => p.id === id).with).toEqual(["bob", "cara"]);
+    await ok(api(d, "POST", "/api/blocks", { handle: "cara" }));
+    expect((await feedOf(d)).find((p: any) => p.id === id).with).toEqual(["bob"]);
+    expect((await json(api(b, "GET", `/api/posts/${id}`))).with).toEqual(["bob", "cara"]);
+  });
+  it("/api/feed/with: the crew drives you were marked at that day, with who else came; not a cancelled one, not another day", async () => {
+    const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara")];
+    const crew = (await json(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).id;
+    for (const u of [b, c]) await ok(api(u, "POST", "/api/crews/join", { token: (await json(api(a, "POST", `/api/crews/${crew}/invite`))).token }));
+    const ev = (id: string, at: string, cancelled = 0) => env.DB.prepare(
+      "INSERT INTO crew_events (id, crew_id, created_by, title, starts_at, meet_lat, meet_lon, cancelled) VALUES (?1, ?2, ?3, ?4, ?5, 35, -84, ?6)").bind(id, crew, a.id, `Run ${id}`, at, cancelled);
+    const came = (e: string, u: TestUser) => env.DB.prepare("INSERT INTO crew_event_attendance (event_id, user_id) VALUES (?1, ?2)").bind(e, u.id);
+    await env.DB.batch([ev("e1", "2026-11-14 23:30:00"), ev("e2", "2026-11-14 15:00:00", 1), ev("e3", "2026-11-10 15:00:00"),
+      came("e1", a), came("e1", b), came("e1", c), came("e2", a), came("e3", a)]);
+    expect(await json(api(a, "GET", "/api/feed/with?day=2026-11-14"))).toEqual([{ crew_id: crew, crew: "Ridge Runners", title: "Run e1", with: ["bob", "cara"] }]);
+    expect(await json(api(a, "GET", "/api/feed/with?day=2026-11-15"))).toHaveLength(1);   // an evening drive is the next UTC day
+    expect(await json(api(a, "GET", "/api/feed/with?day=2026-11-12"))).toEqual([]);
+    expect((await api(a, "GET", "/api/feed/with?day=soon")).status).toBe(400);
+  });
+});

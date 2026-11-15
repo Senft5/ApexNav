@@ -115,3 +115,18 @@ def test_the_feed_keeps_friends_stages_for_the_end_card():
 def test_unmuted():
     """Mute keeps a driver's posts off your Feed; your own posts and your own week row always stay."""
     assert run()["um"] == [3, None]
+
+
+WITH_RUNNER = r"""
+const D = require(process.argv[1] + '/web/drive_posts.js');
+console.log(JSON.stringify([D.withLine(['bob'], 'me'), D.withLine(['bob', 'cara'], 'me'), D.withLine(['Me', 'bob'], 'me'),
+  D.withLine(['bob', 'cara', 'dan'], null), D.withLine(['bob', 'cara', 'dan', 'eve', 'fay'], 'cara'), D.withLine([], 'me'), D.withLine(null)]));
+"""
+
+
+def test_with_line():
+    """Who came along on a crew post: you first, then up to three names, then "and N others"."""
+    import json as _j, subprocess as _s
+    r = _j.loads(_s.run([NODE, "-e", WITH_RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r == ["With @bob", "With @bob and @cara", "With you and @bob", "With @bob, @cara and @dan",
+                 "With you, @bob and 3 others", "", ""]

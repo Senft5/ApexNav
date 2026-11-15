@@ -82,3 +82,37 @@ def test_masthead_parts(out):
     assert out["mast"] == {"head": "Tellico Plains", "rest": "Dry · 61°"}
     assert out["mastSky"] == {"head": "Rain", "rest": "16°"}
     assert out["mastNone"] == {"head": "", "rest": ""}
+
+
+def test_apples_reverse_geocode_reads_as_nominatims():
+    """In the app the place under a pin and the plate's town come from Apple's geocoder (ApexNavApp.swift placeReverse,
+    CLGeocoder), not public Nominatim (its usage policy doesn't allow an app's traffic): fromApple gives the Nominatim shape
+    town() and the pin read; Apple naming an address by its street line is no place name; nothing known is null."""
+    src = r"""
+const P = require(process.argv[1] + '/web/place_plate.js');
+const shop = P.fromApple({ type: 'placeReversed', id: 1, failed: false, name: 'Skyline Chili', road: 'Vine St', house: '643', city: 'Cincinnati', county: 'Hamilton', state: 'OH' });
+const house = P.fromApple({ failed: false, name: '643 Vine St', road: 'Vine St', house: '643', city: 'Cincinnati', state: 'OH' });
+const rural = P.fromApple({ failed: false, county: 'Graham County', state: 'NC' });
+console.log(JSON.stringify({ shop, house, rural, town: P.town(shop), ruralTown: P.town(rural), failed: P.fromApple({ failed: true }), none: P.fromApple(null), empty: P.fromApple({ failed: false, name: ' ' }) }));
+"""
+    r = json.loads(subprocess.run([NODE, "-e", src, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["shop"]["name"] == "Skyline Chili" and r["shop"]["address"] == {"road": "Vine St", "house_number": "643", "city": "Cincinnati", "county": "Hamilton", "state": "OH"}
+    assert r["house"]["name"] == "" and r["house"]["display_name"] == "643 Vine St, Cincinnati, OH", "the street line isn't a place name: the pin falls to the road"
+    assert r["town"] == "Cincinnati" and r["ruralTown"] == "Graham County"
+    assert r["failed"] is None and r["none"] is None and r["empty"] is None
+    swift = open(os.path.join(ROOT, "ApexNavApp.swift")).read()
+    assert 'cmd == "placeReverse"' in swift and "CLGeocoder().reverseGeocodeLocation" in swift and '"placeReversed"' in swift
+    js = open(os.path.join(ROOT, "web", "cockpit.js")).read()
+    assert "msg.type === 'placeReversed'" in js and "cmd: 'placeReverse'" in js
+
+
+def test_typed_search_asks_apple_first_in_the_app():
+    """Where to? text sent without tapping a suggestion asks Apple's MKLocalSearch in the app (placeSearch → placeFound),
+    near the phone, and Nominatim only when Apple has no match or on the website."""
+    swift = open(os.path.join(ROOT, "ApexNavApp.swift")).read()
+    assert 'cmd == "placeSearch"' in swift and "request.naturalLanguageQuery = q" in swift and 'type: "placeFound"' in swift
+    js = open(os.path.join(ROOT, "web", "cockpit.js")).read()
+    body = js[js.index("async function resolvePlace("):]
+    body = body[:body.index("\n    }\n")]
+    assert body.index("cmd: 'placeSearch'") < body.index("nominatim.openstreetmap.org/search"), "Apple first, Nominatim after"
+    assert "msg.type === 'placeFound'" in js

@@ -46,7 +46,7 @@ export function duelOutcome(d: { kind: string; you: { score: number; time_s: num
 
 export async function inbox(env: Env, v: Viewer) {
   const me = v.id;
-  const [requests, topped, passed, passedFixed, kudos, duels, follows, drives, postKudos, postComments, mentioned, bookRoads] = await Promise.all([
+  const [requests, topped, passed, passedFixed, kudos, duels, follows, drives, postKudos, postComments, mentioned, bookRoads, withYou] = await Promise.all([
     // a friend request waiting on you (the list shows it as a card; here it counts as waiting)
     all<{ handle: string; at: string }>(env,
       `SELECT u.handle, f.created_at AS at FROM friendships f JOIN users u ON u.id = f.requested_by
@@ -126,6 +126,18 @@ export async function inbox(env: Env, v: Viewer) {
                OR (b.crew_id IS NOT NULL AND EXISTS (SELECT 1 FROM crew_members cm WHERE cm.crew_id = b.crew_id AND cm.user_id = ?1)))
           AND ${NO_BLOCK("u.id", "?1")} AND ${BOOK_SEEN}
         GROUP BY b.id ORDER BY at DESC LIMIT 10`, me),
+    // a crew-mate posted a drive to the crew that you were on: you were both marked at one of its crew drives that day
+    // (the post's "With you", drive_posts.ts WITH_SQL); only while you can see the post
+    all<{ post_id: string; title: string; handle: string; at: string }>(env,
+      `SELECT p.id AS post_id, p.title, u.handle, p.created_at AS at
+         FROM drive_posts p JOIN users u ON u.id = p.author
+        WHERE p.author != ?1 AND p.crew_id IS NOT NULL AND u.handle IS NOT NULL AND p.created_at > datetime('now', '-${DAYS} days') AND ${POST_SEEN("p")}
+          AND EXISTS (SELECT 1 FROM crew_events e
+                JOIN crew_event_attendance a1 ON a1.event_id = e.id AND a1.user_id = p.author
+                JOIN crew_event_attendance a2 ON a2.event_id = e.id AND a2.user_id = ?1
+               WHERE e.crew_id = p.crew_id AND e.cancelled = 0
+                 AND p.driven_on BETWEEN date(e.starts_at, '-14 hours') AND date(e.starts_at, '+14 hours'))
+        ORDER BY p.created_at DESC LIMIT 10`, me),
   ]);
   const items: Item[] = [];
   for (const r of requests) items.push({ kind: "request", at: r.at, handle: r.handle, waiting: true });
@@ -152,6 +164,7 @@ export async function inbox(env: Env, v: Viewer) {
   for (const g of mentions) items.push({ kind: "post_mention", ...g });
   for (const g of perPost(postKudos)) items.push({ kind: "post_kudos", ...g });
   for (const g of perPost(postComments)) if (g.yours || !mPosts.has(g.post_id)) items.push({ kind: "post_comment", ...g });
+  for (const w of withYou) items.push({ kind: "post_with", ...w });
   items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
   const list = items.slice(0, MAX_ITEMS);
   return { items: list, waiting: list.filter((i) => i.waiting).length, now: new Date().toISOString().replace("T", " ").slice(0, 19) };

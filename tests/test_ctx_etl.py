@@ -180,3 +180,30 @@ def test_committed_bundles_carry_their_sources_and_specs():
             assert all(a[A["array"]].size == L["count"] for A in L["attrs"].values())
         if "points" in h:
             assert h["points"]["years"] == [build.FARS_YEARS[0], build.FARS_YEARS[-1]]
+
+
+# ---- the lower 48 (ctx-us.yml) ----------------------------------------------------------------------------------------
+def test_the_lower_48_preset_names_every_state_but_alaska_and_hawaii():
+    from tools.ctx_etl import sources
+    us = build.PRESETS["us"]["states"]
+    assert len(us) == 49 and "DC" in us and "AK" not in us and "HI" not in us, us
+    assert all(len(sources.STATE_FIPS[s]) == 2 for s in us)
+
+
+def test_ctx_us_runs_chunks_into_r2_and_graph_us_reads_them():
+    wf = open(os.path.join(ROOT, ".github", "workflows", "ctx-us.yml")).read()
+    assert "--preset us --chunk" in wf and "/80" in wf and "upload_r2.sh" in wf and "id-token: write" in wf
+    assert '"region"] = "us"' in wf, "the merged index says it is the lower 48's (fetch.py and upload_r2.sh read it)"
+    assert ".github/workflows/ctx-us.yml" in open(os.path.join(ROOT, "backend", "src", "github_oidc.ts")).read(), "its upload is let in"
+    g = open(os.path.join(ROOT, ".github", "workflows", "graph-us.yml")).read()
+    assert "tools.ctx_etl.fetch" in g, "graph-us scores with the lower 48's grid"
+    up = open(os.path.join(ROOT, "tools", "graph_etl", "upload_r2.sh")).read()
+    assert 'ctx_live" = "us"' in up, "the region's weekly mirror never shrinks the lower 48's grid back to three states"
+
+
+def test_fetch_takes_only_the_bundles_under_a_jobs_blocks():
+    from tools.ctx_etl import fetch
+    # Cincinnati's bundle 8/67/97 and one far away (Maine, 8/79/91)
+    index = {"region": "us", "bundles": {"67/97": {"bytes": 1}, "79/91": {"bytes": 1}}}
+    lines = ["39_-85 -85.00,39.00,-84.00,40.00 -85.10,38.90,-83.90,40.10"]
+    assert fetch.wanted(index, fetch.boxes_of(lines)) == ["67/97"]

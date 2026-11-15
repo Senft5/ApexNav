@@ -195,6 +195,16 @@
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${esc(o.label || 'The roads on a map')}">${body}</svg>`;
   }
 
+  /**
+   * Where a link card's text goes (1200 x 630, the size chat apps show large): the map fills the top MAP_H, the band under
+   * it carries the book's name and its facts; a name too long for the band is cut with an ellipsis by the caller's measure.
+   */
+  const CARD = { w: 1200, h: 630, mapH: 470, pad: 48 };
+  function cardLines(book, fmtLenFn) {
+    const p = progress(book.road_list);
+    return { name: String(book.name || 'Roadbook'), facts: [bookLine(book, fmtLenFn), book.by ? `kept by @${book.by}` : null].filter(Boolean).join(' · '), driven: p.of ? p.done : 0 };
+  }
+
   // ---- the pages ---------------------------------------------------------------------------------------------------
   const STYLE = `
     .rb-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 12px; width: 100%; min-height: 56px; padding: 8px 2px; border: 0; border-bottom: 1px solid var(--hair, var(--panel-dim)); background: none; color: var(--panel-ink); text-align: left; font: inherit; }
@@ -216,7 +226,7 @@
    * page: el, btn, toast, apiCall, jsonOf, copyText, me() → /api/me or null, here() → {lat, lon}|null, mayLookUp(p),
    * fmtLen(m), origin(), zones() → privacy zones, planned() → the planned route's track or null,
    * driveRoad(road, book), driveBook(book) (Drive them all), report({kind, target, label, done}), recordings (ApexRecording), cellQuery(lat, lon),
-   * thumb (ApexRouteThumb), colours() → { line, hi }, changed() → the lists were changed (People redraws its count),
+   * thumb (ApexRouteThumb), colours() → { line, hi }, changed() → the lists were changed (People redraws its count), edited() → a write went through,
    * mapUnder(key, pts, w, h, pad) → a picture of the real map under pts' fit, or null (post_map.js, cockpit.js),
    * stages() → your saved stages (the Log's apex.segments).
    */
@@ -231,7 +241,8 @@
     const readJson = (k, d) => { try { return JSON.parse(store.getItem(k)) || d; } catch (_) { return d; } };
     const writeJson = (k, v) => { try { store.setItem(k, JSON.stringify(v)); } catch (_) {} };
     const today = () => new Date().toISOString().slice(0, 10);
-    const call = async (method, path, body) => { try { const r = await apiCall(method, path, body); return { ok: r.ok, status: r.status, data: r.status === 204 ? null : await jsonOf(r) }; } catch (_) { return { ok: false, status: 0, data: null }; } };
+    // edited() → a book's roads may have changed (a road added or removed, a stamp, a follow): the map's Roadbooks layer reads them again
+    const call = async (method, path, body) => { try { const r = await apiCall(method, path, body); if (r.ok && method !== 'GET' && page.edited) try { page.edited(); } catch (_) {} return { ok: r.ok, status: r.status, data: r.status === 204 ? null : await jsonOf(r) }; } catch (_) { return { ok: false, status: 0, data: null }; } };
     const WHY = { 429: 'That’s the limit for now.', 409: 'Pick a handle first in People: a shared roadbook carries it.', 403: 'This roadbook was taken down and can’t be public again.', 0: 'No connection. Try again.' };
     const why = (r, otherwise) => WHY[r.status] || otherwise;
 
@@ -244,6 +255,46 @@
       return null;
     }
     const stampDay = (rid, day) => { const d = readJson(DATES_KEY, {}); if (day === null) delete d[rid]; else if (day) d[rid] = day; else return d[rid] || null; writeJson(DATES_KEY, d); return day; };
+
+    // ---- a public book's link card (backend link_preview.ts): its roads on the real map, made here, sent once a change ----
+    const cardSent = new Map();                                        // book id → what the last card showed
+    const cssColour = (c, d) => { const m = /^var\((--[\w-]+)\)$/.exec(String(c || '')); if (!m) return c || d;
+      try { return root.getComputedStyle(doc.documentElement).getPropertyValue(m[1]).trim() || d; } catch (_) { return d; } };
+    async function sendCard(book) {
+      if (!book || !book.mine || book.visibility !== 'public' || !page.mapUnder || !doc || !root.ApexSync) return false;
+      const roads = drawn(book.road_list), frame = overviewFrame(roads);
+      if (!frame) return false;
+      const t = cardLines(book, fmtLen), sig = `${t.name}|${t.facts}|${roads.map((r) => r.id).join('.')}`;
+      if (cardSent.get(book.id) === sig) return true;
+      const { w, h, mapH, pad } = CARD;
+      const under = await Promise.resolve(page.mapUnder(`rbc_${book.id}_${roads.map((r) => r.id).join('.')}`, frame, w, mapH, pad)).catch(() => null);
+      if (!under) return false;
+      const img = (src) => new Promise((ok) => { const i = new root.Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = src; });
+      const hi = cssColour(colours().hi, '#e8562a');
+      // every road in the accent (your own stamps are yours, not the card's), on a white casing so it reads over the streets
+      const svg = (overview(roads.map((r) => ({ geom: r.geom })), { w, h: mapH, pad, line: hi, hi, width: 8, label: t.name }) || '').replace(/class="rb-casing"/g, 'stroke="#ffffff" stroke-opacity="0.9"');
+      const [map, lines] = await Promise.all([img(under), img(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`)]);
+      if (!map || !lines) return false;
+      const cv = doc.createElement('canvas'); cv.width = w; cv.height = h;
+      const g = cv.getContext('2d');
+      if (!g) return false;
+      g.drawImage(map, 0, 0, w, mapH); g.drawImage(lines, 0, 0, w, mapH);
+      g.fillStyle = '#1b1914'; g.fillRect(0, mapH, w, h - mapH);
+      const font = (px, wt) => `${wt} ${px}px -apple-system, system-ui, "Segoe UI", Roboto, sans-serif`;
+      g.font = font(28, 800); g.fillStyle = hi; g.textBaseline = 'alphabetic';
+      const mark = 'VETTA', mw = g.measureText(mark).width;
+      g.fillText(mark, w - pad - mw, mapH + 64);
+      g.font = font(52, 800); g.fillStyle = '#f4efe4';
+      let name = t.name; while (name.length > 1 && g.measureText(name).width > w - 3 * pad - mw) name = `${name.slice(0, -2).trimEnd()}…`;
+      g.fillText(name, pad, mapH + 70);
+      g.font = font(30, 500); g.fillStyle = '#b9b1a3'; g.fillText(t.facts, pad, mapH + 122);
+      const blob = await new Promise((ok) => cv.toBlob(ok, 'image/jpeg', 0.82));
+      if (!blob) return false;
+      const r = await root.ApexSync.apiFetch(`/api/roadbooks/${encodeURIComponent(book.id)}/card`, { method: 'PUT', headers: { 'content-type': 'image/jpeg' }, body: blob }).catch(() => null);
+      if (r && r.ok) { cardSent.set(book.id, sig); return true; }
+      return false;
+    }
+    const card = (book) => { sendCard(book).catch(() => {}); };
 
     // ---- stamps: found in your own Log, never tapped ----
     const rec = () => page.recordings || root.ApexRecording;
@@ -357,7 +408,8 @@
       if (page.driveBook && (book.road_list || []).length > 1) keys.append(btn('Drive them all', () => { s.close(); page.driveBook(book); }, book.mine || book.following ? 'ink-btn solid' : 'ink-btn'));
       if (book.mine) {
         keys.append(btn('Edit', () => edit(book, () => paint(book, s, body)), 'ink-btn'));
-        if (book.visibility !== 'private') keys.append(btn('Share', () => page.copyText(link(page.origin(), book.id), 'Link copied. Anyone it is shown to can open it.', book.name), 'ink-btn'));
+        // a public one's link shows its roads on the map in a chat (the card goes up as the link is copied)
+        if (book.visibility !== 'private') keys.append(btn('Share', () => { card(book); page.copyText(link(page.origin(), book.id), 'Link copied. Anyone it is shown to can open it.', book.name); }, 'ink-btn'));
       } else if (!book.can_add) {
         const f = btn(book.following ? 'Following' : 'Follow', async () => {
           if (!member()) { toast('Sign in to follow a roadbook and collect its stamps.'); return; }
@@ -494,6 +546,7 @@
         if ('crew' in change) { book.crew = crew ? { id: crew, name: crewNames[crew] } : null; book.can_add = true; }
         if (change.visibility === 'private') book.followers = 0;
         s.close(); done(); loadLists().then(() => page.changed && page.changed()).catch(() => {});
+        if (book.visibility === 'public') card(book);
         toast(change.visibility === 'public' ? `${book.name} is public. Share its link, or let drivers nearby find it.` : change.crew ? `${crewNames[crew]} can add roads to ${book.name} now.` : 'Saved.');
       }, 'ink-btn solid');
       let sure = false;
@@ -654,6 +707,6 @@
     return { section, nearSection, open, addPart, keep, ofFriend, ofCrew, countLine, afterDrive, scanLog, hasAny, lists: () => lists, reload: loadLists };
   }
 
-  const api = { fromTrack, fromStage, coverage, overlaps, boxOf, lengthM, progress, bookLine, overview, overviewFrame, tour, link, mount, TOUR_MAX, STAMP_AT, TRIM_M, MAX_POINTS, MIN_ROAD_M };
+  const api = { fromTrack, fromStage, coverage, overlaps, boxOf, lengthM, progress, bookLine, cardLines, CARD, overview, overviewFrame, tour, link, mount, TOUR_MAX, STAMP_AT, TRIM_M, MAX_POINTS, MIN_ROAD_M };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadbooks = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -33,6 +33,10 @@ on:
         description: "Publish the bands an earlier run built (its run id; band artifacts keep 3 days): no download, no band"
         required: false
         default: ""
+      osm_from:
+        description: "Build the bands from an earlier run's extracts (its run id; they keep 2 days): no Geofabrik download, a rescore"
+        required: false
+        default: ""
   push:
     branches: [claude/project-thread-39xbx9]
     paths:
@@ -57,6 +61,7 @@ jobs:
       only: ${{ steps.plan.outputs.only }}
       live: ${{ steps.plan.outputs.live }}
       reuse: ${{ steps.plan.outputs.reuse }}
+      osmrun: ${{ steps.plan.outputs.osmrun }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -68,6 +73,7 @@ jobs:
           IN_ONLY: ${{ inputs.only }}
           IN_LIVE: ${{ inputs.live }}
           IN_BANDS: ${{ inputs.bands_from }}
+          IN_OSM: ${{ inputs.osm_from }}
         run: |
           only="$IN_ONLY"; live="$IN_LIVE"
           if [ "${{ github.event_name }}" = "push" ]; then
@@ -76,6 +82,11 @@ jobs:
           fi
           [ -z "$only" ] && live=true
           case "$IN_BANDS" in ""|*[!0-9]*) [ -z "$IN_BANDS" ] || { echo "::error::bands_from is a run id"; exit 1; } ;; esac
+          case "$IN_OSM" in ""|*[!0-9]*) [ -z "$IN_OSM" ] || { echo "::error::osm_from is a run id"; exit 1; } ;; esac
+          # osm_from: the extracts an earlier run downloaded (a rescore, the context grid new, the roads a day old), so
+          # Geofabrik is asked for its index only, not for ~10 GB again
+          echo "osmrun=${IN_OSM:-${{ github.run_id }}}" >> "$GITHUB_OUTPUT"
+          [ -n "$IN_OSM" ] && echo "extracts from run $IN_OSM" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "reuse=$IN_BANDS" >> "$GITHUB_OUTPUT"
           echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
           echo "only=$only" >> "$GITHUB_OUTPUT"
@@ -103,7 +114,7 @@ jobs:
 
   osm:
     needs: plan
-    if: needs.plan.outputs.reuse == ''
+    if: needs.plan.outputs.reuse == '' && inputs.osm_from == ''
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -139,7 +150,7 @@ jobs:
   # on a fresh runner, one at a time
   osm-again:
     needs: [plan, osm]
-    if: needs.plan.outputs.reuse == ''
+    if: needs.plan.outputs.reuse == '' && inputs.osm_from == ''
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -175,7 +186,8 @@ jobs:
 
   band:
     needs: [plan, osm, osm-again]
-    if: needs.plan.outputs.reuse == ''
+    # (osm_from: the download jobs are skipped, and the extracts come from that run)
+    if: "!cancelled() && needs.plan.result == 'success' && needs.plan.outputs.reuse == '' && (needs.osm-again.result == 'success' || (inputs.osm_from != '' && needs.osm-again.result == 'skipped'))"
     runs-on: ubuntu-latest
     timeout-minutes: 345
     strategy:
@@ -207,17 +219,23 @@ jobs:
         run: |
           mkdir -p "$WORK/osm"
           for s in ${{ matrix.states }}; do
-            for k in 1 2 3; do gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n "osm-$s" -D "$WORK/osm" && break; sleep 15; done
+            for k in 1 2 3; do gh run download "${{ needs.plan.outputs.osmrun }}" -R "${{ github.repository }}" -n "osm-$s" -D "$WORK/osm" && break; sleep 15; done
             # a state Geofabrik refused the first time: osm-again's (one artifact, a folder per state)
             if [ ! -s "$WORK/osm/$s.osm.pbf" ]; then
-              [ -d "$WORK/again" ] || gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n osm-again -D "$WORK/again" || true
+              [ -d "$WORK/again" ] || gh run download "${{ needs.plan.outputs.osmrun }}" -R "${{ github.repository }}" -n osm-again -D "$WORK/again" || true
               cp "$WORK/again/$s/$s.osm.pbf" "$WORK/osm/" || { echo "::error::no extract for $s"; exit 1; }
             fi
           done
           ls -la "$WORK/osm"
-      - name: The region's context grid (graph-data ctx/v1), else Cincinnati's
+      - name: The context grid under this job's blocks (the lower 48's from R2), else graph-data's, else Cincinnati's
+        env:
+          JOB: ${{ matrix.job }}
         run: |
-          if git fetch -q --depth 1 origin graph-data && git cat-file -e FETCH_HEAD:ctx/v1/index.json 2>/dev/null; then
+          # the lower 48's grid (ctx-us.yml, about 850 MB): only the bundles under this job's blocks
+          python -m tools.graph_etl.us_plan blocks --job "$JOB" > "$WORK/ctx_blocks.txt"
+          if python -m tools.ctx_etl.fetch --boxes "$WORK/ctx_blocks.txt" --out "$WORK/ctx_us"; then
+            echo "CTX_DIR=$WORK/ctx_us" >> "$GITHUB_ENV"
+          elif git fetch -q --depth 1 origin graph-data && git cat-file -e FETCH_HEAD:ctx/v1/index.json 2>/dev/null; then
             mkdir -p "$WORK/ctx_dl" && git archive FETCH_HEAD ctx | tar -x -C "$WORK/ctx_dl"
             echo "CTX_DIR=$WORK/ctx_dl/ctx/v1" >> "$GITHUB_ENV"
           else

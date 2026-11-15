@@ -30,3 +30,9 @@ def test_the_empty_stages_page_says_what_a_stage_is_and_how_to_make_one():
 def test_the_logs_switch_uses_the_pages_typeface():
     # a <button> does not inherit font-family by itself: Drives / Stages were set in Arial beside Inter Tight
     assert ".switch > button { font-family: inherit; }" in PAGE
+
+
+def test_the_empty_log_draws_the_roads_shape_in_pencil_and_says_what_the_score_is():
+    # the end card's glyph, dashed: where the first drive's line will be; no figure, nothing reads as a result
+    assert '<svg class="fp-glyph" viewBox="0 0 28 68">' in PAGE and "stroke-dasharray: 3 4" in PAGE
+    assert '<p class="fp-line">Vetta scores each drive out of 1000.</p>' in PAGE

@@ -185,3 +185,14 @@ def test_keep_a_posts_road_in_a_roadbook_is_wired():
     assert "const geom = fromStage({ geom: pts }, page.zones ? page.zones() : [])" in rb
     assert "{ name: String(t.name || 'Road').slice(0, 60), geom: t.geom }" in rb
     assert "keepRoad: (name, pts) => { if (roadbooks) roadbooks.keep(name, pts); }" in cockpit
+
+
+def test_a_link_card_says_the_book_its_facts_and_its_keeper():
+    out = subprocess.run(["node", "-e", f"""const R = require({json.dumps(os.path.join(ROOT, 'web', 'roadbooks.js'))});
+      const b = {{ name: 'Smokies classics', by: 'sam', roads: 2, length_m: 10000, followers: 0, road_list: [{{ stamped: true }}, {{ stamped: false }}] }};
+      console.log(JSON.stringify([R.cardLines(b, (m) => (m / 1000) + ' km'), R.cardLines({{ name: '', road_list: [] }}, (m) => m + ' m'), R.CARD]));"""],
+        capture_output=True, text=True, check=True).stdout
+    one, empty, card = json.loads(out)
+    assert one["name"] == "Smokies classics" and one["facts"].endswith(" · kept by @sam") and "2 roads" in one["facts"]
+    assert empty["name"] == "Roadbook" and "@" not in empty["facts"]
+    assert (card["w"], card["h"]) == (1200, 630)
