@@ -321,6 +321,8 @@ jobs:
           ls bands | wc -l
       - name: Merge and pack
         run: |
+          # a refused merge must fail here, not hide behind tee and leave the release step a missing packs/index.json
+          set -o pipefail
           python -m tools.graph_etl.merge_index merged/v1 bands/*/v1 | tee -a "$GITHUB_STEP_SUMMARY"
           rm -rf bands
           # no tools.graph_etl.check here: its spot roads are Cincinnati's, checked by graph-region.yml on the same build,

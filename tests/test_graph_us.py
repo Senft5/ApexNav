@@ -123,6 +123,8 @@ def test_the_lower_48_goes_live_in_our_bucket_under_its_own_build_name():
     assert ptr.index("upload_r2.sh merged") < ptr.index("publish_data.sh ptr"), "R2 first: the Worker reads its index before a release"
     assert "set -o pipefail" in ptr
     assert "cp packs/index.json merged/v1/index.json" in pub
+    mp = pub[pub.index("name: Merge and pack"):pub.index("name: The release")]
+    assert mp.index("set -o pipefail") < mp.index("merge_index"), "a refused merge fails its step, not tee's"
 
 
 def test_the_region_mirror_never_shrinks_a_live_lower_48(tmp_path):
