@@ -191,6 +191,7 @@ and in random batches so a trace cannot be re-assembled.
 - Who came (2026-11-14): a post to a crew says "With you and @cara" under its name when the author was marked at one of
   that crew's drives that day (crew_event_attendance: "I was there" or the drive's convoy, which the crew already sees);
   the others marked there, five at most, never across a block, never on a post to friends. `with` on the Feed's posts. No table.
+  For you tells each of them: "@alice posted a drive you were on: Skyway run." (kind `post_with`, Open).
 - Next: "Post to crew" from a corner clip on the drive's page (analysis thread adds the key, `page.post(blob, meta)`).
   Kudos and comments push (2.12).
 

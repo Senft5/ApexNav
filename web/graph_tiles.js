@@ -190,7 +190,7 @@
     });
   }
   // Two sources: the tiles shipped in the app (data/graph/v1: Cincinnati) and the region's from the Worker
-  // (/api/graph/v1: the rest of Ohio, Kentucky and Indiana, relayed from the repository's graph-data branch). The coverage
+  // (/api/graph/v1: the 48 mainland states, from R2, else the US release, else the graph-data branch). The coverage
   // is the union of their indexes; the region's index is asked once a day (kept in IndexedDB for offline). A tile comes
   // from memory, then IndexedDB, then its source; one fetched from the Worker is kept in IndexedDB, so a road once
   // planned (or an area saved, prefetchArea) works offline.

@@ -4488,7 +4488,7 @@
         try { if (window.ApexErrors && ApexErrors.reporter) ApexErrors.reporter.route(level, own.reason, own.error); } catch (_) { /* a report is never in the way */ }
         if (early.shown) return true;                                       // (never: the early quickest is ours too)
         const what = FunRoute.LEVELS[level].label;
-        const msg = own.reason === 'out' ? `${what} routes use Vetta's own road map, which covers Ohio, Kentucky and Indiana so far. Quick works anywhere.`
+        const msg = own.reason === 'out' ? `${what} routes use Vetta's own road map, which covers the 48 mainland US states. Quick works anywhere.`
           : own.reason === 'off' ? `${what} routes need Vetta's own router, which is switched off. Quick still works.`
           : own.reason === 'index' ? `Couldn't load Vetta's road map for this trip. Check signal and try again, or use Quick.`
           : `Couldn't plan a ${what} route just now. Try again, or use Quick.`;
@@ -5330,9 +5330,12 @@
       try { if (window.ApexErrors && ApexErrors.reporter) ApexErrors.reporter.route('loop', why, failed ? `${asked}, ${failed}` : asked); } catch (_) { /* a report is never in the way */ }
       toast(!ownOn() ? 'Loops need Vetta\'s own router, which is switched off.'
         : here == null ? 'Couldn\'t load Vetta\'s road map here. Check signal and try again.'
-        : !here ? 'Loops use Vetta\'s own road map, which covers Ohio, Kentucky and Indiana so far.'
+        : !here ? 'Loops use Vetta\'s own road map, which covers the 48 mainland US states.'
         : failed ? `Vetta's router couldn't finish a ${asked} loop this time. Try again, or a shorter one.`
-        : `Couldn't find a ${asked} loop on Vetta's road map from here. Try another length.`);
+        : `Couldn't find a ${asked} loop on Vetta's road map from here. Try another length.`,
+        // no loop at all (Big Sur, Moab, the San Juans: the good roads there run out and back) still leaves the best roads in
+        // reach: the key opens Best roads nearby, which leads to one (not on the car, where the message is said instead)
+        why === 'none' && !(car.echo > 0) ? { label: 'Best roads', ms: 10000, onClick: () => openNearby() } : undefined);
     }
     const loopCircle = (L) => ({ kind: 'circle', pts: loopWaypoints(L.c, L.miles, Math.random() * 2 * Math.PI), through: true, extra: loopCosting() || {} });
     /** Loop jobs routed (ours come routed) and built into tracks: { t, job, route, km, score, ... } for those that worked. */
