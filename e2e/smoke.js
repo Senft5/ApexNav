@@ -7729,6 +7729,10 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   check(dna && dna.shapes === 2 && dna.w >= 150 && /@bob filled · you outlined/.test(dna.text) && /@bob leads at One arc: 92 to your 70/.test(dna.text) && /You lead at Brakes done: 75 to 64/.test(dna.text)
     && /One arc 92, you 70/.test(dna.label), 'their DNA beside yours: ' + JSON.stringify(dna));
   if (process.env.SHOTS) { await page.evaluate(() => document.querySelector('.profile-view .profile-dna').scrollIntoView()); await page.screenshot({ path: `${process.env.SHOTS}/friend-dna.png` }); }
+  // Share us: me against them as one 9:16 picture, sent the way the drive card is
+  const [vsDl] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.click('.profile-view .profile-dna button:has-text("Share us")')]);
+  check(vsDl.suggestedFilename() === 'dna-me-vs-bob.png', 'me against them saves as a picture: ' + vsDl.suggestedFilename());
+  if (process.env.SHOTS) await vsDl.saveAs(`${process.env.SHOTS}/dna-me-vs-bob.png`);
   // their roadbooks you may open, on their profile (free roamer B, 2026-11-14): Bob's only
   await page.waitForSelector('.profile-view .rb-of-friend:not([hidden]) .rb-row', { timeout: 8000 });
   const rbs = await page.locator('.profile-view .rb-of-friend .rb-row b').allInnerTexts();

@@ -123,6 +123,20 @@
     });
   }
 
+  /** The head-to-head picture's lines (yours and a friend's DNA as wireOf sends them), said as the sharer says it: the
+   *  skills each of you leads by 5 points or more, biggest first, and how many are within 5. [] unless both are whole. */
+  function vsLines(mine, theirs, who) {
+    const whole = (x) => x && x.skills && SKILLS.every((k) => finite(x.skills[k]));
+    if (!whole(mine) || !whole(theirs)) return [];
+    const name = `@${String(who || 'them').replace(/^@/, '')}`, gaps = SKILLS.map((k) => [k, mine.skills[k] - theirs.skills[k]]);
+    const list = (a) => a.sort((x, y) => Math.abs(y[1]) - Math.abs(x[1])).map(([k]) => SHORT[k]).join(', ');
+    const me = gaps.filter(([, g]) => g >= 5), them = gaps.filter(([, g]) => g <= -5), even = 6 - me.length - them.length, out = [];
+    if (me.length) out.push(`I lead at ${list(me)}`);
+    if (them.length) out.push(`${name} leads at ${list(them)}`);
+    if (even) out.push(even === 6 ? 'Within 5 points at every skill' : `Within 5 points at ${even === 1 ? 'one skill' : `${even} skills`}`);
+    return out;
+  }
+
   /** The lines under the hexagon, in order (pure, so the test reads what the picture says). */
   function dnaLines(m) {
     if (!m) return [];
@@ -190,6 +204,53 @@
     return canvas;
   }
 
-  const api = { dnaModel, wireOf, compareLines, compareSvg, crewLeaders, spanText, dnaLines, scopeText, styleWords, bySize, hexPoint, drawDna, SKILLS, SHORT, W, H };
+  /** Me against a friend, 9:16: my shape filled in the accent, theirs outlined over it, each skill's two levels at its
+   *  corner, and vsLines() under it. mine, theirs: wireOf() shapes; who: their handle. Null unless both are whole. */
+  function drawDnaVs(canvas, mine, theirs, who, C = {}) {
+    const lines = vsLines(mine, theirs, who);
+    if (!lines.length) return null;
+    canvas.width = W; canvas.height = H;
+    const g = canvas.getContext('2d'), name = `@${String(who || 'them').replace(/^@/, '')}`;
+    const font = (w, px, fam = C.fontUi || 'system-ui, sans-serif') => `${w} ${px}px ${fam}`;
+    const ink = C.panelInk || '#fff', dim = C.panelDim || '#999', accent = C.accent || '#f60';
+    g.fillStyle = C.panel || '#111'; g.fillRect(0, 0, W, H);
+    g.textBaseline = 'top';
+    g.fillStyle = ink; g.font = font(800, 84, C.fontNum); g.fillText('DRIVING DNA', 90, 120);
+    g.font = font(700, 48); g.fillStyle = accent; g.fillText('Me', 90, 224);
+    const meW = g.measureText('Me ').width; g.fillStyle = dim; g.fillText('vs', 90 + meW, 224);
+    const vsW = g.measureText('vs ').width; g.fillStyle = ink; g.fillText(name, 90 + meW + vsW, 224, W - 180 - meW - vsW);
+    const cx = W / 2, cy = 800, R = 290;
+    const path = (lv) => { g.beginPath(); SKILLS.forEach((k, i) => { const [x, y] = hexPoint(cx, cy, R, i, lv(k)); if (i) g.lineTo(x, y); else g.moveTo(x, y); }); g.closePath(); };
+    g.strokeStyle = dim; g.lineWidth = 2; g.globalAlpha = 0.35;
+    for (const ring of [25, 50, 75, 100]) { path(() => ring); g.stroke(); }
+    for (let i = 0; i < 6; i++) { const [x, y] = hexPoint(cx, cy, R, i, 100); g.beginPath(); g.moveTo(cx, cy); g.lineTo(x, y); g.stroke(); }
+    g.globalAlpha = 1; g.lineJoin = 'round';
+    path((k) => mine.skills[k]); g.globalAlpha = 0.3; g.fillStyle = accent; g.fill(); g.globalAlpha = 1; g.strokeStyle = accent; g.lineWidth = 8; g.stroke();
+    path((k) => theirs.skills[k]); g.strokeStyle = ink; g.lineWidth = 5; g.setLineDash([18, 12]); g.stroke(); g.setLineDash([]);
+    // each corner: the skill's name, then my level in the accent and theirs beside it
+    SKILLS.forEach((k, i) => {
+      const [hx, y] = hexPoint(cx, cy, R + 60, i, 100), x = i % 3 ? cx + Math.sign(hx - cx) * (R * 0.866 + 130) : hx, top = i === 0 ? y - 100 : i === 3 ? y - 4 : y - 48;
+      g.textAlign = 'center'; g.fillStyle = dim; g.font = font(600, 32); g.fillText(SHORT[k], x, top);
+      g.font = font(800, 52, C.fontNum);
+      const a = String(mine.skills[k]), b = String(theirs.skills[k]), sep = '  ', wa = g.measureText(a).width, ws = g.measureText(sep).width, wb = g.measureText(b).width;
+      const x0 = x - (wa + ws + wb) / 2;
+      g.textAlign = 'left'; g.fillStyle = accent; g.fillText(a, x0, top + 40); g.fillStyle = ink; g.fillText(b, x0 + wa + ws, top + 40);
+    });
+    g.textAlign = 'left';
+    const y1 = 1300;
+    g.fillStyle = ink; g.fillRect(90, y1, W - 180, 4);
+    // the key: my colour and theirs, so the two numbers at each corner read without a legend elsewhere
+    g.font = font(600, 36); g.fillStyle = accent; g.fillRect(90, y1 + 52, 44, 10); g.fillText('Me, filled', 150, y1 + 38);
+    g.fillStyle = ink; g.setLineDash([12, 8]); g.lineWidth = 6; g.beginPath(); g.moveTo(520, y1 + 57); g.lineTo(564, y1 + 57); g.stroke(); g.setLineDash([]);
+    g.fillText(`${name}, outlined`, 580, y1 + 38, W - 670);
+    g.font = font(600, 40); g.fillStyle = ink;
+    lines.forEach((line, i) => g.fillText(line, 90, y1 + 130 + i * 62, W - 180));
+    g.fillStyle = dim; g.font = font(500, 34); g.fillText('How we take a corner, not how fast', 90, H - 170);
+    g.fillStyle = accent; g.font = font(800, 40, C.fontNum); g.textAlign = 'right'; g.fillText('VETTA', W - 90, H - 172);
+    g.fillStyle = dim; g.font = font(600, 26); g.fillText(root.ApexDriveCard ? root.ApexDriveCard.SITE : 'vettadrive.com', W - 90, H - 132); g.textAlign = 'left';
+    return canvas;
+  }
+
+  const api = { dnaModel, wireOf, compareLines, vsLines, drawDnaVs, compareSvg, crewLeaders, spanText, dnaLines, scopeText, styleWords, bySize, hexPoint, drawDna, SKILLS, SHORT, W, H };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDnaCard = api;
 })(typeof window !== 'undefined' ? window : globalThis);

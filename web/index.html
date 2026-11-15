@@ -1514,7 +1514,7 @@
     .profile-foot { gap: 16px; border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 8px; } .profile-foot > :first-child { padding-left: 0; }
     /* a friend's profile opens on the person: their photo, name and what they are doing now, as a social app's would */
     .profile-who { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; } .profile-who .note { margin: 0; }
-    .profile-dna .dna-cmp { display: block; margin: 0 auto; max-width: 100%; height: auto; color: var(--panel-dim); } .dna-cmp .dna-them { fill: var(--accent); fill-opacity: 0.3; stroke: var(--accent); stroke-width: 3; stroke-linejoin: round; } .dna-cmp .dna-you { fill: none; stroke: var(--panel-ink); stroke-width: 2; stroke-dasharray: 5 4; stroke-linejoin: round; } .dna-key { text-align: center; } .dna-cmp .dna-name { fill: var(--panel-ink); font-size: 12px; font-weight: 600; }
+    .profile-dna .dna-cmp { display: block; margin: 0 auto; max-width: 100%; height: auto; color: var(--panel-dim); } .dna-cmp .dna-them { fill: var(--accent); fill-opacity: 0.3; stroke: var(--accent); stroke-width: 3; stroke-linejoin: round; } .dna-cmp .dna-you { fill: none; stroke: var(--panel-ink); stroke-width: 2; stroke-dasharray: 5 4; stroke-linejoin: round; } .dna-key { text-align: center; } .profile-dna-head { justify-content: space-between; align-items: center; } .dna-cmp .dna-name { fill: var(--panel-ink); font-size: 12px; font-weight: 600; }
     .profile-who small { display: block; margin-top: 2px; font-size: 13px; color: var(--panel-dim); }
     .profile-who small.live { color: var(--panel-ink); font-weight: 600; }
     .profile-who small.live::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 6px 1px 0; border-radius: 50%; background: var(--accent); }
@@ -2355,6 +2355,14 @@
             <div id="garageRoadFeelBody" class="stack-8"></div>
             <p class="note" id="ambientNote" role="status" aria-live="polite">--</p>
             <button class="ink-btn" id="ambientSignIn" type="button" hidden>Sign in</button>
+            <!-- the owner, 2026-11-15: an anonymous copy of each drive (web/anon_drives.js), on by default -->
+            <div class="row mt-8" style="flex-wrap:wrap">
+              <button class="sw" data-toggle="improve"><i></i><span>Help improve Vetta roads</span></button>
+            </div>
+            <p class="note" style="margin:4px 0 8px">An anonymous copy of each drive: no account, no first or last km, nothing in a privacy zone.</p>
+            <select class="field" id="ageBand" aria-label="Your age, optional, sent with the anonymous copy">
+              <option value="">Age (optional)</option><option>18-24</option><option>25-34</option><option>35-44</option><option>45-54</option><option>55-64</option><option>65+</option>
+            </select>
           </section>
           <section data-panel="garage" data-setting="account" data-title="Account" data-empty-hides>
             <div id="garageAccountBody" class="stack-12" data-fill></div>
