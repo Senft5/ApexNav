@@ -151,6 +151,50 @@ export async function bookDelete(env: Env, v: Viewer, id: string) {
     env.DB.prepare("DELETE FROM reports WHERE kind = 'roadbook' AND target_id = ? AND status = 'open'").bind(id),
     env.DB.prepare("DELETE FROM roadbooks WHERE id = ?").bind(id),   // roads, follows and stamps go with it
   ]);
+  await cardErase(env, [id]);
+}
+
+// ---- a public book's link card (src/link_preview.ts): a picture of its roads on the map the phone made ----------------
+// One JPEG per book in R2 (MEDIA, key roadbook/<id>), 1200 x 630, put by its owner while the book is public, shown to
+// anyone only while it is public and not hidden by reports; gone with the book or the account. No D1 column.
+export const CARD_MAX = 600_000;
+const cardKey = (id: string) => `roadbook/${id}`;
+const PUBLIC_BOOK = `SELECT b.id FROM roadbooks b WHERE b.id = ?1 AND b.visibility = 'public' AND b.roads_n > 0 AND NOT ${reportedSql("roadbook", "b.id")}`;
+
+/** PUT /api/roadbooks/:id/card: your public book's link picture (image/jpeg). */
+export async function cardPut(env: Env, v: Viewer, id: string, req: Request) {
+  if (!env.MEDIA) throw new HttpError(503, "no_media_store");
+  const b = await ownBook(env, v, id);
+  if (b.visibility !== "public") throw new HttpError(409, "not_public");
+  if ((req.headers.get("content-type") || "").split(";")[0].trim().toLowerCase() !== "image/jpeg") throw new HttpError(415, "bad_media_type");
+  if (Number(req.headers.get("content-length") || "0") > CARD_MAX) throw new HttpError(413, "too_big");
+  const bytes = new Uint8Array(await req.arrayBuffer());
+  if (!bytes.length || bytes.length > CARD_MAX) throw new HttpError(413, "too_big");
+  if (!(bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)) throw new HttpError(415, "bad_media_type");
+  await env.MEDIA.put(cardKey(id), bytes, { httpMetadata: { contentType: "image/jpeg" } });
+}
+
+/** Whether a public book has a link picture to show (for the preview's og:image). */
+export async function cardShown(env: Env, id: string): Promise<boolean> {
+  if (!env.MEDIA || !ID_RE.test(id)) return false;
+  return !!(await env.MEDIA.head(cardKey(id)).catch(() => null));
+}
+
+/** GET /api/roadbooks/:id/card.jpg: the picture, to anyone, while the book is public and not hidden. */
+export async function cardGet(env: Env, id: string): Promise<Response> {
+  if (!env.MEDIA || !ID_RE.test(id) || !(await first<{ id: string }>(env, PUBLIC_BOOK, id))) throw new HttpError(404, "no_card");
+  const o = await env.MEDIA.get(cardKey(id));
+  if (!o) throw new HttpError(404, "no_card");
+  return new Response(o.body, { headers: { "content-type": "image/jpeg", "content-length": String(o.size), "cache-control": "public, max-age=300" } });
+}
+
+/** These books' pictures go (a book deleted, or its owner's account). */
+export async function cardErase(env: Env, ids: string[]) {
+  if (!env.MEDIA || !ids.length) return;
+  for (let i = 0; i < ids.length; i += 1000) await env.MEDIA.delete(ids.slice(i, i + 1000).map(cardKey)).catch(() => {});
+}
+export async function booksOfOwner(env: Env, userId: string): Promise<string[]> {
+  return (await all<{ id: string }>(env, "SELECT id FROM roadbooks WHERE owner = ?", userId)).map((r) => r.id);
 }
 
 export async function roadAdd(env: Env, v: Viewer, id: string, req: Request) {

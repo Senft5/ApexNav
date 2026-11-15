@@ -70,6 +70,9 @@ and in random batches so a trace cannot be re-assembled.
   with a road in the map's view are opened, chosen on the phone from the road boxes it already holds. Public books round
   the view are drawn too, thin and faint (legend: Public), found by the coarse cell of the map's centre as Roadbooks near
   you asks (never from inside a privacy zone, once a cell a page); a tap opens one, where Follow is.
+- **Link cards** (2026-11-15, backend/src/link_preview.ts): a public book's link pasted into a chat shows a large card,
+  its roads on the real map with its name and facts, made on the owner's phone when they press Share (sent again only
+  when the name, facts or roads change); other links show what kind they are; the picture is otherwise the app icon.
 ### 2.7 Duels (friends, Scores only)
 - Challenge a friend on one of your stages for 3, 7 or 14 days; the higher Vetta Score on it in that window wins.
   Accepting copies the stage to them. Won by the higher Score, or in a time duel (migration 0048) the quicker time;
