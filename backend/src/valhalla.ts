@@ -76,7 +76,7 @@ export async function valhallaProxy(req: Request, env: Env, action: string): Pro
   try {
     const r = await env.VALHALLA.getByName("router").fetch(`http://router/${action}`, {
       method: "POST", headers: { "content-type": "application/json" }, body: text, signal: AbortSignal.timeout(TIMEOUT_MS) });
-    const h = new Headers({ "content-type": r.headers.get("content-type") ?? "application/json", "cache-control": "no-store", "x-router": r.headers.get("x-router") ?? "own" });
+    const h = new Headers({ "content-type": r.headers.get("content-type") ?? "application/json", "cache-control": "no-store", "x-router": r.ok ? (r.headers.get("x-router") ?? "own") : "none" });
     return new Response(r.body, { status: r.status, headers: h });
   } catch {
     return notOurs("timeout");
