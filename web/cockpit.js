@@ -8483,7 +8483,8 @@
       if (Date.now() - placeAsk.at < 20 * 60000 && moved < 5) return;
       placeAsk.at = Date.now(); placeAsk.lat = p.lat; placeAsk.lon = p.lon;
       const la = p.lat.toFixed(2), lo = p.lon.toFixed(2), d = {};
-      try { d.place = ApexPlacePlate.town(await reverseGeocode(Number(la), Number(lo), 12, 6000)); } catch (_) {}
+      // the town, beside the weather rather than before it: the sky (and the cold-tyres line) never waits on a slow geocoder
+      const town = reverseGeocode(Number(la), Number(lo), 12, 6000).then((r) => { d.place = ApexPlacePlate.town(r); }).catch(() => {});
       // the forecast's now and its last 3 hours of rain, and (US) the nearest NWS stations' latest observation, together
       const om = RouteLoading.json(`https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}&current=temperature_2m,weather_code,precipitation&hourly=precipitation&past_hours=3&forecast_hours=1&timezone=GMT`, {}, 6000)
         .then((w) => { if (w && w.current) { d.tempC = w.current.temperature_2m; d.code = w.current.weather_code; d.mmNow = w.current.precipitation; } d.mm3h = ApexPlacePlate.pastMm(w); }).catch(() => {});
@@ -8496,14 +8497,20 @@
         obs.sort((a, b) => a.ageMin - b.ageMin);                         // the freshest of the nearest three
         d.obs = obs[0] || null;
       })().catch(() => {});
-      await Promise.all([om, nws]);
-      placeAsk.data = d;
       // Vetta Line: a masthead, the place set large and the sky as its line under it. The separator between them stays in the
       // text (not shown), so the plate still reads "Tellico Plains · Dry · 61°" to a screen reader and to textContent.
-      { const pp = $('placePlate'), m = ApexPlacePlate.parts(d, ApexUnits.metric()), b = document.createElement('b');
+      const fill = () => {
+        const pp = $('placePlate'), m = ApexPlacePlate.parts(d, ApexUnits.metric()), b = document.createElement('b');
         b.textContent = m.head; pp.replaceChildren(...(m.head ? [b] : []));
-        if (m.rest) { const i = document.createElement('i'), sp = document.createElement('span'); i.textContent = ' · '; sp.textContent = m.rest; pp.append(i, sp); } }
-      paintPlacePlate();
+        if (m.rest) { const i = document.createElement('i'), sp = document.createElement('span'); i.textContent = ' · '; sp.textContent = m.rest; pp.append(i, sp); }
+        paintPlacePlate();
+      };
+      // the sky is used (wet roads, cold tyres) as soon as it is known; the town fills the plate when it comes
+      await Promise.all([om, nws]);
+      placeAsk.data = d;
+      fill();
+      await town;
+      fill();
     }
     setTimeout(refreshPlacePlate, 4000); setInterval(refreshPlacePlate, 60000);
     window.apexDebug.placePlate = () => { placeAsk.at = 0; return refreshPlacePlate(); };   // e2e: ask now (the first ask waits 4 s for a fix)
