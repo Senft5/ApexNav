@@ -10404,6 +10404,14 @@
    "heard": 1.0,
    "voice": "bm_fable",
    "pace": null
+  },
+  "mark:junction": {
+   "file": "mark_junction.m4a",
+   "dur": 1.12,
+   "text": "Hidden junction",
+   "heard": 1.0,
+   "voice": "bm_fable",
+   "pace": 10.91
   }
  }
 }

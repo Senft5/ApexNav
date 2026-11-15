@@ -37,7 +37,7 @@
 //   hazard=curve*), 'animal_crossing' (label deer/horse/...), 'buggy' (horse-drawn vehicles: W11-14, hazard tags),
 //   'hazard' (other hazard=* values, label), 'viewpoint' (300 m), 'historic' (300 m; label name, value tag), 'fuel'
 //   (800 m; value 1 open 24/7, 0 has other hours, NaN unknown; `hours` = opening_hours, label brand/name), 'ford' (the
-//   road crosses water at a node on it).
+//   road crosses water at a node on it), 'side_road' (a public road joins the route's road at a node of it).
 // Spans: 'roundabout', 'one_lane_bridge' (bridge with lanes=1, two-way), 'single_track' (a two-way road, not a bridge, with
 //   lanes=1: room for one car, so an oncoming one means someone pulls over; label name), 'covered_bridge', 'access_private',
 //   'access_destination', 'cycle_route' (label route name), 'byway' (label byway name), 'divided', 'ford' (a way through water).
@@ -326,12 +326,15 @@
         const h = idx.nearest(P.x(lo), P.y(la), MATCH_M);
         if (!h || !known[h.i] || match[h.i] !== w) return;
         joined.add(id);
+        let road = false;
         for (const o of others) {
-          if (PUBLIC_RE.test(o.tags.highway || '')) counts.side[h.i]++;
+          if (PUBLIC_RE.test(o.tags.highway || '')) { counts.side[h.i]++; road = true; }
           else if (o.tags.highway === 'service') counts.drive[h.i]++;
         }
+        if (road) res.points.push({ kind: 'side_road', atM: Math.round(c.distM[h.i]) });   // where a public road joins
       });
     }
+    res.points.sort((a, b) => a.atM - b.atM);
     const K = (k) => G.perKm(counts[k], c.distM, known);
     ch.signals_per_km.set(K('signal')); ch.stops_per_km.set(K('stop')); ch.crossings_per_km.set(K('crossing'));
     ch.calming_per_km.set(K('calming')); ch.side_roads_per_km.set(K('side')); ch.driveway_joins_per_km.set(K('drive'));

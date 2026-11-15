@@ -172,6 +172,7 @@
       if (note.type === 'mark' && note.code === 'GRAVEL') body += `<g fill="${accent}"><circle cx="34" cy="62" r="3.2"/><circle cx="46" cy="56" r="2.6"/><circle cx="56" cy="64" r="3.4"/><circle cx="66" cy="57" r="2.4"/><circle cx="42" cy="68" r="2.4"/><circle cx="62" cy="70" r="2.8"/></g>`;
       if (note.type === 'mark' && note.code === 'TJUNC') body += `<path d="M30 14 L70 14" stroke="${accent}" stroke-width="5" stroke-linecap="round"/>`;
       if (note.type === 'mark' && note.code === 'NARROW') body += `<path d="M32 76 L42 50 L42 24 M68 76 L58 50 L58 24" fill="none" stroke="${accent}" stroke-width="3.4" stroke-linejoin="round" stroke-linecap="round"/>`;
+      if (note.type === 'mark' && note.code === 'JUNC') body += `<path d="M44 80 L44 20 M44 52 L76 34" fill="none" stroke="${accent}" stroke-width="3.4" stroke-linecap="round"/>`;
       if (note.type === 'mark' && note.code === 'ROUGH') body += `<path d="M28 62 L36 54 L44 64 L52 52 L60 64 L68 55 L74 62" fill="none" stroke="${accent}" stroke-width="3.4" stroke-linejoin="round"/>`;
       if (note.type === 'alpr') body += `<rect x="62" y="38" width="22" height="14" fill="none" stroke="${accent}" stroke-width="2.6"/><circle cx="73" cy="45" r="3.5" fill="${accent}"/><path d="M62 45 L54 45" stroke="${accent}" stroke-width="2.6"/>`;
     }

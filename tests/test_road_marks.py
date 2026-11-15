@@ -83,10 +83,10 @@ def test_nothing_invented_or_off_the_road(out):
 
 
 def test_each_mark_has_its_own_glyph_on_the_strip():
-    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'ANIMAL', 'BUGGY', 'COVERED', 'GRAVEL', 'ROUGH', 'FORD', 'NARROW', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
+    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'ANIMAL', 'BUGGY', 'COVERED', 'GRAVEL', 'ROUGH', 'FORD', 'NARROW', 'JUNC', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
     svgs = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
     assert "<polygon" in svgs[0] and "M58 32 L80 54" in svgs[1] and "M36 30" in svgs[2] and "Q50 34" in svgs[3]
-    assert len(set(svgs[:11])) == 11 and all(s.count("#f70") == 0 for s in svgs[11:])   # an unknown code: the bare hazard straight
+    assert len(set(svgs[:12])) == 12 and all(s.count("#f70") == 0 for s in svgs[12:])   # an unknown code: the bare hazard straight
 
 
 def test_rural_signs_deer_buggies_and_a_covered_bridge(out):
@@ -182,3 +182,42 @@ def test_a_narrow_road_where_it_narrows_to_one_lane():
     assert out["road"]["spans"][0][2] == "Hollow Rd" and len(out["road"]["spans"]) == 2
     assert [e[0] for e in out["not"]["ev"]] == ["BRIDGE"] and out["not"]["spans"] == [[2025, 2100, None]]   # the pinch: a span, too short to call
     assert out["start"]["ev"] == [] and out["untagged"] == {"spans": [], "ev": []}
+
+
+JUNCTION = r"""
+const R = process.argv[1];
+const O = require(R + '/web/route_ctx/osm_overpass.js'), M = require(R + '/web/road_marks.js'), Core = require(R + '/web/apex_core.js');
+const n = 81, lat0 = 39, lon0 = -84.5, dLon = 25 / (111320 * Math.cos(39 * Math.PI / 180));   // 2 km east-west, 25 m samples
+const c = { id: 's', lat: Float64Array.from({ length: n }, () => lat0), lon: Float64Array.from({ length: n }, (_, i) => lon0 + i * dLon), distM: Float64Array.from({ length: n }, (_, i) => i * 25) };
+const at = (i, dyM = 0) => [lat0 + dyM / 110540, lon0 + i * dLon];
+const way = (id, tags, pts, nodes) => ({ type: 'way', id, tags, nodes, geometry: pts.map(([la, lo]) => ({ lat: la, lon: lo })) });
+// the road, with a lane joining at 500 m, another at 1250 m, a driveway at 1500 m and a stop-controlled crossroad at 1750 m
+const els = { elements: [
+  way(1, { highway: 'tertiary' }, [at(-1), at(20), at(50), at(60), at(70), at(81)], [100, 120, 150, 160, 170, 181]),
+  way(2, { highway: 'unclassified' }, [at(20), at(20, 300)], [120, 220]), way(3, { highway: 'residential' }, [at(50), at(50, -300)], [150, 250]),
+  way(4, { highway: 'service' }, [at(60), at(60, 100)], [160, 260]), way(5, { highway: 'secondary' }, [at(70, -300), at(70), at(70, 300)], [270, 170, 271]),
+  { type: 'node', id: 170, lat: at(70)[0], lon: at(70)[1], tags: { highway: 'stop' } },
+] };
+const ctx = O.aggregate(c, O.parse(els), new Uint8Array(n).fill(1));
+const dist = Array.from({ length: 401 }, (_, i) => i * 5);
+const t = (sight) => ({ lat: dist.map(() => lat0), lon: dist.map((d) => lon0 + d / 25 * dLon), dist, sightM: sight ? dist.map(sight) : undefined });
+const near = (a, b, la, lo) => Core.nearestIndex(a, b, la, lo, -1);
+const ev = (tr) => M.events(ctx, c, tr, near).filter((e) => e.kind === 'side_road' || e.kind === 'stop').map((e) => [e.code, e.call, e.dist_m]);
+// a blind bend before 500 m (40 m of sight from 400 to 440 m) and before 1750 m, open road elsewhere
+const blind = (d) => (d >= 400 && d <= 440) || (d >= 1650 && d <= 1690) ? 40 : 400;
+console.log(JSON.stringify({ points: ctx.points.filter((p) => p.kind === 'side_road').map((p) => p.atM),
+  blind: ev(t(blind)), open: ev(t(() => 400)), unknown: ev(t(null)),
+  hidden: [M.hidden(t(blind), 100), M.hidden(t(blind), 10), M.hidden(t(null), 100)] }));
+"""
+
+
+def test_a_hidden_junction_where_a_side_road_joins_out_of_sight():
+    """A public road joining where you can't see it until you're within 80 m (a blind bend) is "Hidden junction"; one
+    you can see coming, a driveway, and one at a stop sign (the stop is the call) are not. Unknown sight is never hidden."""
+    out = json.loads(subprocess.run([NODE, "-e", JUNCTION, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["points"] == [500, 1250, 1750]                     # public roads only, not the driveway
+    assert out["blind"] == [["JUNC", "Hidden junction", 500], ["STOP", "Stop sign", 1750]]
+    assert out["open"] == [["STOP", "Stop sign", 1750]] and out["unknown"] == out["open"]
+    assert out["hidden"] == [True, False, False]
+    js = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert "(e.type === 'corner' || e.kind === 'side_road') && ApexDirections.atJunction(steps, noteM(e))" in js   # the route's own turn is the direction

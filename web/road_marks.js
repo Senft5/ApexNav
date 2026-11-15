@@ -1,8 +1,8 @@
 // Road marks the co-driver calls on a planned route (the route context's OpenStreetMap points and spans, route_ctx/
 // osm_overpass.js): a stop sign that applies to the route, a railway level crossing, a one-lane bridge on a two-way road,
 // speed bumps (one call for a run of them), a mapped deer (or other animal) crossing, horse-drawn buggies, a
-// covered bridge, a ford (the road through water), where the road turns unpaved or rough, and where it narrows to a single
-// track (room for one car). On a back road picked for its corners these are what catch a driver out:
+// covered bridge, a ford (the road through water), where the road turns unpaved or rough, where it narrows to a single
+// track (room for one car), and a side road joining where you can't see it coming (a blind bend). On a back road picked for its corners these are what catch a driver out:
 // a stop sign over a crest, a hump at the end of a fast straight. Each becomes a note event on the track (type 'mark'),
 // read with the pace notes when they are on and drawn on the strip and the map; a stop sign's call distance includes
 // braking to a stop (cockpit.js apexMpsOf). Only what the map has: a mark the map lacks is not invented, and with no route
@@ -22,12 +22,13 @@
     unpaved: { code: 'GRAVEL', call: 'Unpaved road' },
     rough: { code: 'ROUGH', call: 'Rough road' },
     single_track: { code: 'NARROW', call: 'Narrow road' },
+    side_road: { code: 'JUNC', call: 'Hidden junction' },   // only where you can't see it coming (events: hidden)
     tee: { code: 'TJUNC', call: 'T-junction' },   // the road ahead ends (free driving: horizon.js tee), not from Overpass
   };
   // a mapped animal-crossing sign names its animal (osm_overpass.js hazardOf label); deer is the one on these roads
   const animalCall = (label) => { const a = String(label || 'animals').toLowerCase(); return a === 'deer' ? 'Deer crossing' : /^(horse|horses)$/.test(a) ? 'Horse crossing' : /^(cow|cows|cattle)$/.test(a) ? 'Cattle crossing' : 'Animal crossing'; };
   const BUMPS = new Set(['bump', 'hump', 'table', 'cushion', 'yes', 'dip', 'rumble_strip']);   // not chicanes, islands or chokers
-  const RUN_M = 200, SAME_M = 40, SNAP_M = 30, UNPAVED_MIN_M = 50, ROUGH_MIN_M = 100, SURFACE_GAP_M = 300, NARROW_MIN_M = 200;
+  const RUN_M = 200, SAME_M = 40, SNAP_M = 30, UNPAVED_MIN_M = 50, ROUGH_MIN_M = 100, SURFACE_GAP_M = 300, NARROW_MIN_M = 200, HIDDEN_M = 80;
 
   /** Where along a corridor ({lat, lon, distM}) metre m lies, as [lat, lon], or null. */
   function placeAt(c, m) {
@@ -50,7 +51,7 @@
     const raw = [];
     for (const p of Array.isArray(ctx.points) ? ctx.points : []) {
       if (!p || !finite(p.atM)) continue;
-      if (p.kind === 'stop' || p.kind === 'level_crossing' || p.kind === 'buggy' || p.kind === 'ford') raw.push({ kind: p.kind, atM: p.atM });
+      if (p.kind === 'stop' || p.kind === 'level_crossing' || p.kind === 'buggy' || p.kind === 'ford' || p.kind === 'side_road') raw.push({ kind: p.kind, atM: p.atM });
       else if (p.kind === 'animal_crossing') raw.push({ kind: p.kind, atM: p.atM, call: animalCall(p.label) });
       else if (p.kind === 'calming' && BUMPS.has(String(p.label || 'yes'))) raw.push({ kind: 'calming', atM: p.atM });
     }
@@ -129,11 +130,26 @@
       if (!at) continue;
       const hit = nearest(at[0], at[1], t.lat, t.lon);
       if (!hit || !(hit.distM <= SNAP_M) || !(hit.index >= 0)) continue;
+      if (m.kind === 'side_road' && !hidden(t, hit.index)) continue;
       const k = KINDS[m.kind];
       const d = t.dist[hit.index];
       out.push({ type: 'mark', kind: m.kind, code: k.code, call: m.call || (m.n > 1 && k.many ? k.many : k.call), index: hit.index, dist_m: d, end_m: d + (m.endM - m.atM), lat: at[0], lon: at[1] });
     }
-    return unfelt(out, t.events);
+    const stops = out.filter((e) => e.kind === 'stop').map((e) => e.dist_m);   // a stop sign there is the call
+    return unfelt(out.filter((e) => e.kind !== 'side_road' || !stops.some((m) => Math.abs(m - e.dist_m) < 50)), t.events);
+  }
+
+  /**
+   * Whether a side road joining at sample i of track t is out of sight until you are close: 80 m before it (about a stop
+   * from 55 mph, a second to react included), the road you can see ahead (t.sightM, from the bend and what's beside it)
+   * ends short of it. Unknown sight is never hidden.
+   */
+  function hidden(t, i) {
+    const s = t && t.sightM, d = t && t.dist;
+    if (!s || !s.length || !d || !finite(d[i])) return false;
+    let j = i;
+    while (j > 0 && d[i] - d[j] < HIDDEN_M) j--;
+    return d[i] - d[j] >= HIDDEN_M && finite(s[j]) && s[j] < d[i] - d[j];
   }
 
   /**
@@ -180,6 +196,6 @@
     return marks.filter((m) => m.kind !== 'tee' || !stops.some((d) => Math.abs(d - m.dist_m) < SAME_M));
   }
 
-  const api = { marksOf, events, unfelt, union, mapAnswered, cruiseWorthy, placeAt, teeMark, noTeeAtStop, KINDS };
+  const api = { hidden, marksOf, events, unfelt, union, mapAnswered, cruiseWorthy, placeAt, teeMark, noTeeAtStop, KINDS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadMarks = api;
 })(typeof window !== 'undefined' ? window : globalThis);
