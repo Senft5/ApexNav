@@ -10713,6 +10713,29 @@ flow('your own best on the drive page: signed out, your pass of a stage against 
   check(/^\d+\.\d s behind your best set Nov 10$/.test(r1.line.trim()) && r1.h3[0] === 'Where your best was quicker', 'and the older run behind it: ' + JSON.stringify(r1));
 });
 
+flow('your ideal run of a stage: quick early one day and late another, Runs shows your quickest stretches put together, under your best (ghost_duel.js idealOf)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording && window.ApexGhostDuel);
+  await page.evaluate(async (src) => {
+    const gen = eval(src), csv = gen('clean', 0), n = csv.split('\n').length;
+    // the same road twice: 10 % slower over its second half one day, over its first half the other
+    const slow = (late) => csv.split('\n').map((l, i) => { if (!i || !l) return l; const c = l.split(','); if ((i > n / 2) === late) c[5] = (+c[5] * 0.9).toFixed(3); return c.join(','); }).join('\n');
+    const d = ApexRecording.parse(ApexCore, slow(true), 'i0.csv', { id: 'i0', name: 'Dry Ridge Rd', date: '2026-11-10T09:00', source: 'web-gps' });
+    await ApexRecording.store(d);
+    await ApexRecording.store(ApexRecording.parse(ApexCore, slow(false), 'i1.csv', { id: 'i1', name: 'Dry Ridge Rd', date: '2026-11-01T09:00', source: 'web-gps' }));
+    const a = 20, b = d.lat.length - 20;
+    localStorage.setItem('apex.segments', JSON.stringify([{ id: 'seg_i', name: 'Dry Ridge', lat0: d.lat[a], lon0: d.lon[a], lat1: d.lat[b], lon1: d.lon[b], length_m: (b - a) * 5 }]));
+  }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html?tab=stages');
+  await page.waitForSelector('#segList button.seg', { timeout: 15000 });
+  await page.click('#segList button.seg');
+  await page.waitForSelector('#segIdeal:not([hidden])', { timeout: 15000 });
+  const t = await page.textContent('#segIdeal');
+  check(/^Ideal run \d+:\d\d: your quickest stretches from 2 runs put together, \d+\.\d s under your best\.$/.test(t), 'the ideal run under the chart: ' + t);
+});
+
 flow('side by side: a corner filmed on this drive and on your best pass plays as one clip, both from the same point, the gap counting (big bet 5)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} window.APEX_DRIVECAM = '/__drivecam/'; });
   let index = [], video = null;
