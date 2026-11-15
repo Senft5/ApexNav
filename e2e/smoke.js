@@ -7342,12 +7342,20 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
     'a crew drive today picks its crew and names who came');
   await page.click('.post-sheet [role="radiogroup"] button:has-text("Friends")');
   check(await page.$eval('.post-sheet .post-with', (n) => n.hidden), 'to friends: no names');
+  // (2026-11-15) to friends: who came is yours to tag, up to five friends
+  await page.waitForSelector('.post-sheet .post-tags:not([hidden]) button:text-is("@bob")');
+  check(await page.textContent('.post-sheet .post-tags small') === 'Who came? (optional)', 'the tag row asks, once');
+  await page.click('.post-sheet .post-tags button:text-is("@bob")');
+  check(await page.textContent('.post-sheet .post-tags small') === 'With @bob' && await page.getAttribute('.post-sheet .post-tags button:text-is("@bob")', 'aria-pressed') === 'true', 'tapped: the post will say With @bob');
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/post-tags.png` });
   await page.click('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")');
+  check(await page.$eval('.post-sheet .post-tags', (n) => n.hidden), 'to a crew: no tags, the crew drive says who came');
   await page.fill('.post-sheet textarea', 'First run with the crew.');
   await page.click('.post-sheet button:text-is("Post")');
   await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Posted');
   const p = JSON.parse(sent.filter((x) => x.p === '/api/posts').pop().b);
   const first = (() => { const s = p.line; let i = 0, r = 0, sh = 0, b; do { b = s.charCodeAt(i++) - 63; r |= (b & 31) << sh; sh += 5; } while (b >= 32); return (r & 1 ? ~(r >> 1) : r >> 1) / 1e5; })();
+  check(p.tags === undefined, 'a crew post sends no tags');
   check(p.crew_id === 'k1' && p.caption === 'First run with the crew.' && p.score === 790 && p.title === 'Cherohala Skyway' && first > 35.36 + 0.0044,
     'the post: to the crew, the caption, the Score, and the line starting 500 m in: ' + JSON.stringify({ ...p, line: p.line.length, first }));
 });
