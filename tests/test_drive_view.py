@@ -79,6 +79,7 @@ V.mount(rootCoach, scoredDrive, { Core, C, MPH: Core.MPS_TO_MPH,
   coach: { corners: [coachCorner], clean: 1, this_s: 4, ideal_s: 3.5, gain_s: 0.5, top: [0], others: [{ name: 'x', date: '<i>Oct 2</i>' }] } });
 const coachHead = rootCoach.children[0].innerHTML, coachList = rootCoach.children[2];
 const timeList = coachList.children.find((c) => c.className === 'dv-time'), timeHtml = timeList.children[0].children[0].innerHTML;
+const timeFrom = (coachList.children.find((c) => c.className === 'note' && /best passes/.test(c.innerHTML)) || {}).innerHTML || null;
 const cardHtml = coachList.children.find((c) => c.className === 'dv-corners').children[0].innerHTML;
 const rootNotTop = mkEl('div');
 V.mount(rootNotTop, scoredDrive, { Core, C, MPH: Core.MPS_TO_MPH,
@@ -91,7 +92,7 @@ const coastNear = V.tipText({ best: { time_s: 3.9 }, tip: { kind: 'coast', value
 const aloneHead = rootAlone.children[0].innerHTML, aloneList = rootAlone.children[2].children.map((c) => c.className);
 const aloneCard = rootAlone.children[2].children.find((c) => c.className === 'dv-corners').children[0].innerHTML;
 // Against the best drive here: the gap in words, never a "+" to decode
-const refHead = (delta) => { const rt = mkEl('div'); V.mount(rt, scoredDrive, { Core, C, MPH: Core.MPS_TO_MPH, reference: { name: 'X', score: 819, corners: scoredDrive.corners.map(() => ({ delta_s: delta })) } }); return rt.children[2].innerHTML; };
+const refHead = (delta) => { const rt = mkEl('div'); V.mount(rt, scoredDrive, { Core, C, MPH: Core.MPS_TO_MPH, reference: { name: 'X', score: 819, when: 'Yesterday, 10:58 PM', corners: scoredDrive.corners.map(() => ({ delta_s: delta })) } }); return rt.children[2].innerHTML; };
 const refSlower = refHead(-18.94), refLevel = refHead(0.01), refNone = refHead(null);
 
 // Road feel readout names how far to trust each value.
@@ -104,12 +105,13 @@ vFeel.move(5);
 const feelRead = rootFeel.children[1].children[1].children[2].innerHTML;
 
 // Grip circle: shown with measured g, absent without it; scrubbing into a corner names its grip use.
-const ggCol = rootScored.children[1].children[1].children[3];
-const ggCap = ggCol ? ggCol.children.find((c) => c.className === 'note') : null;
-const ggCaption = ggCap ? ggCap.textContent : null;
-const ggLede = ggCol ? (ggCol.children.find((c) => c.className === 'note dv-gg-lede') || {}).textContent : null;
-const ggMore = ggCol ? (ggCol.children.find((c) => c.className === 'quiet dv-gg-more') || {}).innerHTML : null;
-const ggOrder = ggCol ? ggCol.children.map((c) => c.tag) : null;
+const ggHead = rootScored.children[0], ggBox = ggHead.children.find((c) => c.className === 'dv-gg');
+const ggCap = ggHead.children.find((c) => c.className === 'note dv-gg-cap') || null;
+const ggCaption = ggBox ? ggBox['aria-label'] : null, ggCapHidden = ggCap ? ggCap.hidden : null;
+const ggLede = ggBox ? ggBox.title : null, ggRole = ggBox ? ggBox.role : null, ggHas = ggHead.classList.contains('has-gg');
+const ggMore = ggBox ? ggBox.children.some((c) => c.tag === 'details' || c.tag === 'p') : null;
+const ggOrder = ggBox ? ggBox.children.map((c) => c.tag) : null;
+const barSay = V.barMeaning('smoothness', 'Smooth 72'), barHint = V.BAR_HINT;
 lanesEl.dispatch('keydown', { key: 'Home' }); for (let q = 0; q < 4; q++) lanesEl.dispatch('keydown', { key: 'ArrowRight', preventDefault() {} });
 const ggCorner = ggCap ? ggCap.textContent : null;
 const rootNoG = mkEl('div');
@@ -117,7 +119,10 @@ V.mount(rootNoG, { ...scoredDrive, g_known: d.lat.map(() => 0) }, { Core, C, MPH
 const ggNone = rootNoG.children[1].children[1].children.length;
 const rootGap = mkEl('div');                                       // elevation unknown for the first 50 samples (no altitude yet)
 V.mount(rootGap, { ...scoredDrive, elev: scoredDrive.elev.map((v, i) => (i < 50 ? NaN : v)) }, { Core, C, MPH: Core.MPS_TO_MPH });
-const gapLanes = rootGap.children[1].children[1].children[1].innerHTML;
+const gapRight = rootGap.children[1].children[1], gapPick = gapRight.children[3];
+const pickNames = gapPick.children.map((b) => b.innerHTML), lanesSpeed = gapRight.children[1].innerHTML;
+gapPick.children.find((b) => b.dataset.lane === 'elev').onclick();
+const gapLanes = gapRight.children[1].innerHTML, pickOn = gapRight.children[3].children.filter((b) => b.className === 'on').map((b) => b.innerHTML);
 
 // Repeatability rows: the big number is labelled once below, the slowest point and turn-in stay in the spoken label.
 const sp = (b, extra) => ({ apex: 20, passes: 6, spread: { passes: 6, brake_passes: 6, brake_sd_m: b, min_sd_m: 4, min_passes: 6, turn_sd_m: 3, turn_passes: 6, speed_sd_mps: 1, speed_passes: 6, ...extra } });
@@ -132,7 +137,7 @@ const rootCar = mkEl('div');
 V.mount(rootCar, { ...scoredDrive, car: { label: '<b>Miata</b>', mu: 0.52 } }, { Core, C, MPH: Core.MPS_TO_MPH });
 const carHead = rootCar.children[0].innerHTML;
 console.log(JSON.stringify({ notTopCard, carHead, repIntro, reps, full, bare, headHtml, unscoredHeadHtml, hiddenBeforeScrub, hiddenAfterKeyScrub, hiddenBeforeZoom, hiddenAfterZoom,
-  coachHead, timeHtml, cardHtml, refSlower, refLevel, refNone, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, ggLede, ggMore, ggOrder, feelRead, gapLanes }));
+  coachHead, timeHtml, timeFrom, cardHtml, refSlower, refLevel, refNone, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, ggLede, ggMore, ggOrder, ggRole, ggHas, ggCapHidden, pickNames, lanesSpeed, pickOn, barSay, barHint, feelRead, gapLanes }));
 """
 
 
@@ -178,7 +183,8 @@ def test_corner_coach_shows_ideal_time_and_tips(r):
     assert "0.50" not in r["coachHead"], "seconds to a tenth, not a hundredth"
     t = r["timeHtml"]
     assert "Brake 22 m later, like your best pass" in t and "+0.5 s" in t and "0.50" not in t
-    assert "&#60;i&#62;Oct 2&#60;/i&#62;" in t and "<i>" not in t, "drive names and dates are escaped"
+    # one drive behind every best pass: said once over the list, not on each row (Nate's drives, round 2)
+    assert r["timeFrom"] == "Against your best passes, &#60;i&#62;Oct 2&#60;/i&#62;" and "best pass &#60;" not in t, "said once, escaped"
     assert "dv-tip" not in r["cardHtml"], "a corner in Where to find time is not told its tip twice"
 
 
@@ -193,23 +199,28 @@ def test_coast_tip_wording_follows_the_tip_not_the_best_pass(r):
 
 
 def test_grip_circle_from_measured_g_only(r):
-    assert r["ggCaption"].startswith("Outline: braking ") and " · left " in r["ggCaption"] and " · throttle " in r["ggCaption"]
+    assert r["ggCaption"].startswith("Grip circle. ") and "Outline: braking " in r["ggCaption"] and " · left " in r["ggCaption"] and " · throttle " in r["ggCaption"]
+    assert r["ggCapHidden"] is True, "no line under the circle until a corner is picked"
     assert r["ggCorner"].startswith("Corner 1: ") and r["ggCorner"].endswith("% of the outline on average, from 100 m before turn-in to the exit") or r["ggCorner"].startswith("Corner 1: --"), r["ggCorner"]
-    assert r["ggNone"] == 3, "no measured g: no grip circle"
+    assert r["ggNone"] == 4, "no measured g: no grip circle (the zoom keys, the chart, its readout and the chart picker)"
 
 
 def test_grip_circle_explains_itself(r):
-    """TestFlight 14 ("explain what grip circle actually means?"): one line from the vocabulary, then the rest behind a tap."""
+    """Beside the Score (drive page round 1, Nate 2026-11-15): no paragraph under it; a tap says the vocabulary's one line."""
     vocab = json.loads(subprocess.run([NODE, "-e", "console.log(JSON.stringify(require(process.argv[1]).TERMS.gripCircle))",
                                        str(__import__("pathlib").Path(__file__).resolve().parents[1] / "web" / "vocabulary.js")],
                                       capture_output=True, text=True, check=True).stdout)
+    assert r["ggHas"], "the head carries the circle"
     assert r["ggLede"] == vocab["meaning"], "the one line is the vocabulary's meaning, not a second wording"
-    assert r["ggOrder"] == ["h3", "p", "div", "p", "details"], r["ggOrder"]
-    m = r["ggMore"]
-    assert m.startswith("<summary>What the grip circle shows</summary>")
-    for part in ("The dots.", "every 5 m", "The outline.", "16 directions", "5 in 100", "The rings.", "0.5 g",
-                 "bigger shape", "rounder one", "not a target"):
-        assert part in m, part
+    assert r["ggOrder"] == ["small", "div"], r["ggOrder"]
+    assert r["ggMore"] is False, "no paragraph or explainer under the circle"
+    assert r["ggRole"] == "button"
+
+
+def test_score_parts_say_out_of_100(r):
+    assert 'aria-label="Pace 85 out of 100"' in r["headHtml"] and 'data-k="smoothness"' in r["headHtml"]
+    assert r["barHint"] in r["headHtml"]
+    assert r["barSay"] == "Smooth 72 of 100: How gently you steered through the corners."
 
 
 def test_road_feel_says_how_far_to_trust_it():
@@ -273,6 +284,14 @@ console.log(JSON.stringify({
     for v in r.values():
         assert v is None or not any(w in v.lower() for w in ("faster", "quicker", "speed up", "mph", "apex"))
         assert v is None or len(v) <= 140, v   # two or three lines on a phone, not a paragraph
+
+
+def test_one_chart_at_a_time(r):
+    """Drive page round 1 (Nate 2026-11-15): one chart, chosen from a row of names, in place of five stacked lanes."""
+    assert r["pickNames"] == ["Speed", "Turning", "Pedals", "Height"], r["pickNames"]
+    sp = r["lanesSpeed"]
+    assert ">Speed<" in sp and "Turning" not in sp and "Elevation" not in sp
+    assert r["pickOn"] == ["Height"]
 
 
 def test_unknown_elevation_is_a_gap_not_nan(r):
@@ -397,6 +416,8 @@ def test_corner_card_tip_only_where_it_is_news(r):
 
 def test_corners_against_the_best_drive_say_slower_in_words(r):
     n = r["refSlower"]
-    assert "<h2>Corners</h2>" in n and "s slower</b> than your best drive here (819), over " in n and "+" not in n.split("</h2>")[1].split("</p>")[0]
-    assert "Level with your best drive here (819)" in r["refLevel"]
-    assert "No clean corners to compare with your best drive here." in r["refNone"]
+    assert "<h2>Corners</h2>" in n and "s slower</b> than your other drive here (Yesterday, 10:58 PM), over " in n and "+" not in n.split("</h2>")[1].split("</p>")[0]
+    # never a Score beside a time: "slower than your best drive here (668)" read as best = slower (Nate's drives, round 2)
+    assert "819" not in n and "best drive" not in n
+    assert "Level with your other drive here (Yesterday, 10:58 PM)" in r["refLevel"]
+    assert "No clean corners to compare with your other drive here." in r["refNone"]

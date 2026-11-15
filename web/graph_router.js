@@ -1768,7 +1768,12 @@
     for (const nx of snaps) {
       // a connector (to a stage, back to the start) at most LOOP_CONN_A: at Long way's weight it wandered 100 km of back
       // roads to reach the next stage (a 175 mi loop for 90 asked, live 2026-11-06); the stages themselves at the level's
-      const res = loopLeg(v, obj, prev, nx.s, nx.conn ? Math.min(a, connA) : a, penal, { ellipse: ellipseFor(at, nx, nx.conn ? 'fun' : 'max') }, level);
+      const legA = nx.conn ? Math.min(a, connA) : a;
+      // inside the ellipse round the crow line first; where the only road there goes round a lake or a ridge outside it
+      // (Robbinsville to the Dragon round Fontana Lake, 2026-11-15: 11 of 18 chains found no leg), the leg without it.
+      // The loop's length (LOOP_MAX_OFF) and retraced share (LOOP_MAX_RETRACED) still judge what it makes
+      const res = loopLeg(v, obj, prev, nx.s, legA, penal, { ellipse: ellipseFor(at, nx, nx.conn ? 'fun' : 'max') }, level) ||
+        loopLeg(v, obj, prev, nx.s, legA, penal, {}, level);
       if (!res) return null;
       legs.push(res);
       for (const e of res.edges) { penal[e] = hwy[e] * K.LOOP_RETRACE_X; const tw = twin(v, e); if (tw >= 0) penal[tw] = hwy[tw] * K.LOOP_RETRACE_X; }

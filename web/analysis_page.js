@@ -389,6 +389,7 @@
       const how = await ApexSaveFile.shareLink({ title: 'My year on Vetta', text: yearText });   // the real share sheet (feedback 07)
       if (how === 'copied') { $('yearShare').textContent = 'Copied'; setTimeout(() => { $('yearShare').textContent = 'Share'; }, 1500); }
     });
+    let showShort = false;                                              // the Log's short drives, unfolded (renderHistory)
     function renderHistory() {
       const scored = drives.filter(d => d.ds.score != null);
       const best = scored.reduce((m, d) => (!m || d.ds.score > m.ds.score ? d : m), null);
@@ -398,15 +399,15 @@
       $('historyEmpty').hidden = !drivesLoaded || drives.length > 0;   // never claim "no drives" before the store has answered
       $('historyCards').hidden = $('historyPanel').hidden = !drives.length;
       // the hero (REVIEW.md roadmap 13): your latest Vetta Score, big, with its road; the best one quietly under it
-      $('historyCards').innerHTML = `<div class="hero-score"><b>${latest ? latest.ds.score : UNK}</b><small>/1000</small></div>`
-        + `<p class="hero-what">Latest Vetta Score${latest ? ` · <span></span>${ApexAnalysis.monthOf(latest) === null ? '' : ` · ${dateLabel(latest).replace(/, \d{1,2}:\d{2}(\s?[AP]M)?$/i, '')}`}` : ''}</p>`   // the day, not the minute: one line; an undated import none
-        + (best && best !== latest ? `<p class="hero-best">Best ${best.ds.score} · <span></span></p>` : '');
+      // Real-drive review round 2: the hero is the latest Score and its day, with the best as a chip. No drive names here: a
+      // route's name is its destination ("To 10069 ..."), a home address shown big to anyone who sees the screen.
+      $('historyCards').innerHTML = `<div class="hero-score"><b>${latest ? latest.ds.score : UNK}</b><small>/1000</small>`
+        + (best && latest && best.ds.score > latest.ds.score ? `<span class="hero-best">Best ${best.ds.score}</span>` : '') + `</div>`
+        + `<p class="hero-what">Latest Vetta Score${latest && ApexAnalysis.monthOf(latest) !== null ? ` · ${dateLabel(latest).replace(/, \d{1,2}:\d{2}(\s?[AP]M)?$/i, '')}` : ''}</p>`;   // the day, not the minute; an undated import none
       // no Score yet (first drives in town, too few clean corners): the distance you have driven, big, instead of a big "--"
       const far = !latest && drives.length ? /^([\d.,]+)\s*(.*)$/.exec(ApexUnits.long(totalKm * 1000, 1)) : null;
       if (far) $('historyCards').innerHTML = `<div class="hero-score"><b>${far[1]}</b><small>${far[2]}</small></div>`
-        + `<p class="hero-what">In ${drives.length} ${drives.length === 1 ? 'drive' : 'drives'} · no Score yet</p><p class="hero-best">A Score needs a few clean corners.</p>`;
-      if (latest) $('historyCards').querySelector('.hero-what span').textContent = latest.name;   // names are user text
-      if (best && best !== latest) $('historyCards').querySelector('.hero-best span').textContent = best.name;
+        + `<p class="hero-what">In ${drives.length} ${drives.length === 1 ? 'drive' : 'drives'} · no Score yet</p><p class="hero-sub">A Score needs a few clean corners.</p>`;
       $('trendPanel').hidden = scored.length < 3;
       renderYear();
       renderChallenges();
@@ -424,7 +425,13 @@
       const ticks = []; for (let v = lo; v <= 1000; v += step) ticks.push(v);
       const grid = ticks.map(v => { const y = yOf(v); return `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="${C.hair || C.rule}"/><text x="${L - 6}" y="${y + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${v}</text>`; }).join('');
       const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('');
-      const dots = pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="5" fill="${C.accent}"/><text x="${p[0]}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${ApexFormat.dayShort(p[2].date)}</text>`).join('');
+      // one date label per day, and none closer than 44 px to the last (real-drive review: "Oct 30Oct 30Oct 30")
+      let lastDay = null, lastX = -Infinity;
+      const dots = pts.map(p => {
+        const day = ApexFormat.dayShort(p[2].date), lab = day && day !== lastDay && p[0] - lastX >= 44;
+        if (lab) { lastDay = day; lastX = p[0]; }
+        return `<circle cx="${p[0]}" cy="${p[1]}" r="5" fill="${C.accent}"/>` + (lab ? `<text x="${p[0]}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${day}</text>` : '');
+      }).join('');
       if (!scored.length) { $('trend').innerHTML = '<p class="note">No scored drives yet. Start a drive on the map, or import a recording in Garage, Your data; a drive needs a few clean corners to get a Score.</p>'; }
       else $('trend').innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Score over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
 
@@ -451,12 +458,18 @@
       // your best on a road you have scored twice or more, marked on its row as a fitness app marks a PR (free roamer B,
       // 2026-11-14): the same rule as Your records' "Best Score on this road" (roads by name, a tie to the earlier drive)
       const pb = roadBests(drives);
-      const rows = shown.slice().reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${escH(d.name)}${pb.has(d.id) ? ', your best on this road' : ''}">
+      // Real-drive review round 2: a drive under a mile with no corners (to the shop and back) folds under "Short drives (n)"
+      // at the foot of the list, unless every drive is one; its page, Score and records are unchanged
+      const isShort = (d) => Number.isFinite(d.km) && d.km < 1.609 && !(d.corners && d.corners.length);
+      const shorts = shown.filter(isShort), tuck = shorts.length && shorts.length < shown.length && !showShort;
+      const rows = shown.filter((d) => !tuck || !isShort(d)).reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${escH(d.name)}${pb.has(d.id) ? ', your best on this road' : ''}">
         <td class="ix-date">${stamp(d)}</td>
         <td class="ix-shape">${shapeThumb(d)}</td>
         <td class="l ix-road"><b>${escH(listName(d.name))}</b><span class="sub">${ApexFormat.factsLine(d, ['distance', 'corners'])}${ApexDriveTags.normalize(d.tags).length ? ` · <span class="tagline">${escH(ApexDriveTags.normalize(d.tags).join(', '))}</span>` : ''}</span></td>
-        <td class="ix-score">${pb.has(d.id) ? '<span class="pb">Best</span>' : ''}${d.ds.score != null ? `<span class="score">${d.ds.score}</span>` : ''}</td></tr>`).join('');
+        <td class="ix-score">${pb.has(d.id) ? '<span class="pb">Best</span>' : ''}${d.ds.score != null ? `<span class="score">${d.ds.score}</span>` : ''}</td></tr>`).join('')
+        + (tuck ? `<tr class="short-row"><td colspan="4"><button class="btn quiet-btn" id="showShorts" type="button">Short drives (${shorts.length})</button></td></tr>` : '');
       $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="4"><span class="note">No drives yet.</span></td></tr>' : !shown.length ? '<tr><td class="l" colspan="4"><span class="note">No drives with those tags.</span></td></tr>' : rows;
+      if ($('showShorts')) $('showShorts').addEventListener('click', () => { showShort = true; renderHistory(); });
       setTimeout(renderRecords, 0);
       setTimeout(renderSteadiness, 0);                                  // the coach runs per road: after the Log has painted
       setTimeout(renderDrivingCard, 0);
@@ -497,16 +510,21 @@
       const run = runs.length ? runs.reduce((m, d) => (d.run.corners > m.run.corners ? d : m)) : null;
       $('recordsPanel').hidden = !rows.length && !smooth && !brake && !kinds.length && !run;
       if ($('recordsPanel').hidden) return;
-      const pct = (v) => `${Math.round(v * 100)}%`;
+      // one unit a group (Nate's drives, round 2: one list read 737, 64%, 99%, 5 and 100/100): Scores out of 1000, then
+      // feats out of 100 as the drive page's bars read them, and a run in corners
+      const pct = (v) => `${Math.round(v * 100)}<small>/100</small>`;
       const day = (d) => `<span class="nw">${monthOf(d) ? ApexFormat.dateTime(d.date.slice(0, 10)) : 'date unknown'}</span>`;   // "30 Oct", as the list's stamps read; never 2026-10-30
       const line = (what, d, value, sub) => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link"><td class="l"><b></b><span class="sub">${what} · ${sub}</span></td><td><span class="score">${value}</span></td></tr>`;
       const out = [], names = [];
-      for (const r of rows) { out.push(line(`Best Score on this road, of ${r.n} scored drives`, r.best, r.best.ds.score, r.fresh ? `${day(r.best)}, your latest here: a new best` : day(r.best))); names.push(r.name); }
+      const head = (t) => `<tr class="rec-h"><th colspan="2">${t}</th></tr>`;
+      if (rows.length) out.push(head('Scores'));
+      for (const r of rows) { out.push(line(`Best Score on this road, of ${r.n} scored drives`, r.best, `${r.best.ds.score}<small>/1000</small>`, r.fresh ? `${day(r.best)}, your latest here: a new best` : day(r.best))); names.push(r.name); }
+      if (smooth || brake || run || kinds.length) out.push(head('Feats'));
       if (smooth) { out.push(line(`Smoothest drive this month, of ${of('smoothness').length}`, smooth, pct(smooth.ds.components.smoothness), day(smooth))); names.push(smooth.name); }
       if (brake) { out.push(line(`Best braking this month, of ${of('braking').length}`, brake, pct(brake.ds.components.braking), day(brake))); names.push(brake.name); }
-      if (run) { out.push(line(`Best run this month: corners in a row, smooth and settled${Number.isFinite(run.run.len_m) && run.run.len_m > 0 ? `, over ${ApexUnits.long(run.run.len_m, 1)}` : ''}`, run, run.run.corners, day(run))); names.push(run.name); }
+      if (run) { out.push(line(`Best run this month: corners in a row, smooth and settled${Number.isFinite(run.run.len_m) && run.run.len_m > 0 ? `, over ${ApexUnits.long(run.run.len_m, 1)}` : ''}`, run, `${run.run.corners}<small> in a row</small>`, day(run))); names.push(run.name); }
       const way = (dir) => (dir === 'L' ? ' left' : dir === 'R' ? ' right' : ' corner');
-      for (const { z, r, d } of kinds) { out.push(line(`Cleanest ${z}${way(r.dir)}, of ${r.n} ${z} corners`, d, `${r.level}<small>/100</small>`, day(d))); names.push(d.name); }   // a corner record out of 100, beside Scores out of 1000
+      for (const { z, r, d } of kinds) { out.push(line(`Cleanest ${z}${way(r.dir)}, of ${r.n} ${z} corners`, d, `${r.level}<small>/100</small>`, day(d))); names.push(d.name); }   // a corner record out of 100, as the other feats
       $('recordsTable').innerHTML = out.join('');
       $('recordsTable').querySelectorAll('tr td.l b').forEach((b, i) => { b.textContent = names[i]; });   // names are user text
     }
@@ -1056,14 +1074,16 @@
       const list = drives.slice().reverse();
       list.forEach(d => pick.add(new Option(driveLabel(d), d.id)));
       const actions = document.querySelector('#tab-drive .actions'); actions.hidden = !list.length;
-      if (!list.length) { $('dvTitle').textContent = 'No drives yet'; $('dvNote').textContent = ''; $('dvRoot').innerHTML = '<p class="note">Start a drive on the map, or import a recording in Garage, Your data.</p>'; return; }
+      const parts = (on) => { for (const k of ['dvPartDrove', 'dvPartRoad', 'dvPartYours', 'dvTagsPanel', 'dvRecce']) $(k).hidden = !on; };   // the three parts' labels, with a drive only
+      if (!list.length) { parts(false); $('dvTitle').textContent = 'No drives yet'; $('dvNote').textContent = ''; $('dvRoadRoot').replaceChildren(); $('dvRoot').innerHTML = '<p class="note">Start a drive on the map, or import a recording in Garage, Your data.</p>'; return; }
+      parts(true);
       pick.value = list.some(d => d.id === keep) ? keep : list[0].id;
       const id = pick.value, s = summaryOf(id), run = ++dvRun;
       if (dvCurrent && dvCurrent.id !== id) {                            // another drive: nothing of the last one stays on its page
         $('tab-drive').insertBefore(dvActs, $('dvRoot'));
         if (dvView) dvView.destroy();
         dvView = null; dvCurrent = null; dvInfo = null; dcPanel = null;
-        $('dvRoot').replaceChildren(); $('dvDashcam').replaceChildren();
+        $('dvRoot').replaceChildren(); $('dvRoadRoot').replaceChildren(); $('dvDashcam').replaceChildren(); tagsOpen = false;
         for (const k of ['dvRoad', 'dvGhost', 'dvVote', 'dvRecce', 'dvFlyby', 'dvTouch', 'dvBest']) $(k).hidden = true;
       }
       // The drive's name is the page title (you arrive from the Log list); the picker stays only as this view's state.
@@ -1079,7 +1099,7 @@
       if (dvView) dvView.destroy();
       const reference = dvInfo.reference || null, coach = dvInfo.coach || null;
       $('tab-drive').insertBefore(dvActs, $('dvRoot'));                // out of the root before it is redrawn
-      dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach, mapPalette: () => look.map, traceOf: (k) => ApexAnalysis.job('cornerTrace', { id, k }),
+      dvView = ApexDriveView.mount($('dvRoot'), d, { roadRoot: $('dvRoadRoot'), Core, C, MPH, reference, coach, mapPalette: () => look.map, traceOf: (k) => ApexAnalysis.job('cornerTrace', { id, k }),
         // one tap from a corner to its clip, from the app's own video of the drive (the Dashcam panel below, big bet 5)
         canClip: (s, e) => !!(dcPanel && dcPanel.canClip && dcPanel.canClip(s, e)), clip: (s, e) => (dcPanel && dcPanel.clip ? dcPanel.clip(s, e) : false),
         canPostClip: () => !!(dcPanel && dcPanel.canPost && dcPanel.canPost()), postClip: () => (dcPanel && dcPanel.post ? dcPanel.post() : null),
@@ -1154,9 +1174,15 @@
       // written in the worker: the record's one transaction, its summary with it (F-06)
       try { return !!(await ApexAnalysis.job('patch', { id: d.id, fields: { tags: d.tags, note: d.note } })).summary; } catch (_) { return false; }
     }
+    // Drive page round 1 (Nate 2026-11-15): the tags you chose, and "+ Tag" for the rest; all seven chips only once it is open
+    let tagsOpen = false;
+    $('dvTagOpen').addEventListener('click', () => { tagsOpen = true; const d = currentDrive(); if (d) renderTags(d); $('dvTagNew').focus({ preventScroll: true }); });
     function renderTags(d) {
       const box = $('dvTags'), current = ApexDriveTags.normalize(d.tags);
-      box.replaceChildren(...ApexDriveTags.offered(drives.filter((x) => x.id !== d.id), current).map((t) => {
+      const shown = tagsOpen ? ApexDriveTags.offered(drives.filter((x) => x.id !== d.id), current) : current;
+      $('dvTagOpen').hidden = tagsOpen; $('dvTagOpen').setAttribute('aria-expanded', String(tagsOpen)); $('dvTagMore').hidden = !tagsOpen;
+      box.hidden = !shown.length;
+      box.replaceChildren(...shown.map((t) => {
         const on = current.some((c) => c.toLowerCase() === t.toLowerCase()), b = document.createElement('button');
         b.className = 'btn' + (on ? ' on' : ''); b.textContent = t; b.setAttribute('aria-pressed', String(on));
         b.addEventListener('click', async () => { await saveTags(d, ApexDriveTags.toggle(d.tags, t), d.note); renderTags(d); });

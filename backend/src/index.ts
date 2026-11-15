@@ -53,6 +53,7 @@ import { traceTile } from "./trace_relay";
 import { grantedThemes } from "./themes";
 import { isDeveloper } from "./developers";
 import { coverage, exportRoads, roadBins } from "./roads";
+import { insightRoads, keyAccess, meta as insightMeta } from "./road_insights";
 import { crewStandings } from "./standings";
 import { crewBoard, publishDriveScores } from "./drive_scores";
 import { enter as taEnter, circuitsNow, leave as taLeave, makeCircuit, runs as taRuns, timeAttack } from "./time_attack";
@@ -180,6 +181,10 @@ on("GET", "/api/ops/roads.geojson", async (req, env) => {
   if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
   return json(await exportRoads(env, new URL(req.url)));
 });
+// Road insights API (src/road_insights.ts, docs/ROAD_INSIGHTS.md; the viewer at data.vettadrive.com): aggregate road facts,
+// ten drivers or more, noised; real data only with a key, partner keys only once the owner opens them. The meta is public.
+on("GET", "/api/data/v1/meta", async () => json(insightMeta(), 200, { "cache-control": "public, max-age=3600" }));
+on("GET", "/api/data/v1/roads.geojson", async (req, env) => json(await insightRoads(env, new URL(req.url), await keyAccess(req, env)), 200, { "cache-control": "no-store" }));
 on("GET", "/api/points", async (req, env) => json(await pointsFor(env, (await requireMember(req, env)).id)));
 on("GET", "/api/flags", async (req, env) => json(await flagsFor(env, req)));
 // Work zones from state feeds without CORS (web/route_ctx/hazards_live.js); 0.5° tiles only, nothing kept.

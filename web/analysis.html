@@ -79,7 +79,7 @@
     #tab-driving { zoom: var(--type-scale, 1); }   /* Your driving is words and numerals: all of it at the phone's text size */
     /* IN-1 (panel round 2): the drive's page too: its title, the score and coaching line, the keys, the corner list, tags
        and the panels' words; the map, lanes and charts (.dv-grid) and the dashcam keep their measured size. */
-    #tab-drive > div:first-child, #tab-drive > div:has(#dvTitle), #dvRoot > .dv-head, #dvActs, #dvRoot > .dv-list, #dvTagsPanel, #dvRecce, #dvVote, #dvFlyby, #dvRoad > h2 { zoom: var(--type-scale, 1); }
+    #tab-drive > div:first-child, #tab-drive > div:has(#dvTitle), #dvRoot > .dv-head, #dvActs, #dvRoadRoot > .dv-list, #tab-drive > .dv-part, #dvTagsPanel, #dvRecce, #dvVote, #dvFlyby, #dvRoad > h2 { zoom: var(--type-scale, 1); }
     /* GR-2: a floor on the drive's page: prose and captions at least 17 px, every key at least 44 px each way */
     #tab-drive :is(.note, .dv-meta, .dv-plain, .linkbtn, a.back, .dv-call, .dv-tip) { font-size: 17px; }
     #tab-drive :is(.linkbtn, .stamps > button, .switch > button, button.btn, .dv-z) { min-height: 44px; min-width: 44px; }
@@ -124,6 +124,7 @@
     #recordsTable td.l { white-space: normal; }
     #recordsTable .nw { white-space: nowrap; }
     #recordsTable .score small { font-size: 13px; font-weight: 500; color: var(--panel-dim); margin-left: 1px; }   /* a corner record is out of 100, a Score out of 1000 */
+    #recordsTable tr.rec-h th { text-align: left; font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--panel-dim); padding: 12px 0 2px; border: 0; }
     td .sub { display: block; font-size: 11px; color: var(--panel-dim); font-family: var(--font-ui); }
     tr.stopped td { opacity: 0.55; }
     tr.best td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
@@ -192,6 +193,8 @@
     .dv-corner.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
     .dv-corner b { font-family: var(--font-num); color: var(--signal); } .dv-call { font-weight: 700; font-size: 14px; } .dv-v { font-family: var(--font-num); font-size: 13px; }
     .dv-d { grid-column: 2 / 4; font-size: 11px; color: var(--panel-dim); }
+    .dv-res { font-weight: 700; font-size: 15px; } .dv-res.miss { color: var(--signal); }
+    .dv-lvl { font-family: var(--font-num); font-size: 18px; font-weight: 700; } #tab-drive .dv-d .dv-call { font-weight: 400; font-size: 13px; } .dv-d { font-size: 13px; } .dv-d .dv-v { font-size: inherit; }
     .dv-tip { grid-column: 2 / 4; font-size: 12px; line-height: 1.35; }
     /* the corner overlay: one corner, this pass against your best pass, under the row tapped */
     .dv-ovl { grid-column: 1 / -1; display: block; padding: 10px 12px 12px; border-radius: 10px; background: var(--face, var(--panel)); }
@@ -205,10 +208,22 @@
     .dv-time li > .dv-ovl { margin-top: 6px; }
     .dv-ovl .dv-clip { display: inline-flex; margin: 2px 0 8px; min-height: 44px; }
     .dv-plain { margin: 8px 0 0; font-size: 15px; line-height: 1.4; max-width: 60ch; }
-    .dv-gg { margin-top: 12px; } .dv-gg h3 { font-size: 13px; margin: 0 0 6px; }
-    .dv-gg-pic { position: relative; width: 100%; max-width: 320px; aspect-ratio: 1; } .dv-gg-pic svg { display: block; width: 100%; height: 100%; }
+    /* the grip circle beside the Score (drive page round 1): the Score left, the circle right, the rest full width under them */
+    .dv-head.has-gg { grid-template-columns: minmax(0, 1fr) minmax(120px, 44%); column-gap: 12px; }
+    .dv-head.has-gg > * { grid-column: 1 / -1; order: 2; }
+    .dv-head.has-gg > .dv-score { grid-column: 1; grid-row: 1; align-self: center; flex-wrap: wrap; }
+    .dv-head.has-gg > .dv-gg { grid-column: 2; grid-row: 1; }
+    .dv-head > .bars, .dv-head > .dv-bar-say { order: 0; } .dv-head > .dv-gg-cap { order: 1; margin: 0; font-size: 13px; }
+    .dv-gg { display: grid; gap: 2px; justify-items: center; } .dv-gg-name { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
+    .dv-head .bar { background: none; border: 0; padding: 4px 0; margin: 0; color: var(--panel-dim); font: inherit; font-size: 11px; cursor: pointer; text-align: left; min-height: 32px; }
+    .dv-head .bar[aria-expanded="true"] { color: var(--panel-ink); font-weight: 700; }
+    .dv-head .dv-bar-say { margin: 0; font-size: 13px; }
+    /* the page's three parts: a small label over each, so How you drove, The road and Yours read as three */
+    #tab-drive > .dv-part { margin: 18px 0 0; font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--panel-dim); }
+    .dv-lanepick { max-width: 100%; } .dv-lanepick > button { padding: 0 4px; font-size: 14px; }
+    .dv-tagnew { display: inline-flex; align-items: center; gap: 8px; } .dv-tagnew[hidden] { display: none; }
+    .dv-gg-pic { position: relative; width: 100%; max-width: 220px; aspect-ratio: 1; } .dv-gg-pic svg { display: block; width: 100%; height: 100%; }
     .dv-gg-hot { position: absolute; inset: 0; pointer-events: none; }
-    .dv-gg-lede { margin: 0 0 8px; max-width: 60ch; } .dv-gg-more { max-width: 60ch; margin-top: 8px; } .dv-gg-more p { margin: 0 0 8px; }
     /* the real map under the route picture (drive_basemap.js): the SVG on top, the map fades in only once its tiles drew */
     .dv-plan { position: relative; } .dv-plan > svg { position: relative; z-index: 1; display: block; width: 100%; height: auto; }
     .dv-plan > .dv-basemap { position: absolute; inset: 0; z-index: 0; opacity: 0; transition: opacity 0.3s ease-out; pointer-events: none; overflow: hidden; }
@@ -315,7 +330,10 @@
     .hero-score b { font: 800 88px/0.9 var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
     .hero-score small { font-size: 18px; font-weight: 600; color: var(--panel-dim); margin-left: 4px; }
     .hero-what { margin: 6px 0 0; font-size: 15px; font-weight: 600; }
-    .hero-best { margin: 2px 0 0; font-size: 14px; color: var(--panel-dim); }
+    .hero-best { display: inline-block; vertical-align: 18px; margin-left: 12px; padding: 4px 10px; border: 1.5px solid var(--rule); border-radius: var(--r-chip, 999px); font-size: 14px; font-weight: 700; color: var(--panel-dim); }
+    .short-row td { padding: 10px 0; text-align: center; }
+    .short-row .btn { min-height: 44px; }
+    .hero-sub { margin: 2px 0 0; font-size: 14px; color: var(--panel-dim); }
     details.quiet { border-bottom: 1px solid var(--rule); }
     details.quiet > summary { cursor: pointer; list-style: none; min-height: 44px; display: flex; align-items: center; justify-content: space-between; font-size: 15px; font-weight: 600; }
     details.quiet > summary::-webkit-details-marker { display: none; }
@@ -385,10 +403,22 @@
             <button class="linkbtn" id="dvStage">Mark a stage</button>
           </div></details>
       </div>
+      <!-- Drive page round 1 (Nate 2026-11-15, "metrics confusing and disorganised"): three parts. How you drove (the Score,
+           the grip circle beside it, your touch and records), The road (map, one chart, corners), Yours (tags, note, video, notes). -->
+      <h2 class="dv-part" id="dvPartDrove">How you drove</h2>
       <div id="dvRoot"></div>
+      <div class="panel" id="dvGhost" hidden><h2 id="dvGhostHead"></h2><p class="dv-road-since" id="dvGhostLine"></p><div id="dvGhostRows"></div><div class="dv-ghost-acts" id="dvGhostActs"></div></div>
+      <div class="panel" id="dvTouch" hidden><h2>Your touch on this drive</h2><div id="dvTouchList" class="stack-8"></div></div>
+      <div class="panel" id="dvBest" hidden><h2>Against your records</h2><div id="dvBestList" class="stack-8"></div></div>
+      <h2 class="dv-part" id="dvPartRoad">The road</h2>
+      <div id="dvRoadRoot"></div>
+      <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><p class="dv-road-since" id="dvRoadSince" hidden></p><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
+      <div class="panel" id="dvFlyby" hidden><h2>Friends on these roads that day</h2><div id="dvFlybyList" class="stack-8"></div></div>
+      <h2 class="dv-part" id="dvPartYours">Yours</h2>
       <div class="dv-tagrow" id="dvTagsPanel">
-        <div class="stamps" id="dvTags" role="group" aria-label="Tags for this drive"></div>
-        <input id="dvTagNew" maxlength="24" placeholder="+ tag" aria-label="Add a tag" /><button class="linkbtn" id="dvTagAdd">Add</button>
+        <div class="stamps" id="dvTags" role="group" aria-label="Tags for this drive" hidden></div>
+        <button class="btn" id="dvTagOpen" aria-expanded="false">+ Tag</button>
+        <span class="dv-tagnew" id="dvTagMore" hidden><input id="dvTagNew" maxlength="24" placeholder="Your own tag" aria-label="Add a tag" /><button class="linkbtn" id="dvTagAdd">Add</button></span>
         <details class="quiet dv-notebox"><summary>Note</summary>
           <textarea id="dvNoteText" maxlength="280" placeholder="A note for yourself (stays on this phone)" aria-label="Note"></textarea></details>
         <p class="note" id="dvTagsNote" aria-live="polite"></p></div>
@@ -398,11 +428,6 @@
         <div class="actions" id="dvRecceActs"></div><div class="stack-8 mt-8" id="dvRecceList"></div></div>
       <div class="panel" id="dvVote" hidden><h2>Which route was better?</h2><div class="actions" id="dvVoteBtns" role="group" aria-label="Which route was better"></div>
         <p class="note">Your answers rank your roads (Log). They stay on this phone.</p></div>
-      <div class="panel" id="dvFlyby" hidden><h2>Friends on these roads that day</h2><div id="dvFlybyList" class="stack-8"></div></div>
-      <div class="panel" id="dvTouch" hidden><h2>Your touch on this drive</h2><div id="dvTouchList" class="stack-8"></div></div>
-      <div class="panel" id="dvBest" hidden><h2>Against your records</h2><div id="dvBestList" class="stack-8"></div></div>
-      <div class="panel" id="dvGhost" hidden><h2 id="dvGhostHead"></h2><p class="dv-road-since" id="dvGhostLine"></p><div id="dvGhostRows"></div><div class="dv-ghost-acts" id="dvGhostActs"></div></div>
-      <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><p class="dv-road-since" id="dvRoadSince" hidden></p><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
     </section>
 
     <!-- ============================ YOUR DRIVING ============================ -->
