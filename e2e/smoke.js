@@ -7422,7 +7422,7 @@ flow('the full Feed picks whose posts (All, Friends or one crew) and mutes a dri
     if (u.pathname === '/api/crews') return json([{ ...rr, role: 'member', visibility: 'private', members: 3 }]);
     if (u.pathname === '/api/feed') {
       asked.push(u.search);
-      const all = [post(5, rr), post(4, null), post(3, rr), post(2, null), post(1, null)];
+      const all = [{ ...post(5, rr), with: ['me', 'cara'] }, post(4, null), post(3, rr), post(2, null), post(1, null)];
       return json(u.searchParams.get('friends') === '1' ? all.filter((p) => !p.crew) : u.searchParams.get('crew') === 'k1' ? all.filter((p) => p.crew) : all);
     }
     return json([]);
@@ -7435,6 +7435,8 @@ flow('the full Feed picks whose posts (All, Friends or one crew) and mutes a dri
   const pick = await page.$$eval('.people-pop.open .feed-pick button', (l) => l.map((b) => `${b.textContent}${b.getAttribute('aria-checked') === 'true' ? '*' : ''}`));
   check(JSON.stringify(pick) === JSON.stringify(['All*', 'Friends', 'Ridge Runners']), 'the pick: All, Friends, each crew; All on: ' + JSON.stringify(pick));
   check(/Drive 5.*Drive 1/.test(await titles()), 'All: every post: ' + await titles());
+  const along = await page.$$eval('.people-pop.open .feed-card .feed-with', (l) => l.map((x) => x.textContent));
+  check(JSON.stringify(along) === '["With you and @cara"]', 'who came, on the crew post only, you first: ' + JSON.stringify(along));
   await page.click('.people-pop.open .feed-pick button:has-text("Friends")');
   await page.waitForFunction(() => [...document.querySelectorAll('.people-pop.open .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 4,Drive 2,Drive 1');
   await page.click('.people-pop.open .feed-pick button:has-text("Ridge Runners")');
