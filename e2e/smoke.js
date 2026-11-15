@@ -6177,7 +6177,7 @@ flow('a ghost duel: on your stage a friend has driven, the bar shows the live ga
   if (await page.isVisible('#permSheet.show')) await page.click('#permGo');
   check(asked === 'seg_sam', 'the ghost asked for is the stage\'s own (its origin): ' + asked);
   // drive it 5 % quicker than sam, as the app's frames with their own clock
-  const bars = [];
+  const bars = [], ghosts = [];
   for (let burst = 0; burst < 11; burst++) {
     await page.evaluate((burst) => {
       const r = window.__road;
@@ -6189,9 +6189,18 @@ flow('a ghost duel: on your stage a friend has driven, the bar shows the live ga
       }
     }, burst);
     await page.waitForTimeout(1050);
-    if (await page.isVisible('#ghostBar')) bars.push(await page.textContent('#ghostBar'));
+    if (await page.isVisible('#ghostBar')) {
+      bars.push(await page.textContent('#ghostBar'));
+      // the ghost on the map (D-04): sam's marker where sam was at this moment, behind you (you are 5 % quicker)
+      ghosts.push(await page.evaluate(() => { const g = document.querySelector('.ghost-puck'), me = document.querySelector('.puck');
+        if (!g || !g.isConnected) return null; const a = g.getBoundingClientRect(), b = me.getBoundingClientRect();
+        return { label: g.getAttribute('aria-label'), text: g.textContent, px: Math.round(Math.hypot(a.x - b.x, a.y - b.y)) }; }));
+    }
   }
   check(bars.length > 0 && bars.some((b) => /^Esses−\d+\.\d s vs @samGhost$/.test(b.trim())), 'the bar shows the live gap, ahead of sam: ' + JSON.stringify(bars));
+  check(ghosts.length > 0 && ghosts.every((g) => g && g.label === 'Ghost: sam' && g.text === 'S') && ghosts.some((g) => g.px > 4),
+    'sam\'s ghost is on the map while the bar is, apart from your arrow: ' + JSON.stringify(ghosts));
+  check(!(await page.evaluate(() => { const g = document.querySelector('.ghost-puck'); return !!(g && g.isConnected); })), 'and gone once the stage is done');
   const runs = await page.evaluate(() => window.apexDebug.ghostRuns);
   check(Array.isArray(runs) && runs.length === 1 && runs[0].who === 'sam' && runs[0].gap_s < -3, 'the finish against sam is kept: ' + JSON.stringify(runs));
   // on along a straight, so the co-driver has the quiet slot (a fresh fix) to say it in
