@@ -89,6 +89,15 @@
     // budget never shuts out the highway-free quickest (+ HWY_FREE_SLACK_S). A point snapped onto a highway moves to the
     // nearest other road within HWY_SNAP_M (a car on the highway, heading given and within HWY_ON_M of it, stays on it)
     NO_HWY: { fun: true, max: true }, TRUNK_FUN_KM: 1.5, HWY_LINK_X: 25, HWY_ABSURD: 2, HWY_FREE_SLACK_S: 60, HWY_SNAP_M: 150, HWY_ON_M: 25,
+    // a road trip (2026-11-15): where keeping off the highways costs more than HWY_FIT_S past the level's own budget
+    // (Denver to Ouray at Fun: 12 h highway-free against 5.5 h, so the card fell back to Quick; Cincinnati to Deals Gap:
+    // 8.4 h against 5 h with one bridge of interstate), the level takes highway where it must to stay inside its budget:
+    // each highway second costs the largest of HWY_FIT_X that fits, so the twisty roads stay and the long straight
+    // transit goes on the highway. A short ride is untouched: its highway-free way is rarely that much longer.
+    HWY_FIT_S: 1200, HWY_FIT_X: [8, 4, 2.5, 1.6, 1.25],
+    // the A* bound's top speed (view): the fastest edge of at least VMAX_MIN_M, at most VMAX_MPS (the 85 mph of Texas 130,
+    // as the tiles time it: the limit x 1.05 flow, 40 m/s)
+    VMAX_MIN_M: 200, VMAX_MPS: 40,
     // loops (loop()): at Quick motorway and trunk cost x LOOP_HWY_X on every leg (a short link to good roads, never the
     // bulk), at Fun and Long way they are never driven (NO_HWY, the same exception); the
     // stages within reach of half the length at LOOP_REACH_MS; at most LOOP_STAGES of them chained, LOOP_TRIES loops
@@ -205,8 +214,11 @@
         name[g] = ed.name && ed.name[e] !== NO_NAME ? ed.name[e] : -1;
         if (ed.hIn && ed.hOut) { hIn[g] = ed.hIn[e] / 256 * 2 * Math.PI; hOut[g] = ed.hOut[e] / 256 * 2 * Math.PI; }
         if (ed.ch) for (const k in ed.ch) roadCh[k][g] = ed.ch[k][e];
+        // the A* bound's top speed: from edges long enough for their time to be measured, never past VMAX_MPS (2026-11-15:
+        // one 60 m edge in Ohio timed at 0.5 s, 430 km/h, made every search in its view 3 x as blind, and Long way from
+        // Cincinnati to Deals Gap ran out of search before reaching it; a 4 m edge rounds to 0.1 s, 43 m/s)
         const v = len[g] / time[g];
-        if (v > vmax) vmax = v;
+        if (v > vmax && len[g] >= K.VMAX_MIN_M) vmax = Math.min(v, K.VMAX_MPS);
       }
     });
     first[N] = E;
@@ -1294,6 +1306,29 @@
     const l = search(v, obj, src, dst, 0, null, { ...opts, ...xl });
     return l ? { r: l, mode: 'link', src, dst, xo: xl } : null;
   }
+  /**
+   * A road trip's level quickest inside the budget (HWY_FIT_S): the route that keeps off the highways the most while its
+   * time stays at most fitS, each highway second costing the largest HWY_FIT_X that fits. Returns { route, x, src, dst,
+   * xo } or null (not even the cheapest fits: the level keeps its highway-free way).
+   */
+  function fitHighway(v, obj, src, dst, opts, is, fitS, level) {
+    // a binary search over HWY_FIT_X (largest first): each try crosses the whole trip, so two or three, not five
+    const X = K.HWY_FIT_X, at = new Map();
+    const tryX = (i) => {
+      if (!at.has(i)) {
+        const x = X[i], xo = { hwyX: { is, x } }, r = search(v, obj, src, dst, 0, null, { ...opts, ...xo });
+        const route = r ? assemble(v, r, obj, { level, role: 'quickest', a: 0 }) : null;
+        at.set(i, route && route.timeS <= fitS ? { route, x, src, dst, xo } : null);
+      }
+      return at.get(i);
+    };
+    let lo = 0, hi = X.length - 1, best = null;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1, g = tryX(mid);
+      if (g) { best = g; hi = mid - 1; } else lo = mid + 1;
+    }
+    return best;
+  }
   /** Why a route with the exception drives a highway: it starts on one, ends on one, or there is no other way across. */
   function hwyReason(v, r) {
     const E = r.edgeIdx;
@@ -1350,6 +1385,16 @@
       base = f.r ? assemble(v, f.r, obj, { level, role: 'quickest', a: 0 }) : quick;
       if (base !== quick) quick.why.role = 'quickest-highway';
       hwy = { mode: f.mode, absurd: f.mode === 'free' && base.timeS > K.HWY_ABSURD * quick.timeS, quickS: quick.timeS, freeS: f.mode === 'free' ? base.timeS : null };
+      const fitS = quick.timeS * (1 + L.budget) + L.slackS;
+      if (base !== quick && base.timeS > fitS + K.HWY_FIT_S) {
+        const g = fitHighway(v, obj, snaps.src, snaps.dst, opts0, is, fitS, level);
+        if (g) {
+          ({ src, dst } = g);
+          opts = { ...opts0, ...g.xo };
+          hwy = { mode: 'link', fit: g.x, absurd: false, quickS: quick.timeS, freeS: hwy.freeS };
+          base = g.route;
+        }
+      }
     }
     // the budget over the quickest; never so tight it shuts out the level's own quickest (a highway-free way)
     const limitS = Math.max(quick.timeS * (1 + L.budget) + L.slackS, base === quick ? 0 : base.timeS + K.HWY_FREE_SLACK_S);
