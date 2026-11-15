@@ -197,7 +197,7 @@ async function clippedText(page) {
       if (el.scrollWidth > el.clientWidth + 1 && /hidden|clip/.test(cs.overflowX) && cs.textOverflow !== 'ellipsis') hits.push(`${where(el)} "${text}" cut ${el.scrollWidth - el.clientWidth} px wide`);
       else if (el.scrollHeight > el.clientHeight + 2 && /hidden|clip/.test(cs.overflowY) && !(+cs.webkitLineClamp > 0)) hits.push(`${where(el)}${el.parentElement ? " in " + where(el.parentElement) : ""} "${text}" cut ${el.scrollHeight - el.clientHeight} px tall`);
       else if (r.right > W + 1 && cs.position !== 'fixed') {
-        let scroller = false; for (let n = el.parentElement; n; n = n.parentElement) { const c = getComputedStyle(n); if (/auto|scroll/.test(c.overflowX)) { scroller = true; break; } }
+        let scroller = false; for (let n = el.parentElement; n && n !== document.body && n !== document.documentElement; n = n.parentElement) { const c = getComputedStyle(n); if (/auto|scroll/.test(c.overflowX)) { scroller = true; break; } }
         if (!scroller) hits.push(`${where(el)} "${text}" runs ${Math.round(r.right - W)} px off the screen`);
       }
     }
@@ -4583,7 +4583,7 @@ flow('a drive started on the car and never ended is in the Log: the car switchin
   // 1. started on the car's screen, driven 3.5 km, the car switched off in the car park: no End
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start', free: true }));
   await page.waitForFunction(() => window.apexDebug.driveActive);
-  for (let b = 0; b < 4; b++) { await feed(b * 80, (b + 1) * 80, 15); await page.waitForTimeout(150); }
+  for (let b = 0; b < 4; b++) { await feed(b * 80, (b + 1) * 80, 15); await page.waitForTimeout(150); if (b === 1) await page.evaluate(() => window.apexDebug.say('Stage done.')); }
   await until(async () => (await ApexRecording.keepAll()).length === 1, null, 'the drive is checkpointed as it goes');
   const posted = await page.evaluate(() => window.__native.filter((m) => m.cmd === 'journal').map((m) => m.op));
   check(posted.indexOf('start') >= 0 && posted.indexOf('durable') > posted.indexOf('start'), 'the shell is told the drive began and what is kept: ' + posted);
@@ -4595,6 +4595,9 @@ flow('a drive started on the car and never ended is in the Log: the car switchin
   const one = await until(async () => { const all = await ApexRecording.all(); return all.length === 1 && !(await ApexRecording.keepAll()).length ? all[0] : null; }, null, 'saved, and nothing left in progress');
   check(one.ended === 'car' && one.dist[one.dist.length - 1] > 3400, 'the whole drive saved, said how it ended: ' + JSON.stringify({ ended: one.ended, m: one.dist[one.dist.length - 1] }));
   check(/Ended when the car disconnected/.test(await page.textContent('#endLine')), 'the card says so');
+  // what the co-driver said on it, kept with the drive (cockpit.js saidOnDrive): each line, where, and in which voice
+  check(Array.isArray(one.said) && one.said.length > 0 && one.said.every((x) => typeof x.line === 'string' && ['pack', 'phone', null].includes(x.eng) && Number.isFinite(x.m)),
+    'the drive keeps what was said: ' + JSON.stringify((one.said || []).slice(0, 3)));
   check(await page.evaluate(() => window.__native.some((m) => m.cmd === 'journal' && m.op === 'end')), 'the shell drops its journal once saved');
 
   // 2. another drive from the car; the phone closes the page in the background (it writes nothing more) after the last
@@ -9273,6 +9276,58 @@ flow('contrast in every look: the welcome, the map, People, the Garage and the L
   else check(!found.length, `text under the contrast floor:\n  ${found.join('\n  ')}`);
 });
 
+// U-15 / IN-1: the main screens at the phone's larger text sizes (1.5x and the largest, 2x): no text cut off by its box
+// or the screen's edge, no key too small to hit; the checks every flow runs on its last screen at the default size
+flow('large text on every screen: the welcome, the map, a route card, People, the Garage and the Log (empty and with drives) cut nothing at 1.5x and 2x (IDEAS U-15, IN-1)', async (page, base) => {
+  graphDir = graphFixture();
+  const found = [];
+  const read = async (p, where) => { await p.evaluate(() => { const st = document.querySelector('.stage'); if (st) st.scrollLeft = 0; });
+    found.push(...(await clippedText(p)).map((h) => `${where}: ${h}`), ...(await smallTargets(p)).map((h) => `${where}: small key ${h}`));
+    const wide = await p.evaluate(() => Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth);
+    if (wide > 1) found.push(`${where}: the page is ${wide} px wider than the phone`); };
+  try {
+    for (const k of [1.5, 2]) {
+      const ctx = await page.context().browser().newContext({ viewport: { width: 390, height: 844 }, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+      await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
+      await ctx.addInitScript(() => { try { localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.funLevel', 'quick'); } catch (_) {} });
+      const p = await ctx.newPage();
+      try {
+        await p.goto(base + '/index.html');
+        await p.waitForSelector('#obNext', { state: 'visible' });
+        await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(400);
+        await read(p, `${k}x welcome`);
+        await p.evaluate(() => localStorage.setItem('apex.onboarded', '1'));
+        await p.goto(base + '/index.html');
+        await p.waitForFunction(() => window.apexDebug && window.apexDebug.map && !document.getElementById('boot'), null, { timeout: 20000 });
+        await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(800);
+        await read(p, `${k}x map`);
+        for (const view of ['people', 'garage']) {
+          await p.evaluate((v) => document.querySelector(`#tabbar .tab[data-view="${v}"]`).click(), view);
+          await p.waitForTimeout(700);
+          await read(p, `${k}x ${view}`);
+        }
+        await p.goto(base + '/analysis.html');
+        await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(800);
+        await read(p, `${k}x log`);
+        await ownTrip(p, base);
+        await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(1200);
+        await read(p, `${k}x route card`);
+        // the Log with drives in it: three, one with a long name
+        await p.evaluate(async () => { for (const [id, name, km] of [['lt1', 'Cherohala Skyway', 30], ['lt2', 'Tail of the Dragon (US-129)', 18], ['lt3', 'Foothills Parkway West', 27]]) {
+          const lat = [], lon = []; for (let i = 0; i < km * 200; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + 0.001 * Math.sin(i / 40)); }
+          await ApexRecording.store({ id, name, date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+            lon_g: lat.map(() => 0), lat_g: lat.map((_, i) => 0.3 * Math.sin(i / 40)), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }); } });
+        await p.goto(base + '/analysis.html');
+        await p.waitForSelector('#historyTable tr.row-link', { timeout: 15000 });
+        await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(800);
+        await read(p, `${k}x log with drives`);
+      } finally { await ctx.close(); }
+    }
+  } finally { graphDir = null; }
+  if (process.env.CLIP_LOG) for (const h of found) console.log('CLIP large | ' + h);
+  else check(!found.length, `at a large text size, text cut off or a key too small:\n  ${found.join('\n  ')}`);
+});
+
 // U-15: the route card, Saved and Where to? in every look, day and night: the card is what a driver reads most before a drive
 flow('contrast in every look: a planned route\'s card and its Saved key hold 4.5:1 in each theme, day and night (IDEAS U-15)', async (page, base) => {
   graphDir = graphFixture();
@@ -13126,8 +13181,14 @@ flow('the drive screen, Vetta Line: one hero speed over a ruled line, Limit, Sig
   check(drawn.dash === 'none' && parseFloat(drawn.off) === 0 && drawn.op === '1', 'after the move the tulip is whole and the call fully inked: ' + JSON.stringify(drawn));
   const tp = await page.evaluate(() => { const ink = (() => { const i = document.createElement('i'); i.style.color = getComputedStyle(document.documentElement).getPropertyValue('--panel-ink'); document.body.append(i); const c = getComputedStyle(i).color; i.remove(); return c; })();
     const filled = [...document.querySelectorAll('#transport button')].filter((b) => b.getClientRects().length && getComputedStyle(b).backgroundColor === ink).map((b) => b.id || b.textContent);
-    return { filled, rates: [...document.querySelectorAll('#rateDetents button')].map((b) => Math.round(b.getBoundingClientRect().height)) }; });
+    return { filled, rates: [...document.querySelectorAll('#rateDetents button')].filter((b) => b.getClientRects().length).map((b) => Math.round(b.getBoundingClientRect().height)) }; });
   check(JSON.stringify(tp.filled) === '["replayDone"]' && tp.rates.every((h) => h >= 44), 'the replay\'s one ink key is Done; the speeds keep a thumb\'s height: ' + JSON.stringify(tp));
+  // the transport is one row (real-drive review): one speed key that steps on when tapped, beside the scrubber and Done
+  const row = await page.evaluate(() => { const k = document.querySelector('#rateDetents [aria-checked="true"]'), y = (e) => Math.round(e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2);
+    const before = k.dataset.rate; k.click(); const after = document.querySelector('#rateDetents [aria-checked="true"]').dataset.rate;
+    return { before, after, shown: [...document.querySelectorAll('#rateDetents button')].filter((b) => b.getClientRects().length).length,
+      ys: ['playBtn', 'scrubber', 'replayDone'].map((id) => y(document.getElementById(id))).concat(y(document.querySelector('#rateDetents [aria-checked="true"]'))) }; });
+  check(row.shown === 1 && row.before !== row.after && Math.max(...row.ys) - Math.min(...row.ys) <= 12, 'one speed key that steps on, on one row with play, the scrubber and Done: ' + JSON.stringify(row));
   // reduced motion: cuts. No count, no arriving paper, no searching stroke, and nothing left hidden or half drawn
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 393, height: 852 });
@@ -13732,7 +13793,7 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
     ['the strip never cuts', 23], ['when to go', 21], ['the map is a fixed stage', 20], ['a deliberate detour', 20],
     ['theme contract on the page', 19], ['plan flow (d)', 18], ['plan flow (g)', 18], ['a loop by time', 17], ['plan flow (a)', 17],
     ['plan flow (e, f)', 16], ["the map's viewpoint, café and fuel stamps", 15],
-    ['contrast in every look: the welcome', 30], ['contrast in every look: a planned', 27], ['contrast in every look: the drive', 22]];
+    ['contrast in every look: the welcome', 30], ['contrast in every look: a planned', 27], ['contrast in every look: the drive', 22], ['large text on every screen', 20]];
   const weight = (f) => (LONG_S.find(([p]) => f.name.startsWith(p)) || [, 5])[1];
   const slice = new Map();
   if (shard) {
@@ -13756,6 +13817,8 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
     // stubbed Valhalla off our tiles: they plan at Quick unless they (or ctxOpts.funLevel) choose a level
     await ctx.addInitScript((lv) => { try { if (!localStorage.getItem('apex.funLevel')) localStorage.setItem('apex.funLevel', lv); } catch (_) {} }, lv0 || 'quick');
     const page = await ctx.newPage();
+    // VOICE_LOG=1: every line the page gives no pack clips, so the phone's own voice says it (cockpit.js pumpSpeech)
+    if (process.env.VOICE_LOG) await page.exposeFunction('__voiceGap', (text) => console.log(`VOICE_GAP ${name} | ${text}`));
     if (process.env.THROTTLE) { const c = await ctx.newCDPSession(page); await c.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.THROTTLE) }); }
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e && e.stack || e)));
