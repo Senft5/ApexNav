@@ -46,15 +46,20 @@
      * replaces the map's, and the route's corner notes and braking envelope are worked out again. Not during a drive (the
      * notes ahead would jump); the route says how much of it was corrected. Returns true when anything changed.
      */
+    // And the camber members measured and agree on (contributor.js camFrom, 3 deg or more): a corner that leans the wrong
+    // way says so ("slopes away"), a banked one is "banked", and the braking envelope takes it (apex_core.js apexSpeedMps).
     function applyCrowdCurvature(t, m) {
-      if (!t || t.kind !== 'route' || !m || !Array.isArray(m.crowdK) || !Array.isArray(t.kappa) || t.crowdCorrected != null) return false;
+      if (!t || t.kind !== 'route' || !m || !(Array.isArray(m.crowdK) || Array.isArray(m.crowdCam)) || !Array.isArray(t.kappa) || t.crowdCorrected != null) return false;
       if (window.ApexFlags && !ApexFlags.on('crowd_curvature')) return false;            // switched off on the server (flags.js, IDEAS Y-06)
-      const { kappa, replaced } = Core.blendCurvature(t.kappa, m.crowdK, m.crowdKn || []);
-      t.crowdCorrected = replaced * 5;
-      if (!replaced) return false;
+      const { kappa, replaced } = Array.isArray(m.crowdK) ? Core.blendCurvature(t.kappa, m.crowdK, m.crowdKn || []) : { kappa: Float64Array.from(t.kappa), replaced: 0 };
+      const cam = Array.isArray(m.crowdCam) && m.crowdCam.length === t.kappa.length ? m.crowdCam : null;
+      const camN = cam ? cam.reduce((a, v) => a + (Number.isFinite(v) ? 1 : 0), 0) : 0;
+      t.crowdCorrected = replaced * 5; t.crowdCamber = camN * 5;
+      if (!replaced && !camN) return false;
+      const camberRad = camN ? Float64Array.from(cam, (v) => (Number.isFinite(v) ? v * Math.PI / 180 : 0)) : null;
       const ds = new Float64Array(kappa.length).fill(5), sight = Float64Array.from(t.sightM);
-      const env = Core.brakingEnvelopeMps(kappa, ds, null, null, undefined, sight);
-      const corners = Core.annotateCautions(Core.detectCorners(kappa, ds), env, sight);
+      const env = Core.brakingEnvelopeMps(kappa, ds, camberRad, null, undefined, sight);
+      const corners = Core.annotateCautions(Core.detectCorners(kappa, ds, camberRad), env, sight);
       const events = corners.map(c => cornerEventOf(c, t.lat, t.lon, t.dist));
       Core.linkNotes(events);
       t.events = [...events, ...t.events.filter(e => e.type !== 'corner')].sort((a, b) => a.dist_m - b.dist_m);

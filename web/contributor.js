@@ -462,7 +462,7 @@
     const runs = locate({ drive: route, match, ways }), s = seriesFrom(runs, roads, route.lat.length);
     // the driven curvature along it (IDEAS Q-04), per sample, for correcting the map's corners
     return { ...summarize(runs, roads, route.lat.length), crowdK: s.k, crowdKn: s.kn, crowdBumps: s.bumps, crowdCrests: crestsFrom(s.crest, s.crn),
-      crowdRough: Array.isArray(route.dist) ? roughFrom(s.rough, s.n, route.dist) : [] };
+      crowdRough: Array.isArray(route.dist) ? roughFrom(s.rough, s.n, route.dist) : [], crowdCam: camFrom(s.cam, s.cn, s.csd) };
   }
   /**
    * Members' bumps and crests along a free drive's road ahead (no map match: the road context already knows the way under
@@ -514,6 +514,16 @@
     return { cam, rough, n, cn, csd, rsd, k, kn, crest, crn, bumps };
   }
 
+  /**
+   * The camber two or more members measured and agree on (agreement 'agree': their SD within AGREE.camber_deg, 1.5 deg), per
+   * sample in degrees, relative to the turn (+ banked into it, - off-camber), only where it is CAMBER_MIN_DEG (3 deg, the
+   * route card's banked / off-camber) or more either way; null elsewhere (flat, one pass, disagreeing, or unmeasured).
+   */
+  const CAMBER_MIN_DEG = 3;
+  function camFrom(cam, cn, csd) {
+    return (Array.isArray(cam) ? cam : []).map((v, i) => (finite(v) && Math.abs(v) >= CAMBER_MIN_DEG
+      && agreement(Array.isArray(cn) ? cn[i] : null, Array.isArray(csd) ? csd[i] : null, AGREE.camber_deg) === 'agree' ? v : null));
+  }
   /**
    * Broken pavement members measured (IDEAS Q-01 data): runs where two or more passes measured the roughness and its mean is
    * ROUGH_G (0.30 g rms, the route card's "rough") or more, ROUGH_RUN_M (100 m) long at least, runs less than ROUGH_GAP_M
@@ -692,6 +702,6 @@
     return Math.round(100 * (1 - Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30))));
   }
 
-  const api = { CAM_V, binFlow, bumpEvidence, binBump, bumpEvents, crestsFrom, crestEvents, roughFrom, roughMarks, feelFromWays, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, wayTiles, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { CAM_V, binFlow, bumpEvidence, binBump, bumpEvents, crestsFrom, crestEvents, camFrom, roughFrom, roughMarks, feelFromWays, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, wayTiles, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);
