@@ -46,7 +46,7 @@ const map = {getSource: () => ({setData: data => {ribbon = data;}})};
 const look = {colors:{signal:'red',amber:'orange',calm:'green'}};
 const scrubCanvas = {getBoundingClientRect: () => ({width:300,height:30})};
 const window = {devicePixelRatio:1}, totalM = () => 495, allEvents = () => [];
-const state = {cursorM:0};
+const state = {cursorM:0}, replayOn = false;   // paintJump (Jump to the corners) reads it
 const attrs = {}, $ = () => ({getAttribute: k => attrs[k], setAttribute: (k, v) => { attrs[k] = v; }});
 const strokes = [];
 const sctx = new Proxy({}, {get: (_, key) => (...args) => {
@@ -56,7 +56,7 @@ const sctx = new Proxy({}, {get: (_, key) => (...args) => {
 }});
 eval(functionText('updateRibbon') + '\nupdateRibbon(15, 0, true);');
 assert.deepEqual(ribbon, emptyFC());
-eval(functionText('paintScrubValue') + functionText('drawScrubber') + '\ndrawScrubber();');
+eval(functionText('paintScrubValue') + functionText('cornersStartM') + functionText('paintJump') + functionText('drawScrubber') + '\ndrawScrubber();');
 assert.equal(strokes.length, 0); // no fabricated zero-speed envelope
 assert.equal(attrs['aria-valuetext'], '0.0 of 0.3 mi'); // what VoiceOver reads on the scrubber
 track.envMps = Array(100).fill(null);
@@ -74,7 +74,7 @@ eval(functionText('updateRibbon') + '\nupdateRibbon(15, 0, false);');
 assert.equal(ribbon, null);
 track.envMps = env0;
 eval(functionText('updateRibbon') + '\nupdateRibbon(15, 0, true);');
-eval(functionText('paintScrubValue') + functionText('drawScrubber') + '\ndrawScrubber();');
+eval(functionText('paintScrubValue') + functionText('cornersStartM') + functionText('paintJump') + functionText('drawScrubber') + '\ndrawScrubber();');
 assert.deepEqual(strokes.map(s => s[0]), ['moveTo','lineTo','moveTo','lineTo']);
 })();
 """

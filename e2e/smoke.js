@@ -3298,9 +3298,12 @@ flow('one red that means act now: Sight is ink until you are over it, then colou
   await page.click('#explainDone');
   // waited for, not read once: on a busy runner the class can come off a frame after the click returns (CI 2026-11-11)
   check(await page.waitForFunction(() => !document.getElementById('explainCard').classList.contains('show'), null, { timeout: 2000 }).then(() => true, () => false), 'Done closes it');
-  await page.click('#cluster .g-score');
+  // the Score is -- through a replay of a drive with none, and a replay sets it aside until known (real-drive review
+  // 2026-11-15); the trip beside it explains itself the same way
+  check(await page.evaluate(() => getComputedStyle(document.querySelector('#cluster .g-score.unk')).display === 'none'), 'an unknown Score steps aside in a replay');
+  await page.click('#cluster .odo');
   await page.waitForSelector('#explainCard.show', { timeout: 3000 });
-  check(await page.textContent('#explainTitle') === 'Vetta Score', 'the Score explains itself');
+  check(await page.textContent('#explainTitle') === 'Trip', 'the trip explains itself');
   await page.click('#explainDone');
 });
 
@@ -6768,6 +6771,27 @@ flow('the Log draws one rule between the drive list and Score over time, not two
   check(!r.quiet && (r.row === 0 && r.panel === 1), 'one rule between the list and the panel: ' + JSON.stringify(r));
 });
 
+flow('the Log after a real week: short drives with no corners fold away, Score over time names each day once, the hero names no address (real-drive review round 2)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async (src) => { const gen = eval(src);
+    for (let k = 0; k < 3; k++) await ApexRecording.store(ApexRecording.parse(ApexCore, gen('saw', k), 'W' + k + '.csv', { id: 'W' + k, name: 'To 10069 Pebble Ridge Ln', date: `2026-10-30T1${k}:00`, source: 'web-gps' }));
+    const lat = [], lon = []; for (let i = 0; i < 60; i++) { lat.push(39.10 + i * 5 / 110540); lon.push(-84.52); }   // 0.3 km, straight
+    await ApexRecording.store({ id: 'Wshort', name: 'To the shop', date: '2026-10-31T09:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 12),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, elev: null, hz: 1, source: 'web-gps', events: [] }); }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#trendPanel:not([hidden])', { timeout: 20000 });
+  const r = await page.evaluate(() => ({ rows: [...document.querySelectorAll('#historyTable tr.row-link')].map((t) => t.dataset.drive),
+    fold: (document.getElementById('showShorts') || {}).textContent || null, hero: document.getElementById('historyCards').textContent,
+    labels: [...document.querySelectorAll('#trend svg text[text-anchor="middle"]')].map((t) => t.textContent) }));
+  check(!r.rows.includes('Wshort') && r.rows.length === 3 && r.fold === 'Short drives (1)', 'the short drive folds away: ' + JSON.stringify(r));
+  check(!/Pebble|10069/.test(r.hero), 'the hero names no address: ' + r.hero);
+  check(r.labels.length === new Set(r.labels).size && r.labels.length >= 1, 'each day labelled once: ' + JSON.stringify(r.labels));
+  await page.click('#showShorts');
+  await page.waitForSelector('#historyTable tr[data-drive="Wshort"]', { timeout: 5000 });
+});
+
 flow('a drive\'s corners on a road driven four times: each says your cleanest pass there, and a tap opens the drive that holds it (driver_profile.js roadRecords rows)', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
@@ -9288,7 +9312,8 @@ flow('theme contract on the page: the hazard plate, the speed, the call and the 
     check(r.speed >= 40, `${m}: speed numeral ${r.speed} px`);
     check(r.call >= 21, `${m}: the call ${r.call} px`);
     check(!r.small.length && r.bankPx >= 13, `${m}: nothing on the binnacle under 13 px: ` + JSON.stringify(r.small) + ' bank ' + r.bankPx);
-    check(r.limit && r.limit.w === 44 && r.limit.h === 52 && (r.limit.unknown || r.limit.bg === 'rgb(255, 255, 255)'), `${m}: the Limit sign is the white sign: ` + JSON.stringify(r.limit));
+    // a replay sets an unknown limit aside (real-drive review 2026-11-15: a framed dash is not news); known, it is the sign
+    check(r.limit && ((r.limit.unknown && r.limit.w === 0) || (r.limit.w === 44 && r.limit.h === 52 && (r.limit.unknown || r.limit.bg === 'rgb(255, 255, 255)'))), `${m}: the Limit sign is the white sign, or none while unknown: ` + JSON.stringify(r.limit));
     // night is a mode (REVIEW2.md U-36): a 46 px numeral, Limit and Sight on one row, the trip behind its Trip key
     const nm = await page.evaluate(() => { const d = document.querySelector('.dial-speed .dial-digital'), vis = (q) => { const e = document.querySelector(q); return !!e && e.getClientRects().length > 0; };
       const l = document.querySelector('.ro-limit').getBoundingClientRect(), g = document.querySelector('.ro-sight').getBoundingClientRect();
