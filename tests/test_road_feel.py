@@ -87,5 +87,5 @@ def test_the_end_card_and_the_log_show_it():
     assert "feel: window.ApexRoadFeel ? ApexRoadFeel.summary({ dist: d.dist, camber: d.camber, rough: d.rough }) : null" in html, "a whole record"
     assert '<script src="road_feel.js"></script>' in an and an.index("road_feel.js") < an.index("drive_view.js")
     assert "RF.summary({ dist: d.dist, camber: d.camber, rough: d.rough })" in dv and "Your road feel" in dv and "this phone \\u00b7 1 run" in dv
-    lane = dv[dv.index("      if (own) {"):dv.index("      if (feel) {")]
+    lane = dv[dv.index("      if (own && state.lane === 'road') {"):dv.index("      if (feel && state.lane === 'road') {")]
     assert "if (finite(cm))" in lane and "if (finite(rf))" in lane and "else rs = false" in lane, "gaps are unknown, never drawn as zero"

@@ -335,6 +335,14 @@ def test_a_gravel_road_is_no_stage_when_unpaved_is_avoided():
     assert r == {"avoided": ["Paved Road"], "allowed": ["Gravel Road", "Paved Road"]}, r
 
 
+def test_a_loop_leg_goes_round_a_lake_outside_its_ellipse():
+    """2026-11-15: from Robbinsville 11 of 18 loop chains found no leg, the only roads to the Dragon going round Fontana
+    Lake outside the ellipse a leg searches. A leg that finds nothing there searches again without it."""
+    r = case("lakeLoop")
+    assert r["routes"] >= 1 and all(r["ridge"]), r
+    assert all(48 <= k <= 128 for k in r["km"]), r
+
+
 def test_a_long_good_road_is_one_stage_across_tiles_and_among_many_lanes():
     """2026-11-15: from Robbinsville neither the Cherohala Skyway nor the Dragon was a stage (Best roads nearby, loops):
     a chain broke at a tile's edge (a name's index is its tile's own), stopped at 15 km, and only the first 36 chains of

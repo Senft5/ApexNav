@@ -13,6 +13,9 @@ const MAX_WAYS = 50;
  * without saying who, and a fresh account can't be the second.
  */
 export const MIN_DRIVERS = 2;
+/** road_floor keeps at most this many holders per road+direction (contribute.ts), so the road insights API
+ *  (road_insights.ts) can check its ten-driver floor and size its noise. Only MIN_DRIVERS of them matter here. */
+export const FLOOR_CAP = 50;
 
 /**
  * Open roads (owner decision 2026-10-28): a road driven once is still worth showing, at low confidence (the phone weights
