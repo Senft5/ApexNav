@@ -964,7 +964,7 @@
       const seg = segs.find(s => s.id === activeSeg);
       $('segDetail').hidden = !seg;                                         // board and runs only for the stage you tapped
       $('segTitle').parentElement.hidden = !seg;
-      if (!seg) { $('segTable').innerHTML = ''; $('segChart').innerHTML = ''; $('segIdeal').hidden = true; $('segTitle').textContent = 'Runs'; return; }
+      if (!seg) { $('segTable').innerHTML = ''; $('segChart').innerHTML = ''; $('segIdeal').hidden = true; $('segRaceRow').hidden = true; $('segTitle').textContent = 'Runs'; return; }
       $('segTitle').textContent = `Runs · ${seg.name}`;
       const passes = passesFor(seg).sort((a, b) => (b.p.score ?? -1) - (a.p.score ?? -1));
       const bestTime = Math.min(...passes.map(x => x.p.time_s));
@@ -976,6 +976,18 @@
       // and where to look for it: the stretch your best gave the most away on (2026-11-15), by where it is on the stage
       const at = ideal && ideal.most ? ApexGhostDuel.whereOf(ideal.most) : null;
       $('segIdeal').textContent = $('segIdeal').hidden ? '' : `Ideal run ${mmss(ideal.time_s)}: your quickest stretches from ${ideal.runs} runs put together, ${under.toFixed(1)} s under your best${at ? `, ${ideal.most.gain_s >= under ? 'all' : `${ideal.most.gain_s.toFixed(1)} s`} of it ${at}` : ''}.`;
+      // race it: your next drives' own ghost on this stage is the ideal run, not your best (cockpit startGhostWatch reads
+      // apex.raceIdeal); a second tap goes back to your best
+      const racing = () => { try { const x = JSON.parse(localStorage.getItem('apex.raceIdeal') || '[]'); return Array.isArray(x) ? x : []; } catch (_) { return []; } };
+      const race = $('segRaceIdeal'), on = racing().includes(seg.id);
+      $('segRaceRow').hidden = $('segIdeal').hidden;
+      race.textContent = on ? 'Race your best instead' : 'Race your ideal';
+      race.onclick = () => {
+        const ids = racing().filter((x) => x !== seg.id);
+        if (!on) ids.push(seg.id);
+        try { localStorage.setItem('apex.raceIdeal', JSON.stringify(ids.slice(-50))); } catch (_) {}
+        renderSegments();
+      };
       // TestFlight 2026-11-05 ("bad text spacing"): five columns were wider than a phone, so the table scrolled sideways (the
       // Score cut to "ore", the components' words run together). Now a run is its line (#, run, Score, time) and its four
       // components under it, the whole width; nothing scrolls sideways.

@@ -494,7 +494,9 @@
      * A drive's start: your own quickest pass of each stage as its ghost (ghost_duel.js bestOwn, IDEAS D-04), on a road like
      * today's (surface), its splits cut every 25 m (it never leaves your phone). [{ id: the stage's, splits, corners, time_s }].
      */
-    async ownGhosts({ segs, surface = null }) {
+    // ideal: the stages to race your ideal run on instead (ghost_duel.js idealOf, from your dry runs; Stage Runs "Race your
+    // ideal"), where it is 0.5 s or more under your best from two runs or more, as Stage Runs shows it; else your best
+    async ownGhosts({ segs, surface = null, ideal = [] }) {
       const Core = CoreOf(), G = root.ApexGhostDuel, out = [], PAD = 0.001;
       if (!G) return { ghosts: out };
       const sums = await Rec().summaries(Core);
@@ -504,8 +506,16 @@
         for (const s of sums) {
           if (!holds(s.bbox, seg.lat0, seg.lon0) || !holds(s.bbox, seg.lat1, seg.lon1)) continue;
           const d = await full(s.id, s), p = d && Core.segmentPass(seg, d);
+          const apexes = (d.corners || []).map((c) => c && c.apex);
           if (p) passes.push({ time_s: p.time_s, splits: G.splitsOf(Core, d, p.lo, p.hi), surface: d.surface || null,
-                              corners: G.splitsOf(Core, d, p.lo, p.hi, G.cutsOf(p.lo, p.hi, (d.corners || []).map((c) => c && c.apex))) });
+                              corners: G.splitsOf(Core, d, p.lo, p.hi, G.cutsOf(p.lo, p.hi, apexes)),
+                              lo: p.lo, hi: p.hi, apexes: apexes.filter((a) => Number.isFinite(a) && a > p.lo && a < p.hi) });
+        }
+        const dry = surface !== 'wet' && surface !== 'ice';
+        const top = dry && (ideal || []).includes(seg.id) && G.idealOf ? G.idealOf(passes.filter((x) => x.surface !== 'wet' && x.surface !== 'ice').map((x) => ({ ...x, fine: x.splits }))) : null;
+        if (top && top.runs >= 2 && Math.round((top.best_s - top.time_s) * 10) / 10 >= 0.5 && top.splits.length) {
+          out.push({ id: seg.id, splits: top.splits, corners: top.corners, time_s: top.time_s, ideal: true });
+          continue;
         }
         const b = G.bestOwn(passes, surface);
         if (b) out.push({ id: seg.id, splits: b.splits, corners: b.pass.corners || null, time_s: b.time_s });   // corners: cut at its apexes, for where a stage was lost

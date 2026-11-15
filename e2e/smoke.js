@@ -10739,6 +10739,19 @@ flow('your ideal run of a stage: quick early one day and late another, Runs show
   await page.waitForSelector('#segIdeal:not([hidden])', { timeout: 15000 });
   const t = await page.textContent('#segIdeal');
   check(/^Ideal run \d+:\d\d: your quickest stretches from 2 runs put together, \d+\.\d s under your best, (all|\d+\.\d s) of it (early on|in the middle|late on|in the run to the finish)\.$/.test(t), 'the ideal run under the chart: ' + t);
+  // race it: your own ghost on this stage becomes the ideal run (the cockpit's ownGhosts job), a second tap your best again
+  await page.click('#segRaceIdeal');
+  await page.waitForFunction(() => document.getElementById('segRaceIdeal').textContent === 'Race your best instead');
+  const job = await page.evaluate(async () => { const s = JSON.parse(localStorage.getItem('apex.segments'))[0], ids = JSON.parse(localStorage.getItem('apex.raceIdeal'));
+    const ask = (ideal) => ApexAnalysis.job('ownGhosts', { segs: [s], surface: null, ideal }).then((r) => r.ghosts[0]);
+    return { ids, ideal: await ask(ids), best: await ask([]), label: ApexGhostDuel.label(1.24, 'you', 'your ideal') }; });
+  const m = /(\d+):(\d\d)/.exec(t), shown = +m[1] * 60 + +m[2];
+  check(JSON.stringify(job.ids) === '["seg_i"]' && job.ideal.ideal === true && !job.best.ideal && job.ideal.time_s < job.best.time_s - 0.4
+    && Math.abs(job.ideal.time_s - shown) < 1 && job.ideal.splits[job.ideal.splits.length - 1][1] === job.ideal.time_s && job.label === '+1.2 s vs your ideal',
+    'racing the ideal: the ghost is the ideal run: ' + JSON.stringify({ ids: job.ids, ideal: job.ideal && job.ideal.time_s, best: job.best && job.best.time_s, label: job.label }));
+  await page.click('#segRaceIdeal');
+  await page.waitForFunction(() => document.getElementById('segRaceIdeal').textContent === 'Race your ideal');
+  check(await page.evaluate(() => localStorage.getItem('apex.raceIdeal')) === '[]', 'a second tap races your best again');
 });
 
 flow('side by side: a corner filmed on this drive and on your best pass plays as one clip, both from the same point, the gap counting (big bet 5)', async (page, base) => {
