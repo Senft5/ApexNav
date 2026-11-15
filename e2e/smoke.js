@@ -13144,7 +13144,8 @@ flow('the drive screen, Vetta Line: one hero speed over a ruled line, Limit, Sig
   check(r.line.w >= r.cluster.w - 16 && r.line.y >= r.speedBox.b - 1 && r.ledger.y >= r.line.b - 1, 'the line runs the width of the panel, under the numeral, over the ledger: ' + JSON.stringify([r.line, r.cluster, r.ledger]));
   check(r.limit.x >= r.speedBox.r - 1 && r.sight.x >= r.limit.r && r.meter.x >= r.sight.r - 1 && Math.abs(r.limit.y - r.sight.y) < 12, 'Limit, Sight and the meter stand to the right of the speed, in that order: ' + JSON.stringify([r.speedBox, r.limit, r.sight, r.meter]));
   check(r.speedBox.h > 1.6 * r.limit.h && r.speedBox.w > 1.5 * r.meter.w, 'the speed is the hero, the rest clearly second: ' + JSON.stringify([r.speedBox, r.limit, r.meter]));
-  check(r.scoreIn && /^--SCORE$/.test(r.scoreText) && r.score.y >= r.ledger.y - 1 && r.score.b <= r.ledger.b + 1 && r.trip.y >= r.ledger.y - 1 && r.score.x > r.trip.r, 'the trip and the Score share the ledger line, -- until known: ' + JSON.stringify([r.scoreText, r.score, r.trip, r.ledger]));
+  // real-drive reviews (2026-11-15): an unknown Score steps aside rather than reading "--"; the trip holds the ledger line
+  check(r.scoreIn && /^--SCORE$/.test(r.scoreText) && r.score.w === 0 && r.trip.y >= r.ledger.y - 1 && r.trip.b <= r.ledger.b + 1, 'the trip holds the ledger line; the Score is not shown until known: ' + JSON.stringify([r.scoreText, r.score, r.trip, r.ledger]));
   check(r.bank === 'BANK --' && r.brake === 'BRAKE' && /Trip mi/.test(r.tripText), 'nothing the panel said is lost: ' + JSON.stringify([r.bank, r.brake, r.tripText]));
   check(r.endBg === r.inkRgb && r.endH >= 52, 'End is the one ink key, 52 pt or more: ' + JSON.stringify([r.endBg, r.inkRgb, r.endH]));
   check(r.repText === 'Report' && r.repEdge === 0 && /rgba\(0, 0, 0, 0\)|transparent/.test(r.repBg) && r.repH >= 44, 'Report is a quiet word with a full touch target: ' + JSON.stringify([r.repBg, r.repEdge, r.repH]));

@@ -2061,6 +2061,10 @@
     .cluster-line .ledger > .g-score { flex: none; margin: 0 0 0 auto; display: flex; flex-direction: row-reverse; align-items: baseline; gap: 8px; min-height: 44px; }
     .cluster-line .ledger > .g-score b { font-size: 26px; line-height: 44px; } .cluster-line .ledger > .g-score.unk b { color: var(--panel-dim); } .cluster-line .ledger > .g-score span { font-size: 13px; }
     html[data-mode="night"] #cluster.cluster-line:not(.show-trip) .trip-peek { padding: 0; min-width: 44px; text-align: left; }
+    /* the drive screen as the replay (real-drive reviews): what the drive can't know steps aside, not a framed dash: the
+       Score until scored, the limit sign until a limit is known, the Bank figure until measured (a web drive never is) */
+    .cluster-line .ledger > .g-score.unk, .cluster-line .ro-limit.unknown { display: none; }
+    .cluster-line .g-line .dial-digital.small.unk { visibility: hidden; }
     @media (orientation: landscape) and (max-height: 540px), (max-width: 359px) {
       /* a narrow column (a phone on its side, a small phone): the numeral keeps its size; the meter moves down beside the ledger */
       .cluster-line { grid-template-columns: 80px minmax(0, 1fr) auto; grid-template-areas: "speed speed read" "rule rule rule" "g ledger ledger"; }
