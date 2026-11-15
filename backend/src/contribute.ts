@@ -7,6 +7,7 @@ import { isoWeek } from "./points";
 import { serverFlag } from "./flags";
 import { establishedSql } from "./reports_sql";
 import { FLOOR_CAP } from "./roads";
+import { ROAD_CHUNK, chunkJson, mergeBinRow, packRow, unpackRow, type Packed } from "./road_pack";
 
 export const LIMITS = { maxBins: 2000, minBins: 20, maxAgeDays: 14, kmPerDay: 600, kmPerWeek: 1500, uploadsPerHour: 300, minCoverage: 0.6 };
 const BIN_KM = 0.005;
@@ -155,13 +156,14 @@ function meanSql(mean: string, m2: string, k: string, x: string) {
   };
 }
 
-/** Merges one bin into road_bins in a single atomic statement (computed from the old row). */
-export function mergeBin(env: Env, wayId: number, dir: number, b: Bin, day: string): D1PreparedStatement {
+/** Merges one bin into a per-bin table in a single atomic statement (computed from the old row). The reference for
+ *  road_pack.ts mergeBinRow (test/road_pack.test.ts runs both); uploads have used the packed rows since migration 0068. */
+export function mergeBin(env: Env, wayId: number, dir: number, b: Bin, day: string, table = "road_bins_legacy"): D1PreparedStatement {
   const smoother = `(n >= 3 AND rough_mean IS NOT NULL AND ?5 < rough_mean * ${FRESH.repaveRatio} AND rough_mean - ?5 > ${FRESH.repaveG})`;
   const reset = `(${smoother} AND smooth_run + 1 >= ${FRESH.repavePasses})`;
   const cam = meanSql("camber_mean", "camber_m2", "camber_n", "?4"), rough = meanSql("rough_mean", "rough_m2", "n", "?5");
   return env.DB.prepare(
-    `INSERT INTO road_bins (way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, crest_n, last_on, smooth_run, k_mean, k_n,
+    `INSERT INTO ${table} (way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, crest_n, last_on, smooth_run, k_mean, k_n,
                             flow_mean, brake_mean, flow_n, bump_hit, bump_pass)
      VALUES (?1, ?2, ?3, 1, ?4, CASE WHEN ?4 IS NULL THEN NULL ELSE 0 END, CASE WHEN ?4 IS NULL THEN 0 ELSE 1 END, ?5, 0, ?6, CASE WHEN ?6 IS NULL THEN 0 ELSE 1 END, ?7, 0,
              ?8, CASE WHEN ?8 IS NULL THEN 0 ELSE 1 END, ?9, CASE WHEN ?9 IS NULL THEN NULL ELSE ?10 END, CASE WHEN ?9 IS NULL THEN 0 ELSE 1 END,
@@ -193,23 +195,63 @@ export function mergeBin(env: Env, wayId: number, dir: number, b: Bin, day: stri
   ).bind(wayId, dir, b.i, b.cam, b.rough, b.crest, day, b.k, b.fl, b.fl === null ? null : (b.hb ?? 0), b.bp, bumpWeight(day));
 }
 
+/** A road_chunks write that read `ver` fails, and so does its whole batch, when another upload wrote the chunk first. */
+export const CHUNK_CONFLICT = /NOT NULL constraint failed: road_chunks\.ver|UNIQUE constraint failed: road_chunks/;
+
 /**
+ * This upload's bins merged into their road_chunks rows (migration 0068): one read of the chunks it touches, the merge in the
+ * Worker (road_pack.ts mergeBinRow), and one write per chunk, about 3 rows a km where a row per bin wrote about 210. Each
+ * write checks the chunk's ver; one that changed in between fails the batch (CHUNK_CONFLICT) and contribute() starts the
+ * merge again from a fresh read.
+ *
  * A bump hit in bin i by this person (IDEAS Q-02): one more driver for the bin unless the same person already hit something
- * in its 40 m cell, or in the next cell when the hit is near that edge. The marker is a keyed hash, never the person. Runs
- * after the bin's merge in the same batch (the row exists); the UPDATE checks the markers before the INSERT adds this one.
+ * in its 40 m cell, or in the next cell when the hit is near that edge. The marker is a keyed hash, never the person.
  */
-async function bumpDriverStmts(env: Env, userId: string, c: Contribution): Promise<D1PreparedStatement[]> {
+async function packedStmts(env: Env, userId: string, c: Contribution): Promise<D1PreparedStatement[]> {
+  const ids = [...new Set(c.bins.map((b) => Math.floor(b.i / ROAD_CHUNK)))];
+  const rows = (await env.DB.prepare(`SELECT chunk, ver, bins FROM road_chunks WHERE way_id = ? AND dir = ? AND chunk IN (${ids.map(() => "?").join(", ")})`)
+    .bind(c.wayId, c.dir, ...ids).all<{ chunk: number; ver: number; bins: string }>()).results;
+  const old = new Map(rows.map((r) => [r.chunk, { ver: r.ver, bins: JSON.parse(r.bins) as Packed }]));
+  const fresh = new Map<number, Packed>();
+  const chunkOf = (i: number) => { const k = Math.floor(i / ROAD_CHUNK); return old.get(k)?.bins ?? fresh.get(k) ?? fresh.set(k, {}).get(k)!; };
+  for (const b of c.bins) {
+    const p = chunkOf(b.i), off = String(b.i % ROAD_CHUNK);
+    p[off] = packRow(mergeBinRow(p[off] ? unpackRow(p[off]) : null, b, c.drivenOn));
+  }
   const out: D1PreparedStatement[] = [];
+  const hits = [];
   for (const b of c.bins) {
     if (b.bp !== 1) continue;
     const cell = Math.floor(b.i / BUMP.cellBins), r = b.i - cell * BUMP.cellBins;
     const near = r < BUMP.nearBins ? cell - 1 : r >= BUMP.cellBins - BUMP.nearBins ? cell + 1 : null;
-    const mark = async (k: number) => (await hmac(env, `b|${userId}|${c.wayId}|${c.dir}|${k}`)).buffer;
+    const mark = async (k: number) => hmac(env, `b|${userId}|${c.wayId}|${c.dir}|${k}`);
     const own = await mark(cell), other = near === null ? own : await mark(near);
-    out.push(env.DB.prepare("UPDATE road_bins SET bump_drivers = bump_drivers + 1 WHERE way_id = ? AND dir = ? AND bin_idx = ? AND NOT EXISTS (SELECT 1 FROM seen WHERE h IN (?, ?))")
-      .bind(c.wayId, c.dir, b.i, own, other),
-      env.DB.prepare("INSERT OR IGNORE INTO seen (h) VALUES (?)").bind(own));
+    hits.push({ i: b.i, own, other });
   }
+  if (hits.length) {
+    const hex = (u: Uint8Array | ArrayBuffer) => [...new Uint8Array(u)].map((x) => x.toString(16).padStart(2, "0")).join("");
+    const all = [...new Map(hits.flatMap((h) => [h.own, h.other]).map((u) => [hex(u), u])).values()];
+    const parts: D1PreparedStatement[] = [];
+    for (let k = 0; k < all.length; k += 90) {
+      const part = all.slice(k, k + 90);
+      parts.push(env.DB.prepare(`SELECT h FROM seen WHERE h IN (${part.map(() => "?").join(", ")})`).bind(...part.map((u) => u.buffer)));
+    }
+    const seen = new Set((await env.DB.batch<{ h: ArrayBuffer }>(parts)).flatMap((r) => r.results.map((x) => hex(x.h))));
+    for (const h of hits) {                                   // in bin order, as the per-bin UPDATE then INSERT did
+      if (!seen.has(hex(h.own)) && !seen.has(hex(h.other))) {
+        const p = chunkOf(h.i), row = unpackRow(p[String(h.i % ROAD_CHUNK)]);
+        row.bump_drivers += 1;
+        p[String(h.i % ROAD_CHUNK)] = packRow(row);
+      }
+      seen.add(hex(h.own));
+      out.push(env.DB.prepare("INSERT OR IGNORE INTO seen (h) VALUES (?)").bind(h.own.buffer));
+    }
+  }
+  for (const [k, o] of old) {
+    out.push(env.DB.prepare(`UPDATE road_chunks SET bins = CASE WHEN ver = ?4 THEN ?5 ELSE bins END, ver = CASE WHEN ver = ?4 THEN ver + 1 ELSE NULL END
+                              WHERE way_id = ?1 AND dir = ?2 AND chunk = ?3`).bind(c.wayId, c.dir, k, o.ver, chunkJson(o.bins)));
+  }
+  for (const [k, p] of fresh) out.push(env.DB.prepare("INSERT INTO road_chunks (way_id, dir, chunk, bins) VALUES (?, ?, ?, ?)").bind(c.wayId, c.dir, k, chunkJson(p)));
   return out;
 }
 
@@ -308,8 +350,6 @@ export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ a
   const { mult, again, holder } = await multiplierFor(env, v.id, c);
   const stmts: D1PreparedStatement[] = [
     env.DB.prepare("INSERT INTO seen (h) VALUES (?)").bind(chunk.buffer),                                  // fails (409 below) if a parallel copy won the race
-    ...c.bins.map((b) => mergeBin(env, c.wayId, c.dir, b, c.drivenOn)),
-    ...(await bumpDriverStmts(env, v.id, c)),
     // the two-driver privacy floor (roads.ts shownSql) counts established members only (migration 0058): a fresh account
     // still earns its slot above, but can't alone make a lone driver's road visible. Counted again on a later drive, once
     // the account is a week old. Up to FLOOR_CAP holders (hmacs, never ids) are kept, so the road insights API can check its
@@ -335,11 +375,16 @@ export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ a
     stmts.push(env.DB.prepare("INSERT INTO points_ledger (user_id, iso_week, octane) VALUES (?1, ?2, ?3) ON CONFLICT (user_id, iso_week) DO UPDATE SET octane = octane + ?3")
       .bind(v.id, isoWeek(now.getTime()), c.km * mult));
   }
-  try {
-    await env.DB.batch(stmts);
-  } catch {
-    if (await hasReceipt()) return { accepted: true, bins: c.bins.length, duplicate: true };
-    throw new HttpError(503, "contribution_temporarily_unavailable");
+  // the bins go last: when another upload wrote one of the same chunks in between, the batch fails and is built again
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await env.DB.batch([...stmts, ...(await packedStmts(env, v.id, c))]);
+      break;
+    } catch (err) {
+      if (await hasReceipt()) return { accepted: true, bins: c.bins.length, duplicate: true };
+      if (attempt < 3 && CHUNK_CONFLICT.test(String((err as Error)?.message ?? err))) continue;
+      throw new HttpError(503, "contribution_temporarily_unavailable");
+    }
   }
   await payReferral(env, v.id, now);
   if (again) await countAgain(env, v.id, c);

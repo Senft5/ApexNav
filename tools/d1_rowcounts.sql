@@ -14,7 +14,8 @@ SELECT
   (SELECT COUNT(*) FROM grants) AS grants,
   (SELECT COUNT(*) FROM board_entries) AS board_entries,
   (SELECT COUNT(*) FROM shared_routes) AS shared_routes,
-  (SELECT COUNT(*) FROM road_bins) AS road_bins,
+  (SELECT COUNT(*) FROM road_bins) AS road_bins,                -- a view over road_chunks since 0068: bins, not rows
+  (SELECT COUNT(*) FROM road_chunks) AS road_chunks,
   (SELECT COUNT(*) FROM hazard_obs) AS hazard_obs,
   (SELECT COUNT(*) FROM ingest_pending) AS ingest_pending,
   (SELECT COUNT(*) FROM rank_slots) AS rank_slots,

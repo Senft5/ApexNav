@@ -3,7 +3,18 @@
 // active drivers would use up a month in its first week. Packing a way's bins into a few rows per km needs the merge done
 // in the Worker instead of in SQL; this is that merge, kept identical to contribute.ts mergeBin (the SQL one) by
 // test/road_pack.test.ts, which runs both on the same passes.
-import { BUMP, FRESH, bumpWeight, type Bin } from "./contribute";
+import { FRESH, bumpWeight, type Bin } from "./contribute";
+
+/** Bins per road_chunks row (migration 0068): 640 m of one way and direction. */
+export const ROAD_CHUNK = 128;
+type Packed = Record<string, unknown[]>;
+/** A bin as stored in its chunk's JSON: the BIN_COLUMNS values in order. */
+export const packRow = (r: BinRow): unknown[] => BIN_COLUMNS.map((c) => r[c]);
+export const unpackRow = (a: unknown[]): BinRow => Object.fromEntries(BIN_COLUMNS.map((c, k) => [c, a[k] ?? (NOT_NULL.has(c) ? 0 : null)])) as unknown as BinRow;
+const NOT_NULL: ReadonlySet<string> = new Set(["n", "camber_n", "crest_n", "smooth_run", "k_n", "flow_n", "bump_hit", "bump_pass", "bump_drivers"]);
+/** A chunk's JSON with its bins in index order (JavaScript keeps integer keys ascending). */
+export const chunkJson = (p: Packed): string => JSON.stringify(Object.fromEntries(Object.keys(p).map(Number).sort((a, b) => a - b).map((k) => [String(k), p[k]])));
+export type { Packed };
 
 /** A road_bins row, the columns the merge reads and writes (way, direction and index are the key, not stored here). */
 export interface BinRow {
@@ -83,4 +94,3 @@ export function mergeBinRow(o: BinRow | null, b: Bin, day: string): BinRow {
     n: reset ? 1 : o.n + 1,
   };
 }
-export { BUMP };
