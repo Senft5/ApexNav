@@ -138,3 +138,43 @@ def test_cockpit_asks_valhalla_only_through_the_helper():
     js = (ROOT / "web" / "cockpit.js").read_text()
     assert "valhalla1.openstreetmap.de" not in js
     assert js.count("valhallaJson('") >= 4
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_modules_with_an_injected_fetch_ask_ours_first_too():
+    script = r"""
+const assert = require('node:assert/strict');
+const L = require(process.argv[1] + '/web/route_loading.js');
+let asked = [], answer;
+global.fetch = async (url, init) => { asked.push(url); return answer(url, init); };
+const res = (status, body, headers = {}) => ({ ok: status === 200, status, headers: { get: (k) => headers[k] ?? null }, json: async () => body });
+let injected = [];
+const mine = async (url, init) => { injected.push(url); return res(200, { edges: ['public'] }); };
+const post = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"shape":[]}' };
+(async () => {
+  globalThis.ApexSync = { apiBase: 'https://vettadrive.app' }; globalThis.location = { protocol: 'apexnav:' };
+  // ours answers: a Response the module reads as before, and the injected fetch is not asked
+  answer = (url) => res(200, { edges: ['own'] }, { 'x-router': 'own' });
+  const r = await L.valhallaFetch('https://valhalla1.openstreetmap.de/trace_attributes', post, mine);
+  assert.equal(r.ok, true); assert.deepEqual(await r.json(), { edges: ['own'] });
+  assert.deepEqual(asked, ['https://vettadrive.app/api/valhalla/trace_attributes']); assert.deepEqual(injected, []);
+  // ours outside its region: the module's own fetch, with the same request
+  asked = []; answer = (url) => res(503, { reason: 'outside_region' });
+  assert.deepEqual(await (await L.valhallaFetch('https://valhalla1.openstreetmap.de/sources_to_targets', post, mine)).json(), { edges: ['public'] });
+  assert.deepEqual(injected, ['https://valhalla1.openstreetmap.de/sources_to_targets']);
+  // anything that isn't a POST to the public router goes straight to the module's fetch
+  asked = []; injected = [];
+  await L.valhallaFetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=x' }, mine);
+  assert.deepEqual(asked, []); assert.deepEqual(injected, ['https://overpass-api.de/api/interpreter']);
+  // a caller that already gave up is not held up by ours
+  const ac = new AbortController(); ac.abort(); injected = [];
+  await L.valhallaFetch('https://valhalla1.openstreetmap.de/trace_attributes', { ...post, signal: ac.signal }, mine);
+  assert.deepEqual(asked, []); assert.equal(injected.length, 1);
+})().catch((e) => { console.error(e); process.exitCode = 1; });
+"""
+    r = subprocess.run([NODE, "-e", script, str(ROOT)], capture_output=True, text=True, timeout=20)
+    assert r.returncode == 0, r.stderr
+    for f in ["route_ctx/router_edges.js", "route_ctx/crew_meet.js", "contributor.js"]:
+        js = (ROOT / "web" / f).read_text()
+        assert "root.ApexRouteLoading.valhallaFetch(u, i, f)" in js, f
+        assert "await viaOurs(" in js, f
