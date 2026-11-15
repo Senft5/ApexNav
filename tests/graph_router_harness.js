@@ -36,8 +36,12 @@ function tiles(nodes, edges, restrictions = [], restrictionsVia = []) {
     for (let a = 0; a < n; a++) firstEdge[a + 1] = firstEdge[a] + local[a].length;
     const E = { count: m, to: new Uint32Array(m), toTile: new Uint32Array(m), len_dm: new Uint32Array(m), t_ds: new Uint32Array(m), quality: new Uint8Array(m), scenery: new Uint8Array(m),
       fun: new Uint16Array(m), conf: new Uint8Array(m), flags: new Uint16Array(m), cls: new Uint8Array(m), speed: new Uint8Array(m), name: new Uint16Array(m), hIn: new Uint8Array(m), hOut: new Uint8Array(m) };
+    // road channels (graph_tiles.js edges.ch), where an edge gives any: NaN on the others, as a tile that doesn't carry it
+    const chN = [...new Set(order.flatMap((ix) => Object.keys(edges[ix].ch || {})))];
+    if (chN.length) E.ch = Object.fromEntries(chN.map((c) => [c, new Float32Array(m).fill(NaN)]));
     const names = [], nameIx = new Map(), geoms = [];
     order.forEach((ix, li) => {
+      if (edges[ix].ch) for (const c in edges[ix].ch) E.ch[c][li] = edges[ix].ch[c];
       const e = edges[ix], [tk, tl] = nodeAt.get(e.to), a = nodes[e.from], b = nodes[e.to];
       E.to[li] = tl;
       const [ti, tj] = tk.split('_').map(Number);

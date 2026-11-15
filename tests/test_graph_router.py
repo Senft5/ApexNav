@@ -399,6 +399,17 @@ def test_a_pass_on_a_long_straight_trunk_is_a_riders_road():
     assert r["hwy"]["straight"] and all(r["hwy"]["straight"]), r
 
 
+def test_a_scenic_byway_counts_as_scenic_in_funs_search():
+    """2026-11-15 (tools/famous_roads.js): the Talimena and the Blue Ridge Parkway sweep more than they wind, so Fun left
+    them for roads with more corner points. A road the tiles mark a scenic byway (their byway channel, from OSM's route=road
+    relations) counts at least BYWAY_S scenery: Fun takes it over a road a little curvier; with no byway, or tiles from
+    before the channel, nothing changes."""
+    assert case("byway") == ["US 59"]
+    assert case("byway", "0") == ["US 59"]
+    assert case("byway", "1") == ["Skyline Drive"]
+    assert case("byway", "2") == ["Skyline Drive"]
+
+
 def test_the_highway_exception_takes_the_shortest_link_and_says_why():
     """A river crossed only by I-275's bridge: Fun and Long way drive River Road to the bridge's ramp, the bridge and the
     ramp off (1.7 km), not I-275 from the start (5.3 km, Quick's way), and the card says so; a car on I-275 rerouted at
