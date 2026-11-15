@@ -413,6 +413,8 @@ def test_early_apex_is_told_only_when_gps_and_the_motion_sensors_agree():
     m = da.corner_phases(v, lon, lat, s, e, a, 25.0)
     assert m["min_offset_m"] == -20.0 and m["imu_slow_m"] == -20.0
     assert da._tip({**m, "road_off_m": -20.0}, None)["kind"] == "early_apex"
+    # the size told is the line's against the road (Nate: "drive geometry compared to road geometry"), not the slowest point's
+    assert da._tip({**m, "road_off_m": -17.25}, None)["value"] == 17.3
     v, lon, lat, s, e, a = _early_corner(56, 60)                     # GPS says early, the sensors say at the apex
     m = da.corner_phases(v, lon, lat, s, e, a, 25.0)
     assert m["imu_slow_m"] == 0.0 and da._tip(m, None) is None

@@ -868,7 +868,7 @@
     // and the motion sensors must say so too (imuSlowM), or the two disagree and nothing is told.
     if (m.min_offset_m <= Math.min(SOLO_EARLY_APEX_M, -m.min_mps * GPS_FIX_S) && m.apex_mps_driven - m.min_mps >= SOLO_APEX_DIP_MPS
       && m.imu_slow_m !== null && m.imu_slow_m !== undefined && m.imu_slow_m <= SOLO_EARLY_APEX_M
-      && m.road_off_m !== null && m.road_off_m !== undefined && m.road_off_m <= ROAD_EARLY_M) return { kind: 'early_apex', value: -m.min_offset_m, vs_best: false };
+      && m.road_off_m !== null && m.road_off_m !== undefined && m.road_off_m <= ROAD_EARLY_M) return { kind: 'early_apex', value: Math.round(-m.road_off_m * 10) / 10, vs_best: false };   // the line's own size
     return null;
   }
   // How repeatably a corner is driven over your clean passes (port of drive_analysis._marks/_spread, IDEAS D-07).
