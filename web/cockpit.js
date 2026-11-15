@@ -3936,6 +3936,12 @@
       }
       const m = q.match(COORDS);
       if (m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]), label: `Pin ${parseFloat(m[1]).toFixed(3)}, ${parseFloat(m[2]).toFixed(3)}` };
+      // in the app, Apple's search first (better for US addresses and businesses, no usage limits); Nominatim after
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex) {
+        const p = state.lastPosition;
+        const got = await askNative({ cmd: 'placeSearch', q: q.trim(), lat: p ? p.lat : undefined, lon: p ? p.lon : undefined }, 6000);
+        if (got && Number.isFinite(got.lat) && Number.isFinite(got.lon)) return { lat: got.lat, lon: got.lon, label: got.name || q.trim() };
+      }
       let items;
       try { items = await RouteLoading.json(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`, {}, 10000); }
       catch (_) {
@@ -12108,7 +12114,7 @@
         if (msg && msg.type === 'driveCam') { driveCamSaid(msg.state); return; }
         if (msg && msg.type === 'carOffline') { carOfflineBytes = Number.isFinite(msg.bytes) ? msg.bytes : null; if (typeof renderOffline === 'function') renderOffline().catch(() => {}); return; }
         if (msg && msg.type === 'lifecycle') { if (driveActive) keepSave(); return; }   // going to the background: kept now
-        if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'placeReversed' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
+        if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'placeFound' || msg.type === 'placeReversed' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'nudge') { nudgeAnswered(!!msg.granted); return; }
         if (msg && msg.type === 'push') { pushAnswered(!!msg.granted); return; }
         if (msg && msg.type === 'pushToken') { pushTokenIn(msg); return; }
