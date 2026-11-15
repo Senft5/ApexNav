@@ -1455,7 +1455,16 @@
       if (!place) reversePin(point);
       else if (window.ApexPlaceInfo) {                                  // hours, phone and site, once known (place_info.js)
         const asked = droppedPin;
-        ApexPlaceInfo.lookup(place.name, point.lat, point.lon).then((tags) => { if (droppedPin === asked && tags) placeInfo(ApexPlaceInfo.contact(tags, new Date())); }).catch(() => {});
+        const show = (tags) => { if (droppedPin === asked && tags) placeInfo(ApexPlaceInfo.contact(tags, new Date())); };
+        ApexPlaceInfo.lookup(place.name, point.lat, point.lon).then(async (tags) => {
+          show(tags);
+          // in the app, Apple's map fills a phone or website OpenStreetMap doesn't have (US businesses often lack them)
+          const t = tags || {};
+          if ((t.phone || t['contact:phone']) && (t.website || t['contact:website'])) return;
+          if (!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex)) return;
+          const more = ApexPlaceInfo.withApple(tags, await askNative({ cmd: 'placeContact', name: place.name, lat: point.lat, lon: point.lon }, 5000));
+          if (more && more !== tags) show(more);
+        }).catch(() => {});
       }
     }
     // How long the drive there takes, on the Go key ("Go here · 12 min"), as Apple and Google Maps' place cards say it: the
@@ -12122,7 +12131,7 @@
         if (msg && msg.type === 'driveCam') { driveCamSaid(msg.state); return; }
         if (msg && msg.type === 'carOffline') { carOfflineBytes = Number.isFinite(msg.bytes) ? msg.bytes : null; if (typeof renderOffline === 'function') renderOffline().catch(() => {}); return; }
         if (msg && msg.type === 'lifecycle') { if (driveActive) keepSave(); return; }   // going to the background: kept now
-        if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'placeFound' || msg.type === 'placeReversed' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
+        if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'placeFound' || msg.type === 'placeContact' || msg.type === 'placeReversed' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'nudge') { nudgeAnswered(!!msg.granted); return; }
         if (msg && msg.type === 'push') { pushAnswered(!!msg.granted); return; }
         if (msg && msg.type === 'pushToken') { pushTokenIn(msg); return; }

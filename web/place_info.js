@@ -185,6 +185,16 @@
     });
   }
 
-  const api = { read, status, contact, query, queryMany, placesPath, lookup, lookupMany, match, clock };
+  /** OSM's tags with Apple's phone and website filling what OSM lacks (the app's shell, ApexNavApp.swift placeContact:
+   *  {type:'placeContact', phone, url}). OSM's own values win; hours stay OSM's (Apple gives an app none). */
+  function withApple(tags, msg) {
+    const t = Object.assign({}, tags || {});
+    if (!msg || msg.failed) return tags || null;
+    if (!t.phone && !t['contact:phone'] && typeof msg.phone === 'string' && msg.phone.trim()) t.phone = msg.phone.trim();
+    if (!t.website && !t['contact:website'] && typeof msg.url === 'string' && /^https?:\/\//i.test(msg.url)) t.website = msg.url;
+    return Object.keys(t).length ? t : null;
+  }
+
+  const api = { read, status, contact, query, queryMany, placesPath, lookup, lookupMany, match, clock, withApple };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexPlaceInfo = api;
 })(typeof window !== 'undefined' ? window : globalThis);
