@@ -697,7 +697,7 @@
       if (!me || typeof me.signed_in !== 'boolean') return;
       devAccess = !!(me.signed_in && me.member && me.developer === true);
       $('satSwitch').hidden = !devAccess;
-      if (!devAccess && state.toggles.satellite) { state.toggles.satellite = false; savePrefs(); paintSwitches(); }
+      // a launch that reads signed out (a token being renewed) draws no imagery (applySatellite) but keeps the developer's choice
       applySatellite();
       devCache = undefined;                                              // read again for this account (or none)
       applyDevTune();
@@ -7605,12 +7605,18 @@
       paintPushState();
       // Where to? opened before the account came back: its time attack row's peek skipped then, so it goes now (CI 2026-11-12)
       if (accountMe && accountMe.member && $('planPanel').classList.contains('open')) peekTimeAttack();
-      if (friendsMap && accountMe && accountMe.member) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
-      else if (state.toggles.friends) { state.toggles.friends = false; paintSwitches(); }
-      if (meetsMap && accountMe && accountMe.member) { if (state.toggles.meets) meetsMap.setLayer(true); }
-      if (roadbookMap && accountMe && accountMe.member) { if (state.toggles.roadbooks) roadbookMap.setLayer(true); }
-      else if (state.toggles.roadbooks && socialIn) { state.toggles.roadbooks = false; paintSwitches(); }
-      else if (state.toggles.meets && socialIn) { state.toggles.meets = false; paintSwitches(); }
+      // A layer left on stays on (Nate 2026-11-15: "the map layers sometimes reset when I reopen the app"): the account comes
+      // back before the lazy social scripts, so a member's Friends, Meets and Roadbooks load them and draw then; a launch
+      // that reads signed out draws none of them but keeps the choice for the next one signed in.
+      if (accountMe && accountMe.member) {
+        if (friendsMap) friendsMap.start();
+        if ((state.toggles.friends || state.toggles.meets || state.toggles.roadbooks) && !socialFailed) needSocial().then(() => {
+          if (!accountMe || !accountMe.member) return;
+          if (friendsMap) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
+          if (meetsMap && state.toggles.meets) meetsMap.setLayer(true);
+          if (roadbookMap && state.toggles.roadbooks) roadbookMap.setLayer(true);
+        }).catch(() => {});
+      }
       if (feedbackUi) feedbackUi.refresh();
       if (me && !me.signed_in) setRoutingCars(null);
       else if (me && me.member) apiCall('GET', '/api/garage').then(r => (r.ok ? r.json() : null)).then(list => { if (list) setRoutingCars(list); }).catch(() => {});
@@ -10400,9 +10406,27 @@
         if (reported.pins.has(h.id)) continue;
         const el = document.createElement('div'); el.className = h.official ? 'hz-pin hz-dot' : 'hz-pin';   // a DOT's event: its own word
         el.textContent = ((h.official && h.label) || ApexHazardReports.LABEL[h.kind] || 'Hazard').toUpperCase();
-        reported.pins.set(h.id, new maplibregl.Marker({ element: el }).setLngLat([h.lon, h.lat]).addTo(map));
+        el.setAttribute('aria-label', el.textContent.toLowerCase());
+        const mk = new maplibregl.Marker({ element: el }).setLngLat([h.lon, h.lat]).addTo(map);
+        mk.hz = h; reported.pins.set(h.id, mk);
+      }
+      placePins();
+    }
+    // Which pins show, and how (hazard_reports.js pinView): only in view, a mark zoomed out, a tag closer in, never piled up
+    let pinsQueued = false;
+    function placePins() {
+      if (!reported.pins.size || !mapReady) return;
+      const c = map.getCanvas(), w = c.clientWidth, h = c.clientHeight, list = [];
+      for (const [id, mk] of reported.pins) { const ll = mk.getLngLat(), pt = map.project(ll), hz = mk.hz || {};
+        list.push({ id, x: pt.x, y: pt.y, kind: hz.kind, label: mk.getElement().textContent }); }
+      const how = ApexHazardReports.pinView(list, { width: w, height: h, zoom: map.getZoom() });
+      for (const [id, mk] of reported.pins) {
+        const e = mk.getElement(), v = how.get(id);
+        e.style.display = v ? '' : 'none';
+        e.classList.toggle('hz-mini', v === 'mark');
       }
     }
+    if (map) map.on('move', () => { if (pinsQueued) return; pinsQueued = true; requestAnimationFrame(() => { pinsQueued = false; placePins(); }); });
     // Each fresh fix while driving: call the next reported hazard ahead, and after passing one ask if it's still there.
     // ---- crash check (IDEAS D-17; web/incident.js): impact + stop asks "Are you OK?"; the contact is local only ----------
     const CRASH_KEY = 'apex.crashContact';
