@@ -3,6 +3,7 @@
 // the app must still boot without its map tiles, routers and fonts. Any uncaught page error fails the flow.
 //   node e2e/smoke.js            (needs the `playwright` package and its Chromium; CI installs both)
 const http = require('http');
+const NEWS_ID = require('../web/whats_new.js').NEWS.id;   // "What's new" seen already: a flow's own phone, not the news
 const fs = require('fs');
 const path = require('path');
 const playwright = require('playwright');
@@ -9310,7 +9311,7 @@ flow('contrast in every look: the welcome, the map, People, the Garage and the L
   for (const theme of themes) {
     for (const night of [false, true]) {
       const m = `${theme} ${night ? 'night' : 'day'}`;
-      await page.evaluate(({ t, n }) => { localStorage.clear(); localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, nightMode: n ? 'on' : 'off' })); }, { t: theme, n: night }).catch(() => {});
+      await page.evaluate(({ t, n, ns }) => { localStorage.clear(); localStorage.setItem('apex.newsSeen', ns); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, nightMode: n ? 'on' : 'off' })); }, { t: theme, n: night, ns: NEWS_ID }).catch(() => {});
       await page.goto(base + '/index.html');
       await page.waitForFunction((t) => document.documentElement.dataset.theme === t, theme);
       await page.waitForSelector('#obNext', { state: 'visible' });
@@ -9351,7 +9352,7 @@ async function screensSweep(page, base, shapes) {
     for (const [w, h, k] of shapes) {
       const ctx = await page.context().browser().newContext({ viewport: { width: w, height: h }, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
       await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
-      await ctx.addInitScript(() => { try { localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.funLevel', 'quick'); } catch (_) {} });
+      await ctx.addInitScript((ns) => { try { localStorage.setItem('apex.newsSeen', ns); localStorage.setItem('apex.funLevel', 'quick'); } catch (_) {} }, NEWS_ID);
       const p = await ctx.newPage();
       try {
         await p.goto(base + '/index.html');
@@ -9363,6 +9364,19 @@ async function screensSweep(page, base, shapes) {
         await p.waitForFunction(() => window.apexDebug && window.apexDebug.map && !document.getElementById('boot'), null, { timeout: 20000 });
         await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(800);
         await read(p, `${w}x${h} ${k}x map`);
+        // the plan's sheets: Where to?, its Options, and Best roads nearby (from our tiles)
+        await p.click('#destInput'); await p.waitForTimeout(500);
+        await read(p, `${w}x${h} ${k}x where to`);
+        await p.click('#planOptionsChip'); await p.waitForSelector('#optSheet.open'); await p.waitForTimeout(400);
+        await read(p, `${w}x${h} ${k}x options`);
+        await p.goto(base + '/index.html');
+        await p.waitForFunction(() => window.apexDebug && window.apexDebug.map && !document.getElementById('boot'), null, { timeout: 20000 });
+        await p.evaluate(TYPE_AT(k));
+        if (await p.evaluate(() => { const c = document.getElementById('deckNearby'); if (!c || !c.getClientRects().length) return false; c.scrollIntoView({ inline: 'nearest' }); c.click(); return true; })) {   // the shelf may hold it out of view sideways
+          await p.waitForFunction(() => window.apexDebug.lastExploreOwn != null && !document.getElementById('nearbyStatus').classList.contains('busy'), null, { timeout: 20000 });
+          await p.waitForTimeout(400);
+          await read(p, `${w}x${h} ${k}x best roads nearby`);
+        }
         for (const view of ['people', 'garage']) {
           await p.evaluate((v) => document.querySelector(`#tabbar .tab[data-view="${v}"]`).click(), view);
           await p.waitForTimeout(700);
@@ -9415,7 +9429,7 @@ flow('large text in the Garage: every setting page and the Stages list cut nothi
   for (const [w, h] of [[390, 844], [320, 568]]) {
     const ctx = await page.context().browser().newContext({ viewport: { width: w, height: h } });
     await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
-    await ctx.addInitScript(() => { try { localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+    await ctx.addInitScript((ns) => { try { localStorage.setItem('apex.newsSeen', ns); localStorage.setItem('apex.onboarded', '1'); } catch (_) {} }, NEWS_ID);
     const p = await ctx.newPage();
     try {
       await p.goto(base + '/index.html');
@@ -9451,7 +9465,7 @@ flow('contrast in every look: a planned route\'s card and its Saved key hold 4.5
         // a clean phone per look: a second plan on one page starts from what the first left (recents, the saved route)
         const ctx = await page.context().browser().newContext({ viewport: { width: 390, height: 844 }, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
         await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
-        await ctx.addInitScript(({ t, n }) => { try { localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.funLevel', 'quick'); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, nightMode: n ? 'on' : 'off' })); } catch (_) {} }, { t: theme, n: night });
+        await ctx.addInitScript(({ t, n, ns }) => { try { localStorage.setItem('apex.newsSeen', ns); localStorage.setItem('apex.funLevel', 'quick'); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, nightMode: n ? 'on' : 'off' })); } catch (_) {} }, { t: theme, n: night, ns: NEWS_ID });
         const p = await ctx.newPage();
         try {
         await ownTrip(p, base);
@@ -9479,7 +9493,7 @@ flow('contrast in every look: the drive screen on the replay holds 4.5:1 in each
       const m = `${theme} ${night ? 'night' : 'day'}`;
       const ctx = await page.context().browser().newContext({ viewport: { width: 390, height: 844 } });
       await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
-      await ctx.addInitScript(({ t, n }) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, { t: theme, n: night });
+      await ctx.addInitScript(({ t, n, ns }) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.newsSeen', ns); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, { t: theme, n: night, ns: NEWS_ID });
       const p = await ctx.newPage();
       try {
         await p.goto(base + '/index.html?drive=dry_ridge&play=1');
