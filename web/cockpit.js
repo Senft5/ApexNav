@@ -1798,7 +1798,10 @@
     // =======================================================================
     // a school zone is a mark only in a school run, now (events.js schoolRunAt: a school day, arrival or dismissal hours)
     const schoolRun = (m) => { const now = Date.now(); if (!m.runAt || now - m.runAt > 60000) { m.runAt = now; m.run = !!(window.ApexCtxEvents && ApexCtxEvents.schoolRunAt && ApexCtxEvents.schoolRunAt(now, m.lat, m.lon)); } return m.run; };
-    const allEvents = () => (track ? track.events.concat(track.alpr || [], (track.marks || []).filter((m) => m.kind !== 'school' || schoolRun(m))) : []);   // marks: road_marks.js
+    // "Bridge may be icy" only in the cold (road_marks.js bridgeCold): the air where you are (the place plate's weather,
+    // placeAsk) at 3 °C or colder, or an icy road already (wet_roads.js, a road sensor). Unknown temperature: not said.
+    const bridgeCold = () => { try { const d = placeAsk.data; return (drive.wet && drive.wet.state === 'ice') || !!(d && ApexRoadMarks.bridgeCold(d.tempC)); } catch (_) { return false; } };
+    const allEvents = () => (track ? track.events.concat(track.alpr || [], (track.marks || []).filter((m) => (m.kind !== 'school' || schoolRun(m)) && (m.kind !== 'icy_bridge' || bridgeCold()))) : []);   // marks: road_marks.js
     const distLabel = (m) => ApexUnits.short(m);          // feet and miles, or metres and km (Settings → Units, U-22)
     // Auto: wake on the road ahead (a corner that is tight or needs braking, updateNotes, U-58) or on hard driving. Full:
     // always awake. Quiet: never wake, so only cameras and severe bumps are called.

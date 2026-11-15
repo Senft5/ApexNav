@@ -10262,6 +10262,22 @@
    "heard": 1.0,
    "voice": "bm_lewis",
    "pace": 11.76
+  },
+  "mark:icy_bridge": {
+   "file": "mark_icy_bridge.m4a",
+   "dur": 1.117,
+   "text": "Bridge may be icy",
+   "heard": 1.0,
+   "voice": "bm_lewis",
+   "pace": 11.76
+  },
+  "mark:icy_bridges": {
+   "file": "mark_icy_bridges.m4a",
+   "dur": 1.356,
+   "text": "Bridges may be icy",
+   "heard": 1.0,
+   "voice": "bm_lewis",
+   "pace": 11.29
   }
  }
 }

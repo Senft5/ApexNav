@@ -12732,6 +12732,37 @@ for (const [when, iso, want] of [['in a school run', '2026-11-16T12:45:00Z', 1],
   check((await said()).length === want, `${want ? 'said' : 'not said'} ${when}: ` + JSON.stringify(await page.evaluate(() => window.__said)));
 });
 
+for (const [when, tempC, want] of [['at 1 degree', 1, 1], ['at 10 degrees', 10, 0]]) flow(`a bridge on the road ahead is "Bridge may be icy" only in the cold: ${when} (road_marks.js icy_bridge, bridgeCold)`, async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  const KY = 110540, lat = (m) => 39.1 + m / KY, LON = -84.5;
+  const coords = []; for (let m = 0; m <= 2500; m += 10) coords.push([LON, lat(m)]);
+  // the road north, over a creek on a bridge 1000-1040 m (its own way, sharing the road's nodes)
+  const piece = (id, a, b, tags) => { const ks = []; for (let m = a; m <= b; m += 10) ks.push(m); return { type: 'way', id, tags: { highway: 'tertiary', ...tags }, nodes: ks.map((m) => 5000 + m / 10), geometry: ks.map((m) => ({ lat: lat(m), lon: LON })) }; };
+  const elements = [piece(1, 0, 1000, {}), piece(2, 1000, 1040, { bridge: 'yes', layer: '1' }), piece(3, 1040, 2500, {})];
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }));
+  await page.route('**/api.open-meteo.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ current: { temperature_2m: tempC, precipitation: 0, weather_code: 1 }, hourly: { time: [new Date(Date.now() - 3600e3).toISOString().slice(0, 16)], precipitation: [0] } }) }));
+  await page.route('**/api.weather.gov/**', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  await page.evaluate((c) => apexDebug.horizonFrom(c), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon' && (apexDebug.track.marks || []).some((m) => m.code === 'ICE'), null, { timeout: 30000 })
+    .catch(async () => { throw new Error('no bridge on the road ahead: ' + JSON.stringify(await page.evaluate(() => (apexDebug.track.marks || []).map((m) => [m.code, Math.round(m.dist_m)])))); });
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  await at(await iAt(500));
+  await page.evaluate(() => apexDebug.placePlate());                 // the weather where you are, asked now (resolves with it)
+  const said = () => page.evaluate(() => window.__said.filter((s) => /may be icy/.test(s)));
+  for (let i = await iAt(520), end = await iAt(1000); i <= end && !(await said()).length; i += 2) { await at(i); await page.waitForTimeout(60); }
+  check((await said()).length === want, `${want ? 'said' : 'not said'} ${when}: ` + JSON.stringify(await page.evaluate(() => window.__said)));
+});
+
 flow('road marks on a route set during a drive: the map is asked for this route alone (road_marks.js, attachMarksSoon)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const KY = 110540, lat = (m) => 35.5 + m / KY, LON = -83.9, kx = 111320 * Math.cos(35.5 * Math.PI / 180);
