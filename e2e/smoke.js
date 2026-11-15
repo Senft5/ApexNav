@@ -10736,7 +10736,7 @@ flow('your ideal run of a stage: quick early one day and late another, Runs show
   await page.click('#segList button.seg');
   await page.waitForSelector('#segIdeal:not([hidden])', { timeout: 15000 });
   const t = await page.textContent('#segIdeal');
-  check(/^Ideal run \d+:\d\d: your quickest stretches from 2 runs put together, \d+\.\d s under your best\.$/.test(t), 'the ideal run under the chart: ' + t);
+  check(/^Ideal run \d+:\d\d: your quickest stretches from 2 runs put together, \d+\.\d s under your best, (all|\d+\.\d s) of it (early on|in the middle|late on|in the run to the finish)\.$/.test(t), 'the ideal run under the chart: ' + t);
 });
 
 flow('side by side: a corner filmed on this drive and on your best pass plays as one clip, both from the same point, the gap counting (big bet 5)', async (page, base) => {

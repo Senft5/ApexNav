@@ -217,7 +217,8 @@ const R = process.argv[1];
 const Core = require(R + '/web/apex_core.js'), G = require(R + '/web/ghost_duel.js');
 const pass = (f) => ({ fine: G.splitsOf(Core, { speed_mps: Array.from({ length: 221 }, (_, i) => f(i)) }, 10, 210), lo: 10, hi: 210, apexes: [40, 70, 120, 160] });
 const a = pass((i) => (i < 110 ? 25 : 20)), b = pass((i) => (i < 110 ? 20 : 25)), c = pass(() => 18);
-console.log(JSON.stringify({ two: G.idealOf([a, b, c]), alone: G.idealOf([a]), same: G.idealOf([a, a]), none: G.idealOf(null) }));
+const quick = pass((i) => (i < 40 ? 30 : 18));                              // quicker than a over the first stretch only
+console.log(JSON.stringify({ early: G.idealOf([a, quick]), where: [G.whereOf(G.idealOf([a, b]).most), G.whereOf(G.idealOf([a, quick]).most)], two: G.idealOf([a, b, c]), alone: G.idealOf([a]), same: G.idealOf([a, a]), none: G.idealOf(null) }));
 """
 
 
@@ -231,3 +232,8 @@ def test_your_ideal_run_is_your_quickest_stretches_put_together():
     assert two["stretches"] == 5                                          # cut at 4 apexes 100 m apart, then the finish
     assert r["alone"] is None and r["none"] is None
     assert r["same"]["time_s"] == r["same"]["best_s"]
+    # where to look for it: the stretch your best gave the most away on, by where it is on the stage
+    assert two["most"]["k"] == 5 and two["most"]["of"] == 5 and two["most"]["gain_s"] == pytest.approx(2.5, abs=0.2)
+    assert r["early"]["most"]["k"] == 1 and r["early"]["most"]["gain_s"] == pytest.approx(1, abs=0.2)
+    assert r["where"] == ["in the run to the finish", "early on"]
+    assert r["same"]["most"] is None                                       # nothing given away: nowhere to point

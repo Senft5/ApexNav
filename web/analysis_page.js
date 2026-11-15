@@ -973,7 +973,9 @@
       const ideal = window.ApexGhostDuel ? ApexGhostDuel.idealOf(passes.filter((x) => x.p.surface !== 'wet' && x.p.surface !== 'ice').map((x) => x.p)) : null;
       const under = ideal ? Math.round((ideal.best_s - ideal.time_s) * 10) / 10 : 0;
       $('segIdeal').hidden = !(ideal && under >= 0.5 && ideal.runs >= 2);
-      $('segIdeal').textContent = $('segIdeal').hidden ? '' : `Ideal run ${mmss(ideal.time_s)}: your quickest stretches from ${ideal.runs} runs put together, ${under.toFixed(1)} s under your best.`;
+      // and where to look for it: the stretch your best gave the most away on (2026-11-15), by where it is on the stage
+      const at = ideal && ideal.most ? ApexGhostDuel.whereOf(ideal.most) : null;
+      $('segIdeal').textContent = $('segIdeal').hidden ? '' : `Ideal run ${mmss(ideal.time_s)}: your quickest stretches from ${ideal.runs} runs put together, ${under.toFixed(1)} s under your best${at ? `, ${ideal.most.gain_s >= under ? 'all' : `${ideal.most.gain_s.toFixed(1)} s`} of it ${at}` : ''}.`;
       // TestFlight 2026-11-05 ("bad text spacing"): five columns were wider than a phone, so the table scrolled sideways (the
       // Score cut to "ore", the components' words run together). Now a run is its line (#, run, Score, time) and its four
       // components under it, the whole width; nothing scrolls sideways.
