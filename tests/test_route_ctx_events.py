@@ -130,3 +130,32 @@ const cor = () => C.corridor('river', line, { departAt: Date.UTC(2026, 10, 2, 12
     assert o["overAfterOurs"] == 1 and "-84.5000" in o["firstOver"] and "-84.7500" not in o["firstOver"]
     assert len(o["allOver"]) == 2 and "-84.7500" in o["allOver"][1]   # server down: both cells go to Overpass, as before
     assert "school-zone" in o["spans"] and "no schools" not in o["note"]
+
+
+SCHOOL = r"""
+const root = process.argv[1];
+const E = require(root + '/web/route_ctx/events.js'), C = require(root + '/tests/fixtures/route_ctx/corridor.js');
+const M = require(root + '/web/road_marks.js');
+const line = [[39.0930, -84.5250], [39.0945, -84.5120], [39.0955, -84.5040], [39.1010, -84.4900], [39.1040, -84.4700]];
+const c = C.corridor('river', line, { departAt: Date.UTC(2026, 10, 2, 17, 0), speedMps: 15 });
+// one school by the road, one 1 km off it
+const ctx = E.evaluate(c, [], { schools: [{ lat: 39.0950, lon: -84.5120 }, { lat: 39.1100, lon: -84.5100 }] });
+const pts = ctx.points.filter((p) => p.kind === 'school');
+const run = (y, mo, d, h, mi) => E.schoolRunAt(Date.UTC(y, mo, d, h, mi), 39.0950, -84.5120);
+console.log(JSON.stringify({ n: pts.length, marks: M.marksOf({ points: pts }).map((m) => m.kind),
+  monday745: run(2026, 10, 2, 12, 45), monday1200: run(2026, 10, 2, 17, 0), monday1500: run(2026, 10, 2, 20, 0),
+  saturday: run(2026, 10, 7, 12, 45), july: run(2026, 6, 6, 12, 45), nowhere: E.schoolRunAt(Date.UTC(2026, 10, 2, 12, 45), 47.6, -122.3),
+  cruise: M.cruiseWorthy({ type: 'mark', kind: 'school' }, 1) }));
+"""
+
+
+def test_a_school_by_the_road_is_a_mark_said_only_in_a_school_run():
+    """A school within 150 m of the road is a point at any hour (the drive may be later than the plan); the drive says
+    "School zone" only when it is a school run then: a school day in that state, arrival or dismissal hours."""
+    out = json.loads(subprocess.run([NODE, "-e", SCHOOL, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["n"] == 1 and out["marks"] == ["school"]
+    assert out["monday745"] is True and out["monday1200"] is False and out["monday1500"] is True
+    assert out["saturday"] is False and out["july"] is False and out["nowhere"] is None   # Washington: no school year known
+    assert out["cruise"] is True
+    js = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert "(track.marks || []).filter((m) => m.kind !== 'school' || schoolRun(m))" in js
