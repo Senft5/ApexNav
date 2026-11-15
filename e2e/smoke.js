@@ -8503,6 +8503,45 @@ flow('satellite: a developer gets a Satellite switch in Layers that lays USGS im
   await page.click('#satSwitch');
   await page.waitForFunction(() => !window.apexDebug.map.getLayer('apex-satellite') && !window.apexDebug.map.getSource('apex-satellite-src'));
 });
+// Nate (2026-11-15, a real drive): "the map layers sometimes reset certain things when I reopen the app". Every layer left on
+// comes back on after a reopen: with the account still on its way, after a launch that read signed out, and after another
+// setting was saved in between. Friends, Meets and Roadbooks (lazy social scripts) are drawn once the account says member.
+flow('map layers: every layer left on is still on after the app is reopened, signed out or in, and the social ones draw (Nate 2026-11-15)', async (page, base) => {
+  const LAYERS = ['twisty', 'coverage', 'lpr', 'roadcams', 'terrain', 'satellite', 'roadbooks', 'meets', 'friends'];
+  let me = { signed_in: true, member: true, handle: 'me', developer: true };
+  const asked = [];
+  await page.route('https://tiles.openfreemap.org/**', satStyle);
+  await page.route('https://basemap.nationalmap.gov/**', (route) => route.fulfill({ contentType: 'image/png', body: PNG1 }));
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()); asked.push(u.pathname);
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json(me);
+    if (u.pathname === '/api/traffic/v1/cameras.json') return json({ sources: ['KYTC'], failed: [], cams: [] });
+    return json({ error: 'not_found' }, 404);
+  });
+  await page.addInitScript((layers) => { try { localStorage.setItem('apex.onboarded', '1');
+    if (!localStorage.getItem('apex.prefs')) localStorage.setItem('apex.prefs', JSON.stringify({ toggles: Object.fromEntries(layers.map((k) => [k, true])), twistyV: 2 })); } catch (_) {} }, LAYERS);
+  const open = async () => {
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.getLayer('apex-twisty'), null, { timeout: 15000 });
+    await page.waitForTimeout(2500);                                   // /api/me has answered, the social scripts have had their chance
+  };
+  const kept = () => page.evaluate((layers) => { const t = (JSON.parse(localStorage.getItem('apex.prefs') || '{}').toggles) || {};
+    return layers.filter((k) => t[k] !== true); }, LAYERS);
+  const shown = () => page.evaluate((layers) => layers.filter((k) => document.querySelector(`[data-toggle="${k}"]`).getAttribute('aria-checked') !== 'true'), LAYERS);
+  const save = () => page.evaluate(() => { const v = document.querySelector('[data-toggle="voice"]'); v.click(); v.click(); });   // another setting saved
+  await open(); await save();
+  check((await kept()).length === 0 && (await shown()).length === 0, 'signed in, every layer still on: lost ' + JSON.stringify({ saved: await kept(), switches: await shown() }));
+  const social = await page.evaluate(() => ({ socialIn: !!window.ApexFriendsMap, }));
+  check(social.socialIn, 'the social layers loaded their scripts to draw: ' + JSON.stringify(social));
+  me = { signed_in: false };                                           // a launch that reads signed out (a token being renewed)
+  await open(); await save();
+  check((await kept()).length === 0, 'a signed-out launch keeps every choice: lost ' + JSON.stringify(await kept()));
+  me = { signed_in: true, member: true, handle: 'me', developer: true };
+  await open();
+  check((await kept()).length === 0 && (await shown()).length === 0, 'signed in again, all of them on: lost ' + JSON.stringify({ saved: await kept(), switches: await shown() }));
+  check(await page.evaluate(() => !!window.apexDebug.map.getLayer('apex-satellite')), 'the developer\'s Satellite is drawn again');
+});
 flow('satellite: anyone else never sees the switch, and one left on in localStorage draws nothing (the owner 2026-11-04)', async (page, base) => {
   const prefs = { toggles: { satellite: true, twisty: true } };
   for (const me of [{ signed_in: true, member: true, handle: 'me' }, { signed_in: false }, { signed_in: true, member: false, handle: 'me', developer: true }]) {

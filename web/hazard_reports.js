@@ -187,6 +187,38 @@
     return best;
   }
 
-  const api = { nextAhead, createPassWatch, stillLive, closuresFor, roadHazardsFor, policeFor, passesNear, onRouteAhead, POLICE_M, plate, LABEL, KINDS: Object.keys(LABEL) };
+  // Pins on the map (Nate 2026-11-15: "road closures and such tags don't scale when you zoom out and show outside the area
+  // you're looking at, so they block half the map"). Only what is in view; zoomed out a small mark, closer in its word as a
+  // tag, the most serious first and never one tag over another; a cap on each.
+  const TAG_ZOOM = 12.5, MAX_TAGS = 10, MAX_MARKS = 40, MARK_PX = 14, PAD_PX = 24;
+  const RANK = { crash: 0, closure: 1, closed_way: 2, police: 3, ice: 4, slow: 5, debris: 6, animal: 6, pothole: 7 };
+  /**
+   * pins: [{ id, x, y, kind, label }] at their screen points; view: { width, height, zoom }.
+   * Returns Map id -> 'tag' | 'mark' (missing: not drawn). A tag's box is guessed from its words (11 px caps).
+   */
+  function pinView(pins, view) {
+    const out = new Map();
+    if (!Array.isArray(pins) || !view || !(view.width > 0) || !(view.height > 0)) return out;
+    const cx = view.width / 2, cy = view.height / 2;
+    const inView = pins.filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y)
+      && p.x > -PAD_PX && p.x < view.width + PAD_PX && p.y > -PAD_PX && p.y < view.height + PAD_PX)
+      .sort((a, b) => ((RANK[a.kind] ?? 8) - (RANK[b.kind] ?? 8)) || (Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy)));
+    const boxes = [], hits = (b) => boxes.some((o) => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0);
+    const tags = view.zoom >= TAG_ZOOM;
+    let nTags = 0, nMarks = 0;
+    for (const p of inView) {
+      if (tags && nTags < MAX_TAGS) {
+        const w = 26 + 8.5 * String(p.label || '').length, b = { x0: p.x - w / 2, x1: p.x + w / 2, y0: p.y - 13, y1: p.y + 13 };
+        if (!hits(b)) { boxes.push(b); out.set(p.id, 'tag'); nTags++; continue; }
+      }
+      if (nMarks >= MAX_MARKS) continue;
+      const h = MARK_PX / 2 + 2, b = { x0: p.x - h, x1: p.x + h, y0: p.y - h, y1: p.y + h };
+      if (hits(b)) continue;                                              // under a tag or another mark: one is enough there
+      boxes.push(b); out.set(p.id, 'mark'); nMarks++;
+    }
+    return out;
+  }
+
+  const api = { pinView, TAG_ZOOM, MAX_TAGS, MAX_MARKS, nextAhead, createPassWatch, stillLive, closuresFor, roadHazardsFor, policeFor, passesNear, onRouteAhead, POLICE_M, plate, LABEL, KINDS: Object.keys(LABEL) };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexHazardReports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

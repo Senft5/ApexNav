@@ -1806,6 +1806,9 @@
     .hz-pin, .pin.bump, .pin.crest, .pin.dip, .pin.mark { font: 800 11px var(--font-ui, sans-serif); letter-spacing: 0.06em; padding: 2px 6px 2px 5px; border: 2px solid var(--hz-edge); color: var(--hz-ink); background: var(--hz-bg); white-space: nowrap; }
     .hz-pin::before, .pin.bump::before, .pin.crest::before, .pin.dip::before, .pin.mark::before { content: ""; display: inline-block; width: 0; height: 0; margin-right: 4px; vertical-align: -1px;
       border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--hz-edge); }
+    /* zoomed out, a pin is its mark only (hazard_reports.js pinView): no words to pile up over the map */
+    .hz-pin.hz-mini { font-size: 0; letter-spacing: 0; padding: 2px; border-width: 1.5px; line-height: 0; }
+    .hz-pin.hz-mini::before { margin-right: 0; vertical-align: 0; }
     /* the report sheet's buttons are the plate others will see (REVIEW.md 1.2, Hazard report) */
     .hz-grid .hz-btn { background: var(--hz-bg); color: var(--hz-ink); border: 2px solid var(--hz-edge); text-align: left; padding: 0 14px; display: flex; align-items: center; gap: 10px; }
     .hz-grid .hz-btn::before { content: ""; flex: none; width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 16px solid var(--hz-edge); }
