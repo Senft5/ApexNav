@@ -9,7 +9,7 @@
   // so the Log lists a year of drives without reading 1.6 MB of rows each. Opening v3 only adds the store: 'drives' is
   // never touched by the upgrade, so every drive already on a phone stays; summaries() builds the missing ones from the
   // drives' own rows the first time it is asked (in the analysis worker, off the page's thread).
-  const DB_VERSION = 3, SUMMARY_VERSION = 3;   // 2: run (flow.js, IDEAS D-30); 3: shape (the Log's row thumbnail)
+  const DB_VERSION = 3, SUMMARY_VERSION = 4;   // 2: run (flow.js, IDEAS D-30); 3: shape (the Log's row thumbnail); 4: old camber unknown
   function idb() {
     if (dbp) return dbp;
     dbp = new Promise((res, rej) => {
@@ -128,13 +128,14 @@
     const t0 = db.transaction(['drives', 'summaries']);
     const [keys, sums] = await Promise.all([req(t0.objectStore('drives').getAllKeys()), req(t0.objectStore('summaries').getAll())]);
     const have = new Map((sums || []).filter((x) => x && x.sv === SUMMARY_VERSION).map((x) => [x.id, x]));
-    // a version-2 summary only lacks the shape: added from the drive's points, never scored again (no core needed)
+    // a version-2 or 3 summary of a drive with no old camber only lacks the shape (2): added from the drive's points, never
+    // scored again (no core needed). A drive with old camber is scored again below (4: its camber is unknown now).
     for (const x of sums || []) {
-      if (!x || x.sv !== 2 || have.has(x.id)) continue;
+      if (!x || (x.sv !== 2 && x.sv !== 3) || have.has(x.id)) continue;
       const t = db.transaction(['drives', 'summaries'], 'readwrite');
       t.objectStore('drives').get(x.id).onsuccess = (e) => {
-        const d = e.target.result; if (!d) return;
-        const y = { ...x, sv: SUMMARY_VERSION, shape: shapeOf(d) }; t.objectStore('summaries').put(y); have.set(x.id, y);
+        const d = e.target.result; if (!d || staleCamber(d)) return;
+        const y = { ...x, sv: SUMMARY_VERSION, shape: x.shape || shapeOf(d) }; t.objectStore('summaries').put(y); have.set(x.id, y);
       };
       try { await done(t); } catch (_) {}
     }
@@ -209,21 +210,24 @@
     for (const need of ['lat', 'lon', 'speed_mph', 'lon_g', 'lat_g']) if (!cols[need]) throw new Error(`missing column ${need}`);
     // g columns recorded without a value (web GPS has no lateral g when stopped) are zero for the profiler, which needs numbers
     const zeroFill = (a) => a.map((v) => (Number.isFinite(v) ? v : 0));
-    const prepared = { ...cols, lon_g: zeroFill(cols.lon_g), lat_g: zeroFill(cols.lat_g) };
+    // cam_v (CAM_V, 3): every camber in the file is from the fixed live pipeline (its camber_v column says so row by row).
+    // Camber from older builds (2, or none) is the attitude filter's drift, not the road's bank (docs/notes
+    // 2026-11-15-camber-specific-force.md): it is unknown here too, so no corner reads "banked" from it and no corner
+    // limit leans on it. contributor.js already never shares it.
+    const camV = cols.camber_v && cols.camber_deg && cols.camber_deg.every((v, i) => !Number.isFinite(v) || cols.camber_v[i] === CAM_V) ? CAM_V : null;
+    const camber = camV === CAM_V ? cols.camber_deg : undefined;
+    const prepared = { ...cols, camber_deg: camber, lon_g: zeroFill(cols.lon_g), lat_g: zeroFill(cols.lat_g) };
     const prof = Core.profileRecording(prepared);
     const gKnown = cols.lat_g.map((v, i) => (Number.isFinite(v) && Number.isFinite(cols.lon_g[i]) ? 1 : 0));
     const stamp = (fileName.match(/(\d{8})_(\d{6})/) || []);
     const date = meta.date || (stamp.length ? `${stamp[1].slice(0, 4)}-${stamp[1].slice(4, 6)}-${stamp[1].slice(6, 8)}T${stamp[2].slice(0, 2)}:${stamp[2].slice(2, 4)}` : new Date().toISOString());
     const nul = (a) => (a ? a.map((v) => (Number.isFinite(v) ? v : null)) : null);
-    // cam_v (CAM_V, 3): every camber in the file is from the fixed live pipeline (its camber_v column says so row by row). Files
-    // without it (older builds) hold placeholder zeros on straights: kept for this phone, never shared (contributor.js).
-    const camV = cols.camber_v && cols.camber_deg && cols.camber_deg.every((v, i) => !Number.isFinite(v) || cols.camber_v[i] === CAM_V) ? CAM_V : null;
     return {
       cam_v: camV,
       id: meta.id || ('rec_' + fileName.replace(/\W+/g, '_')), name: meta.name || fileName.replace(/\.csv$/i, ''), date, date_known: !!(meta.date || stamp.length), source: meta.source || 'imported',
       lat: cols.lat, lon: cols.lon, dist: cols.distance_m || cols.lat.map((_, i) => i * 5), speed_mps: cols.speed_mph.map((v) => v / MPH),
       lon_g: prepared.lon_g, lat_g: prepared.lat_g, g_known: gKnown.every(Boolean) ? null : gKnown, elev: cols.elevation_m && cols.elevation_m.some(Number.isFinite) ? cols.elevation_m : null, events: prof.events,
-      camber: nul(cols.camber_deg), rough: nul(cols.roughness_rms), crest: nul(cols.crest_vertical_g), vpeak: nul(cols.vert_peak_g), kappa: Array.from(Core.computeCurvature(cols.lat, cols.lon).kappa),
+      camber: camber ? nul(camber) : cols.lat.map(() => null), rough: nul(cols.roughness_rms), crest: nul(cols.crest_vertical_g), vpeak: nul(cols.vert_peak_g), kappa: Array.from(Core.computeCurvature(cols.lat, cols.lon).kappa),
       envMps: nul(prof.envMps), sightM: nul(prof.sightM), hz: HAZARD_VERSION,
       ...(cols.t_s && cols.t_s.some(Number.isFinite) ? { t_s: nul(cols.t_s) } : {}), ...(Number.isFinite(meta.t0) ? { t0: meta.t0 } : {}),
     };
@@ -245,9 +249,14 @@
     return out;
   }
 
+  /** A record holding camber its build read wrong (cam_v not CAM_V: the attitude filter's drift, docs/notes
+   *  2026-11-15-camber-specific-force.md). repair makes it unknown; parse never keeps it. */
+  const staleCamber = (d) => !!d && d.cam_v !== CAM_V && Array.isArray(d.camber) && d.camber.some(Number.isFinite);
+
   /**
    * Drives saved before 2026-10-26 have NaN corner limits (blank camber cells poisoned the envelope), so their score was NaN.
-   * Profiles such a record again from its own stored columns; a healthy record is returned unchanged.
+   * Profiles such a record again from its own stored columns (as one with stale hazards or stale camber); a healthy
+   * record is returned unchanged.
    */
   function repair(Core, d) {
     if (!d || !Array.isArray(d.events)) return d;
@@ -255,12 +264,13 @@
     if (d.imu_lag === undefined && Core.imuLagBins && Array.isArray(d.speed_mps)) { const lag = Core.imuLagBins(d); if (lag) d = { ...Core.alignImu(d, lag), imu_lag: lag }; }
     const measuredHazards = [d.crest, d.vpeak].some((a) => Array.isArray(a) && a.some(Number.isFinite));
     const stale = d.hz !== HAZARD_VERSION && measuredHazards;        // saved before hazards were found on phone drives
-    if (!stale && d.events.every((e) => e.type !== 'corner' || Number.isFinite(e.apex_mph))) return d;
+    const oldCam = staleCamber(d);                                     // camber from a build before the fix: attitude drift
+    if (!stale && !oldCam && d.events.every((e) => e.type !== 'corner' || Number.isFinite(e.apex_mph))) return d;
     const nan = (a) => (a ? a.map((v) => (v == null ? NaN : v)) : undefined);
     const prof = Core.profileRecording({ lat: d.lat, lon: d.lon, distance_m: d.dist, speed_mph: d.speed_mps.map((v) => v * MPH), lon_g: d.lon_g, lat_g: d.lat_g,
-      camber_deg: nan(d.camber), roughness_rms: nan(d.rough), crest_vertical_g: nan(d.crest), vert_peak_g: nan(d.vpeak), elevation_m: d.elev || undefined });
+      camber_deg: oldCam ? undefined : nan(d.camber), roughness_rms: nan(d.rough), crest_vertical_g: nan(d.crest), vert_peak_g: nan(d.vpeak), elevation_m: d.elev || undefined });
     const nul = (a) => a.map((v) => (Number.isFinite(v) ? v : null));
-    return { ...d, events: prof.events, envMps: nul(prof.envMps), sightM: nul(prof.sightM), hz: HAZARD_VERSION };
+    return { ...d, ...(oldCam ? { camber: d.camber.map(() => null) } : {}), events: prof.events, envMps: nul(prof.envMps), sightM: nul(prof.sightM), hz: HAZARD_VERSION };
   }
 
   // Adapt the shared Log record without inventing missing road measurements.
