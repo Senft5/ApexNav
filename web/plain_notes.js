@@ -132,7 +132,7 @@
     'Speed bumps': 'calming_many', 'Deer crossing': 'deer', 'Horse crossing': 'horse', 'Cattle crossing': 'cattle', 'Animal crossing': 'animal',
     'Horse-drawn buggies': 'buggy', 'Covered bridge': 'covered_bridge', 'Water crossing': 'ford', 'Unpaved road': 'unpaved', 'Rough road': 'rough',
     'Narrow road': 'narrow', 'T-junction': 'tee', 'Hidden junction': 'junction', 'School zone': 'school',
-    'Bridge may be icy': 'icy_bridge', 'Bridges may be icy': 'icy_bridges' };
+    'Roundabout': 'roundabout', 'Bridge may be icy': 'icy_bridge', 'Bridges may be icy': 'icy_bridges' };
   /** The clip for a hazard's own call ("Crest", "Stop sign"), as web/voice.js codriverTokens names it, or null. */
   function hazardToken(e) {
     if (!e || e.type === 'corner') return null;

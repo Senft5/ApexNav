@@ -27,6 +27,7 @@
     school: { code: 'SCHOOL', call: 'School zone' },        // said only in a school run (cockpit.js, events.js schoolRunAt)   // only where you can't see it coming (events: hidden)
     icy_bridge: { code: 'ICE', call: 'Bridge may be icy', many: 'Bridges may be icy' },   // said only in the cold (bridgeCold)
     tee: { code: 'TJUNC', call: 'T-junction' },   // the road ahead ends (free driving: horizon.js tee), not from Overpass
+    roundabout: { code: 'RBT', call: 'Roundabout' },   // the road ahead meets a roundabout (free driving: horizon.js), not from Overpass
   };
   // a mapped animal-crossing sign names its animal (osm_overpass.js hazardOf label); deer is the one on these roads
   const animalCall = (label) => { const a = String(label || 'animals').toLowerCase(); return a === 'deer' ? 'Deer crossing' : /^(horse|horses)$/.test(a) ? 'Horse crossing' : /^(cow|cows|cattle)$/.test(a) ? 'Cattle crossing' : 'Animal crossing'; };
@@ -202,11 +203,13 @@
    * The T-junction where the road ahead ends (free driving: horizon.js says the road ends and every way on turns off), as
    * a mark at the track's last sample, or null. From the map's road lines; a stop sign there says it instead (noTeeAtStop).
    */
-  function teeMark(t) {
+  function teeMark(t, kind = 'tee') {
     const n = t && Array.isArray(t.dist) ? t.dist.length : 0;
-    if (n < 2 || !finite(t.dist[n - 1])) return null;
-    return { type: 'mark', kind: 'tee', code: KINDS.tee.code, call: KINDS.tee.call, index: n - 1, dist_m: t.dist[n - 1], end_m: t.dist[n - 1], lat: t.lat[n - 1], lon: t.lon[n - 1] };
+    if (n < 2 || !finite(t.dist[n - 1]) || !KINDS[kind]) return null;
+    return { type: 'mark', kind, code: KINDS[kind].code, call: KINDS[kind].call, index: n - 1, dist_m: t.dist[n - 1], end_m: t.dist[n - 1], lat: t.lat[n - 1], lon: t.lon[n - 1] };
   }
+  /** The roundabout where the road ahead meets one (horizon.js end 'roundabout'), as a mark at the track's last sample. */
+  const roundaboutMark = (t) => teeMark(t, 'roundabout');
   /** Marks less a T-junction with a stop sign within 40 m: the stop sign is the call there (it brakes to a stop). */
   function noTeeAtStop(marks) {
     if (!Array.isArray(marks)) return marks || [];
@@ -214,6 +217,6 @@
     return marks.filter((m) => m.kind !== 'tee' || !stops.some((d) => Math.abs(d - m.dist_m) < SAME_M));
   }
 
-  const api = { bridgeCold, ICY_BRIDGE_C, hidden, marksOf, events, unfelt, union, mapAnswered, cruiseWorthy, placeAt, teeMark, noTeeAtStop, KINDS };
+  const api = { roundaboutMark, bridgeCold, ICY_BRIDGE_C, hidden, marksOf, events, unfelt, union, mapAnswered, cruiseWorthy, placeAt, teeMark, noTeeAtStop, KINDS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadMarks = api;
 })(typeof window !== 'undefined' ? window : globalThis);

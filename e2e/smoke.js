@@ -12598,6 +12598,36 @@ flow('a T-junction where the road ahead ends: a free drive hears it before the e
   check((await tees()).length === 1, 'once: ' + JSON.stringify(await tees()));
 });
 
+flow('a roundabout where the road ahead meets one: a free drive hears "Roundabout" with room to slow, once (horizon.js ring, road_marks.js roundaboutMark)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [] }) }));
+  const lat = (m) => 35.5 + m / 110540, LON = -83.9;
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const coords = []; for (let m = 0; m <= 1500; m += 10) coords.push([LON, lat(m)]);
+  await page.evaluate((coords) => apexDebug.horizonFrom(coords, 'roundabout'), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon');
+  const marks = await page.evaluate(() => (apexDebug.track.marks || []).map((m) => [m.code, Math.round(m.dist_m)]));
+  check(marks.length === 1 && marks[0][0] === 'RBT' && Math.abs(marks[0][1] - 1500) <= 10, 'the roundabout at the end of the road ahead: ' + JSON.stringify(marks));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 25, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const rbs = () => page.evaluate(() => window.__said.filter((s) => /Roundabout/.test(s)));
+  let saidAt = null;
+  for (let i = await iAt(1000), end = await iAt(1450); i <= end && saidAt === null; i += 2) {
+    await at(i); await page.waitForTimeout(50);
+    if ((await rbs()).length) saidAt = await page.evaluate((i) => apexDebug.track.dist[i], i);
+  }
+  // from 25 m/s to the ring's entry at 7 m/s at the app's braking: well before it
+  check(saidAt !== null && 1500 - saidAt >= 80, `"Roundabout" said with room to slow (${saidAt === null ? 'never' : Math.round(1500 - saidAt) + ' m before'}): ` + JSON.stringify(await page.evaluate(() => window.__said)));
+  check((await rbs()).length === 1, 'once: ' + JSON.stringify(await rbs()));
+});
+
 flow('a limit that drops on the road ahead: a free drive with no route hears "Limit 35 ahead." from the map, once (limit_ahead.js fromCtx)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;

@@ -368,7 +368,7 @@
     });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, say: (text) => say(text, true), get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, get ghostRuns() { return drive.ghosts || null; }, refreshSavedDrives: () => refreshSavedDrives(), renameStandInDrives: (m) => renameStandInDrives(m), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), get limitSaid() { return drive.limitSaid ? drive.limitSaid.length : 0; }, horizonFrom: async (coords, tee = false) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; if (tee) t.marks = [ApexRoadMarks.teeMark(t)]; useHorizon(t); return t.id; } };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, say: (text) => say(text, true), get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, get ghostRuns() { return drive.ghosts || null; }, refreshSavedDrives: () => refreshSavedDrives(), renameStandInDrives: (m) => renameStandInDrives(m), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), get limitSaid() { return drive.limitSaid ? drive.limitSaid.length : 0; }, horizonFrom: async (coords, tee = false) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; if (tee) t.marks = [ApexRoadMarks.teeMark(t, tee === 'roundabout' ? 'roundabout' : 'tee')]; useHorizon(t); return t.id; } };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -2129,7 +2129,7 @@
       if (learned != null) { try { localStorage.setItem(REACT_KEY, learned.toFixed(2)); } catch (_) {} }
     }
     const noteM = (e) => (Number.isFinite(e.start_m) && e.start_m <= e.dist_m ? e.start_m : e.dist_m);
-    const apexMpsOf = (e) => (e.type === 'corner' && Number.isFinite(e.apex_mph) ? e.apex_mph / 2.2369362921 : e.type === 'mark' && e.kind === 'stop' ? 0 : e.type === 'mark' && e.kind === 'tee' ? 4 : null);   // a stop sign: braking to a stop; a T: to a turn
+    const apexMpsOf = (e) => (e.type === 'corner' && Number.isFinite(e.apex_mph) ? e.apex_mph / 2.2369362921 : e.type === 'mark' && e.kind === 'stop' ? 0 : e.type === 'mark' && e.kind === 'tee' ? 4 : e.type === 'mark' && e.kind === 'roundabout' ? 7 : null);   // a stop sign: braking to a stop; a T: to a turn; a roundabout: to its entry (~15 mph)
     let lastNotes = [];
     // U-58: Auto says when it goes quiet and when the notes come back (ApexNoteTiming.createWakeVoice: once each way, never
     // within two minutes of the last, silent on a drive's first reading). The drive's first note is called whatever the
@@ -2865,6 +2865,8 @@
       t.kind = 'horizon'; t.subtitle = 'The road ahead, from the map'; t.horizonEnd = h.end;
       // the road ahead ends at a T (horizon.js tee): a mark there, called like a stop sign (braking to a turn)
       if (h.tee && window.ApexRoadMarks && ApexRoadMarks.teeMark) { const m = ApexRoadMarks.teeMark(t); if (m) t.marks = [m]; }
+      // or at a roundabout (horizon.js end 'roundabout'): "Roundabout", braking to its entry
+      else if (h.end === 'roundabout' && window.ApexRoadMarks && ApexRoadMarks.roundaboutMark) { const m = ApexRoadMarks.roundaboutMark(t); if (m) t.marks = [m]; }
       useHorizon(t);
     }
     function useHorizon(t) {
