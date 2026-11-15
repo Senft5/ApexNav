@@ -127,7 +127,7 @@ def test_the_road_ahead_gets_the_marks_too():
     """A free drive (no route) asks the map for the horizon's own corridor, and a mark said on the last horizon is not
     said again on the next one, which overlaps it."""
     js = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
-    assert "attachHorizonMarks(t);" in js and "await contextOn([c], CTX_BUDGET_MS, 'ahead', ['osm_overpass', 'events'], { placesOnly: true });" in js
+    assert "attachHorizonMarks(t);" in js and "await contextOn([c], CTX_BUDGET_MS, 'ahead', ['osm_overpass', 'events'], { placesOnly: true, ways: true });" in js
     assert "free.marksSaid = [...(free.marksSaid || []), ...old.marks.filter(" in js
 
 

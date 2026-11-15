@@ -12571,6 +12571,49 @@ flow('road marks on the road ahead: a free drive with no route still hears the s
   check((await stops()).length === 1, 'not again on the next road ahead: ' + JSON.stringify(await stops()));
 });
 
+flow('members\' road feel on the road ahead: a free drive hears the bump members felt, once, and not again on the next road ahead (horizonFeel by cells, contributor.js feelFromWays)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  const KY = 110540, lat = (m) => 35.5 + m / KY, LON = -83.9, g = (m) => ({ lat: lat(m), lon: LON });
+  const WAY = 4000000123;   // past a Float32's range: the id goes as a string
+  const elements = [{ type: 'way', id: WAY, tags: { highway: 'tertiary', name: 'Ridge Road' }, nodes: [1, 2], geometry: [g(-20), g(3000)] }];
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }));
+  // members felt a bump 1500 m along (bin 304 of the way, which starts 20 m behind), northbound
+  const asked = [];
+  // asked by the 0.1 degree cells the road ahead crosses (VI-1), never by its ways: the answer carries the way's line
+  await page.route((u) => u.pathname === '/api/roads', (route) => { const q = new URL(route.request().url()).searchParams; asked.push(q.get('cells') || 'ways:' + q.get('ways'));
+    const bins = Array.from({ length: 600 }, (_, b) => b);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ways: { [WAY]: { 0: { i: bins, cam: bins.map(() => null), rough: bins.map(() => null), n: bins.map(() => 3), cn: bins.map(() => 0), crest: bins.map(() => null), crn: bins.map(() => 0), bp: [[304, 0.9]] } } },
+      lines: { [WAY]: [[lat(-20), LON], [lat(3000), LON]] } }) }); });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks && window.ApexContributor && window.ApexSync);
+  await page.evaluate(() => { ApexSync.signedIn = () => true; });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const coords = []; for (let m = 0; m <= 2500; m += 10) coords.push([LON, lat(m)]);
+  await page.evaluate((coords) => apexDebug.horizonFrom(coords), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon' && apexDebug.track.crowdBumps != null, null, { timeout: 30000 })
+    .catch(async () => { throw new Error('no members\' road feel on the road ahead: ' + JSON.stringify(await page.evaluate(() => [apexDebug.track && apexDebug.track.kind, apexDebug.lastCtx])) + ' asked ' + JSON.stringify(asked)); });
+  const bumps = await page.evaluate(() => apexDebug.track.events.filter((e) => e.crowd).map((e) => [e.type, Math.round(e.dist_m)]));
+  check(bumps.length === 1 && bumps[0][0] === 'bump' && Math.abs(bumps[0][1] - 1500) <= 10, 'the members\' bump on the road ahead: ' + JSON.stringify(bumps));
+  check(asked.length === 1 && asked[0] === '355_-839', 'asked by the cell the road ahead is in: ' + JSON.stringify(asked));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 22, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const heard = () => page.evaluate(() => window.__said.filter((s) => /bump/i.test(s)));
+  for (let i = await iAt(1100), end = await iAt(1495); i <= end && !(await heard()).length; i += 2) { await at(i); await page.waitForTimeout(40); }
+  check((await heard()).length === 1, 'the bump called on a free drive: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  // the next road ahead overlaps this one: the bump it holds was said already, and the way's answer is kept (not asked again)
+  const c2 = []; for (let m = 1400; m <= 3000; m += 10) c2.push([LON, lat(m)]);
+  await page.evaluate((c) => apexDebug.horizonFrom(c), c2);
+  await page.waitForFunction(() => apexDebug.track.dist[apexDebug.track.dist.length - 1] < 1700 && apexDebug.track.crowdBumps != null, null, { timeout: 30000 });
+  for (let i = 0, end = await iAt(300); i <= end; i += 2) { await at(i); await page.waitForTimeout(40); }
+  check((await heard()).length === 1, 'not again on the next road ahead: ' + JSON.stringify(await heard()));
+  check(asked.length === 1, 'the cell asked once: ' + JSON.stringify(asked));
+});
+
 flow('a T-junction where the road ahead ends: a free drive hears it before the end, early enough to slow for the turn, once (road_marks.js teeMark)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;

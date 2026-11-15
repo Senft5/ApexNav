@@ -561,3 +561,53 @@ def test_crests_two_or_more_members_felt_are_pace_notes():
     assert o["crests"] == [{"index": 104, "g": 0.3}]
     assert o["ev"] == [["crest", "Crest", 520, 0.3, True]]
     assert o["beside"] == 0 and o["none"] == 0 and o["bad"] == 0
+
+
+FREE_FEEL = r"""
+const R = process.argv[1];
+const C = require(R + '/web/contributor.js'), O = require(R + '/web/route_ctx/osm_overpass.js');
+// a free drive's road ahead: 2 km east, 5 m samples; a tertiary road under the first 1.5 km (its first node 20 m behind
+// the car), a residential street after it
+const n = 401, lat0 = 39, lon0 = -84.5, dLon = 5 / (111320 * Math.cos(39 * Math.PI / 180));
+const c = { id: 'h', lat: Float64Array.from({ length: n }, () => lat0), lon: Float64Array.from({ length: n }, (_, i) => lon0 + i * dLon), distM: Float64Array.from({ length: n }, (_, i) => i * 5) };
+const at = (i) => ({ lat: lat0, lon: lon0 + i * dLon });
+const els = O.parse({ elements: [
+  { type: 'way', id: 4000000123, tags: { highway: 'tertiary' }, nodes: [1, 2], geometry: [at(-4), at(300)] },
+  { type: 'way', id: 9, tags: { highway: 'residential' }, nodes: [2, 3], geometry: [at(300), at(401)] }] });
+const ctx = O.aggregate(c, els, new Uint8Array(n).fill(1), { ways: true });
+const plain = O.aggregate(c, els, new Uint8Array(n).fill(1));
+const t = { lat: Array.from(c.lat), lon: Array.from(c.lon), dist: Array.from(c.distM), events: [] };
+// the members' answer for the tertiary road eastbound: a bump at bin 104, a crest two passes felt round bins 204-210;
+// and the residential street has a bump too (never asked, never used)
+const bins = Array.from({ length: 300 }, (_, b) => b);
+const road = { i: bins, cam: bins.map(() => null), rough: bins.map(() => null), n: bins.map(() => 2), cn: bins.map(() => 0),
+  crest: bins.map((b) => (b >= 204 && b <= 210 ? (b === 207 ? 0.32 : 0.25) : null)), crn: bins.map((b) => (b >= 204 && b <= 210 ? 2 : 0)), bp: [[104, 0.9]] };
+const roads = { '4000000123': { 0: road }, '9': { 0: { ...road, bp: [[10, 0.9]] } } };
+const m = C.feelFromWays(t, ctx.spans, roads);
+console.log(JSON.stringify({
+  spans: ctx.spans.filter((s) => s.kind === 'osm_way').map((s) => [s.label, s.cls, s.fromM, s.toM, s.geom.length]),
+  plain: plain.spans.filter((s) => s.kind === 'osm_way').length,
+  bumps: m.crowdBumps, crests: m.crowdCrests,
+  none: C.feelFromWays(t, plain.spans, roads), empty: C.feelFromWays(t, ctx.spans, {}).crowdBumps,
+  // the server's own line of the way (the cells answer) starts 20 m further back: the bins are counted on it
+  shifted: C.feelFromWays(t, ctx.spans, roads, { '4000000123': [[at(-8).lat, at(-8).lon], [at(300).lat, at(300).lon]] }).crowdBumps,
+}));
+"""
+
+
+def test_a_free_drive_gets_members_bumps_and_crests_from_the_road_context():
+    """The road ahead has no map match: the road context names the OSM way under each stretch (osm_way spans, by id as a
+    string since ids pass a Float32's range), and the members' bins along that way become its bumps and crests."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    o = json.loads(subprocess.run([NODE, "-e", FREE_FEEL, root], capture_output=True, text=True, check=True).stdout)
+    assert o["spans"] == [["4000000123", "tertiary", 0, 1500, 2], ["9", "residential", 1505, 2000, 2]]
+    assert o["plain"] == 0, "only asked for (a free drive's road ahead)"
+    # (bin b covers 5b..5b+5 m of the way from its first node, 20 m behind the car: sample b-4, give or take float rounding)
+    assert len(o["bumps"]) == 1 and abs(o["bumps"][0]["index"] - 100) <= 1 and o["bumps"][0]["p"] == 0.9, "on the tertiary road, at its bin; the residential street's never"
+    assert len(o["crests"]) == 1 and abs(o["crests"][0]["index"] - 203) <= 1 and o["crests"][0]["g"] == 0.32
+    assert o["none"] is None and o["empty"] == []
+    assert len(o["shifted"]) == 1 and abs(o["shifted"][0]["index"] - 96) <= 1
+    js = open(os.path.join(root, "web", "cockpit.js")).read()
+    assert "horizonFeel(t, c).catch(() => {});" in js and "{ placesOnly: true, ways: true }" in js
+    assert "(t.kind !== 'route' && t.kind !== 'horizon')" in js and "free.feelSaid = null;" in js
+    assert "routeCtxOpts().lookupCells" in js and "/api/roads?ways=${ids" not in js[js.index("async function horizonFeel"):js.index("async function horizonFeel") + 3000], "by cells, never way ids (VI-1)"

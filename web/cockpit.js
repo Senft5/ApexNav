@@ -67,7 +67,7 @@
      * may happen mid-drive: it only adds notes, it never moves one. Once per track. Returns true when anything was added.
      */
     function applyCrowdBumps(t, m) {
-      if (!t || t.kind !== 'route' || !m || !Array.isArray(m.crowdBumps) || t.crowdBumps != null || !Array.isArray(t.events)) return false;
+      if (!t || (t.kind !== 'route' && t.kind !== 'horizon') || !m || !Array.isArray(m.crowdBumps) || t.crowdBumps != null || !Array.isArray(t.events)) return false;
       if (window.ApexFlags && !ApexFlags.on('crowd_bumps')) return false;               // switched off on the server (flags.js)
       const add = ApexContributor.bumpEvents(t, m.crowdBumps, t.events);
       t.crowdBumps = add.length;
@@ -2900,6 +2900,7 @@
     function useHorizon(t) {
       const old = track && track.kind === 'horizon' ? track : null, cos = Math.cos(t.lat[0] * Math.PI / 180);
       const said = old ? old.events.filter(e => state.spoken.has(`${old.id}:${e.type}:${e.index}`)) : [];
+      if (old) free.feelSaid = [...(free.feelSaid || []), ...old.events.filter((e) => e.crowd && state.spoken.has(`${old.id}:${e.type}:${e.index}`)).map((e) => ({ type: e.type, lat: e.lat, lon: e.lon }))].slice(-40);
       if (old && Array.isArray(old.marks)) free.marksSaid = [...(free.marksSaid || []), ...old.marks.filter(e => state.spoken.has(`${old.id}:${e.type}:${e.index}`))].slice(-30);
       track = t; state.cursorM = 0; state.spoken.clear();
       for (const e of t.events) if (said.some(k => k.type === e.type && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 25)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
@@ -2920,7 +2921,7 @@
         if (track !== t) return;
         const c = { t, route: { coords: Array.from(t.lat, (la, i) => [t.lon[i], la]), times: null }, timeS: null, match: 'map_snap' };
         // events.js for the schools by the road ahead (our built points, else the map), not the games or concerts on it
-        await contextOn([c], CTX_BUDGET_MS, 'ahead', ['osm_overpass', 'events'], { placesOnly: true });
+        await contextOn([c], CTX_BUDGET_MS, 'ahead', ['osm_overpass', 'events'], { placesOnly: true, ways: true });
         if (track !== t || !c.ctx || !c.corridor) return;
         t.marks = ApexRoadMarks.union(t.marks, ApexRoadMarks.events(c.ctx, c.corridor, t, (la, lo, lats, lons) => Core.nearestIndex(la, lo, lats, lons, -1)));
         if (ApexRoadMarks.noTeeAtStop) t.marks = ApexRoadMarks.noTeeAtStop(t.marks);
@@ -2929,8 +2930,39 @@
         const cos = Math.cos(t.lat[0] * Math.PI / 180);
         for (const e of t.marks) if ((free.marksSaid || []).some(k => k.code === e.code && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 40)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
         if (t.marks.length) { rebuildPins(); render(false); }
+        horizonFeel(t, c).catch(() => {});
         if (!ApexRoadMarks.mapAnswered(c.ctx) && tries < 2) attachHorizonMarks(t, tries + 1);   // the map's late answer is kept: ask again
       }, tries ? 4000 * tries : 300);
+    }
+    // Members' road feel on the road ahead (a free drive, no route): the bumps several members felt and the crests two or
+    // more went light over (contributor.js feelFromWays), as a planned route gets them (applyCrowdBumps). No map match: the
+    // road context names the way under each stretch (osm_overpass.js 'osm_way'). Members' data comes by the 0.1° cells the
+    // road ahead crosses (VI-1, routeCtxOpts lookupCells, as the route engine's crowd provider asks), never by its way ids,
+    // and each cell's answer is kept 30 min, so a road you follow asks once a cell. Signed out or not a member: the server
+    // says no, kept as none for the same time. One said on an earlier road ahead, which overlaps this one, isn't again.
+    const feelCells = new Map(), FEEL_CELL_MS = 30 * 60000;
+    async function horizonFeel(t, c) {
+      if (!window.ApexContributor || !ApexContributor.feelFromWays || !t || t.kind !== 'horizon' || t.crowdBumps != null || !c || !c.ctx) return;
+      if (window.ApexFlags && !ApexFlags.on('crowd_bumps')) return;
+      const spans = (c.ctx.spans || []).filter((sp) => sp.kind === 'osm_way' && !ApexContributor.SKIP_CLASSES.has(sp.cls));
+      const lookup = spans.length && window.ApexSync && ApexSync.signedIn() ? routeCtxOpts().lookupCells : null;
+      if (!lookup) return;
+      const cells = [...new Set(Array.from(t.lat, (la, i) => `${Math.floor(la / 0.1)}_${Math.floor(t.lon[i] / 0.1)}`))].slice(0, 16), now = Date.now();
+      const fresh = cells.filter((k) => !(feelCells.has(k) && now - feelCells.get(k).at < FEEL_CELL_MS));
+      if (fresh.length) {
+        const got = await lookup(fresh).catch(() => null);
+        if (!got && navigator.onLine === false) return;                 // no signal: unknown, asked again on the next road ahead
+        if (feelCells.size > 64) feelCells.clear();
+        for (const k of fresh) feelCells.set(k, { at: now, ways: (got && got.ways) || null, lines: (got && got.lines) || {} });
+      }
+      if (track !== t || t.crowdBumps != null) return;
+      const roads = {}, lines = {};
+      for (const k of cells) { const e = feelCells.get(k); if (e && e.ways) { Object.assign(roads, e.ways); Object.assign(lines, e.lines); } }
+      if (!spans.some((sp) => roads[sp.label])) return;
+      if (!applyCrowdBumps(t, ApexContributor.feelFromWays(t, spans, roads, lines))) return;
+      const cos = Math.cos(t.lat[0] * Math.PI / 180);
+      for (const e of t.events) if (e.crowd && (free.feelSaid || []).some((k) => k.type === e.type && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 25)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
+      render(false);
     }
     // seamless (a new route while driving: a reroute, a traffic detour, the way home): the new line replaces the old in one
     // frame, and the follow camera carries on from where it is, never snapped or re-fitted mid-drive.
@@ -11300,7 +11332,7 @@
       startStageWatch(); startCoach(); drive.ghosts = null; startGhostWatch(null);
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.turns = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; free.viewsSaid = null; free.twisty = null; free.twistySaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); drive.surface = window.ApexRoadSurface ? ApexRoadSurface.createLog() : null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.turns = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; free.viewsSaid = null; free.feelSaid = null; free.twisty = null; free.twistySaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); drive.surface = window.ApexRoadSurface ? ApexRoadSurface.createLog() : null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
