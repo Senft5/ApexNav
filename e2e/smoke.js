@@ -6284,7 +6284,8 @@ flow('your own ghost: on a stage you have driven before (no friend, not signed i
     await page.waitForTimeout(1000);
   }
   const said = await page.evaluate(() => window.__said.filter((t) => /your best/.test(t)));
-  check(said.filter((t) => /^Esses done\. .+ down on your best\.$/.test(t)).length === 1, 'the co-driver says it at the finish, once: ' + JSON.stringify(said));
+  check(said.filter((t) => /^Esses done\. .+ down on your best\. Most of it (early on|in the middle|late on|in the run to the finish)\.$/.test(t)).length === 1,
+    'the co-driver says it at the finish, once, and where most of it went: ' + JSON.stringify(said));
 });
 
 flow('your best pass on a wet road: an ODOT sensor reads the road wet, so your dry best is no time to chase: said once, no gap, no "brake later" (pass_coach.js setSurface)', async (page, base) => {
