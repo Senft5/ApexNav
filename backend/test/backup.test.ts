@@ -46,9 +46,11 @@ describe("database backup", () => {
     await seed();
     const { statements, counts } = await dumpStatements(env.DB);
     expect(counts.users).toBe(2);
-    expect(counts.road_bins).toBe(1);
+    expect(counts.road_chunks).toBe(1);                                                  // the bin, packed (migration 0068)
     // Restore into an empty second database, the way `wrangler d1 execute --file` would.
     const existing = (await restoreDb.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'").all<{ name: string }>()).results;
+    const views = (await restoreDb.prepare("SELECT name FROM sqlite_master WHERE type='view'").all<{ name: string }>()).results;   // and their triggers
+    if (views.length) await restoreDb.batch(views.map((t) => restoreDb.prepare(`DROP VIEW "${t.name}"`)));
     if (existing.length) await restoreDb.batch(existing.map((t) => restoreDb.prepare(`DROP TABLE "${t.name}"`)));
     await restoreDb.batch(statements.map((s) => restoreDb.prepare(s)));
     expect(await snapshot(restoreDb)).toEqual(await snapshot(env.DB));
@@ -68,26 +70,26 @@ describe("database backup", () => {
 
   it("pages through tables longer than one query page", async () => {
     await freshDb();
-    const rows = Array.from({ length: 1205 }, (_, i) => env.DB.prepare("INSERT INTO road_bins (way_id, dir, bin_idx, n, rough_mean) VALUES (1, 0, ?, 1, ?)").bind(i, i / 1000));
+    const rows = Array.from({ length: 1205 }, (_, i) => env.DB.prepare("INSERT INTO road_bins_legacy (way_id, dir, bin_idx, n, rough_mean) VALUES (1, 0, ?, 1, ?)").bind(i, i / 1000));
     await env.DB.batch(rows);
     const { statements, counts } = await dumpStatements(env.DB);
-    expect(counts.road_bins).toBe(1205);
-    expect(new Set(statements.filter((s) => s.startsWith('INSERT INTO "road_bins"'))).size).toBe(1205);
+    expect(counts.road_bins_legacy).toBe(1205);
+    expect(new Set(statements.filter((s) => s.startsWith('INSERT INTO "road_bins_legacy"'))).size).toBe(1205);
   });
 
   it("reads each row a few times, not once per page before it (no OFFSET paging)", async () => {
     // Workers Free allows 5M rows read a day for the whole app. OFFSET paging read every skipped row again: 10,000 road_bins
     // cost ~88,000 rows and 100,000 would have cost ~5M, a Monday with the app down from the backup on.
     await freshDb();
-    for (let k = 0; k < 10; k++) await env.DB.batch(Array.from({ length: 1000 }, (_, i) => env.DB.prepare("INSERT INTO road_bins (way_id, dir, bin_idx, n, rough_mean) VALUES (?, ?, ?, 1, 0.1)").bind(k >> 1, k & 1, i)));
+    for (let k = 0; k < 10; k++) await env.DB.batch(Array.from({ length: 1000 }, (_, i) => env.DB.prepare("INSERT INTO road_bins_legacy (way_id, dir, bin_idx, n, rough_mean) VALUES (?, ?, ?, 1, 0.1)").bind(k >> 1, k & 1, i)));
     let read = 0;
     const db = new Proxy(env.DB, { get(t, p) {
       if (p === "batch") return async (s: D1PreparedStatement[]) => { const r = await t.batch(s); for (const x of r) read += x.meta.rows_read; return r; };
       const v = Reflect.get(t, p); return typeof v === "function" ? v.bind(t) : v;
     } });
     const { statements, counts } = await dumpStatements(db as D1Database);
-    expect(counts.road_bins).toBe(10000);
-    expect(new Set(statements.filter((s) => s.startsWith('INSERT INTO "road_bins"'))).size).toBe(10000);
+    expect(counts.road_bins_legacy).toBe(10000);
+    expect(new Set(statements.filter((s) => s.startsWith('INSERT INTO "road_bins_legacy"'))).size).toBe(10000);
     expect(read).toBeLessThan(5 * 10000);
   });
 
