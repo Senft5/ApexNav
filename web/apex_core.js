@@ -768,8 +768,8 @@
     const b0 = r0 === null ? start : r0, b1 = kThr === null ? end : kThr;
     let coast = 0;
     for (let k = b0; k <= b1; k++) if (coasting(v, lonG, k)) coast++;
-    let late = 0;
-    for (let k = apex; k <= end; k++) late = Math.max(late, -lonG[k]);
+    let late = 0;                                                    // still braking past the apex, until back on the throttle
+    for (let k = apex + 1; k <= end && !(lonG[k] > THROTTLE_G); k++) late = Math.max(late, -lonG[k]);   // (drive_analysis.corner_phases)
     return { ...m, brake_m: r0 === null ? null : (apex - r0) * 5, trail_m: trail * 5, coast_m: coast * 5,
              throttle_m: kThr === null ? null : (kThr - apex) * 5, late_brake_g: late, apex_mps_driven: v[apex],
              imu_slow_m: imuSlowM(v, lonG, latG, start, end) };

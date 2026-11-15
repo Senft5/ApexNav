@@ -308,6 +308,7 @@ def corner_phases(speed_mps, lon_g, lat_g, start: int, end: int, apex: int, apex
     coast_m: metres with |a_lon| < COAST_G from the brake point (or corner start) to the throttle point (or exit) where
       the car slows, by a_lon and GPS's speed both (_coasting); speed held there is part throttle, not coasting.
     throttle_m: throttle point relative to the apex (< 0 before it); None if not back on the throttle by 100 m after.
+    late_brake_g: the hardest braking past the apex (from the bin after it) before the throttle comes back on.
     """
     m = corner_metrics(speed_mps, lon_g, lat_g, start, end, apex, apex_mps)
     v = np.asarray(speed_mps, dtype=float)
@@ -333,8 +334,12 @@ def corner_phases(speed_mps, lon_g, lat_g, start: int, end: int, apex: int, apex
     b0 = start if r0 is None else r0
     b1 = end if k_thr is None else k_thr
     coast = sum(1 for k in range(b0, b1 + 1) if _coasting(v, lon, k))
+    # still braking after the apex: past it, until back on the throttle; braking after that is for what comes next (Nate's
+    # drives, 2026-11-15: two of three "still braking" corners were back on the gas at +0.2 g, then braking 60 m on)
     late = 0.0
-    for k in range(apex, end + 1):
+    for k in range(apex + 1, end + 1):
+        if lon[k] > THROTTLE_G:
+            break
         late = max(late, -float(lon[k]))
     return {**m, "brake_m": None if r0 is None else (apex - r0) * 5.0, "trail_m": trail * 5.0, "coast_m": coast * 5.0,
             "throttle_m": None if k_thr is None else (k_thr - apex) * 5.0, "late_brake_g": late,

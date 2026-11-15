@@ -223,9 +223,13 @@ def test_coach_alone_still_names_the_habit():
     tip = da.coach(a, [])["corners"][0]["tip"]
     assert tip["kind"] == "coast" and tip["value"] >= da.SOLO_COAST_M
     assert da.coach(_pass(), [])["corners"][0]["tip"] is None, "the corner at a held speed: no coasting to tell"
-    late = _pass(throttle_at=84)
-    late["lon_g"][90:94] = -0.35                        # braking after the apex
+    late = _pass()
+    late["lon_g"][80:94] = -0.35                        # still braking past the apex (88), never off the brakes
     assert da.coach(late, [])["corners"][0]["tip"]["kind"] == "brake_after_apex"
+    again = _pass(throttle_at=84)
+    again["lon_g"][90:94] = -0.35                       # back on the gas, then braking again: for what comes next
+    t = da.coach(again, [])["corners"][0]["tip"]
+    assert t is None or t["kind"] != "brake_after_apex"
 
 
 def test_coach_finds_no_time_in_the_same_drive_seen_through_gps_jitter():
