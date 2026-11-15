@@ -103,6 +103,9 @@
     // found nothing at all. The search's own ellipse is unchanged inside the band
     LONG_TILES: 120, SPINE_SHARE: 0.15, SPINE_MIN_M: 20000, SPINE_MAX_M: 40000, BAND_M: { quick: 15000, fun: 20000, max: 30000 },
     LONG_KM: 150, LONG_TOL: 0.4, PLAN_SOFT_MS: 6000,
+    // decoded tiles kept (about 0.5 MB each): a long trip's spine and band together pass 64, and at 64 Cincinnati to
+    // Asheville decoded 152 tiles for 65 (5 s of its 10)
+    TILE_CACHE: 160,
     OUT_BACK_KM: 2,          // Best roads nearby: a dead-end run of good road this long stays (driven there and back); the stage minimum
   };
 
@@ -1984,7 +1987,7 @@
    *   { id, type: 'covers', points }                -> { id, covers }
    *   { id, type: 'plan', from, to, level, ... }    -> { id, result: { routes, quick, limitS, ms, tiles } }
    *   { id, type: 'loop', start, km, level, ... }   -> { id, result: { routes, ms, tiles } }
-   * and { id, error } for anything that fails. Tiles are kept (the last 64) and the last view is reused for the same set.
+   * and { id, error } for anything that fails. Tiles are kept (the K.TILE_CACHE used last) and the last view is reused for the same set.
    */
   function host(env) {
     const tiles = new Map();
@@ -1993,11 +1996,12 @@
     const ready = new Set();                                          // tiles loaded and decoded (or known missing)
     const load = (t) => {
       const k = keyOf(t.i, t.j);
-      if (!tiles.has(k)) {
-        tiles.set(k, Promise.resolve(env.load(t.i, t.j)).catch(() => null).then((x) => { ready.add(k); return x; }));
-        if (tiles.size > 64) tiles.delete(tiles.keys().next().value);
-      }
-      return tiles.get(k);
+      let p = tiles.get(k);
+      if (p) tiles.delete(k);                                         // a hit goes to the back: the least recently used go first
+      else p = Promise.resolve(env.load(t.i, t.j)).catch(() => null).then((x) => { ready.add(k); return x; });
+      tiles.set(k, p);
+      if (tiles.size > K.TILE_CACHE) { const old = tiles.keys().next().value; tiles.delete(old); ready.delete(old); }
+      return p;
     };
     // the view is kept and grown: a plan inside the tiles already viewed (the preloaded area round you) reuses it; one
     // that needs more builds the union once (at most MAX_VIEW tiles, else just what it needs)

@@ -586,6 +586,16 @@ def test_a_long_trip_loads_a_band_round_the_quickest_way_not_the_whole_ellipse()
         assert x["asked"] < x["ellipse"] / 2, x
 
 
+def test_a_long_trips_second_ask_reuses_the_tiles_the_first_decoded():
+    """Fun, then Long way, on one long trip: at the old 64 tiles Cincinnati to Asheville decoded 152 tiles for 65, half
+    of its 10 s. The kept tiles are a real least-recently-used cache of K.TILE_CACHE."""
+    r = case("tileCache")
+    fun, mx = r["kept"]
+    assert fun["routed"] and mx["routed"], r
+    assert mx["loads"] < mx["tiles"], r
+    assert r["tiny"][1]["loads"] > mx["loads"], r
+
+
 def test_a_plan_past_its_soft_time_answers_with_what_it_has():
     """On a slow phone a long trip's refinement (more bisection steps, alternates, the spread) stops at K.PLAN_SOFT_MS;
     the plan still answers with a route rather than running into the page's timeout."""

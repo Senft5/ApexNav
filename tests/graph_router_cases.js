@@ -114,6 +114,30 @@ const CASES = {
     }
     return out;
   },
+  async tileCache() {
+    // one host plans a long trip at Fun, then Long way: the tiles the first ask decoded are kept (K.TILE_CACHE, least
+    // recently used out first), so the second decodes only what it adds. At a cache of 4 it decodes them all again
+    const nodes = [], edges = [];
+    for (let k = 0; k <= 80; k++) nodes.push(at(39.3, -86 + k * 0.05));
+    for (let k = 0; k < 80; k++) two(edges, k, k + 1, { quality: 0.5, cls: 3, name: 'Main Road', t: 200 });
+    const T = H.tiles(nodes, edges);
+    const from = { lat: 39.3, lon: -85.99 }, to = { lat: 39.3, lon: -82.01 };
+    const run = async (cache) => {
+      const keep = R.K.TILE_CACHE; R.K.TILE_CACHE = cache;
+      try {
+        let loads = 0;
+        const env = { load: (i, j) => { loads++; return T.tiles.find((t) => t.tile.i === i && t.tile.j === j) || null; }, index: null };
+        const h = R.host(env), out = [];
+        for (const level of ['fun', 'max']) {
+          loads = 0;
+          const m = await h.handle({ id: 1, type: 'plan', from, to, level, geometry: false });
+          out.push({ routed: !!(m.result && m.result.routes.length), loads, tiles: m.result ? m.result.tiles.length : 0 });
+        }
+        return out;
+      } finally { R.K.TILE_CACHE = keep; }
+    };
+    return { kept: await run(R.K.TILE_CACHE), tiny: await run(4) };
+  },
   softBudget() {
     // past K.PLAN_SOFT_MS a plan answers with what it has (two bisection steps), never nothing
     const g = H.grid({ seed: 7, nx: 9, ny: 7, holes: 0.1, oneway: 0.1, signals: 0.1, lat0: 39.2, lon0: -84.52, stepDeg: 0.01 });
