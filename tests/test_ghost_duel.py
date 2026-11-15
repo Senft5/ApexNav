@@ -173,3 +173,38 @@ def test_your_own_best_is_a_ghost_on_a_road_like_todays():
     assert r["selfs"] and all(r["selfs"]) and r["done"] == [13]                              # 62.5 s against 50: 12.5 down (rounded up)
     assert r["labels"] == ["+0.3 s vs your best", "−1.2 s vs your best", "level with your best"]
     assert r["spoken"] == "1.4 seconds up on your best."
+
+
+WORST_RUNNER = r"""
+const R = process.argv[1];
+const Core = require(R + '/web/apex_core.js'), G = require(R + '/web/ghost_duel.js');
+const lat = [], lon = []; for (let i = 0; i <= 220; i++) { lat.push(39.0 + i * 5 / 110540); lon.push(-84.5); }
+const d = { speed_mps: lat.map(() => 20) };
+const sp = G.splitsOf(Core, d, 10, 210, G.cutsOf(10, 210, [12, 40, 50, 70, 120, 205]));   // cut at 15 %, 30 %, 55 %, the finish
+const stage = { id: 's1', name: 'Dry Ridge', start: [lat[10], lon[10]], end: [lat[210], lon[210]], length_m: 1000, geom: [[lat[10], lon[10]], [lat[210], lon[210]]] };
+function finish(slow) {                                      // the ghost's pace, but 10 m/s over bins slow[0]..slow[1]
+  const tr = G.createTracker([{ stage, who: 'sam', splits: sp, time_s: 50 }]), rows = [];
+  let t = 0, done = null;
+  for (let i = 0; i <= 220; i++) { rows.push({ lat: lat[i], lon: lon[i], t_s: t }); t += 5 / (i >= slow[0] && i < slow[1] ? 10 : 20);
+    const r = tr.update(rows); if (r && r.state === 'done') done = r; }
+  return done && { gap: Math.round(done.gap * 10) / 10, worst: done.worst, said: G.worstSaid(done.worst) };
+}
+console.log(JSON.stringify({
+  middle: finish([95, 115]), early: finish([20, 40]), late: finish([150, 170]), none: finish([0, 0]),
+  said: [G.worstSaid({ k: 2, of: 4, a: 0.7, b: 0.9 }), G.worstSaid(null)],
+  gap: G.worstOf([{ t_s: 0 }, { t_s: null }, { t_s: 2 }], 0, 2, 0, [[0.5, 1], [1, 2]]),
+}));
+"""
+
+
+def test_where_a_stage_was_lost():
+    """At the finish, down on the ghost: the stretch between its corner cuts that cost most (0.3 s or more), said by where
+    it is on the stage (early on, in the middle, late on, the run to the finish), never a corner number the road doesn't have."""
+    r = json.loads(subprocess.run([NODE, "-e", WORST_RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["middle"]["gap"] == pytest.approx(5, abs=0.3) and r["middle"]["worst"]["k"] == 3 and r["middle"]["worst"]["of"] == 4
+    assert r["middle"]["worst"]["gap_s"] == pytest.approx(5, abs=0.3) and r["middle"]["said"] == "Most of it in the middle."
+    assert r["early"]["worst"]["k"] == 1 and r["early"]["said"] == "Most of it early on."
+    assert r["late"]["worst"]["k"] == 4 and r["late"]["said"] == "Most of it in the run to the finish."
+    assert r["none"]["worst"] is None and r["none"]["said"] is None                          # level: nothing lost anywhere
+    assert r["said"] == ["Most of it late on.", None]
+    assert r["gap"] is None                                                                  # a gap in the clock: no answer

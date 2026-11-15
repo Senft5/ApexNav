@@ -168,7 +168,34 @@
     return `${say ? say(Math.abs(gap)) : `${Math.abs(gap).toFixed(1)} seconds`} ${gap > 0 ? 'down on' : 'up on'} ${w}.`;
   }
 
-  const ENTRY_M = 30, HEADING_DEG = 60, NEAR_M = 25, PAST_M = 12, SAY_EVERY = 2;
+  /**
+   * At a stage's finish: the corner stretch where you lost most to the ghost, { k, of, a, b, gap_s } (k counts the ghost's
+   * corner-cut splits from 1, k === of the run to the finish; a..b the stretch as fractions of the stage), from the live rows [entry, end] (their own clock, t_s,
+   * read at each cut by distance along the pass). Null when no stretch lost WORST_S or more, or the clock has a gap.
+   */
+  function worstOf(rows, entry, end, t0, cut) {
+    if (!Array.isArray(cut) || !cut.length || !(end > entry)) return null;
+    const mine = [];
+    for (const [q] of cut) {
+      const x = entry + q * (end - entry), i = Math.floor(x), f = x - i, a = rows[i] && rows[i].t_s, b = rows[Math.min(end, i + 1)] && rows[Math.min(end, i + 1)].t_s;
+      if (!finite(a) || !finite(b)) return null;
+      mine.push([q, a + (b - a) * f - t0]);
+    }
+    const lost = standout(cornerSplits(mine, cut).rows, 1).lost[0];
+    return lost && lost.gap_s >= WORST_S ? { k: lost.k, of: cut.length, a: lost.a, b: lost.b, gap_s: r1(lost.gap_s) } : null;
+  }
+  /**
+   * What the co-driver adds at the finish, where on the stage it went (the stretch's middle; a corner number would not be
+   * the road's own): "Most of it early on." / "in the middle." / "late on." / "in the run to the finish."
+   */
+  function worstSaid(w) {
+    if (!w || !finite(w.a) || !finite(w.b)) return null;
+    if (w.k >= w.of) return 'Most of it in the run to the finish.';
+    const m = (w.a + w.b) / 2;
+    return `Most of it ${m < 1 / 3 ? 'early on' : m < 2 / 3 ? 'in the middle' : 'late on'}.`;
+  }
+
+  const ENTRY_M = 30, HEADING_DEG = 60, NEAR_M = 25, PAST_M = 12, SAY_EVERY = 2, WORST_S = 0.3;
   /**
    * Follows the live 5 m rows ({ lat, lon, t_s }) against ghosts [{ stage: { id, name, start, end, length_m, geom }, who,
    * splits, time_s }]. update(rows) → null outside a stage, { state: 'in', name, who, gap, q, elapsed_s } inside (and
@@ -224,7 +251,7 @@
           if (cur.endMin.m <= NEAR_M && me > cur.endMin.m + PAST_M) {
             const e = rows[cur.endMin.i], time = finite(e.t_s) ? e.t_s - cur.t0 : null;
             const out = { state: 'done', name: cur.g.stage.name, who: cur.g.who, self: !!cur.g.self, stageId: cur.g.stage.id, q: 1, time_s: time,
-                          gap: finite(time) ? time - cur.g.time_s : cur.gap, say: true };
+                          gap: finite(time) ? time - cur.g.time_s : cur.gap, say: true, worst: worstOf(rows, cur.entry, cur.endMin.i, cur.t0, cur.g.corners || cur.g.splits) };
             cur = null; scanned = i + 1;
             return out;
           }
@@ -262,6 +289,6 @@
     return 'Couldn\u2019t send it. Try again.';
   }
 
-  const api = { cutsOf, splitsOf, bestOwn, timeAt, qAt, pointAt, gapAt, cornerSplits, standout, label, spoken, createTracker, countFor, MAX, challengeKey, challengeSaid };
+  const api = { cutsOf, splitsOf, bestOwn, worstOf, worstSaid, timeAt, qAt, pointAt, gapAt, cornerSplits, standout, label, spoken, createTracker, countFor, MAX, challengeKey, challengeSaid };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexGhostDuel = api;
 })(typeof window !== 'undefined' ? window : globalThis);

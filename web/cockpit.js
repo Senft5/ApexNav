@@ -11195,7 +11195,7 @@
       let own = [];
       try { own = (await ApexAnalysis.job('ownGhosts', { segs: segs.map(({ id, lat0, lon0, lat1, lon1, length_m }) => ({ id, lat0, lon0, lat1, lon1, length_m })), surface })).ghosts || []; } catch (_) { own = []; }
       const mine = own.map((g) => { const st = segs.find((x) => x.id === g.id);
-        return st ? { stage: stageOf(st), who: 'you', name: 'your best', self: true, splits: g.splits, time_s: g.time_s, surface } : null; }).filter(Boolean);
+        return st ? { stage: stageOf(st), who: 'you', name: 'your best', self: true, splits: g.splits, corners: g.corners || null, time_s: g.time_s, surface } : null; }).filter(Boolean);
       // a friend's run, where one reached you, comes first: it is the one the tracker picks on that stage
       const canon = (x) => x.origin || x.id, synced = segs.filter((x) => x.synced);
       let rows = [];
@@ -11255,8 +11255,10 @@
       // the pack says the gap without the stage's or the friend's name (both on the bar): "Stage done. 1.4 seconds up."
       const bareGap = (gap) => (Math.abs(gap) < 0.05 ? 'Level.' : `${words(Math.abs(gap))} ${gap > 0 ? 'down' : 'up'}.`);
       if (r.state === 'done') {
-        const line = Number.isFinite(r.gap) ? `${r.name} done. ${ApexGhostDuel.spoken(r.gap, name, words)}` : `${r.name} done.`;
-        toast(line); if (isSpirited()) sayQuietLine(line, Number.isFinite(r.gap) ? `Stage done. ${bareGap(r.gap)}` : 'Stage done.');
+        // down on the ghost: where most of it went ("Most of it late on."), from the stretch between its corners that cost most
+        const where = Number.isFinite(r.gap) && r.gap > 0.05 && ApexGhostDuel.worstSaid ? ApexGhostDuel.worstSaid(r.worst) : null, tail = where ? ` ${where}` : '';
+        const line = Number.isFinite(r.gap) ? `${r.name} done. ${ApexGhostDuel.spoken(r.gap, name, words)}${tail}` : `${r.name} done.`;
+        toast(line); if (isSpirited()) sayQuietLine(line, Number.isFinite(r.gap) ? `Stage done. ${bareGap(r.gap)}${tail}` : 'Stage done.');
         if (!r.self) (drive.ghosts || (drive.ghosts = [])).push({ stage: r.name, who: r.who, gap_s: Number.isFinite(r.gap) ? Math.round(r.gap * 10) / 10 : null });
         return;
       }

@@ -489,7 +489,7 @@
 
     /**
      * A drive's start: your own quickest pass of each stage as its ghost (ghost_duel.js bestOwn, IDEAS D-04), on a road like
-     * today's (surface), its splits cut every 25 m (it never leaves your phone). [{ id: the stage's, splits, time_s }].
+     * today's (surface), its splits cut every 25 m (it never leaves your phone). [{ id: the stage's, splits, corners, time_s }].
      */
     async ownGhosts({ segs, surface = null }) {
       const Core = CoreOf(), G = root.ApexGhostDuel, out = [], PAD = 0.001;
@@ -501,10 +501,11 @@
         for (const s of sums) {
           if (!holds(s.bbox, seg.lat0, seg.lon0) || !holds(s.bbox, seg.lat1, seg.lon1)) continue;
           const d = await full(s.id, s), p = d && Core.segmentPass(seg, d);
-          if (p) passes.push({ time_s: p.time_s, splits: G.splitsOf(Core, d, p.lo, p.hi), surface: d.surface || null });
+          if (p) passes.push({ time_s: p.time_s, splits: G.splitsOf(Core, d, p.lo, p.hi), surface: d.surface || null,
+                              corners: G.splitsOf(Core, d, p.lo, p.hi, G.cutsOf(p.lo, p.hi, (d.corners || []).map((c) => c && c.apex))) });
         }
         const b = G.bestOwn(passes, surface);
-        if (b) out.push({ id: seg.id, splits: b.splits, time_s: b.time_s });
+        if (b) out.push({ id: seg.id, splits: b.splits, corners: b.pass.corners || null, time_s: b.time_s });   // corners: cut at its apexes, for where a stage was lost
       }
       release();
       return { ghosts: out };
