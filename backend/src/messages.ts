@@ -1,4 +1,4 @@
-// Direct messages (2026-11-14, migration 0064): one friend to another, as in any social app. A conversation is the pair's
+// Direct messages (2026-11-14, migration 0065): one friend to another, as in any social app. A conversation is the pair's
 // messages, newest last. Written only between friends who haven't blocked each other; once unfriended the history stays
 // readable to both, and nothing new can be sent. Blocks hide the whole conversation both ways. A message can be reported
 // (kind "dm", safety.ts): the reporter no longer sees it, and the owner's queue gets it. Its sender can unsend it.

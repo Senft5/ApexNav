@@ -5,7 +5,7 @@
   (`?chat=`). A conversation is bubbles (yours on the right), a field and Send (Return sends); it looks again every 10 s
   while open. A tap on a bubble: Unsend yours, Report theirs. Garage → Notifications has a Messages switch.
   `backend/src/messages.ts` (GET/POST `/api/messages/:handle`, GET `/api/messages`, GET `/api/me/messages/unread`,
-  DELETE `/api/messages/m/:id`), `web/messages.js`, migration 0064 `direct_messages`.
+  DELETE `/api/messages/m/:id`), `web/messages.js`, migration 0065 `direct_messages`.
 - Next: Challenge back / Rematch on a ghost duel once the analysis thread's #782 merges.
 
 # CALL SHEET

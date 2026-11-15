@@ -69,6 +69,48 @@
     };
   }
 
+  /** What a friend sees (PUT /api/me/dna, backend dna.ts): the six levels, the style words and the kind of corner, no more. */
+  function wireOf(m) {
+    if (!m) return null;
+    const skills = {};
+    for (const s of m.skills) skills[s.key] = s.level;
+    return { skills, style: m.style.slice(0, 3), size: m.size ? m.size.best : null, corners: m.corners, drives: m.drives };
+  }
+
+  /** A friend's DNA beside yours (both as wireOf sends them; yours may be null), in words: their style, where they lead
+   *  you most and where you lead them most (a skill 5 points apart or more). */
+  function compareLines(theirs, mine, who) {
+    if (!theirs || !theirs.skills) return [];
+    const name = `@${String(who || 'them').replace(/^@/, '')}`, out = [];
+    if ((theirs.style || []).length) out.push(`${name}: ${theirs.style.join(' · ')}`);
+    if (mine && mine.skills) {
+      const gaps = SKILLS.map((k) => [k, theirs.skills[k] - mine.skills[k]]).filter(([, g]) => finite(g));
+      const lead = gaps.filter(([, g]) => g >= 5).sort((a, b) => b[1] - a[1])[0], you = gaps.filter(([, g]) => g <= -5).sort((a, b) => a[1] - b[1])[0];
+      if (lead) out.push(`${name} leads at ${SHORT[lead[0]]}: ${theirs.skills[lead[0]]} to your ${mine.skills[lead[0]]}`);
+      if (you) out.push(`You lead at ${SHORT[you[0]]}: ${mine.skills[you[0]]} to ${theirs.skills[you[0]]}`);
+      if (!lead && !you) out.push('Within 5 points of each other at every skill');
+    } else out.push('Yours shows here once all six of your skills are measured');
+    return out;
+  }
+
+  /** The two hexagons as an SVG element (a friend's filled, yours outlined), sized by CSS; doc: the document. */
+  function compareSvg(doc, theirs, mine) {
+    const NS = 'http://www.w3.org/2000/svg', w = 350, h = 260, c = w / 2, cy = h / 2, R = 92;   // room round it for the skills' names
+    const node = (tag, attrs) => { const n = doc.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v)); return n; };
+    const pts = (lv) => SKILLS.map((k, i) => hexPoint(c, cy, R, i, lv(k)).map((x) => x.toFixed(1)).join(',')).join(' ');
+    const svg = node('svg', { viewBox: `0 0 ${w} ${h}`, width: w, height: h, role: 'img', class: 'dna-cmp' });
+    for (const ring of [50, 100]) svg.append(node('polygon', { points: pts(() => ring), fill: 'none', stroke: 'currentColor', 'stroke-opacity': 0.25 }));
+    svg.append(node('polygon', { points: pts((k) => theirs.skills[k]), class: 'dna-them' }));
+    if (mine && mine.skills) svg.append(node('polygon', { points: pts((k) => mine.skills[k]), class: 'dna-you' }));
+    SKILLS.forEach((k, i) => {
+      const [x, y] = hexPoint(c, cy, R + 12, i, 100), t = node('text', { x: x.toFixed(1), y: (y + (i === 0 ? -4 : i === 3 ? 12 : 4)).toFixed(1),
+        'text-anchor': i === 0 || i === 3 ? 'middle' : x > c ? 'start' : 'end', class: 'dna-name' });
+      t.textContent = SHORT[k]; svg.append(t);
+    });
+    svg.setAttribute('aria-label', SKILLS.map((k) => `${SHORT[k]} ${theirs.skills[k]}${mine && mine.skills ? `, you ${mine.skills[k]}` : ''}`).join('; '));
+    return svg;
+  }
+
   /** The lines under the hexagon, in order (pure, so the test reads what the picture says). */
   function dnaLines(m) {
     if (!m) return [];
@@ -136,6 +178,6 @@
     return canvas;
   }
 
-  const api = { dnaModel, spanText, dnaLines, scopeText, styleWords, bySize, hexPoint, drawDna, SKILLS, SHORT, W, H };
+  const api = { dnaModel, wireOf, compareLines, compareSvg, spanText, dnaLines, scopeText, styleWords, bySize, hexPoint, drawDna, SKILLS, SHORT, W, H };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDnaCard = api;
 })(typeof window !== 'undefined' ? window : globalThis);

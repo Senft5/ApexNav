@@ -26,6 +26,7 @@ import {
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
 import { itemsDelete, itemsGet, itemsPut } from "./member_items";
+import { dnaPut } from "./dna";
 import * as drivePosts from "./drive_posts";
 import * as messages from "./messages";
 import { mediaGet, mediaPut } from "./post_media";
@@ -161,6 +162,8 @@ on("DELETE", "/api/me", async (req, env) => deleteAccount(env, await requireUser
 on("GET", "/api/me/items", async (req, env) => json(await itemsGet(env, await requireUser(req, env), new URL(req.url))));
 on("PUT", "/api/me/items", async (req, env) => json(await itemsPut(env, await requireUser(req, env), req)));
 on("DELETE", "/api/me/items", async (req, env) => { await itemsDelete(env, await requireUser(req, env), new URL(req.url)); return noContent(); });
+// Your driving DNA (dna.ts): members, shown to friends you share scores with
+on("PUT", "/api/me/dna", async (req, env) => { await dnaPut(env, await requireMember(req, env), req); return noContent(); });
 on("PUT", "/api/me/handle", async (req, env) => { await setHandle(env, await requireMember(req, env), req); return noContent(); });
 
 on("PUT", "/api/me/contribute", async (req, env) => { await setContribute(env, await requireMember(req, env), req); return noContent(); });

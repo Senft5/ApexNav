@@ -1,4 +1,4 @@
-// Direct messages (src/messages.ts, migration 0064): friends only; the list newest first with unread counts; reading marks
+// Direct messages (src/messages.ts, migration 0065): friends only; the list newest first with unread counts; reading marks
 // read; blocks hide both ways; a report hides it from the reporter and the owner's queue removes it; unsend; the hourly cap;
 // a push that never carries the words; the sweep after a year; Download my data lists what you sent; Delete account takes it.
 import { env } from "cloudflare:workers";

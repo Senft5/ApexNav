@@ -7697,7 +7697,9 @@ flow('friend profile: a friend on People → Profile shows what the friend share
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
     if (u.pathname === '/api/friends/U1/profile') return json({ handle: 'bob', name: 'Bob <b>S</b>', friends_since: '2026-09-01', crews: ['Ridge Runners'], cars: [],
-      stages: [{ stage: 'Esses', best: 812, days_month: 3, last: '2026-10-27' }], totals: { stages: 1, days_month: 3, best: 812 } });
+      stages: [{ stage: 'Esses', best: 812, days_month: 3, last: '2026-10-27' }], totals: { stages: 1, days_month: 3, best: 812 },
+      dna: { theirs: { skills: { squeeze: 81, brake: 64, arc: 92, entry: 77, line: 58, exit: 70 }, style: ['Trail-braker', 'Late apex'], size: 'fast', corners: 212, drives: 14 },
+             mine: { skills: { squeeze: 80, brake: 75, arc: 70, entry: 77, line: 60, exit: 72 }, style: [], size: null, corners: 90, drives: 6 } } });
     if (u.pathname === '/api/points') return json({ total: 0 });
     if (u.pathname === '/api/roadbooks/friends') return json([{ id: 'BOBBOOKAAAAAAAAA', name: 'Bob\'s Kentucky', visibility: 'friends', by: 'bob', mine: false, roads: 4, length_m: 30000, followers: 0, following: false },
       { id: 'CARABOOKAAAAAAAA', name: 'Cara\'s set', visibility: 'public', by: 'cara', mine: false, roads: 2, length_m: 9000, followers: 0, following: false }]);
@@ -7712,6 +7714,12 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   const t = await page.textContent('.profile-view');
   check(t.includes('@bob') && /Bob <b>S<\/b> · friends since September( 2026)?/.test(t) && t.includes('Esses · best 812 · 3 days this month') && t.includes('Ridge Runners'), 'the profile, as text: ' + t);
   check(!/Times are never shown|on them this month/.test(t), 'no line saying what is not shown, and "this month" once under its head: ' + t);
+  // their driving DNA beside yours (dna_card.js): the two hexagons and where each of you leads
+  const dna = await page.evaluate(() => { const d = document.querySelector('.profile-view .profile-dna'); return d && { text: d.innerText, shapes: d.querySelectorAll('svg .dna-them, svg .dna-you').length,
+    w: d.querySelector('svg').getBoundingClientRect().width, label: d.querySelector('svg').getAttribute('aria-label') }; });
+  check(dna && dna.shapes === 2 && dna.w >= 150 && /@bob filled · you outlined/.test(dna.text) && /@bob leads at One arc: 92 to your 70/.test(dna.text) && /You lead at Brakes done: 75 to 64/.test(dna.text)
+    && /One arc 92, you 70/.test(dna.label), 'their DNA beside yours: ' + JSON.stringify(dna));
+  if (process.env.SHOTS) { await page.evaluate(() => document.querySelector('.profile-view .profile-dna').scrollIntoView()); await page.screenshot({ path: `${process.env.SHOTS}/friend-dna.png` }); }
   // their roadbooks you may open, on their profile (free roamer B, 2026-11-14): Bob's only
   await page.waitForSelector('.profile-view .rb-of-friend:not([hidden]) .rb-row', { timeout: 8000 });
   const rbs = await page.locator('.profile-view .rb-of-friend .rb-row b').allInnerTexts();

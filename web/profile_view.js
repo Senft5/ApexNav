@@ -47,11 +47,21 @@
       ...who,
       ...(keys.length ? [el('div', { className: 'row profile-keys' }, ...keys.map(([label, run], i) => btn(label, run, i ? 'ink-btn' : 'ink-btn solid')))] : []),
       ...extra,
+      ...(!partial && p.dna && p.dna.theirs && root.ApexDnaCard ? [dnaSection(p, el)] : []),
       ...(partial ? [el('p', { className: 'note', textContent: 'Couldn’t load the rest. Check signal.' })]
         : [...v.sections.map((s) => el('div', { className: 'stack-8' }, el('b', { textContent: s.head }), ...s.rows.map((r) => el('p', { className: 'note', textContent: r }))))]),   // what they share with you, so no line saying so
       ...(foot.length ? [el('div', { className: 'row profile-foot' }, ...foot.map(([label, run, cls]) => btn(label, run, cls || 'linkbtn')))] : []));
   }
 
-  const api = { lines, show, since, car };
+  /** Their driving DNA beside yours (dna_card.js): the two hexagons, theirs filled and yours outlined, and a line or two. */
+  function dnaSection(p, el) {
+    const D = root.ApexDnaCard, who = `@${p.handle || '?'}`;
+    return el('div', { className: 'stack-8 profile-dna' }, el('b', { textContent: 'Driving DNA' }),
+      D.compareSvg(root.document, p.dna.theirs, p.dna.mine),
+      el('p', { className: 'note dna-key', textContent: p.dna.mine ? `${who} filled · you outlined` : `${who}` }),
+      ...D.compareLines(p.dna.theirs, p.dna.mine, p.handle).map((t) => el('p', { className: 'note', textContent: t })));
+  }
+
+  const api = { lines, show, since, car, dnaSection };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexProfileView = api;
 })(typeof window !== 'undefined' ? window : globalThis);
