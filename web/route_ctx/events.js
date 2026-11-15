@@ -291,8 +291,9 @@
     const inBox = (ev) => ev.lat >= box[0] - 0.05 && ev.lat <= box[2] + 0.05 && ev.lon >= box[1] - 0.05 && ev.lon <= box[3] + 0.05;
     const jobs = [];
     // MLB: one call for the plan's dates, kept 6 h (schedules change only with postponements).
+    // placesOnly (the free drive's road ahead, cockpit.js attachHorizonMarks): only the schools, no schedules asked
     jobs.push((async () => {
-      if (!finite(fromMs)) return null;
+      if (!finite(fromMs) || opts.placesOnly) return null;
       const key = 'mlb.' + ymd(fromMs) + '.' + ymd(toMs);
       let ev = U.cacheGet(e.storage, key, 6 * 3600e3, e.now);
       if (!ev) { const j = await U.getJSON(e.fetchFn, mlbUrl(fromMs, toMs), { timeoutMs: BUDGET_MS - 500, signal: e.signal }); if (!j) return null; ev = parseMlb(j); U.cachePut(e.storage, key, ev, e.now); }
@@ -300,7 +301,7 @@
     })());
     const sgKey = U.keyFor(opts, 'seatgeekClientId');
     jobs.push((async () => {
-      if (!sgKey || !finite(fromMs)) return undefined;
+      if (!sgKey || !finite(fromMs) || opts.placesOnly) return undefined;
       const key = 'sg.' + box.map((v) => v.toFixed(1)).join(',') + '.' + Math.floor(fromMs / 36e5);
       let ev = U.cacheGet(e.storage, key, 3 * 3600e3, e.now);
       if (!ev) { const j = await U.getJSON(e.fetchFn, seatgeekUrl(box, fromMs, toMs, sgKey), { timeoutMs: BUDGET_MS - 500, signal: e.signal }); if (!j) return null; ev = parseSeatgeek(j); U.cachePut(e.storage, key, ev, e.now); }
@@ -326,7 +327,9 @@
     return out;
   }
 
-  const provider = { id: ID, version: VERSION, channels: CHANNELS, needs: { network: true, key: 'seatgeekClientId' }, budgetMs: BUDGET_MS, fetch };
+  // no needs.key: the registry would skip the whole provider without a SeatGeek id, and baseball, church hours, school
+  // runs and the schools by the road need none (fetch asks SeatGeek only with an id, and says so without one)
+  const provider = { id: ID, version: VERSION, channels: CHANNELS, needs: { network: true }, budgetMs: BUDGET_MS, fetch };
   U.register(provider);
   const api = { provider, CHANNELS, VENUES, HOURS, FILL, radiusM, phase, mlbUrl, parseMlb, seatgeekUrl, parseSeatgeek, dedupe, SCHOOL_YEAR, schoolDay, schoolRunAt, churchWindow, placesQuery, parsePlaces, evaluate, fetch };
   if (NODE) module.exports = api; else root.ApexCtxEvents = api;

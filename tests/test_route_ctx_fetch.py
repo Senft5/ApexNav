@@ -90,7 +90,7 @@ def test_registry_shim_holds_every_provider(out):
     ids = {i[0]: i for i in out["registry"]["ids"]}
     assert out["registry"]["shim"] is True
     assert set(ids) == {"conditions", "wildlife", "events", "hazards-live", "photos"}
-    assert ids["wildlife"][3] is False and ids["events"][4] == "seatgeekClientId" and ids["photos"][4] == "mapillaryToken"
+    assert ids["wildlife"][3] is False and ids["events"][4] is None and ids["photos"][4] == "mapillaryToken"
     assert all(i[5] > 0 for i in ids.values())
 
 

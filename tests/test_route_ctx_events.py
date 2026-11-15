@@ -132,6 +132,29 @@ const cor = () => C.corridor('river', line, { departAt: Date.UTC(2026, 10, 2, 12
     assert "school-zone" in o["spans"] and "no schools" not in o["note"]
 
 
+
+def test_places_only_asks_no_schedules_but_finds_the_school():
+    """The free drive's road ahead (cockpit.js attachHorizonMarks, placesOnly): the schools by the road from our build,
+    no MLB or SeatGeek call, and the schedules stay unknown rather than "no games"."""
+    js = r"""
+const root = process.argv[1];
+const E = require(root + '/web/route_ctx/events.js'), C = require(root + '/tests/fixtures/route_ctx/corridor.js');
+const mem = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v), removeItem: (k) => m.delete(k), m }; };
+const line = [[39.0930, -84.5250], [39.0945, -84.5120], [39.0955, -84.5040]];
+const cor = () => C.corridor('river', line, { departAt: Date.UTC(2026, 10, 2, 12, 30), speedMps: 15 });
+(async () => {
+  const urls = [];
+  const fetchFn = async (u) => { urls.push(String(u)); return { ok: true, status: 200, json: async () => ({ elements: [], dates: [] }), text: async () => '{}' }; };
+  const apiGet = async () => ({ cells: { '156_-339': { schools: [[39.0950, -84.5120]], worship: [] }, '156_-338': { schools: [], worship: [] } } });
+  const r = await E.fetch([cor()], { fetchFn, apiGet, storage: mem(), budgetMs: 4000, placesOnly: true, settings: { seatgeekClientId: 'k' } });
+  console.log(JSON.stringify({ urls, schools: r.river.points.filter((p) => p.kind === 'school').length, note: r.river.note || '' }));
+})();
+"""
+    o = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert o["urls"] == []                     # no schedule asked, nothing went to Overpass (our build had both cells)
+    assert o["schools"] == 1 and "no schedules" in o["note"] and "no schools" not in o["note"]
+
+
 SCHOOL = r"""
 const root = process.argv[1];
 const E = require(root + '/web/route_ctx/events.js'), C = require(root + '/tests/fixtures/route_ctx/corridor.js');

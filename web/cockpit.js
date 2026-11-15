@@ -2885,7 +2885,8 @@
       setTimeout(async () => {
         if (track !== t) return;
         const c = { t, route: { coords: Array.from(t.lat, (la, i) => [t.lon[i], la]), times: null }, timeS: null, match: 'map_snap' };
-        await contextOn([c], CTX_BUDGET_MS, 'ahead', ['osm_overpass']);
+        // events.js for the schools by the road ahead (our built points, else the map), not the games or concerts on it
+        await contextOn([c], CTX_BUDGET_MS, 'ahead', ['osm_overpass', 'events'], { placesOnly: true });
         if (track !== t || !c.ctx || !c.corridor) return;
         t.marks = ApexRoadMarks.union(t.marks, ApexRoadMarks.events(c.ctx, c.corridor, t, (la, lo, lats, lons) => Core.nearestIndex(la, lo, lats, lons, -1)));
         if (ApexRoadMarks.noTeeAtStop) t.marks = ApexRoadMarks.noTeeAtStop(t.marks);
