@@ -320,6 +320,7 @@ struct ApexCockpitWebView: UIViewRepresentable {
 
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
             shell.webDidStartLoading()
+            shell.reloadWhy = "inUse"                                    // told to the new page (app health reload_web)
             webView.reload()
         }
 
@@ -1066,6 +1067,9 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         wv.evaluateJavaScript("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;", completionHandler: nil)
     }
 
+    /// Why the shell reloaded the page (iOS killed its web content process), said to the page once it has loaded.
+    var reloadWhy: String?
+
     func webDidStartLoading() {
         webReady = false
         liveInFlight = 0; liveStalled = false; backlogInFlight = false   // a new page asks for its journal itself (web recoverKept)
@@ -1078,6 +1082,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         ApexCar.shared.toPage = { [weak self] obj in self?.sendToPage(obj) }
         ApexCarOffline.shared.toPage = { [weak self] obj in self?.sendToPage(obj) }
         pushLiveFrame()
+        if let why = reloadWhy { reloadWhy = nil; sendToPage(["type": "reloaded", "why": why]) }   // iOS killed the last page
         offerDriveIfReady()
         if let g = pendingGpx { pendingGpx = nil; deliverGpx(g) }
         #if DEBUG
@@ -1134,6 +1139,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         wv.evaluateJavaScript("document.readyState") { [weak self, weak wv] result, error in
             guard error != nil || result == nil, let wv else { return }
             self?.webDidStartLoading()
+            self?.reloadWhy = "background"
             if wv.url == nil { wv.load(URLRequest(url: ApexWebBundle.entryURL)) } else { wv.reload() }
         }
     }
