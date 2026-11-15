@@ -680,6 +680,7 @@
     .ly-key .k-cam { stroke: var(--signal); stroke-width: 1.5; stroke-linecap: butt; stroke-linejoin: miter; fill: var(--panel); }
     .ly-key .k-hill { stroke: var(--panel-dim); stroke-width: 1.5; fill: var(--hair, transparent); }
     .ly-key .k-meet { stroke: var(--panel-ink); stroke-width: 1.5; fill: var(--panel); }
+    .ly-key .k-event { stroke: #ff7a1a; stroke-width: 2.2; fill: none; stroke-linecap: round; }
     .ly-key .k-driven { stroke: var(--gain); } .ly-key .k-todo { stroke: var(--panel-ink); stroke-dasharray: 3 2.5; stroke-linecap: butt; }
     .ly-legend b.k-pub::before { background: var(--panel-ink); opacity: 0.5; height: 1.5px; } .ly-legend b.k-driven::before { background: var(--gain); } .ly-legend b.k-todo::before { background: none; border-top: 2px dashed var(--panel-ink); height: 0; }
     .ly-key .k-roadcam { stroke: var(--panel); stroke-width: 1.5; fill: var(--panel-ink); }
@@ -2286,6 +2287,8 @@
         <button class="sw ly" data-toggle="satellite" id="satSwitch" hidden><i></i><span>Satellite</span><svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"></svg></button>
         <button class="sw ly" data-toggle="roadbooks"><i></i><span>Roadbooks<small class="ly-legend"><b class="k-driven">Driven</b><b class="k-todo">To drive</b><b class="k-pub">Public</b></small></span>
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><path class="k-driven" d="M3 15 C7 15 8 8 12 8"/><path class="k-todo" d="M15 9 C19 10 20 5 25 5"/></svg></button>
+        <button class="sw ly" data-toggle="events"><i></i><span>Events<small>Time attacks and meets as you drive near</small></span>
+          <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><path class="k-event" d="M7 18 V5 M21 18 V5 M5 4 H23 V9 H5 Z"/></svg></button>
         <button class="sw ly" data-toggle="meets"><i></i><span>Meets<small>Public crews' meets</small></span>
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><rect class="k-meet" x="6" y="3" width="16" height="10"/><path class="k-meet" d="M14 13 V18"/></svg></button>
         <button class="sw ly" data-toggle="friends"><i></i><span>Friends<small>Sharing where they are</small></span>

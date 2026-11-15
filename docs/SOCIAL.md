@@ -214,6 +214,18 @@ and in random batches so a trace cannot be re-assembled.
   tap Accept and you're friends. It's the same one-use link Send a friend link makes (10 open at most), so New code makes
   the next one. Drawn on a canvas by `vendor/qrcode.js`, which loads only when it's asked for.
 
+### 2.15 Events on the map (members; built 2026-11-15)
+- Nate (2026-11-15): time attacks and meets pop up as you drive near, like an open-world game's event markers, in our own
+  look. The Layers sheet's Events switch (on by default, kept like every layer).
+- The area's time attack loops stand as a glowing start gate (orange, facing the way the loop leaves); your crews' drives
+  and public meets in the next 24 hours stand at their meeting points (blue). Tapping either opens its card.
+- Driving up to one (a gate within 450 m, a meet within 800 m from 3 h before it starts to 1 h after, ahead of you within
+  75 degrees, or anywhere close while you're stopped) raises one card at the foot of the map: what it is, its name, three
+  facts (Length / Your best / Leader, or Starts / Crew / Going), and one key, Start or Join, with Not now (down 30 min).
+  One card at a time; it goes when you're well past. Unknown stays `--`.
+- Start enters the loop (if needed) and drives it, the same as Where to? (`timeAttack.go`). Join opens the drive's card.
+- No backend change: `/api/ta` (area point only), `/api/events`, `/api/events/near` (privacy-zone cell). `web/event_markers.js`.
+
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.
 

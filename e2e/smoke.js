@@ -13345,6 +13345,47 @@ flow('time attack (the owner, 2026-11-12: static best roads, a featured one, boa
   await page.waitForFunction(() => /The clock runs from the start line/.test(document.getElementById('toast').textContent) && document.getElementById('planPanel').classList.contains('routed'), null, { timeout: 15000 });
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('events on the map (Nate 2026-11-15, like an open-world game): the area\'s time attack stands as a glowing start gate and a crew drive at its meeting point; driving up to the gate raises one card, name, length, your best, the leader, Start; Start enters it and drives the loop; Not now keeps it down (Worker stubbed)', async (page, base) => {
+  const GEOM = JSON.stringify([[35.95, -83.9], [35.95, -83.89], [35.96, -83.88], [35.95, -83.9]]);
+  const sent = [];
+  const starts = new Date(Date.now() + 2 * 3600e3).toISOString();
+  await page.addInitScript(() => { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/ta' && m === 'GET') {
+      sent.push(['GET', u.search]);
+      return json({ circuits: [{ id: 'ta-GATE1', slot: 0, name: 'Foothills loop', length_m: 16093, geom: GEOM, featured: true, entered: false }],
+        board: { id: 'ta-GATE1', period: 'all', entrants: 2, rows: [{ place: 1, handle: 'dee', time_s: 754, gap_s: 0, mine: false }, { place: 2, handle: 'me', time_s: 801, gap_s: 47, mine: true }], you: { place: 2, time_s: 801 } } });
+    }
+    if (u.pathname === '/api/events' && m === 'GET') return json([{ id: 'EVTGATE1AAAAAAAA', crew_id: 'C1', crew_name: 'Ridge Runners', title: 'Dawn run', starts_at: starts,
+      meet_name: 'Kroger lot', meet_lat: 35.99, meet_lon: -83.95, route_id: null, notes: null, by_handle: 'bob', mine: false, can_cancel: false, my_rsvp: null, going: ['bob'], maybe: 0, lead: null, sweep: null, regroup: [] }]);
+    if (m === 'POST' && u.pathname === '/api/ta/enter') { sent.push([u.pathname, JSON.parse(route.request().postData() || 'null')]); return json({ segment_id: 'COPYG1', added: true }); }
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.waitForSelector('.ev-gate.ta', { timeout: 15000 });
+  check(await page.$('.ev-gate.meet') !== null, 'the crew drive stands at its meeting point');
+  await page.waitForSelector('.ev-card.up', { timeout: 10000 });
+  const card = await page.evaluate(() => { const c = document.querySelector('.ev-card');
+    return { title: c.querySelector('h2').textContent, kick: c.querySelector('.ev-kick').textContent, facts: [...c.querySelectorAll('.ev-facts > div')].map((f) => f.textContent), keys: [...c.querySelectorAll('button')].map((b) => b.textContent) }; });
+  check(card.title === 'Foothills loop' && card.kick === 'Featured time attack', 'the gate card names it: ' + JSON.stringify(card));
+  await page.waitForFunction(() => /dee/.test(document.querySelector('.ev-card .ev-facts')?.textContent || ''));
+  const facts = await page.$$eval('.ev-card .ev-facts > div', (fs) => fs.map((f) => f.textContent));
+  check(facts.length === 3 && /Length/.test(facts[0]) && /Your best13:21/.test(facts[1]) && /Leader@dee 12:34/.test(facts[2]), 'three facts, as text: ' + JSON.stringify(facts));
+  check(card.keys.join('|') === 'Start|Not now', 'one key and Not now: ' + card.keys.join('|'));
+  check(!sent.some(([, q]) => typeof q === 'string' && /35\.95\d|83\.90\d/.test(q)), 'only the area goes to the server, never where you are: ' + JSON.stringify(sent));
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/event-gate.png` });
+  await page.click('.ev-card button:text-is("Start")');
+  await page.waitForFunction(() => !document.querySelector('.ev-card.up'));
+  check(sent.some(([p, b]) => p === '/api/ta/enter' && b && b.id === 'ta-GATE1'), 'Start enters the loop');
+  await page.waitForTimeout(2600);
+  check(!(await page.$('.ev-card.up')), 'once started, its card stays down');
+}, { geolocation: { latitude: 35.9502, longitude: -83.9033 }, permissions: ['geolocation'] });
+
 flow('time attack duel: Challenge a friend on a time attack loop picks a friend, won by time, on your copy of the loop (IDEAS S-24, Worker stubbed)', async (page, base) => {
   const GEOM = JSON.stringify([[35.95, -83.9], [35.97, -83.88], [35.95, -83.9]]);
   const sent = [];
