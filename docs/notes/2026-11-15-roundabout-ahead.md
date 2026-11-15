@@ -14,3 +14,13 @@
   e2e "a roundabout where the road ahead meets one" (fails with the kind removed).
 - Next: check on a real free drive through a roundabout (tile simplification at low zoom may leave a small ring with
   fewer than six points, so it would read as a plain junction: silent, as before).
+
+# CALL SHEET
+
+## horizon.js loads with the drive, not at launch (2026-11-15)
+- What: `horizon.js` moved from an `index.html` script tag to the lazy `ahead` group (`web/lazy.js`), loaded at the idle
+  warm-up and at drive start, beside the other road-ahead modules.
+- Why: the roundabout ring check put the launch path 1.7 KB over the startup budget (3.6 MB, e2e "startup budget"); the
+  road ahead is only built while driving and `buildHorizon` already waits for `window.ApexHorizon`.
+- Undo: put `<script src="horizon.js" defer></script>` back in `web/index.html` and drop it from the `ahead` group (and
+  `tests/test_launch_split.py`).
