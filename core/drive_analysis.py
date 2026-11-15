@@ -647,7 +647,8 @@ def coach(a: dict, others: list) -> dict:
     the best clean pass of the same stretch among a and others (passes over the sane corner limit
     never count as best: overdriving is not a reference), the time a lost to it and one tip.
     gain_s: the sum of the corners' gains of at least TIP_GAIN_S (smaller ones are GPS alignment noise);
-    ideal_s = a's time over its clean corners - gain_s. Other passes are timed over exactly a's stretch (aligned_time_s).
+    ideal_s = a's time over its clean corners - gain_s. Other passes are timed over exactly a's stretch (aligned_time_s);
+    times: each counted other pass's time there, [j, s] (j its index in others), for the corner's passes over time.
     """
     hints = [-1] * len(others)
     out = []
@@ -669,6 +670,7 @@ def coach(a: dict, others: list) -> dict:
         mins = [None if sa is None else (sa - c["apex"]) * 5.0]
         turns, speeds = [ma["turn_in_m"]], [float(ma["min_mps"])]
         froms = [-1]
+        times = []                                                          # every other pass's time here: [j, s]
         for j, b in enumerate(others):
             w = match_window(a, c["start"], c["end"], b, hints[j])
             if w is None:
@@ -687,6 +689,7 @@ def coach(a: dict, others: list) -> dict:
             if mb["min_mps"] < STOPPED_MPS:
                 continue
             passes += 1
+            times.append([j, float(tb)])
             ob, sb = _marks(b, bs, be, b_apex)
             ob, sb = (None if x is None else _on_a(a, c["apex"] - (b_apex - x), b, x) for x in (ob, sb))
             ob = None if ob is not None and ob > c["apex"] else ob             # braking cannot begin past the apex
@@ -706,7 +709,7 @@ def coach(a: dict, others: list) -> dict:
         tip = _tip(ma, best if best_from >= 0 and gain >= TIP_GAIN_S else None)
         out.append({"apex": c["apex"], "m": ma, "best": None if best_from < 0 else best, "best_from": best_from,
                     "gain_s": gain, "tip": tip, "passes": passes, "spread": _spread(brakes, mins, passes, froms, turns, speeds),
-                    "prior_s": None if prior is None else float(prior["time_s"]), "prior_from": prior_from})
+                    "prior_s": None if prior is None else float(prior["time_s"]), "prior_from": prior_from, "times": times})
     clean = [x for x in out if x["gain_s"] is not None]
     this_s = float(sum(x["m"]["time_s"] for x in clean))
     gain_s = float(sum(x["gain_s"] for x in clean if x["gain_s"] >= TIP_GAIN_S))     # below that is GPS alignment noise

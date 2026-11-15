@@ -7037,6 +7037,9 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   check(/^Corner \d+ against your best pass$/.test(ovl.head) && ovl.paths >= 3 && ovl.open === 'true' && !ovl.wide
     && ovl.rows.some((t) => /^Slowest: \d+ mph.* · best pass \d+ mph/.test(t)) && /^Through the corner: (\d+\.\d s (slower|quicker) than|level with) the best pass$/.test(ovl.rows[ovl.rows.length - 1]),
     'the corner overlay: ' + JSON.stringify(ovl));
+  // the corner over your four drives here, oldest first, this drive last (it is the latest): is it getting quicker?
+  const passes = await page.evaluate(() => { const p = document.querySelector('.dv-ovl .dv-ovl-passes'); return p && p.textContent; });
+  check(/^Your passes here: ([^·]+ \d+\.\d s · ){3}this drive \d+\.\d s$/.test(passes || ''), 'the corner\'s passes over time: ' + passes);
   await page.click('.dv-time li button');
   check(await page.evaluate(() => !document.querySelector('.dv-ovl')), 'a second tap closes the overlay');
   const abrupt = await page.evaluate(() => { const l = document.querySelector('.dv-abrupt'); return l ? { rows: [...l.querySelectorAll('li .note')].map((n) => n.textContent), say: l.previousElementSibling.textContent } : null; });

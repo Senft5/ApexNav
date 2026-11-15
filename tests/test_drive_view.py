@@ -421,3 +421,18 @@ def test_corners_against_the_best_drive_say_slower_in_words(r):
     assert "819" not in n and "best drive" not in n
     assert "Level with your other drive here (Yesterday, 10:58 PM)" in r["refLevel"]
     assert "No clean corners to compare with your other drive here." in r["refNone"]
+
+
+def test_a_corner_over_your_drives_oldest_first():
+    """A corner's passes over time (Core.coach times, the drives' dates): oldest first with this drive among them, the
+    last five; nothing to say without another pass, or when no date is known."""
+    root = str(__import__("pathlib").Path(__file__).resolve().parents[1])
+    js = """const V = require(process.argv[1] + '/web/drive_view.js');
+const co = { near: [{ date: '2026-11-03T10:00' }, { date: '2026-10-30T09:00' }, { date: null }], corners: [{ m: { time_s: 4.62 }, times: [[0, 4.81], [1, 5.12], [2, 4.0]] }, { m: { time_s: 3 }, times: [] }] };
+const ps = V.cornerPasses(co, 0, '2026-11-15T10:00');
+console.log(JSON.stringify({ ps, line: V.cornerPassesLine(ps, (d) => d.slice(5, 10)), none: V.cornerPasses(co, 1, '2026-11-15'), noLine: V.cornerPassesLine([ps[0]]),
+  last: V.cornerPasses({ near: Array.from({ length: 7 }, (_, i) => ({ date: `2026-10-0${i + 1}` })), corners: [{ m: { time_s: 2 }, times: Array.from({ length: 7 }, (_, i) => [i, 3]) }] }, 0, '2026-11-01').length }));"""
+    out = json.loads(subprocess.run([NODE, "-e", js, root], capture_output=True, text=True, check=True, timeout=60).stdout)
+    assert [p["time_s"] for p in out["ps"]] == [5.12, 4.81, 4.62] and out["ps"][-1]["self"]   # an undated pass is left out
+    assert out["line"] == "Your passes here: 10-30 5.1 s · 11-03 4.8 s · this drive 4.6 s"
+    assert out["none"] == [] and out["noLine"] is None and out["last"] == 5

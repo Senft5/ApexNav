@@ -964,7 +964,7 @@
       const ta = turnIn(a, c.start, c.end);
       ma.turn_in_m = ta === null || ta > c.apex ? null : (c.apex - ta) * 5;
       const brakes = [oa === null ? null : (c.apex - oa) * 5], mins = [sa === null ? null : (sa - c.apex) * 5], froms = [-1];
-      const turns = [ma.turn_in_m], speeds = [ma.min_mps];
+      const turns = [ma.turn_in_m], speeds = [ma.min_mps], times = [];   // times: every other pass's time here, [j, s]
       others.forEach((b, j) => {
         const w = matchWindow(a, c.start, c.end, b, hints[j]);
         if (!w) return;
@@ -978,6 +978,7 @@
         mb.time_s = tb;
         if (mb.min_mps < STOPPED_MPS) return;
         passes++;
+        times.push([j, tb]);
         let [ob, sb] = passMarks(b, bs, be, bApex).map((x) => (x === null ? null : onA(a, c.apex - (bApex - x), b, x)));
         if (ob !== null && ob > c.apex) ob = null;                       // braking cannot begin past the apex
         let tt = turnIn(b, bs, be);
@@ -990,7 +991,7 @@
       const gain = ma.time_s - best.time_s;
       out.push({ apex: c.apex, m: ma, best: bestFrom < 0 ? null : best, best_from: bestFrom, gain_s: gain,
                  tip: coachTip(ma, bestFrom >= 0 && gain >= TIP_GAIN_S ? best : null), passes, spread: spread(brakes, mins, passes, froms, turns, speeds),
-                 prior_s: prior ? prior.time_s : null, prior_from: priorFrom });
+                 prior_s: prior ? prior.time_s : null, prior_from: priorFrom, times });
     }
     const clean = out.filter(x => x.gain_s !== null);
     const thisS = clean.reduce((s, x) => s + x.m.time_s, 0), gainS = clean.reduce((s, x) => s + (x.gain_s >= TIP_GAIN_S ? x.gain_s : 0), 0);

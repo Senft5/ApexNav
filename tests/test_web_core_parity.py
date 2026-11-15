@@ -188,6 +188,8 @@ def test_parity_coach_on_real_drives():
             assert (cj.get("prior_s") is None) == (cp.get("prior_s") is None) and cj.get("prior_from", -1) == cp.get("prior_from", -1)
             if cp.get("prior_s") is not None:
                 assert cj["prior_s"] == pytest.approx(cp["prior_s"], rel=1e-9)   # your fastest other pass (the drive page's new bests)
+            assert [j for j, _ in cj.get("times", [])] == [j for j, _ in cp.get("times", [])]   # the corner's passes over time
+            assert [t for _, t in cj.get("times", [])] == pytest.approx([t for _, t in cp.get("times", [])], rel=1e-9)
             assert (cj["tip"] is None) == (cp["tip"] is None)
             if cp["tip"]:
                 tips += 1

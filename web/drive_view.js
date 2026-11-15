@@ -715,15 +715,17 @@
       if (!o.canClip || !o.clip || !o.canClip(c.start, c.end)) return null;
       return actKey('solid', 'Clip this corner', () => o.clip(c.start, c.end));
     }
-    // a corner with no best pass to lay over it: just its clip key, when there is a video of it
+    // the corner over your drives here, oldest first: is it getting quicker? (Core.coach times; like with like already)
+    const passesLine = (k) => { const t = cornerPassesLine(cornerPasses(co, k, d.date), root.ApexFormat && root.ApexFormat.dayShort); return t ? el('p', 'dv-ovl-passes', esc(t)) : null; };
+    // a corner with no best pass to lay over it: its clip key, when there is a video of it, and its passes over time
     function openClipOnly(k, after) {
       if (ovl) { ovl.remove(); ovl = null; }
       if (ovlAt) ovlAt.setAttribute('aria-expanded', 'false');
       if (ovlK === k && ovlAt === after) { ovlK = -1; ovlAt = null; return; }
-      const key = clipKey(k);
-      if (!key) { ovlK = -1; ovlAt = null; return; }
+      const key = clipKey(k), line = passesLine(k);                  // your best pass here: its clip, and the corner over your drives
+      if (!key && !line) { ovlK = -1; ovlAt = null; return; }
       ovlK = k; ovlAt = after; after.setAttribute('aria-expanded', 'true');
-      const box = el('div', 'dv-ovl'); box.append(key); after.after(box); ovl = box;
+      const box = el('div', 'dv-ovl'); if (key) box.append(key); if (line) box.append(line); after.after(box); ovl = box;
     }
     const openCorner = (k, after) => { if (overlayable(k)) openOverlay(k, after); else openClipOnly(k, after); };
     async function openOverlay(k, after) {
@@ -745,6 +747,8 @@
       const pic = el('div', 'dv-ovl-pic', overlaySvg(tr, C, MPH, Math.round(Math.min(560, (box.clientWidth || 340)))));
       const key = el('div', 'dv-ovl-key', `<span class="a">This drive</span><span class="b">Best pass</span>`);
       box.append(pic, key, ...T.rows(tr, fmt).map((t) => el('p', 'dv-ovl-row', esc(t))));
+      const pl = passesLine(k);
+      if (pl) box.append(pl);
       // both passes filmed: the two videos side by side, the gap counting (ghost_clip.js)
       if (o.ghostOf) Promise.resolve(o.ghostOf(k, r)).then((go) => {
         if (!go || ovl !== box) return;
@@ -869,6 +873,25 @@
   }
 
   /**
+   * A corner's passes over time (Core.coach times, co.near's dates): [{ date, time_s, self }], oldest first, this drive among
+   * them; the last n. [] when no other pass of it is known.
+   */
+  function cornerPasses(co, k, selfDate, n = 5) {
+    const x = co && co.corners && co.corners[k];
+    if (!x || !x.m || !Number.isFinite(x.m.time_s) || !Array.isArray(x.times) || !x.times.length || !Array.isArray(co.near)) return [];
+    const out = x.times.map(([j, t]) => ({ date: co.near[j] && co.near[j].date, time_s: t, self: false }))
+      .filter((p) => typeof p.date === 'string' && Number.isFinite(p.time_s));
+    if (!out.length) return [];
+    out.push({ date: typeof selfDate === 'string' ? selfDate : '', time_s: x.m.time_s, self: true });
+    return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)).slice(-n);
+  }
+  /** "Your passes here: Oct 30 5.1 s · Nov 3 4.8 s · this drive 4.6 s"; null under two passes. day: an ISO date → "Oct 30". */
+  function cornerPassesLine(ps, day) {
+    if (!Array.isArray(ps) || ps.length < 2) return null;
+    return `Your passes here: ${ps.map((p) => `${p.self ? 'this drive' : (day && day(p.date)) || String(p.date).slice(5, 10)} ${p.time_s.toFixed(1)} s`).join(' \u00b7 ')}`;
+  }
+
+  /**
    * How this drive compares with your first drive of the road (the drive job's road rows, oldest first: { self, date,
    * dateLabel, score, matched, delta_s }, delta_s the other drive's time less this one's over the corners both drove).
    * { since, score_d, gain_s, matched } or null: this is the first, or no older drive shares 3 corners with it.
@@ -885,6 +908,6 @@
     return { since: first.dateLabel || '', score_d: Number.isFinite(a) && Number.isFinite(b) ? a - b : null, gain_s: first.delta_s, matched: first.matched };
   }
 
-  const api = { barMeaning, BAR_HINT, mount, newBests, roadProgress, overlaySvg, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };
+  const api = { barMeaning, BAR_HINT, mount, newBests, cornerPasses, cornerPassesLine, roadProgress, overlaySvg, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveView = api;
 })(typeof window !== 'undefined' ? window : globalThis);
