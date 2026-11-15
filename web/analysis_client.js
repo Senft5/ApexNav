@@ -312,7 +312,7 @@
       let reference = null;
       for (const o of near.filter((x) => x.ds.score != null).sort((p, q) => q.ds.score - p.ds.score)) {
         const r = compare(o);
-        if (r.overlap_m >= 0.3 * len && r.matched_corners >= 3) { reference = { id: o.id, name: o.name, score: o.ds.score, corners: r.corners }; break; }
+        if (r.overlap_m >= 0.3 * len && r.matched_corners >= 3) { reference = { id: o.id, name: o.name, score: o.ds.score, when: label(o), corners: r.corners }; break; }
       }
       const road = [d, ...all.filter((o) => o.ds.score != null && compare(o).overlap_m >= 0.3 * len)].sort((p, q) => (p.date < q.date ? -1 : 1))
         .map((o) => { const r = o === d ? null : compare(o);

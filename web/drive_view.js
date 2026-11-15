@@ -19,6 +19,16 @@
     return a === b ? `${a} ${u}` : `${a}–${b} ${u}`; };
   const DIST_WORDS = (m) => (U() && U().metric() ? `${(m / 1000).toFixed(2)} kilometres` : `${(m / 1609.344).toFixed(2)} miles`);
 
+  const VOC = () => root.ApexVocabulary || (typeof module !== 'undefined' && typeof require === 'function' ? require('./vocabulary.js') : null);
+  // the Score's four parts: what each means (vocabulary.js, one term one meaning), said when its bar is tapped
+  const BAR_HINT = 'Each part out of 100. Tap one for what it means.';
+  const BAR_TERM = { pace: 'pace', smoothness: 'smooth', braking: 'brakes', consistency: 'rhythm' };
+  function barMeaning(k, text) {
+    const V = root.ApexVocabulary || (typeof module !== 'undefined' && typeof require === 'function' ? require('./vocabulary.js') : null);
+    const t = V && V.TERMS && V.TERMS[BAR_TERM[k]], label = String(text || '').trim();
+    return t ? `${label} of 100: ${t.meaning.replace(/, part of the Score\.$/, '.')}` : label;
+  }
+
   /** Summary numbers for the header strip; null where the drive has no such data. */
   function summarize(d, Core) {
     const t = Core.elapsedS(d.speed_mps), n = d.lat.length;
@@ -182,27 +192,22 @@
       + txt(c0, 26, 'middle', 'THROTTLE') + txt(c0, S - 18, 'middle', 'BRAKE') + txt(16, c0 - 4, 'start', 'L') + txt(S - 16, c0 - 4, 'end', 'R') + '</svg>';
     const g2 = (v) => (v == null ? '--' : `${v.toFixed(2)} g`);
     const base = `Outline: braking ${g2(env.brake_g)} \u00b7 left ${g2(env.left_g)} \u00b7 right ${g2(env.right_g)} \u00b7 throttle ${g2(env.throttle_g)}`;   // one labelled row
-    cap.textContent = base;
-    const head = el('h3', null, 'Grip circle');
-    // TestFlight 14 ("explain what grip circle actually means?"): its one line from the vocabulary (one term, one meaning),
-    // and the rest behind a tap, as the Log's other quiet rows open
+    cap.hidden = true;                                               // the outline's numbers are its spoken label; the line under it is a corner's
+    // Drive page round 1 (Nate 2026-11-15, metrics confusing): the circle sits beside the Score; its axis words say what it
+    // is, so no paragraph under it. Its one-line meaning (vocabulary.js) is the picture's tooltip and spoken label.
     const V = root.ApexVocabulary || (typeof module !== 'undefined' && typeof require === 'function' ? require('./vocabulary.js') : null);
     const term = V && V.TERMS && V.TERMS.gripCircle;
-    const lede = el('p', 'note dv-gg-lede');
-    lede.textContent = term ? term.meaning : '';
-    const more = el('details', 'quiet dv-gg-more');
-    more.innerHTML = '<summary>What the grip circle shows</summary>'
-      + '<p class="note"><b>The dots.</b> One for every ' + fine(5) + ' of the drive where the phone measured the forces on the car: how hard you were braking or speeding up (down and up) and turning (left and right) at that moment. Dots near the middle are gentle driving.</p>'
-      + `<p class="note"><b>The outline.</b> In each of 16 directions, how far your dots reach, leaving out the furthest 5 in 100 so one pothole doesn’t count. Where it breaks off, too few moments went that way to say.</p>`
-      + `<p class="note"><b>The rings.</b> 0.5 g${R > 1.05 ? ' and 1 g' : ''}. At 1 g the push you feel is as strong as gravity.</p>`
-      + '<p class="note"><b>What the shape means.</b> A bigger shape: you asked more of the tyres. A rounder one: you blended braking into turning, and turning into speeding up, instead of doing one and then the other. It is a picture of how you drove, not a target to push: on a public road the grip left in reserve is what keeps you safe.</p>'
-      + '<p class="note">Move along the drive into a corner and that corner’s own line is drawn on top.</p>';
-    box.append(...(term ? [head, lede, pic, cap, more] : [head, pic, cap, more]));
+    if (term) box.title = term.meaning;
+    box.setAttribute('aria-label', `Grip circle. ${term ? `${term.meaning} ` : ''}${base}.`);
+    box.setAttribute('role', 'button'); box.setAttribute('tabindex', '0'); box.setAttribute('aria-expanded', 'false');
+    cap.className = 'note dv-gg-cap';
+    box.append(el('small', 'dv-gg-name', 'Grip circle'), pic);
     pic.append(hot);
     let shown = -2;
     function show(c, kc) {
       if (kc === shown) return; shown = kc;
-      if (!c) { hot.innerHTML = ''; cap.textContent = base; return; }
+      if (!c) { hot.innerHTML = ''; cap.textContent = ''; cap.hidden = true; return; }
+      cap.hidden = false;
       let p = '';
       const lo = Math.max(0, c.start - 20);                          // 100 m before turn-in: the brake zone, not the straight before it
       for (let i = lo; i <= c.end; i++) if (ok(i)) { const [x, y] = xy(d.lat_g[i], d.lon_g[i]); p += `${p ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`; }
@@ -210,7 +215,7 @@
       const use = Core.gripUse(d.lat_g, d.lon_g, lo, c.end, env, d.g_known || null);
       cap.textContent = `Corner ${kc + 1}: ${use == null ? '--' : `${Math.round(Math.min(1, use) * 100)}%`} of the outline on average, from ${U() && U().size ? U().size(100) : '100 m'} before turn-in to the exit`;
     }
-    return { box, show, env };
+    return { box, cap, show, env };
   }
 
   // How far to trust member road feel at sample i: passes and their spread (ApexContributor.agreement), never a guess.
@@ -282,9 +287,10 @@
     const ds = d.ds || (Core && Core.driverScore ? Core.driverScore(d.speed_mps, d.lon_g, d.lat_g, d.corners) : null);
     const comp = ds && ds.components;
     const scoreVal = ds && finite(ds.score) ? ds.score : '<i class="unk">--</i>';   // unknown in pencil (REVIEW2.md U-34)
+    // the four parts of the Score, each out of 100 (the Score is out of 1000): a tap says what one means, in one line
     const bar = (k, label) => {
       const v = comp && finite(comp[k]) ? Math.round(comp[k] * 100) : null;
-      return `<div class="bar">${label} ${v != null ? v : '--'}<i><u style="width:${v != null ? v : 0}%"></u></i></div>`;
+      return `<button type="button" class="bar" data-k="${k}" aria-expanded="false" aria-label="${label} ${v != null ? `${v} out of 100` : 'not known'}">${label} ${v != null ? v : '--'}<i><u style="width:${v != null ? v : 0}%"></u></i></button>`;
     };
     // the ideal drive only means something once another pass of the same corners exists
     const ideal = co && co.clean && co.gain_s > 0 && co.corners.some((x) => x.passes > 1)
@@ -306,6 +312,7 @@
     const scored = !!(ds && finite(ds.score)), nCorners = Array.isArray(d.corners) ? d.corners.length : null;
     head.innerHTML = (scored ? `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`
       + `<div class="bars">${bar('pace', 'Pace')}${bar('smoothness', 'Smooth')}${bar('braking', 'Brakes')}${bar('consistency', 'Rhythm')}</div>`
+      + `<p class="note dv-bar-say" aria-live="polite">${BAR_HINT}</p>`
       : `<div class="dv-score no-score"><b class="score">${nCorners ? 'Too few clean corners to score' : 'No corners to score'}</b></div>`)
       // RA-3 (panel round 2): the end card's line, from the one helper (format.js factsLine): same distance, time and corners
       + `<div class="dv-meta">${root.ApexFormat ? root.ApexFormat.factsLine({ len_m: finite(S.km) ? S.km * 1000 : null, secs: S.duration_s, corners: d.corners }) : `${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners`}</div>`
@@ -323,12 +330,28 @@
       + (tired ? `<p class="dv-plain">${esc(tired)}</p>` : '')
       + (brakes ? `<p class="dv-plain">${esc(brakes)}</p>` : '')
       + (ideal ? `<div class="dv-meta">Ideal drive: <b class="gain">${ideal.gain.toFixed(1)} s</b> quicker \u00b7 your best pass at each of ${ideal.n} corner${ideal.n === 1 ? '' : 's'}, from ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
-    root_.append(head, el('div', 'dv-grid'));
-    const grid = root_.lastChild; grid.append(mapBox, el('div', 'dv-right'));
-    const zoom = el('div', 'dv-zoom'); grid.lastChild.append(zoom, lanes, read);
+    // a tap on a part of the Score says what it means; a second tap puts the hint back
+    // (the grip circle the same way: a tap says what it is, in the same line, in place of a paragraph under it)
+    const explain = (e) => {
+      const b = e.target && e.target.closest ? e.target.closest('.bar[data-k], .dv-gg') : null, say = head.querySelector('.dv-bar-say');
+      if (!b || !say) return;
+      const open = b.getAttribute('aria-expanded') !== 'true';
+      head.querySelectorAll('.bar[data-k], .dv-gg').forEach((x) => x.setAttribute('aria-expanded', String(x === b && open)));
+      say.textContent = !open ? BAR_HINT : b.dataset.k ? barMeaning(b.dataset.k, b.textContent) : `Grip circle: ${b.title || 'how hard you braked, turned and sped up, every moment of the drive'}`;
+    };
+    head.addEventListener('click', explain);
+    head.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('dv-gg')) { e.preventDefault(); explain(e); } });
+    // Drive page round 1 (Nate 2026-11-15): How you drove first (the Score, and the grip circle beside it), then the road.
+    // o.roadRoot: where the map, the chart and the corners go (the page's The road part); here, after the head, without one
     const gg = ggView(d, Core, C);                                   // friction circle; null without enough measured g
-    if (gg) grid.lastChild.append(gg.box);
-    root_.append(list);
+    if (gg) { head.classList.add('has-gg'); head.append(gg.box, gg.cap); }
+    const roadRoot = o.roadRoot || root_;
+    if (o.roadRoot) o.roadRoot.innerHTML = '';
+    root_.append(head);
+    roadRoot.append(el('div', 'dv-grid'));
+    const grid = roadRoot.lastChild; grid.append(mapBox, el('div', 'dv-right'));
+    const zoom = el('div', 'dv-zoom'); grid.lastChild.append(zoom, lanes, read);
+    roadRoot.append(list);
 
     // ---- plan map ------------------------------------------------------------------------------------------------
     // planned in Web Mercator metres (drive_basemap.js project) so the real map lines up under it exactly; centred, and at
@@ -464,18 +487,34 @@
     let W = 0, geo = null;
     const LANES = [
       { id: 'speed', label: 'Speed', h: 84, get: (i) => d.speed_mps[i] * MPH, lo: 0, hi: Math.ceil(vmax * MPH / 10) * 10, unit: SPD(), fill: true },
-      { id: 'lat', label: 'Cornering g', h: 70, get: (i) => (d.lat_g ? d.lat_g[i] : null), sym: true, unit: 'g' },
-      { id: 'lon', label: 'Brake and throttle g', h: 70, get: (i) => (d.lon_g ? d.lon_g[i] : null), sym: true, unit: 'g' },
+      { id: 'lat', label: 'Turning: left up, right down', h: 70, get: (i) => (d.lat_g ? d.lat_g[i] : null), sym: true, unit: 'g' },
+      { id: 'lon', label: 'Pedals: gas up, brake down', h: 70, get: (i) => (d.lon_g ? d.lon_g[i] : null), sym: true, unit: 'g' },
     ];
     for (const L of LANES) {
       if (L.sym) { let m = 0.25; for (let i = 0; i < n; i++) { const v = L.get(i); if (finite(v)) m = Math.max(m, Math.abs(v)); } L.hi = Math.ceil(m * 10) / 10; L.lo = -L.hi; }
     }
     const hasElev = !!d.elev;
+    // Drive page round 1 (Nate 2026-11-15): one chart at a time, chosen from a row of names, in place of five stacked lanes
+    const pickRow = el('div', 'switch dv-lanepick'); pickRow.setAttribute('role', 'group'); pickRow.setAttribute('aria-label', 'Chart');
+    state.lane = 'speed';
+    const laneChoices = () => [['speed', 'Speed'], ['lat', 'Turning'], ['lon', 'Pedals'], ...(own || feel ? [['road', 'Road']] : []), ...(hasElev ? [['elev', 'Height']] : [])];
+    function buildPick() {
+      const ch = laneChoices();
+      if (!ch.some(([k]) => k === state.lane)) state.lane = 'speed';
+      pickRow.innerHTML = '';
+      for (const [k, label] of ch) {
+        const b = el('button', k === state.lane ? 'on' : '', label); b.type = 'button'; b.dataset.lane = k; b.setAttribute('aria-pressed', String(k === state.lane));
+        b.onclick = () => { state.lane = k; for (const x of pickRow.children) { x.className = x.dataset.lane === k ? 'on' : ''; x.setAttribute('aria-pressed', String(x.dataset.lane === k)); } draw(); };
+        pickRow.append(b);
+      }
+    }
+    if (lanes.before) lanes.before(pickRow); else grid.lastChild.append(pickRow);   // over the chart, under the zoom keys
     let feel = null;                                                       // member-measured road feel along this drive (setRoadFeel)
     // panel round 2 (HE-1): this phone's own road feel on this drive, from its own rows, only when the mount calibrated
     // (road_feel.js summary: 200 m of measured camber at least); gaps are unknown and drawn as nothing, never as zero
     const RF = root.ApexRoadFeel || (typeof module !== 'undefined' && typeof require === 'function' ? require('./road_feel.js') : null);
     const own = RF && Array.isArray(d.camber) && RF.summary({ dist: d.dist, camber: d.camber, rough: d.rough }) ? { cam: d.camber, rough: Array.isArray(d.rough) ? d.rough : [] } : null;
+    buildPick();
     function draw() {
       W = Math.max(280, lanes.clientWidth || 600);
       const LM = 8, RM = 8, LH = 18;                                        // label row above each lane
@@ -483,8 +522,8 @@
       let yTop = 0, svg = '';
       geo = { X, LM, RM, lanes: [] };
       const step = Math.max(1, Math.floor((v1 - v0) / (W * 1.2)));
-      for (const L of LANES) {
-        const top = yTop + LH, h = L.h, Y = (v) => top + h - ((v - L.lo) / (L.hi - L.lo)) * h;
+      for (const L of LANES.filter((x) => x.id === state.lane)) {
+        const top = yTop + LH, h = L.h + 70, Y = (v) => top + h - ((v - L.lo) / (L.hi - L.lo)) * h;
         geo.lanes.push({ top, h });
         svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">${L.label}</text>`;
         svg += `<text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${L.sym ? `\u00b1${L.hi.toFixed(1)} g` : `${L.hi} ${SPD()}`}</text>`;
@@ -502,8 +541,8 @@
         svg += p ? `<path d="${p}" fill="none" stroke="${L.id === 'speed' ? C.panelInk : C.accent}" stroke-width="1.6" stroke-linejoin="round"/>` : `<text x="${LM}" y="${top + h / 2}" font-size="11" fill="${C.panelDim}">not recorded</text>`;
         yTop = top + h + 10;
       }
-      if (own) {                                                           // HE-1: what this phone felt, labelled so it is never the crowd's
-        const top = yTop + LH, h = 56, cs = Math.max(1, Math.floor((v1 - v0) / (W * 1.2))), bw = Math.max(1, (W - LM - RM) / ((v1 - v0) / cs));
+      if (own && state.lane === 'road') {                                   // HE-1: what this phone felt, labelled so it is never the crowd's
+        const top = yTop + LH, h = 140, cs = Math.max(1, Math.floor((v1 - v0) / (W * 1.2))), bw = Math.max(1, (W - LM - RM) / ((v1 - v0) / cs));
         svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Your road feel</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">this phone \u00b7 1 run \u00b7 banking \u00b18\u00b0 \u00b7 roughness</text>`;
         svg += `<line x1="${LM}" x2="${W - RM}" y1="${top + h / 2}" y2="${top + h / 2}" stroke="${C.rule}" stroke-dasharray="3 4"/><line x1="${LM}" x2="${W - RM}" y1="${top + h}" y2="${top + h}" stroke="${C.rule}"/>`;
         let bars = '', rp = '', rs = false;
@@ -515,8 +554,8 @@
         svg += bars + (rp ? `<path d="${rp}" fill="none" stroke="${C.panelDim}" stroke-width="1.4"/>` : '');
         geo.lanes.push({ top, h }); yTop = top + h + 10;
       }
-      if (feel) {                                                          // what members measured on these roads; gaps are unknown, not zero
-        const top = yTop + LH, h = 56, covered = feel.cam.filter((v) => v != null).length;
+      if (feel && state.lane === 'road') {   // what members measured on these roads; gaps are unknown, not zero
+        const top = yTop + LH, h = 140, covered = feel.cam.filter((v) => v != null).length;
         svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Road feel</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${covered ? `banking \u00b18\u00b0 (faint: 1 run or runs differ) \u00b7 roughness` : 'no member data on this road yet'}</text>`;
         svg += `<line x1="${LM}" x2="${W - RM}" y1="${top + h / 2}" y2="${top + h / 2}" stroke="${C.rule}" stroke-dasharray="3 4"/><line x1="${LM}" x2="${W - RM}" y1="${top + h}" y2="${top + h}" stroke="${C.rule}"/>`;
         const cs = Math.max(1, Math.floor((v1 - v0) / (W * 1.2)));
@@ -529,9 +568,9 @@
         svg += bars + (rp ? `<path d="${rp}" fill="none" stroke="${C.signal}" stroke-width="1.4"/>` : '');
         geo.lanes.push({ top, h }); yTop = top + h + 10;
       }
-      if (hasElev) {                                                       // faint elevation profile along the bottom
+      if (hasElev && state.lane === 'elev') {                              // the elevation profile
         let lo = Infinity, hi = -Infinity; for (const v of d.elev) if (finite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
-        const top = yTop + LH, h = 40, span = Math.max(10, hi - lo);
+        const top = yTop + LH, h = 140, span = Math.max(10, hi - lo);
         svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Elevation</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${elevSpan(lo, hi)}</text>`;
         // one filled shape per measured stretch: unknown elevation is a gap, never a dive to the bottom
         let p = '', run = null;
@@ -544,7 +583,7 @@
           last = i;
         }
         close(run, last);
-        if (p) svg += `<path d="${p}" fill="${C.rule}" opacity="0.18"/>`;   // faint, as the comment above says
+        if (p) svg += `<path d="${p}" fill="${C.rule}" opacity="0.3"/>`;
         geo.lanes.push({ top, h }); yTop = top + h + 6;
       }
       // numbered corner flags on top of the first lane
@@ -554,7 +593,7 @@
       geo.H = yTop;
       const win = mapBox.querySelector('#dvWin');                          // the zoomed stretch, outlined on the map
       if (win) { let pts = ''; if (v1 - v0 < n - 1) for (let i = v0; i <= v1; i += Math.max(1, Math.floor((v1 - v0) / 120))) pts += P(i).map((q) => q.toFixed(1)).join(',') + ' '; win.setAttribute('points', pts); }
-      lanes.innerHTML = `<svg width="${W}" height="${yTop}" viewBox="0 0 ${W} ${yTop}" style="touch-action:none;cursor:crosshair" role="img" aria-label="Speed, lateral and longitudinal g along the drive">${svg}</svg>`;
+      lanes.innerHTML = `<svg width="${W}" height="${yTop}" viewBox="0 0 ${W} ${yTop}" style="touch-action:none;cursor:crosshair" role="img" aria-label="${esc((laneChoices().find(([k]) => k === state.lane) || [0, 'Speed'])[1])} along the drive">${svg}</svg>`;
       move(state.i);
     }
     const cornerAt = (i) => d.corners.findIndex((c) => i >= c.start && i <= c.end);
@@ -594,10 +633,11 @@
     let net = null;
     if (ref) { const ks = d.corners.map((_, k) => lost(k)).filter((x) => x != null); net = ks.length ? ks.reduce((s, x) => s + x, 0) : null; }
     // TestFlight 2026-11-12 ("walls of text"): the comparison and the repeatability say their numbers in a line each
-    // the gap in words, against the drive it is measured from ("+18.9 s" was a sign to decode); each card's delta follows it
+    // the gap in words, against the drive it is measured from ("+18.9 s" was a sign to decode); each card's delta follows it.
+    // Named by its day, never its Score: a Score beside a time read as "your best" being the slower one (Nate's drives, round 2)
     const nk = d.corners.map((_, k) => lost(k)).filter((x) => x != null).length;
     const gap = net == null ? null : Math.abs(net) < 0.05 ? 'level' : `${Math.abs(net).toFixed(1)} s ${net > 0 ? 'slower' : 'quicker'}`;
-    list.innerHTML = '<h2>Corners</h2>' + (ref ? `<p class="note" style="margin-bottom:8px">${gap == null ? 'No clean corners to compare with your best drive here.' : `${gap === 'level' ? 'Level with' : `<b class="${net > 0 ? 'loss' : 'gain'}">${gap}</b> than`} your best drive here (${esc(String(ref.score))}), over ${nk} corner${nk === 1 ? '' : 's'}`}</p>` : '');
+    list.innerHTML = '<h2>Corners</h2>' + (ref ? `<p class="note" style="margin-bottom:8px">${gap == null ? 'No clean corners to compare with your other drive here.' : `${gap === 'level' ? 'Level with' : `<b class="${net > 0 ? 'loss' : 'gain'}">${gap}</b> than`} your other drive here${ref.when ? ` (${esc(ref.when)})` : ''}, over ${nk} corner${nk === 1 ? '' : 's'}`}</p>` : '');
     const reps = consistencyRows(co);
     if (reps.length) {                                               // how repeatably each corner is driven over your passes (D-07)
       const ul = el('ol', 'dv-time'), m = (x) => fine(Math.max(3, x)), spd = (x) => `${Math.max(1, Math.round(x * MPH))} ${SPD()}`;
@@ -631,8 +671,10 @@
       const advice = ab.moments.map((m) => abruptAdvice(d.lat_g, d.lon_g, m.index)), same = advice.every((a) => a === advice[0]);
       ab.moments.forEach((m, k) => {
         const near = d.corners.findIndex((c) => m.index >= c.start - 4 && m.index <= c.end + 4), li = el('li'), b = el('button');
-        b.innerHTML = `<b>${String.fromCharCode(65 + k)}</b><span>${near >= 0 ? `Corner ${near + 1} \u00b7 ${esc(callOf(d.corners[near]))}` : 'Between corners'}</span><em class="loss">${m.jerk_gps.toFixed(1)} g/s</em>`
-          + `<span class="note">${DIST(d.dist[m.index])}${same && ab.moments.length > 1 ? '' : ` \u00b7 ${advice[k]}`}</span>`;
+        // in a word first, the number after it in the one spelling (vocabulary.js rateWord; it said "1.4 g/s", Nate 2026-11-15)
+        const word = VOC() && VOC().rateWord ? VOC().rateWord(m.jerk_gps) : null;
+        b.innerHTML = `<b>${String.fromCharCode(65 + k)}</b><span>${near >= 0 ? `Corner ${near + 1} \u00b7 ${esc(callOf(d.corners[near]))}` : 'Between corners'}</span><em class="loss">${word ? word.charAt(0).toUpperCase() + word.slice(1) : `${m.jerk_gps.toFixed(1)} g a second`}</em>`
+          + `<span class="note">${DIST(d.dist[m.index])}${same && ab.moments.length > 1 ? '' : ` \u00b7 ${advice[k]}`}${word ? ` \u00b7 ${m.jerk_gps.toFixed(1)} g a second` : ''}</span>`;
         b.onclick = () => { if (showSmooth) showSmooth(); pick(m.index, m.index - 10, m.index + 10); };
         li.append(b); ul.append(li);
       });
@@ -712,14 +754,16 @@
     }
     if (co && co.top.length) {                                      // where the time is: the biggest gaps to your own best passes
       const ul = el('ol', 'dv-time');
+      // the drive the best passes came from, said once over the list when it is one drive (it was on every row, round 2)
+      const froms = co.top.map((k) => (co.corners[k].best ? co.others[co.corners[k].best_from] : null)), one = froms.every((f) => f && froms[0] && f.date === froms[0].date) ? froms[0] : null;
       for (const k of co.top) {
         const x = co.corners[k], c = d.corners[k], from = x.best ? co.others[x.best_from] : null, li = el('li'), b = el('button');
         b.innerHTML = `<b>${k + 1}</b><span>${esc(callOf(c))}</span><em class="loss">${fmtD(x.gain_s)}</em>`
-          + `<span class="note">${esc(tipText(x, MPH) || 'Same technique, quicker all the way through')}${from ? ` \u00b7 best pass ${esc(from.date)}` : ''}</span>`;
+          + `<span class="note">${esc(tipText(x, MPH) || 'Same technique, quicker all the way through')}${from && !one ? ` \u00b7 best pass ${esc(from.date)}` : ''}</span>`;
         b.onclick = () => { pick(c.apex, c.start, c.end); openCorner(k, b); };
         li.append(b); ul.append(li);
       }
-      list.prepend(el('h2', null, 'Where to find time'), ul);
+      list.prepend(...[el('h2', null, 'Where to find time'), one ? el('p', 'note', `Against your best passes, ${esc(one.date)}`) : null, ul].filter(Boolean));
     }
     // your best yet: the corners this drive beat every other pass of, and by how much (above Where to find time: news first)
     const wins = newBests(co);
@@ -735,12 +779,22 @@
       list.prepend(el('h2', null, wins.length === 1 ? 'Your best yet here' : `Your best yet in ${wins.length} corners`), ul);
     }
     const grid2 = el('div', 'dv-corners');
+    // each corner leads with how it went (driver_profile.js cornerResult: clean out of 100 and what cost it most), the call
+    // and the speed under it; the number on the map is where it is (it said "0.01 mi"). Unmeasured g: no result, the call leads
+    const DP = root.ApexDriverProfile || (typeof module !== 'undefined' && typeof require === 'function' ? (() => { try { return require('./driver_profile.js'); } catch (_) { return null; } })() : null);
+    let byApex = new Map();
+    try { if (DP && DP.observe && DP.cornerResult && d.lat_g && d.lon_g) for (const o of DP.observe(d, Core)) byApex.set(o.apex, DP.cornerResult(o)); } catch (_) { byApex = new Map(); }
     d.corners.forEach((c, k) => {
-      const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${callOf(c)}, apex ${Math.round(c.apex_mps * MPH)} ${SPD_WORDS()}`);
-      r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${esc(callOf(c))}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} ${SPD()}</span><span class="dv-d">${DIST(d.dist[c.apex])}${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`
+      const r = el('button', 'dv-corner'), res = byApex.get(c.apex) || null;
+      r.setAttribute('aria-label', `Corner ${k + 1}: ${res ? `${res.say}, ${res.level} out of 100, ` : ''}${callOf(c)}, apex ${Math.round(c.apex_mps * MPH)} ${SPD_WORDS()}`);
+      const delta = ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : '';
+      r.innerHTML = res
+        ? `<b>${k + 1}</b><span class="dv-res${res.worst ? ' miss' : ''}">${esc(res.say.charAt(0).toUpperCase() + res.say.slice(1))}</span><span class="dv-lvl">${res.level}</span>`
+          + `<span class="dv-d"><span class="dv-call">${esc(callOf(c))}</span> \u00b7 <span class="dv-v">${Math.round(c.apex_mps * MPH)} ${SPD()}</span>${delta}</span>`
+        : `<b>${k + 1}</b><span class="dv-call">${esc(callOf(c))}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} ${SPD()}</span>${delta ? `<span class="dv-d">${delta.replace(/^ \u00b7 /, '')}</span>` : ''}`
         // a tip only where it is news: a habit (no best pass to copy) that Where to find time does not already say; the rest
         // say it in their delta, so cards don't repeat "your best pass was 4 mph quicker" (TestFlight 2026-11-12, "text walls")
-        + (co && tipText(co.corners[k], MPH) && !co.top.includes(k) && (!co.corners[k].best || co.corners[k].tip.vs_best === false)
+        + (!(res && res.worst) && co && tipText(co.corners[k], MPH) && !co.top.includes(k) && (!co.corners[k].best || co.corners[k].tip.vs_best === false)
           ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
       r.onclick = () => { pick(c.apex, c.start, c.end); openCorner(k, r); };
       if (overlayable(k)) r.setAttribute('aria-expanded', 'false');
@@ -778,7 +832,7 @@
     draw();
     const ro = new ResizeObserver(() => { if (Math.abs((lanes.clientWidth || 0) - W) > 2) draw(); if (basemap) basemap.refit(); });
     ro.observe(lanes); if (basemap && planBox) ro.observe(planBox);
-    function setRoadFeel(series) { feel = series; draw(); }
+    function setRoadFeel(series) { feel = series; buildPick(); draw(); }
     // the corners this drive is your cleanest pass of on this road (driver_profile.js roadRecords, from the drive job)
     // rows: [{ apex, note, by }] (driver_profile.js roadRecords rows with their words), or bare apexes this pass is cleanest
     // at; open(by) makes the note a link to the drive that holds the corner
@@ -831,6 +885,6 @@
     return { since: first.dateLabel || '', score_d: Number.isFinite(a) && Number.isFinite(b) ? a - b : null, gain_s: first.delta_s, matched: first.matched };
   }
 
-  const api = { mount, newBests, roadProgress, overlaySvg, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };
+  const api = { barMeaning, BAR_HINT, mount, newBests, roadProgress, overlaySvg, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveView = api;
 })(typeof window !== 'undefined' ? window : globalThis);

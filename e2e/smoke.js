@@ -4411,6 +4411,21 @@ flow('drive ended: the card and the Log give the same score and time for the rec
   // RA-3 (panel round 2): one set of numbers: the card's line and the drive page's are the same words (distance, time,
   // every corner), and the Log's row says the same distance and corners (recording 7: 3 corners on the card, 2 on the row)
   check(/ min/.test(card.meta) && !/ h /.test(card.meta) && /corner/.test(card.meta) && log.meta === card.meta, `the card's line is the drive page's: ${card.meta} against ${log.meta}`);
+  // drive page round 1 (Nate 2026-11-15): each part of the Score is out of 100 and a tap says what it means; a second tap puts the hint back
+  await page.click('.dv-head .bar[data-k="pace"]');
+  const say = await page.textContent('.dv-head .dv-bar-say');
+  await page.click('.dv-head .bar[data-k="pace"]');
+  const back = await page.textContent('.dv-head .dv-bar-say');
+  check(/^Pace \d+ of 100: How close to the road’s grip you drove the corners\.$/.test(say) && /^Each part out of 100/.test(back), 'a part of the Score says what it means: ' + JSON.stringify([say, back]));
+  await page.click('.dv-head .dv-gg');
+  check(/^Grip circle: /.test(await page.textContent('.dv-head .dv-bar-say')), 'the grip circle says what it is on a tap');
+  // each corner leads with how it went (clean or what cost it, out of 100), never its distance in miles; the abrupt moments
+  // say it in a word, the number in the one spelling
+  const rows = await page.evaluate(() => ({ res: [...document.querySelectorAll('.dv-corner')].filter((r) => r.querySelector('.dv-res')).map((r) => [r.querySelector('.dv-res').textContent, r.querySelector('.dv-lvl').textContent]),
+    miles: [...document.querySelectorAll('.dv-corner')].filter((r) => / mi\b/.test(r.textContent)).length,
+    abrupt: [...document.querySelectorAll('.dv-abrupt li')].map((li) => [li.querySelector('em').textContent, li.querySelector('.note').textContent]) }));
+  check(rows.res.length >= 3 && rows.res.every(([w, n]) => /^(Clean|[A-Z][a-z ]+)$/.test(w) && /^\d{1,3}$/.test(n)) && !rows.miles
+    && rows.abrupt.length && rows.abrupt.every(([w, t]) => /^(Sharp|Firm|Gentle)$/.test(w) && /\d g a second$/.test(t) && !/g\/s/.test(t)), 'corner results and abrupt moments in words: ' + JSON.stringify(rows));
   await page.goto(`${base}/analysis.html`);
   await page.waitForSelector(`tr[data-drive="${card.id}"] .sub`, { timeout: 15000 });
   const row = await page.evaluate((id) => document.querySelector(`tr[data-drive="${id}"] .sub`).textContent, card.id);
@@ -6585,6 +6600,12 @@ flow('drive tags: tag a drive in the Log, filter by it, the note stays on the ph
     await ApexRecording.store(rec('t2', 'Dry one'));
   });
   await page.goto(base + '/analysis.html?drive=t1');
+  // the tags fold behind + Tag until one is used (drive page round 1): none chosen, so no chips out yet
+  await page.waitForSelector('#dvRoot .dv-head', { timeout: 15000 });   // drawn in the same turn as the tags
+  const fold = await page.evaluate(() => ({ chips: document.querySelectorAll('#dvTags button').length, tagsHidden: document.getElementById('dvTags').hidden,
+    more: document.getElementById('dvTagMore').hidden, open: !document.getElementById('dvTagOpen').hidden }));
+  check(fold.chips === 0 && fold.tagsHidden && fold.more && fold.open, 'no tag chips out until + Tag: ' + JSON.stringify(fold));
+  await page.click('#dvTagOpen');
   await page.waitForSelector('#dvTags button');
   await page.click('#dvTags button:has-text("Wet")');
   await page.fill('#dvTagNew', 'E46');
@@ -6719,6 +6740,12 @@ flow('a drive\'s elevation lane gives its range in your units, and one height on
   const label = async (units) => {
     await page.evaluate((u) => localStorage.setItem('apex.units', u), units);
     await page.goto(base + '/analysis.html?drive=E0');
+    // one chart at a time (drive page round 1, Nate 2026-11-15): Speed first, the others a tap away
+    await page.waitForSelector('.dv-lanepick button[data-lane="elev"]', { timeout: 20000 });
+    const before = await page.evaluate(() => ({ on: document.querySelector('.dv-lanepick .on').textContent, names: [...document.querySelectorAll('.dv-lanepick button')].map((b) => b.textContent),
+      lanes: [...document.querySelectorAll('.dv-lanes svg > text')].map((t) => t.textContent).filter((t) => /^(Speed|Turning|Pedals|Elevation|Your road feel|Road feel)/.test(t)) }));
+    check(before.on === 'Speed' && before.lanes.join() === 'Speed' && before.names.join() === 'Speed,Turning,Pedals,Height', 'one chart, picked from a row: ' + JSON.stringify(before));
+    await page.click('.dv-lanepick button[data-lane="elev"]');
     await page.waitForFunction(() => [...document.querySelectorAll('svg text')].some((t) => t.textContent === 'Elevation'), null, { timeout: 20000 });
     return page.evaluate(() => { const t = [...document.querySelectorAll('svg text')], i = t.findIndex((x) => x.textContent === 'Elevation'); return t[i + 1].textContent; });
   };
@@ -6777,7 +6804,7 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   await page.click('.dv-time li button');
   check(await page.evaluate(() => !document.querySelector('.dv-ovl')), 'a second tap closes the overlay');
   const abrupt = await page.evaluate(() => { const l = document.querySelector('.dv-abrupt'); return l ? { rows: [...l.querySelectorAll('li .note')].map((n) => n.textContent), say: l.previousElementSibling.textContent } : null; });
-  check(abrupt && abrupt.rows.length === 3 && abrupt.rows.every((t) => !/·/.test(t)) && /^The brake came on sharply: squeeze it on$/.test(abrupt.say), 'abrupt moments say a shared advice once: ' + JSON.stringify(abrupt));
+  check(abrupt && abrupt.rows.length === 3 && abrupt.rows.every((t) => !/squeeze|sharply/.test(t) && /\d g a second$/.test(t)) && /^The brake came on sharply: squeeze it on$/.test(abrupt.say), 'abrupt moments say a shared advice once: ' + JSON.stringify(abrupt));
   // where this pass was well off your cleanest at a least even corner, the note says what it lost most (the second pass held the arc)
   check(road.rows.some((r) => r.why === 'arc') && notes.some((n) => /, mostly one steering arc$/.test(n.t)), 'what this pass lost: ' + JSON.stringify(road.rows.filter((r) => r.why)).slice(0, 300));
   const touchText = await page.evaluate(() => document.body.innerText);
@@ -6974,7 +7001,7 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   check(dt.best.length >= 2 && /^Cleanest tight corner: \d{1,3}( · your best of \d+ tight corners| · level with your best(, .+)?| · your best \d{1,3}(, .+)?)?$/.test(dt.best[0]), 'a drive against your records: ' + JSON.stringify(dt.best));
   // corner by corner on its road: these three drives are on three roads, so no corner has been driven three times
   check(dt.road && dt.road.corners === 0 && dt.road.best === 0, 'no corner of this road driven three times yet: ' + JSON.stringify(dt.road));
-  check(dt.say.join(' | ') === 'Brakes on: 1.1 g a second · usually 0.8 | Turn-in: one quick movement · usually 0.9', 'a drive\'s touch in words: ' + dt.say);
+  check(dt.say.join(' | ') === 'Brakes on: sharp, 1.1 g a second · usually 0.8 | Turn-in: one quick movement · usually 0.9', 'a drive\'s touch in words: ' + dt.say);
   // each drive's observations were kept: a second visit reads no drive again, and a deleted drive's are dropped
   const again = await page.evaluate(() => ApexAnalysis.job('profile'));
   check(again.read === 0 && again.profile.corners === 108, 'kept between visits: read ' + again.read);
@@ -9084,6 +9111,28 @@ flow('import: a drive from a file is named after the road that carried it (IDEAS
   check(hero.stamp === '--' && !(/Dry Ridge Road/.test(hero.what) && /Today|AM|PM/.test(hero.what)), 'the index stamps it "--" and the hero names no time for it: ' + JSON.stringify(hero));
 });
 
+flow('old drives named by a date or an address get their road on the map page; a name you gave stays (Nate\'s drives, round 2)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexStages && window.ApexRoadNames && window.ApexRecording);
+  const out = await page.evaluate(async () => {
+    ApexStages.namesAlong = async () => [{ properties: { name: 'Dry Ridge Road' }, geometry: { type: 'MultiLineString', coordinates: [[[-84.75, 39.24], [-84.68, 39.24]]] } }];
+    const kx = 111320 * Math.cos(39.24 * Math.PI / 180), lat = [], lon = [];
+    for (let i = 0; i < 400; i++) { lat.push(39.2401); lon.push(-84.74 + i * 5 / kx); }
+    const rec = (id, name) => ({ id, name, date: '2026-11-14T21:35:00', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps' });
+    await ApexRecording.store(rec('o1', 'Drive 11/14/2026 9:35 PM'));
+    await ApexRecording.store(rec('o2', 'To 10069 Pebble Ridge Ln'));
+    await ApexRecording.store(rec('o3', 'Sunday with Sam'));
+    const n = await apexDebug.renameStandInDrives(10);
+    const names = Object.fromEntries((await ApexRecording.all()).map((d) => [d.id, d.name]));
+    const again = await apexDebug.renameStandInDrives(10);           // asked once: not again
+    return { n, names, again };
+  });
+  check(out.n === 2 && out.names.o1 === 'Dry Ridge Road' && out.names.o2 === 'Dry Ridge Road' && out.names.o3 === 'Sunday with Sam' && out.again === 0,
+    'a date or an address gives way to the road; your own name stays: ' + JSON.stringify(out));
+});
+
 flow('track day: on a mapped raceway, Start/finish here times laps (IDEAS D-15)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.webkit = { messageHandlers: { apex: { postMessage() {} } } };   // the iOS shell's bridge, faked: frames come from window.apex.live
@@ -10646,13 +10695,15 @@ flow('Your records: unknown dates and unscored drives never make a "new best", a
       // this month: smoothness measured on two, braking on one only; best runs of 6 and 9 (an old month's 20 never counts)
       d('m1', 'Town loop', `${ym}-01T09:00:00`, 600, c(0.6, NaN), { run: { corners: 6, len_m: 2000 } }), d('m2', 'Back road', `${ym}-02T09:00:00`, 650, c(0.7, 0.9), { run: { corners: 9, len_m: 3400 } })];
     window.apexLogDebug.records(seed);
-    const rows = [...document.querySelectorAll('#recordsTable tr')].map((tr) => [tr.dataset.drive, tr.textContent]);
+    const rows = [...document.querySelectorAll('#recordsTable tr.row-link')].map((tr) => [tr.dataset.drive, tr.textContent]), heads = [...document.querySelectorAll('#recordsTable tr.rec-h')].map((tr) => tr.textContent);
     const t = document.getElementById('recordsTable').closest('.scroll');
-    return { rows, overflow: t.scrollWidth - t.clientWidth };
+    return { rows, heads, overflow: t.scrollWidth - t.clientWidth };
   });
   const text = r.rows.map(([id, t]) => `${id}: ${t}`).join('\n');
   check(r.rows.length === 4, `two roads and two month records (got\n${text})`);
-  check(r.rows[3][0] === 'm2' && /Best run this month: corners in a row, smooth and settled, over 2\.1 mi/.test(r.rows[3][1]) && /9\s*$/.test(r.rows[3][1]), `this month's best run, from the summaries (got\n${text})`);
+  check(r.rows[3][0] === 'm2' && /Best run this month: corners in a row, smooth and settled, over 2\.1 mi/.test(r.rows[3][1]) && /9 in a row\s*$/.test(r.rows[3][1]), `this month's best run, from the summaries (got\n${text})`);
+  // one unit a group (Nate's drives, round 2): Scores out of 1000, then feats out of 100 and a run in corners; never a %
+  check(r.heads.join() === 'Scores,Feats' && /\/1000\s*$/.test(r.rows[0][1]) && /\/100\s*$/.test(r.rows[2][1]) && !/%/.test(text), `one unit a group (got ${r.heads}\n${text})`);
   check(r.rows[0][0] === 'b2' && /a new best/.test(r.rows[0][1]), `the dated latest best is new (got\n${text})`);
   check(r.rows[1][0] === 'a4' && !/new best/.test(r.rows[1][1]) && /date unknown/.test(r.rows[1][1]) && /of 3 scored drives/.test(r.rows[1][1]), `an undated import is no "latest" (got\n${text})`);
   check(r.rows[2][0] === 'm2' && /Smoothest drive this month, of 2/.test(r.rows[2][1]), `braking measured once is no record (got\n${text})`);
@@ -10915,6 +10966,20 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
     return { first: score && score.compareDocumentPosition(document.getElementById('dvTagsPanel')) & Node.DOCUMENT_POSITION_FOLLOWING, replay: document.getElementById('dvReplay').className,
       tags: tags && tags.className, wide: [...document.querySelectorAll('#tab-drive *')].filter((e) => e.offsetParent && e.getBoundingClientRect().right > innerWidth + 1).map((e) => e.className).slice(0, 5), ids: ids.length }; });
   check(dv.first && /solid/.test(dv.replay) && /stamps/.test(dv.tags) && !dv.wide.length, 'Drive detail: ' + JSON.stringify(dv));
+  // drive page round 1 (Nate 2026-11-15): three parts in order, the grip circle beside the Score, a part of the Score says what it means
+  const parts = await page.evaluate(() => {
+    const top = (q) => { const e = document.querySelector(q); return e && e.offsetParent ? Math.round(e.getBoundingClientRect().top + scrollY) : null; };
+    const s = document.querySelector('.dv-score').getBoundingClientRect(), g = document.querySelector('.dv-head > .dv-gg');
+    return { drove: top('#dvPartDrove'), score: top('.dv-score'), road: top('#dvPartRoad'), map: top('#dvRoadRoot .dv-map'), yours: top('#dvPartYours'), tags: top('#dvTagsPanel'),
+      beside: g ? Math.abs(g.getBoundingClientRect().top - s.top) < 140 && g.getBoundingClientRect().left > s.left : false, para: !!document.querySelector('.dv-gg-lede, .dv-gg-more') };
+  });
+  check(parts.drove < parts.score && parts.score < parts.road && parts.road < parts.map && parts.map < parts.yours && parts.yours < parts.tags && parts.beside && !parts.para,
+    'three parts, the circle beside the Score: ' + JSON.stringify(parts));
+  if (await page.$('.dv-head .bar[data-k="pace"]')) {                  // a scored drive: its four parts
+    await page.click('.dv-head .bar[data-k="pace"]');
+    const say = await page.textContent('.dv-head .dv-bar-say');
+    check(/^Pace \d+ of 100: How close to the road’s grip you drove the corners\.$/.test(say), 'a part of the Score says what it means: ' + say);
+  } else console.log('     (unscored drive: ' + await page.textContent('.dv-score') + ')');
   // People signed out: the same Friends | Crews switch, each side what it gets you in three glyphs, then sign-in (the owner, 2026-10-30)
   await page.goto(base + '/index.html?view=people');
   await page.waitForSelector('#accountBody .join-gets');

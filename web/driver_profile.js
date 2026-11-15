@@ -292,6 +292,20 @@
     }
     return out;
   }
+  // A corner's own result on the drive page (Nate 2026-11-15: rows read the call, not how it went): how clean it was, out of
+  // 100 (the mean of its measured skills), and what cost it most in a few words.
+  const MISS = { squeeze: 'braked more than once', brake: 'still braking past the middle', arc: 'corrected the steering',
+    entry: 'speed still changing going in', line: 'slowest too early', exit: 'coasted before the gas' };
+  const MISS_UNDER = 60;                                               // the weakest skill under this is named; at it or over, clean
+  // A corner with no braking has no braking skills to read; it is judged on the ones it has (three at least, the arc and the
+  // entry among them), never on a guess at the others.
+  function cornerResult(o) {
+    const known = o ? SKILLS.filter((k) => finite(o[k])) : [];
+    if (known.length < 3 || !known.includes('arc') || !known.includes('entry')) return null;
+    const lv = level(known.reduce((a, k) => a + o[k], 0) / known.length);
+    const worst = known.reduce((w, k) => (o[k] < o[w] ? k : w), known[0]);
+    return { level: lv, worst: level(o[worst]) < MISS_UNDER ? worst : null, say: level(o[worst]) < MISS_UNDER ? MISS[worst] : 'clean' };
+  }
   /** Words for driveRecords on drive `id`, a labelled row a size: "Cleanest tight corner: 94 · your best 100, Aug 12".
    *  Facts, never a push (TestFlight 2026-11-12: "94 at best here; your record is 100" read as a riddle). */
   function driveRecordLines(dr, id, day = (at) => at.slice(0, 10)) {
@@ -784,7 +798,9 @@
       const a = rateText(dt.drive[k]), b = dt.usual ? rateText(dt.usual[k]) : null;
       if (!a) continue;
       // a labelled row a measure, as Your touch reads (TestFlight 2026-11-12, "text walls"); the panel says "on this drive"
-      const now = a === 'quick' ? 'one quick movement' : `${a} g a second`;
+      // a word first, the number beside it (vocabulary.js rateWord, the abrupt moments' own scale): "gentle, 0.2 g a second"
+      const V = root.ApexVocabulary || (typeof require === 'function' ? require('./vocabulary.js') : null), w = V && V.rateWord ? V.rateWord(dt.drive[k].rate) : null;
+      const now = a === 'quick' ? 'one quick movement' : `${w ? `${w}, ` : ''}${a} g a second`;
       const off = dt.outside && dt.outside[k];
       out.push(`${TOUCH_NAME[k]}: ${now}${b ? ` \u00b7 usually ${b}` : ''}${off === 'above' ? ' \u00b7 sharper than usual' : off === 'below' ? ' \u00b7 gentler than usual' : ''}`);
     }
@@ -1111,7 +1127,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadEvenedLine, roadsToWork, skillRoadLine, skillRoad, roadUnevenLine, roadEndLine, cardLine, focusLines, scopeLine, skillDef, trendLabel, sayFindings, render,
+  const api = { SKILLS, observe, cornerResult, MISS, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadEvenedLine, roadsToWork, skillRoadLine, skillRoad, roadUnevenLine, roadEndLine, cardLine, focusLines, scopeLine, skillDef, trendLabel, sayFindings, render,
     PRACTICE_MIN, practice, drivePractice, onPlanRoad, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

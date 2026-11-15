@@ -78,12 +78,12 @@ def test_parity_and_words():
     assert out["by"] == py["touch_by"]
     assert out["tt"] == py["touch_trend"]
     assert out["dt"] == py_dt
-    assert out["fixed"] == ["Brakes on: 1.4 g a second · usually 0.86",
+    assert out["fixed"] == ["Brakes on: sharp, 1.4 g a second · usually 0.86",
                             "Brakes off: one quick movement · usually 0.5"]
-    assert out["alone"] == ["Brakes on: 0.9 g a second"]
-    assert out["off"] == ["Brakes on: 1.2 g a second · usually 0.8 · sharper than usual",
-                          "Brakes off: 0.2 g a second · usually 0.5 · gentler than usual",
-                          "Turn-in: 0.6 g a second · usually 0.6"]
+    assert out["alone"] == ["Brakes on: firm, 0.9 g a second"]
+    assert out["off"] == ["Brakes on: sharp, 1.2 g a second · usually 0.8 · sharper than usual",
+                          "Brakes off: gentle, 0.2 g a second · usually 0.5 · gentler than usual",
+                          "Turn-in: firm, 0.6 g a second · usually 0.6"]
     assert out["months"] == ["Brakes on month by month, in g a second: Sep 1.2, Oct quick."]
     assert out["none"] == [] and out["say"] and len(out["trend"]) >= 1
     words = " ".join(out["say"] + out["trend"] + out["fixed"] + out["off"]).lower()

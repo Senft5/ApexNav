@@ -90,3 +90,30 @@ def test_an_imported_drive_is_named_after_its_road():
     assert out["off"] is None and out["none"] is None and out["short"] is None   # 1 km off any road, no tiles: unknown
     assert out["stand"] == [True, True, True, True]
     assert out["kept"] == [False, False, False]
+
+
+TWISTY = r"""
+const R = require('./web/road_names.js');
+// a straight 2 km and a winding 1 km: an S of 90° bends every 100 m
+const straight = { lat: [], lon: [] }, wind = { lat: [], lon: [] };
+for (let i = 0; i < 400; i++) { straight.lat.push(39.2 + i * 5 / 111320); straight.lon.push(-84.7); }
+let y = 39.3, x = -84.6, h = 0;
+for (let i = 0; i < 200; i++) { if (i % 20 === 0) h = h === 0 ? Math.PI / 2 : 0; y += Math.cos(h) * 5 / 111320; x += Math.sin(h) * 5 / (111320 * Math.cos(y * Math.PI / 180)); wind.lat.push(y); wind.lon.push(x); }
+const tS = R.turnDeg(straight.lat, straight.lon), tW = R.turnDeg(wind.lat, wind.lon);
+console.log(JSON.stringify({ tS, tW,
+  twisty: R.driveRoad({ 'Colerain Avenue': 2000, 'Dry Ridge Road': 1000 }, { 'Colerain Avenue': tS, 'Dry Ridge Road': tW }),
+  longest: R.driveRoad({ 'Colerain Avenue': 2000, 'Bank Street': 400 }, { 'Colerain Avenue': 20, 'Bank Street': 10 }),
+  short: R.driveRoad({ 'Bank Street': 150 }, {}), none: R.driveRoad({}, {}),
+  dest: ['To 10069 Pebble Ridge Ln', 'To a dropped pin', 'Dragon loop', 'Tour of the Ridge', '', null].map(R.isDestinationName) }));
+"""
+
+
+def test_a_drive_is_named_after_its_twistiest_road():
+    """Nate's drives, round 2: 3 of 13 were "Drive 11/14/2026 9:35 PM" (city streets first, no road a third of it) and a
+    routed one "To 10069 Pebble Ridge Ln", a house address. The twistiest road names it, else the longest."""
+    out = json.loads(subprocess.run([NODE, "-e", TWISTY], capture_output=True, text=True, check=True, cwd=Path(__file__).resolve().parents[1]).stdout)
+    assert out["tS"] < 10 and out["tW"] > 500, (out["tS"], out["tW"])
+    assert out["twisty"] == "Dry Ridge Road", "the winding kilometre names it over the straight two"
+    assert out["longest"] == "Colerain Avenue", "no road with real bends: the longest"
+    assert out["short"] is None and out["none"] is None, "150 m of one road is no name"
+    assert out["dest"] == [True, True, False, False, False, False]
