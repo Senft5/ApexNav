@@ -46,15 +46,20 @@
      * replaces the map's, and the route's corner notes and braking envelope are worked out again. Not during a drive (the
      * notes ahead would jump); the route says how much of it was corrected. Returns true when anything changed.
      */
+    // And the camber members measured and agree on (contributor.js camFrom, 3 deg or more): a corner that leans the wrong
+    // way says so ("slopes away"), a banked one is "banked", and the braking envelope takes it (apex_core.js apexSpeedMps).
     function applyCrowdCurvature(t, m) {
-      if (!t || t.kind !== 'route' || !m || !Array.isArray(m.crowdK) || !Array.isArray(t.kappa) || t.crowdCorrected != null) return false;
+      if (!t || t.kind !== 'route' || !m || !(Array.isArray(m.crowdK) || Array.isArray(m.crowdCam)) || !Array.isArray(t.kappa) || t.crowdCorrected != null) return false;
       if (window.ApexFlags && !ApexFlags.on('crowd_curvature')) return false;            // switched off on the server (flags.js, IDEAS Y-06)
-      const { kappa, replaced } = Core.blendCurvature(t.kappa, m.crowdK, m.crowdKn || []);
-      t.crowdCorrected = replaced * 5;
-      if (!replaced) return false;
+      const { kappa, replaced } = Array.isArray(m.crowdK) ? Core.blendCurvature(t.kappa, m.crowdK, m.crowdKn || []) : { kappa: Float64Array.from(t.kappa), replaced: 0 };
+      const cam = Array.isArray(m.crowdCam) && m.crowdCam.length === t.kappa.length ? m.crowdCam : null;
+      const camN = cam ? cam.reduce((a, v) => a + (Number.isFinite(v) ? 1 : 0), 0) : 0;
+      t.crowdCorrected = replaced * 5; t.crowdCamber = camN * 5;
+      if (!replaced && !camN) return false;
+      const camberRad = camN ? Float64Array.from(cam, (v) => (Number.isFinite(v) ? v * Math.PI / 180 : 0)) : null;
       const ds = new Float64Array(kappa.length).fill(5), sight = Float64Array.from(t.sightM);
-      const env = Core.brakingEnvelopeMps(kappa, ds, null, null, undefined, sight);
-      const corners = Core.annotateCautions(Core.detectCorners(kappa, ds), env, sight);
+      const env = Core.brakingEnvelopeMps(kappa, ds, camberRad, null, undefined, sight);
+      const corners = Core.annotateCautions(Core.detectCorners(kappa, ds, camberRad), env, sight);
       const events = corners.map(c => cornerEventOf(c, t.lat, t.lon, t.dist));
       Core.linkNotes(events);
       t.events = [...events, ...t.events.filter(e => e.type !== 'corner')].sort((a, b) => a.dist_m - b.dist_m);
@@ -67,11 +72,19 @@
      * may happen mid-drive: it only adds notes, it never moves one. Once per track. Returns true when anything was added.
      */
     function applyCrowdBumps(t, m) {
-      if (!t || t.kind !== 'route' || !m || !Array.isArray(m.crowdBumps) || t.crowdBumps != null || !Array.isArray(t.events)) return false;
+      if (!t || (t.kind !== 'route' && t.kind !== 'horizon') || !m || !Array.isArray(m.crowdBumps) || t.crowdBumps != null || !Array.isArray(t.events)) return false;
       if (window.ApexFlags && !ApexFlags.on('crowd_bumps')) return false;               // switched off on the server (flags.js)
       const add = ApexContributor.bumpEvents(t, m.crowdBumps, t.events);
       t.crowdBumps = add.length;
-      if (!add.length) return false;
+      // and crests two or more members' phones felt go light over (contributor.js crestsFrom): "Crest" with the notes
+      const crests = ApexContributor.crestEvents ? ApexContributor.crestEvents(t, m.crowdCrests || [], t.events) : [];
+      t.crowdCrests = crests.length;
+      add.push(...crests);
+      // and broken pavement two or more members measured (contributor.js roughFrom): "Rough road" with the road marks
+      const rough = ApexContributor.roughMarks ? ApexContributor.roughMarks(t, m.crowdRough || [], t.marks) : [];
+      t.crowdRough = rough.length;
+      if (rough.length) t.marks = window.ApexRoadMarks ? ApexRoadMarks.union(t.marks, rough) : [...(t.marks || []), ...rough];
+      if (!add.length) return rough.length > 0;
       t.events = [...t.events, ...add].sort((a, b) => a.dist_m - b.dist_m);
       Core.linkNotes(t.events);
       if (t.marks && window.ApexRoadMarks) t.marks = ApexRoadMarks.unfelt(t.marks, t.events);   // a mapped hump they felt: one call
@@ -184,7 +197,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, roadbooks: false, nudge: false, push: false, satellite: false, improve: true }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, roadcams: false, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, events: true, roadbooks: false, nudge: false, push: false, satellite: false, improve: true }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -368,7 +381,7 @@
     });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, get ghostRuns() { return drive.ghosts || null; }, refreshSavedDrives: () => refreshSavedDrives(), renameStandInDrives: (m) => renameStandInDrives(m), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), horizonFrom: async (coords, tee = false) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; if (tee) t.marks = [ApexRoadMarks.teeMark(t)]; useHorizon(t); return t.id; } };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, say: (text) => say(text, true), get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, get ghostRuns() { return drive.ghosts || null; }, refreshSavedDrives: () => refreshSavedDrives(), renameStandInDrives: (m) => renameStandInDrives(m), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), get limitSaid() { return drive.limitSaid ? drive.limitSaid.length : 0; }, horizonFrom: async (coords, tee = false) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; if (tee) t.marks = [ApexRoadMarks.teeMark(t, tee === 'roundabout' ? 'roundabout' : 'tee')]; useHorizon(t); return t.id; } };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -1733,6 +1746,32 @@
       el.setAttribute('aria-valuetext', text);
       el.setAttribute('aria-valuenow', String(T > 0 ? Math.round(at / T * 100) : 0));
     }
+    // Jump to the corners (real-drive review 2026-11-15: a free drive's replay opened on twenty minutes of interstate): where
+    // the drive's corners start, the first run of three corners inside 1.5 km (else its first corner), 400 m before it so
+    // the notes have their run-in. Offered while the replay is more than a kilometre short of it; one tap moves there.
+    const HAZARD_NOTE = new Set(['bump', 'crest', 'dip']);   // instruments.js HAZARD_TYPES: the strip's measured hazards
+    const cornerMs = new WeakMap();                                      // a track's corner metres, sorted (nearCorner)
+    function nearCorner(t, m) {
+      if (!t || !Array.isArray(t.events)) return false;
+      let cs = cornerMs.get(t);
+      if (!cs) { cs = t.events.filter((e) => e.type === 'corner' && Number.isFinite(e.dist_m)).map((e) => Number.isFinite(e.start_m) ? e.start_m : e.dist_m).sort((a, b) => a - b); cornerMs.set(t, cs); }
+      let lo = 0, hi = cs.length;                                         // the first corner at or after m - 150
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (cs[mid] < m - 150) lo = mid + 1; else hi = mid; }
+      return lo < cs.length && cs[lo] <= m + 400;
+    }
+    function cornersStartM(t) {
+      const cs = (t && Array.isArray(t.events) ? t.events : []).filter((e) => e.type === 'corner' && Number.isFinite(e.dist_m)).map((e) => Number.isFinite(e.start_m) ? e.start_m : e.dist_m).sort((a, b) => a - b);
+      if (!cs.length) return null;
+      const run = cs.find((m, i) => i + 2 < cs.length && cs[i + 2] - m <= 1500);
+      return Math.max(0, (run != null ? run : cs[0]) - 400);
+    }
+    function paintJump() {
+      const b = $('jumpCorners'); if (!b) return;
+      const at = replayOn && state.mode === 'replay' && track ? cornersStartM(track) : null;
+      const show = at != null && state.cursorM < at - 300;   // a city start: up to 700 m before the corners
+      if (b.hidden === show) b.hidden = !show;
+      b._at = at;
+    }
     function drawScrubber() {
       const r = scrubRect || scrubCanvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
       const w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
@@ -1740,6 +1779,7 @@
       sctx.clearRect(0, 0, w, h);
       if (!track) return;
       paintScrubValue();
+      paintJump();
       const C = look.colors, n = track.dist.length, T = totalM(), step = Math.max(1, Math.floor(n / w)), xOf = (m) => (m / T) * w;
       if (track.elev) {
         let lo = Infinity, hi = -Infinity;
@@ -1769,7 +1809,12 @@
     // =======================================================================
     // 6. CO-DRIVER — quiet in cruise, full pace notes when spirited or STAGE
     // =======================================================================
-    const allEvents = () => (track ? track.events.concat(track.alpr || [], track.marks || []) : []);   // marks: road_marks.js
+    // a school zone is a mark only in a school run, now (events.js schoolRunAt: a school day, arrival or dismissal hours)
+    const schoolRun = (m) => { const now = Date.now(); if (!m.runAt || now - m.runAt > 60000) { m.runAt = now; m.run = !!(window.ApexCtxEvents && ApexCtxEvents.schoolRunAt && ApexCtxEvents.schoolRunAt(now, m.lat, m.lon)); } return m.run; };
+    // "Bridge may be icy" only in the cold (road_marks.js bridgeCold): the air where you are (the place plate's weather,
+    // placeAsk) at 3 °C or colder, or an icy road already (wet_roads.js, a road sensor). Unknown temperature: not said.
+    const bridgeCold = () => { try { const d = placeAsk.data; return (drive.wet && drive.wet.state === 'ice') || !!(d && ApexRoadMarks.bridgeCold(d.tempC)); } catch (_) { return false; } };
+    const allEvents = () => (track ? track.events.concat(track.alpr || [], (track.marks || []).filter((m) => (m.kind !== 'school' || schoolRun(m)) && (m.kind !== 'icy_bridge' || bridgeCold()))) : []);   // marks: road_marks.js
     const distLabel = (m) => ApexUnits.short(m);          // feet and miles, or metres and km (Settings → Units, U-22)
     // Auto: wake on the road ahead (a corner that is tight or needs braking, updateNotes, U-58) or on hard driving. Full:
     // always awake. Quiet: never wake, so only cameras and severe bumps are called.
@@ -1840,6 +1885,24 @@
     // opts: kind 'hazard' (goes first, may cut off an ordinary line), key (never twice in a row), atM (route metres: dropped once passed).
     // review recordings (.github/workflows/app-review.yml, debug builds only): every line said goes to the system log, a
     // transcript to read beside the video, which has no sound
+    // The drive's own log of what was said (kept with the drive on the phone as `said`, never in an anonymous upload, whose
+    // columns are listed in anon_drives.js): when (s from the drive's start), where (m along it), the line, which voice said
+    // it (pack: the chosen voice's clips; phone: the phone's voice; a prompt style such as a tone when the words were skipped; null: cut off) and, for a note, how far ahead of it the call began, so
+    // a review can see where it fell back to the phone's voice and how early or late each call landed.
+    function saidOnDrive(item) {
+      let rec = null;
+      try { rec = driveActive ? drive.rec : null; } catch (_) { return null; }   // (a line said while the page is still starting)
+      if (!rec || !item || !item.text) return null;
+      const said = rec.said || (rec.said = []);
+      if (said.length >= SAID_MAX) return null;
+      const last = rec.rows.length ? rec.rows[rec.rows.length - 1] : null;   // its newest 5 m row: seconds from the start
+      const t = last && Number.isFinite(last.t_s) ? last.t_s : null;
+      const ahead = Number.isFinite(item.atM) && queueCursor() != null ? Math.round(item.atM - queueCursor()) : null;
+      const x = { t, m: Math.round(rec.dist), line: String(item.text).slice(0, 120), eng: null, ...(ahead != null ? { ahead } : {}) };
+      said.push(x);
+      return x;
+    }
+    const SAID_MAX = 1500;
     function saidLog(text) { if (window.APEX_REVIEW) { try { window.webkit.messageHandlers.apex.postMessage({ cmd: 'said', text: String(text) }); } catch (_) {} } }
     function say(text, force, chain = null, sysToken = null, opts = {}) {
       // a road hazard (not a turn or a crest, which share the urgent speech lane) also alerts on the car's screen
@@ -1931,15 +1994,17 @@
         try { const len = ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, cue, Themes.get(state.theme).sounds)); await new Promise(r => setTimeout(r, len * 1000 + 40)); } catch (_) {}
       }
       const duck = ApexSpeechQueue.ducks(item, isSpirited());
-      let played = false;
+      const said = saidOnDrive(item);   // logged as it starts; which voice said it is filled in once it has played
+      let played = false, voiced = null;   // voiced: the clips this line was given (null: none, so the phone's voice says it)
       try {
         if (state.voiceId !== 'device' && window.ApexVoice) {
           await ApexVoice.load(state.voiceId);
           const own = item.tokens || (item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null);
           // MA-3: the advice's clip in the same breath as the call's (rally words; plain words are spoken whole)
           const tokens = own && item.chain && item.aside && item.aside.kind === 'advice' ? [...own, item.aside.token] : own;
+          voiced = tokens && ApexVoice.covers(tokens) ? tokens : null;
           const promptStyle = await voiceBracket(true, duck);
-          if (promptStyle !== 'normal') { voiceBracket(false); speech.busy = false; speech.followUp = null; pumpSpeech(); return; }   // silent or a tone: skip the words
+          if (promptStyle !== 'normal') { if (said) said.eng = promptStyle; voiceBracket(false); speech.busy = false; speech.followUp = null; pumpSpeech(); return; }   // silent or a tone: skip the words
           try {
             // A call the bank can only voice by joining clips plays as one whole render when the
             // route-load prefetch has it; the join is the audible seam we are avoiding.
@@ -1950,7 +2015,13 @@
           } finally { voiceBracket(false); }
         }
       } catch (_) { /* fall back to the device voice */ }
+      // App health: lines said by the chosen pack's voice, and lines a pack voice was chosen for but the phone's voice said
+      // (no clips for them, or the clips failed), so a fallback that creeps back shows in Garage → Account → App health
+      if (state.voiceId !== 'device') health.bump(played ? 'voice_pack' : 'voice_phone');
+      if (said) said.eng = played ? 'pack' : 'phone';
       if (played) { speech.busy = false; pumpSpeech(); return; }
+      // e2e (VOICE_LOG=1): a line with a pack voice chosen but no clips for it, said by the phone's voice instead
+      if (!voiced && state.voiceId !== 'device' && typeof window.__voiceGap === 'function') { try { window.__voiceGap(String(item.text)); } catch (_) {} }
       deviceSpeak(spokenText(item.text), duck);
       if (speech.queue.hazardWaiting(performance.now(), queueCursor())) preemptForHazard();   // a hazard arrived while the model voice tried
     }
@@ -2071,7 +2142,7 @@
       if (learned != null) { try { localStorage.setItem(REACT_KEY, learned.toFixed(2)); } catch (_) {} }
     }
     const noteM = (e) => (Number.isFinite(e.start_m) && e.start_m <= e.dist_m ? e.start_m : e.dist_m);
-    const apexMpsOf = (e) => (e.type === 'corner' && Number.isFinite(e.apex_mph) ? e.apex_mph / 2.2369362921 : e.type === 'mark' && e.kind === 'stop' ? 0 : e.type === 'mark' && e.kind === 'tee' ? 4 : null);   // a stop sign: braking to a stop; a T: to a turn
+    const apexMpsOf = (e) => (e.type === 'corner' && Number.isFinite(e.apex_mph) ? e.apex_mph / 2.2369362921 : e.type === 'mark' && e.kind === 'stop' ? 0 : e.type === 'mark' && e.kind === 'tee' ? 4 : e.type === 'mark' && e.kind === 'roundabout' ? 7 : null);   // a stop sign: braking to a stop; a T: to a turn; a roundabout: to its entry (~15 mph)
     let lastNotes = [];
     // U-58: Auto says when it goes quiet and when the notes come back (ApexNoteTiming.createWakeVoice: once each way, never
     // within two minutes of the last, silent on a drive's first reading). The drive's first note is called whatever the
@@ -2186,8 +2257,18 @@
       }
       const firstKey = track && state.firstNoteKey && state.firstNoteKey.startsWith(`${track.id}:`) ? state.firstNoteKey : null;
       const isFirst = (e) => !!firstKey && `${track.id}:${e.type}:${e.index}` === firstKey;
+      // Real-drive review round 2: a measured hazard (bump, crest, dip) shows only inside the voice's own lead for it (twice
+      // the lead, at least 200 m), and one at a time. Two BUMP cards counting down from 0.9 mi on a 35 mph street were noise.
+      let hazardUp = false;
+      const hazardNear = (e) => {
+        if (!HAZARD_NOTE.has(e.type)) return true;
+        if (hazardUp) return false;
+        const ok = noteM(e) - state.cursorM <= Math.max(200, 2 * ApexNoteTiming.leadM({ vMps, text: e.call || 'Bump ahead', reactionS: reactS }));
+        if (ok) hazardUp = true;
+        return ok;
+      };
       const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner' || isFirst(e)).filter(e => noteM(e) - state.cursorM <= 3000)
-        .filter(e => !(e.type === 'corner' && ApexDirections.atJunction(steps, noteM(e)))).slice(0, 3);   // a junction shows once, as the direction
+        .filter(e => !((e.type === 'corner' || e.kind === 'side_road') && ApexDirections.atJunction(steps, noteM(e)))).filter(hazardNear).slice(0, 3);   // a junction shows once, as the direction
       const notes = shown.map(e => {
         const d = distLabel(Math.max(0, noteM(e) - state.cursorM));   // 0 once you're in the corner
         return { key: `${e.type}:${e.index}:${e.dist_m}`, type: e.type, code: e.code, call: state.noteWords === 'plain' && !e.recce ? ApexPlainNotes.plainCall(e) : e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: Math.max(0, noteM(e) - state.cursorM),
@@ -2363,10 +2444,11 @@
       // A posted limit that drops ahead (limit_ahead.js): said once per drop, before the sign, when you're over the new one;
       // first through the quiet gate (a limit has a place: 8 s, then the sign is close and the line goes stale).
       if (live && !offRoute && !limitSay && track && track.limitMps && window.ApexLimitAhead && vMps != null) {
-        const drop = ApexLimitAhead.next(track, state.cursorM), said = drive.limitSaid || (drive.limitSaid = new Set());
-        const key = drop && `${track.id}:${Math.round(drop.atM)}`;
-        if (drop && !said.has(key) && ApexLimitAhead.due(drop, state.cursorM, vMps)) {
-          said.add(key);
+        // said by where the sign is, not by the track: the road ahead on a free drive is rebuilt and overlaps itself
+        const drop = ApexLimitAhead.next(track, state.cursorM), said = drive.limitSaid || (drive.limitSaid = []);
+        const di = drop ? Math.max(0, track.dist.findIndex((d) => d >= drop.atM)) : -1, where = drop && { lat: track.lat[di], lon: track.lon[di] };
+        if (drop && !ApexLimitAhead.saidNear(said, where.lat, where.lon) && ApexLimitAhead.due(drop, state.cursorM, vMps)) {
+          said.push(where);
           const text = ApexLimitAhead.text(drop.limitMps, ApexUnits.speed);
           if (text) limitSay = { text, until: performance.now() + 8000 };
         }
@@ -2385,14 +2467,29 @@
         const said = drive.sectionsSaid || (drive.sectionsSaid = new Set()), sec = ApexCornersAhead.next(track.sections, state.cursorM, said);
         if (sec && ApexCornersAhead.due(sec, state.cursorM, vMps)) { said.add(sec.startM); cornersSay = { text: ApexCornersAhead.text(sec), until: performance.now() + 15000 }; }
       }
+      // The same on a free drive (no route): from the road ahead, counting how far you have driven since your last corner.
+      // A road ahead is rebuilt over itself, so a section is said once per place (within 150 m).
+      if (live && track && track.kind === 'horizon' && window.ApexCornersAhead && ApexCornersAhead.tracker) {
+        const quietM = (free.twisty || (free.twisty = ApexCornersAhead.tracker())).update(track, state.cursorM);
+        if (!cornersSay && state.notesMode !== 'quiet' && vMps != null && quietM != null) {
+          const sec = ApexCornersAhead.ahead(track.events, state.cursorM, quietM, track.dist[track.dist.length - 1]);
+          const i = sec ? Math.max(0, track.dist.findIndex((d) => d >= sec.startM)) : -1, cos = Math.cos(track.lat[0] * Math.PI / 180);
+          const near = sec && (free.twistySaid || []).some((p) => Math.hypot((p.lat - track.lat[i]) * 110540, (p.lon - track.lon[i]) * 111320 * cos) < 150);
+          if (sec && !near && ApexCornersAhead.due(sec, state.cursorM, vMps)) {
+            free.twistySaid = [...(free.twistySaid || []), { lat: track.lat[i], lon: track.lon[i] }].slice(-20);
+            cornersSay = { text: ApexCornersAhead.text(sec), until: performance.now() + 15000 };
+          }
+        }
+      }
       if (cornersSay && (performance.now() > cornersSay.until || state.notesMode === 'quiet')) cornersSay = null;
       // The places along the planned route (along_ahead.js, from the route card's t.scenic): the last fuel before a long
       // stretch with none, in any notes mode; a viewpoint or waterfall at most every 5 minutes, not in Quiet notes.
-      if (live && !offRoute && !alongSay && track && track === plannedRoute && Array.isArray(track.scenic) && window.ApexAlongAhead && vMps != null) {
-        const said = drive.alongSaid || (drive.alongSaid = new Set()), nowS = performance.now() / 1000;
+      // On a free drive the road ahead's own viewpoints and waterfalls (attachHorizonViews), with the same 5 minutes between.
+      if (live && !offRoute && !alongSay && track && (track === plannedRoute || track.kind === 'horizon') && Array.isArray(track.scenic) && window.ApexAlongAhead && vMps != null) {
+        const said = track.kind === 'horizon' ? (track.alongSaid || (track.alongSaid = new Set())) : drive.alongSaid || (drive.alongSaid = new Set()), nowS = performance.now() / 1000;
         const a = ApexAlongAhead.due(track, state.cursorM, vMps, { said, lastViewS: state.notesMode === 'quiet' ? nowS : drive.viewAt, nowS,
           electric: !!(routingCar() && routingCar().fuel === 'electric'), metric: ApexUnits.metric(), spoken: ApexUnits.spokenShort });
-        if (a) { said.add(a.key); if (a.view) drive.viewAt = nowS; alongSay = { text: a.text, bare: a.bare || null, until: performance.now() + (a.view ? 10000 : 20000) }; }
+        if (a) { said.add(a.key); if (a.view) drive.viewAt = nowS; if (track.kind === 'horizon' && a.at) free.viewsSaid = [...(free.viewsSaid || []), a.at].slice(-30); alongSay = { text: a.text, bare: a.bare || null, until: performance.now() + (a.view ? 10000 : 20000) }; }
       }
       if (alongSay && performance.now() > alongSay.until) alongSay = null;
       if (briefSay && performance.now() > briefSay.until) briefSay = null;
@@ -2408,7 +2505,7 @@
           && (e.type === 'corner' ? spirited : (spirited || noteworthyInCruise(e))));
         const bumpDue = ApexRoadMemory.upcoming(hazardMemory, state.live, 0, quietReach, { has: () => false });
         // a named place: the pack says the line without the name (its clips), the name stays on the screen
-        const bareTokens = quiet.bare && window.ApexVoiceLines ? ApexVoiceLines.compose(quiet.bare) : null;
+        const bareTokens = quiet.bare && window.ApexVoiceLines ? ApexVoiceLines.forText(quiet.bare) || ApexVoiceLines.compose(quiet.bare) : null;
         if (!callDue && !bumpDue) { say(quiet.text, false, null, null, bareTokens ? { tokens: bareTokens, named: true } : {}); if (quiet === limitSay) limitSay = null; else if (quiet === briefSay) briefSay = null; else if (quiet === cornersSay) cornersSay = null; else if (quiet === alongSay) alongSay = null; else if (quiet === brakeSay) brakeSay = null; else if (quiet === sunSay) sunSay = null; else if (quiet === breakSay) breakSay = null; else { flowSay = flowQueue.shift() || null; if (flowSay) flowSay.until = performance.now() + 20000; } }
       }
     }
@@ -2481,7 +2578,9 @@
       si.sight = sightMps != null ? ApexUnits.speed(sightMps) : null; si.open = sightOpen; si.speed = vMps != null ? ApexUnits.speed(vMps) : null;
       si.limit = limit != null ? ApexUnits.speed(limit) : null; si.unit = ApexUnits.speedU();
       const held = sightHold.step(si, performance.now());
-      paintSight(held.msg, !!live);
+      // Real-drive review round 2: in a replay the plate shows only near a corner (400 m before to 150 m after). On a straight
+      // city street it flipped Open, 65, 55 every few seconds and said nothing a driver could use.
+      paintSight(replayOn && state.mode === 'replay' && !nearCorner(track, state.cursorM) ? ApexCarPlay.sightMessage(null) : held.msg, !!live);
       carLimit(live ? si.limit : null, si.unit);                       // the posted limit's sign on the car's map
       const d = renderIn.cluster;                                       // F-18: one object, refilled each frame (the cluster reads it, keeps nothing)
       // in the chosen units (mph or km/h, U-22); the names are the cluster's
@@ -2780,11 +2879,37 @@
       t.kind = 'horizon'; t.subtitle = 'The road ahead, from the map'; t.horizonEnd = h.end;
       // the road ahead ends at a T (horizon.js tee): a mark there, called like a stop sign (braking to a turn)
       if (h.tee && window.ApexRoadMarks && ApexRoadMarks.teeMark) { const m = ApexRoadMarks.teeMark(t); if (m) t.marks = [m]; }
+      // or at a roundabout (horizon.js end 'roundabout'): "Roundabout", braking to its entry
+      else if (h.end === 'roundabout' && window.ApexRoadMarks && ApexRoadMarks.roundaboutMark) { const m = ApexRoadMarks.roundaboutMark(t); if (m) t.marks = [m]; }
       useHorizon(t);
+    }
+    // The viewpoints and waterfalls on the road ahead (a free drive, no route): the map tiles' viewpoints (stages.js pois, kept
+    // per tile) and the weekly OSM build's waterfalls (cellList, kept per cell set), within reach of the road (scenic.js along).
+    // Said by along_ahead.js as on a planned route; one said on an earlier road ahead, which overlaps this one, isn't again.
+    // Nothing known (offline, no tiles): nothing said. No fuel lines: a few km ahead says nothing about the next pump.
+    async function attachHorizonViews(t) {
+      if (!window.ApexScenic || !window.ApexStages || !ApexStages.pois || !t || t.kind !== 'horizon' || !Array.isArray(t.lat) || t.lat.length < 2) return;
+      const pts = [];
+      for (let i = 0; i < t.lat.length; i += 100) pts.push({ lat: t.lat[i], lon: t.lon[i] });   // every 500 m
+      pts.push({ lat: t.lat[t.lat.length - 1], lon: t.lon[t.lon.length - 1] });
+      let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
+      for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
+      const box = [s - 0.005, w - 0.005, n + 0.005, e + 0.005];
+      const [raw, falls] = await Promise.all([
+        ApexStages.pois(pts).catch(() => null),
+        ApexScenic.fallsInRegion ? cellList('falls', ...box).then((d) => ApexScenic.fallsInRegion(d, ...box) || []).catch(() => []) : Promise.resolve([]),
+      ]);
+      if (track !== t) return;
+      const views = (raw || []).filter((p) => p && p.kind === 'view').concat(falls || []);
+      if (!views.length) return;
+      const cos = Math.cos(t.lat[0] * Math.PI / 180);
+      const heard = (p) => (free.viewsSaid || []).some((k) => Math.hypot((k.lat - p.lat) * 110540, (k.lon - p.lon) * 111320 * cos) < 60);
+      t.scenic = ApexScenic.along(views, t).filter((p) => !heard(p));
     }
     function useHorizon(t) {
       const old = track && track.kind === 'horizon' ? track : null, cos = Math.cos(t.lat[0] * Math.PI / 180);
       const said = old ? old.events.filter(e => state.spoken.has(`${old.id}:${e.type}:${e.index}`)) : [];
+      if (old) free.feelSaid = [...(free.feelSaid || []), ...old.events.filter((e) => e.crowd && state.spoken.has(`${old.id}:${e.type}:${e.index}`)).map((e) => ({ type: e.type, lat: e.lat, lon: e.lon }))].slice(-40);
       if (old && Array.isArray(old.marks)) free.marksSaid = [...(free.marksSaid || []), ...old.marks.filter(e => state.spoken.has(`${old.id}:${e.type}:${e.index}`))].slice(-30);
       track = t; state.cursorM = 0; state.spoken.clear();
       for (const e of t.events) if (said.some(k => k.type === e.type && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 25)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
@@ -2793,6 +2918,7 @@
       rebuildPins();
       render(false);
       attachHorizonMarks(t);
+      attachHorizonViews(t).catch(() => {});
     }
     // Road marks on the road ahead too (free driving, no route): stop signs, rail crossings, one-lane bridges, fords, deer
     // crossings, gravel, from the map's answer for the horizon's own corridor (osm_overpass.js keeps its 5 km tiles a week,
@@ -2803,15 +2929,56 @@
       setTimeout(async () => {
         if (track !== t) return;
         const c = { t, route: { coords: Array.from(t.lat, (la, i) => [t.lon[i], la]), times: null }, timeS: null, match: 'map_snap' };
-        await contextOn([c], CTX_BUDGET_MS, 'ahead', ['osm_overpass']);
+        // events.js for the schools by the road ahead (our built points, else the map), not the games or concerts on it
+        await contextOn([c], CTX_BUDGET_MS, 'ahead', ['osm_overpass', 'events'], { placesOnly: true, ways: true });
         if (track !== t || !c.ctx || !c.corridor) return;
         t.marks = ApexRoadMarks.union(t.marks, ApexRoadMarks.events(c.ctx, c.corridor, t, (la, lo, lats, lons) => Core.nearestIndex(la, lo, lats, lons, -1)));
         if (ApexRoadMarks.noTeeAtStop) t.marks = ApexRoadMarks.noTeeAtStop(t.marks);
+        // the posted limits on the road ahead from the same answer (limit_ahead.js fromCtx), for "Limit 35 ahead." on a free drive
+        if (!t.limitMps && window.ApexLimitAhead && ApexLimitAhead.fromCtx) { const l = ApexLimitAhead.fromCtx(c.ctx, c.corridor, t.dist); if (l) { t.limitMps = l; t.limitSource = 'map'; } }
         const cos = Math.cos(t.lat[0] * Math.PI / 180);
         for (const e of t.marks) if ((free.marksSaid || []).some(k => k.code === e.code && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 40)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
         if (t.marks.length) { rebuildPins(); render(false); }
+        horizonFeel(t, c).catch(() => {});
         if (!ApexRoadMarks.mapAnswered(c.ctx) && tries < 2) attachHorizonMarks(t, tries + 1);   // the map's late answer is kept: ask again
       }, tries ? 4000 * tries : 300);
+    }
+    // Members' road feel on the road ahead (a free drive, no route): the bumps several members felt and the crests two or
+    // more went light over (contributor.js feelFromWays), as a planned route gets them (applyCrowdBumps). No map match: the
+    // road context names the way under each stretch (osm_overpass.js 'osm_way'). Members' data comes by the 0.1° cells the
+    // road ahead crosses (VI-1, routeCtxOpts lookupCells, as the route engine's crowd provider asks), never by its way ids,
+    // and each cell's answer is kept 30 min, so a road you follow asks once a cell. Signed out or not a member: the server
+    // says no, kept as none for the same time. One said on an earlier road ahead, which overlaps this one, isn't again.
+    const feelCells = new Map(), FEEL_CELL_MS = 30 * 60000;
+    async function horizonFeel(t, c) {
+      if (!window.ApexContributor || !ApexContributor.feelFromWays || !t || t.kind !== 'horizon' || t.crowdBumps != null || !c || !c.ctx) return;
+      if (window.ApexFlags && !ApexFlags.on('crowd_bumps')) return;
+      const spans = (c.ctx.spans || []).filter((sp) => sp.kind === 'osm_way' && !ApexContributor.SKIP_CLASSES.has(sp.cls));
+      const lookup = spans.length && window.ApexSync && ApexSync.signedIn() ? routeCtxOpts().lookupCells : null;
+      if (!lookup) return;
+      const cells = [...new Set(Array.from(t.lat, (la, i) => `${Math.floor(la / 0.1)}_${Math.floor(t.lon[i] / 0.1)}`))].slice(0, 16), now = Date.now();
+      const fresh = cells.filter((k) => !(feelCells.has(k) && now - feelCells.get(k).at < FEEL_CELL_MS));
+      if (fresh.length) {
+        const got = await lookup(fresh).catch(() => null);
+        if (!got && navigator.onLine === false) return;                 // no signal: unknown, asked again on the next road ahead
+        if (feelCells.size > 64) feelCells.clear();
+        for (const k of fresh) feelCells.set(k, { at: now, ways: (got && got.ways) || null, lines: (got && got.lines) || {} });
+      }
+      if (track !== t || t.crowdBumps != null) return;
+      const roads = {}, lines = {};
+      for (const k of cells) { const e = feelCells.get(k); if (e && e.ways) { Object.assign(roads, e.ways); Object.assign(lines, e.lines); } }
+      if (!spans.some((sp) => roads[sp.label])) return;
+      const m = ApexContributor.feelFromWays(t, spans, roads, lines);
+      // the corners ahead from the camber members agree on: "slopes away" / "banked", only corners not yet said and 300 m
+      // or more ahead, so no call changes as it comes up (the map's corners stay: no curvature swap mid-drive)
+      const leaning = m && m.crowdCam && ApexContributor.camberMods ? ApexContributor.camberMods(t, m.crowdCam, Core.paceNoteText,
+        (e) => !state.spoken.has(`${t.id}:${e.type}:${e.index}`) && e.dist_m - (track === t ? state.cursorM : 0) >= 300) : 0;
+      if (!applyCrowdBumps(t, m) && !leaning) return;
+      const cos = Math.cos(t.lat[0] * Math.PI / 180);
+      for (const e of t.events) if (e.crowd && (free.feelSaid || []).some((k) => k.type === e.type && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 25)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
+      for (const e of t.marks || []) if (e.crowd && (free.marksSaid || []).some((k) => k.code === e.code && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 40)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
+      if (t.crowdRough) rebuildPins();
+      render(false);
     }
     // seamless (a new route while driving: a reroute, a traffic detour, the way home): the new line replaces the old in one
     // frame, and the follow camera carries on from where it is, never snapped or re-fitted mid-drive.
@@ -2882,6 +3049,7 @@
           (m.avgPasses != null ? ` · ${m.avgPasses.toFixed(1)} runs on average` : '') +
           (t.crowdCorrected >= 30 ? ` · corners from members' drives on ${ApexUnits.long(t.crowdCorrected, 1)}` : '') +
           (t.crowdBumps > 0 ? ` · ${t.crowdBumps === 1 ? 'a bump' : `${t.crowdBumps} bumps`} members felt` : '') +
+          (t.crowdCrests > 0 ? ` · ${t.crowdCrests === 1 ? 'a crest' : `${t.crowdCrests} crests`} members went light over` : '') +
           (m.keptAt != null ? ` (kept ${keptWhen(m.keptAt)})` : '');
     }
     // A saved route keeps what members measured along it (route_feel.js), refreshed whenever its card asks with signal.
@@ -2965,7 +3133,9 @@
     // =======================================================================
     // 9. ROUTING — Valhalla (highways de-prioritised) + posted limits; OSRM fallback
     // =======================================================================
-    const VALHALLA = 'https://valhalla1.openstreetmap.de';
+    // our own router first, the public server when ours can't answer (route_loading.js valhalla(), backend/src/valhalla.ts);
+    // the init's body is what is sent
+    const valhallaJson = (action, init, timeoutMs) => RouteLoading.valhalla(action, init.body, timeoutMs);
     function decodePolyline6(str) {
       const out = []; let i = 0, lat = 0, lon = 0;
       while (i < str.length) {
@@ -3292,7 +3462,7 @@
     async function valhallaRoutesExcluding(points, throughRoadsOnly, alternates, extra, excl) {
       // Loop waypoints snap only to through roads (tertiary..primary), never cul-de-sacs or motorways.
       const filter = { min_road_class: 'tertiary', max_road_class: 'primary', exclude_ramp: true };
-      const json = await RouteLoading.json(`${VALHALLA}/route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      const json = await valhallaJson('route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
         locations: points.map((p, i) => {
           const end = i === 0 || i === points.length - 1;
           if (!end && p.shaping) return { lat: p.lat, lon: p.lon, type: 'through', radius: 25 };   // stay on the stage
@@ -3313,7 +3483,7 @@
       const rows = Math.max(1, Math.floor(100 / targets.length)), parts = [];
       for (let i = 0; i < sources.length; i += rows) {
         const src = sources.slice(i, i + rows);
-        const json = await RouteLoading.json(`${VALHALLA}/sources_to_targets`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        const json = await valhallaJson('sources_to_targets', { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sources: src.map(p => ({ lat: p.lat, lon: p.lon })), targets: targets.map(p => ({ lat: p.lat, lon: p.lon })), ...(costing || FunRoute.costing(avoid, routingCar())) }) });
         if (!Array.isArray(json.sources_to_targets)) throw new Error(json.error || 'no matrix');
         parts.push(json.sources_to_targets);
@@ -3471,7 +3641,7 @@
       for (let i = 0; i < t.lat.length; i += stride) idx.push(i);
       if (idx[idx.length - 1] !== t.lat.length - 1) idx.push(t.lat.length - 1);
       try {
-        const json = await RouteLoading.json(`${VALHALLA}/trace_attributes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        const json = await valhallaJson('trace_attributes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
           shape: idx.map(i => ({ lat: t.lat[i], lon: t.lon[i] })), costing: 'auto', shape_match: 'map_snap',
           filters: { attributes: ['edge.speed_limit', 'matched.edge_index'], action: 'include' } }) });
         const edges = json.edges || [];
@@ -3716,7 +3886,9 @@
       // your taste (taste.js) when it moved this route up: the word for what you lean to, never a number
       const tasteLine = (() => { try { const f = t.tasteBonus >= 1 && window.ApexTaste ? ApexTaste.fit(ApexTaste.load(localStorage)) : null;
         if (!f) return ''; const k = ApexTaste.AXES.slice().sort((a, b) => f[b] - f[a])[0]; return `Suits your taste for ${{ tech: 'technical roads', flow: 'flowing roads', smooth: 'smooth surfaces' }[k]} · `; } catch (_) { return ''; } })();
-      $('routeCardSub').textContent = `${tasteLine}${carLine ? carLine + ' · ' : ''}${closed}${missed}${missedPolice}${around}${towns}${sun}${cams}${feel}`.replace(/ · $/, '');
+      // your roadbooks' roads it drives (roadbooks.js alongRoute, attachBooks): the reason a planned road is worth it
+      const booksLine = t.bookRoads && t.bookRoads.length && window.ApexRoadbooks ? `${ApexRoadbooks.routeLine(t.bookRoads)} · ` : '';
+      $('routeCardSub').textContent = `${booksLine}${tasteLine}${carLine ? carLine + ' · ' : ''}${closed}${missed}${missedPolice}${around}${towns}${sun}${cams}${feel}`.replace(/ · $/, '');
       $('routeCardSub').hidden = !$('routeCardSub').textContent;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
@@ -3874,6 +4046,7 @@
       paintStops(t);
       attachWeather(t);
       attachClosures(t);
+      if (typeof attachBooks === 'function') attachBooks(t);
       if (typeof attachWhen === 'function') attachWhen(t);        // (tests evaluate buildRoute on its own)
       if (typeof attachMarksSoon === 'function') attachMarksSoon(t);   // road marks also for a route rebuilt mid-drive
       // the route bar shows this; screen readers hear it (REVIEW.md: the bar is the toast)
@@ -4782,7 +4955,7 @@
     function ownInstructions(c) {
       if (!c || c.kind !== 'own' || !window.ApexOwnRouting) return Promise.resolve(null);
       if (!ownInstructed.has(c.route)) ownInstructed.set(c.route, tlTime('valhalla: turn instructions (after the card)', ApexOwnRouting.instruct(c.route,
-        (body) => RouteLoading.json(`${VALHALLA}/trace_route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, OWN_INSTRUCT_MS),
+        (body) => valhallaJson('trace_route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, OWN_INSTRUCT_MS),
         routeOf, FunRoute.costing(avoid, routingCar()), OWN_INSTRUCT_MS).catch(() => 'own')));
       return ownInstructed.get(c.route);
     }
@@ -5699,7 +5872,7 @@
           r.setAttribute('role', 'group'); r.setAttribute('aria-label', `${m.label}: ${m.value == null ? 'not known' : `${m.value} out of 100`}, ${m.hint}`);
           return r;
         });
-        const lines = [...meters, ...[...ApexRoadPage.facts(d), ...onRoad].map(([k, v]) => { const r = el('div', 'rp-fact'); r.append(el('span', '', k), el('b', '', v)); return r; })];
+        const lines = [...meters, ...[...ApexRoadPage.facts(d, (m) => ApexUnits.long(m, 1), repavedMonth), ...onRoad].map(([k, v]) => { const r = el('div', 'rp-fact'); r.append(el('span', '', k), el('b', '', v)); return r; })];
         const best = Number.isFinite(s.elevA) && Number.isFinite(s.elevB) && Math.abs(s.elevB - s.elevA) >= 40
           ? ((s.tight || 0) / s.km >= 1.2 ? 'Better climbed: tight corners are safer uphill.' : 'Better descended: it flows.') : null;
         // the climb is a height (feet or metres, heightLabel); ApexUnits.short is an object and printed "[object Object]"
@@ -5722,7 +5895,7 @@
       try { elev = await RouteLoading.optional(ApexStages.profile({ lat: rs.lat, lon: rs.lon, dist }, 30), 6000); } catch (_) { elev = null; }
       try {
         if (window.ApexContributor && member)
-          measured = await RouteLoading.optional(ApexContributor.measuredAlong({ lat: rs.lat, lon: rs.lon }, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }), 12000);
+          measured = await RouteLoading.optional(ApexContributor.measuredAlong({ lat: rs.lat, lon: rs.lon, dist }, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }), 12000);
       } catch (_) { measured = null; }
       reports = await reportsP;
       if (!roadPop.classList.contains('open') || h.textContent !== roadLabel(s.name)) return;
@@ -7399,7 +7572,7 @@
       zones: () => privacyZones, planned: () => (plannedRoute && Array.isArray(plannedRoute.lat) && plannedRoute.lat.length > 1 ? plannedRoute : null),
       report: (o) => safety && safety.report(o), changed: () => { if (booksRowCount) booksRowCount(); }, mapUnder,
       stages: () => { try { const l = JSON.parse(localStorage.getItem('apex.segments') || '[]'); return Array.isArray(l) ? l : []; } catch (_) { return []; } },
-      edited: () => { clearTimeout(booksEdited); booksEdited = setTimeout(() => { if (roadbookMap) roadbookMap.forget(); }, 600); },   // a burst of stamps reads the map's books once
+      edited: () => { clearTimeout(booksEdited); booksEdited = setTimeout(() => { if (roadbookMap) roadbookMap.forget(); if (roadbooks) roadbooks.forgetOpened(); }, 600); },   // a burst of stamps reads the map's books once
       // a crew roadbook's road as a crew drive: People's Crews side, the crew's plan form named after the road, the road as
       // its route (shared with the crew as Plan it does with a planned route)
       planCrewDrive: (road, crew) => {
@@ -7448,7 +7621,8 @@
           ownInstructLater(t, r);
           await buildRoute(null, id, name, t);
           const n = (book.road_list || []).length, of = legs.length < n ? ` of its ${n}` : '';
-          cardNote(`${legs.length} roads${of} from ${name}, nearest first: ${ApexUnits.long(totalM(), 1)}`);
+          // only the ones still to stamp (roadbooks.js "Drive the N new"): said as new
+          cardNote(`${legs.length} ${book.onlyNew ? 'new ' : ''}roads${book.onlyNew ? '' : of} from ${name}, nearest first: ${ApexUnits.long(totalM(), 1)}`);
         } catch (_) { toast('Couldn\u2019t route through those roads. Drive them one at a time.'); }
         finally { loopBusy = false; ui.done(); }
       },
@@ -7558,6 +7732,27 @@
     onSocial(() => { try { meetsMap = window.ApexMeetsMap && crewEvents && crewEvents.meetCard ? ApexMeetsMap.mount({ el, btn, apiCall, jsonOf, map,
       mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; }, mayLookUp: nearLookupOk,
       card: (e, redo) => crewEvents.meetCard(e, redo) }) : null; } catch (e) { console.error('meets map', e); } });
+    // Events on the map (web/event_markers.js; Nate 2026-11-15): the area's time attacks as start gates, the next day's meets
+    // at their meeting points, and a card that rises as you drive up to one (Start / Join). On by default, members only.
+    let eventMarkers = null;
+    onSocial(() => { try { eventMarkers = window.ApexEventMarkers ? ApexEventMarkers.mount({ el, btn, map, apiCall, jsonOf,
+      member: () => !!(accountMe && accountMe.member),
+      here: () => (state.lastPosition && Number.isFinite(state.lastPosition.lat) ? state.lastPosition : null),
+      motion: () => state.lastMotion || null,
+      mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; }, mayLookUp: nearLookupOk,
+      areaPoint: (p) => (window.ApexTimeAttack ? ApexTimeAttack.areaPoint(p) : null),
+      fmtLen: (m) => ApexUnits.long(m, 1),
+      startAttack: async (c) => (timeAttack && timeAttack.go ? timeAttack.go(c) : false),
+      openMeet: (ev) => {
+        if (!crewEvents) return;
+        const ov = el('div', { className: 'overlay show' }), close = () => ov.remove();
+        ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', ev.name);
+        const redo = () => { close(); eventMarkers.refresh(true); };
+        ov.append(el('div', { className: 'stack-8', style: 'max-width:560px' }, ev.own ? crewEvents.card(ev.e, { redo }) : crewEvents.meetCard(ev.e, redo),
+          el('div', { className: 'row' }, btn('Close', close, 'linkbtn'))));
+        ov.addEventListener('click', (x) => { if (x.target === ov) close(); });
+        document.body.append(ov);
+      } }) : null; } catch (e) { console.error('event markers', e); } });
     // Roadbooks on the map (web/roadbook_map.js): the roads of your books, your crews' and the ones you follow, and public
     // books round the view, quieter; a tap opens the book. Only books with a road in view are opened.
     const booksNearAt = new Map();                                       // cell query → the public books there (a promise)
@@ -7623,15 +7818,16 @@
       // Where to? opened before the account came back: its time attack row's peek skipped then, so it goes now (CI 2026-11-12)
       if (accountMe && accountMe.member && $('planPanel').classList.contains('open')) peekTimeAttack();
       // A layer left on stays on (Nate 2026-11-15: "the map layers sometimes reset when I reopen the app"): the account comes
-      // back before the lazy social scripts, so a member's Friends, Meets and Roadbooks load them and draw then; a launch
+      // back before the lazy social scripts, so a member's Friends, Meets, Roadbooks and Events load them and draw then; a launch
       // that reads signed out draws none of them but keeps the choice for the next one signed in.
       if (accountMe && accountMe.member) {
         if (friendsMap) friendsMap.start();
-        if ((state.toggles.friends || state.toggles.meets || state.toggles.roadbooks) && !socialFailed) needSocial().then(() => {
+        if ((state.toggles.friends || state.toggles.meets || state.toggles.roadbooks || state.toggles.events) && !socialFailed) needSocial().then(() => {
           if (!accountMe || !accountMe.member) return;
           if (friendsMap) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
           if (meetsMap && state.toggles.meets) meetsMap.setLayer(true);
           if (roadbookMap && state.toggles.roadbooks) roadbookMap.setLayer(true);
+          if (eventMarkers && state.toggles.events) eventMarkers.setLayer(true);
         }).catch(() => {});
       }
       if (feedbackUi) feedbackUi.refresh();
@@ -9379,10 +9575,15 @@
     function renderCamList() { document.querySelectorAll('[data-cam]').forEach(b => b.classList.toggle('on', b.dataset.cam === state.camFeel)); }
     document.querySelectorAll('[data-cam]').forEach(b => b.addEventListener('click', () => { state.camFeel = b.dataset.cam; renderCamList(); savePrefs(); }));
     renderCamList();
-    $('playBtn').addEventListener('click', () => { setPlaying(!state.playing); });   // the name is on the plate; the pack's voice is for the road
+    $('playBtn').addEventListener('click', () => { setPlaying(!state.playing); });
+    $('jumpCorners').addEventListener('click', () => { const b = $('jumpCorners'); if (b._at == null || !track) return; state.cursorM = b._at; paintReplayEnd(false); render(true); });   // the name is on the plate; the pack's voice is for the road
     document.querySelectorAll('#rateDetents [data-rate]').forEach((b) => b.addEventListener('click', () => {
-      state.rate = Number(b.dataset.rate);
-      document.querySelectorAll('#rateDetents [data-rate]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+      const all = [...document.querySelectorAll('#rateDetents [data-rate]')];
+      // one speed key (index.html, the transport's one row): the chosen speed is the only one shown, and a tap steps on
+      const pick = b.getAttribute('aria-checked') === 'true' && all.every((x) => x === b || !x.getClientRects().length) ? all[(all.indexOf(b) + 1) % all.length] : b;
+      state.rate = Number(pick.dataset.rate);
+      all.forEach((x) => x.setAttribute('aria-checked', String(x === pick)));
+      if (pick !== b) pick.focus({ preventScroll: true });
     }));
     const scrubber = $('scrubber');
     let scrubbing = false;
@@ -9437,6 +9638,10 @@
           let seen = false; try { seen = localStorage.getItem('apex.friendsExplained') === '1'; localStorage.setItem('apex.friendsExplained', '1'); } catch (_) {}
           if (state.toggles.friends && !seen && friendsMap) friendsMap.sheet();
         });
+      }
+      if (k === 'events') {   // time attacks and meets as you drive near (event_markers.js)
+        if (!accountMe || !accountMe.member) { state.toggles.events = false; paintSwitches(); askSignIn('see time attacks and meets on the map'); return; }
+        needSocial().then(() => { if (eventMarkers) eventMarkers.setLayer(state.toggles.events); });
       }
       if (k === 'meets') {   // S-13: public crews' meets near the map
         if (!accountMe || !accountMe.member) { state.toggles.meets = false; paintSwitches(); askSignIn('see car meets on the map'); return; }
@@ -9957,6 +10162,16 @@
     }
     // Seasonal and time-of-day closures (conditional_closures.js, IDEAS R-22): OSM conditional access tags on the roads the
     // route uses, read for when you'd get there. A trip over 1° across, or the map offline: nothing said.
+    // the roads of your roadbooks a planned route drives, said on its card (roadbooks.js alongRoute); members, not in a drive
+    async function attachBooks(t) {
+      if (!t || driveActive || !Array.isArray(t.lat) || t.lat.length < 2 || !accountMe || !accountMe.member) return;
+      if (!roadbooks) { if (typeof needSocial !== 'function') return; await needSocial().catch(() => {}); }
+      if (!roadbooks || plannedRoute !== t) return;
+      const found = await roadbooks.alongRoute(t.lat, t.lon).catch(() => []);
+      if (plannedRoute !== t || !found.length) return;
+      t.bookRoads = found;
+      renderRouteCard(t);
+    }
     async function attachClosures(t) {
       $('routeCardClosures').hidden = true;
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2 || !window.ApexConditional) return;
@@ -11004,13 +11219,15 @@
       bar.classList.toggle('ahead', Number.isFinite(r.gap) && r.gap < -0.05); bar.classList.toggle('behind', Number.isFinite(r.gap) && r.gap > 0.05);
       if (!bar.hidden) { $('stageBar').hidden = true; $('coachBar').hidden = true; }
       const words = (x) => (window.ApexPassCoach && ApexPassCoach.spoken ? ApexPassCoach.spoken(x) : `${x.toFixed(1)} seconds`);
+      // the pack says the gap without the stage's or the friend's name (both on the bar): "Stage done. 1.4 seconds up."
+      const bareGap = (gap) => (Math.abs(gap) < 0.05 ? 'Level.' : `${words(Math.abs(gap))} ${gap > 0 ? 'down' : 'up'}.`);
       if (r.state === 'done') {
         const line = Number.isFinite(r.gap) ? `${r.name} done. ${ApexGhostDuel.spoken(r.gap, name, words)}` : `${r.name} done.`;
-        toast(line); if (isSpirited()) sayQuietLine(line);
+        toast(line); if (isSpirited()) sayQuietLine(line, Number.isFinite(r.gap) ? `Stage done. ${bareGap(r.gap)}` : 'Stage done.');
         (drive.ghosts || (drive.ghosts = [])).push({ stage: r.name, who: r.who, gap_s: Number.isFinite(r.gap) ? Math.round(r.gap * 10) / 10 : null });
         return;
       }
-      if (r.say && isSpirited() && Number.isFinite(r.gap)) sayQuietLine(ApexGhostDuel.spoken(r.gap, name, words));
+      if (r.say && isSpirited() && Number.isFinite(r.gap)) sayQuietLine(ApexGhostDuel.spoken(r.gap, name, words), bareGap(r.gap));
     }
     // ---- live coaching against your best pass, on any road driven before (web/pass_coach.js) ---------------------------
     // Each remembered corner you finish is set against its fastest pass (the time gap, owner 2026-11-14) and its best
@@ -11109,7 +11326,7 @@
     async function enterDrive() {
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
-      driveActive = true; health.bump('drives'); drive.startedAt = performance.now(); pushQuiet(true);
+      driveActive = true; ApexLazy.load('ahead').catch(() => {}); health.bump('drives'); drive.startedAt = performance.now(); pushQuiet(true);
       driveCam(true);                                                  // Film the drive (DriveCam.swift): the app films the road
       leaveAtMs = null; whenReset();                                                     // driving it now: the plan's hour is this one
       learnFromPick();                                                 // a route you chose over Vetta's first: your taste (taste.js)
@@ -11132,7 +11349,7 @@
       startStageWatch(); startCoach(); drive.ghosts = null; startGhostWatch(null);
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.turns = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); drive.surface = window.ApexRoadSurface ? ApexRoadSurface.createLog() : null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.turns = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; free.viewsSaid = null; free.feelSaid = null; free.twisty = null; free.twistySaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); drive.surface = window.ApexRoadSurface ? ApexRoadSurface.createLog() : null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
@@ -11597,6 +11814,7 @@
         // Passenger aboard (For this drive) tags the drive 'Passenger' (drive_tags.js), so the Log knows it too
         { const tags = window.ApexRouteDriver ? ApexRouteDriver.driveTags(ApexRouteDriver.load(localStorage)) : []; if (tags.length) extra.tags = tags; }
         if (laps.length) extra.laps = laps;
+        if (Array.isArray(rec.said) && rec.said.length) extra.said = rec.said;   // what was said, and in which voice (saidOnDrive)
         if (battery) extra.battery = battery;
         { const sf = drive.surface ? drive.surface.value() : null; if (sf) extra.surface = sf; }   // dry, wet or icy (road_surface.js); unknown left out
         // F-04: the card in the frame after End, from the recording as it stands; the drive is parsed, scored and saved in
@@ -12357,7 +12575,7 @@
     if (['convoy', 'crew', 'invite', 'add', 'roadbook'].some((k) => params.has(k))) needSocial();
     else { let asked = false; const go = () => { if (!asked) { asked = true; idle(needSocial); } }; map.once('idle', () => setTimeout(go, 300)); setTimeout(go, 6000); }
     // the route-context providers (web/lazy.js 'ctx') likewise, so the first plan finds them in; a plan before then loads them
-    { let warm = false; const goCtx = () => { if (!warm) { warm = true; idle(needCtx); } }; map.once('idle', () => setTimeout(goCtx, 600)); setTimeout(goCtx, 6500); }
+    { let warm = false; const goCtx = () => { if (!warm) { warm = true; idle(needCtx); ApexLazy.load('ahead').catch(() => {}); } }; map.once('idle', () => setTimeout(goCtx, 600)); setTimeout(goCtx, 6500); }
     if (document.fonts) document.fonts.ready.then(() => render(true));
     // Native speed (big bet #10): the cover lifts on the first frames of the built cockpit, not when the map's first tile has
     // come in over the network (up to 3 s later on a cold start). The map waits on its own paper until that tile draws (U-68,

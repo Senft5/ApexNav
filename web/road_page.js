@@ -32,6 +32,9 @@
       hairpins: corners.filter((c) => c.severity === 'HP').length, tech: axes.tech, flow: axes.flow,
       surf: finite(opts.surf) ? opts.surf : null, clear, confidence, climb, drop,
       minutes: Math.round(f.seconds / 60), blind: Math.round(100 * f.blind_share),
+      // members' camber and repaving (contributor.js summarize), null when no member measured it
+      bankedKm: m && finite(m.bankedKm) ? m.bankedKm : null, offCamberKm: m && finite(m.offCamberKm) ? m.offCamberKm : null,
+      repavedOn: m && typeof m.repavedOn === 'string' && finite(m.repavedKm) && m.repavedKm >= 0.05 ? m.repavedOn : null,
     };
   }
 
@@ -59,10 +62,19 @@
       { key: 'clear', label: 'Clear road', hint: finite(d.clear) ? 'how few junctions break it up' : 'its junctions aren\'t counted yet', value: n(d.clear) },
     ];
   }
-  /** The facts under the scores: [label, value]; how sure we are in words, never a code. */
-  function facts(d) {
+  /**
+   * The facts under the scores: [label, value]; how sure we are in words, never a code. With members' data: how much of it
+   * leans ("0.4 mi banked, 0.2 mi off-camber", 50 m or more of either) and the month they felt it repaved ("Mar 2026").
+   * fmtDist(m) and fmtMonth('YYYY-MM') in the driver's words; a row is left out when nobody measured it.
+   */
+  function facts(d, fmtDist = (m) => `${(m / 1000).toFixed(1)} km`, fmtMonth = (ym) => ym) {
     const hp = !d.hairpins ? '' : d.hairpins === d.corners && d.corners > 1 ? ', all hairpins' : ` · ${d.hairpins} ${d.hairpins === 1 ? 'hairpin' : 'hairpins'}`;
-    return [['Corners', `${d.corners}${hp}`], ['Blind corners', finite(d.blind) ? `${d.blind}%` : '--'], ['How sure', CONF[d.confidence]]];
+    const rows = [['Corners', `${d.corners}${hp}`], ['Blind corners', finite(d.blind) ? `${d.blind}%` : '--']];
+    const lean = [[d.bankedKm, 'banked'], [d.offCamberKm, 'off-camber']].filter(([km]) => finite(km) && km >= 0.05).map(([km, w]) => `${fmtDist(km * 1000)} ${w}`);
+    if (lean.length) rows.push(['Camber', lean.join(', ')]);
+    if (typeof d.repavedOn === 'string') rows.push(['Repaved', fmtMonth(d.repavedOn)]);
+    rows.push(['How sure', CONF[d.confidence]]);
+    return rows;
   }
 
   /**
@@ -100,7 +112,8 @@
 
   /**
    * What's on the road now (IDEAS Q-13, verified hazards): bumps members felt (ApexContributor.measuredAlong crowdBumps,
-   * verified by 2+ drivers on the server) and live hand reports (GET /api/hazards) within NEAR_M of its line, cleared ones
+   * verified by 2+ drivers on the server), crests they went light over (crowdCrests) and rough stretches (crowdRough,
+   * { index, endIndex }, with toM) and live hand reports (GET /api/hazards) within NEAR_M of its line, cleared ones
    * left out, in order along it: [{ kind, title, atM, confirms, crowd }]. rs: the road resampled at 5 m ({ lat[], lon[] });
    * reports: the API's list, or null when it wasn't asked (then only bumps). null when nothing was looked up at all, so the
    * page says nothing rather than "none" (unknown stays unknown).
@@ -115,6 +128,14 @@
     const at = (i, f = 0) => (along ? along[i] + f * ((along[i + 1] ?? along[i]) - along[i]) : (i + f) * 5);
     for (const b of (measured && Array.isArray(measured.crowdBumps) ? measured.crowdBumps : [])) {
       if (b && Number.isInteger(b.index) && b.index >= 0 && b.index < rs.lat.length) out.push({ kind: 'bump', title: 'Bump', atM: at(b.index), confirms: null, crowd: true });
+    }
+    // crests members went light over and rough stretches they felt (contributor.js crestsFrom / roughFrom, 2+ drivers)
+    for (const c of (measured && Array.isArray(measured.crowdCrests) ? measured.crowdCrests : [])) {
+      if (c && Number.isInteger(c.index) && c.index >= 0 && c.index < rs.lat.length) out.push({ kind: 'crest', title: 'Crest', atM: at(c.index), confirms: null, crowd: true });
+    }
+    for (const r of (measured && Array.isArray(measured.crowdRough) ? measured.crowdRough : [])) {
+      if (!r || !Number.isInteger(r.index) || !Number.isInteger(r.endIndex) || r.index < 0 || r.endIndex >= rs.lat.length || r.endIndex <= r.index) continue;
+      out.push({ kind: 'rough', title: 'Rough road', atM: at(r.index), toM: at(r.endIndex), confirms: null, crowd: true });
     }
     const n = rs.lat.length, lat0 = rs.lat[0], kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
     // the road's box widened by NEAR_M, so a long route only measures the reports beside it
@@ -139,7 +160,8 @@
     return out.sort((a, b) => a.atM - b.atM);
   }
   /**
-   * The page's lines for it: [label, value]. Bumps in one line ("Bumps members felt", "at 0.4 and 1.3 mi"), each report
+   * The page's lines for it: [label, value]. Bumps in one line ("Bumps members felt", "at 0.4 and 1.3 mi"), crests the same,
+   * rough stretches as spans ("Rough road members felt", "0.4–0.9 mi"), each report
    * on its own ("Gravel", "at 1.2 mi · 3 confirmed"), at most `max` reports; "None reported" when it was looked up and
    * nothing is there; [] when it wasn't (null).
    */
@@ -147,10 +169,19 @@
     if (!Array.isArray(list)) return [];
     if (!list.length) return [['On this road', 'None reported']];
     const and = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
-    const bumps = list.filter((x) => x.crowd), reps = list.filter((x) => !x.crowd).slice(0, max), rows = [];
-    if (bumps.length) {
-      const at = bumps.slice(0, 4).map((b) => fmt(b.atM)), nums = at.map((v, i) => (i < at.length - 1 ? v.replace(/\s*[^\d.,\s]+$/, '') : v));
-      rows.push([bumps.length === 1 ? 'Bump members felt' : `${bumps.length} bumps members felt`, `at ${and(nums)}${bumps.length > 4 ? ' and more' : ''}`]);
+    const bare = (v) => v.replace(/\s*[^\d.,\s]+$/, '');
+    const crowd = (kind) => list.filter((x) => x.crowd && x.kind === kind), reps = list.filter((x) => !x.crowd).slice(0, max), rows = [];
+    const points = (xs, one, many) => {
+      if (!xs.length) return;
+      const at = xs.slice(0, 4).map((b) => fmt(b.atM)), nums = at.map((v, i) => (i < at.length - 1 ? bare(v) : v));
+      rows.push([xs.length === 1 ? one : `${xs.length} ${many}`, `at ${and(nums)}${xs.length > 4 ? ' and more' : ''}`]);
+    };
+    points(crowd('bump'), 'Bump members felt', 'bumps members felt');
+    points(crowd('crest'), 'Crest members went light over', 'crests members went light over');
+    const rough = crowd('rough');
+    if (rough.length) {
+      const spans = rough.slice(0, 3).map((r) => `${bare(fmt(r.atM))}–${fmt(r.toM)}`);
+      rows.push([rough.length === 1 ? 'Rough road members felt' : `${rough.length} rough stretches members felt`, `${and(spans)}${rough.length > 3 ? ' and more' : ''}`]);
     }
     for (const r of reps) rows.push([r.title, `at ${fmt(r.atM)}${finite(r.confirms) && r.confirms > 0 ? ` · ${r.confirms} confirmed` : ''}`]);
     return rows;

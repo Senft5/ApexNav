@@ -19,7 +19,8 @@ let seed = 7; const rng = () => { seed = (seed * 16807) % 2147483647; return see
 const n = 2001, lat = [], lon = [], dist = [], speed = [], t = [];
 for (let i = 0; i < n; i++) { lat.push(39 + i * 5 / 110540); lon.push(-84.5); dist.push(i * 5); speed.push(20); t.push(1000 + i / 4); }
 const d = { id: 'rec_home', name: 'Home to work', note: 'mine', tags: ['x'], car: { label: 'Tiburon' }, date: '2026-11-14T19:42:10.000Z', t0: 1731613330000,
-  source: 'phone', cam_v: 2, hz: 1, lat, lon, dist, speed_mps: speed, lon_g: dist.map(() => 0), lat_g: dist.map(() => 0), t_s: t, events: [{ type: 'corner' }] };
+  source: 'phone', cam_v: 2, hz: 1, lat, lon, dist, speed_mps: speed, lon_g: dist.map(() => 0), lat_g: dist.map(() => 0), t_s: t, events: [{ type: 'corner' }],
+  said: [{ t: 3, m: 40, line: '4.0 seconds up on Sam.', eng: 'phone' }] };
 const before = JSON.stringify(d);
 const whole = A.anonymize(d, () => false, rng, { age: '25-34' });
 // a privacy zone 300 m round the 5 km mark: two pieces
@@ -51,7 +52,7 @@ def test_a_piece_carries_nothing_about_the_driver():
     r = run()
     assert r["unchanged"]                                                # the driver's own drive is never changed
     [p] = r["whole"]
-    for k in ("name", "note", "tags", "car", "date", "t0", "events"):
+    for k in ("name", "note", "tags", "car", "date", "t0", "events", "said"):   # said: what the co-driver said (cockpit.js saidOnDrive)
         assert k not in p
     assert p["id"] != "rec_home" and len(p["id"]) == 16
     assert p["hour"] == "2026-11-14T19" and p["age"] == "25-34" and p["source"] == "phone"

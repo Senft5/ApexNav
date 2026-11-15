@@ -65,6 +65,19 @@ describe("map data in R2", () => {
     expect((await DATA.list()).objects).toHaveLength(0);
   });
 
+  it("takes a road library card only as a JPEG, under its road's key, and stores it as one", async () => {
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+    const cards = await token({ workflow: "Road library cards", workflow_ref: "Senft5/ApexNav/.github/workflows/road-cards.yml@refs/heads/main" });
+    expect((await put("roads/v1/cherohala-skyway-tellico-plains.jpg", jpeg)).status).toBe(403);         // the map data job: not its key
+    expect((await put("graph/v1/b/b1/10_20.vgr", new Uint8Array([86, 71, 82, 49]), cards)).status).toBe(403);   // the card job: only cards
+    expect((await put("roads/v1/cherohala-skyway-tellico-plains.jpg", new Uint8Array([1, 2, 3, 4]), cards)).status).toBe(400);
+    expect((await put("roads/v1/../x.jpg", jpeg, cards)).status).toBe(400);
+    expect((await put("roads/v1/Bad_Name.jpg", jpeg, cards)).status).toBe(400);
+    expect((await put("roads/v1/cherohala-skyway-tellico-plains.jpg", jpeg, cards)).status).toBe(201);
+    const o = await DATA.head("roads/v1/cherohala-skyway-tellico-plains.jpg");
+    expect(o?.httpMetadata?.contentType).toBe("image/jpeg");
+  });
+
   it("switches the index only once every tile is there, then serves R2 first and drops builds older than the last two", async () => {
     expect((await put("graph/v1/b/b1/10_20.vgr", tileBytes)).status).toBe(201);
     const early = await put("graph/v1/index.json", index("b1"));
@@ -91,6 +104,26 @@ describe("map data in R2", () => {
     const builds = async () => [...new Set((await DATA.list({ prefix: "graph/v1/b/" })).objects.map((o) => o.key.split("/")[3]))].sort();
     for (let i = 0; i < 50 && (await builds()).length > 2; i++) await new Promise((r) => setTimeout(r, 20));
     expect(await builds()).toEqual(["b2", "b3"]);
+  });
+
+  it("takes our router's tile index only when every part is there and they add up, then keeps the last two builds", async () => {
+    const part = new Uint8Array(1000).fill(7);
+    const vix = (build: string, parts = 2, bytes = 2000) => JSON.stringify({ build, parts, bytes, sha256: "a".repeat(64) });
+    expect((await put("valhalla/v1/b/w1/part-000", part)).status).toBe(201);
+    expect((await put("valhalla/v1/index.json", vix("w1"))).status).toBe(409);   // part-001 missing
+    expect((await put("valhalla/v1/b/w1/part-001", part)).status).toBe(201);
+    expect((await put("valhalla/v1/index.json", vix("w1", 2, 1999))).status).toBe(409);   // sizes don't add up
+    expect((await put("valhalla/v1/index.json", JSON.stringify({ build: "w1", parts: 2 }))).status).toBe(400);
+    expect((await put("valhalla/v1/index.json", vix("w1"))).status).toBe(201);
+    expect((await put("valhalla/v1/b/w1/part-1", part)).status).toBe(400);   // not a part name
+    for (const b of ["w2", "w3"]) {
+      for (const n of ["part-000", "part-001"]) await put(`valhalla/v1/b/${b}/${n}`, part);
+      expect((await put("valhalla/v1/index.json", vix(b))).status).toBe(201);
+    }
+    const builds = async () => [...new Set((await DATA.list({ prefix: "valhalla/v1/b/" })).objects.map((o) => o.key.split("/")[3]))].sort();
+    for (let i = 0; i < 50 && (await builds()).length > 2; i++) await new Promise((r) => setTimeout(r, 20));
+    expect(await builds()).toEqual(["w2", "w3"]);
+    expect((await get("/api/data/valhalla/v1/index.json")).status).toBe(404);   // never served to the public: only to the container
   });
 
   it("serves the camera list and context bundles from R2", async () => {

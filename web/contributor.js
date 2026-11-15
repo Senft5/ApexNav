@@ -179,6 +179,8 @@
 
   // ---- network shell -------------------------------------------------------------------------------------------------------
   const VALHALLA = 'https://valhalla1.openstreetmap.de', OVERPASS = 'https://overpass-api.de/api/interpreter';
+  // ours first when route_loading.js is loaded (it is on the map page), else straight to `f` (tests, the analysis page)
+  const viaOurs = (f) => (u, i) => (root.ApexRouteLoading && root.ApexRouteLoading.valhallaFetch ? root.ApexRouteLoading.valhallaFetch(u, i, f) : f(u, i));
 
   /** Snaps the drive to the road graph with Valhalla trace_attributes (chunks of 2,500 points). Returns the per-sample match array. */
   async function matchDrive(drive, fetchFn = fetch) {
@@ -187,7 +189,7 @@
       const e = Math.min(n, s + CH + 20);                              // small overlap so edges continue across chunks
       const shape = []; for (let i = s; i < e; i++) shape.push({ lat: drive.lat[i], lon: drive.lon[i] });
       if (shape.length < 2) continue;
-      const r = await fetchFn(`${VALHALLA}/trace_attributes`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+      const r = await viaOurs(fetchFn)(`${VALHALLA}/trace_attributes`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
         shape, costing: 'auto', shape_match: 'map_snap', filters: { attributes: ['edge.way_id', 'edge.road_class', 'edge.names', 'matched.edge_index', 'matched.type'], action: 'include' } }) });
       if (!r.ok) throw new Error(`map matching failed (${r.status})`);
       const j = await r.json();
@@ -459,7 +461,29 @@
     if (!roads) return null;
     const runs = locate({ drive: route, match, ways }), s = seriesFrom(runs, roads, route.lat.length);
     // the driven curvature along it (IDEAS Q-04), per sample, for correcting the map's corners
-    return { ...summarize(runs, roads, route.lat.length), crowdK: s.k, crowdKn: s.kn, crowdBumps: s.bumps };
+    return { ...summarize(runs, roads, route.lat.length), crowdK: s.k, crowdKn: s.kn, crowdBumps: s.bumps, crowdCrests: crestsFrom(s.crest, s.crn),
+      crowdRough: Array.isArray(route.dist) ? roughFrom(s.rough, s.n, route.dist) : [], crowdCam: camFrom(s.cam, s.cn, s.csd) };
+  }
+  /**
+   * Members' bumps and crests along a free drive's road ahead (no map match: the road context already knows the way under
+   * each stretch, osm_overpass.js 'osm_way' spans { fromM, toM, label: way id, cls, geom }). `roads` is the /api/roads answer
+   * for those ways; `lines` ({ way: [[lat, lon]] }, the cells answer's) the server's own line of each, which the bins are
+   * counted on, else the span's. { crowdBumps, crowdCrests } as measuredAlong gives them, or null when no stretch is known.
+   */
+  function feelFromWays(track, spans, roads, lines = null) {
+    const n = track && Array.isArray(track.lat) ? track.lat.length : 0;
+    const ws = (Array.isArray(spans) ? spans : []).filter((sp) => sp && sp.kind === 'osm_way' && sp.label && Array.isArray(sp.geom) && sp.geom.length > 1);
+    if (!n || !ws.length || !roads || !Array.isArray(track.dist)) return null;
+    const match = new Array(n).fill(null), ways = {};
+    let k = 0;
+    for (let i = 0; i < n; i++) {
+      const d = track.dist[i];
+      while (k < ws.length && ws[k].toM < d - 2.5) k++;
+      const sp = ws[k];
+      if (sp && sp.fromM <= d + 2.5) { match[i] = { way: sp.label, cls: sp.cls || null }; ways[sp.label] = (lines && Array.isArray(lines[sp.label]) && lines[sp.label].length > 1 ? lines[sp.label] : null) || sp.geom; }
+    }
+    const runs = locate({ drive: track, match, ways }), s = seriesFrom(runs, roads, n);
+    return { crowdBumps: s.bumps, crowdCrests: crestsFrom(s.crest, s.crn), crowdRough: roughFrom(s.rough, s.n, track.dist), crowdCam: camFrom(s.cam, s.cn, s.csd) };
   }
   /**
    * Per-sample measured series along a route: { cam[], rough[], n[], cn[], csd[], rsd[], k[], kn[] } with null where no member has measured
@@ -468,7 +492,7 @@
    */
   function seriesFrom(runs, roads, total) {
     const blank = () => new Array(total).fill(null);
-    const cam = blank(), rough = blank(), n = blank(), cn = blank(), csd = blank(), rsd = blank(), k = blank(), kn = blank(), bumps = [];
+    const cam = blank(), rough = blank(), n = blank(), cn = blank(), csd = blank(), rsd = blank(), k = blank(), kn = blank(), crest = blank(), crn = blank(), bumps = [];
     const at = (a, j) => (a && a[j] != null ? a[j] : null);
     for (const run of runs) {
       const d = roads[run.way] && roads[run.way][run.dir]; if (!d) continue;
@@ -477,7 +501,7 @@
         const j = idx.get(p.bin); if (j == null) continue;
         cam[p.i] = d.cam[j]; rough[p.i] = d.rough[j]; n[p.i] = d.n[j];
         cn[p.i] = d.cn ? d.cn[j] : null; csd[p.i] = at(d.csd, j); rsd[p.i] = at(d.rsd, j);
-        k[p.i] = at(d.k, j); kn[p.i] = at(d.kn, j);
+        k[p.i] = at(d.k, j); kn[p.i] = at(d.kn, j); crest[p.i] = at(d.crest, j); crn[p.i] = at(d.crn, j);
       }
       // crowd-verified bumps (IDEAS Q-02, roads.ts verifiedBumps): [bin, posterior] on this road+direction, at the first
       // sample of the route in that bin
@@ -487,7 +511,112 @@
       }
     }
     bumps.sort((a, b) => a.index - b.index);
-    return { cam, rough, n, cn, csd, rsd, k, kn, bumps };
+    return { cam, rough, n, cn, csd, rsd, k, kn, crest, crn, bumps };
+  }
+
+  /**
+   * The camber two or more members measured and agree on (agreement 'agree': their SD within AGREE.camber_deg, 1.5 deg), per
+   * sample in degrees, relative to the turn (+ banked into it, - off-camber), only where it is CAMBER_MIN_DEG (3 deg, the
+   * route card's banked / off-camber) or more either way; null elsewhere (flat, one pass, disagreeing, or unmeasured).
+   */
+  const CAMBER_MIN_DEG = 3;
+  function camFrom(cam, cn, csd) {
+    return (Array.isArray(cam) ? cam : []).map((v, i) => (finite(v) && Math.abs(v) >= CAMBER_MIN_DEG
+      && agreement(Array.isArray(cn) ? cn[i] : null, Array.isArray(csd) ? csd[i] : null, AGREE.camber_deg) === 'agree' ? v : null));
+  }
+  /**
+   * Corner notes on track ({ events }) from the camber members agree on (camFrom, degrees relative to the turn) at each
+   * apex: "off-camber" (slopes away) at -3 deg or less, "banked" at +3 or more, the call worked out again (apex_core.js
+   * paceNoteText). Only the corners `may(e)` allows (on a free drive: not yet said, and far enough ahead that the call
+   * doesn't change as it comes). Returns how many changed.
+   */
+  function camberMods(track, cam, paceNoteText, may = () => true) {
+    let n = 0;
+    if (!track || !Array.isArray(track.events) || !Array.isArray(cam) || typeof paceNoteText !== 'function') return 0;
+    for (const e of track.events) {
+      if (!e || e.type !== 'corner' || !Array.isArray(e.mods) || !finite(cam[e.index]) || !may(e)) continue;
+      const mod = cam[e.index] <= -CAMBER_MIN_DEG ? 'off-camber' : cam[e.index] >= CAMBER_MIN_DEG ? 'banked' : null;
+      if (!mod || e.mods.includes(mod)) continue;
+      e.mods = [...e.mods.filter((m) => m !== 'off-camber' && m !== 'banked'), mod];
+      const t = paceNoteText(e);
+      e.code = t.code; e.call = t.call; e.crowdCam = true; n++;
+    }
+    return n;
+  }
+  /**
+   * Broken pavement members measured (IDEAS Q-01 data): runs where two or more passes measured the roughness and its mean is
+   * ROUGH_G (0.30 g rms, the route card's "rough") or more, ROUGH_RUN_M (100 m) long at least, runs less than ROUGH_GAP_M
+   * (300 m) apart as one (a patched bit is no new surface): [{ index, endIndex }]. One pass, or untested, is no rough road.
+   */
+  const ROUGH_RUN_M = 100, ROUGH_GAP_M = 300;
+  function roughFrom(rough, n, dist) {
+    const out = [];
+    if (!Array.isArray(rough) || !Array.isArray(dist)) return out;
+    const hit = (i) => finite(rough[i]) && rough[i] >= ROUGH_G && Array.isArray(n) && finite(n[i]) && n[i] >= 2;
+    let run = null, cur = null;
+    const close = () => { if (run && dist[run.endIndex] - dist[run.index] >= ROUGH_RUN_M) out.push(run); };
+    const end = (c) => { if (run && dist[c.index] - dist[run.endIndex] < ROUGH_GAP_M) run.endIndex = c.endIndex; else { close(); run = c; } };
+    for (let i = 0; i < Math.min(rough.length, dist.length); i++) {
+      if (hit(i)) { if (cur) cur.endIndex = i; else cur = { index: i, endIndex: i }; continue; }
+      if (cur) { end(cur); cur = null; }
+    }
+    if (cur) end(cur);
+    close();
+    return out;
+  }
+  /**
+   * "Rough road" marks (road_marks.js kind rough) where members measured broken pavement along track ({ lat, lon, dist }),
+   * from roughFrom's runs; not at the very start (the car is already on it), and not where the track's marks already have
+   * one within 40 m (the map's smoothness tag: one call).
+   */
+  function roughMarks(track, runs, marks) {
+    const have = (Array.isArray(marks) ? marks : []).filter((m) => m && m.code === 'ROUGH').map((m) => m.dist_m);
+    const d = track && track.dist;
+    return (Array.isArray(runs) ? runs : []).filter((r) => r && Number.isInteger(r.index) && d && finite(d[r.index]) && r.index > 0)
+      .filter((r) => !have.some((m) => Math.abs(m - d[r.index]) < 40))
+      .map((r) => ({ type: 'mark', kind: 'rough', code: 'ROUGH', call: 'Rough road', index: r.index, dist_m: d[r.index],
+        end_m: finite(d[r.endIndex]) ? d[r.endIndex] : d[r.index], lat: track.lat[r.index], lon: track.lon[r.index], crowd: true }));
+  }
+
+  /**
+   * Crests members' phones felt (IDEAS Q-08 data, ROAD_INTELLIGENCE 3.2): where two or more passes measured the crest and
+   * their mean peak unweighting is CREST_G (0.15 g, roads.ts) or more, as [{ index, g }] at the lightest sample of each run;
+   * runs less than SAME_CREST_M apart are one crest. One pass, or a server that doesn't send crn, is no crest.
+   */
+  const CREST_G = 0.15, SAME_CREST_M = 30;
+  function crestsFrom(crest, crn) {
+    const out = [];
+    if (!Array.isArray(crest) || !Array.isArray(crn)) return out;
+    let run = null;
+    const close = () => { if (run) out.push({ index: run.index, g: +run.g.toFixed(3) }); run = null; };
+    for (let i = 0; i < crest.length; i++) {
+      const ok = finite(crest[i]) && crest[i] >= CREST_G && crn[i] >= 2;
+      if (ok) {
+        if (run && (i - run.last) * BIN_M < SAME_CREST_M) { run.last = i; if (crest[i] > run.g) { run.g = crest[i]; run.index = i; } }
+        else { close(); run = { index: i, g: crest[i], last: i }; }
+      }
+    }
+    close();
+    return out;
+  }
+  /**
+   * The route's pace-note events for crests members felt: one 'crest' event per crest on the track ({ lat[], lon[], dist[] }),
+   * marked `crowd` with its mean unweighting, none within SAME_CREST_M of a crest the track already has. Called with the
+   * notes awake (a crest is a fun-driving note, not a hazard to wake cruise for).
+   */
+  function crestEvents(track, crests, existing = []) {
+    if (!track || !Array.isArray(track.lat) || !Array.isArray(crests)) return [];
+    const dist = track.dist || track.lat.map((_, i) => i * BIN_M), out = [];
+    const taken = (existing || []).filter((e) => e && e.type === 'crest' && finite(e.dist_m)).map((e) => e.dist_m);
+    for (const c of crests) {
+      const i = c && c.index;
+      if (!Number.isInteger(i) || i < 0 || i >= track.lat.length || !finite(dist[i])) continue;
+      if (taken.some((m) => Math.abs(m - dist[i]) < SAME_CREST_M)) continue;
+      taken.push(dist[i]);
+      out.push({ type: 'crest', code: 'CREST', call: 'Crest', index: i, dist_m: dist[i], start_m: dist[i], end_m: dist[i],
+                 lat: track.lat[i], lon: track.lon[i], severity_g: finite(c.g) ? c.g : null, crowd: { g: finite(c.g) ? c.g : null } });
+    }
+    return out;
   }
 
   /**
@@ -592,6 +721,6 @@
     return Math.round(100 * (1 - Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30))));
   }
 
-  const api = { CAM_V, binFlow, bumpEvidence, binBump, bumpEvents, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, wayTiles, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { CAM_V, binFlow, bumpEvidence, binBump, bumpEvents, crestsFrom, crestEvents, camFrom, camberMods, roughFrom, roughMarks, feelFromWays, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, wayTiles, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);

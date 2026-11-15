@@ -123,9 +123,10 @@ export function csrfCheck(req: Request, env: Env): void {
   if (req.method === "GET" || req.method === "HEAD") return;
   const o = req.headers.get("origin");
   if (o === APP_ORIGIN) {
-    // Signed-out app requests: only the sign-in exchanges (Google code, Apple token) and anonymous crash reports.
+    // Signed-out app requests: only the sign-in exchanges (Google code, Apple token), anonymous crash reports and our own
+    // router (src/valhalla.ts: a route asked for, nothing written, no account).
     const path = new URL(req.url).pathname;
-    if (!bearer(req) && path !== "/api/auth/app/exchange" && path !== "/api/auth/apple" && path !== "/api/errors") throw new HttpError(403, "bad_origin");
+    if (!bearer(req) && path !== "/api/auth/app/exchange" && path !== "/api/auth/apple" && path !== "/api/errors" && !path.startsWith("/api/valhalla/")) throw new HttpError(403, "bad_origin");
   } else if (!o || o !== origin(req, env)) throw new HttpError(403, "bad_origin");
   if (req.headers.get("x-apexnav") !== "1") throw new HttpError(403, "missing_header");
 }

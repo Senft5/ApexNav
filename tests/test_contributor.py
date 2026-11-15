@@ -1,5 +1,6 @@
 """Phone-side contributor (web/contributor.js): drive + way geometry -> bin summaries. Synthetic roads in the test only, never shipped."""
 import json
+import os
 import shutil
 import subprocess
 
@@ -530,3 +531,154 @@ const C = require(process.argv[1] + '/web/contributor.js');
     assert o["asked"] == [f"/api/ctx/ways?tiles={','.join(o['tiles'])}&ids=7,9"]
     assert o["got"] == ["7", "9"] and len(o["over"]) == 1 and "way(id:9)" in o["over"][0]
     assert len(o["downOver"]) == 1 and "way(id:7,9)" in o["downOver"][0]
+
+
+CRESTS = r"""
+const C = require(process.argv[1] + '/web/contributor.js');
+// per 5 m sample: a crest two passes felt at 100-110 (lightest 0.3 g at 104), one only a single pass felt at 300 (0.4 g),
+// a slight rise two passes felt at 500 (0.1 g, under 0.15), and a second crest 4 samples after the first (one crest)
+const N = 600, crest = new Array(N).fill(null), crn = new Array(N).fill(null);
+for (let i = 100; i <= 110; i++) { crest[i] = i === 104 ? 0.3 : 0.18; crn[i] = 2; }
+crest[114] = 0.2; crn[114] = 3;
+crest[300] = 0.4; crn[300] = 1;
+crest[500] = 0.1; crn[500] = 4;
+crest[400] = 0.25; crn[400] = null;                                   // an older server: no crn, no crest
+const crests = C.crestsFrom(crest, crn);
+const t = { lat: Array.from({ length: N }, (_, i) => 35 + i * 5 / 110540), lon: new Array(N).fill(-83), dist: Array.from({ length: N }, (_, i) => i * 5) };
+const ev = C.crestEvents(t, crests);
+const beside = C.crestEvents(t, crests, [{ type: 'crest', dist_m: 530 }]);
+console.log(JSON.stringify({ crests, ev: ev.map((e) => [e.type, e.call, e.dist_m, e.severity_g, !!e.crowd]), beside: beside.length,
+  none: C.crestsFrom(null, null).length, bad: C.crestEvents(t, [{ index: -1, g: 0.3 }, { index: 1e6, g: 0.3 }]).length }));
+"""
+
+
+def test_crests_two_or_more_members_felt_are_pace_notes():
+    """A crest is a pace note on a planned route where two or more passes measured it and their mean peak unweighting is
+    0.15 g or more (roads.ts CREST_G): one per run, at its lightest point; one pass, a slight rise, or a server that doesn't
+    say how many passes is none; a crest the track already has is not called twice."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    o = json.loads(subprocess.run([NODE, "-e", CRESTS, root], capture_output=True, text=True, check=True).stdout)
+    assert o["crests"] == [{"index": 104, "g": 0.3}]
+    assert o["ev"] == [["crest", "Crest", 520, 0.3, True]]
+    assert o["beside"] == 0 and o["none"] == 0 and o["bad"] == 0
+
+
+FREE_FEEL = r"""
+const R = process.argv[1];
+const C = require(R + '/web/contributor.js'), O = require(R + '/web/route_ctx/osm_overpass.js');
+// a free drive's road ahead: 2 km east, 5 m samples; a tertiary road under the first 1.5 km (its first node 20 m behind
+// the car), a residential street after it
+const n = 401, lat0 = 39, lon0 = -84.5, dLon = 5 / (111320 * Math.cos(39 * Math.PI / 180));
+const c = { id: 'h', lat: Float64Array.from({ length: n }, () => lat0), lon: Float64Array.from({ length: n }, (_, i) => lon0 + i * dLon), distM: Float64Array.from({ length: n }, (_, i) => i * 5) };
+const at = (i) => ({ lat: lat0, lon: lon0 + i * dLon });
+const els = O.parse({ elements: [
+  { type: 'way', id: 4000000123, tags: { highway: 'tertiary' }, nodes: [1, 2], geometry: [at(-4), at(300)] },
+  { type: 'way', id: 9, tags: { highway: 'residential' }, nodes: [2, 3], geometry: [at(300), at(401)] }] });
+const ctx = O.aggregate(c, els, new Uint8Array(n).fill(1), { ways: true });
+const plain = O.aggregate(c, els, new Uint8Array(n).fill(1));
+const t = { lat: Array.from(c.lat), lon: Array.from(c.lon), dist: Array.from(c.distM), events: [] };
+// the members' answer for the tertiary road eastbound: a bump at bin 104, a crest two passes felt round bins 204-210;
+// and the residential street has a bump too (never asked, never used)
+const bins = Array.from({ length: 300 }, (_, b) => b);
+const road = { i: bins, cam: bins.map(() => null), rough: bins.map(() => null), n: bins.map(() => 2), cn: bins.map(() => 0),
+  crest: bins.map((b) => (b >= 204 && b <= 210 ? (b === 207 ? 0.32 : 0.25) : null)), crn: bins.map((b) => (b >= 204 && b <= 210 ? 2 : 0)), bp: [[104, 0.9]] };
+const roads = { '4000000123': { 0: road }, '9': { 0: { ...road, bp: [[10, 0.9]] } } };
+const m = C.feelFromWays(t, ctx.spans, roads);
+console.log(JSON.stringify({
+  spans: ctx.spans.filter((s) => s.kind === 'osm_way').map((s) => [s.label, s.cls, s.fromM, s.toM, s.geom.length]),
+  plain: plain.spans.filter((s) => s.kind === 'osm_way').length,
+  bumps: m.crowdBumps, crests: m.crowdCrests,
+  none: C.feelFromWays(t, plain.spans, roads), empty: C.feelFromWays(t, ctx.spans, {}).crowdBumps,
+  // the server's own line of the way (the cells answer) starts 20 m further back: the bins are counted on it
+  shifted: C.feelFromWays(t, ctx.spans, roads, { '4000000123': [[at(-8).lat, at(-8).lon], [at(300).lat, at(300).lon]] }).crowdBumps,
+}));
+"""
+
+
+def test_a_free_drive_gets_members_bumps_and_crests_from_the_road_context():
+    """The road ahead has no map match: the road context names the OSM way under each stretch (osm_way spans, by id as a
+    string since ids pass a Float32's range), and the members' bins along that way become its bumps and crests."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    o = json.loads(subprocess.run([NODE, "-e", FREE_FEEL, root], capture_output=True, text=True, check=True).stdout)
+    assert o["spans"] == [["4000000123", "tertiary", 0, 1500, 2], ["9", "residential", 1505, 2000, 2]]
+    assert o["plain"] == 0, "only asked for (a free drive's road ahead)"
+    # (bin b covers 5b..5b+5 m of the way from its first node, 20 m behind the car: sample b-4, give or take float rounding)
+    assert len(o["bumps"]) == 1 and abs(o["bumps"][0]["index"] - 100) <= 1 and o["bumps"][0]["p"] == 0.9, "on the tertiary road, at its bin; the residential street's never"
+    assert len(o["crests"]) == 1 and abs(o["crests"][0]["index"] - 203) <= 1 and o["crests"][0]["g"] == 0.32
+    assert o["none"] is None and o["empty"] == []
+    assert len(o["shifted"]) == 1 and abs(o["shifted"][0]["index"] - 96) <= 1
+    js = open(os.path.join(root, "web", "cockpit.js")).read()
+    assert "horizonFeel(t, c).catch(() => {});" in js and "{ placesOnly: true, ways: true }" in js
+    assert "(t.kind !== 'route' && t.kind !== 'horizon')" in js and "free.feelSaid = null;" in js
+    assert "routeCtxOpts().lookupCells" in js and "/api/roads?ways=${ids" not in js[js.index("async function horizonFeel"):js.index("async function horizonFeel") + 3000], "by cells, never way ids (VI-1)"
+
+
+ROUGH = r"""
+const C = require(process.argv[1] + '/web/contributor.js');
+const n = 400, dist = Array.from({ length: n }, (_, i) => i * 5), lat = dist.map((d) => 35 + d / 110540), lon = dist.map(() => -84);
+const rough = new Array(n).fill(null), np = new Array(n).fill(null);
+const set = (a, b, v, k) => { for (let i = a; i <= b; i++) { rough[i] = v; np[i] = k; } };
+set(20, 50, 0.4, 2);      // 150 m broken, two passes: a rough road
+set(70, 90, 0.35, 3);     // 100 m more after a 100 m smooth patch: the same stretch
+set(150, 200, 0.5, 1);    // one pass only: none
+set(250, 260, 0.6, 4);    // 50 m: too short
+set(300, 340, 0.2, 5);    // measured, not broken
+const runs = C.roughFrom(rough, np, dist);
+const t = { lat, lon, dist };
+console.log(JSON.stringify({ runs,
+  marks: C.roughMarks(t, runs, []).map((m) => [m.code, m.call, m.dist_m, m.end_m, m.crowd]),
+  mapped: C.roughMarks(t, runs, [{ code: 'ROUGH', dist_m: 120 }]).length,
+  start: C.roughFrom([0.5, 0.5, 0.5, ...new Array(30).fill(0.5)], new Array(33).fill(2), dist.slice(0, 33)).length,
+  startMarks: C.roughMarks(t, C.roughFrom([0.5, 0.5, 0.5, ...new Array(30).fill(0.5)], new Array(33).fill(2), dist.slice(0, 33)), []).length }));
+"""
+
+
+def test_rough_road_where_two_or_more_members_measured_broken_pavement():
+    """"Rough road" where two or more passes measured broken pavement (0.30 g rms or more, the route card's "rough") for
+    100 m or more; a short patch between is the same stretch; one pass, a short bit or a fair road is none; the map's own
+    smoothness mark there is one call; not at the very start, where the car already is."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    o = json.loads(subprocess.run([NODE, "-e", ROUGH, root], capture_output=True, text=True, check=True).stdout)
+    assert o["runs"] == [{"index": 20, "endIndex": 90}]
+    assert o["marks"] == [["ROUGH", "Rough road", 100, 450, True]]
+    assert o["mapped"] == 0 and o["start"] == 1 and o["startMarks"] == 0
+    js = open(os.path.join(root, "web", "cockpit.js")).read()
+    assert "ApexContributor.roughMarks(t, m.crowdRough || [], t.marks)" in js
+
+
+CAM = r"""
+const C = require(process.argv[1] + '/web/contributor.js');
+console.log(JSON.stringify(C.camFrom([-5, -5, 4, 2.5, -6, 5, null, -4], [2, 3, 2, 3, 1, 2, 2, 2], [0.5, 1.4, 0.3, 0.1, null, 2.5, null, null])));
+"""
+
+
+def test_camber_members_agree_on():
+    """Members' camber steers the corners only where two or more passes agree (SD within 1.5 deg) and it leans 3 deg or more
+    either way: one pass, passes that disagree, an unknown spread or a flat road say nothing."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    o = json.loads(subprocess.run([NODE, "-e", CAM, root], capture_output=True, text=True, check=True).stdout)
+    assert o == [-5, -5, 4, None, None, None, None, None]
+    js = open(os.path.join(root, "web", "cockpit.js")).read()
+    assert "Core.detectCorners(kappa, ds, camberRad)" in js and "Core.brakingEnvelopeMps(kappa, ds, camberRad," in js
+
+
+CAM_MODS = r"""
+const C = require(process.argv[1] + '/web/contributor.js'), Core = require(process.argv[1] + '/web/apex_core.js');
+const corner = (index, mods, dist_m) => ({ type: 'corner', index, dist_m, dir: 'L', severity: 3, grade: '', shape: null, caution: null, mods, code: 'L3', call: 'Left 3' });
+const t = { events: [corner(10, [], 500), corner(20, ['tightens'], 900), corner(30, ['banked'], 1300), corner(40, [], 200), corner(50, [], 1700), { type: 'bump', index: 10 }] };
+const cam = new Array(60).fill(null); cam[10] = -4; cam[20] = 5; cam[30] = -3.5; cam[40] = -6; cam[50] = 2;
+const n = C.camberMods(t, cam, Core.paceNoteText, (e) => e.dist_m >= 300);
+console.log(JSON.stringify({ n, calls: t.events.filter((e) => e.type === 'corner').map((e) => [e.call, e.mods, !!e.crowdCam]) }));
+"""
+
+
+def test_the_road_aheads_corners_take_the_camber_members_agree_on():
+    """A free drive's corners ahead get "off-camber" (slopes away) or "banked" from members' agreed camber at the apex; a
+    mapped "banked" that members measured leaning away is corrected; a corner too close (not allowed) or a flat one stays."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    o = json.loads(subprocess.run([NODE, "-e", CAM_MODS, root], capture_output=True, text=True, check=True).stdout)
+    assert o["n"] == 3
+    assert o["calls"] == [["Left 3 off-camber", ["off-camber"], True], ["Left 3 tightens banked", ["tightens", "banked"], True],
+                          ["Left 3 off-camber", ["off-camber"], True], ["Left 3", [], False], ["Left 3", [], False]]
+    js = open(os.path.join(root, "web", "cockpit.js")).read()
+    assert "ApexContributor.camberMods(t, m.crowdCam, Core.paceNoteText," in js

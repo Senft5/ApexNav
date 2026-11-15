@@ -261,6 +261,8 @@
     return playBuffer(await phraseCache.get(key));
   }
   const joins = (tokens) => cover(tokens).length - 1;
+  /** Whether the loaded bank has a clip for every part of these tokens. */
+  const covers = (tokens) => !!bank && Array.isArray(tokens) && tokens.length > 0 && cover(tokens).every((t) => !!bank.tokens[t]);
   // Pre-render phrases we know are coming (route names) so they're instant when needed.
   async function prefetch(texts) {
     if (!bank || !bank.kokoro_voice) return;
@@ -289,5 +291,5 @@
     try { return (await (await fetch('voices/index.json')).json()).voices; } catch (_) { return []; }
   }
 
-  root.ApexVoice = { load, play, nativeDone, tokensFor, cover, joins, playWhole, voices, speakLive, prefetch, warmLive, liveState, liveInfo, renderLive: render, renderLine, canRenderLine: () => !IN_APP, unlock: audio, get bank() { return bank; } };
+  root.ApexVoice = { load, play, nativeDone, tokensFor, cover, covers, joins, playWhole, voices, speakLive, prefetch, warmLive, liveState, liveInfo, renderLive: render, renderLine, canRenderLine: () => !IN_APP, unlock: audio, get bank() { return bank; } };
 })(window);

@@ -90,9 +90,28 @@ trust risk: "Vetta sells how fast you take corners" is a bad headline. Pavement 
 ## 6. Next steps (in order)
 
 1. **Now:** keep collecting under today's privacy page; the anonymous drive upload stays internal only and is never sold.
-2. **Count distinct contributors per section per period without ids** (a monthly salted token or a HyperLogLog sketch in
-   `road_bins`); `rank_slots` only remembers the first two, so k ≥ 10 can't be checked today.
+2. ~~Count distinct contributors without ids~~ **done** (§7): per road and direction, all time; per period is still to do.
 3. **IRI calibration drive** on a road with a published survey (ROAD_DATA.md §4).
 4. **Owner (docs/OWNER_TODO.md):** a privacy lawyer reviews §2–§4 (flat-fee review, a few thousand dollars).
-5. Build the release pipeline (k filter, DP noise, re-identification test) behind an owner-only flag.
+5. Release pipeline: k filter and DP noise **done** (§7, internal keys only); the written re-identification test is next.
 6. Change consent and policy (§4), then run the free pilot, then price the first deal.
+
+## 7. What is built (2026-11-15)
+
+**data.vettadrive.com**: a map viewer (web/insights.html) and an API (backend/src/road_insights.ts). Nothing is sold.
+
+- **Viewer:** colours roads by roughness, banking, off-camber, crests, flow or hard braking; tap a road for its figures.
+  Without a key it shows **web/insights-sample.geojson**: real OpenStreetMap road lines with **made-up** values, labelled
+  as made up everywhere (tools/insights_sample.py builds it). With a key it shows the real released roads in view.
+- **API:** `GET /api/data/v1/roads.geojson?bbox=s,w,n,e` (key, ≤ 1° a side), `GET /api/data/v1/meta` (public).
+- **Rules in code:** through roads only; **≥ 10 distinct established drivers** per road and direction (`road_floor` now
+  keeps up to 50 hmac holders, never ids, so it can count past two; no new table); month only; values clipped and
+  Laplace-noised (ε = 1 per metric per month, scale from the driver count, the same draw on every ask); confidence as a
+  band (fair, good, high), never a count.
+- **Keys:** `python tools/data_key.py` makes one. Its sha256 goes in `DATA_OWNER_KEYS` (internal, works now) or
+  `DATA_API_KEYS` (a partner: refused with `partner_access_not_open` until the `road_data_partners` flag is turned on,
+  which waits for §4).
+- **Owner's review view:** an internal key with `&floor=app` (the viewer's "Include roads under 10 drivers" box, on by
+  default for internal keys) uses the members' app rule instead of the 10-driver floor, so the owner sees the product's
+  shape before roads reach 10 drivers. A partner key ignores it. The owner's key hash is in wrangler.jsonc vars.
+- **Not yet:** per-section (5 m) figures, IRI calibration, hour of day, age bands, per-key usage metering.

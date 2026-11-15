@@ -2,13 +2,16 @@
 // roadbook, convoy, friend); vettadrive.com is the information page (About, Privacy, Terms, the App Store). Both are
 // Custom Domains on this one Worker (wrangler.jsonc routes), and apexnav.senftns.workers.dev keeps working unchanged, since
 // the iOS app calls it. www. of either goes to the bare name.
-// wrangler.jsonc run_worker_first sends "/", "/index.html" and "/.well-known/*" here, besides /api/*; everything else is a
+// wrangler.jsonc run_worker_first sends "/", "/index.html", "/.well-known/*" and "/roads/*" here, besides /api/*; everything else is a
 // static file served before the Worker runs. The app's front page gets a link preview card (src/link_preview.ts).
 import { withPreview } from "./link_preview";
+import { roadLibrary } from "./road_library";
 import { Env } from "./util";
 
 export const APP_HOST = "vettadrive.app";
 export const INFO_HOST = "vettadrive.com";
+/** The road insights viewer (web/insights.html, src/road_insights.ts): its front page is the viewer; the API answers there too. */
+export const DATA_HOST = "data.vettadrive.com";
 const TEAM_APP_ID = "JNX759T5W6.com.senft.ApexNav";   // Apple team + bundle id (project.yml)
 
 /** apple-app-site-association: which links on vettadrive.app open the app (ApexNavApp.swift ApexWebBundle.linkItems),
@@ -46,6 +49,15 @@ export async function routeHost(req: Request, env: Env): Promise<Response | null
   if (host === INFO_HOST && (path === "/" || path === "/index.html")) {
     const about = await env.ASSETS.fetch(new Request(new URL("/about", url.origin), { headers: req.headers }));
     return new Response(about.body, { status: about.status, headers: about.headers });
+  }
+  if (host === DATA_HOST && (path === "/" || path === "/index.html")) {
+    const page = await env.ASSETS.fetch(new Request(new URL("/insights", url.origin), { headers: req.headers }));
+    return new Response(page.body, { status: page.status, headers: page.headers });
+  }
+  // the road library (src/road_library.ts) lives on the app's name; vettadrive.com's /roads goes there
+  if (path === "/roads" || path.startsWith("/roads/")) {
+    if (host === INFO_HOST) { url.hostname = APP_HOST; return Response.redirect(url.toString(), 301); }
+    if (req.method === "GET" || req.method === "HEAD") { const lib = await roadLibrary(env, url); if (lib) return lib; }
   }
   // the app's front page carries a link preview card (src/link_preview.ts) for whatever link it was opened by
   if ((path === "/" || path === "/index.html") && req.method === "GET") return withPreview(await env.ASSETS.fetch(req), env, url);

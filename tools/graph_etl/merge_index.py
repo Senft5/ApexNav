@@ -9,12 +9,29 @@ must stay under the 50 MB a git host takes without complaint.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 
 MAX_FILE = 50 * 1024 * 1024
+GRID_TAG = re.compile(r"-g[0-9a-f]{6}$")
+
+
+def same_build(builds):
+    """The one build id of blocks that agree, else None. Blocks that differ only in the context grid's tag (build.py
+    ctx_tag) agree: each graph-us band fetched just its own bundles of one grid release, whose cut indexes hashed
+    apart before tools/ctx_etl/fetch.py stamped the release's own id (2026-11-15: 141 bands, 141 tags). Their roads
+    and edges are the same build; the merged id carries one tag made of theirs."""
+    ids = sorted(map(str, builds))
+    if len(ids) <= 1:
+        return ids[0] if ids else None
+    roots = {GRID_TAG.sub("", b) for b in ids}
+    if len(roots) > 1:
+        return None
+    return roots.pop() + "-g" + hashlib.sha1(",".join(ids).encode()).hexdigest()[:6]
 
 
 def merge(out, blocks):
@@ -42,10 +59,13 @@ def merge(out, blocks):
         for k, v in (ix.get("stats") or {}).items():
             if isinstance(v, (int, float)):
                 stats[k] = stats.get(k, 0) + v
-    if len(builds) > 1 or len(models) > 1:
+    build = same_build(builds)
+    if (len(builds) > 1 and build is None) or len(models) > 1:
         raise SystemExit(f"blocks from different builds: {sorted(map(str, builds))}")
     total = sum(m["bytes"] for m in merged.values())
     ix = dict(base or {"version": 3})
+    if build is not None:
+        ix["build"] = build
     ix.update({"tiles": dict(sorted(merged.items())), "tile_count": len(merged), "bytes": total, "stats": stats,
                "bbox": None, "edges": sum(m.get("edges", 0) for m in merged.values()),
                "nodes": sum(m.get("nodes", 0) for m in merged.values())})

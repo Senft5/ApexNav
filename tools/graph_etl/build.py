@@ -402,7 +402,8 @@ def ctx_tag(ctx_dir):
     p = os.path.join(ctx_dir or "", "index.json")
     if not ctx_dir or not os.path.exists(p) or os.path.samefile(ctx_dir, os.path.join(ROOT, "web", "data", "ctx", "v1")):
         return ""
-    return "-g" + hashlib.sha1(open(p, "rb").read()).hexdigest()[:6]
+    release = json.load(open(p)).get("release")      # a cut of one release (tools/ctx_etl/fetch.py): that release's id
+    return "-g" + (str(release)[:6] if release else hashlib.sha1(open(p, "rb").read()).hexdigest()[:6])
 
 
 def run_scorer(records_path, scores_path, dem_cache, ctx_dir):

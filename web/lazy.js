@@ -6,7 +6,7 @@
 (function (root) {
   'use strict';
   const GROUPS = {
-    social: ['photos.js', 'safety_ui.js', 'crew_standings.js', 'crew_events.js', 'meets_map.js', 'crew_page.js', 'crew_voice.js', 'spots_feed.js', 'roadbooks.js', 'roadbook_map.js', 'duels.js', 'inbox.js', 'people_suggest.js', 'drive_posts.js', 'messages.js', 'post_map.js', 'time_attack.js',
+    social: ['photos.js', 'safety_ui.js', 'crew_standings.js', 'crew_events.js', 'meets_map.js', 'event_markers.js', 'crew_page.js', 'crew_voice.js', 'spots_feed.js', 'roadbooks.js', 'roadbook_map.js', 'duels.js', 'inbox.js', 'people_suggest.js', 'drive_posts.js', 'messages.js', 'post_map.js', 'time_attack.js',
       'feedback.js', 'dna_card.js', 'profile_view.js', 'people_samples.js', 'friends_map.js', 'who_sees.js', 'car_lookup.js', 'builds.js', 'garage_ui.js',
       'convoy.js', 'convoy_voice.js', 'convoy_ui.js'],
     g2p: ['g2p.js'],                 // the neural voice's phonemizer (voice.js), only when a neural voice first speaks
@@ -19,6 +19,9 @@
     // by the first plan, whichever is first); each registers itself with route_ctx/registry.js, which stays at launch
     ctx: ['route_ctx/graph.js', 'route_ctx/router_edges.js', 'route_ctx/dem.js', 'route_ctx/conditions.js', 'route_ctx/wildlife.js',
       'route_ctx/events.js', 'route_ctx/hazards_live.js', 'route_ctx/photos.js', 'route_ctx/osm_tiles.js', 'route_ctx/osm_overpass.js', 'route_ctx/road_name_age.js'],
+    // the quiet lines of a drive (cockpit.js notes loop, each behind its window.Apex* check): once the map is idle after the
+    // launch, or when a drive starts, whichever is first
+    ahead: ['sun_ahead.js', 'briefing.js', 'corners_ahead.js', 'along_ahead.js', 'horizon.js'],
     ops: ['service_check.js'],       // the owner's service check (cockpit.js serviceCheckSection): only while /api/me says moderator           // dev mode's panel (cockpit.js devPanel): only on a developer's phone (/api/me developer)
   };
   const files = new Map();           // file -> Promise, so a file is fetched and run once whoever asks

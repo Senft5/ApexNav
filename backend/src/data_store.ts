@@ -7,8 +7,11 @@
 //
 // Keys:  graph/v1/index.json            the live index (its `build` names the tile set)
 //        graph/v1/b/<build>/<i>_<j>.vgr  one build's tiles: a new build is written beside the old, then the index switches
+//        roads/v1/<road id>.jpg         a road library page's link card (.github/workflows/road-cards.yml)
 //        ctx/v1/index.json, ctx/v1/8/<x>/<y>.vcg, cameras/v1/region.json, osm/v2/<bi>_<bj>.bin (+ index.json, falls.json, closures.json)
-import { verifyGitHubOidc } from "./github_oidc";
+//        valhalla/v1/index.json, valhalla/v1/b/<build>/part-NNN   our own router's tile tar in 45 MB parts (src/valhalla.ts),
+//                                       read only by its container; the index goes live when every part is there
+import { ROAD_CARDS, verifyGitHubOidc } from "./github_oidc";
 import { Env, HttpError, json } from "./util";
 
 export const BUILD = /^[\w.:-]{1,64}$/;
@@ -17,6 +20,8 @@ const KEYS = [
   /^graph\/v1\/b\/[\w.:-]{1,64}\/\d{1,4}_\d{1,4}\.vgr$/,
   /^ctx\/v1\/(index\.json|8\/\d{1,3}\/\d{1,3}\.vcg)$/,
   /^cameras\/v1\/region\.json$/,
+  /^valhalla\/v1\/(index\.json|b\/[\w.:-]{1,64}\/part-\d{3})$/,   // our own router's tiles (.github/workflows/valhalla-tiles.yml)
+  /^roads\/v1\/[a-z0-9-]{1,80}\.jpg$/,                              // the road library's link cards (tools/road_cards.js, road_library.ts)
   /^osm\/v2\/(index\.json|falls\.json|closures\.json|-?\d{1,4}_-?\d{1,4}\.bin|(places|points|lines)\/-?\d{1,4}_-?\d{1,4}\.json)$/,   // the OSM route context bundles (tools/osm_ctx/build.py, osm_relay.ts)
 ];
 export const MAX_BYTES = 50 * 1024 * 1024;   // a graph tile is about 0.4 MB, the largest bundle a few MB
@@ -55,6 +60,8 @@ export async function dataPut(req: Request, env: Env, ctx?: ExecutionContext): P
   if (!claims) throw new HttpError(401, "bad_token");
   const key = new URL(req.url).searchParams.get("key") ?? "";
   if (!KEYS.some((re) => re.test(key))) throw new HttpError(400, "bad_key");
+  // the card job writes its cards and nothing else; the map data jobs never write cards
+  if ((claims.workflow_file === ROAD_CARDS) !== key.startsWith("roads/")) throw new HttpError(403, "wrong_workflow");
   const declared = Number(req.headers.get("content-length") ?? 0);
   if (declared > MAX_BYTES) throw new HttpError(413, "too_big");
   const bytes = await req.arrayBuffer();
@@ -62,15 +69,23 @@ export async function dataPut(req: Request, env: Env, ctx?: ExecutionContext): P
   const sha = hex(await crypto.subtle.digest("SHA-256", bytes));
   let previous: string | null = null;
   if (key === "graph/v1/index.json") previous = await checkGraphIndex(env, bytes);
+  if (key === "valhalla/v1/index.json") previous = await checkValhallaIndex(env, bytes);
   const had = await env.DATA.head(key);
   if (had && had.customMetadata?.sha256 === sha) return json({ key, same: true });
-  const type = key.endsWith(".json") ? "application/json" : "application/octet-stream";
+  const type = key.endsWith(".json") ? "application/json" : key.endsWith(".jpg") ? "image/jpeg" : "application/octet-stream";
+  // a card must be a JPEG (its first bytes), not whatever a run happened to send
+  if (key.endsWith(".jpg") && !(new Uint8Array(bytes.slice(0, 3)).every((b, i) => b === [0xff, 0xd8, 0xff][i]))) throw new HttpError(400, "not_jpeg");
   await env.DATA.put(key, bytes, { httpMetadata: { contentType: type }, customMetadata: { sha256: sha, run: claims.run_id, sha: claims.sha.slice(0, 12) } });
   console.log(JSON.stringify({ event: "data_put", key, bytes: bytes.byteLength, workflow: claims.workflow, run: claims.run_id }));
   if (key === "graph/v1/index.json") {
     indexMemo = null;
     const ix = JSON.parse(new TextDecoder().decode(bytes)) as { build: string };
     const sweep = dropOldBuilds(env, [ix.build, previous].filter((b): b is string => !!b));
+    if (ctx) ctx.waitUntil(sweep); else await sweep;
+  }
+  if (key === "valhalla/v1/index.json") {
+    const ix = JSON.parse(new TextDecoder().decode(bytes)) as { build: string };
+    const sweep = dropOldBuilds(env, [ix.build, previous].filter((b): b is string => !!b), "valhalla/v1/b/");
     if (ctx) ctx.waitUntil(sweep); else await sweep;
   }
   return json({ key, bytes: bytes.byteLength }, 201);
@@ -99,25 +114,53 @@ async function checkGraphIndex(env: Env, bytes: ArrayBuffer): Promise<string | n
   } catch { return null; }
 }
 
+/** Our router's tile index ({ build, parts, bytes, sha256 }) goes live only when its parts are all in R2 and add up to
+ *  `bytes` (409 otherwise): the container joins them and checks the sha256 before it serves. Returns the build it replaces. */
+async function checkValhallaIndex(env: Env, bytes: ArrayBuffer): Promise<string | null> {
+  let ix: { build?: unknown; parts?: unknown; bytes?: unknown; sha256?: unknown };
+  try { ix = JSON.parse(new TextDecoder().decode(bytes)); } catch { throw new HttpError(400, "bad_index"); }
+  if (typeof ix.build !== "string" || !BUILD.test(ix.build) || !Number.isInteger(ix.parts) || (ix.parts as number) < 1 || (ix.parts as number) > 999
+    || !Number.isInteger(ix.bytes) || typeof ix.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(ix.sha256)) throw new HttpError(400, "bad_index");
+  const prefix = `valhalla/v1/b/${ix.build}/`, sizes = new Map<string, number>();
+  let cursor: string | undefined;
+  do {
+    const l = await env.DATA!.list({ prefix, cursor, limit: 1000 });
+    for (const o of l.objects) sizes.set(o.key.slice(prefix.length), o.size);
+    cursor = l.truncated ? l.cursor : undefined;
+  } while (cursor);
+  let total = 0, missing = 0;
+  for (let i = 0; i < (ix.parts as number); i++) {
+    const n = sizes.get(`part-${String(i).padStart(3, "0")}`);
+    if (n === undefined) missing++; else total += n;
+  }
+  if (missing) throw new HttpError(409, `parts_missing:${missing}`);
+  if (total !== ix.bytes) throw new HttpError(409, "parts_size");
+  try {
+    const cur = await env.DATA!.get("valhalla/v1/index.json");
+    const b = cur ? (JSON.parse(await cur.text()) as { build?: unknown }).build : null;
+    return typeof b === "string" && b !== ix.build ? b : null;
+  } catch { return null; }
+}
+
 /** Deletes every build's tiles but `keep` (the new live build and the one it replaced). */
-async function dropOldBuilds(env: Env, keep: string[]): Promise<void> {
+async function dropOldBuilds(env: Env, keep: string[], root = "graph/v1/b/"): Promise<void> {
   try {
     const builds = new Set<string>();
     let cursor: string | undefined;
     do {
-      const l = await env.DATA!.list({ prefix: "graph/v1/b/", delimiter: "/", cursor });
-      for (const p of l.delimitedPrefixes) builds.add(p.slice("graph/v1/b/".length, -1));
+      const l = await env.DATA!.list({ prefix: root, delimiter: "/", cursor });
+      for (const p of l.delimitedPrefixes) builds.add(p.slice(root.length, -1));
       cursor = l.truncated ? l.cursor : undefined;
     } while (cursor);
     for (const b of builds) {
       if (keep.slice(0, KEEP_BUILDS).includes(b)) continue;
       // each page is deleted before the next list, so it always lists from the start
       for (let more = true; more;) {
-        const l = await env.DATA!.list({ prefix: `graph/v1/b/${b}/`, limit: 1000 });
+        const l = await env.DATA!.list({ prefix: `${root}${b}/`, limit: 1000 });
         if (l.objects.length) await env.DATA!.delete(l.objects.map((o) => o.key));
         more = l.truncated && l.objects.length > 0;
       }
-      console.log(JSON.stringify({ event: "data_build_dropped", build: b }));
+      console.log(JSON.stringify({ event: "data_build_dropped", root, build: b }));
     }
   } catch (err) {
     console.error("data_sweep", err);   // the next index upload tries again

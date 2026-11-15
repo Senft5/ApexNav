@@ -14,6 +14,8 @@
   const U = (typeof module !== 'undefined' && module.exports ? require('./ctx_util.js') : root.ApexRouteCtxUtil).E;   // E's helpers (ctx_util.js)
   const CELL_DEG = 0.1, MEAN_WEIGHT = 0.25, MAX_CANDIDATES = 10, DETOUR = 1.35, FALLBACK_KMH = 60, MIN_CELLS = 2;
   const VALHALLA = 'https://valhalla1.openstreetmap.de';
+  // ours first when route_loading.js is loaded (it is on the map page), else straight to `f` (tests, the analysis page)
+  const viaOurs = (f) => (u, i) => (root.ApexRouteLoading && root.ApexRouteLoading.valhallaFetch ? root.ApexRouteLoading.valhallaFetch(u, i, f) : f(u, i));
   const finite = U.finite;
 
   /** A position coarsened to its 0.1-degree cell centre, as the server keeps it: { lat, lon } or null. */
@@ -72,7 +74,7 @@
 
   async function matrix(from, to, fetchFn) {
     try {
-      const r = await fetchFn(`${VALHALLA}/sources_to_targets`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const r = await viaOurs(fetchFn)(`${VALHALLA}/sources_to_targets`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sources: from.map((p) => ({ lat: p.lat, lon: p.lon })), targets: to.map((p) => ({ lat: p.lat, lon: p.lon })), costing: 'auto' }) });
       const j = r && r.ok ? await r.json() : null;
       if (!j || !Array.isArray(j.sources_to_targets)) return null;

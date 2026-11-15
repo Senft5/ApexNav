@@ -32,7 +32,7 @@ import * as messages from "./messages";
 import { mediaGet, mediaPut } from "./post_media";
 import { devDriveGet, devDriveList, devDrivePut } from "./dev_drives";
 import { anonDriveGet, anonDriveList, anonDrivePut } from "./anon_drives";
-import { afterCrewDrive, afterDuel, afterMessage, afterFriend, afterKudos, afterPassed, afterTopped, bestBefore, afterPostComment, afterPostKudos, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
+import { afterCrewDrive, afterDuel, afterMessage, afterFriend, afterKudos, afterPassed, afterTopped, bestBefore, afterPostComment, afterPostKudos, afterPostTag, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewBadge, crewFeed, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
 import { decalsPlace } from "./livery";
@@ -42,6 +42,7 @@ import { photoDelete, photoList, photoServe, photoUpload, photoUse } from "./pho
 import { ctxServe } from "./context_grid";
 import { cameraList, graphIndex, graphTile } from "./graph";
 import { dataPut } from "./data_store";
+import { ownValhalla, valhallaProxy, valhallaStatus } from "./valhalla";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
@@ -53,6 +54,7 @@ import { traceTile } from "./trace_relay";
 import { grantedThemes } from "./themes";
 import { isDeveloper } from "./developers";
 import { coverage, exportRoads, roadBins } from "./roads";
+import { insightRoads, keyAccess, meta as insightMeta } from "./road_insights";
 import { crewStandings } from "./standings";
 import { crewBoard, publishDriveScores } from "./drive_scores";
 import { enter as taEnter, circuitsNow, leave as taLeave, makeCircuit, runs as taRuns, timeAttack } from "./time_attack";
@@ -67,6 +69,7 @@ import { STATS_SAMPLE, recordStat, statsSummary } from "./stats";
 import { etaStart, etaUpdate, etaView } from "./eta_share";
 import { highlightCreate, highlightDelete, highlightList, highlightRate } from "./highlights";
 export { ConvoyIndex, ConvoyRoom } from "./convoy";
+export { ValhallaRouter, ValhallaTiles } from "./valhalla";
 import { crewHomeSet, crewMeetCells } from "./crew_meet";
 import { chargers } from "./chargers";
 import { camerasResponse, trafficResponse } from "./traffic";
@@ -180,6 +183,10 @@ on("GET", "/api/ops/roads.geojson", async (req, env) => {
   if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
   return json(await exportRoads(env, new URL(req.url)));
 });
+// Road insights API (src/road_insights.ts, docs/ROAD_INSIGHTS.md; the viewer at data.vettadrive.com): aggregate road facts,
+// ten drivers or more, noised; real data only with a key, partner keys only once the owner opens them. The meta is public.
+on("GET", "/api/data/v1/meta", async () => json(insightMeta(), 200, { "cache-control": "public, max-age=3600" }));
+on("GET", "/api/data/v1/roads.geojson", async (req, env) => json(await insightRoads(env, new URL(req.url), await keyAccess(req, env)), 200, { "cache-control": "no-store" }));
 on("GET", "/api/points", async (req, env) => json(await pointsFor(env, (await requireMember(req, env)).id)));
 on("GET", "/api/flags", async (req, env) => json(await flagsFor(env, req)));
 // Work zones from state feeds without CORS (web/route_ctx/hazards_live.js); 0.5° tiles only, nothing kept.
@@ -203,7 +210,8 @@ on("GET", "/api/ctx/lines", async (req, env) => lineTiles(new URL(req.url), env.
 // A drive's ways' whole geometry from the built tiles, for road data (osm_relay.ts wayShapes; web/contributor.js)
 on("GET", "/api/ctx/ways", async (req, env) => wayShapes(new URL(req.url), env.DATA));
 // The router's edges for a stage cut from the map tiles (trace_relay.ts; route_ctx/router_edges.js), kept 3 days per shape
-on("GET", "/api/ctx/trace", async (req) => traceTile(new URL(req.url)));
+// (ours first, 6 s, then the public router)
+on("GET", "/api/ctx/trace", async (req, env) => traceTile(new URL(req.url), fetch, (pts, body) => ownValhalla(env, "trace_attributes", body, pts, 6000)));
 on("GET", "/api/shop", async (req, env) => json(await shop(env, await requireMember(req, env))));
 on("POST", "/api/redeem", async (req, env) => json(await redeem(env, await requireMember(req, env), req)));
 
@@ -348,6 +356,9 @@ on("GET", "/api/traffic/v1/cameras.json", (_req, env) => camerasResponse(env));
 on("GET", "/api/cameras/v1/region.json", (_req, env) => cameraList(fetch, env));
 // CI's upload of the map data into R2 (src/data_store.ts): a GitHub OIDC token of this repository's main branch, no secret
 on("PUT", "/api/ops/data", (req, env, _m, ctx) => dataPut(req, env, ctx));
+// our own Valhalla router (src/valhalla.ts): 503 means "ask the public server", which the phone then does
+on("GET", "/api/valhalla/status", (_req, env) => valhallaStatus(env));
+on("POST", "/api/valhalla/:action", (req, env, m) => valhallaProxy(req, env, m.groups!.action));
 // photos (src/photos.ts, REVIEW.md 5.2): JPEG in, metadata out; members only
 on("POST", "/api/photos", async (req, env) => json(await photoUpload(env, await requireMember(req, env), req), 201));
 on("GET", "/api/photos", async (req, env) => json(await photoList(env, await requireMember(req, env), new URL(req.url))));
@@ -434,7 +445,11 @@ on("POST", "/api/messages/:handle", async (req, env, m, ctx) => {
 });
 on("GET", "/api/feed/week", async (req, env) => json(await drivePosts.feedWeek(env, await requireMember(req, env))));
 on("GET", "/api/feed", async (req, env) => json(await drivePosts.feed(env, await requireMember(req, env), new URL(req.url))));
-on("POST", "/api/posts", async (req, env) => json(await drivePosts.postCreate(env, await requireMember(req, env), req), 201));
+on("POST", "/api/posts", async (req, env, _m, ctx) => {
+  const v = await requireMember(req, env), made = await drivePosts.postCreate(env, v, req);
+  if (made.tagged) await later(ctx, afterPostTag(env, v, made.id));
+  return json({ id: made.id }, 201);
+});
 on("GET", "/api/posts/:id", async (req, env, m) => json(await drivePosts.postGet(env, await requireMember(req, env), m.groups!.id)));
 on("PUT", "/api/posts/:id", async (req, env, m) => json(await drivePosts.postEdit(env, await requireMember(req, env), m.groups!.id, req)));
 on("DELETE", "/api/posts/:id", async (req, env, m) => { await drivePosts.postDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
@@ -443,6 +458,7 @@ on("POST", "/api/posts/:id/kudos", async (req, env, m, ctx) => {
   if (k) await later(ctx, afterPostKudos(env, v, m.groups!.id, k.author, k.title));
   return noContent();
 });
+on("DELETE", "/api/posts/:id/tag", async (req, env, m) => { await drivePosts.postUntag(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 on("DELETE", "/api/posts/:id/kudos", async (req, env, m) => { await drivePosts.postKudos(env, await requireMember(req, env), m.groups!.id, false); return noContent(); });
 on("POST", "/api/posts/:id/comments", async (req, env, m, ctx) => {
   const v = await requireMember(req, env), c = await drivePosts.commentCreate(env, v, m.groups!.id, req);
@@ -515,7 +531,7 @@ on("GET", "/api/convoy/:id/connect", async (req, env, m) => convoyConnect(req, e
 // No credentials: cookies never cross; any other origin gets no CORS headers at all.
 const APP_CORS: Record<string, string> = {
   "access-control-allow-origin": APP_ORIGIN, "access-control-allow-methods": "GET, POST, PUT, DELETE",
-  "access-control-allow-headers": "authorization, content-type, x-apexnav", "access-control-max-age": "600", vary: "Origin",
+  "access-control-allow-headers": "authorization, content-type, x-apexnav", "access-control-expose-headers": "x-router", "access-control-max-age": "600", vary: "Origin",
 };
 function withAppCors(res: Response): Response {
   if (res.status === 101 || res.webSocket) return res;   // a socket upgrade: CORS does not apply, and a 101 cannot be rebuilt

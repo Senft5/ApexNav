@@ -42,6 +42,7 @@ for (metric of [false, true]) for (const km of [3.2, 8, 20, 64, 150]) for (const
   const dist = [0, km * 1000], events = [...Array.from({ length: nc }, (_, k) => corner(10 + k)), ...Array.from({ length: hp }, (_, k) => corner(5 + k, 'HP'))];
   const t = B.line({ dist, events }, 0, units); if (t) add('briefing', t, said(t)); }
 for (const n of [3, 9, 24, 140]) { const t = CA.text({ startM: 1000, endM: 4000, corners: n }); add('twisty', t, said(t)); }
+{ const t = CA.text({ startM: 1000, endM: 4000, corners: 9, open: true }); add('twisty open', t, said(t)); }
 add('descent', BH.descentCall({ grade: 0.08, start_m: 0, end_m: 5000 }), said(BH.descentCall({ grade: 0.08, start_m: 0, end_m: 5000 })));
 add('brakes', BH.CALL_TEXT, said(BH.CALL_TEXT));
 add('sun', SA.TEXT, said(SA.TEXT));

@@ -11,23 +11,32 @@
   "observability": { "enabled": true, "redact_query_string": true, "logs": { "invocation_logs": false } },
   // Not a secret: Google shows the client ID in the sign-in URL. The client SECRET, OWNER_EMAIL and PEPPER are dashboard secrets and never go in this file.
   "vars": {
-    "GOOGLE_CLIENT_ID": "299251127161-jj8nql86bqkr48pmidejbbrjaupns1om.apps.googleusercontent.com"
+    "GOOGLE_CLIENT_ID": "299251127161-jj8nql86bqkr48pmidejbbrjaupns1om.apps.googleusercontent.com",
+    // Road insights internal keys (backend/src/road_insights.ts): sha256 of each key, never the key (the owner's is in the
+    // project files). Not a secret: a sha256 of a random 256-bit key can't be turned back into the key. Remove one to revoke it.
+    "DATA_OWNER_KEYS": "0184e5e50127f792a32da04c389c4a776ff0281d7f677be17526df1b29dacf0a"
   },
-  "assets": { "directory": "./web", "binding": "ASSETS", "run_worker_first": ["/api/*", "/", "/index.html", "/.well-known/*", "/apple-app-site-association"] },
+  "assets": { "directory": "./web", "binding": "ASSETS", "run_worker_first": ["/api/*", "/", "/index.html", "/.well-known/*", "/apple-app-site-association", "/roads", "/roads/*"] },
   // The owner's domains (2026-11-14, backend/src/hosts.ts): vettadrive.app is the app, the API and shared links; vettadrive.com
-  // the information page. workers.dev stays on: the iOS app and every link shared before now use apexnav.senftns.workers.dev.
+  // the information page, data.vettadrive.com the road insights viewer and API docs (web/insights.html). workers.dev stays on: the iOS app and every link shared before now use apexnav.senftns.workers.dev.
   "workers_dev": true,
   "preview_urls": true,
   "routes": [
     { "pattern": "vettadrive.app", "custom_domain": true },
     { "pattern": "www.vettadrive.app", "custom_domain": true },
     { "pattern": "vettadrive.com", "custom_domain": true },
-    { "pattern": "www.vettadrive.com", "custom_domain": true }
+    { "pattern": "www.vettadrive.com", "custom_domain": true },
+    { "pattern": "data.vettadrive.com", "custom_domain": true }
   ],
   // Convoys (backend/src/convoy.ts): one Durable Object per live group drive. Previews get their own namespace automatically,
   // but the env binding must be declared in the previews block too.
-  "durable_objects": { "bindings": [{ "name": "CONVOY", "class_name": "ConvoyRoom" }, { "name": "CONVOY_INDEX", "class_name": "ConvoyIndex" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ConvoyRoom", "ConvoyIndex"] }],
+  // VALHALLA (backend/src/valhalla.ts): our own Quick-route router, one Container (router/Dockerfile) behind one Durable Object.
+  // Production only: previews have no Containers, so the previews block leaves VALHALLA out and the app asks the public server.
+  "durable_objects": { "bindings": [{ "name": "CONVOY", "class_name": "ConvoyRoom" }, { "name": "CONVOY_INDEX", "class_name": "ConvoyIndex" }, { "name": "VALHALLA", "class_name": "ValhallaRouter" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ConvoyRoom", "ConvoyIndex"] }, { "tag": "v2", "new_sqlite_classes": ["ValhallaRouter"] }],
+  // "basic" is 1/4 vCPU, 1 GiB, 4 GB disk (about $7 a month if it never sleeps; it sleeps after 6 h without a request).
+  // The tiles are not in the image: the container fetches them from R2 when it starts (router/start.sh).
+  "containers": [{ "class_name": "ValhallaRouter", "image": "./router/Dockerfile", "instance_type": "basic", "max_instances": 1 }],
   // Abuse floor for every write (per session, or per IP signed out) and sign-in (per IP): backend/src/ratelimit.ts.
   // namespace_id is any number unique to this account; previews declare their own below.
   "ratelimits": [

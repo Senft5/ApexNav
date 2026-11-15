@@ -13,6 +13,9 @@ const MAX_WAYS = 50;
  * without saying who, and a fresh account can't be the second.
  */
 export const MIN_DRIVERS = 2;
+/** road_floor keeps at most this many holders per road+direction (contribute.ts), so the road insights API
+ *  (road_insights.ts) can check its ten-driver floor and size its noise. Only MIN_DRIVERS of them matter here. */
+export const FLOOR_CAP = 50;
 
 /**
  * Open roads (owner decision 2026-10-28): a road driven once is still worth showing, at low confidence (the phone weights
@@ -34,7 +37,7 @@ export const confLevel = (passes: number) => (passes >= 5 ? 3 : passes >= 2 ? 2 
 
 export interface RoadBinRow {
   way_id: number; dir: number; bin_idx: number; n: number; camber_mean: number | null; camber_m2: number | null; camber_n: number;
-  rough_mean: number | null; rough_m2: number | null; crest_peak: number | null; changed_on: string | null; k_mean: number | null; k_n: number;
+  rough_mean: number | null; rough_m2: number | null; crest_peak: number | null; crest_n: number; changed_on: string | null; k_mean: number | null; k_n: number;
   flow_mean: number | null; brake_mean: number | null; flow_n: number; bump_hit: number; bump_pass: number; bump_drivers: number;
 }
 
@@ -118,7 +121,7 @@ async function binsFor(env: Env, ids: number[]) {
 }
 
 type Col = (number | null)[];
-type Dir = { i: number[]; n: number[]; cam: Col; cn: number[]; csd: Col; rough: Col; rsd: Col; crest: Col; ch: (string | null)[]; k: Col; kn: number[];
+type Dir = { i: number[]; n: number[]; cam: Col; cn: number[]; csd: Col; rough: Col; rsd: Col; crest: Col; crn: number[]; ch: (string | null)[]; k: Col; kn: number[];
              fl: Col; hb: Col; fn: number[]; ag?: number; hr?: number[]; bp?: [number, number][] };
 async function binsChunk(env: Env, ids: number[]) {
   // the open-road / two-driver rule is checked once per way and direction (p, s), not once per bin: per bin it read
@@ -129,7 +132,7 @@ async function binsChunk(env: Env, ids: number[]) {
   const pairs = ids.map((_, k) => `(?${k + 1}, 0), (?${k + 1}, 1)`).join(", ");
   const rows = (await env.DB.prepare(
     `WITH p(way_id, dir) AS (VALUES ${pairs}), s AS (SELECT p.way_id, p.dir FROM p WHERE ${shownSql("p.way_id", "p.dir")})
-     SELECT rb.way_id, rb.dir, rb.bin_idx, rb.n, rb.camber_mean, rb.camber_m2, rb.camber_n, rb.rough_mean, rb.rough_m2, rb.crest_peak, rb.changed_on, rb.k_mean, rb.k_n,
+     SELECT rb.way_id, rb.dir, rb.bin_idx, rb.n, rb.camber_mean, rb.camber_m2, rb.camber_n, rb.rough_mean, rb.rough_m2, rb.crest_peak, rb.crest_n, rb.changed_on, rb.k_mean, rb.k_n,
             rb.flow_mean, rb.brake_mean, rb.flow_n, rb.bump_hit, rb.bump_pass, rb.bump_drivers
        FROM s JOIN road_bins rb ON rb.way_id = s.way_id AND rb.dir = s.dir`,
   ).bind(...ids).all<RoadBinRow>()).results;
@@ -141,16 +144,18 @@ async function binsChunk(env: Env, ids: number[]) {
   // fl / hb / fn: flow (members' mean speed steadiness 0..1, a ratio with no speed in it), the share of passes that braked hard
   // with no corner ahead, and how many passes sent flow; null / 0 from passes that didn't. ag (per direction): loveLevel, how
   // many members came back to it. hr (per direction, only with the quiet_hours flag on and 5+ drivers): 12 shares of passes.
+  // crn: how many passes measured the crest (crest is their mean peak unweighting, g); a crest two or more agree on is a
+  // pace note on a planned route (contributor.js crestEvents).
   // bp (per direction, only when there are any): crowd-verified bumps as [bin, posterior] (verifiedBumps), never a count.
   const out: Record<string, Record<string, Dir>> = {};
   const r3 = (v: number | null) => (v == null ? null : Math.round(v * 1000) / 1000);
   for (const r of rows) {
-    const d = ((out[r.way_id] ??= {})[r.dir] ??= { i: [], n: [], cam: [], cn: [], csd: [], rough: [], rsd: [], crest: [], ch: [], k: [], kn: [], fl: [], hb: [], fn: [] });
+    const d = ((out[r.way_id] ??= {})[r.dir] ??= { i: [], n: [], cam: [], cn: [], csd: [], rough: [], rsd: [], crest: [], crn: [], ch: [], k: [], kn: [], fl: [], hb: [], fn: [] });
     d.fl.push(r.flow_n > 0 ? r3(r.flow_mean) : null); d.hb.push(r.flow_n > 0 ? r3(r.brake_mean) : null); d.fn.push(r.flow_n ?? 0);
     d.k.push(r.k_n > 0 && r.k_mean != null ? Math.round(r.k_mean * 1e6) / 1e6 : null); d.kn.push(r.k_n);
     d.ch.push(r.changed_on ? r.changed_on.slice(0, 7) : null);
     d.i.push(r.bin_idx); d.n.push(r.n); d.cam.push(r.camber_mean); d.cn.push(r.camber_n); d.csd.push(sampleSd(r.camber_m2, r.camber_n));
-    d.rough.push(r.rough_mean); d.rsd.push(sampleSd(r.rough_m2, r.n)); d.crest.push(r.crest_peak);
+    d.rough.push(r.rough_mean); d.rsd.push(sampleSd(r.rough_m2, r.n)); d.crest.push(r.crest_peak); d.crn.push(r.crest_n ?? 0);
   }
   const byDir = new Map<string, RoadBinRow[]>();
   for (const r of rows) if (r.bump_hit > 0 || r.bump_pass > 0) { const k = `${r.way_id}:${r.dir}`; (byDir.get(k) ?? byDir.set(k, []).get(k)!).push(r); }

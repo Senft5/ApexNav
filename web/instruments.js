@@ -171,6 +171,11 @@
       if (note.type === 'mark' && note.code === 'FORD') body += `<path d="M28 52 Q34 46 40 52 T52 52 T64 52 T76 52 M28 62 Q34 56 40 62 T52 62 T64 62 T76 62" fill="none" stroke="${accent}" stroke-width="3" stroke-linecap="round"/>`;
       if (note.type === 'mark' && note.code === 'GRAVEL') body += `<g fill="${accent}"><circle cx="34" cy="62" r="3.2"/><circle cx="46" cy="56" r="2.6"/><circle cx="56" cy="64" r="3.4"/><circle cx="66" cy="57" r="2.4"/><circle cx="42" cy="68" r="2.4"/><circle cx="62" cy="70" r="2.8"/></g>`;
       if (note.type === 'mark' && note.code === 'TJUNC') body += `<path d="M30 14 L70 14" stroke="${accent}" stroke-width="5" stroke-linecap="round"/>`;
+      if (note.type === 'mark' && note.code === 'NARROW') body += `<path d="M32 76 L42 50 L42 24 M68 76 L58 50 L58 24" fill="none" stroke="${accent}" stroke-width="3.4" stroke-linejoin="round" stroke-linecap="round"/>`;
+      if (note.type === 'mark' && note.code === 'JUNC') body += `<path d="M44 80 L44 20 M44 52 L76 34" fill="none" stroke="${accent}" stroke-width="3.4" stroke-linecap="round"/>`;
+      if (note.type === 'mark' && note.code === 'SCHOOL') body += `<path d="M30 74 L50 26 L70 74 Z M40 62 L60 62" fill="none" stroke="${accent}" stroke-width="3" stroke-linejoin="round"/>`;
+      if (note.type === 'mark' && note.code === 'RBT') body += `<circle cx="50" cy="26" r="12" fill="none" stroke="${accent}" stroke-width="3.4"/><path d="M62 18 L66 26 L58 26" fill="none" stroke="${accent}" stroke-width="2.6" stroke-linejoin="round"/>`;   // the ring the road ends at
+      if (note.type === 'mark' && note.code === 'ICE') body += `<path d="M64 24 L64 56 M50 32 L78 48 M50 48 L78 32" stroke="${accent}" stroke-width="3" stroke-linecap="round"/><path d="M28 74 Q50 60 72 74" fill="none" stroke="${accent}" stroke-width="3"/>`;   // a snowflake over a bridge's arch
       if (note.type === 'mark' && note.code === 'ROUGH') body += `<path d="M28 62 L36 54 L44 64 L52 52 L60 64 L68 55 L74 62" fill="none" stroke="${accent}" stroke-width="3.4" stroke-linejoin="round"/>`;
       if (note.type === 'alpr') body += `<rect x="62" y="38" width="22" height="14" fill="none" stroke="${accent}" stroke-width="2.6"/><circle cx="73" cy="45" r="3.5" fill="${accent}"/><path d="M62 45 L54 45" stroke="${accent}" stroke-width="2.6"/>`;
     }

@@ -3,6 +3,7 @@
 // the app must still boot without its map tiles, routers and fonts. Any uncaught page error fails the flow.
 //   node e2e/smoke.js            (needs the `playwright` package and its Chromium; CI installs both)
 const http = require('http');
+const NEWS_ID = require('../web/whats_new.js').NEWS.id;   // "What's new" seen already: a flow's own phone, not the news
 const fs = require('fs');
 const path = require('path');
 const playwright = require('playwright');
@@ -197,8 +198,83 @@ async function clippedText(page) {
       if (el.scrollWidth > el.clientWidth + 1 && /hidden|clip/.test(cs.overflowX) && cs.textOverflow !== 'ellipsis') hits.push(`${where(el)} "${text}" cut ${el.scrollWidth - el.clientWidth} px wide`);
       else if (el.scrollHeight > el.clientHeight + 2 && /hidden|clip/.test(cs.overflowY) && !(+cs.webkitLineClamp > 0)) hits.push(`${where(el)}${el.parentElement ? " in " + where(el.parentElement) : ""} "${text}" cut ${el.scrollHeight - el.clientHeight} px tall`);
       else if (r.right > W + 1 && cs.position !== 'fixed') {
-        let scroller = false; for (let n = el.parentElement; n; n = n.parentElement) { const c = getComputedStyle(n); if (/auto|scroll/.test(c.overflowX)) { scroller = true; break; } }
+        let scroller = false; for (let n = el.parentElement; n && n !== document.body && n !== document.documentElement; n = n.parentElement) { const c = getComputedStyle(n); if (/auto|scroll/.test(c.overflowX)) { scroller = true; break; } }
         if (!scroller) hits.push(`${where(el)} "${text}" runs ${Math.round(r.right - W)} px off the screen`);
+      }
+    }
+    return hits.slice(0, 12);
+  }).catch(() => []);
+}
+
+// A wall of text on every flow's last screen (2026-11-15, the owner 2026-11-12: "ai slop walls of text everywhere"): a
+// block of words in view (a paragraph, a list item, a cell) over WALL_WORDS words. The privacy policy and terms are
+// documents, read as such, and are not checked. WALL_LOG=1 lists instead of failing.
+const WALL_WORDS = 40;
+async function wallsOfText(page) {
+  return page.evaluate((max) => {
+    const where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.') : '');
+    if (/\/(privacy|terms|support)(\.html)?$/.test(location.pathname)) return [];
+    const W = innerWidth, H = innerHeight, hits = [];
+    const blocks = [...document.querySelectorAll('body p, body li, body dd, body td, body small, body span, body div, body label, body summary')];
+    for (const el of blocks) {
+      if (el.closest('svg, script, style, .maplibregl-ctrl-attrib, [hidden], [aria-hidden="true"], [inert]')) continue;
+      // a block: its own text is most of its words (a container of other blocks is counted by its children)
+      const own = [...el.childNodes].filter((n) => n.nodeType === 3 || (n.nodeType === 1 && getComputedStyle(n).display.startsWith('inline'))).map((n) => n.textContent).join(' ');
+      const words = own.trim().split(/\s+/).filter((w) => /[A-Za-z]/.test(w)).length;
+      if (words <= max) continue;
+      const r = el.getBoundingClientRect(); if (!r.width || !r.height || r.bottom < 0 || r.top > H || r.right < 0 || r.left > W) continue;
+      const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || +cs.opacity === 0 || cs.display === 'none') continue;
+      hits.push(`${where(el)} ${words} words: "${own.trim().replace(/\s+/g, ' ').slice(0, 70)}…"`);
+    }
+    return hits.slice(0, 8);
+  }, WALL_WORDS).catch(() => []);
+}
+
+// Text drawn over other text, on every flow's last screen (2026-11-15): two lines of words from different boxes that
+// cross by more than a third of the smaller one's height and a few px of width, both showing (nothing opaque between the
+// lower one and the eye). A badge on a label, a value over its caption, a stacked toast over a note. OVERLAP_LOG=1 lists.
+async function overlappingText(page) {
+  return page.evaluate(() => {
+    const where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).slice(0, 3).join('.') : '');
+    const W = innerWidth, H = innerHeight, runs = [];
+    const clear = (c) => { const m = /rgba?\(([^)]+)\)/.exec(c); if (!m) return c === 'transparent'; const a = m[1].split(/[ ,/]+/).filter(Boolean); return a.length > 3 && +a[3] < 0.5; };
+    const ctx = document.createElement('canvas').getContext('2d');
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let t = walker.nextNode(); t && runs.length < 600; t = walker.nextNode()) {
+      if (!t.nodeValue.trim()) continue;
+      const el = t.parentElement; if (!el || el.closest('svg, script, style, .maplibregl-marker, .maplibregl-ctrl-attrib')) continue;
+      let hidden = false; for (let n = el; n && n.nodeType === 1; n = n.parentElement) { if (n.hidden || n.inert || n.getAttribute('aria-hidden') === 'true') { hidden = true; break; } }
+      if (hidden) continue;
+      const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || +cs.opacity === 0 || clear(cs.color)) continue;
+      const clips = []; for (let n = el; n && n !== document.body; n = n.parentElement) { const c = n === el ? cs : getComputedStyle(n); if (c.overflowX !== 'visible' || c.overflowY !== 'visible') clips.push(n.getBoundingClientRect()); }
+      const range = document.createRange(); range.selectNodeContents(t);
+      // the ink, not the line box: a big display numeral's box is mostly air above and below its digits
+      ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      const m = ctx.measureText(t.nodeValue.trim()), up = m.actualBoundingBoxAscent, down = m.actualBoundingBoxDescent, base = m.fontBoundingBoxDescent;
+      for (const box of range.getClientRects()) {
+        const r = { left: box.left, right: box.right, top: box.bottom - base - up, bottom: box.bottom - base + down };
+        for (const c of clips) { r.left = Math.max(r.left, c.left); r.right = Math.min(r.right, c.right); r.top = Math.max(r.top, c.top); r.bottom = Math.min(r.bottom, c.bottom); }
+        r.width = r.right - r.left; r.height = r.bottom - r.top;     // what an ellipsis or a scroller hides isn't drawn
+        if (r.width < 2 || r.height < 4 || r.bottom < 0 || r.top > H || r.right < 0 || r.left > W) continue;
+        // showing: every box above this text at its middle is see-through (or holds it)
+        const x = Math.min(Math.max(r.left + r.width / 2, 0), W - 1), y = Math.min(Math.max(r.top + r.height / 2, 0), H - 1);
+        let shows = false;
+        for (const n of document.elementsFromPoint(x, y)) {
+          if (n === el || el.contains(n)) { shows = true; break; }
+          if (n.contains(el)) continue;
+          const c = getComputedStyle(n);
+          if (!clear(c.backgroundColor) || c.backgroundImage !== 'none' || (c.backdropFilter && c.backdropFilter !== 'none') || n.tagName === 'IMG' || n.tagName === 'CANVAS' || n.tagName === 'VIDEO') break;
+        }
+        if (shows) runs.push({ el, r, text: t.nodeValue.trim().slice(0, 30) });
+      }
+    }
+    const hits = [], seen = new Set();
+    for (let i = 0; i < runs.length; i++) for (let j = i + 1; j < runs.length; j++) {
+      const a = runs[i], b = runs[j]; if (a.el === b.el || a.el.contains(b.el) || b.el.contains(a.el)) continue;
+      const w = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left), h = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
+      if (w > 3 && h > Math.min(a.r.height, b.r.height) / 3) {
+        const k = where(a.el) + '|' + where(b.el); if (seen.has(k)) continue; seen.add(k);
+        hits.push(`${where(a.el)} "${a.text}" over ${where(b.el)} "${b.text}" (${Math.round(w)}x${Math.round(h)} px)`);
       }
     }
     return hits.slice(0, 12);
@@ -338,7 +414,7 @@ const frame = (i, extra = {}) => ({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy
 // Startup budget (IDEAS P-06): what the map page loads and runs before it is ready, so a heavy module added to the boot
 // path shows here instead of on a phone. Bytes are exact, so their budget is about a tenth over today; CPU time varies by runner, so its
 // budget only catches a gross regression (about 0.2 s here on 2026-11-11). Raise a budget on purpose, never to get green.
-const BOOT = { scriptBytes: 3.6e6, scriptCount: 145, cpuS: 2.0, longTaskMs: 1500 };   // 2026-11-11: 3.23 MB in 130 scripts, 0.12 s, 0.17 s
+const BOOT = { scriptBytes: 3.7e6, scriptCount: 145, cpuS: 2.0, longTaskMs: 1500 };   // 2026-11-11: 3.23 MB in 130 scripts, 0.12 s, 0.17 s; 2026-11-15: 3.60 MB in 140, 0.12 s (raised to 3.7 MB on purpose for graph_router.js out-and-back loops, which plan offline so cannot load late)
 flow('startup budget: the map page is ready within its script bytes, script count, CPU time and longest task (IDEAS P-06)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__long = 0; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__long = Math.max(window.__long, e.duration); }).observe({ type: 'longtask', buffered: true }); } catch (_) {} });
@@ -3298,9 +3374,12 @@ flow('one red that means act now: Sight is ink until you are over it, then colou
   await page.click('#explainDone');
   // waited for, not read once: on a busy runner the class can come off a frame after the click returns (CI 2026-11-11)
   check(await page.waitForFunction(() => !document.getElementById('explainCard').classList.contains('show'), null, { timeout: 2000 }).then(() => true, () => false), 'Done closes it');
-  await page.click('#cluster .g-score');
+  // the Score is -- through a replay of a drive with none, and a replay sets it aside until known (real-drive review
+  // 2026-11-15); the trip beside it explains itself the same way
+  check(await page.evaluate(() => getComputedStyle(document.querySelector('#cluster .g-score.unk')).display === 'none'), 'an unknown Score steps aside in a replay');
+  await page.click('#cluster .odo');
   await page.waitForSelector('#explainCard.show', { timeout: 3000 });
-  check(await page.textContent('#explainTitle') === 'Vetta Score', 'the Score explains itself');
+  check(await page.textContent('#explainTitle') === 'Trip', 'the trip explains itself');
   await page.click('#explainDone');
 });
 
@@ -3937,6 +4016,7 @@ flow('meets on the map: off by default; on, public meets near the map are pinned
   await page.waitForTimeout(1500);                                                        // the account is known
   await page.evaluate(() => { apexDebug.state.follow = false; apexDebug.map.jumpTo({ center: [-83.95, 35.45], zoom: 9 }); });
   await page.click('#swTab');
+  asked.length = 0;                                                                       // the Events layer (on by default) asked for its own
   await page.click('[data-toggle="meets"]');
   await page.waitForSelector('.mm-pin');
   check(/^Meets within 50 mi of the map\. Tap a pin\.$/.test(await page.textContent('#toast')), 'the switch says where in the driver\'s miles, in one line: ' + await page.textContent('#toast'));
@@ -4004,6 +4084,38 @@ flow('roadbooks on the map: off by default; on, only the books with a road in vi
   await page.waitForFunction(() => { const d = apexDebug.map.getSource('apex-books-src').serialize().data; return d.features.length === 2 && d.features[0].properties.name === 'The Dragon'; }, null, { timeout: 10000 });
   check(opened.filter((o) => o === 'near').length === 3, 'the map, the book\'s page, then the map again after the edit: ' + JSON.stringify(opened));
   check(await page.evaluate(() => apexDebug.map.getSource('apex-books-src').serialize().data.features.some((f) => f.properties.name === 'Foothills Parkway' && f.properties.p === 1)), 'the public book stays on the map after the edit');
+});
+
+flow('roadbooks on the route card: a planned route that drives a road of your roadbooks names it, and says when it is new to you (free roamer B, 2026-11-15)', async (page, base) => {
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  // the stub's own line between the two ends, points 120 to 220: a road on it
+  const a = { lat: 35.9606, lon: -83.9207 }, b = { lat: 36.06, lon: -83.80 };
+  const at = (i) => { const t = i / 400, wig = Math.sin(t * Math.PI * 9) * 0.004 * Math.sin(t * Math.PI); return [+(a.lon + (b.lon - a.lon) * t + wig).toFixed(6), +(a.lat + (b.lat - a.lat) * t + wig).toFixed(6)]; };
+  const geom = Array.from({ length: 101 }, (_, k) => at(120 + k));
+  const lats = geom.map((q) => q[1]), lons = geom.map((q) => q[0]);
+  const box = [Math.min(...lats), Math.max(...lats), Math.min(...lons), Math.max(...lons)];
+  const book = { id: 'ROUTEROUTEROUTER', name: 'Smokies classics', mine: true, visibility: 'private', by: 'me', roads: 1, length_m: 9000,
+    road_list: [{ id: 'r1', name: 'Hollow Creek Road', geom, length_m: 9000, stamps: 0, stamped: false }] };
+  const opened = [];
+  await page.route(base + '/api/**', (route) => {
+    const p = new URL(route.request().url()).pathname, json = (x) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(x) });
+    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (p === '/api/roadbooks') return json({ mine: [{ ...book, road_list: [{ id: 'r1', name: 'Hollow Creek Road', box, stamped: false }] }], following: [], crews: [] });
+    if (p === '/api/roadbooks/ROUTEROUTEROUTER') { opened.push(p); return json(book); }
+    return json([]);
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.signedIn', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.waitForTimeout(1500);                                                        // the account is known
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.9606, lon: -83.9207 }, { lat: 36.06, lon: -83.80 }], 'to_x', 'To the ridge'));
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 20000 });
+  await page.waitForFunction(() => /Drives Hollow Creek Road from Smokies classics, new to you/.test(document.getElementById('routeCardSub').textContent), null, { timeout: 15000 })
+    .catch(async () => { throw new Error('card: ' + await page.textContent('#routeCardSub')); });
+  check(opened.length === 1, 'only the book whose road meets the route was opened: ' + opened.length);
 });
 
 flow('roadbooks: sharing your public roadbook sends its link card, its roads on the map as a 1200 x 630 JPEG, once until it changes (free roamer B, 2026-11-15)', async (page, base) => {
@@ -4547,7 +4659,7 @@ flow('a drive started on the car and never ended is in the Log: the car switchin
   // 1. started on the car's screen, driven 3.5 km, the car switched off in the car park: no End
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start', free: true }));
   await page.waitForFunction(() => window.apexDebug.driveActive);
-  for (let b = 0; b < 4; b++) { await feed(b * 80, (b + 1) * 80, 15); await page.waitForTimeout(150); }
+  for (let b = 0; b < 4; b++) { await feed(b * 80, (b + 1) * 80, 15); await page.waitForTimeout(150); if (b === 1) await page.evaluate(() => window.apexDebug.say('Stage done.')); }
   await until(async () => (await ApexRecording.keepAll()).length === 1, null, 'the drive is checkpointed as it goes');
   const posted = await page.evaluate(() => window.__native.filter((m) => m.cmd === 'journal').map((m) => m.op));
   check(posted.indexOf('start') >= 0 && posted.indexOf('durable') > posted.indexOf('start'), 'the shell is told the drive began and what is kept: ' + posted);
@@ -4559,6 +4671,9 @@ flow('a drive started on the car and never ended is in the Log: the car switchin
   const one = await until(async () => { const all = await ApexRecording.all(); return all.length === 1 && !(await ApexRecording.keepAll()).length ? all[0] : null; }, null, 'saved, and nothing left in progress');
   check(one.ended === 'car' && one.dist[one.dist.length - 1] > 3400, 'the whole drive saved, said how it ended: ' + JSON.stringify({ ended: one.ended, m: one.dist[one.dist.length - 1] }));
   check(/Ended when the car disconnected/.test(await page.textContent('#endLine')), 'the card says so');
+  // what the co-driver said on it, kept with the drive (cockpit.js saidOnDrive): each line, where, and in which voice
+  check(Array.isArray(one.said) && one.said.length > 0 && one.said.every((x) => typeof x.line === 'string' && ['pack', 'phone', null].includes(x.eng) && Number.isFinite(x.m)),
+    'the drive keeps what was said: ' + JSON.stringify((one.said || []).slice(0, 3)));
   check(await page.evaluate(() => window.__native.some((m) => m.cmd === 'journal' && m.op === 'end')), 'the shell drops its journal once saved');
 
   // 2. another drive from the car; the phone closes the page in the background (it writes nothing more) after the last
@@ -5215,17 +5330,25 @@ flow('a saved route keeps its road feel: Save keeps what members measured along 
     // members drove a bend 100 m long (three passes) and felt two bumps
     ApexContributor.measuredAlong = async (t) => { window.__asked++; const n = t.lat.length, k = new Array(n).fill(null), kn = new Array(n).fill(null);
       for (let i = 300; i < 320; i++) { k[i] = 0.02; kn[i] = 3; }
-      return { coverage: 0.5, coveredKm: 30, km: 60, avgPasses: 2, roughness: 0.1, bankedKm: 0, roughKm: 0, repavedKm: 0, crowdK: k, crowdKn: kn, crowdBumps: [{ index: 100, p: 0.9 }, { index: 400, p: 0.85 }] }; };
+      // and its camber: it leans the wrong way, 5 degrees, by passes that agree (contributor.js camFrom)
+      const cam = new Array(n).fill(null); for (let i = 296; i < 324; i++) cam[i] = -5;
+      return { coverage: 0.5, coveredKm: 30, km: 60, avgPasses: 2, roughness: 0.1, bankedKm: 0, roughKm: 0, repavedKm: 0, crowdK: k, crowdKn: kn, crowdCam: cam, crowdBumps: [{ index: 100, p: 0.9 }, { index: 400, p: 0.85 }], crowdCrests: [{ index: 250, g: 0.3 }] }; };
   });
   await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.52, lon: -83.92 }, { lat: 36.08, lon: -83.92 }], 'route_feel', 'Down the ridge', null,
     { from: null, to: { lat: 36.08, lon: -83.92 }, via: [] }));
   await page.waitForFunction(() => /2 bumps members felt/.test(document.getElementById('measuredNote').textContent), null, { timeout: 20000 });
   const online = await page.textContent('#measuredNote');
   check(/corners from members' drives/.test(online) && !/kept/.test(online), 'with signal: the members\' corners and bumps, asked now: ' + online);
+  // and a crest two or more members went light over: on the card and a "Crest" pace note on the route (contributor.js crestEvents)
+  check(/a crest members went light over/.test(online), 'the crest members felt on the card: ' + online);
+  check(await page.evaluate(() => apexDebug.track.events.filter((e) => e.type === 'crest' && e.crowd).length) === 1, 'one crest note on the route from members\' drives');
+  const sloped = await page.evaluate(() => apexDebug.track.events.filter((e) => e.type === 'corner' && e.index >= 296 && e.index < 324).map((e) => [e.call, e.mods]));
+  check(sloped.length >= 1 && sloped.every((c) => c[1].includes('off-camber')), 'the bend members measured leaning the wrong way is called so: ' + JSON.stringify(sloped));
   await page.evaluate(() => document.getElementById('routeSaveBtn').click());
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.routeFeel') || '{}'));
   const e = Object.values(kept)[0];
-  check(e && e.k.length === 1 && e.k[0][1].length === 20 && e.bumps.length === 2, 'Save keeps the bend and the bumps with the route: ' + JSON.stringify(kept).slice(0, 300));
+  check(e && Array.isArray(e.cam) && e.cam.length === 1 && e.cam[0][1].length === 28, 'Save keeps the camber members agree on: ' + JSON.stringify(e && e.cam));
+  check(e && e.k.length === 1 && e.k[0][1].length === 20 && e.bumps.length === 2 && e.crests && e.crests.length === 1, 'Save keeps the bend, the bumps and the crest with the route: ' + JSON.stringify(kept).slice(0, 300));
   // the context grid's indexes read with signal first (as a real phone would have them): read for the first time with no
   // signal they'd fall back to the shipped copy's path for every tile, a 404 here once the flow is back online
   await page.waitForFunction(() => window.ApexContextGrid && ApexContextGrid.urlsNear, null, { timeout: 20000 });
@@ -5831,6 +5954,17 @@ flow('roadbooks: Drive them all routes from where you are through the book\'s ro
   const one = await page.evaluate(() => ({ toast: document.getElementById('toast').textContent, lat: [apexDebug.track.lat[0], apexDebug.track.lat[apexDebug.track.lat.length - 1]] }));
   check(lead.length === 2 && near(lead[0], [-83.8, 35.6]) && near(lead[1], B[0]) && Math.abs(one.lat[0] - 35.6) < 1e-3 && Math.abs(one.lat[1] - B[B.length - 1][1]) < 1e-4
     && /^Road B, from Smokies day out: [\d.]+ (mi|km) to the start, then [\d.]+ (mi|km) of it\.$/.test(one.toast), 'one road: from you to its start, then all of it: ' + JSON.stringify({ lead, one }));
+  // (2026-11-15) with Road A driven, the key is the ones still to stamp, and All stays beside it
+  book.road_list[2].stamped = true; asked.length = 0;
+  await page.goto(base + '/index.html?roadbook=BBBBBBBBBBBBBBBB');
+  await page.waitForSelector('.rb-pop.open button:has-text("Drive the 3 new")', { timeout: 15000 });
+  check(!!(await page.$('.rb-pop.open button[aria-label="Drive all 4 roads"]')) && !(await page.$('.rb-pop.open button:has-text("Drive them all")')), 'Drive the 3 new, and All beside it');
+  await page.click('.rb-pop.open button:has-text("Drive the 3 new")');
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.id === 'roadbook_all_BBBBBBBBBBBBBBBB', null, { timeout: 20000 });
+  const newLocs = asked.find((l) => Array.isArray(l) && l.length > 3) || [];
+  const newNote = await page.evaluate(() => document.getElementById('routeProgress').textContent);
+  check(/^2 new roads from Smokies day out, nearest first: /.test(newNote), 'the card says new: ' + newNote);
+  check(newLocs.length > 3 && !newLocs.some((l) => near(l, A[0]) || near(l, A[A.length - 1])) && newLocs.some((l) => near(l, B[0])), 'the drive leaves out the road already driven: ' + newLocs.length);
 }, { geolocation: { latitude: 35.6, longitude: -83.8 }, permissions: ['geolocation'] });
 
 flow('crash check: a hard impact then a stop asks "Are you OK?"; no answer offers a call and a text to the contact (IDEAS D-17)', async (page, base) => {
@@ -6768,6 +6902,27 @@ flow('the Log draws one rule between the drive list and Score over time, not two
   check(!r.quiet && (r.row === 0 && r.panel === 1), 'one rule between the list and the panel: ' + JSON.stringify(r));
 });
 
+flow('the Log after a real week: short drives with no corners fold away, Score over time names each day once, the hero names no address (real-drive review round 2)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async (src) => { const gen = eval(src);
+    for (let k = 0; k < 3; k++) await ApexRecording.store(ApexRecording.parse(ApexCore, gen('saw', k), 'W' + k + '.csv', { id: 'W' + k, name: 'To 10069 Pebble Ridge Ln', date: `2026-10-30T1${k}:00`, source: 'web-gps' }));
+    const lat = [], lon = []; for (let i = 0; i < 60; i++) { lat.push(39.10 + i * 5 / 110540); lon.push(-84.52); }   // 0.3 km, straight
+    await ApexRecording.store({ id: 'Wshort', name: 'To the shop', date: '2026-10-31T09:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 12),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, elev: null, hz: 1, source: 'web-gps', events: [] }); }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#trendPanel:not([hidden])', { timeout: 20000 });
+  const r = await page.evaluate(() => ({ rows: [...document.querySelectorAll('#historyTable tr.row-link')].map((t) => t.dataset.drive),
+    fold: (document.getElementById('showShorts') || {}).textContent || null, hero: document.getElementById('historyCards').textContent,
+    labels: [...document.querySelectorAll('#trend svg text[text-anchor="middle"]')].map((t) => t.textContent) }));
+  check(!r.rows.includes('Wshort') && r.rows.length === 3 && r.fold === 'Short drives (1)', 'the short drive folds away: ' + JSON.stringify(r));
+  check(!/Pebble|10069/.test(r.hero), 'the hero names no address: ' + r.hero);
+  check(r.labels.length === new Set(r.labels).size && r.labels.length >= 1, 'each day labelled once: ' + JSON.stringify(r.labels));
+  await page.click('#showShorts');
+  await page.waitForSelector('#historyTable tr[data-drive="Wshort"]', { timeout: 5000 });
+});
+
 flow('a drive\'s corners on a road driven four times: each says your cleanest pass there, and a tap opens the drive that holds it (driver_profile.js roadRecords rows)', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
@@ -7378,12 +7533,20 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
     'a crew drive today picks its crew and names who came');
   await page.click('.post-sheet [role="radiogroup"] button:has-text("Friends")');
   check(await page.$eval('.post-sheet .post-with', (n) => n.hidden), 'to friends: no names');
+  // (2026-11-15) to friends: who came is yours to tag, up to five friends
+  await page.waitForSelector('.post-sheet .post-tags:not([hidden]) button:text-is("@bob")');
+  check(await page.textContent('.post-sheet .post-tags small') === 'Who came? (optional)', 'the tag row asks, once');
+  await page.click('.post-sheet .post-tags button:text-is("@bob")');
+  check(await page.textContent('.post-sheet .post-tags small') === 'With @bob' && await page.getAttribute('.post-sheet .post-tags button:text-is("@bob")', 'aria-pressed') === 'true', 'tapped: the post will say With @bob');
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/post-tags.png` });
   await page.click('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")');
+  check(await page.$eval('.post-sheet .post-tags', (n) => n.hidden), 'to a crew: no tags, the crew drive says who came');
   await page.fill('.post-sheet textarea', 'First run with the crew.');
   await page.click('.post-sheet button:text-is("Post")');
   await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Posted');
   const p = JSON.parse(sent.filter((x) => x.p === '/api/posts').pop().b);
   const first = (() => { const s = p.line; let i = 0, r = 0, sh = 0, b; do { b = s.charCodeAt(i++) - 63; r |= (b & 31) << sh; sh += 5; } while (b >= 32); return (r & 1 ? ~(r >> 1) : r >> 1) / 1e5; })();
+  check(p.tags === undefined, 'a crew post sends no tags');
   check(p.crew_id === 'k1' && p.caption === 'First run with the crew.' && p.score === 790 && p.title === 'Cherohala Skyway' && first > 35.36 + 0.0044,
     'the post: to the crew, the caption, the Score, and the line starting 500 m in: ' + JSON.stringify({ ...p, line: p.line.length, first }));
 });
@@ -9051,7 +9214,10 @@ flow('road page: About a road shows its archetype, axes and how sure it is (IDEA
       ? new Response(JSON.stringify([{ id: 'a', kind: 'gravel', lat: 35 + 50 / 110540, lon: -83, confirms: 3, clears: 0 },
         { id: 'b', kind: 'animal', lat: 35 + 60 / 110540, lon: -83, confirms: 1, clears: 2 }]), { headers: { 'content-type': 'application/json' } })
       : realFetch(path, o));
-    ApexContributor.measuredAlong = async () => ({ coverage: 0, avgPasses: 0, crowdBumps: [{ index: 40, p: 0.9 }] });
+    // with crests and a rough stretch members felt (2026-11-15); the road goes in with its metres, so rough runs are known
+    ApexContributor.measuredAlong = async (r) => { window.__roadAsked = r; return { coverage: 0, avgPasses: 0, crowdBumps: [{ index: 40, p: 0.9 }],
+      crowdCrests: [{ index: 60, g: 0.3 }], crowdRough: [{ index: 80, endIndex: 140 }],
+      bankedKm: 0.3, offCamberKm: 0.1, repavedKm: 0.2, repavedOn: '2026-03' }; };
     const lat = [], lon = []; let x = 0, y = 0, h = Math.PI / 2;
     const step = (n, turn) => { for (let i = 0; i < n; i++) { h += turn; x += 5 * Math.cos(h); y += 5 * Math.sin(h); lat.push(35 + y / 110540); lon.push(-83 + x / 91190); } };
     step(20, 0); for (let k = 0; k < 8; k++) { step(10, (k % 2 ? 1 : -1) * Math.PI / 10); step(16, 0); } step(20, 0);
@@ -9060,6 +9226,9 @@ flow('road page: About a road shows its archetype, axes and how sure it is (IDEA
   await page.waitForFunction(() => /Bump members felt/.test(document.querySelector('aside.side-pop.open').textContent), null, { timeout: 10000 });
   const onRoad = await page.textContent('aside.side-pop.open');
   check(/Gravel\s*at [\d.]+ (mi|ft|km|m) · 3 confirmed/.test(onRoad) && !/Animal/.test(onRoad), 'the live report, not the cleared one: ' + onRoad.slice(0, 600));
+  check(/Crest members went light over\s*at [\d.]+ (mi|ft|km|m)/.test(onRoad) && /Rough road members felt\s*[\d.]+–[\d.]+ (mi|km)/.test(onRoad), 'crests and rough road members felt: ' + onRoad.slice(0, 600));
+  check(/Camber\s*[\d.]+ (mi|km) banked, [\d.]+ (mi|km|ft|m) off-camber/.test(onRoad) && /Repaved\s*Mar 2026/.test(onRoad), 'members\' camber and repaving: ' + onRoad.slice(0, 600));
+  check(await page.evaluate(() => Array.isArray(window.__roadAsked.dist) && window.__roadAsked.dist.length === window.__roadAsked.lat.length), 'the road is asked with its metres');
   await page.click('aside.side-pop.open button:has-text("Close")');
   check(!(await page.isVisible('aside.side-pop.open[aria-label="About this road"]')), 'closes');
 });
@@ -9189,7 +9358,7 @@ flow('contrast in every look: the welcome, the map, People, the Garage and the L
   for (const theme of themes) {
     for (const night of [false, true]) {
       const m = `${theme} ${night ? 'night' : 'day'}`;
-      await page.evaluate(({ t, n }) => { localStorage.clear(); localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, nightMode: n ? 'on' : 'off' })); }, { t: theme, n: night }).catch(() => {});
+      await page.evaluate(({ t, n, ns }) => { localStorage.clear(); localStorage.setItem('apex.newsSeen', ns); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, nightMode: n ? 'on' : 'off' })); }, { t: theme, n: night, ns: NEWS_ID }).catch(() => {});
       await page.goto(base + '/index.html');
       await page.waitForFunction((t) => document.documentElement.dataset.theme === t, theme);
       await page.waitForSelector('#obNext', { state: 'visible' });
@@ -9214,6 +9383,124 @@ flow('contrast in every look: the welcome, the map, People, the Garage and the L
   else check(!found.length, `text under the contrast floor:\n  ${found.join('\n  ')}`);
 });
 
+// U-15 / IN-1: the main screens at the phone's larger text sizes (1.5x and the largest, 2x): no text cut off by its box
+// or the screen's edge, no key too small to hit; the checks every flow runs on its last screen at the default size
+// The main screens (the welcome, the idle map, People, the Garage, the Log empty and with three drives, a planned route's
+// card) read in each phone shape [width, height, text scale], on a clean phone: cut text, small keys, words over words,
+// and a page wider than the phone. Returns what it found. (Roamer D, 2026-11-14/15)
+async function screensSweep(page, base, shapes) {
+  graphDir = graphFixture();
+  const found = [];
+  const read = async (p, where) => { await p.evaluate(() => { const st = document.querySelector('.stage'); if (st) st.scrollLeft = 0; });
+    found.push(...(await clippedText(p)).map((h) => `${where}: ${h}`), ...(await smallTargets(p)).map((h) => `${where}: small key ${h}`), ...(await overlappingText(p)).map((h) => `${where}: ${h}`));
+    const wide = await p.evaluate(() => Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth);
+    if (wide > 1) found.push(`${where}: the page is ${wide} px wider than the phone`); };
+  try {
+    for (const [w, h, k] of shapes) {
+      const ctx = await page.context().browser().newContext({ viewport: { width: w, height: h }, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+      await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
+      await ctx.addInitScript((ns) => { try { localStorage.setItem('apex.newsSeen', ns); localStorage.setItem('apex.funLevel', 'quick'); } catch (_) {} }, NEWS_ID);
+      const p = await ctx.newPage();
+      try {
+        await p.goto(base + '/index.html');
+        await p.waitForSelector('#obNext', { state: 'visible' });
+        await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(400);
+        await read(p, `${w}x${h} ${k}x welcome`);
+        await p.evaluate(() => localStorage.setItem('apex.onboarded', '1'));
+        await p.goto(base + '/index.html');
+        await p.waitForFunction(() => window.apexDebug && window.apexDebug.map && !document.getElementById('boot'), null, { timeout: 20000 });
+        await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(800);
+        await read(p, `${w}x${h} ${k}x map`);
+        // the plan's sheets: Where to?, its Options, and Best roads nearby (from our tiles)
+        await p.click('#destInput'); await p.waitForTimeout(500);
+        await read(p, `${w}x${h} ${k}x where to`);
+        await p.click('#planOptionsChip'); await p.waitForSelector('#optSheet.open'); await p.waitForTimeout(400);
+        await read(p, `${w}x${h} ${k}x options`);
+        await p.goto(base + '/index.html');
+        await p.waitForFunction(() => window.apexDebug && window.apexDebug.map && !document.getElementById('boot'), null, { timeout: 20000 });
+        await p.evaluate(TYPE_AT(k));
+        if (await p.evaluate(() => { const c = document.getElementById('deckNearby'); if (!c || !c.getClientRects().length) return false; c.scrollIntoView({ inline: 'nearest' }); c.click(); return true; })) {   // the shelf may hold it out of view sideways
+          await p.waitForFunction(() => window.apexDebug.lastExploreOwn != null && !document.getElementById('nearbyStatus').classList.contains('busy'), null, { timeout: 20000 });
+          await p.waitForTimeout(400);
+          await read(p, `${w}x${h} ${k}x best roads nearby`);
+        }
+        for (const view of ['people', 'garage']) {
+          await p.evaluate((v) => document.querySelector(`#tabbar .tab[data-view="${v}"]`).click(), view);
+          await p.waitForTimeout(700);
+          await read(p, `${w}x${h} ${k}x ${view}`);
+        }
+        await p.goto(base + '/analysis.html');
+        await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(800);
+        await read(p, `${w}x${h} ${k}x log`);
+        await ownTrip(p, base);
+        await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(1200);
+        await read(p, `${w}x${h} ${k}x route card`);
+        // the Log with drives in it: three, one with a long name
+        await p.evaluate(async () => { for (const [id, name, km] of [['lt1', 'Cherohala Skyway', 30], ['lt2', 'Tail of the Dragon (US-129)', 18], ['lt3', 'Foothills Parkway West', 27]]) {
+          const lat = [], lon = []; for (let i = 0; i < km * 200; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + 0.001 * Math.sin(i / 40)); }
+          await ApexRecording.store({ id, name, date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+            lon_g: lat.map(() => 0), lat_g: lat.map((_, i) => 0.3 * Math.sin(i / 40)), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }); } });
+        await p.goto(base + '/analysis.html');
+        await p.waitForSelector('#historyTable tr.row-link', { timeout: 15000 });
+        await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(800);
+        await read(p, `${w}x${h} ${k}x log with drives`);
+      } finally { await ctx.close(); }
+    }
+  } finally { graphDir = null; }
+  return found;
+}
+
+
+flow('large text on every screen: the welcome, the map, a route card, People, the Garage and the Log (empty and with drives) cut nothing and draw no words over others at 1.5x and 2x (IDEAS U-15, IN-1)', async (page, base) => {
+  const found = await screensSweep(page, base, [[390, 844, 1.5], [390, 844, 2]]);
+  if (process.env.CLIP_LOG) for (const h of found) console.log('CLIP large | ' + h);
+  else check(!found.length, `at a large text size, text cut off or a key too small:\n  ${found.join('\n  ')}`);
+});
+
+// The narrowest phone a driver can have (an iPhone SE or mini with Display Zoom on is 320 points wide), at its own and its
+// largest text, and a phone on its side in a mount (2026-11-15): the same screens, the same checks.
+flow('the narrowest phone and a phone on its side: the welcome, the map, a route card, People, the Garage and the Log fit at 320 pt (1x and 2x text) and at 844 x 390 (IDEAS U-15, U-16)', async (page, base) => {
+  const found = await screensSweep(page, base, [[320, 568, 1], [320, 568, 2], [844, 390, 1]]);
+  if (process.env.CLIP_LOG) for (const h of found) console.log('CLIP narrow | ' + h);
+  else check(!found.length, `on a narrow phone or on its side, text cut off, words over words or a key too small:\n  ${found.join('\n  ')}`);
+});
+
+// Every Garage setting page and the Stages list at the largest text, on a 390 phone and on the narrowest one (320 pt, an
+// SE or mini with Display Zoom), 2026-11-15: no word cut, no words over words, no key too small, no page wider than the
+// phone. A switch's long word ("Kilometres", "Steady") was cut at 320 pt; its keys now wrap instead.
+flow('large text in the Garage: every setting page and the Stages list cut nothing at 2x, on a 390 phone and a 320 pt one (IDEAS U-15)', async (page, base) => {
+  const found = [];
+  const read = async (p, where) => { found.push(...(await clippedText(p)).map((h) => `${where}: ${h}`), ...(await smallTargets(p)).map((h) => `${where}: small key ${h}`), ...(await overlappingText(p)).map((h) => `${where}: ${h}`));
+    const wide = await p.evaluate(() => Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth);
+    if (wide > 1) found.push(`${where}: the page is ${wide} px wider than the phone`); };
+  for (const [w, h] of [[390, 844], [320, 568]]) {
+    const ctx = await page.context().browser().newContext({ viewport: { width: w, height: h } });
+    await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
+    await ctx.addInitScript((ns) => { try { localStorage.setItem('apex.newsSeen', ns); localStorage.setItem('apex.onboarded', '1'); } catch (_) {} }, NEWS_ID);
+    const p = await ctx.newPage();
+    try {
+      await p.goto(base + '/index.html');
+      await p.waitForFunction(() => window.apexDebug && !document.getElementById('boot'), null, { timeout: 20000 });
+      await p.evaluate(() => document.querySelector('#tabbar .tab[data-view="garage"]').click()); await p.waitForTimeout(400);
+      await p.click('#garageGear'); await p.waitForTimeout(400);
+      const keys = await p.evaluate(() => [...new Set([...document.querySelectorAll('#garageSettings .nav-row[data-setting]')].filter((r) => r.offsetParent && getComputedStyle(r).visibility !== 'hidden').map((r) => r.dataset.setting))]);
+      check(keys.length >= 8, 'the Garage lists its settings: ' + keys.join(', '));
+      for (const key of keys) {
+        await p.goto(base + '/index.html');
+        await p.waitForFunction(() => window.apexDebug && !document.getElementById('boot'), null, { timeout: 20000 });
+        await p.evaluate(TYPE_AT(2));
+        await p.evaluate(() => document.querySelector('#tabbar .tab[data-view="garage"]').click()); await p.waitForTimeout(400);
+        await openSetting(p, key);
+        await read(p, `${w}x${h} setting ${key}`);
+      }
+      await p.goto(base + '/analysis.html?tab=segments'); await p.evaluate(TYPE_AT(2)); await p.waitForTimeout(800);
+      await read(p, `${w}x${h} stages`);
+    } finally { await ctx.close(); }
+  }
+  if (process.env.CLIP_LOG) for (const f of found) console.log('CLIP garage | ' + f);
+  else check(!found.length, `at the largest text, in the Garage or Stages:\n  ${found.join('\n  ')}`);
+});
+
 // U-15: the route card, Saved and Where to? in every look, day and night: the card is what a driver reads most before a drive
 flow('contrast in every look: a planned route\'s card and its Saved key hold 4.5:1 in each theme, day and night (IDEAS U-15)', async (page, base) => {
   graphDir = graphFixture();
@@ -9225,7 +9512,7 @@ flow('contrast in every look: a planned route\'s card and its Saved key hold 4.5
         // a clean phone per look: a second plan on one page starts from what the first left (recents, the saved route)
         const ctx = await page.context().browser().newContext({ viewport: { width: 390, height: 844 }, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
         await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
-        await ctx.addInitScript(({ t, n }) => { try { localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.funLevel', 'quick'); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, nightMode: n ? 'on' : 'off' })); } catch (_) {} }, { t: theme, n: night });
+        await ctx.addInitScript(({ t, n, ns }) => { try { localStorage.setItem('apex.newsSeen', ns); localStorage.setItem('apex.funLevel', 'quick'); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, nightMode: n ? 'on' : 'off' })); } catch (_) {} }, { t: theme, n: night, ns: NEWS_ID });
         const p = await ctx.newPage();
         try {
         await ownTrip(p, base);
@@ -9253,7 +9540,7 @@ flow('contrast in every look: the drive screen on the replay holds 4.5:1 in each
       const m = `${theme} ${night ? 'night' : 'day'}`;
       const ctx = await page.context().browser().newContext({ viewport: { width: 390, height: 844 } });
       await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
-      await ctx.addInitScript(({ t, n }) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, { t: theme, n: night });
+      await ctx.addInitScript(({ t, n, ns }) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.newsSeen', ns); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, { t: theme, n: night, ns: NEWS_ID });
       const p = await ctx.newPage();
       try {
         await p.goto(base + '/index.html?drive=dry_ridge&play=1');
@@ -9297,7 +9584,8 @@ flow('theme contract on the page: the hazard plate, the speed, the call and the 
     check(r.speed >= 40, `${m}: speed numeral ${r.speed} px`);
     check(r.call >= 21, `${m}: the call ${r.call} px`);
     check(!r.small.length && r.bankPx >= 13, `${m}: nothing on the binnacle under 13 px: ` + JSON.stringify(r.small) + ' bank ' + r.bankPx);
-    check(r.limit && r.limit.w === 44 && r.limit.h === 52 && (r.limit.unknown || r.limit.bg === 'rgb(255, 255, 255)'), `${m}: the Limit sign is the white sign: ` + JSON.stringify(r.limit));
+    // a replay sets an unknown limit aside (real-drive review 2026-11-15: a framed dash is not news); known, it is the sign
+    check(r.limit && ((r.limit.unknown && r.limit.w === 0) || (r.limit.w === 44 && r.limit.h === 52 && (r.limit.unknown || r.limit.bg === 'rgb(255, 255, 255)'))), `${m}: the Limit sign is the white sign, or none while unknown: ` + JSON.stringify(r.limit));
     // night is a mode (REVIEW2.md U-36): a 46 px numeral, Limit and Sight on one row, the trip behind its Trip key
     const nm = await page.evaluate(() => { const d = document.querySelector('.dial-speed .dial-digital'), vis = (q) => { const e = document.querySelector(q); return !!e && e.getClientRects().length > 0; };
       const l = document.querySelector('.ro-limit').getBoundingClientRect(), g = document.querySelector('.ro-sight').getBoundingClientRect();
@@ -12327,6 +12615,85 @@ flow('road marks on the road ahead: a free drive with no route still hears the s
   check((await stops()).length === 1, 'not again on the next road ahead: ' + JSON.stringify(await stops()));
 });
 
+flow('members\' road feel on the road ahead: a free drive hears the bump members felt and the rough road they measured, once, and not again on the next road ahead (horizonFeel by cells, contributor.js feelFromWays)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  const KY = 110540, lat = (m) => 35.5 + m / KY, LON = -83.9, g = (m) => ({ lat: lat(m), lon: LON });
+  const WAY = 4000000123;   // past a Float32's range: the id goes as a string
+  const elements = [{ type: 'way', id: WAY, tags: { highway: 'tertiary', name: 'Ridge Road' }, nodes: [1, 2], geometry: [g(-20), g(3000)] }];
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }));
+  // members felt a bump 1500 m along (bin 304 of the way, which starts 20 m behind), northbound, and measured broken
+  // pavement from 980 m (bins 200-240)
+  const asked = [];
+  // asked by the 0.1 degree cells the road ahead crosses (VI-1), never by its ways: the answer carries the way's line
+  await page.route((u) => u.pathname === '/api/roads', (route) => { const q = new URL(route.request().url()).searchParams; asked.push(q.get('cells') || 'ways:' + q.get('ways'));
+    const bins = Array.from({ length: 600 }, (_, b) => b);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ways: { [WAY]: { 0: { i: bins, cam: bins.map(() => null), rough: bins.map((b) => (b >= 200 && b <= 240 ? 0.4 : 0.1)), n: bins.map(() => 3), cn: bins.map(() => 0), crest: bins.map(() => null), crn: bins.map(() => 0), bp: [[304, 0.9]] } } },
+      lines: { [WAY]: [[lat(-20), LON], [lat(3000), LON]] } }) }); });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks && window.ApexContributor && window.ApexSync);
+  await page.evaluate(() => { ApexSync.signedIn = () => true; });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const coords = []; for (let m = 0; m <= 2500; m += 10) coords.push([LON, lat(m)]);
+  await page.evaluate((coords) => apexDebug.horizonFrom(coords), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon' && apexDebug.track.crowdBumps != null, null, { timeout: 30000 })
+    .catch(async () => { throw new Error('no members\' road feel on the road ahead: ' + JSON.stringify(await page.evaluate(() => [apexDebug.track && apexDebug.track.kind, apexDebug.lastCtx])) + ' asked ' + JSON.stringify(asked)); });
+  const bumps = await page.evaluate(() => apexDebug.track.events.filter((e) => e.crowd).map((e) => [e.type, Math.round(e.dist_m)]));
+  check(bumps.length === 1 && bumps[0][0] === 'bump' && Math.abs(bumps[0][1] - 1500) <= 10, 'the members\' bump on the road ahead: ' + JSON.stringify(bumps));
+  const rough = await page.evaluate(() => (apexDebug.track.marks || []).filter((m) => m.crowd).map((m) => [m.code, Math.round(m.dist_m), Math.round(m.end_m)]));
+  check(rough.length === 1 && rough[0][0] === 'ROUGH' && Math.abs(rough[0][1] - 980) <= 10 && Math.abs(rough[0][2] - 1180) <= 10, 'the rough road members measured: ' + JSON.stringify(rough));
+  check(asked.length === 1 && asked[0] === '355_-839', 'asked by the cell the road ahead is in: ' + JSON.stringify(asked));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 22, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const heard = () => page.evaluate(() => window.__said.filter((s) => /bump/i.test(s)));
+  for (let i = await iAt(700), end = await iAt(1495); i <= end && !(await heard()).length; i += 2) { await at(i); await page.waitForTimeout(40); }
+  check((await heard()).length === 1, 'the bump called on a free drive: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  check((await page.evaluate(() => window.__said.filter((s) => /^Rough road/.test(s)))).length === 1, '"Rough road" called before it: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  // the next road ahead overlaps this one: the bump it holds was said already, and the way's answer is kept (not asked again)
+  const c2 = []; for (let m = 1400; m <= 3000; m += 10) c2.push([LON, lat(m)]);
+  await page.evaluate((c) => apexDebug.horizonFrom(c), c2);
+  await page.waitForFunction(() => apexDebug.track.dist[apexDebug.track.dist.length - 1] < 1700 && apexDebug.track.crowdBumps != null, null, { timeout: 30000 });
+  for (let i = 0, end = await iAt(300); i <= end; i += 2) { await at(i); await page.waitForTimeout(40); }
+  check((await heard()).length === 1, 'not again on the next road ahead: ' + JSON.stringify(await heard()));
+  check(asked.length === 1, 'the cell asked once: ' + JSON.stringify(asked));
+});
+
+flow('members\' camber on the road ahead: a free drive\'s bend members measured sloping away gets "off-camber" before it is said (horizonFeel, contributor.js camberMods)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
+    window.APEX_REVIEW = true; });
+  // north 1000 m, a 90 degree right-hander of 60 m radius, then east: one bend about 1050 m ahead
+  const KY = 110540, KX = 111320 * Math.cos(35.5 * Math.PI / 180), LAT0 = 35.5, LON0 = -83.9, pts = [];
+  for (let m = -20; m <= 1000; m += 5) pts.push([0, m]);
+  const R = 60; for (let a = 1; a <= 18; a++) { const th = a * Math.PI / 36; pts.push([R - R * Math.cos(th), 1000 + R * Math.sin(th)]); }
+  for (let m = 5; m <= 1400; m += 5) pts.push([R + m, 1000 + R]);
+  const ll = ([e, n]) => [LAT0 + n / KY, LON0 + e / KX];
+  const WAY = 4000000456;
+  const elements = [{ type: 'way', id: WAY, tags: { highway: 'tertiary', name: 'Bend Road' }, nodes: [1, 2], geometry: pts.map((p) => { const [la, lo] = ll(p); return { lat: la, lon: lo }; }) }];
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }));
+  // three members agree the whole road slopes away from the turn by 6 degrees (SD 0.5)
+  await page.route((u) => u.pathname === '/api/roads', (route) => {
+    const bins = Array.from({ length: 600 }, (_, b) => b);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ways: { [WAY]: { 0: { i: bins, cam: bins.map(() => -6), csd: bins.map(() => 0.5), rough: bins.map(() => 0.1), n: bins.map(() => 3), cn: bins.map(() => 3), crest: bins.map(() => null), crn: bins.map(() => 0), bp: [] } } },
+      lines: { [WAY]: pts.map(ll) } }) }); });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks && window.ApexContributor && window.ApexSync);
+  await page.evaluate(() => { ApexSync.signedIn = () => true; });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const coords = pts.filter((p) => p[1] >= 0 || p[0] > 0).map((p) => { const [la, lo] = ll(p); return [lo, la]; });
+  await page.evaluate((coords) => apexDebug.horizonFrom(coords), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon' && apexDebug.track.crowdBumps != null, null, { timeout: 30000 })
+    .catch(async () => { throw new Error('no members\' road feel on the road ahead: ' + JSON.stringify(await page.evaluate(() => [apexDebug.track && apexDebug.track.kind, apexDebug.lastCtx]))); });
+  const bends = await page.evaluate(() => apexDebug.track.events.filter((e) => e.type === 'corner').map((e) => ({ at: Math.round(e.dist_m), mods: e.mods, crowdCam: !!e.crowdCam, call: e.call })));
+  check(bends.length >= 1 && bends.every((b) => b.at > 900 && b.at < 1200), 'the one bend on the road ahead: ' + JSON.stringify(bends));
+  check(bends.some((b) => b.crowdCam && b.mods.includes('off-camber') && !b.mods.includes('banked')), 'members\' camber makes it off-camber: ' + JSON.stringify(bends));
+});
+
 flow('a T-junction where the road ahead ends: a free drive hears it before the end, early enough to slow for the turn, once (road_marks.js teeMark)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
@@ -12355,6 +12722,233 @@ flow('a T-junction where the road ahead ends: a free drive hears it before the e
   // from 25 m/s to a turn at 4 m/s at the app's braking: well before the junction
   check(saidAt !== null && 1500 - saidAt >= 80, `"T-junction" said with room to slow (${saidAt === null ? 'never' : Math.round(1500 - saidAt) + ' m before'}): ` + JSON.stringify(await page.evaluate(() => window.__said)));
   check((await tees()).length === 1, 'once: ' + JSON.stringify(await tees()));
+});
+
+flow('a roundabout where the road ahead meets one: a free drive hears "Roundabout" with room to slow, once (horizon.js ring, road_marks.js roundaboutMark)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [] }) }));
+  const lat = (m) => 35.5 + m / 110540, LON = -83.9;
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const coords = []; for (let m = 0; m <= 1500; m += 10) coords.push([LON, lat(m)]);
+  await page.evaluate((coords) => apexDebug.horizonFrom(coords, 'roundabout'), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon');
+  const marks = await page.evaluate(() => (apexDebug.track.marks || []).map((m) => [m.code, Math.round(m.dist_m)]));
+  check(marks.length === 1 && marks[0][0] === 'RBT' && Math.abs(marks[0][1] - 1500) <= 10, 'the roundabout at the end of the road ahead: ' + JSON.stringify(marks));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 25, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const rbs = () => page.evaluate(() => window.__said.filter((s) => /Roundabout/.test(s)));
+  let saidAt = null;
+  for (let i = await iAt(1000), end = await iAt(1450); i <= end && saidAt === null; i += 2) {
+    await at(i); await page.waitForTimeout(50);
+    if ((await rbs()).length) saidAt = await page.evaluate((i) => apexDebug.track.dist[i], i);
+  }
+  // from 25 m/s to the ring's entry at 7 m/s at the app's braking: well before it
+  check(saidAt !== null && 1500 - saidAt >= 80, `"Roundabout" said with room to slow (${saidAt === null ? 'never' : Math.round(1500 - saidAt) + ' m before'}): ` + JSON.stringify(await page.evaluate(() => window.__said)));
+  check((await rbs()).length === 1, 'once: ' + JSON.stringify(await rbs()));
+});
+
+flow('a viewpoint on the road ahead: a free drive hears "Lookout Rock on the right" once, and not again on the next road ahead (along_ahead.js, attachHorizonViews)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [] }) }));
+  const lat = (m) => 35.5 + m / 110540, LON = -83.9;
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexStages);
+  // the map tiles' places by the road: a named viewpoint 90 m east of it at 1200 m (the right, driving north), a café
+  await page.evaluate(([la, lo, la2]) => { ApexStages.pois = async () => [{ kind: 'view', name: 'Lookout Rock', lat: la, lon: lo }, { kind: 'cafe', name: 'Bean', lat: la2, lon: lo }]; }, [lat(1200), LON + 0.001, lat(600)]);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive && window.ApexAlongAhead && window.ApexScenic, null, { timeout: 15000 });
+  const coords = []; for (let m = 0; m <= 2000; m += 10) coords.push([LON, lat(m)]);
+  await page.evaluate((coords) => apexDebug.horizonFrom(coords), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon' && Array.isArray(apexDebug.track.scenic), null, { timeout: 15000 });
+  const sc = await page.evaluate(() => apexDebug.track.scenic.map((p) => [p.kind, p.name, Math.round(p.m)]));
+  check(sc.length === 1 && sc[0][0] === 'view' && sc[0][1] === 'Lookout Rock' && Math.abs(sc[0][2] - 1200) <= 10, 'the viewpoint along the road ahead, not the café: ' + JSON.stringify(sc));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const views = () => page.evaluate(() => window.__said.filter((s) => /Lookout Rock|A viewpoint/.test(s)));
+  for (let i = await iAt(700), end = await iAt(1150); i <= end && !(await views()).length; i += 2) { await at(i); await page.waitForTimeout(60); }
+  const heard = await views();
+  check(heard.length === 1 && /on the right/.test(heard[0]), 'said once, on its side: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  // the next road ahead overlaps this one: the viewpoint is not on its list again
+  await page.evaluate((coords) => apexDebug.horizonFrom(coords.slice(50)), coords);
+  await page.waitForFunction(() => Array.isArray(apexDebug.track.scenic) && apexDebug.track.alongSaid === undefined, null, { timeout: 15000 });
+  const again = await page.evaluate(() => apexDebug.track.scenic);
+  check(again.length === 0, 'not again on the next road ahead: ' + JSON.stringify(again));
+});
+
+flow('a limit that drops on the road ahead: a free drive with no route hears "Limit 35 ahead." from the map, once (limit_ahead.js fromCtx)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  const KY = 110540, lat = (m) => 35.5 + m / KY, LON = -83.9, g = (m) => ({ lat: lat(m), lon: LON });
+  const ids = (a, b) => { const o = []; for (let m = a; m <= b; m += 100) o.push(1000 + m / 100); return o; };
+  // the map's road north: 55 mph to 1.5 km, then 35 mph into a town
+  const elements = [
+    { type: 'way', id: 1, tags: { highway: 'secondary', name: 'Valley Road', maxspeed: '55 mph' }, nodes: ids(0, 1500), geometry: ids(0, 1500).map((_, k) => g(k * 100)) },
+    { type: 'way', id: 2, tags: { highway: 'secondary', name: 'Main Street', maxspeed: '35 mph' }, nodes: ids(1500, 4000), geometry: ids(1500, 4000).map((_, k) => g(1500 + k * 100)) },
+  ];
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexLimitAhead);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const coords = []; for (let m = 0; m <= 2500; m += 10) coords.push([LON, lat(m)]);
+  await page.evaluate((coords) => apexDebug.horizonFrom(coords), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon' && Array.isArray(apexDebug.track.limitMps), null, { timeout: 30000 })
+    .catch(async () => { throw new Error('no limits on the road ahead: ' + JSON.stringify(await page.evaluate(() => apexDebug.lastCtx))); });
+  const mph = await page.evaluate(() => { const t = apexDebug.track, at = (m) => t.limitMps[t.dist.findIndex((d) => d >= m)]; return [at(500), at(2000)].map((v) => v && Math.round(v * 2.2369362921)); });
+  check(mph[0] === 55 && mph[1] === 35, 'the map\'s limits on the road ahead: ' + JSON.stringify(mph));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 25, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const lim = () => page.evaluate(() => window.__said.filter((s) => /^Limit 35 ahead/.test(s)));
+  for (let i = await iAt(1000), end = await iAt(1440); i <= end && !(await lim()).length; i += 2) { await at(i); await page.waitForTimeout(60); }
+  check((await lim()).length === 1, 'said before the sign: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  // the next road ahead starts short of the sign (rebuilt before its end): the same sign is not said again
+  const c2 = []; for (let m = 1100; m <= 3600; m += 10) c2.push([LON, lat(m)]);
+  await page.evaluate((c) => apexDebug.horizonFrom(c), c2);
+  await page.waitForFunction(() => apexDebug.track.dist[apexDebug.track.dist.length - 1] > 2400 && apexDebug.track.lat[0] > 35.509 && Array.isArray(apexDebug.track.limitMps), null, { timeout: 30000 });
+  for (let i = 0, end = await iAt(380); i <= end; i += 1) { await at(i); await page.waitForTimeout(60); }
+  // (the drop is queued at most once: a second queue would be a second sign where there is one)
+  check((await lim()).length === 1 && await page.evaluate(() => apexDebug.limitSaid) === 1, 'not again on the next road ahead: ' + JSON.stringify([await lim(), await page.evaluate(() => apexDebug.limitSaid)]));
+});
+
+flow('a twisty section on a free drive: after 2 km without a corner, "Twisty section ahead." about 30 s out, once (corners_ahead.js ahead)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [] }) }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexCornersAhead);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const KY = 110540, LON = -83.9, kx = 111320 * Math.cos(35.5 * Math.PI / 180), lat = (m) => 35.5 + m / KY;
+  // north: straight to 3.3 km, then a road that snakes (a bend every 100 m) for 1.2 km
+  const pt = (m) => [LON + (m > 3300 ? 40 * Math.sin((m - 3300) * Math.PI / 100) : 0) / kx, lat(m)];
+  const road = (a, b) => { const o = []; for (let m = a; m <= b; m += 10) o.push(pt(m)); return o; };
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 25, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const twisty = () => page.evaluate(() => window.__said.filter((s) => /^Twisty section ahead/.test(s)));
+  await page.evaluate((c) => apexDebug.horizonFrom(c), road(0, 2500));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon');
+  for (let i = 0, end = await iAt(2000); i <= end; i += 5) { await at(i); await page.waitForTimeout(40); }   // 2 km of straight road
+  check(!(await twisty()).length, 'nothing on the straight: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  await page.evaluate((c) => apexDebug.horizonFrom(c), road(2000, 4500));
+  await page.waitForFunction(() => apexDebug.track.lat[0] > 35.518 && apexDebug.track.events.filter((e) => e.type === 'corner').length >= 6, null, { timeout: 15000 })
+    .catch(async () => { throw new Error('no corners on the road ahead: ' + JSON.stringify(await page.evaluate(() => apexDebug.track.events.map((e) => [e.type, Math.round(e.dist_m)])))); });
+  for (let i = 0, end = await iAt(1100); i <= end && !(await twisty()).length; i += 2) { await at(i); await page.waitForTimeout(60); }
+  const first = await page.evaluate(() => { const c = apexDebug.track.events.find((e) => e.type === 'corner'); return c && (Number.isFinite(c.start_m) ? c.start_m : c.dist_m); });
+  const when = await page.evaluate(() => apexDebug.state.cursorM);
+  check((await twisty()).length === 1 && first - when >= 200 && first - when <= 800, 'said once, about 30 s before the bends: ' + JSON.stringify([await twisty(), Math.round(first - when)]));
+});
+
+flow('a hidden junction: a side road joining just past a blind bend on the road ahead is called, one in plain sight is not (road_marks.js hidden)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  const KY = 110540, LAT0 = 35.5, LON0 = -83.9, kx = 111320 * Math.cos(LAT0 * Math.PI / 180);
+  const ll = ([x, y]) => [LON0 + x / kx, LAT0 + y / KY];
+  // north 1200 m, a right-hand bend of 50 m radius, then east; a lane joins where the bend ends (out of sight) and
+  // another 500 m along the straight north (in plain sight)
+  const P = [];
+  for (let y = 0; y <= 1200; y += 10) P.push([0, y]);
+  for (let a = 0.2; a < Math.PI / 2; a += 0.2) P.push([50 - 50 * Math.cos(a), 1200 + 50 * Math.sin(a)]);
+  for (let x = 50; x <= 1300; x += 10) P.push([x, 1250]);
+  const kBlind = P.findIndex(([x, y]) => y === 1250 && x >= 60), kOpen = P.findIndex(([, y]) => y >= 500);
+  const node = (k) => 1000 + k;
+  const elements = [
+    { type: 'way', id: 1, tags: { highway: 'tertiary', name: 'Ridge Road' }, nodes: P.map((_, k) => node(k)), geometry: P.map((p) => { const [lon, lat] = ll(p); return { lat, lon }; }) },
+    ...[[2, kBlind, [0, 300]], [3, kOpen, [-300, 0]]].map(([id, k, [dx, dy]]) => ({ type: 'way', id, tags: { highway: 'unclassified' }, nodes: [node(k), 9000 + id],
+      geometry: [P[k], [P[k][0] + dx, P[k][1] + dy]].map((p) => { const [lon, lat] = ll(p); return { lat, lon }; }) })),
+  ];
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  await page.evaluate((c) => apexDebug.horizonFrom(c), P.map(ll));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon' && (apexDebug.track.marks || []).some((m) => m.code === 'JUNC'), null, { timeout: 30000 })
+    .catch(async () => { throw new Error('no hidden junction on the road ahead: ' + JSON.stringify(await page.evaluate(() => (apexDebug.track.marks || []).map((m) => [m.code, Math.round(m.dist_m)])))); });
+  const marks = await page.evaluate(() => apexDebug.track.marks.filter((m) => m.code === 'JUNC').map((m) => Math.round(m.dist_m)));
+  check(marks.length === 1 && marks[0] > 1250 && marks[0] < 1300, 'one, past the bend, not the one in plain sight: ' + JSON.stringify(marks));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const said = () => page.evaluate(() => window.__said.filter((s) => /Hidden junction/.test(s)));
+  for (let i = await iAt(900), end = await iAt(1275); i <= end && !(await said()).length; i += 2) { await at(i); await page.waitForTimeout(60); }
+  check((await said()).length === 1, 'said once, by the bend: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+});
+
+for (const [when, iso, want] of [['in a school run', '2026-11-16T12:45:00Z', 1], ['at noon', '2026-11-16T17:00:00Z', 0]]) flow(`a school zone by the road is said only in a school run: ${when} (road_marks.js school, events.js schoolRunAt)`, async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.clock.setFixedTime(new Date(iso));                  // a Monday in Cincinnati: 7:45 am, or noon
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements:
+      // the places query (events.js) has a school 30 m off the road at 1 km; the road's own query (osm_overpass.js) nothing
+      /place_of_worship/.test(decodeURIComponent(route.request().postData() || '')) ? [{ type: 'node', id: 9, lat: 39.1 + 1000 / 110540, lon: -84.5 + 30 / 86300, tags: { amenity: 'school' } }] : [] }) }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive && window.ApexCtxEvents && window.ApexCtxEvents.schoolRunAt, null, { timeout: 20000 });
+  const KY = 110540, lat = (m) => 39.1 + m / KY, LON = -84.5;
+  const coords = []; for (let m = 0; m <= 2500; m += 10) coords.push([LON, lat(m)]);
+  await page.evaluate((c) => apexDebug.horizonFrom(c), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon');
+  // the road ahead asks the map for its schools (attachHorizonMarks, events.js placesOnly): the one at 1 km becomes a mark
+  await page.waitForFunction(() => (apexDebug.track.marks || []).some((m) => m.kind === "school"), null, { timeout: 15000 });
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const said = () => page.evaluate(() => window.__said.filter((s) => /School zone/.test(s)));
+  for (let i = await iAt(600), end = await iAt(990); i <= end && !(await said()).length; i += 2) { await at(i); await page.waitForTimeout(60); }
+  check((await said()).length === want, `${want ? 'said' : 'not said'} ${when}: ` + JSON.stringify(await page.evaluate(() => window.__said)));
+});
+
+for (const [when, tempC, want] of [['at 1 degree', 1, 1], ['at 10 degrees', 10, 0]]) flow(`a bridge on the road ahead is "Bridge may be icy" only in the cold: ${when} (road_marks.js icy_bridge, bridgeCold)`, async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  const KY = 110540, lat = (m) => 39.1 + m / KY, LON = -84.5;
+  const coords = []; for (let m = 0; m <= 2500; m += 10) coords.push([LON, lat(m)]);
+  // the road north, over a creek on a bridge 1000-1040 m (its own way, sharing the road's nodes)
+  const piece = (id, a, b, tags) => { const ks = []; for (let m = a; m <= b; m += 10) ks.push(m); return { type: 'way', id, tags: { highway: 'tertiary', ...tags }, nodes: ks.map((m) => 5000 + m / 10), geometry: ks.map((m) => ({ lat: lat(m), lon: LON })) }; };
+  const elements = [piece(1, 0, 1000, {}), piece(2, 1000, 1040, { bridge: 'yes', layer: '1' }), piece(3, 1040, 2500, {})];
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }));
+  await page.route('**/api.open-meteo.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ current: { temperature_2m: tempC, precipitation: 0, weather_code: 1 }, hourly: { time: [new Date(Date.now() - 3600e3).toISOString().slice(0, 16)], precipitation: [0] } }) }));
+  await page.route('**/api.weather.gov/**', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  await page.evaluate((c) => apexDebug.horizonFrom(c), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon' && (apexDebug.track.marks || []).some((m) => m.code === 'ICE'), null, { timeout: 30000 })
+    .catch(async () => { throw new Error('no bridge on the road ahead: ' + JSON.stringify(await page.evaluate(() => (apexDebug.track.marks || []).map((m) => [m.code, Math.round(m.dist_m)])))); });
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  await at(await iAt(500));
+  await page.evaluate(() => apexDebug.placePlate());                 // the weather where you are, asked now (resolves with it)
+  const said = () => page.evaluate(() => window.__said.filter((s) => /may be icy/.test(s)));
+  for (let i = await iAt(520), end = await iAt(1000); i <= end && !(await said()).length; i += 2) { await at(i); await page.waitForTimeout(60); }
+  check((await said()).length === want, `${want ? 'said' : 'not said'} ${when}: ` + JSON.stringify(await page.evaluate(() => window.__said)));
 });
 
 flow('road marks on a route set during a drive: the map is asked for this route alone (road_marks.js, attachMarksSoon)', async (page, base) => {
@@ -13021,7 +13615,8 @@ flow('the drive screen, Vetta Line: one hero speed over a ruled line, Limit, Sig
   check(r.line.w >= r.cluster.w - 16 && r.line.y >= r.speedBox.b - 1 && r.ledger.y >= r.line.b - 1, 'the line runs the width of the panel, under the numeral, over the ledger: ' + JSON.stringify([r.line, r.cluster, r.ledger]));
   check(r.limit.x >= r.speedBox.r - 1 && r.sight.x >= r.limit.r && r.meter.x >= r.sight.r - 1 && Math.abs(r.limit.y - r.sight.y) < 12, 'Limit, Sight and the meter stand to the right of the speed, in that order: ' + JSON.stringify([r.speedBox, r.limit, r.sight, r.meter]));
   check(r.speedBox.h > 1.6 * r.limit.h && r.speedBox.w > 1.5 * r.meter.w, 'the speed is the hero, the rest clearly second: ' + JSON.stringify([r.speedBox, r.limit, r.meter]));
-  check(r.scoreIn && /^--SCORE$/.test(r.scoreText) && r.score.y >= r.ledger.y - 1 && r.score.b <= r.ledger.b + 1 && r.trip.y >= r.ledger.y - 1 && r.score.x > r.trip.r, 'the trip and the Score share the ledger line, -- until known: ' + JSON.stringify([r.scoreText, r.score, r.trip, r.ledger]));
+  // real-drive reviews (2026-11-15): an unknown Score steps aside rather than reading "--"; the trip holds the ledger line
+  check(r.scoreIn && /^--SCORE$/.test(r.scoreText) && r.score.w === 0 && r.trip.y >= r.ledger.y - 1 && r.trip.b <= r.ledger.b + 1, 'the trip holds the ledger line; the Score is not shown until known: ' + JSON.stringify([r.scoreText, r.score, r.trip, r.ledger]));
   check(r.bank === 'BANK --' && r.brake === 'BRAKE' && /Trip mi/.test(r.tripText), 'nothing the panel said is lost: ' + JSON.stringify([r.bank, r.brake, r.tripText]));
   check(r.endBg === r.inkRgb && r.endH >= 52, 'End is the one ink key, 52 pt or more: ' + JSON.stringify([r.endBg, r.inkRgb, r.endH]));
   check(r.repText === 'Report' && r.repEdge === 0 && /rgba\(0, 0, 0, 0\)|transparent/.test(r.repBg) && r.repH >= 44, 'Report is a quiet word with a full touch target: ' + JSON.stringify([r.repBg, r.repEdge, r.repH]));
@@ -13066,8 +13661,14 @@ flow('the drive screen, Vetta Line: one hero speed over a ruled line, Limit, Sig
   check(drawn.dash === 'none' && parseFloat(drawn.off) === 0 && drawn.op === '1', 'after the move the tulip is whole and the call fully inked: ' + JSON.stringify(drawn));
   const tp = await page.evaluate(() => { const ink = (() => { const i = document.createElement('i'); i.style.color = getComputedStyle(document.documentElement).getPropertyValue('--panel-ink'); document.body.append(i); const c = getComputedStyle(i).color; i.remove(); return c; })();
     const filled = [...document.querySelectorAll('#transport button')].filter((b) => b.getClientRects().length && getComputedStyle(b).backgroundColor === ink).map((b) => b.id || b.textContent);
-    return { filled, rates: [...document.querySelectorAll('#rateDetents button')].map((b) => Math.round(b.getBoundingClientRect().height)) }; });
+    return { filled, rates: [...document.querySelectorAll('#rateDetents button')].filter((b) => b.getClientRects().length).map((b) => Math.round(b.getBoundingClientRect().height)) }; });
   check(JSON.stringify(tp.filled) === '["replayDone"]' && tp.rates.every((h) => h >= 44), 'the replay\'s one ink key is Done; the speeds keep a thumb\'s height: ' + JSON.stringify(tp));
+  // the transport is one row (real-drive review): one speed key that steps on when tapped, beside the scrubber and Done
+  const row = await page.evaluate(() => { const k = document.querySelector('#rateDetents [aria-checked="true"]'), y = (e) => Math.round(e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2);
+    const before = k.dataset.rate; k.click(); const after = document.querySelector('#rateDetents [aria-checked="true"]').dataset.rate;
+    return { before, after, shown: [...document.querySelectorAll('#rateDetents button')].filter((b) => b.getClientRects().length).length,
+      ys: ['playBtn', 'scrubber', 'replayDone'].map((id) => y(document.getElementById(id))).concat(y(document.querySelector('#rateDetents [aria-checked="true"]'))) }; });
+  check(row.shown === 1 && row.before !== row.after && Math.max(...row.ys) - Math.min(...row.ys) <= 12, 'one speed key that steps on, on one row with play, the scrubber and Done: ' + JSON.stringify(row));
   // reduced motion: cuts. No count, no arriving paper, no searching stroke, and nothing left hidden or half drawn
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 393, height: 852 });
@@ -13530,6 +14131,47 @@ flow('time attack (the owner, 2026-11-12: static best roads, a featured one, boa
   await page.waitForFunction(() => /The clock runs from the start line/.test(document.getElementById('toast').textContent) && document.getElementById('planPanel').classList.contains('routed'), null, { timeout: 15000 });
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('events on the map (Nate 2026-11-15, like an open-world game): the area\'s time attack stands as a glowing start gate and a crew drive at its meeting point; driving up to the gate raises one card, name, length, your best, the leader, Start; Start enters it and drives the loop; Not now keeps it down (Worker stubbed)', async (page, base) => {
+  const GEOM = JSON.stringify([[35.95, -83.9], [35.95, -83.89], [35.96, -83.88], [35.95, -83.9]]);
+  const sent = [];
+  const starts = new Date(Date.now() + 2 * 3600e3).toISOString();
+  await page.addInitScript(() => { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/ta' && m === 'GET') {
+      sent.push(['GET', u.search]);
+      return json({ circuits: [{ id: 'ta-GATE1', slot: 0, name: 'Foothills loop', length_m: 16093, geom: GEOM, featured: true, entered: false }],
+        board: { id: 'ta-GATE1', period: 'all', entrants: 2, rows: [{ place: 1, handle: 'dee', time_s: 754, gap_s: 0, mine: false }, { place: 2, handle: 'me', time_s: 801, gap_s: 47, mine: true }], you: { place: 2, time_s: 801 } } });
+    }
+    if (u.pathname === '/api/events' && m === 'GET') return json([{ id: 'EVTGATE1AAAAAAAA', crew_id: 'C1', crew_name: 'Ridge Runners', title: 'Dawn run', starts_at: starts,
+      meet_name: 'Kroger lot', meet_lat: 35.99, meet_lon: -83.95, route_id: null, notes: null, by_handle: 'bob', mine: false, can_cancel: false, my_rsvp: null, going: ['bob'], maybe: 0, lead: null, sweep: null, regroup: [] }]);
+    if (m === 'POST' && u.pathname === '/api/ta/enter') { sent.push([u.pathname, JSON.parse(route.request().postData() || 'null')]); return json({ segment_id: 'COPYG1', added: true }); }
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.waitForSelector('.ev-gate.ta', { timeout: 15000 });
+  check(await page.$('.ev-gate.meet') !== null, 'the crew drive stands at its meeting point');
+  await page.waitForSelector('.ev-card.up', { timeout: 10000 });
+  const card = await page.evaluate(() => { const c = document.querySelector('.ev-card');
+    return { title: c.querySelector('h2').textContent, kick: c.querySelector('.ev-kick').textContent, facts: [...c.querySelectorAll('.ev-facts > div')].map((f) => f.textContent), keys: [...c.querySelectorAll('button')].map((b) => b.textContent) }; });
+  check(card.title === 'Foothills loop' && card.kick === 'Featured time attack', 'the gate card names it: ' + JSON.stringify(card));
+  await page.waitForFunction(() => /dee/.test(document.querySelector('.ev-card .ev-facts')?.textContent || ''));
+  const facts = await page.$$eval('.ev-card .ev-facts > div', (fs) => fs.map((f) => f.textContent));
+  check(facts.length === 3 && /Length/.test(facts[0]) && /Your best13:21/.test(facts[1]) && /Leader@dee 12:34/.test(facts[2]), 'three facts, as text: ' + JSON.stringify(facts));
+  check(card.keys.join('|') === 'Start|Not now', 'one key and Not now: ' + card.keys.join('|'));
+  check(!sent.some(([, q]) => typeof q === 'string' && /35\.95\d|83\.90\d/.test(q)), 'only the area goes to the server, never where you are: ' + JSON.stringify(sent));
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/event-gate.png` });
+  await page.click('.ev-card button:text-is("Start")');
+  await page.waitForFunction(() => !document.querySelector('.ev-card.up'));
+  check(sent.some(([p, b]) => p === '/api/ta/enter' && b && b.id === 'ta-GATE1'), 'Start enters the loop');
+  await page.waitForTimeout(2600);
+  check(!(await page.$('.ev-card.up')), 'once started, its card stays down');
+}, { geolocation: { latitude: 35.9502, longitude: -83.9033 }, permissions: ['geolocation'] });
+
 flow('time attack duel: Challenge a friend on a time attack loop picks a friend, won by time, on your copy of the loop (IDEAS S-24, Worker stubbed)', async (page, base) => {
   const GEOM = JSON.stringify([[35.95, -83.9], [35.97, -83.88], [35.95, -83.9]]);
   const sent = [];
@@ -13631,7 +14273,7 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
     ['the strip never cuts', 23], ['when to go', 21], ['the map is a fixed stage', 20], ['a deliberate detour', 20],
     ['theme contract on the page', 19], ['plan flow (d)', 18], ['plan flow (g)', 18], ['a loop by time', 17], ['plan flow (a)', 17],
     ['plan flow (e, f)', 16], ["the map's viewpoint, café and fuel stamps", 15],
-    ['contrast in every look: the welcome', 30], ['contrast in every look: a planned', 27], ['contrast in every look: the drive', 22]];
+    ['contrast in every look: the welcome', 30], ['contrast in every look: a planned', 27], ['contrast in every look: the drive', 22], ['large text on every screen', 20], ['the narrowest phone and a phone on its side', 30], ['large text in the Garage', 40]];
   const weight = (f) => (LONG_S.find(([p]) => f.name.startsWith(p)) || [, 5])[1];
   const slice = new Map();
   if (shard) {
@@ -13655,6 +14297,8 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
     // stubbed Valhalla off our tiles: they plan at Quick unless they (or ctxOpts.funLevel) choose a level
     await ctx.addInitScript((lv) => { try { if (!localStorage.getItem('apex.funLevel')) localStorage.setItem('apex.funLevel', lv); } catch (_) {} }, lv0 || 'quick');
     const page = await ctx.newPage();
+    // VOICE_LOG=1: every line the page gives no pack clips, so the phone's own voice says it (cockpit.js pumpSpeech)
+    if (process.env.VOICE_LOG) await page.exposeFunction('__voiceGap', (text) => console.log(`VOICE_GAP ${name} | ${text}`));
     if (process.env.THROTTLE) { const c = await ctx.newCDPSession(page); await c.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.THROTTLE) }); }
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e && e.stack || e)));
@@ -13680,6 +14324,12 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
       const cut = await clippedText(page);
       if (process.env.CLIP_LOG) for (const h of cut) console.log(`CLIP ${name} | ${h}`);
       else check(!cut.length, `text in view cut off by its box or the screen's edge:\n  ${cut.join('\n  ')}`);
+      const walls = await wallsOfText(page);
+      if (process.env.WALL_LOG) for (const h of walls) console.log(`WALL ${name} | ${h}`);
+      else check(!walls.length, `a wall of text in view (over ${WALL_WORDS} words in one block; the owner's rule, 2026-11-12):\n  ${walls.join('\n  ')}`);
+      const crossed = await overlappingText(page);
+      if (process.env.OVERLAP_LOG) for (const h of crossed) console.log(`OVERLAP ${name} | ${h}`);
+      else check(!crossed.length, `text in view drawn over other text:\n  ${crossed.join('\n  ')}`);
       const faint = await lowContrast(page);
       if (process.env.CONTRAST_LOG) for (const h of faint) console.log(`CONTRAST ${name} | ${h}`);
       else check(!faint.length, `text in view under the contrast floor:\n  ${faint.join('\n  ')}`);

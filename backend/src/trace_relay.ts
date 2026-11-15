@@ -3,7 +3,8 @@
 // points, MAX_KM long> → Valhalla trace_attributes (map_snap, the attributes the phone reads) as { units, edges }, kept
 // KEEP_S per shape in the Cache API, so the network step of the next plan nearby answers at once. Routes the driver is
 // offered are not sent here: their lines go to the public router from the phone, as before (docs/APP_REVIEW.md).
-// Data: © OpenStreetMap contributors, ODbL, via the FOSSGIS Valhalla server.
+// Asked of our own router first (valhalla.ts ownValhalla, OH/KY/IN), the public FOSSGIS server when ours can't answer.
+// Data: © OpenStreetMap contributors, ODbL, via our router or the FOSSGIS Valhalla server.
 
 export const VALHALLA = "https://valhalla1.openstreetmap.de/trace_attributes";
 export const MAX_POINTS = 700, MAX_KM = 40, KEEP_S = 3 * 86400, TIMEOUT_MS = 8000;
@@ -49,19 +50,25 @@ async function sha(s: string): Promise<string> {
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export async function traceTile(url: URL, fetcher: typeof fetch = fetch): Promise<Response> {
+/** `own`: our router's answer for these points and this request body, or null (valhalla.ts ownValhalla). */
+export type OwnAsk = (pts: [number, number][], body: string) => Promise<{ units?: string; edges?: unknown[] } | null>;
+
+export async function traceTile(url: URL, fetcher: typeof fetch = fetch, own: OwnAsk = async () => null): Promise<Response> {
   const shape = url.searchParams.get("shape");
   if (!stageLine(shape)) return new Response(JSON.stringify({ error: "bad_shape" }), { status: 400, headers: { "content-type": "application/json" } });
   const headers = { "content-type": "application/json", "cache-control": `public, max-age=${KEEP_S}`, "x-content-type-options": "nosniff" };
   const cache = typeof caches !== "undefined" ? (caches as unknown as { default: Cache }).default : null;
   const key = new Request(`https://apexnav.cache/trace/v1/${await sha(shape!)}`);
   try { const hit = cache ? await cache.match(key) : undefined; if (hit) return new Response(hit.body, { headers: { ...headers, "x-cache": "hit" } }); } catch { /* a speed-up only */ }
-  let j: { units?: string; edges?: unknown[] } | null = null;
-  try {
-    const r = await fetcher(VALHALLA, { method: "POST", headers: { "content-type": "application/json", "user-agent": "Vetta route context relay" }, signal: AbortSignal.timeout(TIMEOUT_MS),
-      body: JSON.stringify({ encoded_polyline: shape, costing: "auto", shape_match: "map_snap", filters: { action: "include", attributes: ATTRS } }) });
-    if (r.ok) j = await r.json();
-  } catch { j = null; }
+  const ask = JSON.stringify({ encoded_polyline: shape, costing: "auto", shape_match: "map_snap", filters: { action: "include", attributes: ATTRS } });
+  let j: { units?: string; edges?: unknown[] } | null = await own(stageLine(shape)!, ask).catch(() => null);
+  if (!j || !Array.isArray(j.edges) || !j.edges.length) {
+    j = null;
+    try {
+      const r = await fetcher(VALHALLA, { method: "POST", headers: { "content-type": "application/json", "user-agent": "Vetta route context relay" }, signal: AbortSignal.timeout(TIMEOUT_MS), body: ask });
+      if (r.ok) j = await r.json();
+    } catch { j = null; }
+  }
   if (!j || !Array.isArray(j.edges) || !j.edges.length) return new Response(JSON.stringify({ error: "router_unavailable" }), { status: 502, headers: { "content-type": "application/json" } });
   const body = JSON.stringify({ units: j.units ?? "kilometers", edges: j.edges });
   try { if (cache) await cache.put(key, new Response(body, { headers })); } catch { /* asked again next time */ }

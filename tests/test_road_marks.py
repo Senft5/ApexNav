@@ -83,10 +83,10 @@ def test_nothing_invented_or_off_the_road(out):
 
 
 def test_each_mark_has_its_own_glyph_on_the_strip():
-    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'ANIMAL', 'BUGGY', 'COVERED', 'GRAVEL', 'ROUGH', 'FORD', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
+    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'ANIMAL', 'BUGGY', 'COVERED', 'GRAVEL', 'ROUGH', 'FORD', 'NARROW', 'JUNC', 'SCHOOL', 'ICE', 'RBT', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
     svgs = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
     assert "<polygon" in svgs[0] and "M58 32 L80 54" in svgs[1] and "M36 30" in svgs[2] and "Q50 34" in svgs[3]
-    assert len(set(svgs[:10])) == 10 and all(s.count("#f70") == 0 for s in svgs[10:])   # an unknown code: the bare hazard straight
+    assert len(set(svgs[:15])) == 15 and all(s.count("#f70") == 0 for s in svgs[15:])   # an unknown code: the bare hazard straight
 
 
 def test_rural_signs_deer_buggies_and_a_covered_bridge(out):
@@ -127,7 +127,7 @@ def test_the_road_ahead_gets_the_marks_too():
     """A free drive (no route) asks the map for the horizon's own corridor, and a mark said on the last horizon is not
     said again on the next one, which overlaps it."""
     js = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
-    assert "attachHorizonMarks(t);" in js and "await contextOn([c], CTX_BUDGET_MS, 'ahead', ['osm_overpass']);" in js
+    assert "attachHorizonMarks(t);" in js and "await contextOn([c], CTX_BUDGET_MS, 'ahead', ['osm_overpass', 'events'], { placesOnly: true, ways: true });" in js
     assert "free.marksSaid = [...(free.marksSaid || []), ...old.marks.filter(" in js
 
 
@@ -147,3 +147,125 @@ console.log(JSON.stringify({ tee, none: M.teeMark({ dist: [0] }),
     assert out["atStop"] == ["STOP"] and out["farStop"] == ["STOP", "TJUNC"]
     js = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
     assert "if (h.tee && window.ApexRoadMarks && ApexRoadMarks.teeMark)" in js and "e.kind === 'tee' ? 4" in js
+
+
+NARROW = r"""
+const R = process.argv[1];
+const O = require(R + '/web/route_ctx/osm_overpass.js'), M = require(R + '/web/road_marks.js'), Core = require(R + '/web/apex_core.js');
+const n = 121, lat0 = 39, lon0 = -84.5, dLon = 25 / (111320 * Math.cos(39 * Math.PI / 180));   // 3 km east-west, 25 m samples
+const c = { id: 's', lat: Float64Array.from({ length: n }, () => lat0), lon: Float64Array.from({ length: n }, (_, i) => lon0 + i * dLon), distM: Float64Array.from({ length: n }, (_, i) => i * 25) };
+const at = (i) => [lat0, lon0 + i * dLon];
+const way = (id, tags, a, b) => ({ type: 'way', id, tags, nodes: [id * 10, id * 10 + 1], geometry: [at(a), at(b)].map(([la, lo]) => ({ lat: la, lon: lo })) });
+const run = (ways) => {
+  const ctx = O.aggregate(c, O.parse({ elements: ways }), new Uint8Array(n).fill(1));
+  const t = { lat: Array.from(c.lat), lon: Array.from(c.lon), dist: Array.from(c.distM) };
+  return { spans: ctx.spans.filter((s) => s.kind === 'single_track').map((s) => [s.fromM, s.toM, s.label || null]),
+    ev: M.events(ctx, c, t, (a, b, la, lo) => Core.nearestIndex(a, b, la, lo, -1)).map((e) => [e.code, e.call, e.dist_m]) };
+};
+console.log(JSON.stringify({
+  // two lanes, then a single track 500-1000 m, a mapped passing place (two lanes, 100 m), one again to 1600 m, two lanes
+  road: run([way(1, { highway: 'tertiary' }, -1, 20), way(2, { highway: 'tertiary', lanes: '1', name: 'Hollow Rd' }, 20, 40),
+    way(3, { highway: 'tertiary', lanes: '2' }, 40, 44), way(4, { highway: 'tertiary', lanes: '1' }, 44, 64), way(5, { highway: 'tertiary', lanes: '2' }, 64, 121)]),
+  // a one-way lane, a one-lane bridge (its own call), a driveway and a 100 m pinch are not a narrow road
+  not: run([way(1, { highway: 'secondary', lanes: '1', oneway: 'yes' }, -1, 30), way(2, { highway: 'secondary', lanes: '1', bridge: 'yes' }, 30, 40),
+    way(3, { highway: 'service', lanes: '1' }, 40, 70), way(4, { highway: 'secondary' }, 70, 80), way(5, { highway: 'secondary', lanes: '1' }, 80, 84), way(6, { highway: 'secondary' }, 84, 121)]),
+  // the route starts on it: the car is already on the narrow road
+  start: run([way(1, { highway: 'unclassified', lanes: '1' }, -1, 40), way(2, { highway: 'unclassified' }, 40, 121)]),
+  untagged: run([way(1, { highway: 'tertiary' }, -1, 121)]) }));
+"""
+
+
+def test_a_narrow_road_where_it_narrows_to_one_lane():
+    """A two-way road the map has as one lane is a single track: "Narrow road" where it starts, once for the stretch."""
+    out = json.loads(subprocess.run([NODE, "-e", NARROW, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["road"]["ev"] == [["NARROW", "Narrow road", 525]]          # its first sample matched to it; the passing place is no second call
+    assert out["road"]["spans"][0][2] == "Hollow Rd" and len(out["road"]["spans"]) == 2
+    assert [e[0] for e in out["not"]["ev"]] == ["BRIDGE"] and out["not"]["spans"] == [[2025, 2100, None]]   # the pinch: a span, too short to call
+    assert out["start"]["ev"] == [] and out["untagged"] == {"spans": [], "ev": []}
+
+
+JUNCTION = r"""
+const R = process.argv[1];
+const O = require(R + '/web/route_ctx/osm_overpass.js'), M = require(R + '/web/road_marks.js'), Core = require(R + '/web/apex_core.js');
+const n = 81, lat0 = 39, lon0 = -84.5, dLon = 25 / (111320 * Math.cos(39 * Math.PI / 180));   // 2 km east-west, 25 m samples
+const c = { id: 's', lat: Float64Array.from({ length: n }, () => lat0), lon: Float64Array.from({ length: n }, (_, i) => lon0 + i * dLon), distM: Float64Array.from({ length: n }, (_, i) => i * 25) };
+const at = (i, dyM = 0) => [lat0 + dyM / 110540, lon0 + i * dLon];
+const way = (id, tags, pts, nodes) => ({ type: 'way', id, tags, nodes, geometry: pts.map(([la, lo]) => ({ lat: la, lon: lo })) });
+// the road, with a lane joining at 500 m, another at 1250 m, a driveway at 1500 m and a stop-controlled crossroad at 1750 m
+const els = { elements: [
+  way(1, { highway: 'tertiary' }, [at(-1), at(20), at(50), at(60), at(70), at(81)], [100, 120, 150, 160, 170, 181]),
+  way(2, { highway: 'unclassified' }, [at(20), at(20, 300)], [120, 220]), way(3, { highway: 'residential' }, [at(50), at(50, -300)], [150, 250]),
+  way(4, { highway: 'service' }, [at(60), at(60, 100)], [160, 260]), way(5, { highway: 'secondary' }, [at(70, -300), at(70), at(70, 300)], [270, 170, 271]),
+  { type: 'node', id: 170, lat: at(70)[0], lon: at(70)[1], tags: { highway: 'stop' } },
+] };
+const ctx = O.aggregate(c, O.parse(els), new Uint8Array(n).fill(1));
+const dist = Array.from({ length: 401 }, (_, i) => i * 5);
+const t = (sight) => ({ lat: dist.map(() => lat0), lon: dist.map((d) => lon0 + d / 25 * dLon), dist, sightM: sight ? dist.map(sight) : undefined });
+const near = (a, b, la, lo) => Core.nearestIndex(a, b, la, lo, -1);
+const ev = (tr) => M.events(ctx, c, tr, near).filter((e) => e.kind === 'side_road' || e.kind === 'stop').map((e) => [e.code, e.call, e.dist_m]);
+// a blind bend before 500 m (40 m of sight from 400 to 440 m) and before 1750 m, open road elsewhere
+const blind = (d) => (d >= 400 && d <= 440) || (d >= 1650 && d <= 1690) ? 40 : 400;
+console.log(JSON.stringify({ points: ctx.points.filter((p) => p.kind === 'side_road').map((p) => p.atM),
+  blind: ev(t(blind)), open: ev(t(() => 400)), unknown: ev(t(null)),
+  hidden: [M.hidden(t(blind), 100), M.hidden(t(blind), 10), M.hidden(t(null), 100)] }));
+"""
+
+
+def test_a_hidden_junction_where_a_side_road_joins_out_of_sight():
+    """A public road joining where you can't see it until you're within 80 m (a blind bend) is "Hidden junction"; one
+    you can see coming, a driveway, and one at a stop sign (the stop is the call) are not. Unknown sight is never hidden."""
+    out = json.loads(subprocess.run([NODE, "-e", JUNCTION, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["points"] == [500, 1250, 1750]                     # public roads only, not the driveway
+    assert out["blind"] == [["JUNC", "Hidden junction", 500], ["STOP", "Stop sign", 1750]]
+    assert out["open"] == [["STOP", "Stop sign", 1750]] and out["unknown"] == out["open"]
+    assert out["hidden"] == [True, False, False]
+    js = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert "(e.type === 'corner' || e.kind === 'side_road') && ApexDirections.atJunction(steps, noteM(e))" in js   # the route's own turn is the direction
+
+
+ICY = r"""
+const R = process.argv[1];
+const O = require(R + '/web/route_ctx/osm_overpass.js'), M = require(R + '/web/road_marks.js'), Core = require(R + '/web/apex_core.js');
+const n = 161, lat0 = 39, lon0 = -84.5, dLon = 25 / (111320 * Math.cos(39 * Math.PI / 180));   // 4 km east-west, 25 m samples
+const c = { id: 's', lat: Float64Array.from({ length: n }, () => lat0), lon: Float64Array.from({ length: n }, (_, i) => lon0 + i * dLon), distM: Float64Array.from({ length: n }, (_, i) => i * 25) };
+const at = (i) => [lat0, lon0 + i * dLon];
+const way = (id, tags, a, b) => ({ type: 'way', id, tags, nodes: [id * 10, id * 10 + 1], geometry: [at(a), at(b)].map(([la, lo]) => ({ lat: la, lon: lo })) });
+const road = { highway: 'tertiary' };
+const ctx = O.aggregate(c, O.parse({ elements: [way(1, road, -1, 20), way(2, { ...road, bridge: 'yes', name: 'Mill Creek Bridge' }, 20, 22), way(3, road, 22, 30),
+  way(4, { ...road, bridge: 'yes' }, 30, 31), way(5, road, 31, 80), way(6, { ...road, bridge: 'yes', lanes: '1' }, 80, 82), way(7, road, 82, 120),
+  way(8, { ...road, bridge: 'yes' }, 120, 122), way(9, road, 122, 161)] }), new Uint8Array(n).fill(1));
+const t = { lat: Array.from(c.lat), lon: Array.from(c.lon), dist: Array.from(c.distM) };
+// our tiles' bridge spans (osm_tiles.js 'bridge', motorways too) are not read; a second answer of the same bridge is one
+const twice = { ...ctx, spans: [...ctx.spans, { kind: 'bridge', fromM: 1800, toM: 1850 }, { kind: 'road_bridge', fromM: 3010, toM: 3050 }] };
+const mway = O.aggregate(c, O.parse({ elements: [way(1, { highway: 'motorway', oneway: 'yes' }, -1, 60), way(2, { highway: 'motorway', oneway: 'yes', bridge: 'yes' }, 60, 62), way(3, { highway: 'motorway', oneway: 'yes' }, 62, 161)] }), new Uint8Array(n).fill(1));
+console.log(JSON.stringify({ mway: M.events(mway, c, t, (a, b, la, lo) => Core.nearestIndex(a, b, la, lo, -1)).length, spans: ctx.spans.filter((s) => s.kind === 'road_bridge').map((s) => [s.fromM, s.label || null]),
+  ev: M.events(twice, c, t, (a, b, la, lo) => Core.nearestIndex(a, b, la, lo, -1)).map((e) => [e.code, e.call, e.dist_m]),
+  cold: [3, 0, -10, 3.5, 12, null, undefined, NaN].map(M.bridgeCold), cruise: M.cruiseWorthy({ type: 'mark', kind: 'icy_bridge' }, 1) }));
+"""
+
+
+def test_a_bridge_may_be_icy_in_the_cold():
+    """Any bridge on the road is a cold-weather call, "Bridge may be icy": bridges less than 500 m apart are one call
+    (plural), a one-lane bridge keeps its own call, and the same bridge from two answers is one. Not on motorways or trunk
+    roads. Said only at 3 C or colder."""
+    out = json.loads(subprocess.run([NODE, "-e", ICY, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["spans"][0] == [525, "Mill Creek Bridge"] and len(out["spans"]) == 4
+    assert out["ev"] == [["ICE", "Bridges may be icy", 525], ["BRIDGE", "One-lane bridge", 2025], ["ICE", "Bridge may be icy", 3000]]
+    assert out["cold"] == [True, True, True, False, False, False, False, False]
+    assert out["cruise"] is True                                          # in the cold, at any pace: ice on a straight is ice
+    assert out["mway"] == 0                                               # not a motorway's bridges: one every mile
+
+
+def test_the_road_ahead_that_meets_a_roundabout_says_it():
+    """horizon.js ends the road ahead at a roundabout (end 'roundabout'); the page lays a "Roundabout" mark there, braked
+    for like the T (to the ring's entry, about 15 mph)."""
+    js = r"""
+const M = require(process.argv[1] + '/web/road_marks.js');
+const t = { lat: [35.5, 35.51], lon: [-83.9, -83.9], dist: [0, 1110] };
+console.log(JSON.stringify({ rb: M.roundaboutMark(t), tee: M.teeMark(t).code, none: M.roundaboutMark({ dist: [0] }) }));
+"""
+    o = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert o["rb"]["code"] == "RBT" and o["rb"]["call"] == "Roundabout" and o["rb"]["dist_m"] == 1110 and o["tee"] == "TJUNC" and o["none"] is None
+    src = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert "h.end === 'roundabout' && window.ApexRoadMarks && ApexRoadMarks.roundaboutMark" in src
+    assert "e.kind === 'roundabout' ? 7" in src

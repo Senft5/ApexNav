@@ -60,6 +60,11 @@
     { id: 'router_fun', group: 'Our router', name: 'Fun plan', feeds: 'Fun routes', router: 'fun' },
     { id: 'router_long', group: 'Our router', name: 'Long way plan', feeds: 'Long way routes', router: 'max' },
     { id: 'router_loop', group: 'Our router', name: 'Loop plan', feeds: 'loops', router: 'loop' },
+    // our own Valhalla (backend/src/valhalla.ts): asking wakes it when it sleeps, so "starting" right after a quiet spell is normal
+    { id: 'valhalla_own', group: 'Vetta servers', name: 'Our Quick-route server (OH, KY, IN)', feeds: 'Quick routes, turn instructions (the public one stands in)',
+      worker: true, path: '/api/valhalla/status',
+      check: (j) => (!json(j) ? 'no answer' : j.own ? null : j.reason === 'starting' ? 'starting (asked again in a minute or two)' : `not answering (${String(j.reason || '?').slice(0, 40)})`),
+      note: (j) => (json(j) && j.own && j.version ? `Valhalla ${j.version}` : '') },
     { id: 'valhalla', group: 'Outside services', name: 'Valhalla', feeds: 'Quick routes, turn instructions', url: `${VALHALLA}/route`, method: 'POST',
       body: JSON.stringify({ locations: [AT, TO], costing: 'auto', directions_options: { units: 'kilometers' } }),
       check: (j) => (json(j) && j.trip && j.trip.status === 0 ? null : json(j) && j.error ? String(j.error).slice(0, 80) : 'no trip') },
@@ -190,13 +195,14 @@
     const a = appOf(env.ua);
     return { ...a, online: env.online === false ? false : true, results: results.map(({ id, state, http, ms, detail }) => ({ id, state, http, ms, detail })) };
   }
-  /** One line for the whole run: "24 up, 1 slow, 2 down: Overpass (overpass-api.de), Fun plan". */
+  /** One line for the whole run: "24 up, 1 slow, 2 down: Overpass (overpass-api.de), Fun plan". At most three names: the
+   *  rows below list every one, and 21 names in a line was a wall of text (offline, every feed is down). */
   function summary(results) {
     const by = (s) => results.filter((r) => r.state === s);
     const name = (id) => (PROBES.find((p) => p.id === id) || { name: id }).name;
     const down = by('down');
     return [`${by('up').length} up`, by('slow').length ? `${by('slow').length} slow` : null, `${down.length} down`].filter(Boolean).join(', ')
-      + (down.length ? `: ${down.map((r) => name(r.id)).join(', ')}` : '');
+      + (down.length ? `: ${down.slice(0, 3).map((r) => name(r.id)).join(', ')}${down.length > 3 ? ` and ${down.length - 3} more` : ''}` : '');
   }
 
   const api = { PROBES, AT, TO, CAM_TILE, SLOW_MS, probe, run, judge, report, summary, appOf };

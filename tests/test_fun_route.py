@@ -320,7 +320,8 @@ const source = html.match(/async function valhallaMatrix\(.*?\n    }/s)[0];
 const calls = [];
 const RouteLoading = { json: async (url, opts) => { const b = JSON.parse(opts.body); calls.push(b.sources.length * b.targets.length);
   return { sources_to_targets: b.sources.map((s, i) => b.targets.map((t, j) => (j === 0 ? null : { time: 60, distance: Math.round((s.lat - 39) * 100) + j }))) }; } };
-const m = new Function('RouteLoading', 'VALHALLA', 'FunRoute', 'avoid', 'routingCar', 'return (' + source + ')')(RouteLoading, 'https://v', { costing: () => ({}) }, {}, () => null);
+const valhallaJson = (action, init) => RouteLoading.json(`https://v/${action}`, init);   // cockpit.js's helper, ours-then-public left out
+const m = new Function('valhallaJson', 'FunRoute', 'avoid', 'routingCar', 'return (' + source + ')')(valhallaJson, { costing: () => ({}) }, {}, () => null);
 const pts = (n) => Array.from({ length: n }, (_, i) => ({ lat: 39 + i / 100, lon: -84 }));
 (async () => {
   const r = await m(pts(13), pts(13));

@@ -77,6 +77,14 @@
        own width and stay unzoomed, so they still fit and track the finger. */
     #tab-history > :not(#trendPanel):not(#steadyPanel), #tab-segments > .bar-top, #segList, #segDetail table, #tab-segments .more > summary, #contribPanel { zoom: var(--type-scale, 1); }
     #tab-driving { zoom: var(--type-scale, 1); }   /* Your driving is words and numerals: all of it at the phone's text size */
+    /* the Log's head (Drives, Stages), already display-sized type, grows to the fit scale (1.6x at most): at 2x it was wider than the phone and pushed the whole page sideways, the empty Log's key cut off */
+    /* the Log's hero number is display type too (88 px): the fit scale, so 46.6 mi stays whole at 2x */
+    #tab-history > #historyCards:not(#trendPanel):not(#steadyPanel) { zoom: var(--type-scale-fit, 1); }
+    /* a drive's name wraps instead of pushing the list past the phone's edge; at large text the road's little map steps aside for it */
+    .road-index td.ix-road { white-space: normal; overflow-wrap: anywhere; }
+    html[data-type-size] .road-index .ix-shape { display: none; }
+    #tab-history > .log-head:not(#trendPanel):not(#steadyPanel), #tab-segments > .log-head.bar-top { zoom: var(--type-scale-fit, 1);
+      margin-inline: calc(-16px / var(--type-scale-fit, 1)); padding-inline: calc(16px / var(--type-scale-fit, 1)); }   /* its full-bleed rule reaches the page edge, not past it, at any size */
     /* IN-1 (panel round 2): the drive's page too: its title, the score and coaching line, the keys, the corner list, tags
        and the panels' words; the map, lanes and charts (.dv-grid) and the dashcam keep their measured size. */
     #tab-drive > div:first-child, #tab-drive > div:has(#dvTitle), #dvRoot > .dv-head, #dvActs, #dvRoadRoot > .dv-list, #tab-drive > .dv-part, #dvTagsPanel, #dvRecce, #dvVote, #dvFlyby, #dvRoad > h2 { zoom: var(--type-scale, 1); }
@@ -250,10 +258,14 @@
     /* an empty state is one line and its action, never a box of explanation (REVIEW2.md U-33) */
     /* An empty Log or Stages page (design pass 2026-11-10): the page's own furniture in pencil, a head, one line, one key.
        A bare sentence on a blank sheet read as an error, not as a book waiting for its first entry. */
-    .first-page { display: grid; gap: 0; padding-top: 2px; }
+    .first-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding-top: 2px; }
+    /* large text: the pencil drawing keeps to its score boxes (a drawn row of the index was wider than the phone at 2x
+       and pushed the empty Log's words and Start key off the right edge) */
+    html[data-type-size] :is(.fp-ghost .fp-index, .fp-ghost .fp-glyph) { display: none; } html[data-type-size] .fp-digits i { width: 28px; height: 48px; }
     .fp-ghost { color: var(--panel-dim); border-bottom: 1px solid var(--rule); margin-bottom: 16px; }
     .fp-ghost .hero-score { display: flex; align-items: flex-end; padding: 6px 0 14px; border-bottom: 1px solid var(--rule); }
-    .fp-digits { display: inline-flex; gap: 6px; } .fp-digits i { width: 40px; height: 68px; border: 1.5px dashed var(--panel-dim); }   /* three places for the score's figures */
+    .fp-digits { display: inline-flex; gap: 6px; min-width: 0; } .fp-digits i { width: 40px; height: 68px; flex: 0 1 auto; min-width: 0; border: 1.5px dashed var(--panel-dim); }   /* three places for the score's figures; on a narrow phone at large text they give way, not the page */
+    .fp-ghost .hero-score small { flex: none; }
     .fp-ghost .stamp-d { border: 1.5px dashed var(--panel-dim); } .fp-ghost table.fp-index td { border-bottom: 0; }   /* its own class: a drawing of a row is not a row of the index */
     .fp-ghost .ix-road b { font-weight: 500; } .fp-ghost .score { color: var(--panel-dim); }
     /* the road's shape, in pencil where the drive's own line will be drawn (as on the end card), its start in the one red */
@@ -330,7 +342,11 @@
     .hero-score b { font: 800 88px/0.9 var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
     .hero-score small { font-size: 18px; font-weight: 600; color: var(--panel-dim); margin-left: 4px; }
     .hero-what { margin: 6px 0 0; font-size: 15px; font-weight: 600; }
-    .hero-best { margin: 2px 0 0; font-size: 14px; color: var(--panel-dim); }
+    html[data-type-size] .log-hero .hero-score { display: flex; flex-wrap: wrap; align-items: baseline; }   /* a narrow phone at large text: the unit (mi, /1000) wraps under the figure, not off the screen */
+    .hero-best { display: inline-block; vertical-align: 18px; margin-left: 12px; padding: 4px 10px; border: 1.5px solid var(--rule); border-radius: var(--r-chip, 999px); font-size: 14px; font-weight: 700; color: var(--panel-dim); }
+    .short-row td { padding: 10px 0; text-align: center; }
+    .short-row .btn { min-height: 44px; }
+    .hero-sub { margin: 2px 0 0; font-size: 14px; color: var(--panel-dim); }
     details.quiet { border-bottom: 1px solid var(--rule); }
     details.quiet > summary { cursor: pointer; list-style: none; min-height: 44px; display: flex; align-items: center; justify-content: space-between; font-size: 15px; font-weight: 600; }
     details.quiet > summary::-webkit-details-marker { display: none; }
