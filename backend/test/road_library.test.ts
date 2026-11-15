@@ -15,7 +15,9 @@ const LIB: Library = {
   ],
 };
 let asked = 0;
-const env = { ASSETS: { fetch: async (r: Request) => { asked++; const u = new URL(r.url); return u.pathname === "/data/road_library.json" ? Response.json(LIB) : new Response("asset", { headers: { "content-type": "text/html" } }); } } } as unknown as Env;
+const cards = new Map<string, Uint8Array>([["roads/v1/cherohala-skyway-robbinsville.jpg", new Uint8Array([0xff, 0xd8, 0xff, 9])]]);
+const DATA = { head: async (k: string) => (cards.has(k) ? { key: k } : null), get: async (k: string) => (cards.has(k) ? { body: new Blob([cards.get(k)!]).stream() } : null) };
+const env = { DATA, ASSETS: { fetch: async (r: Request) => { asked++; const u = new URL(r.url); return u.pathname === "/data/road_library.json" ? Response.json(LIB) : new Response("asset", { headers: { "content-type": "text/html" } }); } } } as unknown as Env;
 const get = async (u: string) => (await routeHost(new Request(u), env))!;
 
 describe("road library", () => {
@@ -52,6 +54,21 @@ describe("road library", () => {
     expect(t).toContain('href="/roads/calderwood-highway-robbinsville"');
     expect(t).toContain('property="og:title" content="Cherohala Skyway · near Robbinsville, NC · Vetta"');
     expect(t).toContain('<link rel="canonical" href="https://vettadrive.app/roads/cherohala-skyway-robbinsville" />');
+  });
+
+  it("a road with a card in R2 names it for link previews, large; one without names the app icon", async () => {
+    const t = await (await get("https://vettadrive.app/roads/cherohala-skyway-robbinsville")).text();
+    expect(t).toContain('property="og:image" content="https://vettadrive.app/roads/cherohala-skyway-robbinsville.jpg"');
+    expect(t).toContain('name="twitter:card" content="summary_large_image"');
+    const u = await (await get("https://vettadrive.app/roads/ky-22-cincinnati")).text();
+    expect(u).toContain('property="og:image" content="https://vettadrive.app/brand/icon-1024.png"');
+    expect(u).toContain('name="twitter:card" content="summary"');
+    const img = await get("https://vettadrive.app/roads/cherohala-skyway-robbinsville.jpg");
+    expect(img.status).toBe(200);
+    expect(img.headers.get("content-type")).toBe("image/jpeg");
+    expect([...new Uint8Array(await img.arrayBuffer())]).toEqual([0xff, 0xd8, 0xff, 9]);
+    expect((await get("https://vettadrive.app/roads/ky-22-cincinnati.jpg")).status).toBe(404);
+    expect((await get("https://vettadrive.app/roads/not-a-road.jpg")).status).toBe(404);
   });
 
   it("a road with no link opens the app's front page; an unknown road is a 404 page", async () => {

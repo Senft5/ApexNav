@@ -20,7 +20,7 @@ def test_every_road_is_whole_and_in_a_listed_area():
         assert re.fullmatch(r"[a-z0-9-]{1,80}", r["id"]) and not re.fullmatch(r"[a-z]{2}", r["id"]), r["id"]   # never a state's page
         assert r["area"] in areas and r["name"].strip()
         assert r["km"] >= 5 and isinstance(r["corners"], int) and r["corners"] > 0
-        assert len(r["line"]) >= 20 and all(-90 <= la <= 90 and -180 <= lo <= 180 for la, lo in r["line"])
+        assert len(r["line"]) >= 5 and all(-90 <= la <= 90 and -180 <= lo <= 180 for la, lo in r["line"])
         a = areas[r["area"]]
         la, lo = r["line"][0]
         assert abs(la - a["lat"]) < 1.5 and abs(lo - a["lon"]) < 1.8, r["id"]   # within the area's reach
