@@ -25,7 +25,16 @@ console.log(JSON.stringify({ m, lines: K.dnaLines(m), scope: K.scopeText(m), par
   spans: [['2026-11', '2026-11'], ['2025-12', '2026-02'], null].map(K.spanText),
   styles: [K.styleWords({ trail_share: 0.1, slow_m: -4 }, { release: 1.5 }), K.styleWords({ trail_share: 0.3, slow_m: 1 }, { release: 1 }), K.styleWords({}, null)],
   close: K.bySize([{ size: 'tight', levels: { arc: 80 } }, { size: 'fast', levels: { arc: 84 } }]),
-  top: K.hexPoint(0, 0, 100, 0, 50).map((x) => Math.round(x)) }));
+  top: K.hexPoint(0, 0, 100, 0, 50).map((x) => Math.round(x)),
+  wire: K.wireOf(m), noWire: K.wireOf(null),
+  cmp: K.compareLines(K.wireOf(m), { skills: { squeeze: 80, brake: 75, arc: 70, entry: 77, line: 60, exit: 72 } }, '@sam'),
+  even: K.compareLines(K.wireOf(m), K.wireOf(m), 'sam'), alone: K.compareLines({ skills: K.wireOf(m).skills, style: [] }, null, 'sam'), noCmp: K.compareLines(null, null, 'sam'),
+  crew: K.crewLeaders([{ handle: 'me', mine: true, skills: { squeeze: 80, brake: 75, arc: 70, entry: 77, line: 60, exit: 72 } },
+    { handle: 'sam', mine: false, skills: K.wireOf(m).skills }, { handle: 'ann', mine: false, skills: { squeeze: 81, brake: 50, arc: 50, entry: 50, line: 50, exit: 50 } }, { handle: 'x', skills: null }]),
+  vs: K.vsLines({ skills: { squeeze: 80, brake: 75, arc: 70, entry: 77, line: 60, exit: 72 } }, K.wireOf(m), 'sam'),
+  vsEven: K.vsLines(K.wireOf(m), K.wireOf(m), 'sam'), vsPart: K.vsLines(null, K.wireOf(m), 'sam'),
+  vsHalf: K.vsLines({ skills: { ...K.wireOf(m).skills, line: null } }, K.wireOf(m), 'sam'),
+  lone: K.crewLeaders([{ handle: 'me', mine: true, skills: K.wireOf(m).skills }]) }));
 """
 
 
@@ -57,3 +66,30 @@ def test_words_and_spans(out):
     assert out["styles"] == [["Brakes before turning", "Early apex", "Sharp off the brakes"], ["Some trail-braking", "Slowest at the apex", "Even on the brakes"], []]
     assert out["close"] is None                         # within a few points: no kind of corner named
     assert out["top"] == [0, -50]                       # the first skill at the top
+
+
+def test_what_a_friend_sees(out):
+    assert out["wire"] == {"skills": {"squeeze": 81, "brake": 64, "arc": 92, "entry": 77, "line": 58, "exit": 70},
+                           "style": ["Trail-braker", "Late apex", "Gentle off the brakes"], "size": "fast", "corners": 212, "drives": 14}
+    assert out["noWire"] is None
+
+
+def test_beside_a_friend(out):
+    assert out["cmp"] == ["@sam: Trail-braker · Late apex · Gentle off the brakes", "@sam leads at One arc: 92 to your 70", "You lead at Brakes done: 75 to 64"]
+    assert out["even"][1] == "Within 5 points of each other at every skill"
+    assert out["alone"] == ["Yours shows here once all six of your skills are measured"]
+    assert out["noCmp"] == []
+
+
+def test_cleanest_in_the_crew(out):
+    rows = [(r["name"], r["handle"], r["level"], r["you"]) for r in out["crew"]]
+    assert rows == [("One braking", "ann", 81, 80), ("Brakes done", "me", 75, None), ("One arc", "sam", 92, 70),
+                    ("Entry speed", "me", 77, None), ("Patient apex", "me", 60, None), ("Back to power", "me", 72, None)]
+    assert out["lone"] == []
+
+
+def test_me_against_a_friend(out):
+    # said as the sharer says it: what each of us leads by 5 or more, then how many are close; only two whole pictures
+    assert out["vs"] == ["I lead at Brakes done", "@sam leads at One arc", "Within 5 points at 4 skills"]
+    assert out["vsEven"] == ["Within 5 points at every skill"]
+    assert out["vsPart"] == [] and out["vsHalf"] == []

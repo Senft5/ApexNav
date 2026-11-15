@@ -1,0 +1,9 @@
+# STATE
+## Session 2026-11-15 (dev drives): the owner's and the co-developer's drives upload to Vetta for review (claude/project-thread-m2wech)
+- Done: web/dev_drives.js (lazy 'devdrives', only while /api/me says developer) uploads every drive on the phone, backfill included, gzipped, once each, at /api/me, when a drive is stored (recording.js on the 'apex-drives' BroadcastChannel) and when the app returns to the front. Worker: POST /api/dev/drives/:id (developers only, else 404), GET /api/dev/drives and /api/dev/drives/file?key= (internal read key, or a developer's session). R2 bucket apexnav-devdrives (binding DEV_DRIVES, created 2026-11-15, production only). Erased with the account. Garage → Settings → Developer shows "Dev: drives sync to Vetta (n of m sent)".
+- The read key is in the owner's project files, dev-drives/READ_KEY.txt; only its sha256 is in the repo (DEV_DRIVES_READ_HASH).
+- Next: drives arrive once a TestFlight build with this is on the owner's phone. Then load them into the web app (Playwright) and review the replay, drive page and Log on real data. After that: anonymous drives for everyone (trimmed ends, privacy zones, "Help improve Vetta roads" switch, optional age band).
+
+# CALL SHEET
+## 2026-11-15 (dev drives): developers' full drives go to a private R2 bucket, read by a hashed key (claude/project-thread-m2wech)
+Why: the owner asked for his and his co-developer's drives to reach us automatically for internal use; drives live only on the phone. R2, not D1 (no migration, MB-sized records); a separate bucket so nothing else's access touches it. The read path is a 256-bit key whose sha256 is in code, because the Cloudflare connector cannot read R2 objects and no developer session is available to an agent. Undo: drop the DEV_DRIVES binding (uploads answer 503 and the phone retries quietly), or delete the 'devdrives' lazy group. Rotate the key by changing DEV_DRIVES_READ_HASH.

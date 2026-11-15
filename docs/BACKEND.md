@@ -140,6 +140,15 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
 - **Fixed time attacks** (`ta_fixed.ts`, migration 0057; the owner, 2026-11-12: static best roads, a featured one in turn, boards by week, month, year and all time): `ta_circuits` (up to three loops per cell a season, a calendar quarter: id `ta-…`, slot 0-2, name, length, geom, `tries`/`removed`), `ta_entered` (the opt-in), `ta_times` (your quickest time each day you drove one, with that run's Score). `GET /api/ta?lat&lon[&id][&period=week|month|year|all]` (the season's circuits, the featured one marked, one a week in slot order; `make {slot, seed, km, best, avoid}` while a slot is empty; the board of `id` or the featured one for the period), `POST /api/ta/circuit {cell, slot, seed, name, geom}` (checked as the weekly loop, and starting 3 km or more from the area's other loops), `GET /api/ta/entered`, `POST /api/ta/enter {id}`, `POST /api/ta/runs` (as the weekly one: entered, this season, not before you entered), `DELETE /api/ta/entry?id` (all your times on it go). Blocks hide both ways; report kind `circuit` takes one down with its times and its slot is built again from the next seed. Seasons kept two years; in the export (`backend/test/ta_fixed.test.ts`). The weekly endpoints stay for older builds.
 - Invites and sessions are stored as SHA-256 hashes; an invite works once, expires after 7 days, and is redeemed atomically.
 - Verified by `backend/test/*.test.ts` (76 tests; each privacy rule was checked by temporarily reintroducing the bug and seeing the test fail).
+- Driving DNA (migration 0064, `src/dna.ts`): `PUT /api/me/dna` (members) keeps your Your driving card as the phone read it,
+  checked down to the six skill levels (0 to 100), at most three known style words, the corner kind and two counts.
+  `GET /api/friends/:id/profile` carries `dna: { mine, theirs }` when that friend shares Scores with you (their friend
+  grant's `share_scores`), else `dna: null`. `GET /api/crews/:id/page` carries `dna: [{ handle, mine, skills }]`: you, and each
+  member who shares Scores with the crew, never across a block. In the export as `driving_dna`; cascades with the account.
+- Direct messages (migration 0065, `src/messages.ts`): `GET /api/messages` (your conversations, newest first, with unread
+  counts), `GET /api/me/messages/unread`, `GET`/`POST /api/messages/:handle` (read marks them seen; send only to an accepted
+  friend, 1000 characters, 60 an hour), `DELETE /api/messages/m/:id` (unsend, yours only). Blocked either way answers 404;
+  report kind `dm`; push kind `messages`. Kept a year (sweep); in the export as what you sent; cascades with either account.
 
 ## 7. Auth: Google sign-in, no library
 `/api/auth/google/start` → Google (authorization-code flow, PKCE S256, `state`, `nonce`) → `/api/auth/google/callback`: exchanges the code

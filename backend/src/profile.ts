@@ -4,6 +4,7 @@ import type { Viewer } from "./auth";
 import { reportedSql } from "./reports_sql";
 import { PUBLIC_COLS } from "./garage";
 import { VISIBLE_FROM_OTHERS, isAcceptedFriend, isBlocked } from "./social";
+import { dnaPair } from "./dna";
 
 const first = <T>(env: Env, sql: string, ...a: unknown[]) => env.DB.prepare(sql).bind(...a).first<T>();
 const all = async <T>(env: Env, sql: string, ...a: unknown[]) => (await env.DB.prepare(sql).bind(...a).all<T>()).results;
@@ -31,7 +32,10 @@ export async function friendProfile(env: Env, v: Viewer, friendId: string) {
        FROM board_entries be JOIN segments s ON s.owner = ?1 AND COALESCE(s.origin_id, s.id) = be.canon_id
       WHERE be.user_id = ?2 AND (${VISIBLE_FROM_OTHERS})
       GROUP BY be.canon_id ORDER BY days_month DESC, best DESC LIMIT 50`, v.id, friendId);
+  // their driving DNA beside yours (dna.ts): only where they share scores with you
+  const dna = await dnaPair(env, v.id, friendId);
   return {
+    dna: dna.theirs ? dna : null,
     handle: who.handle, name: who.name, friends_since: who.since.slice(0, 10), cars, crews: crews.map((c) => c.name),
     stages: stages.slice(0, 5),
     totals: { stages: stages.length, days_month: stages.reduce((n, s) => n + s.days_month, 0), best: stages.length ? Math.max(...stages.map((s) => s.best)) : null },

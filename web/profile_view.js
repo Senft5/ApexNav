@@ -47,11 +47,31 @@
       ...who,
       ...(keys.length ? [el('div', { className: 'row profile-keys' }, ...keys.map(([label, run], i) => btn(label, run, i ? 'ink-btn' : 'ink-btn solid')))] : []),
       ...extra,
+      ...(!partial && p.dna && p.dna.theirs && root.ApexDnaCard ? [dnaSection(p, el, btn)] : []),
       ...(partial ? [el('p', { className: 'note', textContent: 'Couldn’t load the rest. Check signal.' })]
         : [...v.sections.map((s) => el('div', { className: 'stack-8' }, el('b', { textContent: s.head }), ...s.rows.map((r) => el('p', { className: 'note', textContent: r }))))]),   // what they share with you, so no line saying so
       ...(foot.length ? [el('div', { className: 'row profile-foot' }, ...foot.map(([label, run, cls]) => btn(label, run, cls || 'linkbtn')))] : []));
   }
 
-  const api = { lines, show, since, car };
+  /** Their driving DNA beside yours (dna_card.js): the two hexagons, theirs filled and yours outlined, and a line or two. */
+  function dnaSection(p, el, btn) {
+    const D = root.ApexDnaCard, who = `@${p.handle || '?'}`;
+    // Share us: me against them as one picture (yours filled, theirs outlined), once both of you have all six skills
+    const canShare = btn && D.vsLines(p.dna.mine, p.dna.theirs, p.handle).length && root.ApexDriveCard;
+    const share = canShare ? btn('Share us', async (e) => {
+      const b = e && e.currentTarget, css = getComputedStyle(root.document.documentElement), v = (k) => css.getPropertyValue(k).trim();
+      const cv = D.drawDnaVs(root.document.createElement('canvas'), p.dna.mine, p.dna.theirs, p.handle,
+        { panel: v('--panel'), panelInk: v('--panel-ink'), panelDim: v('--panel-dim'), accent: v('--accent'), fontNum: v('--font-num'), fontUi: v('--font-ui') });
+      if (!cv) return;
+      const out = await root.ApexDriveCard.shareCard(cv, `dna-me-vs-${String(p.handle || 'friend').replace(/[^A-Za-z0-9_-]+/g, '')}.png`);
+      if (b && out === 'saved') { b.textContent = 'Card saved'; setTimeout(() => { b.textContent = 'Share us'; }, 2000); }
+    }, 'ink-btn') : null;
+    return el('div', { className: 'stack-8 profile-dna' }, el('div', { className: 'row profile-dna-head' }, el('b', { textContent: 'Driving DNA' }), ...(share ? [share] : [])),
+      D.compareSvg(root.document, p.dna.theirs, p.dna.mine),
+      el('p', { className: 'note dna-key', textContent: p.dna.mine ? `${who} filled · you outlined` : `${who}` }),
+      ...D.compareLines(p.dna.theirs, p.dna.mine, p.handle).map((t) => el('p', { className: 'note', textContent: t })));
+  }
+
+  const api = { lines, show, since, car, dnaSection };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexProfileView = api;
 })(typeof window !== 'undefined' ? window : globalThis);
