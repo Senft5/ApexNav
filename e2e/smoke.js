@@ -205,6 +205,57 @@ async function clippedText(page) {
   }).catch(() => []);
 }
 
+// Text drawn over other text, on every flow's last screen (2026-11-15): two lines of words from different boxes that
+// cross by more than a third of the smaller one's height and a few px of width, both showing (nothing opaque between the
+// lower one and the eye). A badge on a label, a value over its caption, a stacked toast over a note. OVERLAP_LOG=1 lists.
+async function overlappingText(page) {
+  return page.evaluate(() => {
+    const where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).slice(0, 3).join('.') : '');
+    const W = innerWidth, H = innerHeight, runs = [];
+    const clear = (c) => { const m = /rgba?\(([^)]+)\)/.exec(c); if (!m) return c === 'transparent'; const a = m[1].split(/[ ,/]+/).filter(Boolean); return a.length > 3 && +a[3] < 0.5; };
+    const ctx = document.createElement('canvas').getContext('2d');
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let t = walker.nextNode(); t && runs.length < 600; t = walker.nextNode()) {
+      if (!t.nodeValue.trim()) continue;
+      const el = t.parentElement; if (!el || el.closest('svg, script, style, .maplibregl-marker, .maplibregl-ctrl-attrib')) continue;
+      let hidden = false; for (let n = el; n && n.nodeType === 1; n = n.parentElement) { if (n.hidden || n.inert || n.getAttribute('aria-hidden') === 'true') { hidden = true; break; } }
+      if (hidden) continue;
+      const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || +cs.opacity === 0 || clear(cs.color)) continue;
+      const clips = []; for (let n = el; n && n !== document.body; n = n.parentElement) { const c = n === el ? cs : getComputedStyle(n); if (c.overflowX !== 'visible' || c.overflowY !== 'visible') clips.push(n.getBoundingClientRect()); }
+      const range = document.createRange(); range.selectNodeContents(t);
+      // the ink, not the line box: a big display numeral's box is mostly air above and below its digits
+      ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      const m = ctx.measureText(t.nodeValue.trim()), up = m.actualBoundingBoxAscent, down = m.actualBoundingBoxDescent, base = m.fontBoundingBoxDescent;
+      for (const box of range.getClientRects()) {
+        const r = { left: box.left, right: box.right, top: box.bottom - base - up, bottom: box.bottom - base + down };
+        for (const c of clips) { r.left = Math.max(r.left, c.left); r.right = Math.min(r.right, c.right); r.top = Math.max(r.top, c.top); r.bottom = Math.min(r.bottom, c.bottom); }
+        r.width = r.right - r.left; r.height = r.bottom - r.top;     // what an ellipsis or a scroller hides isn't drawn
+        if (r.width < 2 || r.height < 4 || r.bottom < 0 || r.top > H || r.right < 0 || r.left > W) continue;
+        // showing: every box above this text at its middle is see-through (or holds it)
+        const x = Math.min(Math.max(r.left + r.width / 2, 0), W - 1), y = Math.min(Math.max(r.top + r.height / 2, 0), H - 1);
+        let shows = false;
+        for (const n of document.elementsFromPoint(x, y)) {
+          if (n === el || el.contains(n)) { shows = true; break; }
+          if (n.contains(el)) continue;
+          const c = getComputedStyle(n);
+          if (!clear(c.backgroundColor) || c.backgroundImage !== 'none' || (c.backdropFilter && c.backdropFilter !== 'none') || n.tagName === 'IMG' || n.tagName === 'CANVAS' || n.tagName === 'VIDEO') break;
+        }
+        if (shows) runs.push({ el, r, text: t.nodeValue.trim().slice(0, 30) });
+      }
+    }
+    const hits = [], seen = new Set();
+    for (let i = 0; i < runs.length; i++) for (let j = i + 1; j < runs.length; j++) {
+      const a = runs[i], b = runs[j]; if (a.el === b.el || a.el.contains(b.el) || b.el.contains(a.el)) continue;
+      const w = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left), h = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
+      if (w > 3 && h > Math.min(a.r.height, b.r.height) / 3) {
+        const k = where(a.el) + '|' + where(b.el); if (seen.has(k)) continue; seen.add(k);
+        hits.push(`${where(a.el)} "${a.text}" over ${where(b.el)} "${b.text}" (${Math.round(w)}x${Math.round(h)} px)`);
+      }
+    }
+    return hits.slice(0, 12);
+  }).catch(() => []);
+}
+
 // A key too small to hit, on every flow's last screen (2026-11-14): a button, link, switch, tab or field in view, on top,
 // under 24 x 24 px (WCAG 2.5.8; Apple asks 44 pt, and the drive's keys are bigger still). A link inside a sentence, the
 // map's own markers and a flow's own test fields (#e2e*) are left out. TAP_LOG=1 lists them instead of failing.
@@ -9286,16 +9337,19 @@ flow('contrast in every look: the welcome, the map, People, the Garage and the L
 
 // U-15 / IN-1: the main screens at the phone's larger text sizes (1.5x and the largest, 2x): no text cut off by its box
 // or the screen's edge, no key too small to hit; the checks every flow runs on its last screen at the default size
-flow('large text on every screen: the welcome, the map, a route card, People, the Garage and the Log (empty and with drives) cut nothing at 1.5x and 2x (IDEAS U-15, IN-1)', async (page, base) => {
+// The main screens (the welcome, the idle map, People, the Garage, the Log empty and with three drives, a planned route's
+// card) read in each phone shape [width, height, text scale], on a clean phone: cut text, small keys, words over words,
+// and a page wider than the phone. Returns what it found. (Roamer D, 2026-11-14/15)
+async function screensSweep(page, base, shapes) {
   graphDir = graphFixture();
   const found = [];
   const read = async (p, where) => { await p.evaluate(() => { const st = document.querySelector('.stage'); if (st) st.scrollLeft = 0; });
-    found.push(...(await clippedText(p)).map((h) => `${where}: ${h}`), ...(await smallTargets(p)).map((h) => `${where}: small key ${h}`));
+    found.push(...(await clippedText(p)).map((h) => `${where}: ${h}`), ...(await smallTargets(p)).map((h) => `${where}: small key ${h}`), ...(await overlappingText(p)).map((h) => `${where}: ${h}`));
     const wide = await p.evaluate(() => Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth);
     if (wide > 1) found.push(`${where}: the page is ${wide} px wider than the phone`); };
   try {
-    for (const k of [1.5, 2]) {
-      const ctx = await page.context().browser().newContext({ viewport: { width: 390, height: 844 }, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+    for (const [w, h, k] of shapes) {
+      const ctx = await page.context().browser().newContext({ viewport: { width: w, height: h }, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
       await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
       await ctx.addInitScript(() => { try { localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.funLevel', 'quick'); } catch (_) {} });
       const p = await ctx.newPage();
@@ -9303,23 +9357,23 @@ flow('large text on every screen: the welcome, the map, a route card, People, th
         await p.goto(base + '/index.html');
         await p.waitForSelector('#obNext', { state: 'visible' });
         await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(400);
-        await read(p, `${k}x welcome`);
+        await read(p, `${w}x${h} ${k}x welcome`);
         await p.evaluate(() => localStorage.setItem('apex.onboarded', '1'));
         await p.goto(base + '/index.html');
         await p.waitForFunction(() => window.apexDebug && window.apexDebug.map && !document.getElementById('boot'), null, { timeout: 20000 });
         await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(800);
-        await read(p, `${k}x map`);
+        await read(p, `${w}x${h} ${k}x map`);
         for (const view of ['people', 'garage']) {
           await p.evaluate((v) => document.querySelector(`#tabbar .tab[data-view="${v}"]`).click(), view);
           await p.waitForTimeout(700);
-          await read(p, `${k}x ${view}`);
+          await read(p, `${w}x${h} ${k}x ${view}`);
         }
         await p.goto(base + '/analysis.html');
         await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(800);
-        await read(p, `${k}x log`);
+        await read(p, `${w}x${h} ${k}x log`);
         await ownTrip(p, base);
         await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(1200);
-        await read(p, `${k}x route card`);
+        await read(p, `${w}x${h} ${k}x route card`);
         // the Log with drives in it: three, one with a long name
         await p.evaluate(async () => { for (const [id, name, km] of [['lt1', 'Cherohala Skyway', 30], ['lt2', 'Tail of the Dragon (US-129)', 18], ['lt3', 'Foothills Parkway West', 27]]) {
           const lat = [], lon = []; for (let i = 0; i < km * 200; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + 0.001 * Math.sin(i / 40)); }
@@ -9328,12 +9382,26 @@ flow('large text on every screen: the welcome, the map, a route card, People, th
         await p.goto(base + '/analysis.html');
         await p.waitForSelector('#historyTable tr.row-link', { timeout: 15000 });
         await p.evaluate(TYPE_AT(k)); await p.waitForTimeout(800);
-        await read(p, `${k}x log with drives`);
+        await read(p, `${w}x${h} ${k}x log with drives`);
       } finally { await ctx.close(); }
     }
   } finally { graphDir = null; }
+  return found;
+}
+
+
+flow('large text on every screen: the welcome, the map, a route card, People, the Garage and the Log (empty and with drives) cut nothing and draw no words over others at 1.5x and 2x (IDEAS U-15, IN-1)', async (page, base) => {
+  const found = await screensSweep(page, base, [[390, 844, 1.5], [390, 844, 2]]);
   if (process.env.CLIP_LOG) for (const h of found) console.log('CLIP large | ' + h);
   else check(!found.length, `at a large text size, text cut off or a key too small:\n  ${found.join('\n  ')}`);
+});
+
+// The narrowest phone a driver can have (an iPhone SE or mini with Display Zoom on is 320 points wide), at its own and its
+// largest text, and a phone on its side in a mount (2026-11-15): the same screens, the same checks.
+flow('the narrowest phone and a phone on its side: the welcome, the map, a route card, People, the Garage and the Log fit at 320 pt (1x and 2x text) and at 844 x 390 (IDEAS U-15, U-16)', async (page, base) => {
+  const found = await screensSweep(page, base, [[320, 568, 1], [320, 568, 2], [844, 390, 1]]);
+  if (process.env.CLIP_LOG) for (const h of found) console.log('CLIP narrow | ' + h);
+  else check(!found.length, `on a narrow phone or on its side, text cut off, words over words or a key too small:\n  ${found.join('\n  ')}`);
 });
 
 // U-15: the route card, Saved and Where to? in every look, day and night: the card is what a driver reads most before a drive
@@ -13840,7 +13908,7 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
     ['the strip never cuts', 23], ['when to go', 21], ['the map is a fixed stage', 20], ['a deliberate detour', 20],
     ['theme contract on the page', 19], ['plan flow (d)', 18], ['plan flow (g)', 18], ['a loop by time', 17], ['plan flow (a)', 17],
     ['plan flow (e, f)', 16], ["the map's viewpoint, café and fuel stamps", 15],
-    ['contrast in every look: the welcome', 30], ['contrast in every look: a planned', 27], ['contrast in every look: the drive', 22], ['large text on every screen', 20]];
+    ['contrast in every look: the welcome', 30], ['contrast in every look: a planned', 27], ['contrast in every look: the drive', 22], ['large text on every screen', 20], ['the narrowest phone and a phone on its side', 30]];
   const weight = (f) => (LONG_S.find(([p]) => f.name.startsWith(p)) || [, 5])[1];
   const slice = new Map();
   if (shard) {
@@ -13891,6 +13959,9 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
       const cut = await clippedText(page);
       if (process.env.CLIP_LOG) for (const h of cut) console.log(`CLIP ${name} | ${h}`);
       else check(!cut.length, `text in view cut off by its box or the screen's edge:\n  ${cut.join('\n  ')}`);
+      const crossed = await overlappingText(page);
+      if (process.env.OVERLAP_LOG) for (const h of crossed) console.log(`OVERLAP ${name} | ${h}`);
+      else check(!crossed.length, `text in view drawn over other text:\n  ${crossed.join('\n  ')}`);
       const faint = await lowContrast(page);
       if (process.env.CONTRAST_LOG) for (const h of faint) console.log(`CONTRAST ${name} | ${h}`);
       else check(!faint.length, `text in view under the contrast floor:\n  ${faint.join('\n  ')}`);
