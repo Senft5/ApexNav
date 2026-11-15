@@ -56,6 +56,9 @@ sports car and an SUV can be told apart. Phones don't send it yet; it will be a 
 
 ## 4. Before anything is sold
 
+The full plan is docs/ROAD_INSIGHTS.md; the short list:
+
+
 1. **Consent.** Terms and the privacy page say that anonymous road measurements may be licensed to organisations
    (cities, map makers), and the App Privacy answers match. Changed before the first pilot, not after; contributors stay
    opt-in with the Road data switch.
