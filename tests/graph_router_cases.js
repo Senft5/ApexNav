@@ -1289,6 +1289,21 @@ const CASES = {
   },
 
   // the Cincinnati-size synthetic network: 16 tiles, ~150k edges; per query and per full plan
+  // a long trip (2026-11-15): the backward bound (timeTo) finds the same quickest as the crow line, and settles far less
+  longBound() {
+    const g = H.grid({ seed: 7, nx: 60, ny: 60, stepDeg: 0.03, lat0: 38.5, lon0: -86.0, holes: 0.05, oneway: 0.05, signals: 0.1 });
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles), obj = R.objective(v, {});
+    const from = { lat: 38.52, lon: -85.97 }, to = { lat: 40.25, lon: -83.75 };
+    const src = R.snap(v, from.lat, from.lon), dst = R.snap(v, to.lat, to.lon);
+    const out = { crowKm: R.distM(from.lat, from.lon, to.lat, to.lon) / 1000, runs: [] };
+    for (const a of [0, 3]) {
+      const crow = R.search(v, obj, src, dst, a), bound = R.search(v, obj, src, dst, a, null, { timeTo: true });
+      out.runs.push({ a, same: crow.edges.join() === bound.edges.join(), cost: [crow.cost, bound.cost], settled: [crow.settled, bound.settled] });
+    }
+    const p = R.plan(v, { from, to, level: 'fun' });
+    out.plan = { routes: p.routes.length, ok: p.routes.every((r) => r.timeS <= p.limitS + 1e-6) };
+    return out;
+  },
   perf() {
     const t0 = Date.now();
     const g = H.grid({ seed: 5, nx: 194, ny: 220, stepDeg: 0.0039, lat0: 39.001, lon0: -84.999, holes: 0.05, oneway: 0.05, signals: 0.1 });
