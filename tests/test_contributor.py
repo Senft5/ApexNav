@@ -1,5 +1,6 @@
 """Phone-side contributor (web/contributor.js): drive + way geometry -> bin summaries. Synthetic roads in the test only, never shipped."""
 import json
+import os
 import shutil
 import subprocess
 
@@ -530,3 +531,33 @@ const C = require(process.argv[1] + '/web/contributor.js');
     assert o["asked"] == [f"/api/ctx/ways?tiles={','.join(o['tiles'])}&ids=7,9"]
     assert o["got"] == ["7", "9"] and len(o["over"]) == 1 and "way(id:9)" in o["over"][0]
     assert len(o["downOver"]) == 1 and "way(id:7,9)" in o["downOver"][0]
+
+
+CRESTS = r"""
+const C = require(process.argv[1] + '/web/contributor.js');
+// per 5 m sample: a crest two passes felt at 100-110 (lightest 0.3 g at 104), one only a single pass felt at 300 (0.4 g),
+// a slight rise two passes felt at 500 (0.1 g, under 0.15), and a second crest 4 samples after the first (one crest)
+const N = 600, crest = new Array(N).fill(null), crn = new Array(N).fill(null);
+for (let i = 100; i <= 110; i++) { crest[i] = i === 104 ? 0.3 : 0.18; crn[i] = 2; }
+crest[114] = 0.2; crn[114] = 3;
+crest[300] = 0.4; crn[300] = 1;
+crest[500] = 0.1; crn[500] = 4;
+crest[400] = 0.25; crn[400] = null;                                   // an older server: no crn, no crest
+const crests = C.crestsFrom(crest, crn);
+const t = { lat: Array.from({ length: N }, (_, i) => 35 + i * 5 / 110540), lon: new Array(N).fill(-83), dist: Array.from({ length: N }, (_, i) => i * 5) };
+const ev = C.crestEvents(t, crests);
+const beside = C.crestEvents(t, crests, [{ type: 'crest', dist_m: 530 }]);
+console.log(JSON.stringify({ crests, ev: ev.map((e) => [e.type, e.call, e.dist_m, e.severity_g, !!e.crowd]), beside: beside.length,
+  none: C.crestsFrom(null, null).length, bad: C.crestEvents(t, [{ index: -1, g: 0.3 }, { index: 1e6, g: 0.3 }]).length }));
+"""
+
+
+def test_crests_two_or_more_members_felt_are_pace_notes():
+    """A crest is a pace note on a planned route where two or more passes measured it and their mean peak unweighting is
+    0.15 g or more (roads.ts CREST_G): one per run, at its lightest point; one pass, a slight rise, or a server that doesn't
+    say how many passes is none; a crest the track already has is not called twice."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    o = json.loads(subprocess.run([NODE, "-e", CRESTS, root], capture_output=True, text=True, check=True).stdout)
+    assert o["crests"] == [{"index": 104, "g": 0.3}]
+    assert o["ev"] == [["crest", "Crest", 520, 0.3, True]]
+    assert o["beside"] == 0 and o["none"] == 0 and o["bad"] == 0

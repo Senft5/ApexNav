@@ -5306,17 +5306,20 @@ flow('a saved route keeps its road feel: Save keeps what members measured along 
     // members drove a bend 100 m long (three passes) and felt two bumps
     ApexContributor.measuredAlong = async (t) => { window.__asked++; const n = t.lat.length, k = new Array(n).fill(null), kn = new Array(n).fill(null);
       for (let i = 300; i < 320; i++) { k[i] = 0.02; kn[i] = 3; }
-      return { coverage: 0.5, coveredKm: 30, km: 60, avgPasses: 2, roughness: 0.1, bankedKm: 0, roughKm: 0, repavedKm: 0, crowdK: k, crowdKn: kn, crowdBumps: [{ index: 100, p: 0.9 }, { index: 400, p: 0.85 }] }; };
+      return { coverage: 0.5, coveredKm: 30, km: 60, avgPasses: 2, roughness: 0.1, bankedKm: 0, roughKm: 0, repavedKm: 0, crowdK: k, crowdKn: kn, crowdBumps: [{ index: 100, p: 0.9 }, { index: 400, p: 0.85 }], crowdCrests: [{ index: 250, g: 0.3 }] }; };
   });
   await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.52, lon: -83.92 }, { lat: 36.08, lon: -83.92 }], 'route_feel', 'Down the ridge', null,
     { from: null, to: { lat: 36.08, lon: -83.92 }, via: [] }));
   await page.waitForFunction(() => /2 bumps members felt/.test(document.getElementById('measuredNote').textContent), null, { timeout: 20000 });
   const online = await page.textContent('#measuredNote');
   check(/corners from members' drives/.test(online) && !/kept/.test(online), 'with signal: the members\' corners and bumps, asked now: ' + online);
+  // and a crest two or more members went light over: on the card and a "Crest" pace note on the route (contributor.js crestEvents)
+  check(/a crest members went light over/.test(online), 'the crest members felt on the card: ' + online);
+  check(await page.evaluate(() => apexDebug.track.events.filter((e) => e.type === 'crest' && e.crowd).length) === 1, 'one crest note on the route from members\' drives');
   await page.evaluate(() => document.getElementById('routeSaveBtn').click());
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.routeFeel') || '{}'));
   const e = Object.values(kept)[0];
-  check(e && e.k.length === 1 && e.k[0][1].length === 20 && e.bumps.length === 2, 'Save keeps the bend and the bumps with the route: ' + JSON.stringify(kept).slice(0, 300));
+  check(e && e.k.length === 1 && e.k[0][1].length === 20 && e.bumps.length === 2 && e.crests && e.crests.length === 1, 'Save keeps the bend, the bumps and the crest with the route: ' + JSON.stringify(kept).slice(0, 300));
   // the context grid's indexes read with signal first (as a real phone would have them): read for the first time with no
   // signal they'd fall back to the shipped copy's path for every tile, a 404 here once the flow is back online
   await page.waitForFunction(() => window.ApexContextGrid && ApexContextGrid.urlsNear, null, { timeout: 20000 });

@@ -71,6 +71,10 @@
       if (window.ApexFlags && !ApexFlags.on('crowd_bumps')) return false;               // switched off on the server (flags.js)
       const add = ApexContributor.bumpEvents(t, m.crowdBumps, t.events);
       t.crowdBumps = add.length;
+      // and crests two or more members' phones felt go light over (contributor.js crestsFrom): "Crest" with the notes
+      const crests = ApexContributor.crestEvents ? ApexContributor.crestEvents(t, m.crowdCrests || [], t.events) : [];
+      t.crowdCrests = crests.length;
+      add.push(...crests);
       if (!add.length) return false;
       t.events = [...t.events, ...add].sort((a, b) => a.dist_m - b.dist_m);
       Core.linkNotes(t.events);
@@ -2972,6 +2976,7 @@
           (m.avgPasses != null ? ` · ${m.avgPasses.toFixed(1)} runs on average` : '') +
           (t.crowdCorrected >= 30 ? ` · corners from members' drives on ${ApexUnits.long(t.crowdCorrected, 1)}` : '') +
           (t.crowdBumps > 0 ? ` · ${t.crowdBumps === 1 ? 'a bump' : `${t.crowdBumps} bumps`} members felt` : '') +
+          (t.crowdCrests > 0 ? ` · ${t.crowdCrests === 1 ? 'a crest' : `${t.crowdCrests} crests`} members went light over` : '') +
           (m.keptAt != null ? ` (kept ${keptWhen(m.keptAt)})` : '');
     }
     // A saved route keeps what members measured along it (route_feel.js), refreshed whenever its card asks with signal.

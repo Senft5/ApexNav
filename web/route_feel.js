@@ -1,5 +1,5 @@
 // Members' road feel kept with a saved route (IDEAS F-03): what the crowd measured along it (contributor.js measuredAlong:
-// the coverage line's numbers, the driven corners that replace the map's, the bumps several members felt) is kept on the
+// the coverage line's numbers, the driven corners that replace the map's, the bumps several members felt, the crests they went light over) is kept on the
 // phone when the route is saved or its card asks with signal, so a saved route opened with no signal still gets the
 // members' corners and bump calls and says how old they are. Only what the route uses is kept: the curvature runs that
 // blendCurvature would take (2+ passes, 30 m), by metres along the route so a rebuilt track lines up. Nothing is invented;
@@ -35,7 +35,11 @@
     const bumps = (Array.isArray(m.crowdBumps) ? m.crowdBumps : [])
       .filter((b) => b && Number.isInteger(b.index) && finite(dist[b.index]))
       .map((b) => [Math.round(dist[b.index]), finite(b.p) ? r4(b.p) : null]);
-    return { at: nowMs, sum, k, bumps };
+    // and the crests members felt (contributor.js crestsFrom): [metres, g], kept only when there are any
+    const crests = (Array.isArray(m.crowdCrests) ? m.crowdCrests : [])
+      .filter((c) => c && Number.isInteger(c.index) && finite(dist[c.index]))
+      .map((c) => [Math.round(dist[c.index]), finite(c.g) ? r4(c.g) : null]);
+    return { at: nowMs, sum, k, bumps, ...(crests.length ? { crests } : {}) };
   }
   const indexAt = (dist, m) => {
     let lo = 0, hi = dist.length - 1;
@@ -58,6 +62,8 @@
     out.crowdK = K; out.crowdKn = N;
     out.crowdBumps = (Array.isArray(p.bumps) ? p.bumps : []).filter((b) => Array.isArray(b) && finite(b[0]) && b[0] <= end + 1)
       .map((b) => ({ index: indexAt(dist, b[0]), p: finite(b[1]) ? b[1] : null }));
+    out.crowdCrests = (Array.isArray(p.crests) ? p.crests : []).filter((c) => Array.isArray(c) && finite(c[0]) && c[0] <= end + 1)
+      .map((c) => ({ index: indexAt(dist, c[0]), g: finite(c[1]) ? c[1] : null }));
     return out;
   }
   /** Keeps measured `m` for route `id`; the oldest routes go past MAX_ROUTES or MAX_CHARS. False when nothing was kept. */
