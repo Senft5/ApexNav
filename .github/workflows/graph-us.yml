@@ -30,7 +30,7 @@ on:
         type: boolean
         default: false
       bands_from:
-        description: "Publish the bands an earlier run built (its run id; band artifacts keep 3 days): no download, no band"
+        description: "Publish the bands earlier runs built (run ids, comma separated; band artifacts keep 3 days): no download, no band"
         required: false
         default: ""
       osm_from:
@@ -81,7 +81,8 @@ jobs:
             live=$(sed -n 's/^live=//p' tools/graph_etl/US_BUILD | head -1)
           fi
           [ -z "$only" ] && live=true
-          case "$IN_BANDS" in ""|*[!0-9]*) [ -z "$IN_BANDS" ] || { echo "::error::bands_from is a run id"; exit 1; } ;; esac
+          # bands_from: one run id, or several comma separated (a pilot's Alaska and Hawaii beside the lower 48's run)
+          case "$IN_BANDS" in ""|*[!0-9,]*|,*|*,|*,,*) [ -z "$IN_BANDS" ] || { echo "::error::bands_from is run ids, comma separated"; exit 1; } ;; esac
           case "$IN_OSM" in ""|*[!0-9]*) [ -z "$IN_OSM" ] || { echo "::error::osm_from is a run id"; exit 1; } ;; esac
           # osm_from: the extracts an earlier run downloaded (a rescore, the context grid new, the roads a day old), so
           # Geofabrik is asked for its index only, not for ~10 GB again
@@ -305,19 +306,23 @@ jobs:
         if: needs.plan.outputs.reuse != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN: ${{ needs.plan.outputs.reuse }}
+          RUNS: ${{ needs.plan.outputs.reuse }}
         run: |
           set -o pipefail
           mkdir -p bands
-          gh api --paginate "repos/${{ github.repository }}/actions/runs/$RUN/artifacts?per_page=100" \
-            --jq '.artifacts[] | select(.name | startswith("graph-us-")) | select(.expired | not) | "\(.id) \(.name)"' > arts.txt
-          bands=$(gh api --paginate "repos/${{ github.repository }}/actions/runs/$RUN/jobs?per_page=100" --jq '.jobs[] | select(.name | startswith("band")) | .name' | wc -l)
-          echo "$(wc -l < arts.txt) band artifacts for $bands bands in run $RUN" | tee -a "$GITHUB_STEP_SUMMARY"
-          [ "$(wc -l < arts.txt)" -eq "$bands" ] && [ "$bands" -gt 0 ] || { echo "::error::not every band of run $RUN has its artifact"; exit 1; }
-          while read -r id name; do
-            for k in 1 2 3 4 5; do gh api "repos/${{ github.repository }}/actions/artifacts/$id/zip" > a.zip && break; echo "retry $name"; sleep $((k * 10)); done
-            unzip -q -o a.zip -d bands && rm a.zip
-          done < arts.txt
+          # each run whole or none: every band of it has its artifact (2026-11-15: Alaska and Hawaii, built by a pilot,
+          # published beside the lower 48's bands, which a run of their own would take 13 h to build again)
+          for RUN in ${RUNS//,/ }; do
+            gh api --paginate "repos/${{ github.repository }}/actions/runs/$RUN/artifacts?per_page=100" \
+              --jq '.artifacts[] | select(.name | startswith("graph-us-")) | select(.expired | not) | "\(.id) \(.name)"' > arts.txt
+            bands=$(gh api --paginate "repos/${{ github.repository }}/actions/runs/$RUN/jobs?per_page=100" --jq '.jobs[] | select(.name | startswith("band")) | .name' | wc -l)
+            echo "$(wc -l < arts.txt) band artifacts for $bands bands in run $RUN" | tee -a "$GITHUB_STEP_SUMMARY"
+            [ "$(wc -l < arts.txt)" -eq "$bands" ] && [ "$bands" -gt 0 ] || { echo "::error::not every band of run $RUN has its artifact"; exit 1; }
+            while read -r id name; do
+              for k in 1 2 3 4 5; do gh api "repos/${{ github.repository }}/actions/artifacts/$id/zip" > a.zip && break; echo "retry $name"; sleep $((k * 10)); done
+              unzip -q -o a.zip -d bands && rm a.zip
+            done < arts.txt
+          done
           ls bands | wc -l
       - name: Merge and pack
         run: |
@@ -340,7 +345,7 @@ jobs:
           tag="graph-us-$build"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"; echo "build=$build" >> "$GITHUB_OUTPUT"
           if ! gh release view "$tag" >/dev/null 2>&1; then
-            gh release create "$tag" --target "${{ github.sha }}" --latest=false --title "Road graph (lower 48), build $build" \
+            gh release create "$tag" --target "${{ github.sha }}" --latest=false --title "Road graph (US), build $build" \
               --notes "Vetta's own routing tiles, packed (tools/graph_etl/pack.py). Road data (c) OpenStreetMap contributors, ODbL 1.0; elevation Mapzen Terrain Tiles. Pilot: ${{ needs.plan.outputs.only || 'no' }}."
           fi
           # packs first, the two indexes last: a reader that finds index.json finds every pack

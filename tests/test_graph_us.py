@@ -21,8 +21,34 @@ INDEX = {"features": [
 ]}
 
 
-def test_states_are_the_lower_48_only():
-    assert list(U.states(INDEX)) == ["ohio", "west-virginia"]
+def test_states_are_the_lower_48_alaska_and_hawaii_not_the_territories():
+    assert list(U.states(INDEX)) == ["alaska", "ohio", "west-virginia"]
+    assert U.states(INDEX)["alaska"] == U.EXTRA["alaska"], "Alaska by its road boxes, not its outline across the date line"
+
+
+def test_alaska_and_hawaii_are_built_where_their_roads_are():
+    """2026-11-15: Fun had no road in Alaska or Hawaii (the build was the lower 48's). Their own boxes: Alaska's outline
+    runs across the date line and Hawaii's out to Midway, so their blocks are where the roads are."""
+    ix = {"features": [{"properties": {"id": "us/hawaii", "parent": "us"}, "geometry": box(-178.5, 18.8, -154.7, 28.5)},
+                       {"properties": {"id": "us/alaska", "parent": "us"}, "geometry": box(-179.2, 51.2, 179.8, 71.4)},
+                       {"properties": {"id": "us/ohio", "parent": "us"}, "geometry": box(-84.82, 38.4, -80.52, 42.33)}]}
+    st = U.states(ix)
+    assert sorted(st) == ["alaska", "hawaii", "ohio"]
+    js = U.jobs(st, only={"alaska", "hawaii"})
+    boxes = {tuple(b[1]) for j in js for b in j["blocks"]}
+    for lon, lat, where in ((-149.9, 61.2, "Anchorage"), (-147.7, 64.8, "Fairbanks"), (-148.4, 70.3, "Prudhoe Bay"),
+                            (-165.4, 64.5, "Nome"), (-166.5, 53.9, "Unalaska"), (-134.4, 58.3, "Juneau"),
+                            (-131.6, 55.3, "Ketchikan"), (-157.9, 21.3, "Honolulu"), (-156.0, 20.8, "Hana"),
+                            (-155.1, 19.7, "Hilo"), (-159.4, 22.0, "Kauai")):
+        assert any(b[0] <= lon < b[2] and b[1] <= lat < b[3] for b in boxes), where
+    assert all(b[0] >= -167.0 for b in boxes), "nothing past the date line"
+    assert not any(b[0] >= -141.0 and b[1] >= 61.0 for b in boxes), "the Yukon is Canada's"
+    assert not any(b[1] >= 23.0 and b[3] <= 30.0 for b in boxes), "no blocks out to Midway"
+    assert len(boxes) < 650 and len(js) <= 60
+    assert all("ohio" not in j["states"] for j in js) and all(j["states"] in (["alaska"], ["hawaii"]) for j in js)
+    # the lower 48 alone is planned as before
+    lower = U.jobs(st, only={"ohio"})
+    assert all(-125.0 <= b[1][0] and b[1][1] >= 24.0 for j in lower for b in j["blocks"])
 
 
 def test_the_pacific_northwest_is_in_though_its_polygons_run_out_to_sea():
@@ -32,8 +58,8 @@ def test_the_pacific_northwest_is_in_though_its_polygons_run_out_to_sea():
                        {"properties": {"id": "us/oregon", "parent": "us"}, "geometry": box(-126.11, 41.99, -116.46, 46.30)},
                        {"properties": {"id": "us/hawaii", "parent": "us"}, "geometry": box(-178.5, 18.8, -154.7, 28.5)},
                        {"properties": {"id": "us/alaska", "parent": "us"}, "geometry": box(-179.2, 51.2, -129.9, 71.4)}]}
-    assert list(U.states(ix)) == ["oregon", "washington"]
-    boxes = {tuple(b[1]) for j in U.jobs(U.states(ix)) for b in j["blocks"]}
+    assert list(U.states(ix)) == ["alaska", "hawaii", "oregon", "washington"]
+    boxes = {tuple(b[1]) for j in U.jobs(U.states(ix), only={"oregon", "washington"}) for b in j["blocks"]}
     assert (-123.0, 47.0, -122.0, 48.0) in boxes and (-124.0, 45.0, -123.0, 46.0) in boxes, "Seattle and the Oregon coast"
     assert all(b[0] >= -125.0 for b in boxes), "blocks stay on the lower 48's grid"
 
@@ -41,7 +67,7 @@ def test_the_pacific_northwest_is_in_though_its_polygons_run_out_to_sea():
 def test_geofabriks_us_prefixed_ids_are_states_by_their_short_names():
     ix = {"features": [{"properties": {"id": "us/ohio", "parent": "us", "urls": {"pbf": "https://x/ohio.pbf"}}, "geometry": box(-84.82, 38.4, -80.52, 42.33)},
                        {"properties": {"id": "us/alaska", "parent": "us"}, "geometry": box(-179.2, 51.2, -129.9, 71.4)}]}
-    assert list(U.states(ix)) == ["ohio"]
+    assert list(U.states(ix)) == ["alaska", "ohio"]
     assert U.urls(ix)["ohio"] == "https://x/ohio.pbf"
 
 
@@ -173,6 +199,7 @@ def test_the_dense_east_is_cut_finer_and_the_matrix_fits():
     """2026-11-14: the -95..-80 chunks (Chicago, Detroit, Cleveland) took up to 4 h 17 min of the 5 h 45 min limit. East of
     -100 the chunks are 8 degrees (whole ones: the blocks stay on the grid); the lower 48 whole is still under GitHub's 256 jobs a matrix."""
     full = {f"s{i}": (-125.0 + i, 24.0, -124.0 + i, 50.0) for i in range(59)}
+    assert len(U.jobs({**full, **U.EXTRA})) <= 256, "Alaska and Hawaii beside every block of the lower 48"
     js = U.jobs(full)
     assert len(js) <= 256
     assert all(float(b[1][0]).is_integer() for j in js for b in j["blocks"]), "every block on whole degrees"
@@ -195,6 +222,10 @@ def test_a_publish_can_take_an_earlier_runs_bands():
     assert "run-id:" not in pub
     assert 'gh api --paginate "repos/${{ github.repository }}/actions/runs/$RUN/artifacts?per_page=100"' in pub
     assert "not every band of run $RUN has its artifact" in pub
+    # several runs (2026-11-15: a pilot's Alaska and Hawaii beside the lower 48's bands), each whole or refused
+    assert 'for RUN in ${RUNS//,/ }; do' in pub
+    plan = wf[wf.index("\n  plan:"):wf.index("\n  osm:")]
+    assert '*[!0-9,]*|,*|*,|*,,*' in plan
     assert "python -m tools.graph_etl.check" not in pub, "the spot roads are Cincinnati's: graph-region.yml checks them"
 
 
