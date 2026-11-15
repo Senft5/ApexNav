@@ -67,7 +67,9 @@ and in random batches so a trace cannot be re-assembled.
   plan form with the road as the drive's route.
 - **On the map** (2026-11-14, web/roadbook_map.js): Map layers → Roadbooks (off by default, members only) draws the roads
   of your books, your crews' and the ones you follow, driven ones solid, the rest dashed; a tap opens the book. Only books
-  with a road in the map's view are opened, chosen on the phone from the road boxes it already holds.
+  with a road in the map's view are opened, chosen on the phone from the road boxes it already holds. Public books round
+  the view are drawn too, thin and faint (legend: Public), found by the coarse cell of the map's centre as Roadbooks near
+  you asks (never from inside a privacy zone, once a cell a page); a tap opens one, where Follow is.
 ### 2.7 Duels (friends, Scores only)
 - Challenge a friend on one of your stages for 3, 7 or 14 days; the higher Vetta Score on it in that window wins.
   Accepting copies the stage to them. Won by the higher Score, or in a time duel (migration 0048) the quicker time;

@@ -7502,13 +7502,18 @@
     onSocial(() => { try { meetsMap = window.ApexMeetsMap && crewEvents && crewEvents.meetCard ? ApexMeetsMap.mount({ el, btn, apiCall, jsonOf, map,
       mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; }, mayLookUp: nearLookupOk,
       card: (e, redo) => crewEvents.meetCard(e, redo) }) : null; } catch (e) { console.error('meets map', e); } });
-    // Roadbooks on the map (web/roadbook_map.js): the roads of your books, your crews' and the ones you follow; a tap opens
-    // the book. Only books with a road in view are opened, from the boxes the phone already holds.
+    // Roadbooks on the map (web/roadbook_map.js): the roads of your books, your crews' and the ones you follow, and public
+    // books round the view, quieter; a tap opens the book. Only books with a road in view are opened.
+    const booksNearAt = new Map();                                       // cell query → the public books there (a promise)
     onSocial(() => { try { roadbookMap = window.ApexRoadbookMap && roadbooks ? ApexRoadbookMap.mount({ map,
       call: async (m, p) => { const r = await apiCall(m, p); return { ok: r.ok, data: r.ok ? await jsonOf(r) : null }; },
       // your lists as last read, read once if this page hasn't yet; with no signal, what this phone kept of them
       books: async () => { const l = roadbooks.lists() || await roadbooks.reload().catch(() => null); if (l) return [...l.mine, ...(l.crews || []), ...l.following];
         try { const c = JSON.parse(localStorage.getItem('apex.roadbooks') || 'null'); return c && Array.isArray(c.books) ? c.books : []; } catch (_) { return []; } },
+      // public books round the map's centre: its coarse cell, never from inside a privacy zone, asked once a cell a page
+      near: (lat, lon) => { if (!nearLookupOk({ lat, lon })) return []; const q = ApexPrivacyZones.cellQuery(lat, lon);
+        if (!booksNearAt.has(q)) booksNearAt.set(q, apiCall('GET', `/api/roadbooks/near?${q}`).then(async (r) => { const d = r.ok ? await jsonOf(r) : null; if (!Array.isArray(d)) booksNearAt.delete(q); return Array.isArray(d) ? d : []; }).catch(() => { booksNearAt.delete(q); return []; }));
+        return booksNearAt.get(q); },
       colours: () => ({ ink: look.colors.ink, gain: look.colors.gain, casing: look.colors.routeCasing }),
       open: (id) => { if (roadbooks) roadbooks.open(id); }, blocked: () => state.tapToRoute || state.mode === 'live' || Date.now() < suppressMapClickUntil }) : null; } catch (e) { console.error('roadbook map', e); } });
     // Friends on the map (web/friends_map.js, REVIEW.md 5.4): the Friends layer and who sees you, sent only while you drive
