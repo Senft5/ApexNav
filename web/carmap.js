@@ -377,7 +377,7 @@
     const offline = root.ApexOfflineTiles;
     try { if (offline) offline.install(root.maplibregl); } catch (_) {}
     // at most 2 device pixels to a CSS pixel: a 3x car screen drew 2.25 times the pixels for no sharper a glance
-    map = new root.maplibregl.Map({ container: 'map', style: MAP_STYLE, center: [-84.29, 35.36], zoom: 14, attributionControl: false, interactive: false, fadeDuration: 0,
+    map = new root.maplibregl.Map({ container: 'map', style: MAP_STYLE, center: [-84.29, 35.36], zoom: 14, attributionControl: false, interactive: false, fadeDuration: 0, antialias: true,   // tilted while guiding: smooth edges
       pixelRatio: Math.min(2, root.devicePixelRatio || 1), transformRequest: offline ? offline.transform : undefined });
     const el = document.createElement('div'); el.className = 'car-puck';
     puck = new root.maplibregl.Marker({ element: el, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat([-84.29, 35.36]).addTo(map);

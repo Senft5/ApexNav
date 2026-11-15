@@ -333,6 +333,8 @@
     try { if (window.ApexOfflineTiles && ApexOfflineTiles.tellShell) ApexOfflineTiles.tellShell(); } catch (_) {}
     const map = new maplibregl.Map({ container: 'map', style: MAP_STYLE,
       center: startPos ? [startPos.lon, startPos.lat] : [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0,
+      // the map is tilted (and buildings and 3D terrain stand up): without multisampling their edges stair-step on a phone
+      antialias: true,
       trackResize: false,   // F-02: the page's own observer resizes it (below), once, not again after setPixelRatio already did
       transformRequest: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
     // No silent blank (as the drive page's map, drive_basemap.js): when no base map tile can be drawn here (no signal and no
