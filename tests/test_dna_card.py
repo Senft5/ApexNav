@@ -31,6 +31,9 @@ console.log(JSON.stringify({ m, lines: K.dnaLines(m), scope: K.scopeText(m), par
   even: K.compareLines(K.wireOf(m), K.wireOf(m), 'sam'), alone: K.compareLines({ skills: K.wireOf(m).skills, style: [] }, null, 'sam'), noCmp: K.compareLines(null, null, 'sam'),
   crew: K.crewLeaders([{ handle: 'me', mine: true, skills: { squeeze: 80, brake: 75, arc: 70, entry: 77, line: 60, exit: 72 } },
     { handle: 'sam', mine: false, skills: K.wireOf(m).skills }, { handle: 'ann', mine: false, skills: { squeeze: 81, brake: 50, arc: 50, entry: 50, line: 50, exit: 50 } }, { handle: 'x', skills: null }]),
+  vs: K.vsLines({ skills: { squeeze: 80, brake: 75, arc: 70, entry: 77, line: 60, exit: 72 } }, K.wireOf(m), 'sam'),
+  vsEven: K.vsLines(K.wireOf(m), K.wireOf(m), 'sam'), vsPart: K.vsLines(null, K.wireOf(m), 'sam'),
+  vsHalf: K.vsLines({ skills: { ...K.wireOf(m).skills, line: null } }, K.wireOf(m), 'sam'),
   lone: K.crewLeaders([{ handle: 'me', mine: true, skills: K.wireOf(m).skills }]) }));
 """
 
@@ -83,3 +86,10 @@ def test_cleanest_in_the_crew(out):
     assert rows == [("One braking", "ann", 81, 80), ("Brakes done", "me", 75, None), ("One arc", "sam", 92, 70),
                     ("Entry speed", "me", 77, None), ("Patient apex", "me", 60, None), ("Back to power", "me", 72, None)]
     assert out["lone"] == []
+
+
+def test_me_against_a_friend(out):
+    # said as the sharer says it: what each of us leads by 5 or more, then how many are close; only two whole pictures
+    assert out["vs"] == ["I lead at Brakes done", "@sam leads at One arc", "Within 5 points at 4 skills"]
+    assert out["vsEven"] == ["Within 5 points at every skill"]
+    assert out["vsPart"] == [] and out["vsHalf"] == []
