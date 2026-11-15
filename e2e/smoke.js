@@ -10077,6 +10077,16 @@ flow('a ghost duel on the drive page: your pass of a stage against a friend\'s s
   check(r.head === 'Dry Ridge vs @sam', 'the panel names the stage and the friend: ' + r.head);
   check(/^\d+\.\d s ahead of @sam their best, Nov 1$/.test(r.line.trim()), 'the gap at the finish: ' + r.line);
   check(r.h3[0] === 'Where you were quicker' && r.rows.length >= 1 && r.rows.length <= 3 && r.rows.every((t) => /(Corner \d+ · .+|To the finish)−\d+\.\d s$/.test(t)), 'the corners that decided it: ' + JSON.stringify(r));
+  // one key: you were quicker, so a dare; it sends a 7-day time duel on your stage, and the panel says so
+  let sent = null;
+  await page.route('**/api/duels', (route) => { sent = JSON.parse(route.request().postData() || 'null'); route.fulfill({ status: 201, contentType: 'application/json', body: '{"id":"du1"}' }); });
+  const key = await page.textContent('#dvGhostActs button');
+  check(key === 'Dare @sam to beat it', 'the key under the result: ' + key);
+  await page.click('#dvGhostActs button');
+  await page.waitForSelector('#dvGhostActs [role=status]');
+  check(sent && sent.handle === 'sam' && sent.segment_id === 'seg_mine' && sent.days === 7 && sent.kind === 'time', 'a 7-day time duel on your stage: ' + JSON.stringify(sent));
+  const said = await page.textContent('#dvGhostActs [role=status]');
+  check(said === 'Sent. @sam has 7 days on Dry Ridge once they say yes.' && !(await page.$('#dvGhostActs button')), 'the panel says it was sent: ' + said);
 });
 
 flow('side by side: a corner filmed on this drive and on your best pass plays as one clip, both from the same point, the gap counting (big bet 5)', async (page, base) => {

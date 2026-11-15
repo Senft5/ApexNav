@@ -1,0 +1,109 @@
+name: Context grid (the lower 48, into R2)
+
+# The context grid (tools/ctx_etl: traffic counts, land cover, road noise, census, crashes, flood zones, crops, parks) for
+# the lower 48 and DC, the area graph-us.yml routes: 646 z8 bundles, about 850 MB, too big for the graph-data branch, so
+# it goes to our R2 bucket through the Worker (tools/graph_etl/upload_r2.sh, the run's GitHub OIDC token), which serves
+# it at /api/ctx/v1/ (backend/src/context_grid.ts reads R2 first). CHUNKS jobs each build a run of neighbouring bundles
+# (--chunk k/n) with only the states that reach into them; one publish merges them, the bundles first and the index last.
+# graph-us.yml's band jobs then score their edges with the bundles under their blocks (tools/ctx_etl/fetch.py).
+#
+# The sources change yearly at most: a manual run, on main (the upload's OIDC check names main).
+on:
+  workflow_dispatch:
+    inputs:
+      chunks:
+        description: "only these chunks, comma-separated (a test); empty = all 80. A partial run never goes live."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ctx-us
+  cancel-in-progress: false
+
+jobs:
+  chunk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        # 80 chunks of about 9 bundles (keep it under 100: download-artifact lists 100 artifacts at most)
+        k: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+            30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57,
+            58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79]
+    env:
+      CTX_CACHE: ${{ github.workspace }}/.ctx_cache
+    steps:
+      - name: This chunk asked for?
+        id: on
+        run: |
+          want="${{ inputs.chunks }}"
+          if [ -z "$want" ] || echo ",$want," | grep -q ",${{ matrix.k }},"; then echo "go=1" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.on.outputs.go == '1'
+      - name: Free disk
+        if: steps.on.outputs.go == '1'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h / && free -g
+      - uses: actions/setup-python@v5
+        if: steps.on.outputs.go == '1'
+        with:
+          python-version: "3.12"
+      - if: steps.on.outputs.go == '1'
+        run: pip install -r tools/ctx_etl/requirements.txt
+      - name: Build the chunk
+        if: steps.on.outputs.go == '1'
+        env:                                        # optional (docs/OWNER_TODO.md); without it the 2016 night lights
+          EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
+        run: python -m tools.ctx_etl.build --preset us --chunk "${{ matrix.k }}/80" --out "chunk/v1" --cache "$CTX_CACHE" --threads 8
+      - uses: actions/upload-artifact@v4
+        if: steps.on.outputs.go == '1'
+        with:
+          name: ctx-us-${{ matrix.k }}
+          path: chunk
+          retention-days: 5
+
+  publish:
+    needs: chunk
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write          # the R2 upload (tools/graph_etl/upload_r2.sh): the Worker checks this run's GitHub OIDC token
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q -r tools/ctx_etl/requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ctx-us-*
+          path: chunks
+      - name: Merge the chunks
+        run: |
+          set -o pipefail
+          python -m tools.ctx_etl.build --merge data/ctx/v1 chunks/*/v1 | tee -a "$GITHUB_STEP_SUMMARY"
+          rm -rf chunks
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          ix = json.load(open("data/ctx/v1/index.json"))
+          ix["region"] = "us"
+          json.dump(ix, open("data/ctx/v1/index.json", "w"), indent=1, sort_keys=True)
+          print(f"{len(ix['bundles'])} bundles, {len(ix.get('states') or [])} states, {ix['bytes'] / 1e6:.0f} MB")
+          PY
+          du -sh data/ctx/v1
+      - name: Into R2
+        if: inputs.chunks == ''
+        shell: bash
+        run: |
+          set -o pipefail
+          # the bundles first, the index last (upload_r2.sh): a phone that reads the new index finds every bundle
+          n=$(python3 -c "import json; print(len(json.load(open('data/ctx/v1/index.json'))['bundles']))")
+          [ "$n" -ge 600 ] || { echo "::error::only $n bundles: not published"; exit 1; }
+          bash tools/graph_etl/upload_r2.sh data | tee -a "$GITHUB_STEP_SUMMARY"

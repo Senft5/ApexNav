@@ -94,7 +94,7 @@
     // stages within reach of half the length at LOOP_REACH_MS; at most LOOP_STAGES of them chained, LOOP_TRIES loops
     // routed, each stage driven through a point every LOOP_ALONG_M; a loop with more than LOOP_MAX_RETRACED driven twice
     // is dropped
-    LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 12, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_MAX_RETRACED: 0.4,
+    LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 12, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_MAX_RETRACED: 0.4, LOOP_DIRT_KM: 2,
     LOOP_CONN_FACTOR: 1.7, LOOP_CONN_A: 3, LOOP_MAX_OFF: 0.6, LOOP_NEAR_OFF: 0.15, LOOP_RING_OFF: 0.3, LOOP_RETRIES: 4, LOOP_REFITS: 2, LOOP_CONN_A_SHORT: 1, LOOP_CONN_A_LONG: 6, LOOP_FIT_OFF: 0.12,   // a connector's road length over its crow line, the router's detours to good road in it (Cincinnati, 2026-11-04)
     SNAP_M: 1500, GRID_DEG: 0.01, LIVE_NODES: 200, LIVE_TRIES: 4,   // a snap's road reaches LIVE_NODES or it's an island (snapLive)
     OUT_BACK_KM: 2,          // Best roads nearby: a dead-end run of good road this long stays (driven there and back); the stage minimum
@@ -804,7 +804,7 @@
       }
       for (const e of hit) mult[e] *= K.HAZARD_X;
     }
-    return { bad, mult, add, minBad, nodeCosts: o.nodeCosts !== false };
+    return { bad, mult, add, minBad, nodeCosts: o.nodeCosts !== false, noDirt: !!avoid.unpaved };
   }
 
   // ---- the search ------------------------------------------------------------------------------------------------------
@@ -1516,7 +1516,10 @@
       for (const r of rings(v, req, obj, s0, hwy, level, km)) if (!out.some((x) => sameRoute(x, r))) out.push(r);
     }
     // the length is a guess until routed: one more than 60 % off it isn't the loop asked for
-    const routes = out.filter((r) => Math.abs(r.distM / 1000 - km) / km <= K.LOOP_MAX_OFF);
+    let routes = out.filter((r) => Math.abs(r.distM / 1000 - km) / km <= K.LOOP_MAX_OFF);
+    // unpaved road avoided: where some loops keep (all but LOOP_DIRT_KM) off it, only those; where none can (the Black
+    // Hills' gravel between the paved canyons), the loops as found, their unpaved km on the card (why.unpavedKm)
+    if (obj.noDirt) { const clean = routes.filter((r) => !((r.why.unpavedKm || 0) > K.LOOP_DIRT_KM)); if (clean.length) routes = clean; }
     for (const r of routes) delete r.combo;
     return { routes, ms: Date.now() - t0 };
   }
@@ -1537,8 +1540,25 @@
    * the shortest highway link.
    */
   function loopLeg(v, obj, prev, dst, a, penal, o, level) {
-    if (!noHighway(level)) return search(v, obj, prev, dst, a, penal, o);
-    const is = hwyOf(v);
+    // unpaved road avoided (the app's default): first without any, as a route's pick holds it to the quickest's (a loop
+    // has no quickest); else, no other way, the leg's search as before, unpaved road at its cost (2026-11-14: Sturgis
+    // loops drove 15 to 31 km of gravel, Ouray 70 km)
+    if (obj.noDirt) {
+      const res = loopLegOf(v, obj, prev, dst, a, penal, o, level, dirtOf(v));
+      if (res) return res;
+    }
+    return loopLegOf(v, obj, prev, dst, a, penal, o, level, null);
+  }
+  /** Edges that are unpaved, with the highways (hwyOf) at a level that never drives them: a loop leg's first ban. */
+  function dirtOf(v) {
+    if (v.isDirt) return v.isDirt;
+    const B = v.bits || flagBits(), h = new Uint8Array(v.E);
+    for (let e = 0; e < v.E; e++) if (v.flags[e] & B.unpaved) h[e] = 1;
+    return (v.isDirt = h);
+  }
+  function loopLegOf(v, obj, prev, dst, a, penal, o, level, dirt) {
+    if (!noHighway(level)) return search(v, obj, prev, dst, a, penal, dirt ? { ...o, ban: dirt } : o);
+    const is = dirt ? hwyDirtOf(v) : hwyOf(v);
     const free = search(v, obj, prev, dst, a, penal, { ...o, ban: is });
     if (free) return free;
     const back = prev.map((x) => ({ x, tw: twin(v, x.edge) })).filter((y) => y.tw >= 0 && !is[y.tw]);
@@ -1547,7 +1567,14 @@
       const round = search(v, obj, back.map((y) => ({ edge: y.tw, frac: 1 - y.x.frac, lat: 0, lon: 0 })), dst, a, penal, { ...o, ban: is, startCost: (e) => (tws.has(e) ? K.UTURN_S : 0) });
       if (round) return round;
     }
+    if (dirt) return null;   // (the highway link is the leg as before, unpaved road and all)
     return search(v, obj, prev, dst, a, penal, { ...o, hwyX: { is, x: K.HWY_LINK_X } });
+  }
+  function hwyDirtOf(v) {
+    if (v.isHwyDirt) return v.isHwyDirt;
+    const a = hwyOf(v), b = dirtOf(v), h = new Uint8Array(v.E);
+    for (let e = 0; e < v.E; e++) h[e] = a[e] | b[e];
+    return (v.isHwyDirt = h);
   }
   /**
    * The best roads within reach, chained into loops: explore's stages that a loop of `km` can reach and come back from
