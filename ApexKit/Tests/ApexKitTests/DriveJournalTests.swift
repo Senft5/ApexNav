@@ -64,7 +64,7 @@ final class DriveJournalTests: XCTestCase {
         f.camberDeg = 2.5
         f.camberV = IMUPipeline.camberVersion
         let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(DriveJournal.json([f]).utf8)) as? [[String: Any]])
-        XCTAssertEqual(obj[0]["camber_v"] as? Int, 2)
+        XCTAssertEqual(obj[0]["camber_v"] as? Int, 3)
         XCTAssertEqual(obj[0]["camber_deg"] as? Double, 2.5)
         // a frame an older build wrote: no camber_v, so the page does not record its camber (a decayed placeholder)
         let old = try JSONDecoder().decode(JournalFrame.self, from: Data(#"{"seq":1,"at":1,"lat":35.5,"lon":-83.9,"camber_deg":0,"calibration":"locked","has_fix":true}"#.utf8))

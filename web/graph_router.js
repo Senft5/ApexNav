@@ -42,6 +42,8 @@
     // goodness = not a side street (the engine's poor cost: quality 0.25 -> 0.45) + quality + corners + scenery. Corners
     // carry most of it: a motorway is good road (quality ~0.8) but no fun, and must not soak up the Fun objective
     W_NOTPOOR: 0.2, W_QUALITY: 0.15, W_FUN: 0.45, W_SCENERY: 0.2, POOR_LO: 0.25, POOR_HI: 0.45,
+    // the least scenery a designated scenic road counts (tiles' byway channel: [none, a scenic byway, a National Scenic Byway])
+    BYWAY_S: [null, 0.75, 0.9],
     FUN_FULL_PCT: 0.5,       // fun per km that counts as full: the loaded network's median of edges with corners
     // members' data (crowd.js channels) per edge, with the route engine's own weights (route_engine.js QUALITY/SCENERY)
     // against the share of the model the tile's score already knew (conf x the model's weight)
@@ -694,7 +696,7 @@
     return v.objCache.get(key);
   }
   const OBJ_KNOBS = ['W_NOTPOOR', 'W_QUALITY', 'W_FUN', 'W_SCENERY', 'POOR_LO', 'POOR_HI', 'GATE_LO', 'GATE_HI', 'UNKNOWN_G', 'MODEL_WQ', 'MODEL_WS', 'PRIVATE_X', 'PRIVATE_S',
-    'DESTINATION_X', 'DESTINATION_S', 'FERRY_X', 'UNPAVED_X', 'AVOID_HWY_X', 'AVOID_TOLL_X', 'AVOID_FERRY_X', 'AVOID_UNPAVED_X', 'AVOID_POINT_X', 'AVOID_POINT_M', 'AVOID_CAM_X', 'AVOID_CAM_M', 'CLOSED_X', 'CLOSED_M', 'HAZARD_X', 'HAZARD_M', 'PREF_STEP'];
+    'DESTINATION_X', 'DESTINATION_S', 'FERRY_X', 'UNPAVED_X', 'AVOID_HWY_X', 'AVOID_TOLL_X', 'AVOID_FERRY_X', 'AVOID_UNPAVED_X', 'AVOID_POINT_X', 'AVOID_POINT_M', 'AVOID_CAM_X', 'AVOID_CAM_M', 'CLOSED_X', 'CLOSED_M', 'HAZARD_X', 'HAZARD_M', 'PREF_STEP', 'BYWAY_S'];
   const clampPref = (x) => (Number.isFinite(Number(x)) ? Math.max(-1, Math.min(1, Number(x))) : 0);
   /**
    * Per edge, the share of its turning (radians, at each inner vertex of its line) in tight corners (local radius under
@@ -750,11 +752,17 @@
     // only, so the built-up cut is applied here from the v2 tiles' road channels, read as route_engine.js builtEvidence
     // reads them (density, sidewalk, businesses, buildings, addresses: two agreeing)
     const builtAt = builtAgreeOf(v), F = FunRoute();
+    // a designated scenic road (the tiles' byway channel, from 2026-11-15's builds: 1 a scenic byway, 2 a National Scenic
+    // Byway or All-American Road) counts at least BYWAY_S[level] scenery: the Talimena and the Blue Ridge Parkway sweep
+    // more than they wind, and their views aren't in the land cover (2026-11-15: Fun took US 59 off the Talimena)
+    const byway = v.roadCh && v.roadCh.byway ? v.roadCh.byway : null, BS = K.BYWAY_S || [];
     let minBad = 1;
     for (let e = 0; e < E; e++) {
       // unknown (255, 65535) is unknown: its weight drops out; nothing known at all is UNKNOWN_G
-      const qk = v.quality[e] !== UNKNOWN_U8, sk = v.scenery[e] !== UNKNOWN_U8, fk = Number.isFinite(v.fun[e]);
-      let q = qk ? v.quality[e] / 254 : K.UNKNOWN_G, s = sk ? v.scenery[e] / 254 : 0, cf = qk ? v.conf[e] / 255 : 0;
+      const by = byway && byway[e] >= 1 ? BS[Math.min(2, byway[e])] : null;
+      const qk = v.quality[e] !== UNKNOWN_U8, sk = v.scenery[e] !== UNKNOWN_U8 || Number.isFinite(by), fk = Number.isFinite(v.fun[e]);
+      let q = qk ? v.quality[e] / 254 : K.UNKNOWN_G, s = v.scenery[e] !== UNKNOWN_U8 ? v.scenery[e] / 254 : 0, cf = qk ? v.conf[e] / 255 : 0;
+      if (Number.isFinite(by)) s = Math.max(s, by);
       // members' measurements on this edge: smooth and flowing raise its quality, loved and banked its scenery
       if (crowd && crowd.has[e]) {
         const c = crowd, kq = cf * K.MODEL_WQ, ks = (sk ? cf : 0) * K.MODEL_WS;

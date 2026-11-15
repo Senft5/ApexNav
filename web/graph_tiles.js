@@ -35,7 +35,8 @@
   const NODE_FLAGS = { signal: 1, stop: 2, giveWay: 4, barrier: 8, levelCrossing: 16, deadEnd: 32, crossing: 64, calming: 128 };
   // the road channels a v2 tile carries per edge (tools/graph_etl/tiles.py CHANNELS: name, scale; the file's order)
   const CHANNELS = [['business_per_km', 4], ['access_per_km', 2], ['signals_per_km', 20], ['stops_per_km', 20], ['crossings_per_km', 10],
-    ['calming_per_km', 20], ['schools_per_km', 20], ['worship_per_km', 20], ['sidewalk', 1], ['built', 254], ['density', 16], ['bldg_per_km', 1], ['addr_per_km', 1]];
+    ['calming_per_km', 20], ['schools_per_km', 20], ['worship_per_km', 20], ['sidewalk', 1], ['built', 254], ['density', 16], ['bldg_per_km', 1], ['addr_per_km', 1],
+    ['byway', 1]];
   const CLASS = { motorway: 0, trunk: 1, primary: 2, secondary: 3, tertiary: 4, unclassified: 5, residential: 6, service: 7, track: 8, ferry: 9 };
 
   const tileOf = (lat, lon) => ({ i: Math.floor((lon + 180) / TILE_DEG), j: Math.floor((lat + 90) / TILE_DEG) });

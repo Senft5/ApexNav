@@ -22,12 +22,17 @@ public struct IMUPipeline: Sendable {
     public static let camberHoldS = 1.0
     /// Written with every frame as `camber_v`: camber from this pipeline (unknown when unobserved). Frames, rows and
     /// uploads without it come from builds whose camber decayed to a placeholder 0 on straights, and their camber is not used.
-    public static let camberVersion = 2
+    /// 3 (2026-11-15): camber from the specific force (accel - g * gravity, the raw accelerometer). Version 2 took it from
+    /// userAcceleration, gravity removed, where the bank drops out and the attitude filter's drift in long turns was read
+    /// instead; its camber is not used either.
+    public static let camberVersion = 3
+    /// Lateral specific force (gravity included), +Y left, m/s^2: camber's input.
+    public private(set) var latSpecificMps2 = 0.0
     public private(set) var engagement = 0.0
 
     public init() {}
 
-    /// accel: proper acceleration with gravity removed, phone frame, m/s^2. gyro: rad/s. gravityG: CoreMotion gravity,
+    /// accel: kinematic acceleration (CoreMotion userAcceleration, gravity removed), phone frame, m/s^2. gyro: rad/s. gravityG: CoreMotion gravity,
     /// phone frame, g (points down), or nil. speedMps: latest GPS speed (held between fixes).
     public mutating func step(accel a: Vec3, gyro w: Vec3, timestamp: Double, speedMps: Double, gravityG: Vec3? = nil) {
         var dt = 0.01
@@ -43,6 +48,7 @@ public struct IMUPipeline: Sendable {
         lonAccMps2 += aH * (ax - lonAccMps2)
         latAccMps2 += aH * (ay - latAccMps2)
         yawRateRadS += aH * (yaw - yawRateRadS)
+        if let g = gravityG { latSpecificMps2 += aH * ((ay - gStd * mount.rY.dot(g)) - latSpecificMps2) }
 
         crestAccMps2 += lowPassAlpha(dt: dt, tau: 1.0 / (2.0 * .pi * 1.0)) * (az - crestAccMps2)
 
@@ -56,11 +62,12 @@ public struct IMUPipeline: Sendable {
         segRoughSumSq += sq
         segRoughCount += 1
 
-        // a_y = v w_z cos(phi) - g sin(phi), turn-relative (same gating as core/kinematics.py)
-        // Observed only while cornering; held camberHoldS after the last observation, then unknown (nil, never 0).
+        // a_y = v w_z cos(phi) - g sin(phi) on the specific force, turn-relative (same gating as core/kinematics.py).
+        // Observed only while cornering with gravity known; held camberHoldS after the last observation, then unknown
+        // (nil, never 0).
         let aKin = speedMps * yawRateRadS
-        if abs(aKin) > Self.camberGateMps2 {
-            let sinPhi = max(-0.5, min(0.5, (abs(aKin) - abs(latAccMps2)) / gStd))
+        if abs(aKin) > Self.camberGateMps2 && gravityG != nil {
+            let sinPhi = max(-0.5, min(0.5, (abs(aKin) - abs(latSpecificMps2)) / gStd))
             let phi = asin(sinPhi)
             if let c = camberRad {
                 camberRad = c + lowPassAlpha(dt: dt, tau: 0.3) * (phi - c)

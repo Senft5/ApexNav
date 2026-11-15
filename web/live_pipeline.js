@@ -7,7 +7,7 @@
   'use strict';
   const G = 9.80665, D2R = Math.PI / 180;
   // camber is seen only under cornering load; after the last sample over the gate it is held, then unknown (core/live_pipeline.py)
-  const CAMBER_GATE_MPS2 = 1.5, CAMBER_HOLD_S = 1.0;
+  const CAMBER_GATE_MPS2 = 1.5, CAMBER_HOLD_S = 1.0, CAMBER_VERSION = 3;   // as core/live_pipeline.py
   const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   const scale = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
   const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -44,10 +44,10 @@
       this.ivT = 0; this.ivH = [0, 0, 0]; this.ivYaw = 0; this.ivV0 = null;
     }
     observe(accel, gyro, gravity, dt, v) {
-      if (gravity) this._trackGravity(gyro, gravity, dt);
+      if (gravity) this._trackGravity(gyro, gravity, dt, v);
       if (this.state !== 'default') this._forwardEvidence(accel, gyro, dt, v);
     }
-    _trackGravity(gyro, g, dt) {
+    _trackGravity(gyro, g, dt, v = 0) {
       if (!this.gFast) { this.gFast = g; this.gSlow = g; }
       this.gFast = add(this.gFast, scale(sub(g, this.gFast), alpha(dt, C.G_FAST_TAU)));
       this.gSlow = add(this.gSlow, scale(sub(g, this.gSlow), alpha(dt, C.G_SLOW_TAU)));
@@ -60,7 +60,8 @@
       const moved = angle(up, this.rz) > C.REMOUNT_ANGLE || this.offAxisRate > C.REMOUNT_RATE;
       this.movedS = moved ? this.movedS + dt : 0;
       if (this.movedS >= C.REMOUNT_S) { this.state = 'default'; this.persisted = false; this.movedS = 0; this._resetEvidence(); return; }
-      if (steady) {
+      // never trimmed to a corner's bank: in a corner the car leans on the road, which is the camber being measured
+      if (steady && !(Math.abs(dot(this.rz, gyro) * v) > CAMBER_GATE_MPS2)) {
         this.rz = norm(add(this.rz, scale(sub(up, this.rz), alpha(dt, C.TRIM_TAU))));
         this.rx = norm(reject(this.rx, this.rz)); this.ry = norm(cross(this.rz, this.rx));
       }
@@ -109,6 +110,7 @@
       this.lonAcc = 0; this.latAcc = 0; this.yawRate = 0; this.crestAcc = 0; this.hpVert = 0; this.vertPeak = 0; this.lastAz = 0;
       this.roughMeanSq = 0; this.segRoughSumSq = 0; this.segRoughCount = 0; this.engagement = 0;
       this.camber = null; this.camberAt = null;   // turn-relative bank, rad; null = not observed in the last CAMBER_HOLD_S
+      this.latSf = 0;                              // lateral specific force (gravity included), m/s^2: camber's input
     }
     /** One sample: t in seconds; gravity in g pointing down, or null; v the latest GPS speed (held between fixes). */
     step(accel, gyro, t, v, gravity = null) {
@@ -119,16 +121,18 @@
       const m = this.mount, ax = dot(m.rx, accel), ay = dot(m.ry, accel), az = dot(m.rz, accel), yaw = dot(m.rz, gyro);
       const aH = alpha(dt, 0.15);
       this.lonAcc += aH * (ax - this.lonAcc); this.latAcc += aH * (ay - this.latAcc); this.yawRate += aH * (yaw - this.yawRate);
+      if (gravity) this.latSf += aH * ((ay - G * dot(m.ry, gravity)) - this.latSf);
       this.crestAcc += alpha(dt, 1 / (2 * Math.PI * 1.0)) * (az - this.crestAcc);
       const rc = 1 / (2 * Math.PI * 8.0), beta = rc / (rc + dt);
       this.hpVert = beta * (this.hpVert + az - this.lastAz); this.lastAz = az;
       this.vertPeak = Math.max(this.vertPeak, Math.abs(this.hpVert));
       const sq = this.hpVert * this.hpVert;
       this.roughMeanSq += alpha(dt, 0.5) * (sq - this.roughMeanSq); this.segRoughSumSq += sq; this.segRoughCount += 1;
-      // camber: observed only while cornering, held CAMBER_HOLD_S after the last observation, then unknown (never 0)
+      // camber from the specific force (accel - G * gravity; core/live_pipeline.py CAMBER_VERSION): observed only while
+      // cornering with gravity known, held CAMBER_HOLD_S after the last observation, then unknown (never 0)
       const aKin = v * this.yawRate;
-      if (Math.abs(aKin) > CAMBER_GATE_MPS2) {
-        const sinPhi = Math.max(-0.5, Math.min(0.5, (Math.abs(aKin) - Math.abs(this.latAcc)) / G)), phi = Math.asin(sinPhi);
+      if (Math.abs(aKin) > CAMBER_GATE_MPS2 && gravity) {
+        const sinPhi = Math.max(-0.5, Math.min(0.5, (Math.abs(aKin) - Math.abs(this.latSf)) / G)), phi = Math.asin(sinPhi);
         this.camber = this.camber == null ? phi : this.camber + alpha(dt, 0.3) * (phi - this.camber);
         this.camberAt = t;
       } else if (this.camberAt != null && !(t - this.camberAt >= 0 && t - this.camberAt <= CAMBER_HOLD_S)) { this.camber = null; this.camberAt = null; }
@@ -172,6 +176,6 @@
     get verified() { const n = this.pairs.length; return n >= 10 && this.pairs.filter(Boolean).length / n >= 0.8; }
   }
 
-  const api = { G, CAMBER_HOLD_S, MountCalibrator, IMUPipeline, CrossCheck, fromDeviceMotion, CONSTANTS: C };
+  const api = { G, CAMBER_HOLD_S, CAMBER_VERSION, MountCalibrator, IMUPipeline, CrossCheck, fromDeviceMotion, CONSTANTS: C };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexLivePipeline = api;
 })(typeof window !== 'undefined' ? window : globalThis);

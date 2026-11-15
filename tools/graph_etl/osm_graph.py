@@ -164,12 +164,26 @@ def drivable(t: dict) -> dict | None:
         # a limited-access expressway below trunk class (`motorroad=yes`, or the US tagging `expressway=yes`): a highway to
         # the levels' rule (tiles.py EXPRESSWAY). Not a link: a ramp carries its own class, and the tag is the road's.
         "expressway": 1 if hw not in LINKS and not ferry and "yes" in (t.get("motorroad"), t.get("expressway")) else 0,
+        # a designated scenic road: 2 National Scenic Byway / All-American Road, 1 another scenic byway (a route=road
+        # relation over it, read() fills it in; or the way's own scenic=yes), 0 none (web/route_ctx/osm_overpass.js byway)
+        "byway": 1 if t.get("scenic") == "yes" else 0,
     }
+
+
+def byway_level(t: dict) -> int:
+    """A route=road relation as a byway level, as web/route_ctx/osm_overpass.js bywayLevel: 2 national (NSB, All-American
+    Road), 1 other scenic, 0 not scenic."""
+    net, name = str(t.get("network") or ""), str(t.get("name") or "")
+    if re.search(r"NSB|All-American|AAR", net, re.I) or re.search(r"national scenic byway|all-american road", name, re.I):
+        return 2
+    if t.get("scenic") == "yes" or re.search(r"scenic|byway", net, re.I) or re.search(r"scenic|byway", name, re.I):
+        return 1
+    return 0
 
 
 # attributes that must match for two ways to merge into one edge at a degree-2 joint
 MERGE_KEYS = ("hw", "rc", "use", "oneway", "maxspeed", "lanes", "surface", "sidewalk", "bridge", "tunnel", "toll",
-              "roundabout", "destination", "ferry", "name", "truck", "expressway")
+              "roundabout", "destination", "ferry", "name", "truck", "expressway", "byway")
 
 # ---- node features ------------------------------------------------------------------------------------------------
 def node_kind(t: dict) -> set[str]:
@@ -301,6 +315,14 @@ def read(path: str, bbox=None) -> Raw:
         elif o.is_relation():
             t = dict(o.tags)
             typ = t.get("type")
+            if typ == "route" and t.get("route") == "road":
+                # (relations come after the ways in an extract: the member ways read so far are all there are)
+                lv = byway_level(t)
+                if lv:
+                    for m in o.members:
+                        if m.type == "w" and m.ref in raw.ways and raw.ways[m.ref][0]["byway"] < lv:
+                            raw.ways[m.ref][0]["byway"] = lv
+                continue
             if typ != "restriction":
                 continue
             r = t.get("restriction:motorcar") or t.get("restriction")

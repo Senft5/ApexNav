@@ -62,7 +62,8 @@ READS = (1, 2, 3)
 # (name, scale): u8 = round(value * scale), capped at 254; 255 = unknown. Order is the file's.
 CHANNELS = (("business_per_km", 4), ("access_per_km", 2), ("signals_per_km", 20), ("stops_per_km", 20),
             ("crossings_per_km", 10), ("calming_per_km", 20), ("schools_per_km", 20), ("worship_per_km", 20),
-            ("sidewalk", 1), ("built", 254), ("density", 16), ("bldg_per_km", 1), ("addr_per_km", 1))
+            ("sidewalk", 1), ("built", 254), ("density", 16), ("bldg_per_km", 1), ("addr_per_km", 1),
+            ("byway", 1))
 HEADER_BYTES = 64
 TILE_DEG = 0.25
 

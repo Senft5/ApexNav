@@ -101,11 +101,11 @@ public struct MountCalibrator: Sendable {
 
     /// One 100 Hz sample. gravityG nil (no attitude) leaves the vertical as it is.
     public mutating func observe(accel a: Vec3, gyro w: Vec3, gravityG: Vec3?, dt: Double, speedMps: Double) {
-        if let g = gravityG { trackGravity(gyro: w, gravity: g, dt: dt) }
+        if let g = gravityG { trackGravity(gyro: w, gravity: g, dt: dt, speedMps: speedMps) }
         if state != .default { forwardEvidence(accel: a, gyro: w, dt: dt, v: speedMps) }
     }
 
-    mutating func trackGravity(gyro w: Vec3, gravity g: Vec3, dt: Double) {
+    mutating func trackGravity(gyro w: Vec3, gravity g: Vec3, dt: Double, speedMps: Double = 0.0) {
         if gFast == nil { gFast = g; gSlow = g }
         var fast = gFast!, slow = gSlow!
         fast = fast.plus(g.minus(fast).scaled(lowPassAlpha(dt: dt, tau: Self.gFastTau)))
@@ -131,7 +131,10 @@ public struct MountCalibrator: Sendable {
             resetEvidence()
             return
         }
-        if steady {   // follow slow trim of the mount (and of the road on average)
+        // follow slow trim of the mount (and of the road on average), never a corner's bank: in a corner the car leans on
+        // the road, which is the camber being measured
+        let cornering = abs(rZ.dot(w) * speedMps) > IMUPipeline.camberGateMps2
+        if steady && !cornering {
             rZ = rZ.plus(up.minus(rZ).scaled(lowPassAlpha(dt: dt, tau: Self.trimTau))).normalized()
             rX = rX.rejecting(rZ).normalized()
             rY = rZ.cross(rX).normalized()

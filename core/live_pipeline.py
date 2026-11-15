@@ -24,6 +24,12 @@ EARTH_RADIUS_M = 6371008.8
 # straight that follows it.
 CAMBER_GATE_MPS2 = 1.5
 CAMBER_HOLD_S = 1.0
+# Camber needs the lateral SPECIFIC force, gravity included: a_y = v w cos(phi) - g sin(phi). The phone hands the pipeline
+# CoreMotion's userAcceleration, gravity removed, which tilts with the car, so its lateral part is v w cos(phi) and the bank
+# drops out: what it read was the attitude filter's drift in long turns (9.7 deg on straight motorways in members' data,
+# 2026-11-15). Specific force is accel - G * gravity (the raw accelerometer), as core/kinematics.py takes it offline;
+# without gravity there is no camber (unknown). CAMBER_VERSION 3 marks camber read this way (2 was the gravity-free one).
+CAMBER_VERSION = 3
 
 
 def _dot(a, b): return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
@@ -145,11 +151,11 @@ class MountCalibrator:
     def observe(self, accel, gyro, gravity_g, dt: float, speed_mps: float) -> None:
         """One 100 Hz sample. gravity_g None (no attitude) leaves the vertical as it is."""
         if gravity_g is not None:
-            self._track_gravity(gyro, gravity_g, dt)
+            self._track_gravity(gyro, gravity_g, dt, speed_mps)
         if self.state != "default":
             self._forward_evidence(accel, gyro, dt, speed_mps)
 
-    def _track_gravity(self, gyro, g, dt: float) -> None:
+    def _track_gravity(self, gyro, g, dt: float, speed_mps: float = 0.0) -> None:
         if self.g_fast is None:
             self.g_fast, self.g_slow = g, g
         self.g_fast = _add(self.g_fast, _scale(_sub(g, self.g_fast), alpha(dt, self.G_FAST_TAU)))
@@ -172,7 +178,10 @@ class MountCalibrator:
             self.state, self.persisted, self.moved_s = "default", False, 0.0
             self._reset_evidence()
             return
-        if steady:                                   # follow slow trim of the mount (and of the road on average)
+        # follow slow trim of the mount (and of the road on average), never a corner's bank: in a corner the car leans on
+        # the road, which is the camber being measured
+        cornering = abs(_dot(self.rz, gyro) * speed_mps) > CAMBER_GATE_MPS2
+        if steady and not cornering:
             self.rz = _norm(_add(self.rz, _scale(_sub(up, self.rz), alpha(dt, self.TRIM_TAU))))
             self.rx = _norm(_reject(self.rx, self.rz))
             self.ry = _norm(_cross(self.rz, self.rx))
@@ -260,10 +269,11 @@ class IMUPipeline:
     seg_rough_count: int = 0
     camber: float | None = None  # turn-relative bank, rad; None = not observed in the last CAMBER_HOLD_S
     camber_at: float | None = None  # sensor time of the last camber observation
+    lat_sf: float = 0.0         # lateral specific force (gravity included), +Y left, m/s^2: camber's input
     engagement: float = 0.0
 
     def step(self, accel, gyro, timestamp: float, speed_mps: float, gravity_g=None) -> None:
-        """accel: proper acceleration with gravity removed, phone frame, m/s^2; gyro rad/s; gravity_g: CoreMotion
+        """accel: kinematic acceleration (CoreMotion userAcceleration, gravity removed), phone frame, m/s^2; gyro rad/s; gravity_g: CoreMotion
         gravity, phone frame, g (points down), or None; speed_mps: latest GPS speed (held between fixes)."""
         dt = 0.01
         if self.last_t is not None:
@@ -280,6 +290,8 @@ class IMUPipeline:
         self.lon_acc += a_h * (ax - self.lon_acc)
         self.lat_acc += a_h * (ay - self.lat_acc)
         self.yaw_rate += a_h * (yaw - self.yaw_rate)
+        if gravity_g is not None:
+            self.lat_sf += a_h * ((ay - G * _dot(m.ry, gravity_g)) - self.lat_sf)
 
         self.crest_acc += alpha(dt, 1.0 / (2.0 * math.pi * 1.0)) * (az - self.crest_acc)
 
@@ -293,11 +305,12 @@ class IMUPipeline:
         self.seg_rough_sum_sq += sq
         self.seg_rough_count += 1
 
-        # a_y = v w_z cos(phi) - g sin(phi), turn-relative (same gating as core/kinematics.py)
-        # Observed only while cornering; held CAMBER_HOLD_S after the last observation, then unknown (never 0).
+        # a_y = v w_z cos(phi) - g sin(phi) on the specific force, turn-relative (same gating as core/kinematics.py).
+        # Observed only while cornering and with gravity known; held CAMBER_HOLD_S after the last observation, then
+        # unknown (never 0).
         a_kin = speed_mps * self.yaw_rate
-        if abs(a_kin) > CAMBER_GATE_MPS2:
-            sin_phi = max(-0.5, min(0.5, (abs(a_kin) - abs(self.lat_acc)) / G))
+        if abs(a_kin) > CAMBER_GATE_MPS2 and gravity_g is not None:
+            sin_phi = max(-0.5, min(0.5, (abs(a_kin) - abs(self.lat_sf)) / G))
             phi = math.asin(sin_phi)
             self.camber = phi if self.camber is None else self.camber + alpha(dt, 0.3) * (phi - self.camber)
             self.camber_at = timestamp
