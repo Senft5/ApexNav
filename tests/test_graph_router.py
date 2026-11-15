@@ -335,6 +335,15 @@ def test_a_gravel_road_is_no_stage_when_unpaved_is_avoided():
     assert r == {"avoided": ["Paved Road"], "allowed": ["Gravel Road", "Paved Road"]}, r
 
 
+def test_a_long_good_road_is_one_stage_across_tiles_and_among_many_lanes():
+    """2026-11-15: from Robbinsville neither the Cherohala Skyway nor the Dragon was a stage (Best roads nearby, loops):
+    a chain broke at a tile's edge (a name's index is its tile's own), stopped at 15 km, and only the first 36 chains of
+    short twisty lanes were ever built. Now the Skyway is one stage of its length, up to K.STAGE_KM."""
+    r = case("longStage")
+    assert r["tiles"] >= 2, r
+    assert len(r["skyway"]) == 1 and 25 <= r["skyway"][0] <= r["cap"], r
+
+
 def test_loops_keep_off_unpaved_road_when_it_is_avoided():
     """2026-11-14 (a survey of rider towns): with unpaved avoided (the app's default) Sturgis loops drove 15 to 31 km of
     gravel and Stowe's 20 km. A loop leg first keeps off unpaved road entirely, and a loop with more than LOOP_DIRT_KM

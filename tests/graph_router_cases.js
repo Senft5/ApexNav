@@ -150,6 +150,24 @@ const CASES = {
       return { full: full.routes.length, cut: cut.routes.length, cutHasPick: !!cut.routes[0] };
     } finally { R.K.PLAN_SOFT_MS = keep; }
   },
+  longStage() {
+    // a 30 km good road across a tile's edge (-84.5) and a 6 km twistier lane: the road is one stage, its whole length up
+    // to K.STAGE_KM (a name's index is its tile's own, so the chain once broke at the edge, and stopped at 15 km), and
+    // with many short lanes about it still a stage (every seed is tried, not only the first few dozen chains)
+    const nodes = [], edges = [];
+    for (let k = 0; k <= 30; k++) nodes.push(at(39.3, -84.68 + k * 0.0116));
+    for (let k = 0; k < 30; k++) two(edges, k, k + 1, { quality: 0.85, cls: 3, name: 'Skyway', t: 50, fun: 2.5 });
+    for (let j = 0; j < 60; j++) {
+      const a = nodes.length;
+      for (let k = 0; k <= 3; k++) nodes.push(at(39.32 + 0.004 * j, -84.66 + k * 0.009));
+      for (let k = 0; k < 3; k++) two(edges, a + k, a + k + 1, { quality: 0.8, cls: 5, name: `Lane ${j}`, t: 70, fun: 9 });
+      two(edges, a, Math.min(30, j % 30), { quality: 0.5, cls: 5, name: `Link ${j}`, t: 200 });
+    }
+    const v = R.view(H.tiles(nodes, edges).tiles);
+    const st = R.explore(v, { start: { lat: 39.3, lon: -84.68 }, maxS: 7200, max: 12 }).stages;
+    const sky = st.filter((x) => x.name === 'Skyway');
+    return { skyway: sky.map((x) => +x.km.toFixed(1)), stages: st.length, tiles: new Set([...Array(v.E).keys()].map((e) => v.eTile[e])).size, cap: R.K.STAGE_KM };
+  },
   dirtStage() {
     // two good roads with corners, one of them gravel: with unpaved roads avoided (the app's default) the gravel road is
     // never a stage a loop is built round

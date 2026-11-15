@@ -94,7 +94,7 @@
     // stages within reach of half the length at LOOP_REACH_MS; at most LOOP_STAGES of them chained, LOOP_TRIES loops
     // routed, each stage driven through a point every LOOP_ALONG_M; a loop with more than LOOP_MAX_RETRACED driven twice
     // is dropped
-    LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 12, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_MAX_RETRACED: 0.4, LOOP_DIRT_KM: 2,
+    LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 12, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_MAX_RETRACED: 0.4, LOOP_DIRT_KM: 2, LOOP_DIRT_TRY: [0.7, 0.5, 1.4], STAGE_KM: 40,
     LOOP_CONN_FACTOR: 1.7, LOOP_CONN_A: 3, LOOP_MAX_OFF: 0.6, LOOP_NEAR_OFF: 0.15, LOOP_RING_OFF: 0.3, LOOP_RETRIES: 4, LOOP_REFITS: 2, LOOP_CONN_A_SHORT: 1, LOOP_CONN_A_LONG: 6, LOOP_FIT_OFF: 0.12,   // a connector's road length over its crow line, the router's detours to good road in it (Cincinnati, 2026-11-04)
     SNAP_M: 1500, GRID_DEG: 0.01, LIVE_NODES: 200, LIVE_TRIES: 4,   // a snap's road reaches LIVE_NODES or it's an island (snapLive)
     // long trips (2026-11-15): a corridor over LONG_TILES tiles (about 150 km crow at Fun, 100 at Long way) is cut to a
@@ -316,6 +316,13 @@
   function nameOf(v, e) {
     const ix = v.name[e], t = v.tiles[v.eTile[e]];
     return ix >= 0 && t.names && t.names[ix] ? t.names[ix] : null;
+  }
+  /** Two edges of the same named road, in one tile or across a tile's edge (a name's index is the tile's own). */
+  function sameName(v, a, b) {
+    if (v.name[a] < 0 || v.name[b] < 0) return false;
+    if (v.eTile[a] === v.eTile[b]) return v.name[a] === v.name[b];
+    const n = nameOf(v, a);
+    return n !== null && n === nameOf(v, b);
   }
   /** The other direction of the same road (v -> u with about the same length), or -1. */
   function twin(v, e) {
@@ -1567,10 +1574,25 @@
       for (const r of rings(v, req, obj, s0, hwy, level, km)) if (!out.some((x) => sameRoute(x, r))) out.push(r);
     }
     // the length is a guess until routed: one more than 60 % off it isn't the loop asked for
-    let routes = out.filter((r) => Math.abs(r.distM / 1000 - km) / km <= K.LOOP_MAX_OFF);
+    const fits = () => out.filter((r) => offOf(r) <= K.LOOP_MAX_OFF);
+    const isClean = (r) => !((r.why.unpavedKm || 0) > K.LOOP_DIRT_KM);
+    // unpaved road avoided, and every loop found drives it: the stages picked for other lengths too (LOOP_DIRT_TRY x the
+    // length), whose loops may still fit it. Moab at 150 km (2026-11-15) found only Island in the Sky down the Shafer
+    // Trail and Gemini Bridges (46 km of 4x4 track); the paved La Sal Loop, 102 km, is a stage picked for 105
+    if (obj.noDirt && !fits().some(isClean)) {
+      for (const f of K.LOOP_DIRT_TRY) {
+        drive(loopCombos(v, req.start, km * f, tries, req.prefs, req.avoid), K.LOOP_RETRIES);
+        if (fits().some(isClean)) break;
+      }
+    }
+    let routes = fits();
     // unpaved road avoided: where some loops keep (all but LOOP_DIRT_KM) off it, only those; where none can (the Black
-    // Hills' gravel between the paved canyons), the loops as found, their unpaved km on the card (why.unpavedKm)
-    if (obj.noDirt) { const clean = routes.filter((r) => !((r.why.unpavedKm || 0) > K.LOOP_DIRT_KM)); if (clean.length) routes = clean; }
+    // Hills' gravel between the paved canyons), the ones with the least of it (within LOOP_DIRT_KM of the least), their
+    // unpaved km on the card (why.unpavedKm)
+    if (obj.noDirt && routes.length) {
+      const least = Math.min(...routes.map((r) => r.why.unpavedKm || 0));
+      routes = routes.filter((r) => !((r.why.unpavedKm || 0) > Math.max(least, 0) + K.LOOP_DIRT_KM));
+    }
     for (const r of routes) delete r.combo;
     return { routes, ms: Date.now() - t0 };
   }
@@ -1913,25 +1935,24 @@
       if (v.to[e] === v.tail[p]) return false;
       headings(v, p); headings(v, e);
       if (Math.abs(turnAngle(v.hOut[p], v.hIn[e])) > 1.05) return false;
-      return score[e] >= score[seed] / 3 || (v.name[e] >= 0 && v.name[e] === v.name[p] && v.eTile[e] === v.eTile[p]);
+      return score[e] >= score[seed] / 3 || sameName(v, e, p);
     };
     for (const seed of seeds) {
-      if (out.length >= max * 3) break;
       if (used[seed]) continue;
       const chain = [seed];
       take(seed);
       let km = v.len[seed] / 1000;
-      for (let p = seed; km < 15;) {                                 // forward
+      for (let p = seed; km < K.STAGE_KM;) {                         // forward
         const n = v.to[p];
         let best = -1;
         for (let e = v.first[n]; e < v.first[n + 1]; e++) if (ok(p, e, seed) && (best < 0 || score[e] > score[best])) best = e;
         if (best < 0) break;
         chain.push(best); take(best); km += v.len[best] / 1000; p = best;
       }
-      for (let q = seed; km < 15;) {                                 // back
+      for (let q = seed; km < K.STAGE_KM;) {                         // back
         const n = v.tail[q];
         let best = -1;
-        for (let r = v.rfirst[n]; r < v.rfirst[n + 1]; r++) { const e = v.redge[r]; if (!used[e] && v.to[e] >= 0 && score[e] > 0 && v.tail[q] === v.to[e] && v.tail[e] !== v.to[q]) { headings(v, e); headings(v, q); if (Math.abs(turnAngle(v.hOut[e], v.hIn[q])) <= 1.05 && (score[e] >= score[seed] / 3 || v.name[e] === v.name[q]) && (best < 0 || score[e] > score[best])) best = e; } }
+        for (let r = v.rfirst[n]; r < v.rfirst[n + 1]; r++) { const e = v.redge[r]; if (!used[e] && v.to[e] >= 0 && score[e] > 0 && v.tail[q] === v.to[e] && v.tail[e] !== v.to[q]) { headings(v, e); headings(v, q); if (Math.abs(turnAngle(v.hOut[e], v.hIn[q])) <= 1.05 && (score[e] >= score[seed] / 3 || sameName(v, e, q)) && (best < 0 || score[e] > score[best])) best = e; } }
         if (best < 0) break;
         chain.unshift(best); take(best); km += v.len[best] / 1000; q = best;
       }
