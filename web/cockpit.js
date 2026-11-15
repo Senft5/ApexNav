@@ -9066,6 +9066,7 @@
       const box = $('themeCards'); if (!box) return;
       if (themeCards.size !== Object.keys(Themes.THEMES).length) {
         themeCards.clear();
+        box._at = null;                                                  // new cards start the shelf at 0: turn it to the look in use again
         box.replaceChildren(...Object.values(Themes.THEMES).map((t) => {
           const card = el('div', { className: 'theme-card' });
           const ok = () => themeAllowed(t.id);
