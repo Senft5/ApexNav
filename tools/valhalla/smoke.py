@@ -43,12 +43,12 @@ def main(base: str) -> int:
             [(0.3, 0), (-0.3, 0), (0, 0.4), (0, -0.4), (0.25, 0.3), (-0.25, -0.3), (0.5, 0.5), (-0.5, 0.4), (0.4, -0.6), (0.1, 0.8), (-0.1, -0.8), (0.6, 0), (-0.6, 0)]]
     j, s = ask(base, "sources_to_targets", {"sources": [CINCY, near[0], near[6]], "targets": near, **AUTO})
     cells = [c for row in j["sources_to_targets"] for c in row]
-    holes = [c for c in cells if not c.get("time")]
+    holes = [c for c in cells if c.get("time") is None]   # a pair at the same point is time 0, not a hole
     assert not holes, f"matrix has {len(holes)} holes: {json.dumps(holes)[:600]}"
     rows.append(f"sources_to_targets 3x13 round Cincinnati: {s:.2f} s")
     # cities 200-340 km apart: our matrix may leave such pairs empty, and then the app asks the public server (route_loading.js)
     j, s = ask(base, "sources_to_targets", {"sources": [CINCY, COLUMBUS], "targets": [LEXINGTON, INDY, LOUISVILLE], **AUTO})
-    holes = sum(1 for row in j["sources_to_targets"] for c in row if not c.get("time"))
+    holes = sum(1 for row in j["sources_to_targets"] for c in row if c.get("time") is None)
     rows.append(f"sources_to_targets 2x3 between cities: {holes} of 6 empty, {s:.2f} s (not a failure)")
     j, s = ask(base, "trace_attributes", {"encoded_polyline": shape, "costing": "auto", "shape_match": "map_snap",
                                          "filters": {"action": "include", "attributes": ["edge.speed_limit", "edge.road_class", "edge.way_id"]}})
