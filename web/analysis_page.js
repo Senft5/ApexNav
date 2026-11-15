@@ -968,10 +968,11 @@
       $('segTitle').textContent = `Runs · ${seg.name}`;
       const passes = passesFor(seg).sort((a, b) => (b.p.score ?? -1) - (a.p.score ?? -1));
       const bestTime = Math.min(...passes.map(x => x.p.time_s));
-      // your ideal run (ghost_duel.js idealOf): your quickest stretches, corner to corner, put together, set against your best
+      // your ideal run (ghost_duel.js idealOf): your quickest stretches, corner to corner, put together, set against your best;
+      // shown from 0.5 s under it: splits are kept to a tenth, and on Nate's roads (2026-11-15) the 0.1 s "ideals" were rounding
       const ideal = window.ApexGhostDuel ? ApexGhostDuel.idealOf(passes.filter((x) => x.p.surface !== 'wet' && x.p.surface !== 'ice').map((x) => x.p)) : null;
       const under = ideal ? Math.round((ideal.best_s - ideal.time_s) * 10) / 10 : 0;
-      $('segIdeal').hidden = !(ideal && under >= 0.1 && ideal.runs >= 2);
+      $('segIdeal').hidden = !(ideal && under >= 0.5 && ideal.runs >= 2);
       $('segIdeal').textContent = $('segIdeal').hidden ? '' : `Ideal run ${mmss(ideal.time_s)}: your quickest stretches from ${ideal.runs} runs put together, ${under.toFixed(1)} s under your best.`;
       // TestFlight 2026-11-05 ("bad text spacing"): five columns were wider than a phone, so the table scrolled sideways (the
       // Score cut to "ore", the components' words run together). Now a run is its line (#, run, Score, time) and its four
