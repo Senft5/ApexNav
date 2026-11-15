@@ -118,6 +118,13 @@ let t = 1000; const now = () => t;
   t += 61000; asked = [];
   await L.valhalla('route', '{}', 20000, now);
   assert.equal(asked[0], 'https://vettadrive.app/api/valhalla/route');
+  // a matrix of ours with an empty pair: the public server is asked too, and ours is not rested
+  L.resetValhallaForTest(); asked = []; answer = (url) => url.startsWith('https://vettadrive.app/') ? res(200, { sources_to_targets: [[{ time: 5 }, { time: null }]] }, { 'x-router': 'own' }) : res(200, { sources_to_targets: [[{ time: 5 }, { time: 9 }]] });
+  assert.deepEqual(await L.valhalla('sources_to_targets', '{}', 20000, now), { sources_to_targets: [[{ time: 5 }, { time: 9 }]] });
+  assert.equal(asked.length, 2);
+  asked = []; answer = (url) => url.startsWith('https://vettadrive.app/') ? res(200, { sources_to_targets: [[{ time: 5 }]] }, { 'x-router': 'own' }) : pub(url);
+  assert.deepEqual(await L.valhalla('sources_to_targets', '{}', 20000, now), { sources_to_targets: [[{ time: 5 }]] });
+  assert.equal(asked.length, 1);
   // ours unreachable: the public server
   L.resetValhallaForTest(); asked = []; answer = (url) => { if (url.startsWith('https://vettadrive.app/')) throw new TypeError('offline'); return pub(url); };
   assert.deepEqual(await L.valhalla('route', '{}', 20000, now), { trip: { via: 'public' } });

@@ -48,6 +48,7 @@
     const sync = root.ApexSync;
     return sync && typeof sync.apiBase === 'string' && typeof location !== 'undefined' && /^https?:|^apexnav:/.test(location.protocol) ? sync.apiBase : null;
   };
+  const holed = (j) => !j || !Array.isArray(j.sources_to_targets) || j.sources_to_targets.some((row) => !Array.isArray(row) || row.some((c) => !c || !Number.isFinite(c.time)));
   async function valhalla(action, body, timeoutMs = 20000, now = Date.now) {
     const text = typeof body === 'string' ? body : JSON.stringify(body), base = ownBase(), t0 = now();
     if (base !== null && now() >= ownRestUntil) {
@@ -56,7 +57,11 @@
         const r = await fetch(`${base}/api/valhalla/${action}`, { method: 'POST', body: text, signal: controller.signal, credentials: 'omit',
           headers: { 'Content-Type': 'application/json', 'X-Apexnav': '1' } });
         // x-router: own marks our router's answer (a stand-in API that answers 200 to everything is not a route)
-        if (r.ok && r.headers.get('x-router') === 'own') { api.lastRouter = 'own'; return await r.json(); }
+        if (r.ok && r.headers.get('x-router') === 'own') {
+          const j = await r.json();
+          // a matrix with an empty pair: ours gives up on long pairs sooner than the public server, so it is asked too
+          if (action !== 'sources_to_targets' || !holed(j)) { api.lastRouter = 'own'; return j; }
+        }
         const why = r.status === 503 ? ((await r.json().catch(() => ({}))).reason || '') : '';
         if (why !== 'outside_region' && why !== 'no_points' && r.status >= 500) ownRestUntil = now() + OWN_REST_MS;
       } catch (_) {

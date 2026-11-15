@@ -42,7 +42,8 @@ backend/src/valhalla.ts; tiles for Ohio, Kentucky and Indiana built weekly by .g
 to the public server (valhalla1.openstreetmap.de) when ours answers anything but 200: a point outside the three states'
 outlines, the container starting (it sleeps after 6 h without a request and takes a minute or two to fetch its tiles),
 or no container (previews, tests). After "starting" or no answer the page leaves ours alone for a minute
-(web/route_loading.js `valhalla()`). This changes where Valhalla runs, not what it is used for: still Quick only.
+(web/route_loading.js `valhalla()`). A matrix of ours with an empty pair is asked of the public server too (ours gives up
+on pairs 250+ km apart sooner, tools/valhalla/smoke.py). This changes where Valhalla runs, not what it is used for: still Quick only.
 
 Changing the level re-plans a destination route that is not being driven (not while one is being planned; a route with a stop you added keeps it and the level applies to the next route). Loops ignore the level, so their card hides it.
 
