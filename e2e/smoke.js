@@ -4532,7 +4532,7 @@ flow('a drive started on the car and never ended is in the Log: the car switchin
   // 1. started on the car's screen, driven 3.5 km, the car switched off in the car park: no End
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start', free: true }));
   await page.waitForFunction(() => window.apexDebug.driveActive);
-  for (let b = 0; b < 4; b++) { await feed(b * 80, (b + 1) * 80, 15); await page.waitForTimeout(150); }
+  for (let b = 0; b < 4; b++) { await feed(b * 80, (b + 1) * 80, 15); await page.waitForTimeout(150); if (b === 1) await page.evaluate(() => window.apexDebug.say('Stage done.')); }
   await until(async () => (await ApexRecording.keepAll()).length === 1, null, 'the drive is checkpointed as it goes');
   const posted = await page.evaluate(() => window.__native.filter((m) => m.cmd === 'journal').map((m) => m.op));
   check(posted.indexOf('start') >= 0 && posted.indexOf('durable') > posted.indexOf('start'), 'the shell is told the drive began and what is kept: ' + posted);
@@ -4544,6 +4544,9 @@ flow('a drive started on the car and never ended is in the Log: the car switchin
   const one = await until(async () => { const all = await ApexRecording.all(); return all.length === 1 && !(await ApexRecording.keepAll()).length ? all[0] : null; }, null, 'saved, and nothing left in progress');
   check(one.ended === 'car' && one.dist[one.dist.length - 1] > 3400, 'the whole drive saved, said how it ended: ' + JSON.stringify({ ended: one.ended, m: one.dist[one.dist.length - 1] }));
   check(/Ended when the car disconnected/.test(await page.textContent('#endLine')), 'the card says so');
+  // what the co-driver said on it, kept with the drive (cockpit.js saidOnDrive): each line, where, and in which voice
+  check(Array.isArray(one.said) && one.said.length > 0 && one.said.every((x) => typeof x.line === 'string' && ['pack', 'phone', null].includes(x.eng) && Number.isFinite(x.m)),
+    'the drive keeps what was said: ' + JSON.stringify((one.said || []).slice(0, 3)));
   check(await page.evaluate(() => window.__native.some((m) => m.cmd === 'journal' && m.op === 'end')), 'the shell drops its journal once saved');
 
   // 2. another drive from the car; the phone closes the page in the background (it writes nothing more) after the last

@@ -14,6 +14,8 @@
   - "T-junction".
 - Ghost and stage lines in a pack voice leave out the friend's or stage's name, because a name has no clip. The full line still shows on screen.
 - App health now counts `voice_pack` and `voice_phone` per spoken line (no DB change). Read them after the next TestFlight build to see how often the phone voice still speaks.
+- Each drive record now keeps `said`, a log of what the co-driver said. Each entry has `t` (seconds), `m` (metres along the drive), `line`, `eng` (pack, phone, a prompt style, or null if the line was cut off) and `ahead` (metres to the note when its call began). It stays on the phone; the anonymous upload's columns (anon_drives.js COLS) leave it out, and dev-account uploads carry it. Drives recovered after a reload have no `said`.
+- The replay strip showing bumps about a mile ahead does not affect the voice: notes are only called within `ApexNoteTiming.leadM` (cockpit.js, the note loop). That strip issue belongs to the UI thread.
 - Still on the phone voice by design: lines that name a place (for example "Next fuel: Shell, in 1.9 mi").
 - Next: read voice_pack and voice_phone from Nate's next drives. If voice_phone stays high, run the e2e VOICE_LOG pass again to find the lines.
 

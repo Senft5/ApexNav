@@ -368,7 +368,7 @@
     });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, get ghostRuns() { return drive.ghosts || null; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), horizonFrom: async (coords, tee = false) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; if (tee) t.marks = [ApexRoadMarks.teeMark(t)]; useHorizon(t); return t.id; } };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, say: (text) => say(text, true), get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get passRefs() { return passRefs.length; }, get ghostRuns() { return drive.ghosts || null; }, refreshSavedDrives: () => refreshSavedDrives(), get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p), horizonFrom: async (coords, tee = false) => { const t = await trackFromPolyline(coords, 'horizon', 'The road ahead'); t.kind = 'horizon'; if (tee) t.marks = [ApexRoadMarks.teeMark(t)]; useHorizon(t); return t.id; } };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -1840,6 +1840,24 @@
     // opts: kind 'hazard' (goes first, may cut off an ordinary line), key (never twice in a row), atM (route metres: dropped once passed).
     // review recordings (.github/workflows/app-review.yml, debug builds only): every line said goes to the system log, a
     // transcript to read beside the video, which has no sound
+    // The drive's own log of what was said (kept with the drive on the phone as `said`, never in an anonymous upload, whose
+    // columns are listed in anon_drives.js): when (s from the drive's start), where (m along it), the line, which voice said
+    // it (pack: the chosen voice's clips; phone: the phone's voice; a prompt style such as a tone when the words were skipped; null: cut off) and, for a note, how far ahead of it the call began, so
+    // a review can see where it fell back to the phone's voice and how early or late each call landed.
+    function saidOnDrive(item) {
+      let rec = null;
+      try { rec = driveActive ? drive.rec : null; } catch (_) { return null; }   // (a line said while the page is still starting)
+      if (!rec || !item || !item.text) return null;
+      const said = rec.said || (rec.said = []);
+      if (said.length >= SAID_MAX) return null;
+      const last = rec.rows.length ? rec.rows[rec.rows.length - 1] : null;   // its newest 5 m row: seconds from the start
+      const t = last && Number.isFinite(last.t_s) ? last.t_s : null;
+      const ahead = Number.isFinite(item.atM) && queueCursor() != null ? Math.round(item.atM - queueCursor()) : null;
+      const x = { t, m: Math.round(rec.dist), line: String(item.text).slice(0, 120), eng: null, ...(ahead != null ? { ahead } : {}) };
+      said.push(x);
+      return x;
+    }
+    const SAID_MAX = 1500;
     function saidLog(text) { if (window.APEX_REVIEW) { try { window.webkit.messageHandlers.apex.postMessage({ cmd: 'said', text: String(text) }); } catch (_) {} } }
     function say(text, force, chain = null, sysToken = null, opts = {}) {
       // a road hazard (not a turn or a crest, which share the urgent speech lane) also alerts on the car's screen
@@ -1931,6 +1949,7 @@
         try { const len = ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, cue, Themes.get(state.theme).sounds)); await new Promise(r => setTimeout(r, len * 1000 + 40)); } catch (_) {}
       }
       const duck = ApexSpeechQueue.ducks(item, isSpirited());
+      const said = saidOnDrive(item);   // logged as it starts; which voice said it is filled in once it has played
       let played = false, voiced = null;   // voiced: the clips this line was given (null: none, so the phone's voice says it)
       try {
         if (state.voiceId !== 'device' && window.ApexVoice) {
@@ -1940,7 +1959,7 @@
           const tokens = own && item.chain && item.aside && item.aside.kind === 'advice' ? [...own, item.aside.token] : own;
           voiced = tokens && ApexVoice.covers(tokens) ? tokens : null;
           const promptStyle = await voiceBracket(true, duck);
-          if (promptStyle !== 'normal') { voiceBracket(false); speech.busy = false; speech.followUp = null; pumpSpeech(); return; }   // silent or a tone: skip the words
+          if (promptStyle !== 'normal') { if (said) said.eng = promptStyle; voiceBracket(false); speech.busy = false; speech.followUp = null; pumpSpeech(); return; }   // silent or a tone: skip the words
           try {
             // A call the bank can only voice by joining clips plays as one whole render when the
             // route-load prefetch has it; the join is the audible seam we are avoiding.
@@ -1954,6 +1973,7 @@
       // App health: lines said by the chosen pack's voice, and lines a pack voice was chosen for but the phone's voice said
       // (no clips for them, or the clips failed), so a fallback that creeps back shows in Garage → Account → App health
       if (state.voiceId !== 'device') health.bump(played ? 'voice_pack' : 'voice_phone');
+      if (said) said.eng = played ? 'pack' : 'phone';
       if (played) { speech.busy = false; pumpSpeech(); return; }
       // e2e (VOICE_LOG=1): a line with a pack voice chosen but no clips for it, said by the phone's voice instead
       if (!voiced && state.voiceId !== 'device' && typeof window.__voiceGap === 'function') { try { window.__voiceGap(String(item.text)); } catch (_) {} }
@@ -11570,6 +11590,7 @@
         // Passenger aboard (For this drive) tags the drive 'Passenger' (drive_tags.js), so the Log knows it too
         { const tags = window.ApexRouteDriver ? ApexRouteDriver.driveTags(ApexRouteDriver.load(localStorage)) : []; if (tags.length) extra.tags = tags; }
         if (laps.length) extra.laps = laps;
+        if (Array.isArray(rec.said) && rec.said.length) extra.said = rec.said;   // what was said, and in which voice (saidOnDrive)
         if (battery) extra.battery = battery;
         { const sf = drive.surface ? drive.surface.value() : null; if (sf) extra.surface = sf; }   // dry, wet or icy (road_surface.js); unknown left out
         // F-04: the card in the frame after End, from the recording as it stands; the drive is parsed, scored and saved in
