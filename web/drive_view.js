@@ -633,10 +633,11 @@
     let net = null;
     if (ref) { const ks = d.corners.map((_, k) => lost(k)).filter((x) => x != null); net = ks.length ? ks.reduce((s, x) => s + x, 0) : null; }
     // TestFlight 2026-11-12 ("walls of text"): the comparison and the repeatability say their numbers in a line each
-    // the gap in words, against the drive it is measured from ("+18.9 s" was a sign to decode); each card's delta follows it
+    // the gap in words, against the drive it is measured from ("+18.9 s" was a sign to decode); each card's delta follows it.
+    // Named by its day, never its Score: a Score beside a time read as "your best" being the slower one (Nate's drives, round 2)
     const nk = d.corners.map((_, k) => lost(k)).filter((x) => x != null).length;
     const gap = net == null ? null : Math.abs(net) < 0.05 ? 'level' : `${Math.abs(net).toFixed(1)} s ${net > 0 ? 'slower' : 'quicker'}`;
-    list.innerHTML = '<h2>Corners</h2>' + (ref ? `<p class="note" style="margin-bottom:8px">${gap == null ? 'No clean corners to compare with your best drive here.' : `${gap === 'level' ? 'Level with' : `<b class="${net > 0 ? 'loss' : 'gain'}">${gap}</b> than`} your best drive here (${esc(String(ref.score))}), over ${nk} corner${nk === 1 ? '' : 's'}`}</p>` : '');
+    list.innerHTML = '<h2>Corners</h2>' + (ref ? `<p class="note" style="margin-bottom:8px">${gap == null ? 'No clean corners to compare with your other drive here.' : `${gap === 'level' ? 'Level with' : `<b class="${net > 0 ? 'loss' : 'gain'}">${gap}</b> than`} your other drive here${ref.when ? ` (${esc(ref.when)})` : ''}, over ${nk} corner${nk === 1 ? '' : 's'}`}</p>` : '');
     const reps = consistencyRows(co);
     if (reps.length) {                                               // how repeatably each corner is driven over your passes (D-07)
       const ul = el('ol', 'dv-time'), m = (x) => fine(Math.max(3, x)), spd = (x) => `${Math.max(1, Math.round(x * MPH))} ${SPD()}`;
@@ -753,14 +754,16 @@
     }
     if (co && co.top.length) {                                      // where the time is: the biggest gaps to your own best passes
       const ul = el('ol', 'dv-time');
+      // the drive the best passes came from, said once over the list when it is one drive (it was on every row, round 2)
+      const froms = co.top.map((k) => (co.corners[k].best ? co.others[co.corners[k].best_from] : null)), one = froms.every((f) => f && froms[0] && f.date === froms[0].date) ? froms[0] : null;
       for (const k of co.top) {
         const x = co.corners[k], c = d.corners[k], from = x.best ? co.others[x.best_from] : null, li = el('li'), b = el('button');
         b.innerHTML = `<b>${k + 1}</b><span>${esc(callOf(c))}</span><em class="loss">${fmtD(x.gain_s)}</em>`
-          + `<span class="note">${esc(tipText(x, MPH) || 'Same technique, quicker all the way through')}${from ? ` \u00b7 best pass ${esc(from.date)}` : ''}</span>`;
+          + `<span class="note">${esc(tipText(x, MPH) || 'Same technique, quicker all the way through')}${from && !one ? ` \u00b7 best pass ${esc(from.date)}` : ''}</span>`;
         b.onclick = () => { pick(c.apex, c.start, c.end); openCorner(k, b); };
         li.append(b); ul.append(li);
       }
-      list.prepend(el('h2', null, 'Where to find time'), ul);
+      list.prepend(...[el('h2', null, 'Where to find time'), one ? el('p', 'note', `Against your best passes, ${esc(one.date)}`) : null, ul].filter(Boolean));
     }
     // your best yet: the corners this drive beat every other pass of, and by how much (above Where to find time: news first)
     const wins = newBests(co);

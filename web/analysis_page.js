@@ -497,16 +497,21 @@
       const run = runs.length ? runs.reduce((m, d) => (d.run.corners > m.run.corners ? d : m)) : null;
       $('recordsPanel').hidden = !rows.length && !smooth && !brake && !kinds.length && !run;
       if ($('recordsPanel').hidden) return;
-      const pct = (v) => `${Math.round(v * 100)}%`;
+      // one unit a group (Nate's drives, round 2: one list read 737, 64%, 99%, 5 and 100/100): Scores out of 1000, then
+      // feats out of 100 as the drive page's bars read them, and a run in corners
+      const pct = (v) => `${Math.round(v * 100)}<small>/100</small>`;
       const day = (d) => `<span class="nw">${monthOf(d) ? ApexFormat.dateTime(d.date.slice(0, 10)) : 'date unknown'}</span>`;   // "30 Oct", as the list's stamps read; never 2026-10-30
       const line = (what, d, value, sub) => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link"><td class="l"><b></b><span class="sub">${what} · ${sub}</span></td><td><span class="score">${value}</span></td></tr>`;
       const out = [], names = [];
-      for (const r of rows) { out.push(line(`Best Score on this road, of ${r.n} scored drives`, r.best, r.best.ds.score, r.fresh ? `${day(r.best)}, your latest here: a new best` : day(r.best))); names.push(r.name); }
+      const head = (t) => `<tr class="rec-h"><th colspan="2">${t}</th></tr>`;
+      if (rows.length) out.push(head('Scores'));
+      for (const r of rows) { out.push(line(`Best Score on this road, of ${r.n} scored drives`, r.best, `${r.best.ds.score}<small>/1000</small>`, r.fresh ? `${day(r.best)}, your latest here: a new best` : day(r.best))); names.push(r.name); }
+      if (smooth || brake || run || kinds.length) out.push(head('Feats'));
       if (smooth) { out.push(line(`Smoothest drive this month, of ${of('smoothness').length}`, smooth, pct(smooth.ds.components.smoothness), day(smooth))); names.push(smooth.name); }
       if (brake) { out.push(line(`Best braking this month, of ${of('braking').length}`, brake, pct(brake.ds.components.braking), day(brake))); names.push(brake.name); }
-      if (run) { out.push(line(`Best run this month: corners in a row, smooth and settled${Number.isFinite(run.run.len_m) && run.run.len_m > 0 ? `, over ${ApexUnits.long(run.run.len_m, 1)}` : ''}`, run, run.run.corners, day(run))); names.push(run.name); }
+      if (run) { out.push(line(`Best run this month: corners in a row, smooth and settled${Number.isFinite(run.run.len_m) && run.run.len_m > 0 ? `, over ${ApexUnits.long(run.run.len_m, 1)}` : ''}`, run, `${run.run.corners}<small> in a row</small>`, day(run))); names.push(run.name); }
       const way = (dir) => (dir === 'L' ? ' left' : dir === 'R' ? ' right' : ' corner');
-      for (const { z, r, d } of kinds) { out.push(line(`Cleanest ${z}${way(r.dir)}, of ${r.n} ${z} corners`, d, `${r.level}<small>/100</small>`, day(d))); names.push(d.name); }   // a corner record out of 100, beside Scores out of 1000
+      for (const { z, r, d } of kinds) { out.push(line(`Cleanest ${z}${way(r.dir)}, of ${r.n} ${z} corners`, d, `${r.level}<small>/100</small>`, day(d))); names.push(d.name); }   // a corner record out of 100, as the other feats
       $('recordsTable').innerHTML = out.join('');
       $('recordsTable').querySelectorAll('tr td.l b').forEach((b, i) => { b.textContent = names[i]; });   // names are user text
     }

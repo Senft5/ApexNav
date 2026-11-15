@@ -79,6 +79,7 @@ V.mount(rootCoach, scoredDrive, { Core, C, MPH: Core.MPS_TO_MPH,
   coach: { corners: [coachCorner], clean: 1, this_s: 4, ideal_s: 3.5, gain_s: 0.5, top: [0], others: [{ name: 'x', date: '<i>Oct 2</i>' }] } });
 const coachHead = rootCoach.children[0].innerHTML, coachList = rootCoach.children[2];
 const timeList = coachList.children.find((c) => c.className === 'dv-time'), timeHtml = timeList.children[0].children[0].innerHTML;
+const timeFrom = (coachList.children.find((c) => c.className === 'note' && /best passes/.test(c.innerHTML)) || {}).innerHTML || null;
 const cardHtml = coachList.children.find((c) => c.className === 'dv-corners').children[0].innerHTML;
 const rootNotTop = mkEl('div');
 V.mount(rootNotTop, scoredDrive, { Core, C, MPH: Core.MPS_TO_MPH,
@@ -91,7 +92,7 @@ const coastNear = V.tipText({ best: { time_s: 3.9 }, tip: { kind: 'coast', value
 const aloneHead = rootAlone.children[0].innerHTML, aloneList = rootAlone.children[2].children.map((c) => c.className);
 const aloneCard = rootAlone.children[2].children.find((c) => c.className === 'dv-corners').children[0].innerHTML;
 // Against the best drive here: the gap in words, never a "+" to decode
-const refHead = (delta) => { const rt = mkEl('div'); V.mount(rt, scoredDrive, { Core, C, MPH: Core.MPS_TO_MPH, reference: { name: 'X', score: 819, corners: scoredDrive.corners.map(() => ({ delta_s: delta })) } }); return rt.children[2].innerHTML; };
+const refHead = (delta) => { const rt = mkEl('div'); V.mount(rt, scoredDrive, { Core, C, MPH: Core.MPS_TO_MPH, reference: { name: 'X', score: 819, when: 'Yesterday, 10:58 PM', corners: scoredDrive.corners.map(() => ({ delta_s: delta })) } }); return rt.children[2].innerHTML; };
 const refSlower = refHead(-18.94), refLevel = refHead(0.01), refNone = refHead(null);
 
 // Road feel readout names how far to trust each value.
@@ -136,7 +137,7 @@ const rootCar = mkEl('div');
 V.mount(rootCar, { ...scoredDrive, car: { label: '<b>Miata</b>', mu: 0.52 } }, { Core, C, MPH: Core.MPS_TO_MPH });
 const carHead = rootCar.children[0].innerHTML;
 console.log(JSON.stringify({ notTopCard, carHead, repIntro, reps, full, bare, headHtml, unscoredHeadHtml, hiddenBeforeScrub, hiddenAfterKeyScrub, hiddenBeforeZoom, hiddenAfterZoom,
-  coachHead, timeHtml, cardHtml, refSlower, refLevel, refNone, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, ggLede, ggMore, ggOrder, ggRole, ggHas, ggCapHidden, pickNames, lanesSpeed, pickOn, barSay, barHint, feelRead, gapLanes }));
+  coachHead, timeHtml, timeFrom, cardHtml, refSlower, refLevel, refNone, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, ggLede, ggMore, ggOrder, ggRole, ggHas, ggCapHidden, pickNames, lanesSpeed, pickOn, barSay, barHint, feelRead, gapLanes }));
 """
 
 
@@ -182,7 +183,8 @@ def test_corner_coach_shows_ideal_time_and_tips(r):
     assert "0.50" not in r["coachHead"], "seconds to a tenth, not a hundredth"
     t = r["timeHtml"]
     assert "Brake 22 m later, like your best pass" in t and "+0.5 s" in t and "0.50" not in t
-    assert "&#60;i&#62;Oct 2&#60;/i&#62;" in t and "<i>" not in t, "drive names and dates are escaped"
+    # one drive behind every best pass: said once over the list, not on each row (Nate's drives, round 2)
+    assert r["timeFrom"] == "Against your best passes, &#60;i&#62;Oct 2&#60;/i&#62;" and "best pass &#60;" not in t, "said once, escaped"
     assert "dv-tip" not in r["cardHtml"], "a corner in Where to find time is not told its tip twice"
 
 
@@ -414,6 +416,8 @@ def test_corner_card_tip_only_where_it_is_news(r):
 
 def test_corners_against_the_best_drive_say_slower_in_words(r):
     n = r["refSlower"]
-    assert "<h2>Corners</h2>" in n and "s slower</b> than your best drive here (819), over " in n and "+" not in n.split("</h2>")[1].split("</p>")[0]
-    assert "Level with your best drive here (819)" in r["refLevel"]
-    assert "No clean corners to compare with your best drive here." in r["refNone"]
+    assert "<h2>Corners</h2>" in n and "s slower</b> than your other drive here (Yesterday, 10:58 PM), over " in n and "+" not in n.split("</h2>")[1].split("</p>")[0]
+    # never a Score beside a time: "slower than your best drive here (668)" read as best = slower (Nate's drives, round 2)
+    assert "819" not in n and "best drive" not in n
+    assert "Level with your other drive here (Yesterday, 10:58 PM)" in r["refLevel"]
+    assert "No clean corners to compare with your other drive here." in r["refNone"]

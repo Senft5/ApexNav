@@ -9458,7 +9458,7 @@
     // =======================================================================
     // 10b. DRIVE MODE (web): real GPS + motion, recorded to this device. REPLAY plays a saved drive; the two never mix.
     // =======================================================================
-    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0, rest: null, brakes: null, descentSaid: null, flow: null, wet: null };
+    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, turns: {}, roadIdx: 0, rest: null, brakes: null, descentSaid: null, flow: null, wet: null };
     const NATIVE_SHELL = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex);
     // Film the drive (big bet 5, DriveCam.swift): only the app has a camera to film with; on the web the setting is not offered
     // (its row hides when #driveCamRow is empty). On while a drive runs with the switch set; the shell says what it is doing.
@@ -9599,7 +9599,11 @@
         let feats = [];
         try { feats = map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation_name' }); } catch (_) { /* style not loaded */ }
         const name = ApexRoadNames.nearestRoadName(feats, x.lat, x.lon);
-        if (name) drive.roads[name] = (drive.roads[name] || 0) + 150;
+        if (name) {
+          drive.roads[name] = (drive.roads[name] || 0) + 150;
+          // how much it turned on this road (the drive is named after its twistiest road, road_names.js driveRoad)
+          if (ApexRoadNames.turnDeg) { const seg = r.rows.slice(Math.max(0, drive.roadIdx - 31), drive.roadIdx); drive.turns[name] = (drive.turns[name] || 0) + ApexRoadNames.turnDeg(seg.map((q) => q.lat), seg.map((q) => q.lon)); }
+        }
       }
     }
     // Break cue (IDEAS D-16, live): ApexRoadMemory.restTick keeps the clock (restarted by 15 min standing still); once an
@@ -11080,7 +11084,7 @@
       startStageWatch(); startCoach(); drive.ghosts = null; startGhostWatch(null);
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); drive.surface = window.ApexRoadSurface ? ApexRoadSurface.createLog() : null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.turns = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); drive.surface = window.ApexRoadSurface ? ApexRoadSurface.createLog() : null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
@@ -11502,11 +11506,14 @@
       if (out === 'saved') toast('Card saved.');
     });
     // U-75: a drive on a planned route is named after the route the driver chose (they will look for it under that name); a
-    // free drive after the road that carried most of it (road_names.js), else the date and time
+    // free drive after its twistiest road (road_names.js driveRoad), else the date and time. A route named only for where it
+    // went ("To 10069 Pebble Ridge Ln", a house address on the Log and on a share; Nate's drives, round 2) gives way to the road
     function driveName(road, when) {
       const routeName = track && track.kind === 'route' && typeof track.name === 'string' ? track.name.trim() : '';
-      return routeName || road || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}`;
+      const dest = window.ApexRoadNames && ApexRoadNames.isDestinationName ? ApexRoadNames.isDestinationName(routeName) : false;
+      return (dest ? road : routeName || road) || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}`;
     }
+    const roadOfDrive = () => (window.ApexRoadNames && drive.rec ? (ApexRoadNames.driveRoad ? ApexRoadNames.driveRoad(drive.roads, drive.turns) : ApexRoadNames.mainRoad(drive.roads, drive.rec.km * 1000)) : null);
     // ended: why a drive ended itself ('car', 'parked'; drive_keep.js EndWatch), or nothing for End
     async function leaveDrive(save, ended) {
       if (pendingEnd) { clearTimeout(pendingEnd.timer); pendingEnd = null; paintEndUndo(); }   // I-3: any other way out ends it now
@@ -11524,7 +11531,7 @@
       // In the app the mounted phone's own stream (feedAmbient) carries a recorded drive's road feel. When it ran during
       // this drive, the drive is shared (or waits for signal), so the Log doesn't offer it again by hand.
       const nativeShared = (() => { const a = drive.native && ambient.allowed ? ambientStats() : null; return !!(a && (a.active || a.trips > (drive.ambientTrips || 0))); })();
-      const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec && window.ApexRoadNames ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
+      const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec ? roadOfDrive() : null;
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off'; drive.native = false;
       if (sensors) sensors.stop();
       state.live = null;
@@ -12037,7 +12044,7 @@
     function keepMeta() {
       const c = routingCar();
       return { routeName: track && track.kind === 'route' && typeof track.name === 'string' ? track.name.trim() : '',
-               road: window.ApexRoadNames && drive.rec ? ApexRoadNames.mainRoad(drive.roads, drive.rec.km * 1000) : null,
+               road: roadOfDrive(),
                car: c ? { label: c.label, mu: Core.carGrip(c) } : null };
     }
     /** A checkpoint now (one at a time, in order; a second ask while one is written runs once after it). */
@@ -12108,7 +12115,7 @@
         if (ApexDriveKeep.keepable(rec)) {
           try {
             const meta = (k.head && k.head.meta) || {};
-            const job = driveJob(rec, (when) => meta.routeName || meta.road || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}`);
+            const job = driveJob(rec, (when) => (window.ApexRoadNames && ApexRoadNames.isDestinationName && ApexRoadNames.isDestinationName(meta.routeName) ? null : meta.routeName) || meta.road || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}`);
             const extra = { ended: j && j.active ? end.why : 'recovered' };   // (one the shell is still on was over while the page slept)
             if (meta.car && Number.isFinite(meta.car.mu)) extra.car = meta.car;
             // parsed, scored and saved in the analysis worker, as End does it (F-04): the launch is not held by a drive

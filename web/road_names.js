@@ -87,16 +87,50 @@
     const dist = Array.isArray(t.dist) && t.dist.length === t.lat.length ? t.dist : t.lat.map((_, i) => i * 5);
     const total = dist[dist.length - 1] - dist[0];
     if (!(total > 0)) return null;
-    const by = {};
-    let next = dist[0];
+    const by = {}, turns = {};
+    let next = dist[0], from = 0;
     for (let i = 0; i < t.lat.length; i++) {
       if (!(dist[i] >= next)) continue;
       next = dist[i] + stepM;
       const name = nearestRoadName(features, t.lat[i], t.lon[i]);
-      if (name) by[name] = (by[name] || 0) + stepM;
+      if (name) { by[name] = (by[name] || 0) + stepM; turns[name] = (turns[name] || 0) + turnDeg(t.lat.slice(from, i + 1), t.lon.slice(from, i + 1)); }
+      from = i;
     }
-    return mainRoad(by, total);
+    return driveRoad(by, turns);
   }
+  // Nate's drives (round 2): 3 of 13 were "Drive 11/14/2026 9:35 PM", since no road carried a third of a drive that began on
+  // city streets, and routed ones were "To 10069 Pebble Ridge Ln", a house address. A drive is named after its twistiest
+  // road: the one it turned most on (a couple of real bends at least), else the road it drove longest.
+  const TWISTY_DEG = 120, LONGEST_M = 300;
+  /** Degrees turned along a stretch of fixes (lat, lon arrays), from the heading every few fixes; a fix that didn't move is skipped. */
+  function turnDeg(lat, lon, every = 5) {
+    let prev = null, last = null, sum = 0;
+    for (let i = 0; i < lat.length; i += every) {
+      if (!Number.isFinite(lat[i]) || !Number.isFinite(lon[i])) continue;
+      if (last) {
+        const dy = (lat[i] - last[0]) * 111320, dx = (lon[i] - last[1]) * 111320 * Math.cos(lat[i] * Math.PI / 180);
+        if (Math.hypot(dx, dy) < 8) continue;                          // under GPS noise: no heading from it
+        const h = Math.atan2(dx, dy) * 180 / Math.PI;
+        if (prev !== null) { let d = Math.abs(h - prev) % 360; if (d > 180) d = 360 - d; sum += d; }
+        prev = h;
+      }
+      last = [lat[i], lon[i]];
+    }
+    return sum;
+  }
+  /** The road a drive is named after: metresByName and turnsByName (degrees) as gathered along it; null with no named road. */
+  function driveRoad(metresByName, turnsByName = {}) {
+    let twisty = null, tDeg = 0, long = null, lM = 0;
+    for (const [name, m] of Object.entries(metresByName || {})) {
+      const t = (turnsByName && turnsByName[name]) || 0;
+      if (t > tDeg) { tDeg = t; twisty = name; }
+      if (m > lM) { lM = m; long = name; }
+    }
+    return tDeg >= TWISTY_DEG ? twisty : lM >= LONGEST_M ? long : null;
+  }
+  /** A route's name that is only where it went ("To 10069 Pebble Ridge Ln", "To a dropped pin"): never the drive's name. */
+  const isDestinationName = (name) => typeof name === 'string' && /^To\s/.test(name.trim());
+
   /** Is an imported drive's name only a stand-in: missing, its file's name, or a date ("Drive 10/26/2026 5:03 PM",
    *  "web_20261027_080000")? A name the driver gave it in the app is kept. */
   function isStandInName(name, fileName = '') {
@@ -106,6 +140,6 @@
     return /^web_\d{8}_\d{6}$/.test(n) || /^Drive \d{1,2}\/\d{1,2}\/\d{4}\b/.test(n);
   }
 
-  const api = { nearestRoadName, mainRoad, shortRoadName, holdRoadName, HOLD_MS, roadOfTrack, isStandInName };
+  const api = { nearestRoadName, mainRoad, turnDeg, driveRoad, isDestinationName, TWISTY_DEG, shortRoadName, holdRoadName, HOLD_MS, roadOfTrack, isStandInName };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadNames = api;
 })(typeof window !== 'undefined' ? window : globalThis);
