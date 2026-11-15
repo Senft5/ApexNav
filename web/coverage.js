@@ -25,7 +25,8 @@
   /** Tier for the line, from its surer direction: 2 = five or more passes, 1 = two to four, 0 = a single pass (faintest). */
   const tier = (conf) => Math.max(0, Math.max(...(conf || [0])) - 1);
 
-  const SMOOTH_G = 0.10, ROUGH_G = 0.22;
+  const RS = (root.ApexRoughness || (typeof module !== 'undefined' && typeof require === 'function' ? require('./roughness.js') : null));   // the one roughness scale (roughness.js)
+  const SMOOTH_G = RS.SMOOTH_G, ROUGH_G = RS.ROUGH_G;
   const fin = (v) => typeof v === 'number' && Number.isFinite(v);
   const at = (a, d) => (Array.isArray(a) && fin(a[d]) ? a[d] : null);
 
@@ -42,7 +43,7 @@
   }
 
   /** The pavement class of a mean roughness (g): 1 smooth, 2 fair, 3 rough; 0 when roughness was not measured. */
-  const surface = (rough) => (!fin(rough) || rough < 0 ? 0 : rough < SMOOTH_G ? 1 : rough > ROUGH_G ? 3 : 2);
+  const surface = (rough) => (!fin(rough) || rough < 0 ? 0 : rough <= SMOOTH_G ? 1 : rough >= ROUGH_G ? 3 : 2);
   const SURFACE_WORD = ['Measured', 'Smooth pavement', 'Fair pavement', 'Rough pavement'];
   const SURE_WORD = ['', 'one pass so far', 'a few passes', 'many passes'];
 

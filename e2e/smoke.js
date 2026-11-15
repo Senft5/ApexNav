@@ -9147,7 +9147,7 @@ flow('measured roads: the switch draws the roads members have measured around th
     if (u.pathname === '/api/coverage') {
       boxes.push(u.searchParams.get('bbox'));
       const [s, w, n, e] = u.searchParams.get('bbox').split(',').map(Number), lat = (s + n) / 2, lon = (w + e) / 2;
-      return json({ ways: [{ way: 1, line: [[lat, lon], [lat + 0.01, lon]], conf: [2, 3], rough: [0.3, 0.071], banked: [null, 0.3], offCamber: [null, 0] }] });
+      return json({ ways: [{ way: 1, line: [[lat, lon], [lat + 0.01, lon]], conf: [2, 3], rough: [0.3, 0.02], banked: [null, 0.3], offCamber: [null, 0] }] });
     }
     return json({ error: 'not_found' }, 404);
   });
@@ -9168,7 +9168,7 @@ flow('measured roads: the switch draws the roads members have measured around th
   await page.evaluate(() => { const m = window.apexDebug.map, f = m.getSource('apex-coverage-src')._data.features[0], c = f.geometry.coordinates; m.jumpTo({ center: [(c[0][0] + c[1][0]) / 2, (c[0][1] + c[1][1]) / 2], zoom: 14 }); });
   await page.waitForFunction(() => { const m = window.apexDebug.map; return m.loaded() && m.queryRenderedFeatures([m.getCanvas().clientWidth / 2, m.getCanvas().clientHeight / 2], { layers: ['apex-coverage'] }).length > 0; }, null, { timeout: 8000 });
   await page.evaluate(() => { const m = window.apexDebug.map, c = m.getCenter(); m.fire('click', { point: m.project(c), lngLat: c, originalEvent: {} }); });
-  await page.waitForFunction(() => /Smooth pavement \(0\.07 g\) · many passes · 30% of it banked/.test(document.getElementById('toast').textContent), null, { timeout: 4000 });
+  await page.waitForFunction(() => /Smooth pavement \(0\.02 g\) · many passes · 30% of it banked/.test(document.getElementById('toast').textContent), null, { timeout: 4000 });
   await page.evaluate(() => document.querySelector('[data-toggle="coverage"]').click());
   check(await page.evaluate(() => window.apexDebug.map.getLayoutProperty('apex-coverage', 'visibility')) === 'none', 'hidden when off');
 });
@@ -12630,7 +12630,7 @@ flow('members\' road feel on the road ahead: a free drive hears the bump members
   // asked by the 0.1 degree cells the road ahead crosses (VI-1), never by its ways: the answer carries the way's line
   await page.route((u) => u.pathname === '/api/roads', (route) => { const q = new URL(route.request().url()).searchParams; asked.push(q.get('cells') || 'ways:' + q.get('ways'));
     const bins = Array.from({ length: 600 }, (_, b) => b);
-    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ways: { [WAY]: { 0: { i: bins, cam: bins.map(() => null), rough: bins.map((b) => (b >= 200 && b <= 240 ? 0.4 : 0.1)), n: bins.map(() => 3), cn: bins.map(() => 0), crest: bins.map(() => null), crn: bins.map(() => 0), bp: [[304, 0.9]] } } },
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ways: { [WAY]: { 0: { i: bins, cam: bins.map(() => null), rough: bins.map((b) => (b >= 200 && b <= 240 ? 0.09 : 0.03)), n: bins.map(() => 3), cn: bins.map(() => 0), crest: bins.map(() => null), crn: bins.map(() => 0), bp: [[304, 0.9]] } } },
       lines: { [WAY]: [[lat(-20), LON], [lat(3000), LON]] } }) }); });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks && window.ApexContributor && window.ApexSync);

@@ -70,12 +70,12 @@ out.cls = a[0].cls;
     unknownPeak: bins({ vpeak: vpeak.map((v, i) => (i >= 600 && i < 700 ? null : v)) }).filter((x) => x.bp === null).length }; }
 // network shell with a fake fetch: Valhalla trace_attributes + Overpass, then upload
 // a mostly disputed road: 45 of 50 measured bins disagree, 5 agree on smooth: tiny weight, no Surface
-out.mostlyDisputed = (() => { const m = { km: 0.5, coverage: 0.5, roughCoverage: 0.05, roughness: 0.05, avgPasses: 3, bankedKm: 0, offCamberKm: 0 }; return { adj: C.measuredAdjust(m), surface: C.surfaceScore(m) }; })();
+out.mostlyDisputed = (() => { const m = { km: 0.5, coverage: 0.5, roughCoverage: 0.05, roughness: 0.015, avgPasses: 3, bankedKm: 0, offCamberKm: 0 }; return { adj: C.measuredAdjust(m), surface: C.surfaceScore(m) }; })();
 out.offCamber = C.measuredAdjust({ roughness: null, coverage: 1, km: 10, bankedKm: 0, offCamberKm: 1, avgPasses: 3 });
-out.adjust2 = { onePass: C.measuredAdjust({ roughness: 0.6, coverage: 1, avgPasses: 1 }), banked: C.measuredAdjust({ roughness: null, coverage: 1, km: 10, bankedKm: 1, avgPasses: 3 }),
-  bankedLittle: C.measuredAdjust({ roughness: null, coverage: 1, km: 10, bankedKm: 0.5, avgPasses: 2 }), zeroCoverage: C.measuredAdjust({ roughness: 0.6, coverage: 0, km: 10, bankedKm: 1 }) };
-out.surface = [C.surfaceScore(null), C.surfaceScore({ roughness: 0.05, coverage: 0.1 }), C.surfaceScore({ roughness: 0.05, coverage: 0.5 }), C.surfaceScore({ roughness: 0.5, coverage: 1 }), C.surfaceScore({ roughness: 0.23, coverage: 1 })];
-out.adjust = [C.measuredAdjust(null), C.measuredAdjust({ roughness: null, coverage: 1 }), C.measuredAdjust({ roughness: 0.05, coverage: 1 }), C.measuredAdjust({ roughness: 0.6, coverage: 1 }), C.measuredAdjust({ roughness: 0.6, coverage: 0.1 }), C.measuredAdjust({ roughness: 0.23, coverage: 0.5 })];
+out.adjust2 = { onePass: C.measuredAdjust({ roughness: 0.15, coverage: 1, avgPasses: 1 }), banked: C.measuredAdjust({ roughness: null, coverage: 1, km: 10, bankedKm: 1, avgPasses: 3 }),
+  bankedLittle: C.measuredAdjust({ roughness: null, coverage: 1, km: 10, bankedKm: 0.5, avgPasses: 2 }), zeroCoverage: C.measuredAdjust({ roughness: 0.15, coverage: 0, km: 10, bankedKm: 1 }) };
+out.surface = [C.surfaceScore(null), C.surfaceScore({ roughness: 0.015, coverage: 0.1 }), C.surfaceScore({ roughness: 0.015, coverage: 0.5 }), C.surfaceScore({ roughness: 0.15, coverage: 1 }), C.surfaceScore({ roughness: 0.072, coverage: 1 })];
+out.adjust = [C.measuredAdjust(null), C.measuredAdjust({ roughness: null, coverage: 1 }), C.measuredAdjust({ roughness: 0.015, coverage: 1 }), C.measuredAdjust({ roughness: 0.15, coverage: 1 }), C.measuredAdjust({ roughness: 0.15, coverage: 0.1 }), C.measuredAdjust({ roughness: 0.072, coverage: 0.5 })];
 (async () => {
   // measured data along a route: way 77 direction 0 has bins 200..399 merged from 3 passes, one banked stretch, one unmeasured-camber stretch
   const roads = { 77: { 0: { i: Array.from({ length: 200 }, (_, j) => 200 + j), n: Array(200).fill(3), cam: Array.from({ length: 200 }, (_, j) => (j < 40 ? 5 : j < 60 ? null : 1)), rough: Array(200).fill(0.1), crest: Array(200).fill(0.2) } } };
@@ -618,23 +618,23 @@ const C = require(process.argv[1] + '/web/contributor.js');
 const n = 400, dist = Array.from({ length: n }, (_, i) => i * 5), lat = dist.map((d) => 35 + d / 110540), lon = dist.map(() => -84);
 const rough = new Array(n).fill(null), np = new Array(n).fill(null);
 const set = (a, b, v, k) => { for (let i = a; i <= b; i++) { rough[i] = v; np[i] = k; } };
-set(20, 50, 0.4, 2);      // 150 m broken, two passes: a rough road
-set(70, 90, 0.35, 3);     // 100 m more after a 100 m smooth patch: the same stretch
-set(150, 200, 0.5, 1);    // one pass only: none
-set(250, 260, 0.6, 4);    // 50 m: too short
-set(300, 340, 0.2, 5);    // measured, not broken
+set(20, 50, 0.09, 2);      // 150 m broken, two passes: a rough road
+set(70, 90, 0.08, 3);     // 100 m more after a 100 m smooth patch: the same stretch
+set(150, 200, 0.1, 1);    // one pass only: none
+set(250, 260, 0.12, 4);    // 50 m: too short
+set(300, 340, 0.05, 5);    // measured, not broken
 const runs = C.roughFrom(rough, np, dist);
 const t = { lat, lon, dist };
 console.log(JSON.stringify({ runs,
   marks: C.roughMarks(t, runs, []).map((m) => [m.code, m.call, m.dist_m, m.end_m, m.crowd]),
   mapped: C.roughMarks(t, runs, [{ code: 'ROUGH', dist_m: 120 }]).length,
-  start: C.roughFrom([0.5, 0.5, 0.5, ...new Array(30).fill(0.5)], new Array(33).fill(2), dist.slice(0, 33)).length,
-  startMarks: C.roughMarks(t, C.roughFrom([0.5, 0.5, 0.5, ...new Array(30).fill(0.5)], new Array(33).fill(2), dist.slice(0, 33)), []).length }));
+  start: C.roughFrom([0.1, 0.1, 0.1, ...new Array(30).fill(0.1)], new Array(33).fill(2), dist.slice(0, 33)).length,
+  startMarks: C.roughMarks(t, C.roughFrom([0.1, 0.1, 0.1, ...new Array(30).fill(0.1)], new Array(33).fill(2), dist.slice(0, 33)), []).length }));
 """
 
 
 def test_rough_road_where_two_or_more_members_measured_broken_pavement():
-    """"Rough road" where two or more passes measured broken pavement (0.30 g rms or more, the route card's "rough") for
+    """"Rough road" where two or more passes measured broken pavement (roughness.js ROUGH_G or more, the route card's "rough") for
     100 m or more; a short patch between is the same stretch; one pass, a short bit or a fair road is none; the map's own
     smoothness mark there is one call; not at the very start, where the car already is."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

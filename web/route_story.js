@@ -14,6 +14,7 @@
 // ones only (the class estimate is not a limit); members' words need 500 m measured on that road.
 (function (root) {
   'use strict';
+  const RS = (root.ApexRoughness || (typeof module !== 'undefined' && typeof require === 'function' ? require('./roughness.js') : null));   // the one roughness scale (roughness.js)
   const NODE = typeof module !== 'undefined' && module.exports;
   const Engine = () => root.ApexRouteEngine || (NODE ? require('./route_engine.js') : null);
   const Grid = () => root.ApexContextGrid || (NODE ? (() => { try { return require('./route_ctx/context_grid.js'); } catch (_) { return null; } })() : null);
@@ -329,7 +330,7 @@
     for (const x of [...by.values()].filter((v) => v.m >= T.CROWD_MIN_M).sort((a, b) => b.m - a.m)) {
       const traits = [], minN = T.CROWD_MIN_M / step;
       const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
-      if (x.r.length >= minN) { const r = mean(x.r); if (r < 0.1) traits.push('smooth'); else if (r > 0.22) traits.push('rough'); }
+      if (x.r.length >= minN) { const r = mean(x.r); const lv = RS.level(r); if (lv === 'smooth') traits.push('smooth'); else if (lv === 'rough') traits.push('rough'); }
       if (x.f.length >= minN) { const f = mean(x.f); if (f >= 0.7) traits.push('flows well'); else if (f <= 0.35) traits.push('stop-start'); }
       if (x.b.length >= 0.6 * minN) { const b = quantile(x.b, 0.5); if (b >= 2) traits.push('well banked'); else if (b <= -1.5) traits.push('off-camber in places'); }
       if (x.lovedM >= 300) traits.push('one they come back to');
