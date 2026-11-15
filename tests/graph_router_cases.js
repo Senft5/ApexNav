@@ -82,6 +82,18 @@ const CASES = {
     const names = R.plan(v, { from: { lat: 39.3, lon: -84.5999 }, to: { lat: 39.3, lon: -84.5001 }, level: 'fun' }).routes[0].names.map((x) => x.name);
     return { names, hwy };
   },
+  byway(lv) {
+    // A to B by the Skyline Drive (a ridge road that sweeps more than it winds: fewer corner points) or US 59 (more corners,
+    // the same time and scenery). With the Drive a scenic byway (the tiles' byway channel: lv 1 state, 2 National Scenic
+    // Byway) Fun takes it; with none, US 59
+    const nodes = [at(34.7, -94.6), at(34.71, -94.58), at(34.7, -94.56), at(34.69, -94.58), at(34.7, -94.601), at(34.7, -94.559)];
+    const edges = [], ch = lv === undefined ? undefined : { byway: Number(lv) };
+    two(edges, 0, 1, { quality: 0.8, cls: 3, name: 'Skyline Drive', t: 100, fun: 1.2, scenery: 0.55, ch }); two(edges, 1, 2, { quality: 0.8, cls: 3, name: 'Skyline Drive', t: 100, fun: 1.2, scenery: 0.55, ch });
+    two(edges, 0, 3, { quality: 0.8, cls: 3, name: 'US 59', t: 100, fun: 1.3, scenery: 0.55 }); two(edges, 3, 2, { quality: 0.8, cls: 3, name: 'US 59', t: 100, fun: 1.3, scenery: 0.55 });
+    two(edges, 4, 0, { quality: 0.8, cls: 4, name: 'West Road', t: 8 }); two(edges, 2, 5, { quality: 0.8, cls: 4, name: 'East Road', t: 8 });
+    const v = R.view(H.tiles(nodes, edges).tiles);
+    return R.plan(v, { from: { lat: 34.7, lon: -94.6008 }, to: { lat: 34.7, lon: -94.5592 }, level: 'fun' }).routes[0].names.map((x) => x.name).filter((n) => !/West|East/.test(n));
+  },
   ellipseGoal() {
     // a goal 60 m along a 20 km edge with no junction (a mountain road): the edge's far end is outside the leg's corridor,
     // the goal isn't

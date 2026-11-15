@@ -186,7 +186,7 @@ def road_channels(g, f, k, sc):
             "calming_per_km": float(per[ki["calming"]]), "schools_per_km": float(f["civic"][k][0]),
             "worship_per_km": float(f["civic"][k][1]), "sidewalk": None if walk is None or walk != walk else float(walk),
             "built": sc.get("built"), "density": sc.get("dens"), "bldg_per_km": float(f["bldg"][k]),
-            "addr_per_km": float(f["addr"][k]) if f["addr"] is not None else None}
+            "addr_per_km": float(f["addr"][k]) if f["addr"] is not None else None, "byway": float(a.get("byway") or 0)}
 
 
 def simplify(coords):

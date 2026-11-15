@@ -274,10 +274,12 @@ describe("POST /api/contribute (real time)", () => {
     expect(r.rough_mean).toBeCloseTo(0.2); expect(r.crest_peak).toBeCloseTo(0.4); expect(r.k_mean).toBeCloseTo(0.02);
     await ok(post(a, { drive_id: "drive-alice-2", bins: old, cam_v: 1 }));              // any other marker is not the fixed pipeline either
     expect((await row()).camber_n).toBe(0);
-    // the current app (cam_v: 2): its camber is kept
+    await ok(post(a, { drive_id: "drive-alice-3", bins: old, cam_v: 2 }));              // 2 read the attitude filter's drift (2026-11-15)
+    expect((await row()).camber_n).toBe(0);
+    // the current app (cam_v: 3): its camber is kept
     await ok(post(b, { drive_id: "drive-bob-001", bins: bins().map((x) => ({ ...x, cam: 3.5 })) }));
     r = await row();
-    expect(r).toMatchObject({ n: 3, camber_n: 1 });
+    expect(r).toMatchObject({ n: 4, camber_n: 1 });
     expect(r.camber_mean).toBeCloseTo(3.5);
   });
 
