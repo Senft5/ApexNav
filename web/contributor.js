@@ -464,6 +464,27 @@
     return { ...summarize(runs, roads, route.lat.length), crowdK: s.k, crowdKn: s.kn, crowdBumps: s.bumps, crowdCrests: crestsFrom(s.crest, s.crn) };
   }
   /**
+   * Members' bumps and crests along a free drive's road ahead (no map match: the road context already knows the way under
+   * each stretch, osm_overpass.js 'osm_way' spans { fromM, toM, label: way id, cls, geom }). `roads` is the /api/roads answer
+   * for those ways; `lines` ({ way: [[lat, lon]] }, the cells answer's) the server's own line of each, which the bins are
+   * counted on, else the span's. { crowdBumps, crowdCrests } as measuredAlong gives them, or null when no stretch is known.
+   */
+  function feelFromWays(track, spans, roads, lines = null) {
+    const n = track && Array.isArray(track.lat) ? track.lat.length : 0;
+    const ws = (Array.isArray(spans) ? spans : []).filter((sp) => sp && sp.kind === 'osm_way' && sp.label && Array.isArray(sp.geom) && sp.geom.length > 1);
+    if (!n || !ws.length || !roads || !Array.isArray(track.dist)) return null;
+    const match = new Array(n).fill(null), ways = {};
+    let k = 0;
+    for (let i = 0; i < n; i++) {
+      const d = track.dist[i];
+      while (k < ws.length && ws[k].toM < d - 2.5) k++;
+      const sp = ws[k];
+      if (sp && sp.fromM <= d + 2.5) { match[i] = { way: sp.label, cls: sp.cls || null }; ways[sp.label] = (lines && Array.isArray(lines[sp.label]) && lines[sp.label].length > 1 ? lines[sp.label] : null) || sp.geom; }
+    }
+    const runs = locate({ drive: track, match, ways }), s = seriesFrom(runs, roads, n);
+    return { crowdBumps: s.bumps, crowdCrests: crestsFrom(s.crest, s.crn) };
+  }
+  /**
    * Per-sample measured series along a route: { cam[], rough[], n[], cn[], csd[], rsd[], k[], kn[] } with null where no member has measured
    * that 5 m. cn: passes that measured camber; csd/rsd: how much the passes disagree (sample SD; null under two passes or from
    * a server that does not send it yet). k/kn: the driven paths' mean curvature and its passes (IDEAS Q-04).
@@ -635,6 +656,6 @@
     return Math.round(100 * (1 - Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30))));
   }
 
-  const api = { CAM_V, binFlow, bumpEvidence, binBump, bumpEvents, crestsFrom, crestEvents, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, wayTiles, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { CAM_V, binFlow, bumpEvidence, binBump, bumpEvents, crestsFrom, crestEvents, feelFromWays, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, wayTiles, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);
