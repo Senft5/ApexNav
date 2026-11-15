@@ -196,3 +196,24 @@ def test_a_link_card_says_the_book_its_facts_and_its_keeper():
     assert one["name"] == "Smokies classics" and one["facts"].endswith(" · kept by @sam") and "2 roads" in one["facts"]
     assert empty["name"] == "Roadbook" and "@" not in empty["facts"]
     assert (card["w"], card["h"]) == (1200, 630)
+
+
+def test_a_planned_route_names_the_roadbook_roads_it_drives():
+    out = subprocess.run(["node", "-e", f"""const R = require({json.dumps(os.path.join(ROOT, 'web', 'roadbooks.js'))});
+      const line = (lat0, lon0, n) => Array.from({{ length: n }}, (_, i) => [lon0 + i * 5e-4, lat0]);
+      const dragon = line(35.5, -84.0, 40), other = line(35.6, -84.0, 40), half = line(35.5, -83.99, 40);
+      const books = [{{ id: 'A', name: 'Smokies classics', road_list: [{{ id: 'r1', name: 'The Dragon', geom: dragon, stamped: true }}, {{ id: 'r2', name: 'Elsewhere', geom: other }}] }},
+                     {{ id: 'B', name: 'Crew book', road_list: [{{ id: 'r1', name: 'The Dragon', geom: dragon }}, {{ id: 'r3', name: 'Half on', geom: half }}] }}];
+      const lat = Array.from({{ length: 50 }}, () => 35.5), lon = Array.from({{ length: 50 }}, (_, i) => -84.0 + i * 5e-4);
+      const f = R.onRoute(books, lat, lon);
+      console.log(JSON.stringify([f, R.routeLine(f.slice(0, 1)), R.routeLine([{{ name: 'X', bookName: 'Y', stamped: false }}]), R.routeLine(f), R.routeLine([]), R.onRoute(books, [], [])]));"""],
+        capture_output=True, text=True, check=True).stdout
+    found, one, fresh, many, none, empty = json.loads(out)
+    assert [(x["book"], x["road"], x["stamped"]) for x in found] == [("A", "r1", True)]      # r3 is half off the route; r1 once
+    assert one == "Drives The Dragon from Smokies classics"
+    assert fresh == "Drives X from Y, new to you"
+    assert many == "Drives The Dragon from Smokies classics" and none == "" and empty == []
+    two = subprocess.run(["node", "-e", f"""const R = require({json.dumps(os.path.join(ROOT, 'web', 'roadbooks.js'))});
+      console.log(JSON.stringify(R.routeLine([{{ name: 'a', bookName: 'b', stamped: true }}, {{ name: 'c', bookName: 'd', stamped: false }}])));"""],
+        capture_output=True, text=True, check=True).stdout
+    assert json.loads(two) == "Drives 2 roads from your roadbooks, 1 new to you"

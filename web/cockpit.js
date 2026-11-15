@@ -3755,7 +3755,9 @@
       // your taste (taste.js) when it moved this route up: the word for what you lean to, never a number
       const tasteLine = (() => { try { const f = t.tasteBonus >= 1 && window.ApexTaste ? ApexTaste.fit(ApexTaste.load(localStorage)) : null;
         if (!f) return ''; const k = ApexTaste.AXES.slice().sort((a, b) => f[b] - f[a])[0]; return `Suits your taste for ${{ tech: 'technical roads', flow: 'flowing roads', smooth: 'smooth surfaces' }[k]} · `; } catch (_) { return ''; } })();
-      $('routeCardSub').textContent = `${tasteLine}${carLine ? carLine + ' · ' : ''}${closed}${missed}${missedPolice}${around}${towns}${sun}${cams}${feel}`.replace(/ · $/, '');
+      // your roadbooks' roads it drives (roadbooks.js alongRoute, attachBooks): the reason a planned road is worth it
+      const booksLine = t.bookRoads && t.bookRoads.length && window.ApexRoadbooks ? `${ApexRoadbooks.routeLine(t.bookRoads)} · ` : '';
+      $('routeCardSub').textContent = `${booksLine}${tasteLine}${carLine ? carLine + ' · ' : ''}${closed}${missed}${missedPolice}${around}${towns}${sun}${cams}${feel}`.replace(/ · $/, '');
       $('routeCardSub').hidden = !$('routeCardSub').textContent;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
@@ -3913,6 +3915,7 @@
       paintStops(t);
       attachWeather(t);
       attachClosures(t);
+      if (typeof attachBooks === 'function') attachBooks(t);
       if (typeof attachWhen === 'function') attachWhen(t);        // (tests evaluate buildRoute on its own)
       if (typeof attachMarksSoon === 'function') attachMarksSoon(t);   // road marks also for a route rebuilt mid-drive
       // the route bar shows this; screen readers hear it (REVIEW.md: the bar is the toast)
@@ -7438,7 +7441,7 @@
       zones: () => privacyZones, planned: () => (plannedRoute && Array.isArray(plannedRoute.lat) && plannedRoute.lat.length > 1 ? plannedRoute : null),
       report: (o) => safety && safety.report(o), changed: () => { if (booksRowCount) booksRowCount(); }, mapUnder,
       stages: () => { try { const l = JSON.parse(localStorage.getItem('apex.segments') || '[]'); return Array.isArray(l) ? l : []; } catch (_) { return []; } },
-      edited: () => { clearTimeout(booksEdited); booksEdited = setTimeout(() => { if (roadbookMap) roadbookMap.forget(); }, 600); },   // a burst of stamps reads the map's books once
+      edited: () => { clearTimeout(booksEdited); booksEdited = setTimeout(() => { if (roadbookMap) roadbookMap.forget(); if (roadbooks) roadbooks.forgetOpened(); }, 600); },   // a burst of stamps reads the map's books once
       // a crew roadbook's road as a crew drive: People's Crews side, the crew's plan form named after the road, the road as
       // its route (shared with the crew as Plan it does with a planned route)
       planCrewDrive: (road, crew) => {
@@ -10022,6 +10025,16 @@
     }
     // Seasonal and time-of-day closures (conditional_closures.js, IDEAS R-22): OSM conditional access tags on the roads the
     // route uses, read for when you'd get there. A trip over 1° across, or the map offline: nothing said.
+    // the roads of your roadbooks a planned route drives, said on its card (roadbooks.js alongRoute); members, not in a drive
+    async function attachBooks(t) {
+      if (!t || driveActive || !Array.isArray(t.lat) || t.lat.length < 2 || !accountMe || !accountMe.member) return;
+      if (!roadbooks) { if (typeof needSocial !== 'function') return; await needSocial().catch(() => {}); }
+      if (!roadbooks || plannedRoute !== t) return;
+      const found = await roadbooks.alongRoute(t.lat, t.lon).catch(() => []);
+      if (plannedRoute !== t || !found.length) return;
+      t.bookRoads = found;
+      renderRouteCard(t);
+    }
     async function attachClosures(t) {
       $('routeCardClosures').hidden = true;
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2 || !window.ApexConditional) return;
