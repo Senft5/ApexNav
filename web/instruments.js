@@ -390,6 +390,19 @@
   }
 
   /**
+   * The g-ball in words (the replay's read-out): { turnLabel, turn, pedalLabel, pedal }. Turn: the sideways g and which
+   * way ("0.31 g left"); the pedal: Brake or Gas by the sign of the longitudinal g (ISO 8855: + is throttle) and how hard.
+   * Under 0.03 g: "Straight", "Coasting". Unknown stays "--".
+   */
+  function gReadout(latG, lonG) {
+    const ok = (v) => typeof v === 'number' && Number.isFinite(v);
+    const turn = !ok(latG) ? '--' : Math.abs(latG) < 0.03 ? 'Straight' : `${Math.abs(latG).toFixed(2)} g ${latG > 0 ? 'left' : 'right'}`;
+    const pedalLabel = !ok(lonG) || Math.abs(lonG) < 0.03 ? 'Pedals' : lonG < 0 ? 'Brake' : 'Gas';
+    const pedal = !ok(lonG) ? '--' : Math.abs(lonG) < 0.03 ? 'Coasting' : `${Math.abs(lonG).toFixed(2)} g`;
+    return { turnLabel: 'Turn', turn, pedalLabel, pedal };
+  }
+
+  /**
    * The binnacle's Sight cell from the cluster's frame (panel round 2, SO-1): the same held sight-line speed as the plate
    * under the arrow, never the corner's pace under the same word (recording 7: the plate said 50 and the cell 48, the
    * pace; the pace keeps its own mark on the speed dial). U-130: under 5 mph the plate hides (sightQuiet) and the cell
@@ -434,7 +447,7 @@
     sight: { title: 'Sight', what: 'The fastest you could still stop from within the road you can see ahead, and no faster than the next corner allows. A braking range, never a target.',
       how: 'Worked out from the shape of the road ahead: its bends, its crests and what stands at its edge. When you are faster than it, it turns red and says SLOW. Open: nothing ahead limits you.',
       now: (d, u) => (d.sightOpen ? 'Open' : nf(sightValue(d), u)) },
-    gball: { title: 'Grip ball and Bank', what: 'The ball shows the force you feel: it rolls forward under braking and outward in a turn. Bank is how much the road leans in the corner: + leans into the turn and helps, - is off-camber.',
+    gball: { title: 'Grip ball and Bank', what: 'The ball shows the force you feel: it rolls forward under braking and outward in a turn (a replay says how hard, in g). Bank is how much the road leans: + leans into the turn and helps, - is off-camber.',
       how: 'From the phone\'s motion sensors. Bank reads -- until the phone is calibrated in its mount; nothing is shown that was not measured.' + BANK_SURE,
       now: (d) => bankText(d.camberDeg) },
     meters: { title: 'Surface and Brake / Turn', what: 'Surface: how rough the road is under you. Brake / Turn: how hard you braked or turned, the last few seconds.',
@@ -980,6 +993,13 @@
     const u = [lineSpeed(sp, rule), readouts(ro), odometer(ledger, false), gDial(gg, true, true)];
     sp.dataset.explain = 'speed'; gg.dataset.explain = 'gball'; rule.dataset.explain = 'speed';
     ledger.querySelector('.odo').dataset.explain = 'trip';
+    // The replay's g-ball reads out (the owner 2026-11-15, after a real drive: "g ball should be more prominent", "the
+    // metrics a little confusing"): under the ball, what it shows in words, the turn and the brake or gas, each labelled.
+    // Shown only in a replay (index.html #app.replaying): on a drive the ball alone, no numbers to read at speed.
+    const gRead = html('div', 'g-read', gg), cell = () => { const c = html('div', 'gr-cell', gRead); return [html('span', '', c), html('b', '', c)]; };
+    const [turnL, turnV] = cell(), [pedalL, pedalV] = cell();
+    u.push((d) => { const t = gReadout(d.latG, d.lonG);
+      for (const [e, v] of [[turnL, t.turnLabel], [turnV, t.turn], [pedalL, t.pedalLabel], [pedalV, t.pedal]]) if (e.textContent !== v) e.textContent = v; });
     // Night (REVIEW2.md U-36): the trip readout steps aside for a quiet Trip key; a tap shows it for ten seconds
     const peek = html('button', 'trip-peek', ledger, 'Trip'); peek.type = 'button'; let peekT = 0;
     peek.addEventListener('click', () => { el.classList.add('show-trip'); clearTimeout(peekT); peekT = setTimeout(() => el.classList.remove('show-trip'), 10000); });
@@ -1007,6 +1027,6 @@
   }
 
   const api = { mountCluster, renderNotes, tulipSVG, lockup, stripCode, register, kitPose, KIT, springNeedle, SPEED_MAX, carGauge, carReading, CAR_READS,
-    sightCell, sightValue, sightShort, slowLine, bankText, roadKind, EXPLAIN, explainAllowed, countIn, COUNT_IN_MS, ADVANCE_MS };
+    sightCell, sightValue, sightShort, gReadout, slowLine, bankText, roadKind, EXPLAIN, explainAllowed, countIn, COUNT_IN_MS, ADVANCE_MS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexInstruments = api;
 })(typeof window !== 'undefined' ? window : globalThis);
