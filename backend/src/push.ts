@@ -67,7 +67,7 @@ export async function pushQuiet(env: Env, v: Viewer, req: Request): Promise<void
 
 /** The kinds a driver can each turn off (Garage → Settings → Notifications), and which pushes each holds. */
 export const PUSH_GROUPS: Record<string, string[]> = {
-  friends: ["request", "friend"], kudos: ["kudos", "post_kudos"], comments: ["post_comment"], duels: ["duel"], beaten: ["topped", "passed"], crews: ["crew_drive"],
+  friends: ["request", "friend"], kudos: ["kudos", "post_kudos"], comments: ["post_comment"], duels: ["duel"], beaten: ["topped", "passed"], crews: ["crew_drive"], messages: ["message"],
 };
 const offKey = (userId: string) => `pushoff/${userId}`;
 const groupOf = (kind: string) => Object.keys(PUSH_GROUPS).find((g) => PUSH_GROUPS[g].includes(kind)) || null;
@@ -133,6 +133,7 @@ export const PUSH = {
   postMention: (from: string | null, owner: string | null, title: string, post: string): Push => ({ kind: "post_comment", title, body: `${at(from)} mentioned you on ${owner ? `@${owner}'s` : "a"} drive.`, link: `${LINK}?view=friends&post=${post}` }),
   topped: (from: string | null, stage: string, score: number, yours: number): Push => ({ kind: "topped", title: "Topped", body: `${at(from)} scored ${score} on ${stage}, over your best of ${yours}.`, link: `${LINK}?view=friends` }),
   passed: (from: string | null, stage: string): Push => ({ kind: "passed", title: "Time attack", body: `${at(from)} went quicker than you on ${stage}.`, link: `${LINK}?view=friends` }),
+  message: (from: string | null): Push => ({ kind: "message", title: "Message", body: `${at(from)} sent you a message.`, link: `${LINK}?view=friends${from ? `&chat=${encodeURIComponent(from)}` : ""}` }),
   crewDrive: (crew: string, title: string, by: string | null): Push => ({ kind: "crew_drive", title: crew, body: `${at(by)} planned ${title}. Are you going?`, link: `${LINK}?view=crews` }),
 };
 
@@ -156,6 +157,11 @@ export async function afterDuel(env: Env, v: Viewer, duelId: string, taken: bool
   const d = await env.DB.prepare("SELECT challenger, opponent, stage FROM duels WHERE id = ?").bind(duelId).first<{ challenger: string; opponent: string; stage: string }>();
   if (!d) return;
   await notify(env, [taken ? d.challenger : d.opponent], taken ? PUSH.duelOn(v.handle, d.stage) : PUSH.duelAsk(v.handle, d.stage));
+}
+
+/** A direct message (messages.ts): to its friend, never its words. */
+export async function afterMessage(env: Env, v: Viewer, to: string): Promise<void> {
+  await notify(env, [to], PUSH.message(v.handle));
 }
 
 /** A crew drive planned: every other member, but no one who blocked the planner or whom the planner blocked. */

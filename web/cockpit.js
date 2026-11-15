@@ -7452,7 +7452,7 @@
       const tab = $('crewTab'), old = tab.querySelector('.badge'); if (old) old.remove();
       // friend requests from For you once it has answered (it may know of a newer one), else from /api/me
       const req = inboxBadge ? inboxBadge.data.items.filter((i) => i.kind === 'request').length : peopleRequests;
-      const parts = [[req, 'friend request'], ...peopleAsks, ...(inboxBadge && inboxBadge.n - req > 0 ? [[inboxBadge.n - req, 'new for you']] : [])].filter(([k]) => k > 0);
+      const parts = [[req, 'friend request'], ...peopleAsks, [dmUnread, 'unread message'], ...(inboxBadge && inboxBadge.n - req > 0 ? [[inboxBadge.n - req, 'new for you']] : [])].filter(([k]) => k > 0);
       const n = parts.reduce((a, [k]) => a + k, 0);
       if (!n) return;
       const b = el('span', { className: 'badge', textContent: String(n) });
@@ -7473,6 +7473,12 @@
     onSocial(() => { try { peopleSuggest = window.ApexPeopleSuggest ? ApexPeopleSuggest.mount({ el, btn, toast, apiCall, jsonOf,
       avatar: (id, h, px) => (window.ApexPhotos ? ApexPhotos.avatar(id, h, px) : el('span')),
       sent: (h) => { try { const l = JSON.parse(localStorage.getItem('apex.sentRequests') || '[]'); localStorage.setItem('apex.sentRequests', JSON.stringify([...(Array.isArray(l) ? l : []).filter((x) => x !== h), h].slice(-30))); } catch (_) {} } }) : null; } catch (e) { console.error('suggest', e); } });
+    // Messages (web/messages.js, backend/src/messages.ts): friend to friend; People's row, a profile's Message, a push's tap
+    let messages = null, dmUnread = 0;
+    onSocial(() => { try { messages = window.ApexMessages ? ApexMessages.mount({ el, btn, toast, apiCall, jsonOf,
+      avatar: (id, h, px) => (window.ApexPhotos ? ApexPhotos.avatar(id, h, px) : el('span')),
+      report: (o) => (safety ? safety.report(o) : null),
+      badge: (n) => { if (n !== dmUnread) { dmUnread = n; paintPeopleBadge(); } } }) : null; } catch (e) { console.error('messages', e); } });
     // Drive posts and the Feed (web/drive_posts.js, docs/SOCIAL.md 2.13): Post on the drive's card; the Feed on People → Friends
     let drivePosts = null;
     onSocial(() => { try { drivePosts = window.ApexDrivePosts ? ApexDrivePosts.mount({ el, btn, toast, apiCall, jsonOf,
@@ -7794,6 +7800,11 @@
       // For you (inbox.js): what happened to you lately, one sentence a row (a new account's page stays its three parts)
       if (inbox && !empty) body.append(inbox.section());
       // the Feed (drive_posts.js): the newest drives your friends and crews posted, kudos and comments one tap in
+      // Messages: your conversations with friends, one row (its count is what you haven't read) over a sheet of them
+      if (messages && accepted.length) {
+        const mpop = popSheet('Messages'); pops.push(mpop);
+        body.append(el('div', { className: 'nav-rows' }, messages.row(() => { mpop.replaceChildren(mpop.firstElementChild, messages.list()); mpop.classList.add('open'); })));
+      }
       if (drivePosts && !empty) {
         const fpop = popSheet('Feed'); pops.push(fpop);
         body.append(drivePosts.section(() => { if (!fpop._filled) { fpop.append(drivePosts.full()); fpop._filled = true; } fpop.classList.add('open'); }));
@@ -7828,6 +7839,7 @@
         if (r.ok) closeSheet();
       };
       const keysFor = (f) => [
+        ...(messages && f.handle ? [['Message', () => { closeProfile(); messages.open(f.handle); }]] : []),
         ...(where.get(f.handle) && friendsMap ? [['On the map', () => seeOnMap(f)]] : []),
         ['Share a route', () => { closeProfile(); shareRouteWith(f.handle); }],
         ...(convoy ? [['Invite to a drive', () => driveWith(f)]] : []),
@@ -8915,7 +8927,7 @@
       paintPushKinds();
     }
     // each kind its own switch, under the main one while it is on (the server keeps which are off: GET/PUT /api/push/kinds)
-    const PUSH_KINDS = [['friends', 'Friend requests'], ['kudos', 'Kudos'], ['comments', 'Comments and mentions'], ['duels', 'Duels'], ['beaten', 'Someone beat you'], ['crews', 'Crew drives']];
+    const PUSH_KINDS = [['friends', 'Friend requests'], ['kudos', 'Kudos'], ['comments', 'Comments and mentions'], ['duels', 'Duels'], ['beaten', 'Someone beat you'], ['crews', 'Crew drives'], ['messages', 'Messages']];
     let pushOff = null;
     function paintPushKinds() {
       const box = $('pushKinds'); if (!box) return;
@@ -11908,6 +11920,7 @@
       // a push's tap (backend/src/push.ts): the post it is about, or the friend, or People's side
       showView(ok(p.crew) || ok(p.convoy) || p.view === 'crews' ? 'crews' : 'friends');
       if (ok(p.post)) needSocial().then(() => { if (drivePosts) drivePosts.open(p.post); });
+      if (ok(p.chat) && /^[A-Za-z0-9_]{1,20}$/.test(p.chat)) needSocial().then(() => { if (messages) messages.open(p.chat); });
       if (ok(p.friend) && /^[A-Za-z0-9_]{3,20}$/.test(p.friend)) window.apexOpenFriend(p.friend.toLowerCase()); else renderAccount();
     }
     // Siri: go=to with the place said (q, base64url UTF-8: ApexIntents.swift linkWords), go=loop60 for "Find a 1 hour loop".
