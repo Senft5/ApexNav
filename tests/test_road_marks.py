@@ -83,10 +83,10 @@ def test_nothing_invented_or_off_the_road(out):
 
 
 def test_each_mark_has_its_own_glyph_on_the_strip():
-    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'ANIMAL', 'BUGGY', 'COVERED', 'GRAVEL', 'ROUGH', 'FORD', 'NARROW', 'JUNC', 'SCHOOL', 'ICE', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
+    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'ANIMAL', 'BUGGY', 'COVERED', 'GRAVEL', 'ROUGH', 'FORD', 'NARROW', 'JUNC', 'SCHOOL', 'ICE', 'RBT', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
     svgs = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
     assert "<polygon" in svgs[0] and "M58 32 L80 54" in svgs[1] and "M36 30" in svgs[2] and "Q50 34" in svgs[3]
-    assert len(set(svgs[:14])) == 14 and all(s.count("#f70") == 0 for s in svgs[14:])   # an unknown code: the bare hazard straight
+    assert len(set(svgs[:15])) == 15 and all(s.count("#f70") == 0 for s in svgs[15:])   # an unknown code: the bare hazard straight
 
 
 def test_rural_signs_deer_buggies_and_a_covered_bridge(out):
@@ -254,3 +254,18 @@ def test_a_bridge_may_be_icy_in_the_cold():
     assert out["cold"] == [True, True, True, False, False, False, False, False]
     assert out["cruise"] is True                                          # in the cold, at any pace: ice on a straight is ice
     assert out["mway"] == 0                                               # not a motorway's bridges: one every mile
+
+
+def test_the_road_ahead_that_meets_a_roundabout_says_it():
+    """horizon.js ends the road ahead at a roundabout (end 'roundabout'); the page lays a "Roundabout" mark there, braked
+    for like the T (to the ring's entry, about 15 mph)."""
+    js = r"""
+const M = require(process.argv[1] + '/web/road_marks.js');
+const t = { lat: [35.5, 35.51], lon: [-83.9, -83.9], dist: [0, 1110] };
+console.log(JSON.stringify({ rb: M.roundaboutMark(t), tee: M.teeMark(t).code, none: M.roundaboutMark({ dist: [0] }) }));
+"""
+    o = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert o["rb"]["code"] == "RBT" and o["rb"]["call"] == "Roundabout" and o["rb"]["dist_m"] == 1110 and o["tee"] == "TJUNC" and o["none"] is None
+    src = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert "h.end === 'roundabout' && window.ApexRoadMarks && ApexRoadMarks.roundaboutMark" in src
+    assert "e.kind === 'roundabout' ? 7" in src
