@@ -613,6 +613,10 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
                 shell?.placeResolve(index: index, id: id)
                 return
             }
+            if cmd == "placeSearch", let q = dict["q"] as? String {
+                shell?.placeSearch(query: q, lat: (dict["lat"] as? NSNumber)?.doubleValue, lon: (dict["lon"] as? NSNumber)?.doubleValue, id: id)
+                return
+            }
             if cmd == "placeReverse", let lat = (dict["lat"] as? NSNumber)?.doubleValue, let lon = (dict["lon"] as? NSNumber)?.doubleValue {
                 shell?.placeReverse(lat: lat, lon: lon, id: id)
                 return
@@ -1417,8 +1421,27 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
-    private func sendPlaceResolved(id: Int, lat: Double?, lon: Double?, name: String?) {
-        var payload: [String: Any] = ["type": "placeResolved", "id": id]
+    /// Where to? text sent without tapping a suggestion: one MKLocalSearch for the words around the phone (about 200 km),
+    /// the best match answered as {type:'placeFound'}; the page falls back to Nominatim when Apple has none.
+    func placeSearch(query: String, lat: Double?, lon: Double?, id: Int) {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { sendPlaceResolved(id: id, lat: nil, lon: nil, name: nil, type: "placeFound"); return }
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = q
+        if let lat, let lon, lat.isFinite, lon.isFinite {
+            request.region = MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                                                latitudinalMeters: 200_000, longitudinalMeters: 200_000)
+        }
+        MKLocalSearch(request: request).start { [weak self] response, _ in
+            guard let self else { return }
+            let item = response?.mapItems.first
+            let lat = item?.placemark.coordinate.latitude, lon = item?.placemark.coordinate.longitude, name = item?.name
+            Task { @MainActor in self.sendPlaceResolved(id: id, lat: lat, lon: lon, name: name, type: "placeFound") }
+        }
+    }
+
+    private func sendPlaceResolved(id: Int, lat: Double?, lon: Double?, name: String?, type: String = "placeResolved") {
+        var payload: [String: Any] = ["type": type, "id": id]
         if let lat, let lon, lat.isFinite, lon.isFinite { payload["lat"] = lat; payload["lon"] = lon }
         if let name { payload["name"] = name }
         guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
