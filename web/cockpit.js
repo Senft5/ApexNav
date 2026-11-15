@@ -2250,7 +2250,7 @@
         return ok;
       };
       const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner' || isFirst(e)).filter(e => noteM(e) - state.cursorM <= 3000)
-        .filter(e => !(e.type === 'corner' && ApexDirections.atJunction(steps, noteM(e)))).filter(hazardNear).slice(0, 3);   // a junction shows once, as the direction
+        .filter(e => !((e.type === 'corner' || e.kind === 'side_road') && ApexDirections.atJunction(steps, noteM(e)))).filter(hazardNear).slice(0, 3);   // a junction shows once, as the direction
       const notes = shown.map(e => {
         const d = distLabel(Math.max(0, noteM(e) - state.cursorM));   // 0 once you're in the corner
         return { key: `${e.type}:${e.index}:${e.dist_m}`, type: e.type, code: e.code, call: state.noteWords === 'plain' && !e.recce ? ApexPlainNotes.plainCall(e) : e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: Math.max(0, noteM(e) - state.cursorM),

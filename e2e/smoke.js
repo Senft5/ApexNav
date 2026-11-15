@@ -12653,6 +12653,44 @@ flow('a twisty section on a free drive: after 2 km without a corner, "Twisty sec
   check((await twisty()).length === 1 && first - when >= 200 && first - when <= 800, 'said once, about 30 s before the bends: ' + JSON.stringify([await twisty(), Math.round(first - when)]));
 });
 
+flow('a hidden junction: a side road joining just past a blind bend on the road ahead is called, one in plain sight is not (road_marks.js hidden)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.units', 'imperial'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  const KY = 110540, LAT0 = 35.5, LON0 = -83.9, kx = 111320 * Math.cos(LAT0 * Math.PI / 180);
+  const ll = ([x, y]) => [LON0 + x / kx, LAT0 + y / KY];
+  // north 1200 m, a right-hand bend of 50 m radius, then east; a lane joins where the bend ends (out of sight) and
+  // another 500 m along the straight north (in plain sight)
+  const P = [];
+  for (let y = 0; y <= 1200; y += 10) P.push([0, y]);
+  for (let a = 0.2; a < Math.PI / 2; a += 0.2) P.push([50 - 50 * Math.cos(a), 1200 + 50 * Math.sin(a)]);
+  for (let x = 50; x <= 1300; x += 10) P.push([x, 1250]);
+  const kBlind = P.findIndex(([x, y]) => y === 1250 && x >= 60), kOpen = P.findIndex(([, y]) => y >= 500);
+  const node = (k) => 1000 + k;
+  const elements = [
+    { type: 'way', id: 1, tags: { highway: 'tertiary', name: 'Ridge Road' }, nodes: P.map((_, k) => node(k)), geometry: P.map((p) => { const [lon, lat] = ll(p); return { lat, lon }; }) },
+    ...[[2, kBlind, [0, 300]], [3, kOpen, [-300, 0]]].map(([id, k, [dx, dy]]) => ({ type: 'way', id, tags: { highway: 'unclassified' }, nodes: [node(k), 9000 + id],
+      geometry: [P[k], [P[k][0] + dx, P[k][1] + dy]].map((p) => { const [lon, lat] = ll(p); return { lat, lon }; }) })),
+  ];
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  await page.evaluate((c) => apexDebug.horizonFrom(c), P.map(ll));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon' && (apexDebug.track.marks || []).some((m) => m.code === 'JUNC'), null, { timeout: 30000 })
+    .catch(async () => { throw new Error('no hidden junction on the road ahead: ' + JSON.stringify(await page.evaluate(() => (apexDebug.track.marks || []).map((m) => [m.code, Math.round(m.dist_m)])))); });
+  const marks = await page.evaluate(() => apexDebug.track.marks.filter((m) => m.code === 'JUNC').map((m) => Math.round(m.dist_m)));
+  check(marks.length === 1 && marks[0] > 1250 && marks[0] < 1300, 'one, past the bend, not the one in plain sight: ' + JSON.stringify(marks));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const said = () => page.evaluate(() => window.__said.filter((s) => /Hidden junction/.test(s)));
+  for (let i = await iAt(900), end = await iAt(1275); i <= end && !(await said()).length; i += 2) { await at(i); await page.waitForTimeout(60); }
+  check((await said()).length === 1, 'said once, by the bend: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+});
+
 flow('road marks on a route set during a drive: the map is asked for this route alone (road_marks.js, attachMarksSoon)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const KY = 110540, lat = (m) => 35.5 + m / KY, LON = -83.9, kx = 111320 * Math.cos(35.5 * Math.PI / 180);

@@ -11646,6 +11646,14 @@
    "heard": 1.0,
    "voice": "af_bella",
    "pace": null
+  },
+  "mark:junction": {
+   "file": "mark_junction.m4a",
+   "dur": 0.954,
+   "text": "Hidden junction",
+   "heard": 1.0,
+   "voice": "af_bella",
+   "pace": 12.77
   }
  }
 }
