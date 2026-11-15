@@ -414,7 +414,7 @@ const frame = (i, extra = {}) => ({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy
 // Startup budget (IDEAS P-06): what the map page loads and runs before it is ready, so a heavy module added to the boot
 // path shows here instead of on a phone. Bytes are exact, so their budget is about a tenth over today; CPU time varies by runner, so its
 // budget only catches a gross regression (about 0.2 s here on 2026-11-11). Raise a budget on purpose, never to get green.
-const BOOT = { scriptBytes: 3.6e6, scriptCount: 145, cpuS: 2.0, longTaskMs: 1500 };   // 2026-11-11: 3.23 MB in 130 scripts, 0.12 s, 0.17 s
+const BOOT = { scriptBytes: 3.7e6, scriptCount: 145, cpuS: 2.0, longTaskMs: 1500 };   // 2026-11-11: 3.23 MB in 130 scripts, 0.12 s, 0.17 s; 2026-11-15: 3.60 MB in 140, 0.12 s (raised to 3.7 MB on purpose for graph_router.js out-and-back loops, which plan offline so cannot load late)
 flow('startup budget: the map page is ready within its script bytes, script count, CPU time and longest task (IDEAS P-06)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__long = 0; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__long = Math.max(window.__long, e.duration); }).observe({ type: 'longtask', buffered: true }); } catch (_) {} });
@@ -5330,17 +5330,20 @@ flow('a saved route keeps its road feel: Save keeps what members measured along 
     // members drove a bend 100 m long (three passes) and felt two bumps
     ApexContributor.measuredAlong = async (t) => { window.__asked++; const n = t.lat.length, k = new Array(n).fill(null), kn = new Array(n).fill(null);
       for (let i = 300; i < 320; i++) { k[i] = 0.02; kn[i] = 3; }
-      return { coverage: 0.5, coveredKm: 30, km: 60, avgPasses: 2, roughness: 0.1, bankedKm: 0, roughKm: 0, repavedKm: 0, crowdK: k, crowdKn: kn, crowdBumps: [{ index: 100, p: 0.9 }, { index: 400, p: 0.85 }] }; };
+      return { coverage: 0.5, coveredKm: 30, km: 60, avgPasses: 2, roughness: 0.1, bankedKm: 0, roughKm: 0, repavedKm: 0, crowdK: k, crowdKn: kn, crowdBumps: [{ index: 100, p: 0.9 }, { index: 400, p: 0.85 }], crowdCrests: [{ index: 250, g: 0.3 }] }; };
   });
   await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.52, lon: -83.92 }, { lat: 36.08, lon: -83.92 }], 'route_feel', 'Down the ridge', null,
     { from: null, to: { lat: 36.08, lon: -83.92 }, via: [] }));
   await page.waitForFunction(() => /2 bumps members felt/.test(document.getElementById('measuredNote').textContent), null, { timeout: 20000 });
   const online = await page.textContent('#measuredNote');
   check(/corners from members' drives/.test(online) && !/kept/.test(online), 'with signal: the members\' corners and bumps, asked now: ' + online);
+  // and a crest two or more members went light over: on the card and a "Crest" pace note on the route (contributor.js crestEvents)
+  check(/a crest members went light over/.test(online), 'the crest members felt on the card: ' + online);
+  check(await page.evaluate(() => apexDebug.track.events.filter((e) => e.type === 'crest' && e.crowd).length) === 1, 'one crest note on the route from members\' drives');
   await page.evaluate(() => document.getElementById('routeSaveBtn').click());
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.routeFeel') || '{}'));
   const e = Object.values(kept)[0];
-  check(e && e.k.length === 1 && e.k[0][1].length === 20 && e.bumps.length === 2, 'Save keeps the bend and the bumps with the route: ' + JSON.stringify(kept).slice(0, 300));
+  check(e && e.k.length === 1 && e.k[0][1].length === 20 && e.bumps.length === 2 && e.crests && e.crests.length === 1, 'Save keeps the bend, the bumps and the crest with the route: ' + JSON.stringify(kept).slice(0, 300));
   // the context grid's indexes read with signal first (as a real phone would have them): read for the first time with no
   // signal they'd fall back to the shipped copy's path for every tile, a 404 here once the flow is back online
   await page.waitForFunction(() => window.ApexContextGrid && ApexContextGrid.urlsNear, null, { timeout: 20000 });
@@ -12620,6 +12623,36 @@ flow('a T-junction where the road ahead ends: a free drive hears it before the e
   // from 25 m/s to a turn at 4 m/s at the app's braking: well before the junction
   check(saidAt !== null && 1500 - saidAt >= 80, `"T-junction" said with room to slow (${saidAt === null ? 'never' : Math.round(1500 - saidAt) + ' m before'}): ` + JSON.stringify(await page.evaluate(() => window.__said)));
   check((await tees()).length === 1, 'once: ' + JSON.stringify(await tees()));
+});
+
+flow('a roundabout where the road ahead meets one: a free drive hears "Roundabout" with room to slow, once (horizon.js ring, road_marks.js roundaboutMark)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [] }) }));
+  const lat = (m) => 35.5 + m / 110540, LON = -83.9;
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const coords = []; for (let m = 0; m <= 1500; m += 10) coords.push([LON, lat(m)]);
+  await page.evaluate((coords) => apexDebug.horizonFrom(coords, 'roundabout'), coords);
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon');
+  const marks = await page.evaluate(() => (apexDebug.track.marks || []).map((m) => [m.code, Math.round(m.dist_m)]));
+  check(marks.length === 1 && marks[0][0] === 'RBT' && Math.abs(marks[0][1] - 1500) <= 10, 'the roundabout at the end of the road ahead: ' + JSON.stringify(marks));
+  const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 25, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const rbs = () => page.evaluate(() => window.__said.filter((s) => /Roundabout/.test(s)));
+  let saidAt = null;
+  for (let i = await iAt(1000), end = await iAt(1450); i <= end && saidAt === null; i += 2) {
+    await at(i); await page.waitForTimeout(50);
+    if ((await rbs()).length) saidAt = await page.evaluate((i) => apexDebug.track.dist[i], i);
+  }
+  // from 25 m/s to the ring's entry at 7 m/s at the app's braking: well before it
+  check(saidAt !== null && 1500 - saidAt >= 80, `"Roundabout" said with room to slow (${saidAt === null ? 'never' : Math.round(1500 - saidAt) + ' m before'}): ` + JSON.stringify(await page.evaluate(() => window.__said)));
+  check((await rbs()).length === 1, 'once: ' + JSON.stringify(await rbs()));
 });
 
 flow('a limit that drops on the road ahead: a free drive with no route hears "Limit 35 ahead." from the map, once (limit_ahead.js fromCtx)', async (page, base) => {

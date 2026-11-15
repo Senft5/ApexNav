@@ -1,5 +1,5 @@
-"""The lower-48 graph build's plan (.github/workflows/graph-us.yml): which Geofabrik state extracts to fetch, and the
-jobs that build the 1 degree blocks (tools/graph_etl/region_blocks.py's blocks, the same MARGIN round each).
+"""The US graph build's plan (.github/workflows/graph-us.yml; the lower 48, Alaska and Hawaii): which Geofabrik state
+extracts to fetch, and the jobs that build the 1 degree blocks (tools/graph_etl/region_blocks.py's blocks, the same MARGIN round each).
 
 The country is cut into bands of 1 degree of latitude and each band into CHUNK_DEG chunks of longitude, one job each,
 so no job runs past the runner's 6 hours (Ohio's densest band, ten blocks, took 105 minutes, 2026-11-10). A block is
@@ -24,6 +24,15 @@ from tools.graph_etl.region_blocks import BLOCK, MARGIN
 
 LOWER48 = (-125.0, 24.0, -66.0, 50.0)   # whole degrees round the lower 48 (west, south, east, north)
 LOWER48_SLACK = 3.0
+# Alaska and Hawaii (2026-11-15: Fun had no road there at all): their own boxes, not their Geofabrik outlines. Alaska's
+# runs across the date line (the Aleutians) and Hawaii's out to Midway, thousands of empty blocks. The boxes are where
+# the roads are: Alaska from Unalaska and Nome to Prudhoe Bay, and the panhandle from Yakutat to Ketchikan and Hyder;
+# Hawaii's eight main islands. AREAS are the grids the jobs are cut on, one after another.
+EXTRA = {
+    "alaska": ((-167.0, 53.0, -141.0, 72.0), (-141.0, 54.0, -129.0, 61.0)),
+    "hawaii": ((-161.0, 18.0, -154.0, 23.0),),
+}
+AREAS = (LOWER48, (-167.0, 53.0, -129.0, 72.0), (-161.0, 18.0, -154.0, 23.0))
 CHUNK_DEG = 15.0
 # east of DENSE_WEST the chunks are DENSE_CHUNK_DEG wide: the -95..-80 chunks took up to 4 h 17 min of the runner's 5 h 45 min
 # (Chicago, Detroit and Cleveland: bands 41 to 43, 2026-11-14), the West's under 2 h 15 min
@@ -49,13 +58,18 @@ def _ring_box(coords, box):
     return box
 
 
-def states(index):
-    """{id: (w, s, e, n)} for Geofabrik's US states inside the lower 48 (Alaska, Hawaii and the territories fall out)."""
+def states(index, extra=True):
+    """{id: (w, s, e, n)} for Geofabrik's US states inside the lower 48, and (extra) {id: ((w, s, e, n), ...)} for
+    Alaska and Hawaii (EXTRA's boxes); the territories fall out."""
     out = {}
     for f in index.get("features", []):
         p = f.get("properties") or {}
         sid = short(p.get("id"))
         if not sid or not is_state(p) or not f.get("geometry"):
+            continue
+        if sid in EXTRA:
+            if extra:
+                out[sid] = EXTRA[sid]
             continue
         b = _ring_box(f["geometry"]["coordinates"], [math.inf, math.inf, -math.inf, -math.inf])
         # 3 degrees of slack: Geofabrik's polygons run well out to sea (Washington's to -126.7, Oregon's past -126), and the
@@ -85,33 +99,43 @@ def _touch(a, b):
     return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
 
 
+def _boxes(v):
+    """A state's boxes: one (a lower-48 state's outline) or several (EXTRA)."""
+    return v if isinstance(v[0], (tuple, list)) else (v,)
+
+
+def _touches(box, v):
+    return any(_touch(box, b) for b in _boxes(v))
+
+
 def _name(band, lo):
     return f"b{band:+.2f}_{lo:+.2f}".replace("+", "p").replace("-", "m").replace(".", "")
 
 
 def jobs(st, only=None):
-    """[{name, band, west, east, blocks: [[name, box, clip]], states}] in band order; empty chunks left out."""
+    """[{name, band, west, east, blocks: [[name, box, clip]], states}] in band order, AREAS one after another; empty
+    chunks left out."""
     want = {k: v for k, v in st.items() if not only or k in only}
     out = []
-    w, s, e, n = LOWER48
-    band = s
-    while band < n - 1e-9:
-        lo = w
-        while lo < e - 1e-9:
-            hi = min(e, lo + chunk_deg(band, lo), DENSE_WEST if lo < DENSE_WEST - 1e-9 else e)
-            bl, need = [], set()
-            x = lo
-            while x < hi - 1e-9:
-                box = (x, band, min(hi, x + BLOCK), min(n, band + BLOCK))
-                clip = (box[0] - MARGIN, box[1] - MARGIN, box[2] + MARGIN, box[3] + MARGIN)
-                if any(_touch(box, b) for b in want.values()):
-                    bl.append([_name(band, x), box, clip])
-                    need |= {k for k, b in st.items() if _touch(clip, b)}   # every state under the margin, pilot or not
-                x += BLOCK
-            if bl:
-                out.append({"name": f"{band:g}_{lo:g}", "band": band, "west": lo, "east": hi, "blocks": bl, "states": sorted(need)})
-            lo = hi
-        band += BLOCK
+    for w, s, e, n in AREAS:
+        band = s
+        while band < n - 1e-9:
+            lo = w
+            while lo < e - 1e-9:
+                hi = min(e, lo + chunk_deg(band, lo), DENSE_WEST if lo < DENSE_WEST - 1e-9 else e)
+                bl, need = [], set()
+                x = lo
+                while x < hi - 1e-9:
+                    box = (x, band, min(hi, x + BLOCK), min(n, band + BLOCK))
+                    clip = (box[0] - MARGIN, box[1] - MARGIN, box[2] + MARGIN, box[3] + MARGIN)
+                    if any(_touches(box, b) for b in want.values()):
+                        bl.append([_name(band, x), box, clip])
+                        need |= {k for k, b in st.items() if _touches(clip, b)}   # every state under the margin, pilot or not
+                    x += BLOCK
+                if bl:
+                    out.append({"name": f"{band:g}_{lo:g}", "band": band, "west": lo, "east": hi, "blocks": bl, "states": sorted(need)})
+                lo = hi
+            band += BLOCK
     return out
 
 

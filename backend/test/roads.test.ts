@@ -34,6 +34,8 @@ describe("GET /api/roads", () => {
     // spread between passes: sample SD from the Welford sum of squares, null under two measuring passes
     expect(j["9"]["0"]).toMatchObject({ cn: [2, 0], csd: [0.7071, null], rsd: [0.0141, null] });
     expect(j["9"]["1"]).toMatchObject({ cn: [1], csd: [null], rsd: [null] });
+    // the crest (mean peak unweighting) and how many passes measured it
+    expect(j["9"]["0"]).toMatchObject({ crest: [0.3, 0.1], crn: [0, 0] });
     expect(JSON.stringify(j)).not.toMatch(/user|handle|email/i);
   });
 

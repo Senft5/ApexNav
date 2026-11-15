@@ -8,6 +8,7 @@
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
   const M_LAT = 110540;
   const SNAP_M = 0.8, NEAR_M = 30, ALIGN_DEG = 50, STRAIGHT_DEG = 35, OFF_DEG = 50;
+  const RING_M = 320, RING_R_M = 50;   // a roundabout up to ~100 m across (a big rural one); a city block is no ring this small
   const RANK = { motorway: 7, trunk: 6, primary: 5, secondary: 4, tertiary: 3, minor: 2, unclassified: 2, residential: 2, service: 1, track: 0 };
 
   const angDiff = (a, b) => Math.abs(((a - b) % 360 + 540) % 360 - 180);
@@ -15,7 +16,8 @@
 
   /**
    * lines: [{ coords: [[lon, lat], ...], cls }] (tile pieces are fine: shared ends are joined); me: { lat, lon, heading }.
-   * Returns { coords: [[lon, lat], ...] from you along the road, m: its length, end: 'length' | 'junction' | 'dead end',
+   * Returns { coords: [[lon, lat], ...] from you along the road, m: its length, end: 'length' | 'junction' | 'dead end' |
+   * 'roundabout' (it ends where the road meets a roundabout),
    * tee: the junction is one where the road ends and every way on turns off (a T, not a fork) }
    * or null when you are not on a mapped road going along it.
    */
@@ -53,6 +55,33 @@
       if (!best || d < best.d) best = { d, from: along[0], to: along[1], px, py, cls };
     }
     if (!best) return null;
+    // the shortest ring back to k through one of its other neighbours, not through `from`, within RING_M; a roundabout when
+    // it is round: six or more points, each within RING_R_M of their centre and the nearest at least 0.6 of the farthest
+    function ringAt(k, from) {
+      const starts = [...(adj.get(k) || new Map()).keys()].filter((n) => n !== from);
+      for (const s0 of starts) {
+        const dist = new Map([[s0, Math.hypot(pos.get(s0)[0] - pos.get(k)[0], pos.get(s0)[1] - pos.get(k)[1])]]), back = new Map([[s0, k]]), open = [s0];
+        let found = null;
+        while (open.length) {
+          open.sort((a, b) => dist.get(a) - dist.get(b));
+          const u = open.shift(), du = dist.get(u);
+          if (du > RING_M) break;
+          for (const v of (adj.get(u) || new Map()).keys()) {
+            if (v === from || (u === s0 && v === k)) continue;
+            const dv = du + Math.hypot(pos.get(v)[0] - pos.get(u)[0], pos.get(v)[1] - pos.get(u)[1]);
+            if (v === k) { if (dv <= RING_M && (!found || dv < found.d)) found = { d: dv, last: u }; continue; }
+            if (!dist.has(v) || dv < dist.get(v)) { if (!dist.has(v)) open.push(v); dist.set(v, dv); back.set(v, u); }
+          }
+        }
+        if (!found) continue;
+        const ring = [k]; for (let u = found.last; u !== k && ring.length < 400; u = back.get(u)) ring.push(u);
+        if (ring.length < 6) continue;
+        const cx = ring.reduce((a, u) => a + pos.get(u)[0], 0) / ring.length, cy = ring.reduce((a, u) => a + pos.get(u)[1], 0) / ring.length;
+        const r = ring.map((u) => Math.hypot(pos.get(u)[0] - cx, pos.get(u)[1] - cy)), rMax = Math.max(...r), rMin = Math.min(...r);
+        if (rMax <= RING_R_M && rMin >= 0.6 * rMax) return true;
+      }
+      return false;
+    }
     const out = [[best.px, best.py]];
     let m = 0, prevK = best.from, curK = best.to, end = 'length', cls = best.cls, tee = false;
     const seen = new Set([prevK]);
@@ -66,6 +95,9 @@
       const next = [...(adj.get(curK) || new Map()).entries()].filter(([k]) => k !== prevK)
         .map(([k, c]) => ({ k, c, turn: angDiff(bearingOf(p1[0], p1[1], pos.get(k)[0], pos.get(k)[1]), inB) }));
       if (!next.length) { end = 'dead end'; break; }
+      // a roundabout: the way on is a small ring through this junction (the tiles carry no roundabout tag, so its shape
+      // says it). The co-driver says it; the road ahead stops here, as at any junction (which exit is never guessed)
+      if (next.length >= 2 && ringAt(curK, prevK)) { end = 'roundabout'; break; }
       let pick = null;
       if (next.length === 1) pick = next[0];
       else {

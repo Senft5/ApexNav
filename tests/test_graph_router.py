@@ -372,6 +372,15 @@ def test_loops_keep_off_unpaved_road_when_it_is_avoided():
     assert sum(r["allowed"]) > 10, r
 
 
+def test_where_every_loop_needs_gravel_the_pass_road_there_and_back_is_offered():
+    """2026-11-15: from Ouray there is no paved loop under about 350 km, and with unpaved avoided (the app's default)
+    every loop went over a 4x4 pass (44 to 72 km unpaved). Now the best paved road near is offered there and back
+    (kind outBack, no unpaved road), and with unpaved allowed the loop over the pass is still found."""
+    r = case("valleyLoop")
+    assert r["avoided"] and all(x["kind"] == "outBack" and x["dirt"] <= 2 for x in r["avoided"]), r
+    assert any(x["kind"] == "stages" and x["dirt"] > 10 for x in r["allowed"]), r
+
+
 def test_a_two_lane_trunk_that_bends_is_a_riders_road():
     """2026-11-14 (tools/famous_roads.js): OSM tags many mountain US routes trunk, and Fun never drove The Snake (US 421,
     4.4 corner points a km). A two-way trunk whose road bends (TRUNK_FUN_KM) is not a highway; a straight one (Cincinnati's

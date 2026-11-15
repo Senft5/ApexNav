@@ -40,6 +40,14 @@ out.across = H.ahead([{ coords: north(-100, 400), cls: 'secondary' }], me(90));
 out.noHeading = H.ahead([{ coords: north(-100, 400), cls: 'secondary' }], { lat: LAT, lon: LON, heading: null });
 // a road that ends
 out.dead = summary(H.ahead([{ coords: north(-100, 300), cls: 'minor' }], me(0)));
+// a roundabout of 30 m radius at y = 630: the road north meets it at its south point, a road leaves at its north
+const ring = (r, cy, n) => { const c = []; for (let k = 0; k <= n; k++) { const a = -Math.PI / 2 + 2 * Math.PI * k / n; c.push(P(r * Math.cos(a), cy + r * Math.sin(a))); } return c; };
+out.rb = summary(H.ahead([{ coords: north(-100, 600), cls: 'secondary' }, { coords: ring(30, 630, 16), cls: 'secondary' }, { coords: [P(0, 660), P(0, 1600)], cls: 'secondary' }], me(0)));
+// entering at a tangent (the ring carries straight on): still the roundabout, not round and round it
+const tan = []; for (let y = -100; y <= 600; y += 20) tan.push(P(-30, y));
+out.rbTangent = summary(H.ahead([{ coords: [...tan, P(-30, 630)], cls: 'secondary' }, { coords: ring(30, 630, 16).map(([lo, la]) => [lo, la]), cls: 'secondary' }], me(0, -30, 0)));
+// a city block (100 m square) beside a junction is no roundabout
+out.block = summary(H.ahead([{ coords: north(-100, 600), cls: 'tertiary' }, { coords: [P(-400, 600), P(0, 600), P(400, 600)], cls: 'primary' }, { coords: [P(0, 600), P(100, 600), P(100, 700), P(0, 700), P(0, 600)], cls: 'minor' }], me(0)));
 console.log(JSON.stringify(out));
 """
 
@@ -68,3 +76,11 @@ def test_stops_at_a_t_or_a_fork(out):
 def test_nothing_when_not_on_a_road_going_along_it(out):
     assert out["far"] is None and out["across"] is None and out["noHeading"] is None
     assert out["dead"]["end"] == "dead end" and out["dead"]["m"] == 300
+
+
+def test_a_roundabout_ends_the_road_ahead_as_a_roundabout(out):
+    """The tiles carry no roundabout tag: a small round ring through the junction is one. The road ahead stops there
+    (which exit is never guessed), and says so; a city block beside a junction is no roundabout."""
+    assert out["rb"]["end"] == "roundabout" and out["rb"]["last"] == [0, 600] and out["rb"]["tee"] is False
+    assert out["rbTangent"]["end"] == "roundabout" and out["rbTangent"]["m"] < 700
+    assert out["block"]["end"] == "junction"
