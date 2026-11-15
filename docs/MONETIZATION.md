@@ -82,6 +82,8 @@ launch: that an earned offer code for contributing data is acceptable under 3.1.
 
 ## 5. The road-data business (framework now, sales later)
 
+The full plan (products, prices, legal path, privacy rules, consent, volume): docs/ROAD_INSIGHTS.md.
+
 **What history says.** Buyers paid for specific road products: Michelin bought RoadBotics (pavement condition for
 cities), Bentley Systems bought Blyncsy (road condition from imagery), Nexar sells road data to cities, Roadroid sold
 phone-based roughness surveys. Companies that sold raw driver and location data struggled (Wejo went bankrupt in 2023;
