@@ -196,6 +196,8 @@
     .cp-msg { display: grid; grid-template-columns: 40px 1fr; gap: 10px; padding: 8px 0; border-top: 1px solid var(--rule); }
     .cp-msg p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
     .cp-board-row.tap { cursor: pointer; }
+    .cp-dna-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 40px 56px; align-items: baseline; gap: 8px; padding: 6px 0; border-top: 1px solid var(--rule); }
+    .cp-dna-row .lv { font-family: var(--font-num); font-size: 20px; text-align: right; } .cp-dna-row small { color: var(--panel-dim); text-align: right; } .cp-dna-row.mine b { text-decoration: underline; }
     .cp-msg .cp-who { border: 0; background: none; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; align-self: start; }
     .cp-msg .row { gap: 10px; align-items: baseline; }
     .cp-say { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
@@ -356,7 +358,7 @@
         const panes = {
           drives: [driveSec, members(c), ...(page.posts ? [page.posts(c)] : []), ...(page.books ? [page.books(c)].filter(Boolean) : []), ...(c.pinned ? [pinnedRow(c)] : []), meetShare(c)],   // posts: what members posted to the crew (drive_posts.js)
           chat: [chat(c, draw)],
-          board: [boardSec, ...(c.house ? [houseBoard(c)] : []), buildsRow(c)],
+          board: [boardSec, ...(c.house ? [houseBoard(c)] : []), ...[crewDna(c)].filter(Boolean), buildsRow(c)],
         };
         box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), tabs(c.id, panes), ...[liveryFoot(c, draw)].filter(Boolean)));
         // a public crew (joined as one, or made public since: social.ts crewUpdate turns members' sharing off) asks once on
@@ -607,6 +609,16 @@
       root.document.body.append(ov);
     }
 
+    // The crew's driving DNA (dna_card.js crewLeaders): for each of Your driving's six skills, who in the crew is cleanest at
+    // it, and your own level beside theirs. Only members who share Scores with the crew; nothing with fewer than two.
+    function crewDna(c) {
+      const rows = root.ApexDnaCard ? ApexDnaCard.crewLeaders(c.dna) : [];
+      if (!rows.length) return null;
+      return el('div', { className: 'stack-8 cp-dna' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Cleanest in the crew' })),
+        ...rows.map((x) => el('div', { className: 'cp-dna-row' + (x.mine ? ' mine' : '') }, el('span', { textContent: x.name }),
+          el('b', { textContent: x.mine ? 'You' : `@${x.handle || '?'}` }), el('span', { className: 'lv', textContent: String(x.level) }),
+          el('small', { textContent: x.you != null ? `you ${x.you}` : '' }))));
+    }
     // The Vetta Score board (the owner's TestFlight note 06, 2026-10-31: Octane is gone): each member's face and the total of
     // their drive Scores over the week, month, year or all time, only drives they share with the crew (GET
     // /api/crews/:id/board; your own drives go up first, publishDrives). Unknown stays "--".

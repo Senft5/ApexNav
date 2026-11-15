@@ -28,7 +28,10 @@ console.log(JSON.stringify({ m, lines: K.dnaLines(m), scope: K.scopeText(m), par
   top: K.hexPoint(0, 0, 100, 0, 50).map((x) => Math.round(x)),
   wire: K.wireOf(m), noWire: K.wireOf(null),
   cmp: K.compareLines(K.wireOf(m), { skills: { squeeze: 80, brake: 75, arc: 70, entry: 77, line: 60, exit: 72 } }, '@sam'),
-  even: K.compareLines(K.wireOf(m), K.wireOf(m), 'sam'), alone: K.compareLines({ skills: K.wireOf(m).skills, style: [] }, null, 'sam'), noCmp: K.compareLines(null, null, 'sam') }));
+  even: K.compareLines(K.wireOf(m), K.wireOf(m), 'sam'), alone: K.compareLines({ skills: K.wireOf(m).skills, style: [] }, null, 'sam'), noCmp: K.compareLines(null, null, 'sam'),
+  crew: K.crewLeaders([{ handle: 'me', mine: true, skills: { squeeze: 80, brake: 75, arc: 70, entry: 77, line: 60, exit: 72 } },
+    { handle: 'sam', mine: false, skills: K.wireOf(m).skills }, { handle: 'ann', mine: false, skills: { squeeze: 81, brake: 50, arc: 50, entry: 50, line: 50, exit: 50 } }, { handle: 'x', skills: null }]),
+  lone: K.crewLeaders([{ handle: 'me', mine: true, skills: K.wireOf(m).skills }]) }));
 """
 
 
@@ -73,3 +76,10 @@ def test_beside_a_friend(out):
     assert out["even"][1] == "Within 5 points of each other at every skill"
     assert out["alone"] == ["Yours shows here once all six of your skills are measured"]
     assert out["noCmp"] == []
+
+
+def test_cleanest_in_the_crew(out):
+    rows = [(r["name"], r["handle"], r["level"], r["you"]) for r in out["crew"]]
+    assert rows == [("One braking", "ann", 81, 80), ("Brakes done", "me", 75, None), ("One arc", "sam", 92, 70),
+                    ("Entry speed", "me", 77, None), ("Patient apex", "me", 60, None), ("Back to power", "me", 72, None)]
+    assert out["lone"] == []

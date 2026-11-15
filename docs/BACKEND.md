@@ -143,7 +143,8 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
 - Driving DNA (migration 0064, `src/dna.ts`): `PUT /api/me/dna` (members) keeps your Your driving card as the phone read it,
   checked down to the six skill levels (0 to 100), at most three known style words, the corner kind and two counts.
   `GET /api/friends/:id/profile` carries `dna: { mine, theirs }` when that friend shares Scores with you (their friend
-  grant's `share_scores`), else `dna: null`. In the export as `driving_dna`; cascades with the account.
+  grant's `share_scores`), else `dna: null`. `GET /api/crews/:id/page` carries `dna: [{ handle, mine, skills }]`: you, and each
+  member who shares Scores with the crew, never across a block. In the export as `driving_dna`; cascades with the account.
 - Direct messages (migration 0065, `src/messages.ts`): `GET /api/messages` (your conversations, newest first, with unread
   counts), `GET /api/me/messages/unread`, `GET`/`POST /api/messages/:handle` (read marks them seen; send only to an accepted
   friend, 1000 characters, 60 an hour), `DELETE /api/messages/m/:id` (unsend, yours only). Blocked either way answers 404;

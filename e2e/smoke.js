@@ -3286,12 +3286,15 @@ flow('one red that means act now: Sight is ink until you are over it, then colou
   check(loud.grey !== calm.grey || loud.label !== calm.label, 'in greyscale the alarm still differs from the reading');
   await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'); return t && !t.hidden && t.classList.contains('short'); }, null, { timeout: 8000 });
   check(/^SLOW\d+$/.test((await page.textContent('.sight-tag')).trim()), 'the plate says SLOW: ' + await page.textContent('.sight-tag'));
-  // PR-1: in a replay a tap on Sight, then the Score, says what it is; Done closes it
-  await page.click('#cluster .ro-sight');
+  // PR-1: in a replay a tap on the g-ball, then the Score, says what it is; Done closes it. The replay's panel (the owner
+  // 2026-11-15: "cluttered", "g ball should be more prominent") leaves Sight to the plate under the arrow, so its cell is
+  // read above for its colours but not tapped here
+  check(await page.evaluate(() => getComputedStyle(document.querySelector('#cluster .ro-sight')).display === 'none'), 'a replay leaves Sight to the plate on the map');
+  await page.click('#cluster .g-read');
   await page.waitForSelector('#explainCard.show', { timeout: 3000 });
   const sheet = await page.evaluate(() => ({ title: document.getElementById('explainTitle').textContent, what: document.getElementById('explainWhat').textContent,
     how: document.getElementById('explainHow').textContent, now: document.getElementById('explainNow').textContent }));
-  check(sheet.title === 'Sight' && /never a target/.test(sheet.what) && /SLOW/.test(sheet.how) && /^Now: \d+ (mph|km\/h)$/.test(sheet.now), 'the Sight sheet: ' + JSON.stringify(sheet));
+  check(sheet.title === 'Grip ball and Bank' && /rolls forward under braking/.test(sheet.what) && /^Now: BANK --$/.test(sheet.now), 'the g-ball sheet: ' + JSON.stringify(sheet));
   await page.click('#explainDone');
   // waited for, not read once: on a busy runner the class can come off a frame after the click returns (CI 2026-11-11)
   check(await page.waitForFunction(() => !document.getElementById('explainCard').classList.contains('show'), null, { timeout: 2000 }).then(() => true, () => false), 'Done closes it');
@@ -3630,6 +3633,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   const crewPage = { id: 'k1', name: 'Ridge Runners', motto: 'Slow in, smooth out.', visibility: 'private', area_name: null, members: 3, is_owner: true,
     crest: null, crest_photo_id: null, stripe: null, cover_photo_id: null, livery: 'plain', sharing_scores: true,
     board: [{ handle: 'sam', score: 811, car: 'Mazda MX-5', mine: false }, { handle: 'me', score: null, car: null, mine: true }],
+    dna: [{ handle: 'sam', mine: false, skills: { squeeze: 81, brake: 64, arc: 92, entry: 77, line: 58, exit: 70 } }, { handle: 'me', mine: true, skills: { squeeze: 80, brake: 75, arc: 70, entry: 76, line: 60, exit: 72 } }],
     next: { id: 'e1', title: 'Dawn run', starts_at: soon, meet_name: 'The Hardee\'s', going: ['sam'], my_rsvp: null } };
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method();
@@ -3698,6 +3702,10 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
     return { body, panes: Object.fromEntries([...document.querySelectorAll('.cp-pane')].map((p) => [p.id, [...p.children].map(name).filter(Boolean)])) }; });
   check(JSON.stringify(order.body) === '["title","tabs"]' && JSON.stringify(order.panes['cpPane-drives'].slice(0, 2)) === '["run","Members"]'
     && order.panes['cpPane-chat'].length === 1 && order.panes['cpPane-board'][0] === 'Vetta Score board', 'the page in order: ' + JSON.stringify(order));
+  // the crew's DNA under the board (dna_card.js crewLeaders): who is cleanest at each skill, your level beside it
+  const dnaRows = await page.$$eval('#cpPane-board .cp-dna-row', (r) => r.map((x) => [...x.children].map((c) => c.textContent).filter(Boolean).join(' ')));
+  check(order.panes['cpPane-board'].includes('Cleanest in the crew') && dnaRows.length === 6 && dnaRows[0] === 'One braking @sam 81 you 80' && dnaRows[1] === 'Brakes done You 75',
+    'cleanest in the crew, skill by skill: ' + JSON.stringify(dnaRows));
   check(await page.evaluate(() => ![...document.querySelectorAll('#cpPane-chat h3')].some((h) => h.textContent === 'Chat')), 'the Chat tab names the chat: no second "Chat" heading under it');
   check(!(await page.$$('.crew-page .cp-livery, .crew-page .cp-meter')).length, 'no livery box or meter on the page (they are in Edit livery)');
   check(!/Convoy/.test(await page.$$eval('#crewsBody h3', (h) => h.map((x) => x.textContent).join('|'))), 'no Convoy heading on Crews');
@@ -8560,6 +8568,45 @@ flow('satellite: a developer gets a Satellite switch in Layers that lays USGS im
   await page.click('#satSwitch');
   await page.waitForFunction(() => !window.apexDebug.map.getLayer('apex-satellite') && !window.apexDebug.map.getSource('apex-satellite-src'));
 });
+// Nate (2026-11-15, a real drive): "the map layers sometimes reset certain things when I reopen the app". Every layer left on
+// comes back on after a reopen: with the account still on its way, after a launch that read signed out, and after another
+// setting was saved in between. Friends, Meets and Roadbooks (lazy social scripts) are drawn once the account says member.
+flow('map layers: every layer left on is still on after the app is reopened, signed out or in, and the social ones draw (Nate 2026-11-15)', async (page, base) => {
+  const LAYERS = ['twisty', 'coverage', 'lpr', 'roadcams', 'terrain', 'satellite', 'roadbooks', 'meets', 'friends'];
+  let me = { signed_in: true, member: true, handle: 'me', developer: true };
+  const asked = [];
+  await page.route('https://tiles.openfreemap.org/**', satStyle);
+  await page.route('https://basemap.nationalmap.gov/**', (route) => route.fulfill({ contentType: 'image/png', body: PNG1 }));
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()); asked.push(u.pathname);
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json(me);
+    if (u.pathname === '/api/traffic/v1/cameras.json') return json({ sources: ['KYTC'], failed: [], cams: [] });
+    return json({ error: 'not_found' }, 404);
+  });
+  await page.addInitScript((layers) => { try { localStorage.setItem('apex.onboarded', '1');
+    if (!localStorage.getItem('apex.prefs')) localStorage.setItem('apex.prefs', JSON.stringify({ toggles: Object.fromEntries(layers.map((k) => [k, true])), twistyV: 2 })); } catch (_) {} }, LAYERS);
+  const open = async () => {
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.getLayer('apex-twisty'), null, { timeout: 15000 });
+    await page.waitForTimeout(2500);                                   // /api/me has answered, the social scripts have had their chance
+  };
+  const kept = () => page.evaluate((layers) => { const t = (JSON.parse(localStorage.getItem('apex.prefs') || '{}').toggles) || {};
+    return layers.filter((k) => t[k] !== true); }, LAYERS);
+  const shown = () => page.evaluate((layers) => layers.filter((k) => document.querySelector(`[data-toggle="${k}"]`).getAttribute('aria-checked') !== 'true'), LAYERS);
+  const save = () => page.evaluate(() => { const v = document.querySelector('[data-toggle="voice"]'); v.click(); v.click(); });   // another setting saved
+  await open(); await save();
+  check((await kept()).length === 0 && (await shown()).length === 0, 'signed in, every layer still on: lost ' + JSON.stringify({ saved: await kept(), switches: await shown() }));
+  const social = await page.evaluate(() => ({ socialIn: !!window.ApexFriendsMap, }));
+  check(social.socialIn, 'the social layers loaded their scripts to draw: ' + JSON.stringify(social));
+  me = { signed_in: false };                                           // a launch that reads signed out (a token being renewed)
+  await open(); await save();
+  check((await kept()).length === 0, 'a signed-out launch keeps every choice: lost ' + JSON.stringify(await kept()));
+  me = { signed_in: true, member: true, handle: 'me', developer: true };
+  await open();
+  check((await kept()).length === 0 && (await shown()).length === 0, 'signed in again, all of them on: lost ' + JSON.stringify({ saved: await kept(), switches: await shown() }));
+  check(await page.evaluate(() => !!window.apexDebug.map.getLayer('apex-satellite')), 'the developer\'s Satellite is drawn again');
+});
 flow('satellite: anyone else never sees the switch, and one left on in localStorage draws nothing (the owner 2026-11-04)', async (page, base) => {
   const prefs = { toggles: { satellite: true, twisty: true } };
   for (const me of [{ signed_in: true, member: true, handle: 'me' }, { signed_in: false }, { signed_in: true, member: false, handle: 'me', developer: true }]) {
@@ -9193,8 +9240,12 @@ flow('theme contract on the page: the hazard plate, the speed, the call and the 
     // night is a mode (REVIEW2.md U-36): a 46 px numeral, Limit and Sight on one row, the trip behind its Trip key
     const nm = await page.evaluate(() => { const d = document.querySelector('.dial-speed .dial-digital'), vis = (q) => { const e = document.querySelector(q); return !!e && e.getClientRects().length > 0; };
       const l = document.querySelector('.ro-limit').getBoundingClientRect(), g = document.querySelector('.ro-sight').getBoundingClientRect();
-      return { px: Math.round(parseFloat(getComputedStyle(d).fontSize) * d.getScreenCTM().a), oneRow: Math.abs(l.top - g.top) < 12, odo: vis('#cluster .odo'), key: vis('#cluster .trip-peek') }; });
-    if (night) {
+      return { px: Math.round(parseFloat(getComputedStyle(d).fontSize) * d.getScreenCTM().a), oneRow: Math.abs(l.top - g.top) < 12, odo: vis('#cluster .odo'), key: vis('#cluster .trip-peek'),
+        replay: document.getElementById('app').classList.contains('replaying'), sight: vis('#cluster .ro-sight') }; });
+    if (night && nm.replay) {
+      // a replay is watched, not driven (the owner 2026-11-15): the g-ball leads, Sight is left to the map's plate, the trip shows
+      check(nm.px >= 46 && !nm.sight && nm.odo && !nm.key, 'night replay: a 46 px numeral, Sight on the map, the trip in view: ' + JSON.stringify(nm));
+    } else if (night) {
       check(nm.px >= 46 && nm.oneRow && !nm.odo && nm.key, 'night: a 46 px numeral, Limit and Sight in a row, the trip behind its key: ' + JSON.stringify(nm));
       await page.click('#cluster .trip-peek');
       check(await page.evaluate(() => document.querySelector('#cluster .odo').getClientRects().length > 0), 'night: the Trip key shows the trip');

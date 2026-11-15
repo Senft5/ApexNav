@@ -697,12 +697,13 @@
       if (!me || typeof me.signed_in !== 'boolean') return;
       devAccess = !!(me.signed_in && me.member && me.developer === true);
       $('satSwitch').hidden = !devAccess;
-      if (!devAccess && state.toggles.satellite) { state.toggles.satellite = false; savePrefs(); paintSwitches(); }
+      // a launch that reads signed out (a token being renewed) draws no imagery (applySatellite) but keeps the developer's choice
       applySatellite();
       devCache = undefined;                                              // read again for this account (or none)
       applyDevTune();
       paintDevRow();
       if (devAccess) { const d = devSettings(); if (d && (d.offline || d.lines)) devPanel().catch(() => {}); }   // their switches, without the panel open
+      if (devAccess) devDrivesSync();                                    // their drives go up to Vetta (web/dev_drives.js)
       else if (window.ApexDevPanel) ApexDevPanel.unmount();
     }
     // Dev mode (the owner, 2026-11-09: "a dev mode in the app that shows all routing parameters and other debug info for only
@@ -733,6 +734,18 @@
       if (!devAccess || !window.ApexLazy) return Promise.resolve(null);
       return devPanelP || (devPanelP = ApexLazy.load('dev').then(() => (window.ApexDevPanel ? ApexDevPanel.mount(devHost) : null)).catch((e) => { devPanelP = null; throw e; }));
     }
+    // Developers' drives (the owner, 2026-11-15; web/dev_drives.js, backend/src/dev_drives.ts): on a developer's phone only,
+    // every drive (the ones from before too) uploads whole for internal review: at /api/me, when a drive is saved (recording.js
+    // says so on the 'apex-drives' channel) and when the app comes back to the front. Anyone else's phone never loads it.
+    let devDrivesStat = null;
+    function devDrivesSync() {
+      if (!devAccess || !window.ApexLazy || !window.ApexRecording || !window.ApexSync) return;
+      ApexLazy.load('devdrives').then(() => ApexDevDrives.sync({ ids: () => ApexRecording.ids(), get: (id) => ApexRecording.get(id),
+        apiFetch: ApexSync.apiFetch, store: localStorage, allowed: () => devAccess }))
+        .then((r) => { devDrivesStat = r; paintDevRow(); }).catch((e) => console.error('dev drives', e));
+    }
+    try { const ch = new BroadcastChannel('apex-drives'); ch.onmessage = () => devDrivesSync(); } catch (_) { /* no channel: the next launch sends it */ }
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') devDrivesSync(); });
     // the Garage's Settings row (index.html section data-setting="dev"): empty, so hidden, unless this is a developer
     function paintDevRow() {
       const b = $('garageDevBody');
@@ -743,7 +756,9 @@
         const o = document.createElement('button'); o.type = 'button'; o.className = 'ink-btn'; o.id = 'devOpenBtn'; o.textContent = 'Open the Dev panel';
         o.addEventListener('click', () => { if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.close(); showView('map');
           devPanel().then((p) => p && p.open()).catch((e) => { console.error('dev panel', e); toast('Couldn\'t load the Dev panel.'); }); });
-        b.append(p, o);
+        const sy = document.createElement('p'); sy.className = 'note'; sy.id = 'devDrivesNote';
+        sy.textContent = devDrivesStat ? `Dev: drives sync to Vetta (${devDrivesStat.total - devDrivesStat.pending} of ${devDrivesStat.total} sent)` : 'Dev: drives sync to Vetta';
+        b.append(p, o, sy);
       }
       try { if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.refresh(); } catch (_) { /* drawn at the next open */ }
     }
@@ -7611,13 +7626,19 @@
       paintPushState();
       // Where to? opened before the account came back: its time attack row's peek skipped then, so it goes now (CI 2026-11-12)
       if (accountMe && accountMe.member && $('planPanel').classList.contains('open')) peekTimeAttack();
-      if (friendsMap && accountMe && accountMe.member) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
-      else if (state.toggles.friends) { state.toggles.friends = false; paintSwitches(); }
-      if (meetsMap && accountMe && accountMe.member) { if (state.toggles.meets) meetsMap.setLayer(true); }
-      if (eventMarkers && accountMe && accountMe.member && state.toggles.events) eventMarkers.setLayer(true);
-      if (roadbookMap && accountMe && accountMe.member) { if (state.toggles.roadbooks) roadbookMap.setLayer(true); }
-      else if (state.toggles.roadbooks && socialIn) { state.toggles.roadbooks = false; paintSwitches(); }
-      else if (state.toggles.meets && socialIn) { state.toggles.meets = false; paintSwitches(); }
+      // A layer left on stays on (Nate 2026-11-15: "the map layers sometimes reset when I reopen the app"): the account comes
+      // back before the lazy social scripts, so a member's Friends, Meets, Roadbooks and Events load them and draw then; a launch
+      // that reads signed out draws none of them but keeps the choice for the next one signed in.
+      if (accountMe && accountMe.member) {
+        if (friendsMap) friendsMap.start();
+        if ((state.toggles.friends || state.toggles.meets || state.toggles.roadbooks || state.toggles.events) && !socialFailed) needSocial().then(() => {
+          if (!accountMe || !accountMe.member) return;
+          if (friendsMap) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
+          if (meetsMap && state.toggles.meets) meetsMap.setLayer(true);
+          if (roadbookMap && state.toggles.roadbooks) roadbookMap.setLayer(true);
+          if (eventMarkers && state.toggles.events) eventMarkers.setLayer(true);
+        }).catch(() => {});
+      }
       if (feedbackUi) feedbackUi.refresh();
       if (me && !me.signed_in) setRoutingCars(null);
       else if (me && me.member) apiCall('GET', '/api/garage').then(r => (r.ok ? r.json() : null)).then(list => { if (list) setRoutingCars(list); }).catch(() => {});
@@ -10411,9 +10432,27 @@
         if (reported.pins.has(h.id)) continue;
         const el = document.createElement('div'); el.className = h.official ? 'hz-pin hz-dot' : 'hz-pin';   // a DOT's event: its own word
         el.textContent = ((h.official && h.label) || ApexHazardReports.LABEL[h.kind] || 'Hazard').toUpperCase();
-        reported.pins.set(h.id, new maplibregl.Marker({ element: el }).setLngLat([h.lon, h.lat]).addTo(map));
+        el.setAttribute('aria-label', el.textContent.toLowerCase());
+        const mk = new maplibregl.Marker({ element: el }).setLngLat([h.lon, h.lat]).addTo(map);
+        mk.hz = h; reported.pins.set(h.id, mk);
+      }
+      placePins();
+    }
+    // Which pins show, and how (hazard_reports.js pinView): only in view, a mark zoomed out, a tag closer in, never piled up
+    let pinsQueued = false;
+    function placePins() {
+      if (!reported.pins.size || !mapReady) return;
+      const c = map.getCanvas(), w = c.clientWidth, h = c.clientHeight, list = [];
+      for (const [id, mk] of reported.pins) { const ll = mk.getLngLat(), pt = map.project(ll), hz = mk.hz || {};
+        list.push({ id, x: pt.x, y: pt.y, kind: hz.kind, label: mk.getElement().textContent }); }
+      const how = ApexHazardReports.pinView(list, { width: w, height: h, zoom: map.getZoom() });
+      for (const [id, mk] of reported.pins) {
+        const e = mk.getElement(), v = how.get(id);
+        e.style.display = v ? '' : 'none';
+        e.classList.toggle('hz-mini', v === 'mark');
       }
     }
+    if (map) map.on('move', () => { if (pinsQueued) return; pinsQueued = true; requestAnimationFrame(() => { pinsQueued = false; placePins(); }); });
     // Each fresh fix while driving: call the next reported hazard ahead, and after passing one ask if it's still there.
     // ---- crash check (IDEAS D-17; web/incident.js): impact + stop asks "Are you OK?"; the contact is local only ----------
     const CRASH_KEY = 'apex.crashContact';
