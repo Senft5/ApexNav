@@ -94,7 +94,7 @@
     // stages within reach of half the length at LOOP_REACH_MS; at most LOOP_STAGES of them chained, LOOP_TRIES loops
     // routed, each stage driven through a point every LOOP_ALONG_M; a loop with more than LOOP_MAX_RETRACED driven twice
     // is dropped
-    LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 12, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_MAX_RETRACED: 0.4, LOOP_DIRT_KM: 2, LOOP_DIRT_TRY: [0.7, 0.5, 1.4], STAGE_KM: 40,
+    LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 12, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_ALONG_N: 10, LOOP_MAX_RETRACED: 0.4, LOOP_DIRT_KM: 2, LOOP_DIRT_TRY: [0.7, 0.5, 1.4], STAGE_KM: 40, STAGE_ON_TURN: 0.5, STAGE_GAP_M: 4000, STAGE_JOIN_M: 6000, STAGE_NAME_TURN: 2.6, STAGE_PLAIN: 1,
     LOOP_CONN_FACTOR: 1.7, LOOP_CONN_A: 3, LOOP_MAX_OFF: 0.6, LOOP_NEAR_OFF: 0.15, LOOP_RING_OFF: 0.3, LOOP_RETRIES: 4, LOOP_REFITS: 2, LOOP_CONN_A_SHORT: 1, LOOP_CONN_A_LONG: 6, LOOP_FIT_OFF: 0.12,   // a connector's road length over its crow line, the router's detours to good road in it (Cincinnati, 2026-11-04)
     SNAP_M: 1500, GRID_DEG: 0.01, LIVE_NODES: 200, LIVE_TRIES: 4,   // a snap's road reaches LIVE_NODES or it's an island (snapLive)
     // long trips (2026-11-15): a corridor over LONG_TILES tiles (about 150 km crow at Fun, 100 at Long way) is cut to a
@@ -1711,6 +1711,9 @@
     const n = s.lat.length, idx = [...Array(n).keys()];
     if (rev) idx.reverse();
     const out = [];
+    // every LOOP_ALONG_M, at most LOOP_ALONG_N legs to a stage: each point is a search, and a whole road as one stage
+    // (40 km of the Blue Ridge Parkway) took 27 of them
+    const step = Math.max(K.LOOP_ALONG_M, (s.km || 0) * 1000 / K.LOOP_ALONG_N);
     let run = 0, next = 0;
     for (let q = 0; q < n; q++) {
       const i = idx[q];
@@ -1718,7 +1721,7 @@
       if (run >= next || q === n - 1) {
         const j = idx[Math.min(n - 1, q + 1)], h = q < n - 1 ? bearing(s.lat[i], s.lon[i], s.lat[j], s.lon[j]) : bearing(s.lat[idx[q - 1]], s.lon[idx[q - 1]], s.lat[i], s.lon[i]);
         out.push({ lat: s.lat[i], lon: s.lon[i], h, conn: !out.length });   // the leg to its first point is a connector
-        next = run + K.LOOP_ALONG_M;
+        next = run + step;
       }
     }
     return out;
@@ -1920,45 +1923,66 @@
     const T = reach(v, s0, maxS);
     // (the corner prefs weigh which roads are best here too, as they weigh the search: likeOf)
     const score = new Float32Array(v.E), likeAt = likeOf(v, req.prefs), noDirt = !!(req.avoid && req.avoid.unpaved);
+    // a road edge a stage may run along (score 0 when it has no corners: a tunnel, a straight between two bends)
+    const road = new Uint8Array(v.E);
     const seeds = [];
     for (let e = 0; e < v.E; e++) {
-      if (v.to[e] < 0 || v.quality[e] === UNKNOWN_U8 || !Number.isFinite(v.fun[e]) || v.fun[e] <= 0) continue;
+      if (v.to[e] < 0 || v.quality[e] === UNKNOWN_U8 || !Number.isFinite(v.fun[e]) || v.fun[e] < 0) continue;
       const q = v.quality[e] / 254;
       if (q < K.POOR_HI || (v.flags[e] & (B.private | B.barrier | B.ramp | B.destination | B.expressway)) || v.cls[e] === CLS.motorway || v.cls[e] >= CLS.service) continue;
       if (streetEdge(v, e) === true) continue;
       // unpaved road avoided (the app's default): never a stage, so a loop isn't built round a forest gravel road its own
       // legs then won't drive (Little Snowbird Road, the best "road" from Robbinsville, 2026-11-14)
       if (noDirt && (v.flags[e] & B.unpaved)) continue;
+      road[e] = 1;
       score[e] = q * v.fun[e] * (likeAt ? likeAt(e) : 1) / Math.max(0.05, v.len[e] / 1000);
-      if (Number.isFinite(T[v.tail[e]]) || Number.isFinite(T[v.to[e]])) seeds.push(e);
+      if (score[e] > 0 && (Number.isFinite(T[v.tail[e]]) || Number.isFinite(T[v.to[e]]))) seeds.push(e);
     }
     seeds.sort((a, b) => score[b] - score[a] || a - b);
-    const used = new Uint8Array(v.E), out = [];
+    const used = new Uint8Array(v.E), out = [], chains = [];
     const take = (e) => { used[e] = 1; const tw = twin(v, e); if (tw >= 0) used[tw] = 1; };
+    // the chain goes on along good road, or along its own road through a plainer run (a tunnel, a straight between two
+    // sets of bends) up to STAGE_GAP_M of it in a row (Ironton Park on US 550, 3.5 km): its own road by name, or the same road on under another name (its
+    // class, nearly straight on). US 550 south of Ouray, 2026-11-15: a 40 m tunnel, cornerless edges between the bends and
+    // a stretch OSM names only by its ref cut the Million Dollar Highway into 2-7 km stages, all below the county roads.
+    // (its own road by name may turn sharper: a hairpin that meets a side road at its apex, US 550 by Red Mountain)
+    const on = (p, e, seed) => {
+      const turn = Math.abs(turnAngle(v.hOut[p], v.hIn[e]));
+      if (turn > K.STAGE_NAME_TURN) return false;
+      if (turn > 1.05) return sameName(v, e, p);
+      if (score[e] >= score[seed] / 3) return true;
+      return sameName(v, e, p) || (v.cls[e] === v.cls[p] && turn <= K.STAGE_ON_TURN);
+    };
+    // plain: under a third of the seed's and under STAGE_PLAIN (a third of a short seed's single corner per km is still good road)
+    const plain = (e, seed) => score[e] < Math.min(score[seed] / 3, K.STAGE_PLAIN);
     const ok = (p, e, seed) => {
-      if (used[e] || v.to[e] < 0 || score[e] <= 0) return false;
+      if (used[e] || !road[e]) return false;
       if (v.to[e] === v.tail[p]) return false;
       headings(v, p); headings(v, e);
-      if (Math.abs(turnAngle(v.hOut[p], v.hIn[e])) > 1.05) return false;
-      return score[e] >= score[seed] / 3 || sameName(v, e, p);
+      return on(p, e, seed);
     };
     for (const seed of seeds) {
       if (used[seed]) continue;
       const chain = [seed];
       take(seed);
-      let km = v.len[seed] / 1000;
+      let km = v.len[seed] / 1000, gap = 0;
       for (let p = seed; km < K.STAGE_KM;) {                         // forward
         const n = v.to[p];
         let best = -1;
         for (let e = v.first[n]; e < v.first[n + 1]; e++) if (ok(p, e, seed) && (best < 0 || score[e] > score[best])) best = e;
         if (best < 0) break;
+        gap = plain(best, seed) ? gap + v.len[best] : 0;
+        if (gap > K.STAGE_GAP_M) break;
         chain.push(best); take(best); km += v.len[best] / 1000; p = best;
       }
+      gap = 0;
       for (let q = seed; km < K.STAGE_KM;) {                         // back
         const n = v.tail[q];
         let best = -1;
-        for (let r = v.rfirst[n]; r < v.rfirst[n + 1]; r++) { const e = v.redge[r]; if (!used[e] && v.to[e] >= 0 && score[e] > 0 && v.tail[q] === v.to[e] && v.tail[e] !== v.to[q]) { headings(v, e); headings(v, q); if (Math.abs(turnAngle(v.hOut[e], v.hIn[q])) <= 1.05 && (score[e] >= score[seed] / 3 || sameName(v, e, q)) && (best < 0 || score[e] > score[best])) best = e; } }
+        for (let r = v.rfirst[n]; r < v.rfirst[n + 1]; r++) { const e = v.redge[r]; if (!used[e] && road[e] && v.tail[q] === v.to[e] && v.tail[e] !== v.to[q]) { headings(v, e); headings(v, q); if (on(e, q, seed) && (best < 0 || score[e] > score[best])) best = e; } }
         if (best < 0) break;
+        gap = plain(best, seed) ? gap + v.len[best] : 0;
+        if (gap > K.STAGE_GAP_M) break;
         chain.unshift(best); take(best); km += v.len[best] / 1000; q = best;
       }
       // a through road, not a cul-de-sac: an end that runs into a dead end is cut back to the last junction on the way (a
@@ -1976,7 +2000,16 @@
         while (chain.length && !junctionAt(v, endNode())) km -= v.len[atEnd ? chain.pop() : chain.shift()] / 1000;
       };
       cut(true); cut(false);
-      if (!chain.length || km < 2) continue;
+      // a stage starts and ends on its good road, not on the plain run it went on through
+      if (!outBack) {
+        while (chain.length > 1 && plain(chain[chain.length - 1], seed)) km -= v.len[chain.pop()] / 1000;
+        while (chain.length > 1 && plain(chain[0], seed)) km -= v.len[chain.shift()] / 1000;
+      }
+      if (chain.length) chains.push({ edges: chain, km, seed, outBack });
+    }
+    joinStages(chains);
+    for (const { edges: chain, km, outBack, dead } of chains) {
+      if (dead || km < 2) continue;
       const aS = T[v.tail[chain[0]]], bS = T[v.to[chain[chain.length - 1]]];
       if (!Number.isFinite(aS) && !Number.isFinite(bS)) continue;
       const lat = [], lon = [], names = new Map();
@@ -1994,6 +2027,73 @@
     }
     out.sort((a, b) => b.score - a.score);
     return { stages: out.slice(0, max), ms: Date.now() - t0 };
+
+    /**
+     * Pieces of one road made one stage: a chain that ends where another starts (or ends: that one driven the other way)
+     * is joined to it, across the plain run between them if that is its own road on (on()) for at most STAGE_JOIN_M. Each
+     * seed grows its own chain and stops at road an earlier one took, so a long road came out in pieces (the Million
+     * Dollar Highway in three, 2026-11-15).
+     */
+    function joinStages(list) {
+      const owner = new Int32Array(v.E).fill(-1);
+      list.forEach((c, i) => { for (const e of c.edges) owner[e] = i; });
+      const rev = (c) => { const r = []; for (let i = c.edges.length - 1; i >= 0; i--) { const t = twin(v, c.edges[i]); if (t < 0) return null; r.push(t); } return r; };
+      const lenKm = (es) => es.reduce((a, e) => a + v.len[e], 0) / 1000;
+      // the chain (and which way round) that starts at node n, as edges driven onward from p
+      const ends = new Map(), at = (n) => ends.get(n) || [];
+      const put = (n, i) => { const l = ends.get(n); if (l) l.push(i); else ends.set(n, [i]); };
+      list.forEach((c, i) => { if (!c.outBack) { put(v.tail[c.edges[0]], i); put(v.to[c.edges[c.edges.length - 1]], i); } });
+      const startsAt = (n, self, p, seed) => {
+        for (const i of at(n)) {
+          const c = list[i];
+          if (i === self || c.dead) continue;
+          if (v.tail[c.edges[0]] === n && joins(p, c.edges[0], seed)) return { i, edges: c.edges };
+          if (v.to[c.edges[c.edges.length - 1]] === n) { const r = rev(c); if (r && joins(p, r[0], seed)) return { i, edges: r }; }
+        }
+        return null;
+      };
+      const joins = (p, e, seed) => { headings(v, p); headings(v, e); return v.to[e] !== v.tail[p] && on(p, e, seed); };
+      for (let i = 0; i < list.length; i++) {
+        const a = list[i];
+        if (a.outBack || a.dead) continue;
+        for (let turns = 0; !a.dead && turns < 2; turns++) {
+          // forward from its end; then the same from its start (the chain turned round)
+          for (let grew = true; grew && a.km < K.STAGE_KM;) {
+            grew = false;
+            let p = a.edges[a.edges.length - 1], m = 0;
+            const path = [], inPath = new Set();
+            for (;;) {
+              const n = v.to[p], hit = startsAt(n, i, p, a.seed);
+              if (hit) {
+                const add = path.concat(hit.edges), km = a.km + lenKm(add);
+                if (km <= K.STAGE_KM) {
+                  a.edges = a.edges.concat(add); a.km = km; list[hit.i].dead = true;
+                  for (const e of add) owner[e] = i;
+                  put(v.to[a.edges[a.edges.length - 1]], i);
+                  grew = true;
+                }
+                break;
+              }
+              let best = -1, bestT = Infinity;
+              for (let e = v.first[n]; e < v.first[n + 1]; e++) {
+                const tw = twin(v, e);
+                if (v.to[e] < 0 || !road[e] || owner[e] >= 0 || (tw >= 0 && owner[tw] >= 0) || inPath.has(e) || !joins(p, e, a.seed)) continue;
+                const t = Math.abs(turnAngle(v.hOut[p], v.hIn[e]));
+                if (t < bestT) { best = e; bestT = t; }
+              }
+              if (best < 0) break;
+              m = plain(best, a.seed) ? m + v.len[best] : 0;
+              if (m > K.STAGE_JOIN_M || path.length > 200) break;
+              path.push(best); inPath.add(best); p = best;
+            }
+          }
+          const r = rev(a);
+          if (!r) break;
+          a.edges = r;
+          put(v.to[r[r.length - 1]], i);
+        }
+      }
+    }
   }
 
   // ---- coverage -------------------------------------------------------------------------------------------------------

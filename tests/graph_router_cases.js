@@ -181,6 +181,35 @@ const CASES = {
     const sky = st.filter((x) => x.name === 'Skyway');
     return { skyway: sky.map((x) => +x.km.toFixed(1)), stages: st.length, tiles: new Set([...Array(v.E).keys()].map((e) => v.eTile[e])).size, cap: R.K.STAGE_KM };
   },
+  brokenRoad() {
+    // one mountain road (the Million Dollar Highway, 2026-11-15) in the ways the map breaks it: a 40 m tunnel with no
+    // corners, 3 km of straight between two sets of bends, a stretch named only by its ref, and a hairpin at a junction
+    // (a side road at its apex): one stage, not four pieces; and 9 km of straight is two roads' worth, two stages
+    const nodes = [], edges = [];
+    const road = (lat0, plainKm) => {
+      const a = nodes.length;
+      let lat = lat0, lon = -84.9;
+      nodes.push(at(lat, lon));
+      const step = (dLat, dLon, props) => { lat += dLat; lon += dLon; nodes.push(at(lat, lon)); two(edges, nodes.length - 2, nodes.length - 1, props); };
+      const good = (name) => ({ quality: 0.85, cls: 2, name, t: 60, fun: 3 });
+      const plain = (name) => ({ quality: 0.85, cls: 2, name, t: 60, fun: 0 });
+      for (let k = 0; k < 8; k++) step(0, 0.0116, good('Pass Highway'));
+      step(0, 0.0005, plain('Pass Highway'));                                   // the tunnel
+      for (let k = 0; k < 4; k++) step(0, 0.0116, good('US 9'));                  // by its ref
+      for (let k = 0; k < plainKm; k++) step(0, 0.0116, plain('Pass Highway'));   // the straight
+      for (let k = 0; k < 4; k++) step(0, 0.0116, good('Pass Highway'));
+      const apex = nodes.length - 1;
+      for (let k = 0; k < 8; k++) step(0.009, 0, good('Pass Highway'));           // the hairpin: on north
+      nodes.push(at(lat0 - 0.02, nodes[apex].lon)); two(edges, apex, nodes.length - 1, { quality: 0.6, cls: 5, name: 'Mine Road', t: 120 });
+      return a;
+    };
+    road(39.3, 3);
+    road(38.6, 9);
+    const v = R.view(H.tiles(nodes, edges).tiles);
+    const near = (lat) => R.explore(v, { start: { lat, lon: -84.9 }, maxS: 7200, max: 12 }).stages
+      .filter((x) => Math.abs(x.lat[0] - lat) < 0.2).map((x) => +x.km.toFixed(1));
+    return { one: near(39.3), two: near(38.6), gap: R.K.STAGE_GAP_M };
+  },
   dirtStage() {
     // two good roads with corners, one of them gravel: with unpaved roads avoided (the app's default) the gravel road is
     // never a stage a loop is built round

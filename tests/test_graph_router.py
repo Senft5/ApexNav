@@ -352,6 +352,17 @@ def test_a_long_good_road_is_one_stage_across_tiles_and_among_many_lanes():
     assert len(r["skyway"]) == 1 and 25 <= r["skyway"][0] <= r["cap"], r
 
 
+def test_a_mountain_road_the_map_breaks_up_is_still_one_stage():
+    """2026-11-15: Best roads nearby from Ouray listed the Million Dollar Highway as 2 to 7 km pieces below the county
+    roads: a 40 m tunnel with no corners, cornerless straights between the bends, a stretch OSM names only by its ref
+    and a hairpin that meets a side road each ended a chain, and each seed's chain stopped at road an earlier one took.
+    Now the road is one stage (its pieces joined across up to STAGE_GAP_M of plain road), and a road with far more
+    straight than that between its two good parts is still two stages."""
+    r = case("brokenRoad")
+    assert len(r["one"]) == 1 and r["one"][0] >= 25, r
+    assert len(r["two"]) == 2, r
+
+
 def test_loops_keep_off_unpaved_road_when_it_is_avoided():
     """2026-11-14 (a survey of rider towns): with unpaved avoided (the app's default) Sturgis loops drove 15 to 31 km of
     gravel and Stowe's 20 km. A loop leg first keeps off unpaved road entirely, and a loop with more than LOOP_DIRT_KM
