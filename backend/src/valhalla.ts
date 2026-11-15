@@ -76,10 +76,24 @@ export async function valhallaProxy(req: Request, env: Env, action: string): Pro
   try {
     const r = await env.VALHALLA.getByName("router").fetch(`http://router/${action}`, {
       method: "POST", headers: { "content-type": "application/json" }, body: text, signal: AbortSignal.timeout(TIMEOUT_MS) });
-    const h = new Headers({ "content-type": r.headers.get("content-type") ?? "application/json", "cache-control": "no-store", "x-router": r.headers.get("x-router") ?? "own" });
+    const h = new Headers({ "content-type": r.headers.get("content-type") ?? "application/json", "cache-control": "no-store", "x-router": r.ok ? (r.headers.get("x-router") ?? "own") : "none" });
     return new Response(r.body, { status: r.status, headers: h });
   } catch {
     return notOurs("timeout");
+  }
+}
+
+/** Our router's answer to one call made inside the Worker (the stage trace relay, trace_relay.ts), or null when it can't
+ *  give one: off, a point outside the region, starting, or no answer in `ms`. The caller then asks the public server. */
+export async function ownValhalla(env: Pick<Env, "VALHALLA">, action: string, body: string, pts: [number, number][], ms = TIMEOUT_MS): Promise<Record<string, unknown> | null> {
+  if (!env.VALHALLA || !ACTIONS.has(action) || !pts.length || !pts.every(([la, lo]) => inRegion(la, lo))) return null;
+  try {
+    const r = await env.VALHALLA.getByName("router").fetch(`http://router/${action}`, {
+      method: "POST", headers: { "content-type": "application/json" }, body, signal: AbortSignal.timeout(ms) });
+    if (!r.ok || r.headers.get("x-router") !== "own") { await r.body?.cancel(); return null; }
+    return (await r.json()) as Record<string, unknown>;
+  } catch {
+    return null;
   }
 }
 

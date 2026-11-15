@@ -42,7 +42,7 @@ import { photoDelete, photoList, photoServe, photoUpload, photoUse } from "./pho
 import { ctxServe } from "./context_grid";
 import { cameraList, graphIndex, graphTile } from "./graph";
 import { dataPut } from "./data_store";
-import { valhallaProxy, valhallaStatus } from "./valhalla";
+import { ownValhalla, valhallaProxy, valhallaStatus } from "./valhalla";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
@@ -210,7 +210,8 @@ on("GET", "/api/ctx/lines", async (req, env) => lineTiles(new URL(req.url), env.
 // A drive's ways' whole geometry from the built tiles, for road data (osm_relay.ts wayShapes; web/contributor.js)
 on("GET", "/api/ctx/ways", async (req, env) => wayShapes(new URL(req.url), env.DATA));
 // The router's edges for a stage cut from the map tiles (trace_relay.ts; route_ctx/router_edges.js), kept 3 days per shape
-on("GET", "/api/ctx/trace", async (req) => traceTile(new URL(req.url)));
+// (ours first, 6 s, then the public router)
+on("GET", "/api/ctx/trace", async (req, env) => traceTile(new URL(req.url), fetch, (pts, body) => ownValhalla(env, "trace_attributes", body, pts, 6000)));
 on("GET", "/api/shop", async (req, env) => json(await shop(env, await requireMember(req, env))));
 on("POST", "/api/redeem", async (req, env) => json(await redeem(env, await requireMember(req, env), req)));
 

@@ -179,6 +179,8 @@
 
   // ---- network shell -------------------------------------------------------------------------------------------------------
   const VALHALLA = 'https://valhalla1.openstreetmap.de', OVERPASS = 'https://overpass-api.de/api/interpreter';
+  // ours first when route_loading.js is loaded (it is on the map page), else straight to `f` (tests, the analysis page)
+  const viaOurs = (f) => (u, i) => (root.ApexRouteLoading && root.ApexRouteLoading.valhallaFetch ? root.ApexRouteLoading.valhallaFetch(u, i, f) : f(u, i));
 
   /** Snaps the drive to the road graph with Valhalla trace_attributes (chunks of 2,500 points). Returns the per-sample match array. */
   async function matchDrive(drive, fetchFn = fetch) {
@@ -187,7 +189,7 @@
       const e = Math.min(n, s + CH + 20);                              // small overlap so edges continue across chunks
       const shape = []; for (let i = s; i < e; i++) shape.push({ lat: drive.lat[i], lon: drive.lon[i] });
       if (shape.length < 2) continue;
-      const r = await fetchFn(`${VALHALLA}/trace_attributes`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+      const r = await viaOurs(fetchFn)(`${VALHALLA}/trace_attributes`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
         shape, costing: 'auto', shape_match: 'map_snap', filters: { attributes: ['edge.way_id', 'edge.road_class', 'edge.names', 'matched.edge_index', 'matched.type'], action: 'include' } }) });
       if (!r.ok) throw new Error(`map matching failed (${r.status})`);
       const j = await r.json();

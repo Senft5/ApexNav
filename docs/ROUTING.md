@@ -37,7 +37,8 @@ still gives our chosen line its spoken directions (trace_route), and Quick and a
 likewise are our router's or nothing: off the map the loop card says so, no Valhalla stage loop or circle stands in.
 
 **Our own Valhalla (2026-11-15).** Every Valhalla call the page makes (Quick routes, the matrix, trace_attributes,
-trace_route) goes first to our own Valhalla in a Cloudflare Container (`POST /api/valhalla/<action>`,
+trace_route; and, through `ApexRouteLoading.valhallaFetch`, route context's edges, the crew meeting point and the road-data
+map matching, plus the Worker's stage trace relay via `ownValhalla`) goes first to our own Valhalla in a Cloudflare Container (`POST /api/valhalla/<action>`,
 backend/src/valhalla.ts; tiles for Ohio, Kentucky and Indiana built weekly by .github/workflows/valhalla-tiles.yml), and
 to the public server (valhalla1.openstreetmap.de) when ours answers anything but 200: a point outside the three states'
 outlines, the container starting (it sleeps after 6 h without a request and takes a minute or two to fetch its tiles),
