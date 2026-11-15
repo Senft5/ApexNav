@@ -740,7 +740,7 @@
   }
   // Corner coach — port of core/drive_analysis.coach (parity-tested). Phases of each corner and the
   // time lost to the person's own best clean pass of it; passes over the sane limit never count as best.
-  const COAST_G = 0.05, THROTTLE_G = 0.05, TRAIL_LAT_G = 0.20, BRAKE_GAP = 20, SOLO_APEX_DIP_MPS = 0.3, THROTTLE_LOOKAHEAD = 20, TIP_SPEED_MPS = 0.9, TIP_BRAKE_M = 10,
+  const COAST_G = 0.05, THROTTLE_G = 0.05, TRAIL_LAT_G = 0.20, BRAKE_GAP = 20, SOLO_APEX_DIP_MPS = 1.0, GPS_FIX_S = 1.0, THROTTLE_LOOKAHEAD = 20, TIP_SPEED_MPS = 0.9, TIP_BRAKE_M = 10,
     TIP_COAST_M = 15, TIP_GAIN_S = 0.20, SOLO_COAST_M = 20, SOLO_EARLY_APEX_M = -15, SOLO_LATE_BRAKE_G = 0.25, TOP_OPPORTUNITIES = 3;
   function cornerPhases(v, lonG, latG, start, end, apex, apexMps) {
     const m = cornerMetrics(v, lonG, latG, start, end, apex, apexMps), n = v.length;
@@ -760,7 +760,32 @@
     let late = 0;
     for (let k = apex; k <= end; k++) late = Math.max(late, -lonG[k]);
     return { ...m, brake_m: r0 === null ? null : (apex - r0) * 5, trail_m: trail * 5, coast_m: coast * 5,
-             throttle_m: kThr === null ? null : (kThr - apex) * 5, late_brake_g: late, apex_mps_driven: v[apex] };
+             throttle_m: kThr === null ? null : (kThr - apex) * 5, late_brake_g: late, apex_mps_driven: v[apex],
+             imu_slow_m: imuSlowM(v, lonG, latG, start, end) };
+  }
+  // The slowest point against the tightest, as the phone's motion sensors alone tell it (Nate's drives, 2026-11-15): the
+  // slowest is where the car goes from slowing to speeding up (smoothed a_lon crosses 0, nearest the tightest), the tightest
+  // where a_lat / v^2 (the path's curvature as the car felt it) peaks. GPS places its fixes up to a second late, and not
+  // always as late for its speed as for its position, so "early" is told to the driver only when this agrees. m, or null.
+  const IMU_SLOW_LEAD = 10, IMU_SLOW_TAIL = 4;
+  function imuSlowM(v, lonG, latG, start, end) {
+    const n = v.length, f = (x) => (typeof x === 'number' ? x : NaN);   // unknown g (null) stays unknown, as NaN does in core/
+    const sm = (a, i) => (f(a[Math.max(0, i - 1)]) + f(a[i]) + f(a[Math.min(n - 1, i + 1)])) / 3;
+    let s = 0;
+    for (let k = start; k <= end; k++) if (Number.isFinite(f(latG[k]))) s += latG[k];
+    const sg = s >= 0 ? 1 : -1;
+    let kp = -1, best = -Infinity;
+    for (let k = start; k <= end; k++) {
+      const x = sg * sm(latG, k) * G_STD / Math.max(f(v[k]), 3) ** 2;
+      if (Number.isFinite(x) && x > best) { best = x; kp = k; }
+    }
+    if (kp < 0) return null;
+    let zc = -1;
+    for (let q = Math.max(1, start - IMU_SLOW_LEAD); q < Math.min(n - 1, end + IMU_SLOW_TAIL); q++) {
+      const a = sm(lonG, q), b = sm(lonG, q + 1);
+      if (a < 0 && b >= 0 && (zc < 0 || Math.abs(q - kp) < Math.abs(zc - kp))) zc = q;
+    }
+    return zc < 0 ? null : (zc - kp) * 5;
   }
   function knownRun(d, start, end, apex) {
     const v = d.speed_mps, gk = d.g_known, n = v.length;
@@ -811,7 +836,11 @@
     }
     if (m.late_brake_g >= SOLO_LATE_BRAKE_G) return { kind: 'brake_after_apex', value: m.late_brake_g, vs_best: false };
     if (m.brake_m !== null && m.coast_m >= SOLO_COAST_M) return { kind: 'coast', value: m.coast_m, vs_best: false };
-    if (m.min_offset_m <= SOLO_EARLY_APEX_M && m.apex_mps_driven - m.min_mps >= SOLO_APEX_DIP_MPS) return { kind: 'early_apex', value: -m.min_offset_m, vs_best: false };
+    // Early apex only past what the phone can tell (Nate's drives, 2026-11-15): the slowest point sits on a GPS fix, so under
+    // one fix of travel (a second) before the apex it is not early; a dip under 1 m/s (SLOW_DIP_MPS) is GPS noise, not slowing;
+    // and the motion sensors must say so too (imuSlowM), or the two disagree and nothing is told.
+    if (m.min_offset_m <= Math.min(SOLO_EARLY_APEX_M, -m.min_mps * GPS_FIX_S) && m.apex_mps_driven - m.min_mps >= SOLO_APEX_DIP_MPS
+      && m.imu_slow_m !== null && m.imu_slow_m !== undefined && m.imu_slow_m <= SOLO_EARLY_APEX_M) return { kind: 'early_apex', value: -m.min_offset_m, vs_best: false };
     return null;
   }
   // How repeatably a corner is driven over your clean passes (port of drive_analysis._marks/_spread, IDEAS D-07).
@@ -1262,7 +1291,7 @@
     driverScore, techniqueScore, cornerTechnique, carGrip, cornersForCar, fatigue, spreadBy, turnIn, segmentPass, segmentWindow, segmentWindows,
     removeSpurs, retracedShare,
     compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector, abruptMoments,
-    knownRun, passMarks, matchWindow, nearestIndexWin, meanSe, BRAKE_G, BRAKE_LOOKBACK, BRAKE_GAP, STOPPED_MPS, TURN_LEAD, PACE_CEILING, paceCredit,   // driver_profile.js reads corners as the coach does
+    knownRun, passMarks, imuSlowM, matchWindow, nearestIndexWin, meanSe, BRAKE_G, BRAKE_LOOKBACK, BRAKE_GAP, STOPPED_MPS, TURN_LEAD, PACE_CEILING, paceCredit,   // driver_profile.js reads corners as the coach does
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,
     movingAverage, gradient, unwrap, localXY, resamplePolyline,
     computeCurvature, apexSpeedMps, effectiveMu, brakingEnvelopeMps, sightDistanceM, sightSpeedMps, SIGHT_MAX_M,

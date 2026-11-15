@@ -118,6 +118,10 @@
       let slow = null, vKnown = true;                                   // the slowest point may come before the corner starts
       for (let q = w0; q <= w1; q++) if (!Number.isFinite(v[q])) vKnown = false;
       if (vKnown) slow = Core.passMarks(d, w0, w1, a)[1];
+      // how early the slowest point came, in m: GPS's (its speed against its path), and with the motion sensors' own reading
+      // (Core.imuSlowM) beside it the mean of the two, since GPS places its fixes up to a second late (Nate's drives, 2026-11-15)
+      const imu = slow === null || !Core.imuSlowM ? null : Core.imuSlowM(v, lon, lat, s, e);
+      const early = slow === null ? null : imu === null ? (a - slow) * 5 : ((a - slow) * 5 - imu) / 2;
       // the load the steering asks for, with the speed taken out: slowing to the middle and driving out is one arc
       const vbar = Core.meanSe(v.slice(s, e + 1))[0], side = [];
       for (let q = s; q <= e; q++) side.push(lat[q] * (vbar / Math.max(v[q], Core.STOPPED_MPS)) ** 2);
@@ -153,7 +157,7 @@
         tightens: mods ? mods.includes('tightens') : null, crest: mods ? mods.includes('over crest') : null, grade, minute: t[a] / 60,
         use: tech.use, squeeze, brake: run ? tech.brake : null, arc,
         entry: 1 - clamp01(excess(v.slice(s, e + 1).map((x) => -x), ENTRY_SWING_MPS) / ENTRY_SPAN_MPS),
-        line: slow === null ? null : 1 - clamp01(((a - slow) * 5 - LINE_FREE_M) / LINE_SPAN_M),
+        line: early === null ? null : 1 - clamp01((early - LINE_FREE_M) / LINE_SPAN_M),
         exit: slow === null ? null : 1 - clamp01((ph.coast_m - EXIT_FREE_M) / EXIT_SPAN_M),
         trail: ph.brake_m === null ? null : (ph.trail_m >= TRAIL_MIN_M ? 1 : 0),
         slow_m: slow === null ? null : (slow - a) * 5,
