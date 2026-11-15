@@ -3929,6 +3929,7 @@ flow('meets on the map: off by default; on, public meets near the map are pinned
   await page.waitForTimeout(1500);                                                        // the account is known
   await page.evaluate(() => { apexDebug.state.follow = false; apexDebug.map.jumpTo({ center: [-83.95, 35.45], zoom: 9 }); });
   await page.click('#swTab');
+  asked.length = 0;                                                                       // the Events layer (on by default) asked for its own
   await page.click('[data-toggle="meets"]');
   await page.waitForSelector('.mm-pin');
   check(/^Meets within 50 mi of the map\. Tap a pin\.$/.test(await page.textContent('#toast')), 'the switch says where in the driver\'s miles, in one line: ' + await page.textContent('#toast'));
