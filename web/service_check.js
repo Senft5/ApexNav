@@ -195,13 +195,14 @@
     const a = appOf(env.ua);
     return { ...a, online: env.online === false ? false : true, results: results.map(({ id, state, http, ms, detail }) => ({ id, state, http, ms, detail })) };
   }
-  /** One line for the whole run: "24 up, 1 slow, 2 down: Overpass (overpass-api.de), Fun plan". */
+  /** One line for the whole run: "24 up, 1 slow, 2 down: Overpass (overpass-api.de), Fun plan". At most three names: the
+   *  rows below list every one, and 21 names in a line was a wall of text (offline, every feed is down). */
   function summary(results) {
     const by = (s) => results.filter((r) => r.state === s);
     const name = (id) => (PROBES.find((p) => p.id === id) || { name: id }).name;
     const down = by('down');
     return [`${by('up').length} up`, by('slow').length ? `${by('slow').length} slow` : null, `${down.length} down`].filter(Boolean).join(', ')
-      + (down.length ? `: ${down.map((r) => name(r.id)).join(', ')}` : '');
+      + (down.length ? `: ${down.slice(0, 3).map((r) => name(r.id)).join(', ')}${down.length > 3 ? ` and ${down.length - 3} more` : ''}` : '');
   }
 
   const api = { PROBES, AT, TO, CAM_TILE, SLOW_MS, probe, run, judge, report, summary, appOf };

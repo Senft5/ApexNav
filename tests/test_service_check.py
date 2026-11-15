@@ -137,3 +137,13 @@ S.run(deps, ['router_fun']).then((r) => console.log(JSON.stringify(r[0])));
 def test_a_probe_run_while_hidden_the_whole_time_is_not_judged():
     r = json.loads(subprocess.run([NODE, "-e", HIDDEN, ROOT], capture_output=True, text=True, check=True, timeout=60).stdout)
     assert r["state"] == "skip" and "background" in r["detail"]
+
+
+def test_summary_names_at_most_three_down():
+    js = ("const S = require('./web/service_check.js');"
+          "const r = (n, s) => Array.from({ length: n }, (_, i) => ({ id: 'x' + i, state: s }));"
+          "console.log(S.summary([...r(9, 'up'), ...r(5, 'down')]));"
+          "console.log(S.summary([...r(9, 'up'), ...r(2, 'down')]));")
+    a, b = subprocess.run(["node", "-e", js], cwd=ROOT, capture_output=True, text=True, check=True).stdout.splitlines()
+    assert a == "9 up, 5 down: x0, x1, x2 and 2 more"
+    assert b == "9 up, 2 down: x0, x1"
