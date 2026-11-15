@@ -94,7 +94,7 @@
     // stages within reach of half the length at LOOP_REACH_MS; at most LOOP_STAGES of them chained, LOOP_TRIES loops
     // routed, each stage driven through a point every LOOP_ALONG_M; a loop with more than LOOP_MAX_RETRACED driven twice
     // is dropped
-    LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 12, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_ALONG_N: 10, LOOP_MAX_RETRACED: 0.4, LOOP_DIRT_KM: 2, LOOP_DIRT_TRY: [0.7, 0.5, 1.4], STAGE_KM: 40, STAGE_ON_TURN: 0.5, STAGE_GAP_M: 4000, STAGE_JOIN_M: 6000, STAGE_NAME_TURN: 2.6, STAGE_PLAIN: 1,
+    LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 12, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_ALONG_N: 10, OUT_BACK_ROUTES: 2, OUT_BACK_NEXT_KM: 5, LOOP_MAX_RETRACED: 0.4, LOOP_DIRT_KM: 2, LOOP_DIRT_TRY: [0.7, 0.5, 1.4], STAGE_KM: 40, STAGE_ON_TURN: 0.5, STAGE_GAP_M: 4000, STAGE_JOIN_M: 6000, STAGE_NAME_TURN: 2.6, STAGE_PLAIN: 1,
     LOOP_CONN_FACTOR: 1.7, LOOP_CONN_A: 3, LOOP_MAX_OFF: 0.6, LOOP_NEAR_OFF: 0.15, LOOP_RING_OFF: 0.3, LOOP_RETRIES: 4, LOOP_REFITS: 2, LOOP_CONN_A_SHORT: 1, LOOP_CONN_A_LONG: 6, LOOP_FIT_OFF: 0.12,   // a connector's road length over its crow line, the router's detours to good road in it (Cincinnati, 2026-11-04)
     SNAP_M: 1500, GRID_DEG: 0.01, LIVE_NODES: 200, LIVE_TRIES: 4,   // a snap's road reaches LIVE_NODES or it's an island (snapLive)
     // long trips (2026-11-15): a corridor over LONG_TILES tiles (about 150 km crow at Fun, 100 at Long way) is cut to a
@@ -1585,7 +1585,11 @@
         if (fits().some(isClean)) break;
       }
     }
+    // still none: out along the best paved road near and back (Ouray, 2026-11-15: no paved loop under about 350 km, and
+    // every loop went over a 4x4 pass, 44 to 72 km unpaved; the Million Dollar Highway to Silverton and back is the drive)
+    // (and shorter than asked if it must: a paved road there and back is the honest answer, not a loop over a pass)
     let routes = fits();
+    if (obj.noDirt && !routes.some(isClean)) routes = routes.concat(outAndBack(v, req, obj, s0, hwy, level, km).filter((r) => !routes.some((x) => sameRoute(x, r))));
     // unpaved road avoided: where some loops keep (all but LOOP_DIRT_KM) off it, only those; where none can (the Black
     // Hills' gravel between the paved canyons), the ones with the least of it (within LOOP_DIRT_KM of the least), their
     // unpaved km on the card (why.unpavedKm)
@@ -1595,6 +1599,67 @@
     }
     for (const r of routes) delete r.combo;
     return { routes, ms: Date.now() - t0 };
+  }
+  /**
+   * There and back along a good road near the start, each a loop route of kind 'outBack' (retraced as it drives): the
+   * best stages (by explore's score) whose nearer end is within a third of the length, each cut to what the length leaves
+   * after the drive to it and back. Only paved road: a leg that needs unpaved road is no way back.
+   */
+  function outAndBack(v, req, obj, s0, hwy, level, km) {
+    let stages;
+    try { stages = explore(v, { start: req.start, maxS: Math.max(600, km * 1000 / 2 / K.LOOP_REACH_MS), max: 3 * K.LOOP_STAGES, prefs: req.prefs, avoid: req.avoid }).stages; } catch (_) { return []; }
+    const crow = (lat, lon) => distM(req.start.lat, req.start.lon, lat, lon) / 1000;
+    const out = [];
+    for (const st of stages) {
+      if (out.length >= K.OUT_BACK_ROUTES) break;
+      const L = st.lat.length - 1, rev = crow(st.lat[L], st.lon[L]) < crow(st.lat[0], st.lon[0]);
+      const conn = K.LOOP_CONN_FACTOR * Math.min(crow(st.lat[0], st.lon[0]), crow(st.lat[L], st.lon[L]));
+      const want = km / 2 - conn;                                     // the stage's km out that the length leaves
+      if (conn > km / 3 || want < Math.min(10, st.km)) continue;
+      // on along the next good road from its far end, outward, while the length wants more (Silverton on to Durango)
+      const run = [cutStage(st, rev, want)];
+      for (let left = want - run[0].km; left > 5 && run.length < 3;) {
+        const last = run[run.length - 1], n = last.lat.length - 1, from = crow(last.lat[n], last.lon[n]);
+        const gap = (lat, lon) => distM(last.lat[n], last.lon[n], lat, lon) / 1000;
+        let next = null;
+        for (const x of stages) {
+          if (x === st || run.some((y) => y.from === x)) continue;
+          const M = x.lat.length - 1, r2 = gap(x.lat[M], x.lon[M]) < gap(x.lat[0], x.lon[0]);
+          const g = r2 ? gap(x.lat[M], x.lon[M]) : gap(x.lat[0], x.lon[0]), far = r2 ? crow(x.lat[0], x.lon[0]) : crow(x.lat[M], x.lon[M]);
+          if (g <= K.OUT_BACK_NEXT_KM && far > from && (!next || x.score > next.x.score)) next = { x, r2 };
+        }
+        if (!next) break;
+        const c = cutStage(next.x, next.r2, left);
+        c.from = next.x;
+        run.push(c); left -= c.km;
+      }
+      // the whole run, else just the first road: out and back the same way (no retrace cost: the way back is the road)
+      let r = null;
+      for (let k = run.length; k >= 1 && !r; k = k > 1 ? 1 : 0) {
+        const there = run.slice(0, k).reduce((a, c) => a.concat(alongStage(c, false)), []);
+        const pts = there.concat(there.slice(0, -1).reverse().map((p) => ({ ...p, h: p.h + Math.PI, conn: false })));
+        r = loopAlong(v, obj, s0, req.start, pts, hwy, level, K.LOOP_CONN_A, false);
+        if (r && (r.why.unpavedKm || 0) > K.LOOP_DIRT_KM) r = null;
+        if (r) run.length = k;
+      }
+      if (!r) continue;
+      r.kind = 'outBack'; r.stages = run.map((c) => c.name);
+      if (!out.some((x) => sameRoute(x, r))) out.push(r);
+    }
+    return out;
+  }
+  /** A stage driven from its start (or its end, rev) for at most km: { lat, lon, km }. */
+  function cutStage(st, rev, km) {
+    const idx = [...st.lat.keys()];
+    if (rev) idx.reverse();
+    const lat = [st.lat[idx[0]]], lon = [st.lon[idx[0]]];
+    let run = 0;
+    for (let q = 1; q < idx.length && run < km * 1000; q++) {
+      const i = idx[q];
+      run += distM(lat[lat.length - 1], lon[lon.length - 1], st.lat[i], st.lon[i]);
+      lat.push(st.lat[i]); lon.push(st.lon[i]);
+    }
+    return { lat, lon, km: run / 1000, name: st.name };
   }
   /**
    * Per-edge cost factors a loop starts from: motorway and trunk (and their ramps) x LOOP_HWY_X at Quick; 1 at Fun and
@@ -1753,13 +1818,17 @@
    * search on the loop's costs, earlier legs' edges (both ways) x LOOP_RETRACE_X. The route with `retraced` (share of its
    * length on road driven twice) and `hwyShare` (on motorway or trunk), or null.
    */
-  function loopAlong(v, obj, s0, start, pts, hwy, level, connA = K.LOOP_CONN_A) {
-    const a = K.LOOP_A[level], penal = Float32Array.from(hwy), is = hwyOf(v);
+  function loopAlong(v, obj, s0, start, pts, hwy, level, connA = K.LOOP_CONN_A, retrace = true) {
+    const a = K.LOOP_A[level], penal = Float32Array.from(hwy), is = hwyOf(v), B = v.bits || flagBits();
     const snaps = [];
     for (const p of pts) {
       // the stage's own road, the way it is driven (never a motorway beside it)
-      const along = (e) => !is[e] && Math.abs(turnAngle(p.h, headingNear(v, e, p.lat, p.lon))) < 0.87;
+      // (and never an unpaved road beside it when that is avoided: a point on US 550 snapped onto the Little Molas
+      // campground road, and the loop drove 6 km of its gravel, 2026-11-15)
+      const paved = (e) => !(obj.noDirt && (v.flags[e] & B.unpaved));
+      const along = (e) => !is[e] && paved(e) && Math.abs(turnAngle(p.h, headingNear(v, e, p.lat, p.lon))) < 0.87;
       let x = Number.isFinite(p.h) ? snap(v, p.lat, p.lon, along, 60) : [];
+      if (!x.length) x = snap(v, p.lat, p.lon, (e) => paved(e) && !(noHighway(level) && is[e]), 200);
       if (!x.length) x = snap(v, p.lat, p.lon, noHighway(level) ? (e) => !is[e] : null, 200);
       else x = atNode(v, x, along);
       if (x.length) snaps.push({ s: x, lat: p.lat, lon: p.lon, conn: !!p.conn });
@@ -1779,7 +1848,7 @@
         loopLeg(v, obj, prev, nx.s, legA, penal, {}, level);
       if (!res) return null;
       legs.push(res);
-      for (const e of res.edges) { penal[e] = hwy[e] * K.LOOP_RETRACE_X; const tw = twin(v, e); if (tw >= 0) penal[tw] = hwy[tw] * K.LOOP_RETRACE_X; }
+      if (retrace) for (const e of res.edges) { penal[e] = hwy[e] * K.LOOP_RETRACE_X; const tw = twin(v, e); if (tw >= 0) penal[tw] = hwy[tw] * K.LOOP_RETRACE_X; }
       const last = res.edges[res.edges.length - 1];
       prev = [{ edge: last, frac: res.ft, lat: 0, lon: 0 }];
       at = nx;
