@@ -1,0 +1,103 @@
+name: Valhalla tiles (own Quick-route server, OH+KY+IN, R2)
+
+# The tiles of our own Valhalla router (backend/src/valhalla.ts, router/), built each week from the Geofabrik extracts
+# with the same pinned Valhalla image the router runs, tarred (valhalla_build_extract), cut into 32 MB parts and sent to
+# our R2 bucket through the Worker (tools/graph_etl/upload_r2.sh, GitHub OIDC, main only): valhalla/v1/b/<build>/part-NNN,
+# then valhalla/v1/index.json, which the Worker takes only when every part is there. The router's container fetches
+# them when it starts (router/start.sh) and checks the sha256.
+#
+# Every run, PRs too, first proves the tiles work: the router image is built from router/, started on the parts with
+# 1 GiB of memory (the Container's "basic" size) and asked for real routes. A run off main stops there.
+#
+# Triggers: weekly (Thursday, after the week's extracts are cached by osm-ctx.yml), a manual run, or a PR that changes
+# this file, router/ or tools/valhalla/.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 4"
+  pull_request:
+    paths:
+      - ".github/workflows/valhalla-tiles.yml"
+      - "router/**"
+      - "tools/valhalla/**"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: valhalla-tiles-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  STATES: "ohio kentucky indiana"
+  # keep in step with router/Dockerfile's FROM (tests/test_valhalla.py)
+  IMAGE: "ghcr.io/valhalla/valhalla@sha256:f0e58e726de82e242be749043df906da99a6441e9bdb7f662635f5d8527346d7"
+  PART: "32M"
+
+jobs:
+  tiles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: Week (cache key, shared with the graph and OSM context builds)
+        id: week
+        run: echo "w=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - name: Restore the download cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .graph_cache/osm
+          key: graph-osm-${{ steps.week.outputs.w }}
+      - name: Download the Geofabrik extracts
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .graph_cache/osm
+          for s in $STATES; do
+            curl -fSL --retry 5 --retry-delay 10 --retry-all-errors -o ".graph_cache/osm/$s.osm.pbf" "https://download.geofabrik.de/north-america/us/$s-latest.osm.pbf"
+          done
+          ls -la .graph_cache/osm
+      - name: Build the tiles
+        run: |
+          mkdir -p work && cp .graph_cache/osm/*.osm.pbf work/
+          docker pull -q "$IMAGE"
+          t0=$(date +%s)
+          docker run --rm -v "$PWD/work:/work" -w /work --entrypoint bash "$IMAGE" -euo pipefail -c '
+            valhalla_build_config --mjolnir-tile-dir /work/tiles --mjolnir-tile-extract /work/tiles.tar \
+              --mjolnir-admin /work/admins.sqlite --mjolnir-timezone /work/timezones.sqlite \
+              --mjolnir-traffic-extract "" --additional-data-elevation "" --mjolnir-concurrency "$(nproc)" > /work/valhalla.json
+            valhalla_build_timezones > /work/timezones.sqlite || { echo "::warning::no timezones"; rm -f /work/timezones.sqlite; }
+            valhalla_build_admins -c /work/valhalla.json /work/*.osm.pbf
+            valhalla_build_tiles -c /work/valhalla.json /work/*.osm.pbf
+            valhalla_build_extract -c /work/valhalla.json -v --overwrite
+            rm -rf /work/tiles'
+          sudo chown -R "$(id -u)" work
+          echo "tiles: $(du -h work/tiles.tar | cut -f1) in $(( ($(date +%s) - t0) / 60 )) min" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Cut into parts, index
+        run: |
+          build="${{ steps.week.outputs.w }}-$(sha256sum work/tiles.tar | cut -c1-8)"
+          d="out/valhalla/v1/b/$build"; mkdir -p "$d"
+          split -b "$PART" -d -a 3 work/tiles.tar "$d/part-"
+          python3 tools/valhalla/index.py --tar work/tiles.tar --parts "$d" --build "$build" --source "Geofabrik $STATES" > out/valhalla/v1/index.json
+          rm -f work/*.osm.pbf
+          cat out/valhalla/v1/index.json | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Prove the router answers from these parts (1 GiB, like the Container)
+        run: |
+          docker build -q -t vetta-router router
+          (cd out && python3 -m http.server 8811 >/dev/null 2>&1 &)
+          docker run -d --name vr --network host --memory 1g -e TILES_URL=http://127.0.0.1:8811 vetta-router
+          t0=$(date +%s)
+          for i in $(seq 1 300); do curl -fsS localhost:8002/status >/dev/null 2>&1 && break; sleep 2; done
+          docker logs vr 2>&1 | grep vetta-router || true
+          curl -fsS localhost:8002/status
+          echo "router up in $(( $(date +%s) - t0 )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 tools/valhalla/smoke.py http://localhost:8002 | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "memory: $(docker stats --no-stream vr --format '{{.MemUsage}}')" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Router log
+        if: failure()
+        run: docker logs vr 2>&1 | tail -80 || true
+      - name: Upload to R2
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        shell: bash   # -o pipefail: a refused upload fails the run, not only the script behind the tee
+        run: tools/graph_etl/upload_r2.sh out | tee -a "$GITHUB_STEP_SUMMARY"
