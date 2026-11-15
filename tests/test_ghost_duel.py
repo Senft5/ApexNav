@@ -208,3 +208,24 @@ def test_where_a_stage_was_lost():
     assert r["none"]["worst"] is None and r["none"]["said"] is None                          # level: nothing lost anywhere
     assert r["said"] == ["Most of it late on.", None]
     assert r["gap"] is None                                                                  # a gap in the clock: no answer
+
+
+IDEAL_RUNNER = r"""
+const R = process.argv[1];
+const Core = require(R + '/web/apex_core.js'), G = require(R + '/web/ghost_duel.js');
+const pass = (f) => ({ fine: G.splitsOf(Core, { speed_mps: Array.from({ length: 221 }, (_, i) => f(i)) }, 10, 210), lo: 10, hi: 210, apexes: [40, 70, 120, 160] });
+const a = pass((i) => (i < 110 ? 25 : 20)), b = pass((i) => (i < 110 ? 20 : 25)), c = pass(() => 18);
+console.log(JSON.stringify({ two: G.idealOf([a, b, c]), alone: G.idealOf([a]), same: G.idealOf([a, a]), none: G.idealOf(null) }));
+"""
+
+
+def test_your_ideal_run_is_your_quickest_stretches_put_together():
+    """A stage's ideal run: over each stretch between the quickest pass's corners, the quickest of your passes, added up.
+    Quick early on one day and late on another, the ideal is quicker than either; one pass, or the same pass twice, is
+    no better than your best."""
+    r = json.loads(subprocess.run([NODE, "-e", IDEAL_RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
+    two = r["two"]
+    assert two["best_s"] == pytest.approx(45, abs=0.2) and two["time_s"] == pytest.approx(40.5, abs=0.6) and two["runs"] == 2
+    assert two["stretches"] == 5                                          # cut at 4 apexes 100 m apart, then the finish
+    assert r["alone"] is None and r["none"] is None
+    assert r["same"]["time_s"] == r["same"]["best_s"]

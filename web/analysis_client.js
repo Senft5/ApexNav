@@ -400,6 +400,9 @@
             // cut at its corners' apexes only (ghost_duel.js cutsOf): never a straight's own speed
             try { const G = root.ApexGhostDuel; p.splits = G ? G.splitsOf(Core, d, p.lo, p.hi, G.cutsOf(p.lo, p.hi, (d.corners || []).map((c) => c && c.apex))) : null; } catch (_) { p.splits = null; }
             p.surface = d.surface === 'dry' || d.surface === 'wet' || d.surface === 'ice' ? d.surface : null;
+            // its 25 m splits and its corners' apexes, for your ideal run of the stage (ghost_duel.js idealOf; never sent)
+            try { const G = root.ApexGhostDuel; p.fine = G ? G.splitsOf(Core, d, p.lo, p.hi) : null; } catch (_) { p.fine = null; }
+            p.apexes = (d.corners || []).map((c) => c && c.apex).filter((a) => Number.isFinite(a) && a > p.lo && a < p.hi);
             out[seg.id].push({ id: s.id, p });
           }
         }

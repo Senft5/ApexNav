@@ -153,6 +153,27 @@
     return best ? { splits: best.splits, time_s: r1(best.time_s), surface: surface === 'wet' || surface === 'ice' ? surface : null, pass: best } : null;
   }
 
+  /**
+   * Your ideal run of a stage: the quickest of your passes over each stretch between the same cuts, put together. passes
+   * [{ fine, lo, hi, apexes }] (fine: 25 m splits; apexes: the drive's corner apexes, sample indices); the stretches are
+   * cut at the quickest pass's corners (cutsOf), so a stretch always holds a corner. { time_s, best_s, stretches, runs }
+   * or null under two passes with whole splits.
+   */
+  function idealOf(passes) {
+    const ok = (passes || []).filter((p) => p && Array.isArray(p.fine) && p.fine.length && finite(timeAt(p.fine, 1)));
+    if (ok.length < 2) return null;
+    const best = ok.reduce((a, b) => (timeAt(b.fine, 1) < timeAt(a.fine, 1) ? b : a));
+    const cuts = cutsOf(best.lo, best.hi, best.apexes), used = new Set();
+    let sum = 0, q0 = 0;
+    for (const q of cuts) {
+      let m = Infinity, who = -1;
+      ok.forEach((p, i) => { const d = timeAt(p.fine, q) - timeAt(p.fine, q0); if (finite(d) && d < m) { m = d; who = i; } });
+      if (!finite(m)) return null;
+      sum += m; used.add(who); q0 = q;
+    }
+    return { time_s: r1(sum), best_s: r1(timeAt(best.fine, 1)), stretches: cuts.length, runs: used.size };
+  }
+
   /** "+0.3 vs @sam", "−1.2 vs @sam", "level with @sam" ("vs your best" for your own ghost, self); "--" when nothing compares yet. */
   function label(gap, who, self = false) {
     const w = self ? 'your best' : who ? `@${String(who).replace(/^@/, '')}` : 'them';
@@ -289,6 +310,6 @@
     return 'Couldn\u2019t send it. Try again.';
   }
 
-  const api = { cutsOf, splitsOf, bestOwn, worstOf, worstSaid, timeAt, qAt, pointAt, gapAt, cornerSplits, standout, label, spoken, createTracker, countFor, MAX, challengeKey, challengeSaid };
+  const api = { cutsOf, splitsOf, bestOwn, idealOf, worstOf, worstSaid, timeAt, qAt, pointAt, gapAt, cornerSplits, standout, label, spoken, createTracker, countFor, MAX, challengeKey, challengeSaid };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexGhostDuel = api;
 })(typeof window !== 'undefined' ? window : globalThis);
