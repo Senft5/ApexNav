@@ -260,3 +260,25 @@ describe("who came, on a crew post", () => {
     expect((await api(a, "GET", "/api/feed/with?day=soon")).status).toBe(400);
   });
 });
+
+describe("tagging who came, on a post to friends", () => {
+  it("tags friends only, five at most, never on a crew post; a tagged friend reads With, gets For you, and can take the tag off", async () => {
+    const [a, b, c, d] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara"), await makeUser("dan")];
+    await befriend(a, b); await befriend(a, c);
+    expect((await api(a, "POST", "/api/posts", { ...POST, tags: ["dan"] })).status).toBe(400);                 // not a friend
+    expect((await api(a, "POST", "/api/posts", { ...POST, tags: ["b", "c", "d", "e", "f", "g"] })).status).toBe(400);
+    const crew = (await json(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).id;
+    expect((await api(a, "POST", "/api/posts", { ...POST, crew_id: crew, tags: ["bob"] })).status).toBe(400);   // a crew post says who came itself
+    const { id } = await post(a, { tags: ["bob", "cara", "BOB"] });
+    expect((await json(api(b, "GET", `/api/posts/${id}`))).with).toEqual(["bob", "cara"]);
+    const inbox = await json(api(b, "GET", "/api/inbox"));
+    expect(inbox.items).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "post_with", post_id: id, handle: "alice" })]));
+    // bob blocks cara: neither sees the other's tag
+    await ok(api(b, "POST", "/api/blocks", { handle: "cara" }));
+    expect((await json(api(b, "GET", `/api/posts/${id}`))).with).toEqual(["bob"]);
+    await ok(api(b, "DELETE", `/api/posts/${id}/tag`));
+    expect((await json(api(a, "GET", `/api/posts/${id}`))).with).toEqual(["cara"]);
+    expect((await json(api(c, "GET", "/api/me/export"))).drive_post_tags).toEqual([expect.objectContaining({ on_post_by: "alice", post: "Cherohala Skyway" })]);
+    void d;
+  });
+});

@@ -122,10 +122,20 @@ export async function postCreate(env: Env, v: Viewer, req: Request): Promise<{ i
   if (crew && !(await isCrewMember(env, crew, v.id))) throw new HttpError(404, "no_crew");
   const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM drive_posts WHERE author = ? AND created_at > datetime('now', '-1 day')").bind(v.id).first<{ n: number }>();
   if (n && n.n >= MAX_POSTS_DAY) throw new HttpError(429, "too_many_posts");
+  // who came (2026-11-15): up to TAG_N friends tagged, on a post to friends only (a crew post says who came from the drive's record)
+  if (b.tags !== undefined && b.tags !== null && (!Array.isArray(b.tags) || b.tags.length > TAG_N || !b.tags.every((h) => typeof h === "string" && HANDLE_RE.test(h.toLowerCase())))) throw new HttpError(400, "bad_tags");
+  const asked = [...new Set(((b.tags as string[]) || []).map((h) => h.toLowerCase()))];
+  if (asked.length && crew) throw new HttpError(400, "bad_tags");
+  const tagged = asked.length ? (await env.DB.prepare(`SELECT u.id FROM users u
+      JOIN friendships f ON f.status = 'accepted' AND f.user_a = MIN(u.id, ?1) AND f.user_b = MAX(u.id, ?1)
+     WHERE lower(u.handle) IN (${asked.map((_, i) => `?${i + 2}`).join(", ")}) AND u.id <> ?1 AND ${NOT_BLOCKED("u.id")}`)
+    .bind(v.id, ...asked).all<{ id: string }>()).results.map((r) => r.id) : [];
+  if (tagged.length < asked.length) throw new HttpError(400, "not_friends");
   const id = randomToken(12);
   await env.DB.prepare(`INSERT INTO drive_posts (id, author, crew_id, title, caption, driven_on, length_m, score, roads, stages, line) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(id, v.id, crew, title, caption, day, length === null ? null : Math.round(length), score, roads.length ? JSON.stringify(roads) : null,
       stagesOut.length ? JSON.stringify(stagesOut) : null, line).run();
+  if (tagged.length) await env.DB.batch(tagged.map((u) => env.DB.prepare("INSERT INTO drive_post_tags (post_id, user_id) VALUES (?, ?)").bind(id, u)));
   return { id };
 }
 
@@ -144,12 +154,17 @@ const WITH_SQL = `(SELECT group_concat(handle, ',') FROM (SELECT DISTINCT wu.han
        AND p.driven_on BETWEEN date(e.starts_at, '-14 hours') AND date(e.starts_at, '+14 hours')
        AND (a2.user_id = ?1 OR ${NOT_BLOCKED("a2.user_id")})
      ORDER BY wu.handle LIMIT ${WITH_N}))`;
+/** On a post to friends, the friends the author tagged (drive_post_tags), never across a block with the viewer; five at most. */
+export const TAG_N = 5;
+const TAGS_SQL = `(SELECT group_concat(handle, ',') FROM (SELECT tu.handle FROM drive_post_tags t JOIN users tu ON tu.id = t.user_id
+     WHERE t.post_id = p.id AND tu.handle IS NOT NULL AND (t.user_id = ?1 OR ${NOT_BLOCKED("t.user_id")})
+     ORDER BY tu.handle LIMIT ${TAG_N}))`;
 const SELECT = `SELECT p.id, p.author, u.handle, u.photo_id, p.crew_id, c.name AS crew_name, p.title, p.caption, p.driven_on, p.length_m, p.score, p.roads,
     p.stages, p.line, p.media, p.created_at,
     (SELECT COUNT(*) FROM drive_post_kudos k WHERE k.post_id = p.id) AS kudos,
     EXISTS (SELECT 1 FROM drive_post_kudos k WHERE k.post_id = p.id AND k.user_id = ?1) AS my_kudos,
     (SELECT COUNT(*) FROM drive_comments dc WHERE dc.post_id = p.id AND (dc.author = ?1 OR (${NOT_BLOCKED("dc.author")} AND NOT ${reportedSql("comment", "dc.id")}))) AS comments,
-    CASE WHEN p.crew_id IS NULL THEN NULL ELSE ${WITH_SQL} END AS with_handles
+    CASE WHEN p.crew_id IS NULL THEN ${TAGS_SQL} ELSE ${WITH_SQL} END AS with_handles
   FROM drive_posts p JOIN users u ON u.id = p.author LEFT JOIN crews c ON c.id = p.crew_id`;
 const shape = (r: Row, me: string) => ({
   id: r.id, handle: r.handle, photo_id: r.photo_id, mine: r.author === me, crew: r.crew_id ? { id: r.crew_id, name: r.crew_name } : null,
@@ -158,6 +173,11 @@ const shape = (r: Row, me: string) => ({
   line: r.line, media: (() => { const m = mediaOf(r.media); return m ? { kind: m.kind, label: m.label } : null; })(), created_at: r.created_at, kudos: r.kudos, my_kudos: !!r.my_kudos, comments: r.comments,
   with: r.with_handles ? r.with_handles.split(",").filter(Boolean) : [],
 });
+
+/** DELETE /api/posts/:id/tag: take your own tag off a post you were tagged on (the post stays). */
+export async function postUntag(env: Env, v: Viewer, id: string): Promise<void> {
+  await env.DB.prepare("DELETE FROM drive_post_tags WHERE post_id = ? AND user_id = ?").bind(id, v.id).run();
+}
 
 /** GET /api/feed?before=&author=: the newest posts you can see (yours too), FEED_N at a time, older than `before` (a
  *  created_at); with `author` (a user id: a friend's profile) only theirs, under the same rules as the Feed. */

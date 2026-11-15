@@ -127,16 +127,18 @@ export async function inbox(env: Env, v: Viewer) {
           AND ${NO_BLOCK("u.id", "?1")} AND ${BOOK_SEEN}
         GROUP BY b.id ORDER BY at DESC LIMIT 10`, me),
     // a crew-mate posted a drive to the crew that you were on: you were both marked at one of its crew drives that day
-    // (the post's "With you", drive_posts.ts WITH_SQL); only while you can see the post
+    // (the post's "With you", drive_posts.ts WITH_SQL), or a friend tagged you on a post to friends (drive_post_tags);
+    // only while you can see the post
     all<{ post_id: string; title: string; handle: string; at: string }>(env,
       `SELECT p.id AS post_id, p.title, u.handle, p.created_at AS at
          FROM drive_posts p JOIN users u ON u.id = p.author
-        WHERE p.author != ?1 AND p.crew_id IS NOT NULL AND u.handle IS NOT NULL AND p.created_at > datetime('now', '-${DAYS} days') AND ${POST_SEEN("p")}
-          AND EXISTS (SELECT 1 FROM crew_events e
+        WHERE p.author != ?1 AND u.handle IS NOT NULL AND p.created_at > datetime('now', '-${DAYS} days') AND ${POST_SEEN("p")}
+          AND (EXISTS (SELECT 1 FROM drive_post_tags t WHERE t.post_id = p.id AND t.user_id = ?1)
+           OR p.crew_id IS NOT NULL AND EXISTS (SELECT 1 FROM crew_events e
                 JOIN crew_event_attendance a1 ON a1.event_id = e.id AND a1.user_id = p.author
                 JOIN crew_event_attendance a2 ON a2.event_id = e.id AND a2.user_id = ?1
                WHERE e.crew_id = p.crew_id AND e.cancelled = 0
-                 AND p.driven_on BETWEEN date(e.starts_at, '-14 hours') AND date(e.starts_at, '+14 hours'))
+                 AND p.driven_on BETWEEN date(e.starts_at, '-14 hours') AND date(e.starts_at, '+14 hours')))
         ORDER BY p.created_at DESC LIMIT 10`, me),
   ]);
   const items: Item[] = [];
