@@ -139,3 +139,36 @@ def test_the_ghost_is_where_your_friend_was_at_this_moment(out):
     assert abs(same["ahead_m"]) < 6                                       # at their pace: beside you
     assert slow["ahead_m"] > 100                                         # 16 m/s against their 20: they are well up the road
     assert same["off"] is None
+
+
+OWN_RUNNER = r"""
+const R = process.argv[1];
+const Core = require(R + '/web/apex_core.js'), G = require(R + '/web/ghost_duel.js');
+const lat = [], lon = []; for (let i = 0; i <= 220; i++) { lat.push(39.0 + i * 5 / 110540); lon.push(-84.5); }
+const pass = (mps) => G.splitsOf(Core, { speed_mps: lat.map(() => mps) }, 10, 210);
+const p = (mps, surface) => ({ time_s: 1000 / mps, splits: pass(mps), surface });
+const passes = [p(20, null), p(25, 'wet'), p(18, 'dry'), { time_s: 30, splits: null, surface: null }, p(40, 'ice')];
+const stage = { id: 's1', name: 'Dry Ridge', start: [lat[10], lon[10]], end: [lat[210], lon[210]], length_m: 1000, geom: [[lat[10], lon[10]], [lat[210], lon[210]]] };
+const best = G.bestOwn(passes);
+// a live pass at 16 m/s against your own best (20 m/s): the tracker says it is yours
+const tr = G.createTracker([{ stage, who: 'you', self: true, splits: best.splits, time_s: best.time_s }]), rows = [], seen = [];
+let t = 0; for (let i = 0; i <= 220; i++) { rows.push({ lat: lat[i], lon: lon[i], t_s: t }); t += 5 / 16; const r = tr.update(rows); if (r) seen.push(r); }
+console.log(JSON.stringify({
+  dry: best, wet: G.bestOwn(passes, 'wet'), ice: G.bestOwn(passes, 'ice'), none: [G.bestOwn([]), G.bestOwn(null), G.bestOwn([p(20, 'wet')])],
+  n: best.splits.length, selfs: seen.map((r) => r.self), done: seen.filter((r) => r.state === 'done').map((r) => Math.round(r.gap)),
+  labels: [G.label(0.31, 'you', true), G.label(-1.24, 'you', true), G.label(0, 'you', true)], spoken: G.spoken(-1.4, 'your best'),
+}));
+"""
+
+
+def test_your_own_best_is_a_ghost_on_a_road_like_todays():
+    """Your quickest pass of a stage is its ghost on any stage you've driven before: on a dry road the quickest dry or
+    unknown-surface pass, on a wet one only a wet pass (a dry best is no ghost for the rain); its splits every 25 m (it
+    never leaves your phone), so the marker goes at your own pace down the straights too."""
+    r = json.loads(subprocess.run([NODE, "-e", OWN_RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["dry"]["time_s"] == 50 and r["dry"]["surface"] is None and r["n"] == 40        # 20 m/s unknown beats 18 m/s dry; no splits, no ghost
+    assert r["wet"]["time_s"] == 40 and r["wet"]["surface"] == "wet" and r["ice"]["time_s"] == 25
+    assert r["none"] == [None, None, None]
+    assert r["selfs"] and all(r["selfs"]) and r["done"] == [13]                              # 62.5 s against 50: 12.5 down (rounded up)
+    assert r["labels"] == ["+0.3 s vs your best", "−1.2 s vs your best", "level with your best"]
+    assert r["spoken"] == "1.4 seconds up on your best."

@@ -11184,23 +11184,33 @@
     let ghostWatch = null;
     async function startGhostWatch(surface = null) {
       ghostWatch = null; $('ghostBar').hidden = true; moveGhost();
-      if (!window.ApexGhostDuel || !window.ApexSync) return;
+      if (!window.ApexGhostDuel) return;
       let segs = [];
       try { segs = JSON.parse(localStorage.getItem('apex.segments') || '[]'); } catch (_) {}
-      segs = (Array.isArray(segs) ? segs : []).filter((x) => x && x.synced && Number.isFinite(x.lat0) && Number.isFinite(x.length_m));
+      segs = (Array.isArray(segs) ? segs : []).filter((x) => x && Number.isFinite(x.lat0) && Number.isFinite(x.length_m));
       if (!segs.length) return;
-      try { if (!(await ApexSync.member())) return; } catch (_) { return; }
-      const canon = (x) => x.origin || x.id;
-      let rows = [];
-      try {
-        const r = await ApexSync.apiFetch(`/api/board/ghosts?canons=${encodeURIComponent(segs.slice(0, 20).map(canon).join(','))}${surface ? `&surface=${surface}` : ''}`);
-        rows = r.ok ? await r.json() : [];
-      } catch (_) { rows = []; }
-      if (!driveActive || !Array.isArray(rows) || !rows.length) return;
       const geom = (x) => { try { const g = typeof x.geom === 'string' ? JSON.parse(x.geom) : x.geom; return Array.isArray(g) && g.length > 1 ? g : null; } catch (_) { return null; } };
-      const ghosts = rows.map((g) => { const st = segs.find((x) => canon(x) === g.canon_id);
-        return st ? { stage: { id: st.id, name: st.name || 'Stage', start: [st.lat0, st.lon0], end: [st.lat1, st.lon1], length_m: st.length_m, geom: geom(st) },
-                       who: g.handle || g.name || 'friend', name: g.name || g.handle || 'your friend', splits: g.splits, time_s: g.time_s, surface: g.surface || null } : null; }).filter(Boolean);
+      const stageOf = (st) => ({ id: st.id, name: st.name || 'Stage', start: [st.lat0, st.lon0], end: [st.lat1, st.lon1], length_m: st.length_m, geom: geom(st) });
+      // your own quickest pass of each stage, read in the analysis worker (offline too, members or not)
+      let own = [];
+      try { own = (await ApexAnalysis.job('ownGhosts', { segs: segs.map(({ id, lat0, lon0, lat1, lon1, length_m }) => ({ id, lat0, lon0, lat1, lon1, length_m })), surface })).ghosts || []; } catch (_) { own = []; }
+      const mine = own.map((g) => { const st = segs.find((x) => x.id === g.id);
+        return st ? { stage: stageOf(st), who: 'you', name: 'your best', self: true, splits: g.splits, time_s: g.time_s, surface } : null; }).filter(Boolean);
+      // a friend's run, where one reached you, comes first: it is the one the tracker picks on that stage
+      const canon = (x) => x.origin || x.id, synced = segs.filter((x) => x.synced);
+      let rows = [];
+      if (window.ApexSync && synced.length) {
+        try {
+          if (await ApexSync.member()) {
+            const r = await ApexSync.apiFetch(`/api/board/ghosts?canons=${encodeURIComponent(synced.slice(0, 20).map(canon).join(','))}${surface ? `&surface=${surface}` : ''}`);
+            rows = r.ok ? await r.json() : [];
+          }
+        } catch (_) { rows = []; }
+      }
+      if (!driveActive) return;
+      const friends = (Array.isArray(rows) ? rows : []).map((g) => { const st = synced.find((x) => canon(x) === g.canon_id);
+        return st ? { stage: stageOf(st), who: g.handle || g.name || 'friend', name: g.name || g.handle || 'your friend', splits: g.splits, time_s: g.time_s, surface: g.surface || null } : null; }).filter(Boolean);
+      const ghosts = friends.concat(mine);
       if (ghosts.length) ghostWatch = { tracker: ApexGhostDuel.createTracker(ghosts), ghosts, at: 0, surface };
     }
     // The ghost on the map (IDEAS D-04): a hollow marker where your friend was at this moment of their run, moved every
@@ -11218,8 +11228,9 @@
         ghostMk = { el, m: new maplibregl.Marker({ element: el }).setLngLat([p[1], p[0]]), on: false };
       }
       if (!ghostMk.on) { ghostMk.m.addTo(map); ghostMk.on = true; }
-      ghostMk.el.setAttribute('aria-label', `Ghost: ${v.who}`);            // after the Marker, which labels it "Map marker"
-      ghostMk.el.textContent = String(v.who || '').replace(/^@/, '').charAt(0).toUpperCase();
+      ghostMk.el.setAttribute('aria-label', v.self ? 'Ghost: your best' : `Ghost: ${v.who}`);   // after the Marker, which labels it "Map marker"
+      ghostMk.el.classList.toggle('self', !!v.self);
+      ghostMk.el.textContent = v.self ? '' : String(v.who || '').replace(/^@/, '').charAt(0).toUpperCase();
       ghostMk.m.setLngLat([p[1], p[0]]);
     }
     function feedGhost() {
@@ -11231,13 +11242,13 @@
       const st = drive.wet && drive.wet.state, slick = st === 'wet' || st === 'ice' ? st : null;
       if (slick !== w.surface && !w.refetching) { w.refetching = true; startGhostWatch(slick); return; }
       const r = w.tracker.update(rows), bar = $('ghostBar');
-      w.view = r && r.state === 'in' ? { elapsed_s: r.elapsed_s, wall: performance.now(), who: r.who } : null;
+      w.view = r && r.state === 'in' ? { elapsed_s: r.elapsed_s, wall: performance.now(), who: r.who, self: r.self } : null;
       moveGhost();
       if (!r) { bar.hidden = true; return; }
-      const g = w.ghosts.find((x) => x.stage.id === r.stageId), name = g ? String(g.name).split(' ')[0] : r.who;
+      const g = w.ghosts.find((x) => x.stage.id === r.stageId && !!x.self === !!r.self), name = r.self ? 'your best' : g ? String(g.name).split(' ')[0] : r.who;
       bar.hidden = r.state === 'done';
       $('ghostName').textContent = r.name;
-      $('ghostGap').textContent = ApexGhostDuel.label(r.gap, r.who);
+      $('ghostGap').textContent = ApexGhostDuel.label(r.gap, r.who, r.self);
       bar.classList.toggle('ahead', Number.isFinite(r.gap) && r.gap < -0.05); bar.classList.toggle('behind', Number.isFinite(r.gap) && r.gap > 0.05);
       if (!bar.hidden) { $('stageBar').hidden = true; $('coachBar').hidden = true; }
       const words = (x) => (window.ApexPassCoach && ApexPassCoach.spoken ? ApexPassCoach.spoken(x) : `${x.toFixed(1)} seconds`);
@@ -11246,7 +11257,7 @@
       if (r.state === 'done') {
         const line = Number.isFinite(r.gap) ? `${r.name} done. ${ApexGhostDuel.spoken(r.gap, name, words)}` : `${r.name} done.`;
         toast(line); if (isSpirited()) sayQuietLine(line, Number.isFinite(r.gap) ? `Stage done. ${bareGap(r.gap)}` : 'Stage done.');
-        (drive.ghosts || (drive.ghosts = [])).push({ stage: r.name, who: r.who, gap_s: Number.isFinite(r.gap) ? Math.round(r.gap * 10) / 10 : null });
+        if (!r.self) (drive.ghosts || (drive.ghosts = [])).push({ stage: r.name, who: r.who, gap_s: Number.isFinite(r.gap) ? Math.round(r.gap * 10) / 10 : null });
         return;
       }
       if (r.say && isSpirited() && Number.isFinite(r.gap)) sayQuietLine(ApexGhostDuel.spoken(r.gap, name, words), bareGap(r.gap));

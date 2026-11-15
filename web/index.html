@@ -1828,6 +1828,7 @@
     /* The ghost on the map (IDEAS D-04): where your friend was at this moment of their run, a hollow marker that never hides the road */
     .ghost-puck { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--accent, #e8b21a); background: color-mix(in srgb, var(--accent, #e8b21a) 25%, transparent);
       box-shadow: 0 0 0 2px var(--panel, #111); display: grid; place-items: center; font: 800 10px var(--font-ui, sans-serif); color: var(--panel-ink, #fff); pointer-events: none; }
+    .ghost-puck.self { border-style: dashed; border-color: var(--panel-ink, #fff); background: color-mix(in srgb, var(--panel-ink, #fff) 18%, transparent); }   /* your own best: dashed, no initial */
     .ghost-puck[hidden] { display: none; }
     .hz-ask span { flex: 1; font-weight: 700; }
     .hz-ask .key { min-height: 56px; }

@@ -487,6 +487,29 @@
       return { refs };
     },
 
+    /**
+     * A drive's start: your own quickest pass of each stage as its ghost (ghost_duel.js bestOwn, IDEAS D-04), on a road like
+     * today's (surface), its splits cut every 25 m (it never leaves your phone). [{ id: the stage's, splits, time_s }].
+     */
+    async ownGhosts({ segs, surface = null }) {
+      const Core = CoreOf(), G = root.ApexGhostDuel, out = [], PAD = 0.001;
+      if (!G) return { ghosts: out };
+      const sums = await Rec().summaries(Core);
+      const holds = (b, la, lo) => !!b && la >= b[0] - PAD && la <= b[1] + PAD && lo >= b[2] - PAD && lo <= b[3] + PAD;
+      for (const seg of segs || []) {
+        const passes = [];
+        for (const s of sums) {
+          if (!holds(s.bbox, seg.lat0, seg.lon0) || !holds(s.bbox, seg.lat1, seg.lon1)) continue;
+          const d = await full(s.id, s), p = d && Core.segmentPass(seg, d);
+          if (p) passes.push({ time_s: p.time_s, splits: G.splitsOf(Core, d, p.lo, p.hi), surface: d.surface || null });
+        }
+        const b = G.bestOwn(passes, surface);
+        if (b) out.push({ id: seg.id, splits: b.splits, time_s: b.time_s });
+      }
+      release();
+      return { ghosts: out };
+    },
+
     /** The map cells your own drives cover (ApexPrefer.grid, for routes that prefer roads you have not driven). */
     async drivenGrid() {
       const sums = await Rec().summaries(CoreOf()), lines = [];
