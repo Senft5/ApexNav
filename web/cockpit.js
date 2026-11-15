@@ -2475,11 +2475,12 @@
       if (cornersSay && (performance.now() > cornersSay.until || state.notesMode === 'quiet')) cornersSay = null;
       // The places along the planned route (along_ahead.js, from the route card's t.scenic): the last fuel before a long
       // stretch with none, in any notes mode; a viewpoint or waterfall at most every 5 minutes, not in Quiet notes.
-      if (live && !offRoute && !alongSay && track && track === plannedRoute && Array.isArray(track.scenic) && window.ApexAlongAhead && vMps != null) {
-        const said = drive.alongSaid || (drive.alongSaid = new Set()), nowS = performance.now() / 1000;
+      // On a free drive the road ahead's own viewpoints and waterfalls (attachHorizonViews), with the same 5 minutes between.
+      if (live && !offRoute && !alongSay && track && (track === plannedRoute || track.kind === 'horizon') && Array.isArray(track.scenic) && window.ApexAlongAhead && vMps != null) {
+        const said = track.kind === 'horizon' ? (track.alongSaid || (track.alongSaid = new Set())) : drive.alongSaid || (drive.alongSaid = new Set()), nowS = performance.now() / 1000;
         const a = ApexAlongAhead.due(track, state.cursorM, vMps, { said, lastViewS: state.notesMode === 'quiet' ? nowS : drive.viewAt, nowS,
           electric: !!(routingCar() && routingCar().fuel === 'electric'), metric: ApexUnits.metric(), spoken: ApexUnits.spokenShort });
-        if (a) { said.add(a.key); if (a.view) drive.viewAt = nowS; alongSay = { text: a.text, bare: a.bare || null, until: performance.now() + (a.view ? 10000 : 20000) }; }
+        if (a) { said.add(a.key); if (a.view) drive.viewAt = nowS; if (track.kind === 'horizon' && a.at) free.viewsSaid = [...(free.viewsSaid || []), a.at].slice(-30); alongSay = { text: a.text, bare: a.bare || null, until: performance.now() + (a.view ? 10000 : 20000) }; }
       }
       if (alongSay && performance.now() > alongSay.until) alongSay = null;
       if (briefSay && performance.now() > briefSay.until) briefSay = null;
@@ -2873,6 +2874,29 @@
       else if (h.end === 'roundabout' && window.ApexRoadMarks && ApexRoadMarks.roundaboutMark) { const m = ApexRoadMarks.roundaboutMark(t); if (m) t.marks = [m]; }
       useHorizon(t);
     }
+    // The viewpoints and waterfalls on the road ahead (a free drive, no route): the map tiles' viewpoints (stages.js pois, kept
+    // per tile) and the weekly OSM build's waterfalls (cellList, kept per cell set), within reach of the road (scenic.js along).
+    // Said by along_ahead.js as on a planned route; one said on an earlier road ahead, which overlaps this one, isn't again.
+    // Nothing known (offline, no tiles): nothing said. No fuel lines: a few km ahead says nothing about the next pump.
+    async function attachHorizonViews(t) {
+      if (!window.ApexScenic || !window.ApexStages || !ApexStages.pois || !t || t.kind !== 'horizon' || !Array.isArray(t.lat) || t.lat.length < 2) return;
+      const pts = [];
+      for (let i = 0; i < t.lat.length; i += 100) pts.push({ lat: t.lat[i], lon: t.lon[i] });   // every 500 m
+      pts.push({ lat: t.lat[t.lat.length - 1], lon: t.lon[t.lon.length - 1] });
+      let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
+      for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
+      const box = [s - 0.005, w - 0.005, n + 0.005, e + 0.005];
+      const [raw, falls] = await Promise.all([
+        ApexStages.pois(pts).catch(() => null),
+        ApexScenic.fallsInRegion ? cellList('falls', ...box).then((d) => ApexScenic.fallsInRegion(d, ...box) || []).catch(() => []) : Promise.resolve([]),
+      ]);
+      if (track !== t) return;
+      const views = (raw || []).filter((p) => p && p.kind === 'view').concat(falls || []);
+      if (!views.length) return;
+      const cos = Math.cos(t.lat[0] * Math.PI / 180);
+      const heard = (p) => (free.viewsSaid || []).some((k) => Math.hypot((k.lat - p.lat) * 110540, (k.lon - p.lon) * 111320 * cos) < 60);
+      t.scenic = ApexScenic.along(views, t).filter((p) => !heard(p));
+    }
     function useHorizon(t) {
       const old = track && track.kind === 'horizon' ? track : null, cos = Math.cos(t.lat[0] * Math.PI / 180);
       const said = old ? old.events.filter(e => state.spoken.has(`${old.id}:${e.type}:${e.index}`)) : [];
@@ -2884,6 +2908,7 @@
       rebuildPins();
       render(false);
       attachHorizonMarks(t);
+      attachHorizonViews(t).catch(() => {});
     }
     // Road marks on the road ahead too (free driving, no route): stop signs, rail crossings, one-lane bridges, fords, deer
     // crossings, gravel, from the map's answer for the horizon's own corridor (osm_overpass.js keeps its 5 km tiles a week,
@@ -11275,7 +11300,7 @@
       startStageWatch(); startCoach(); drive.ghosts = null; startGhostWatch(null);
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.turns = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; free.twisty = null; free.twistySaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); drive.surface = window.ApexRoadSurface ? ApexRoadSurface.createLog() : null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.turns = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; limitSay = null; drive.limitSaid = null; briefSay = null; drive.briefed = false; cornersSay = null; drive.sectionsSaid = null; alongSay = null; drive.alongSaid = null; drive.viewAt = null; free.marksSaid = null; free.viewsSaid = null; free.twisty = null; free.twistySaid = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); drive.surface = window.ApexRoadSurface ? ApexRoadSurface.createLog() : null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
