@@ -140,7 +140,8 @@
   /**
    * Your own quickest pass of a stage as its ghost, on any stage you've driven before: passes [{ time_s, splits, surface }]
    * (splits finely cut, every 25 m: it never leaves your phone), the quickest with whole splits on a road like today's
-   * (surface 'wet' / 'ice', or null for dry, where a pass of unknown surface counts as dry). Null when none.
+   * (surface 'wet' / 'ice', or null for dry, where a pass of unknown surface counts as dry), and `pass` the one it is. Null
+   * when none.
    */
   function bestOwn(passes, surface = null) {
     const like = (s) => (surface === 'wet' || surface === 'ice' ? s === surface : s !== 'wet' && s !== 'ice');
@@ -149,7 +150,7 @@
       if (!p || !finite(p.time_s) || !(p.time_s > 0) || !Array.isArray(p.splits) || !p.splits.length || !like(p.surface)) continue;
       if (!best || p.time_s < best.time_s) best = p;
     }
-    return best ? { splits: best.splits, time_s: r1(best.time_s), surface: surface === 'wet' || surface === 'ice' ? surface : null } : null;
+    return best ? { splits: best.splits, time_s: r1(best.time_s), surface: surface === 'wet' || surface === 'ice' ? surface : null, pass: best } : null;
   }
 
   /** "+0.3 vs @sam", "−1.2 vs @sam", "level with @sam" ("vs your best" for your own ghost, self); "--" when nothing compares yet. */

@@ -140,22 +140,39 @@
     // Your notes (recce.js, IDEAS V-09): keep a drive's calls as yours, edit them, forget them.
     // A ghost duel's result (ghost_duel.js): on one of your stages this drive covered, against the quickest run a friend
     // shared with you there on a road like this one (GET /api/board/ghosts), the gap at the finish and the corners that
-    // decided it. Members only, silent offline. #dvGhostActs holds its one key, Challenge back (a time duel, POST /api/duels).
+    // decided it. #dvGhostActs holds its one key, Challenge back (a time duel, POST /api/duels). With no friend's run there
+    // (signed out, offline, or none shared), against your own quickest other pass of the stage on a road like this one
+    // (bestOwn, the passes job's corner-cut splits), with no key: the same panel, "vs your best".
     async function renderGhost(d, run) {
       const panel = $('dvGhost'), G = window.ApexGhostDuel;
       panel.hidden = true;
-      if (!G || !window.ApexSync || !Array.isArray(d.speed_mps) || !(await ApexSync.member())) return;
-      const mine = (segs || []).filter((x) => x && x.synced).map((seg) => ({ seg, p: Core.segmentPass(seg, d) })).filter((x) => x.p);
+      if (!G || !Array.isArray(d.speed_mps)) return;
+      const mine = (segs || []).map((seg) => ({ seg, p: Core.segmentPass(seg, d) })).filter((x) => x.p);
       if (!mine.length) return;
       const canon = (x) => x.origin || x.id, surf = d.surface === 'wet' || d.surface === 'ice' ? d.surface : '';
-      const r = await ApexSync.apiFetch(`/api/board/ghosts?canons=${encodeURIComponent(mine.slice(0, 20).map((x) => canon(x.seg)).join(','))}${surf ? `&surface=${surf}` : ''}`);
-      const ghosts = r.ok ? await r.json() : [];
-      if (run !== dvRun || !Array.isArray(ghosts)) return;
-      const pick = mine.map((x) => ({ ...x, g: ghosts.find((g) => g.canon_id === canon(x.seg)) })).find((x) => x.g);
+      const synced = mine.filter((x) => x.seg.synced);
+      let ghosts = [];
+      try {
+        if (synced.length && window.ApexSync && (await ApexSync.member())) {
+          const r = await ApexSync.apiFetch(`/api/board/ghosts?canons=${encodeURIComponent(synced.slice(0, 20).map((x) => canon(x.seg)).join(','))}${surf ? `&surface=${surf}` : ''}`);
+          ghosts = r.ok ? await r.json() : [];
+        }
+      } catch (_) { ghosts = []; }
+      if (run !== dvRun) return;
+      let pick = synced.map((x) => ({ ...x, g: (Array.isArray(ghosts) ? ghosts : []).find((g) => g.canon_id === canon(x.seg)) })).find((x) => x.g);
+      if (!pick) {
+        await stagePasses();
+        if (run !== dvRun) return;
+        pick = mine.map((x) => {
+          const others = passesFor(x.seg).filter((o) => o.d.id !== d.id).map((o) => ({ time_s: o.p.time_s, splits: o.p.splits, surface: o.p.surface, date: o.d.date }));
+          const b = G.bestOwn(others, surf || null);
+          return b ? { ...x, g: { self: true, splits: b.splits, time_s: b.time_s, surface: b.surface, driven_on: b.pass && b.pass.date ? String(b.pass.date).slice(0, 10) : null } } : null;
+        }).find(Boolean);
+      }
       if (!pick) return;
       const { seg, p, g } = pick, fine = G.splitsOf(Core, d, p.lo, p.hi), cs = G.cornerSplits(fine, g.splits);
       if (!fine || !Number.isFinite(cs.total)) return;
-      const who = `@${g.handle || 'friend'}`, words = ApexDriveView.noteWordsPref ? ApexDriveView.noteWordsPref() : undefined;
+      const who = g.self ? 'your best' : `@${g.handle || 'friend'}`, words = ApexDriveView.noteWordsPref ? ApexDriveView.noteWordsPref() : undefined;
       // a stretch is named by the corner its split was taken at (the friend's apex, within 100 m of one of yours)
       const nameOf = (row) => {
         if (row.b >= 1) return 'To the finish';
@@ -166,14 +183,15 @@
       };
       const fmt = (x) => `${x >= 0.05 ? '+' : x <= -0.05 ? '\u2212' : ''}${Math.abs(x).toFixed(1)} s`;
       $('dvGhostHead').textContent = `${seg.name || 'Stage'} vs ${who}`;
+      const day = g.driven_on ? escH(ApexFormat.dayShort(g.driven_on)) : '';
       $('dvGhostLine').innerHTML = `<b class="${cs.total > 0.05 ? 'loss' : cs.total < -0.05 ? 'gain' : ''}">${Math.abs(cs.total) < 0.05 ? `Level with ${escH(who)}` : `${Math.abs(cs.total).toFixed(1)} s ${cs.total > 0 ? 'behind' : 'ahead of'} ${escH(who)}`}</b>`
-        + ` <span class="note">their best${g.driven_on ? `, ${escH(ApexFormat.dayShort(g.driven_on))}` : ''}${g.surface === 'wet' || g.surface === 'ice' ? ` \u00b7 ${g.surface === 'ice' ? 'icy' : 'wet'} road` : ''}</span>`;
+        + ` <span class="note">${g.self ? (day ? `set ${day}` : '') : `their best${day ? `, ${day}` : ''}`}${g.surface === 'wet' || g.surface === 'ice' ? ` \u00b7 ${g.surface === 'ice' ? 'icy' : 'wet'} road` : ''}</span>`;
       const st = G.standout(cs.rows, 3), list = (title, rows) => rows.length
         ? `<h3>${title}</h3><ol class="dv-time">${rows.map((x) => `<li><span>${escH(nameOf(x))}</span><em class="${x.gap_s > 0 ? 'loss' : 'gain'}">${fmt(x.gap_s)}</em></li>`).join('')}</ol>` : '';
-      $('dvGhostRows').innerHTML = list(`Where ${escH(who)} was quicker`, st.lost) + list('Where you were quicker', st.gained);
-      panel.dataset.stage = seg.id; panel.dataset.who = g.handle || ''; panel.dataset.gap = String(cs.total);
+      $('dvGhostRows').innerHTML = list(g.self ? 'Where your best was quicker' : `Where ${escH(who)} was quicker`, st.lost) + list('Where you were quicker', st.gained);
+      panel.dataset.stage = seg.id; panel.dataset.who = g.self ? 'self' : g.handle || ''; panel.dataset.gap = String(cs.total);
       // one key: a 7-day time duel with them on this stage (none while you already have one open with them there)
-      const acts = $('dvGhostActs'), key = G.challengeKey(cs.total, g.handle, g.duel);
+      const acts = $('dvGhostActs'), key = g.self ? null : G.challengeKey(cs.total, g.handle, g.duel);
       acts.replaceChildren();
       if (key) {
         const b = document.createElement('button'); b.className = 'btn'; b.textContent = key;

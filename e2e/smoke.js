@@ -10679,6 +10679,39 @@ flow('a ghost duel on the drive page: your pass of a stage against a friend\'s s
   check(said === 'Sent. @sam has 7 days on Dry Ridge once they say yes.' && !(await page.$('#dvGhostActs button')), 'the panel says it was sent: ' + said);
 });
 
+flow('your own best on the drive page: signed out, your pass of a stage against your quickest other run there, the gap at the finish and the corners that decided it, no duel key (ghost_duel.js bestOwn)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  let asked = 0;
+  await page.route('**/api/board/ghosts**', (route) => { asked++; route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }); });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording && window.ApexGhostDuel);
+  await page.evaluate(async (src) => {
+    const gen = eval(src);
+    // the same road twice: today's drive, and an older one 5 % slower
+    const slower = (csv) => csv.split('\n').map((l, i) => { if (!i || !l) return l; const c = l.split(','); c[5] = (+c[5] * 0.95).toFixed(3); return c.join(','); }).join('\n');
+    const d = ApexRecording.parse(ApexCore, gen('clean', 0), 'g0.csv', { id: 'g0', name: 'Dry Ridge Rd', date: '2026-11-10T09:00', source: 'web-gps' });
+    const o = ApexRecording.parse(ApexCore, slower(gen('clean', 0)), 'g1.csv', { id: 'g1', name: 'Dry Ridge Rd', date: '2026-11-01T09:00', source: 'web-gps' });
+    await ApexRecording.store(o); await ApexRecording.store(d);
+    const n = d.lat.length, a = 20, b = n - 20;
+    localStorage.setItem('apex.segments', JSON.stringify([{ id: 'seg_mine', name: 'Dry Ridge', lat0: d.lat[a], lon0: d.lon[a], lat1: d.lat[b], lon1: d.lon[b], length_m: (b - a) * 5 }]));
+  }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html?tab=drive&drive=g0');
+  await page.waitForSelector('#dvGhost:not([hidden])', { timeout: 20000 });
+  const r = await page.evaluate(() => ({ head: document.getElementById('dvGhostHead').textContent, line: document.getElementById('dvGhostLine').textContent,
+    rows: [...document.querySelectorAll('#dvGhostRows li')].map((x) => x.textContent), h3: [...document.querySelectorAll('#dvGhostRows h3')].map((x) => x.textContent),
+    keys: document.querySelectorAll('#dvGhostActs button').length }));
+  check(asked === 0, 'signed out: no friend\'s run is asked for');
+  check(r.head === 'Dry Ridge vs your best', 'the panel names the stage and your best: ' + r.head);
+  check(/^\d+\.\d s ahead of your best set Nov 1$/.test(r.line.trim()), 'the gap at the finish, against the older run: ' + r.line);
+  check(r.h3[0] === 'Where you were quicker' && r.rows.length >= 1 && r.rows.length <= 3 && r.rows.every((t) => /(Corner \d+ · .+|To the finish)−\d+\.\d s$/.test(t)), 'the corners that decided it: ' + JSON.stringify(r));
+  check(r.keys === 0, 'no duel key against yourself');
+  // the older drive, against today's: behind it, the stretches where your best was quicker
+  await page.goto(base + '/analysis.html?tab=drive&drive=g1');
+  await page.waitForSelector('#dvGhost:not([hidden])', { timeout: 20000 });
+  const r1 = await page.evaluate(() => ({ line: document.getElementById('dvGhostLine').textContent, h3: [...document.querySelectorAll('#dvGhostRows h3')].map((x) => x.textContent) }));
+  check(/^\d+\.\d s behind your best set Nov 10$/.test(r1.line.trim()) && r1.h3[0] === 'Where your best was quicker', 'and the older run behind it: ' + JSON.stringify(r1));
+});
+
 flow('side by side: a corner filmed on this drive and on your best pass plays as one clip, both from the same point, the gap counting (big bet 5)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} window.APEX_DRIVECAM = '/__drivecam/'; });
   let index = [], video = null;
