@@ -121,7 +121,10 @@ const list = P.onThisRoad(rs, measured, reports);
 const mi = (m) => `${(m / 1609.344).toFixed(1)} mi`;
 console.log(JSON.stringify({ list, facts: P.hazardFacts(list, mi), none: P.hazardFacts(P.onThisRoad(rs, null, [])),
   unknown: P.onThisRoad(rs, null, null), unknownFacts: P.hazardFacts(null), bumpsOnly: P.hazardFacts(P.onThisRoad(rs, measured, null), mi),
-  one: P.hazardFacts(P.onThisRoad(rs, { crowdBumps: [{ index: 80, p: 0.9 }] }, null), mi) }));
+  one: P.hazardFacts(P.onThisRoad(rs, { crowdBumps: [{ index: 80, p: 0.9 }] }, null), mi),
+  feel: (() => { const l = P.onThisRoad(rs, { crowdBumps: [], crowdCrests: [{ index: 100, g: 0.3 }, { index: 300, g: 0.4 }, { index: 5000, g: 0.4 }],
+    crowdRough: [{ index: 40, endIndex: 160 }, { index: 380, endIndex: 9999 }] }, null); return { list: l, facts: P.hazardFacts(l, mi) }; })(),
+  oneEach: P.hazardFacts(P.onThisRoad(rs, { crowdCrests: [{ index: 100, g: 0.3 }], crowdRough: [{ index: 40, endIndex: 160 }, { index: 200, endIndex: 280 }] }, null), mi) }));
 """
 
 
@@ -174,3 +177,15 @@ def test_route_reports_line():
     # closures have their own warning
     assert out["line"] == "Reported on the way: Pothole at 3 km (1 confirmed) · Gravel at 12 km (3 confirmed) · Debris at 15 km (1 confirmed) and 1 more"
     assert out["two"].endswith("and 2 more") and out["none"] == ""
+
+
+def test_crests_and_rough_road_members_felt(haz):
+    # crests and rough stretches (2+ drivers, contributor.js) on the road page; ones past the road's end left out
+    kinds = [(x["kind"], x["atM"], x.get("toM")) for x in haz["feel"]["list"]]
+    assert kinds == [("rough", 200, 800), ("crest", 500, None), ("crest", 1500, None)]
+    f = haz["feel"]["facts"]
+    assert ["2 crests members went light over", "at 0.3 and 0.9 mi"] in f
+    assert ["Rough road members felt", "0.1–0.5 mi"] in f
+    o = haz["oneEach"]
+    assert ["Crest members went light over", "at 0.3 mi"] in o
+    assert ["2 rough stretches members felt", "0.1–0.5 mi and 0.6–0.9 mi"] in o

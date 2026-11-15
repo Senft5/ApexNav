@@ -5895,7 +5895,7 @@
       try { elev = await RouteLoading.optional(ApexStages.profile({ lat: rs.lat, lon: rs.lon, dist }, 30), 6000); } catch (_) { elev = null; }
       try {
         if (window.ApexContributor && member)
-          measured = await RouteLoading.optional(ApexContributor.measuredAlong({ lat: rs.lat, lon: rs.lon }, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }), 12000);
+          measured = await RouteLoading.optional(ApexContributor.measuredAlong({ lat: rs.lat, lon: rs.lon, dist }, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }), 12000);
       } catch (_) { measured = null; }
       reports = await reportsP;
       if (!roadPop.classList.contains('open') || h.textContent !== roadLabel(s.name)) return;
