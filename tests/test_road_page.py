@@ -28,6 +28,9 @@ const U = require(process.argv[1] + '/web/units.js');
 console.log(JSON.stringify({ d, bare, head: P.headline(d), meters: P.meters(d), bareMeters: P.meters(bare), facts: P.facts(d), bareFacts: P.facts(bare),
   one: P.facts({ ...d, corners: 5, hairpins: 1 }), some: P.facts({ ...d, corners: 9, hairpins: 3 }), none: P.facts({ ...d, hairpins: 0 }),
   // what the sheet used to pass for the climb: ApexUnits.short is an object, and the line read "climbing [object Object]"
+  felt: (() => { const m = P.describe(Core, s, { measured: { coverage: 0.7, avgPasses: 3, bankedKm: 0.42, offCamberKm: 0.2, repavedKm: 0.3, repavedOn: '2026-03' } });
+    return { d: m, facts: P.facts(m, (x) => `${(x / 1609.344).toFixed(1)} mi`, (ym) => `month ${ym}`),
+      thin: P.facts(P.describe(Core, s, { measured: { coverage: 0.7, avgPasses: 3, bankedKm: 0.01, offCamberKm: 0, repavedKm: 0.01, repavedOn: '2026-03' } })) }; })(),
   objHead: P.headline(d, undefined, (m) => U.short(m)), ftHead: P.headline(d, undefined, (m) => `${Math.round(m * 3.28084)} ft`) }));
 """
 
@@ -189,3 +192,15 @@ def test_crests_and_rough_road_members_felt(haz):
     o = haz["oneEach"]
     assert ["Crest members went light over", "at 0.3 mi"] in o
     assert ["2 rough stretches members felt", "0.1–0.5 mi and 0.6–0.9 mi"] in o
+
+
+def test_members_camber_and_repaving(out):
+    f = out["felt"]["facts"]
+    assert ["Camber", "0.3 mi banked, 0.1 mi off-camber"] in f
+    assert ["Repaved", "month 2026-03"] in f
+    assert f[-1][0] == "How sure"
+    labels = [k for k, _ in out["felt"]["thin"]]
+    assert "Camber" not in labels and "Repaved" not in labels       # under 50 m: not worth a row
+    bare = [k for k, _ in out["bareFacts"]]
+    assert "Camber" not in bare and "Repaved" not in bare           # nobody measured it: no row, never "none"
+    assert out["bare"]["bankedKm"] is None and out["bare"]["repavedOn"] is None

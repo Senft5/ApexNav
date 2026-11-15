@@ -32,6 +32,9 @@
       hairpins: corners.filter((c) => c.severity === 'HP').length, tech: axes.tech, flow: axes.flow,
       surf: finite(opts.surf) ? opts.surf : null, clear, confidence, climb, drop,
       minutes: Math.round(f.seconds / 60), blind: Math.round(100 * f.blind_share),
+      // members' camber and repaving (contributor.js summarize), null when no member measured it
+      bankedKm: m && finite(m.bankedKm) ? m.bankedKm : null, offCamberKm: m && finite(m.offCamberKm) ? m.offCamberKm : null,
+      repavedOn: m && typeof m.repavedOn === 'string' && finite(m.repavedKm) && m.repavedKm >= 0.05 ? m.repavedOn : null,
     };
   }
 
@@ -59,10 +62,19 @@
       { key: 'clear', label: 'Clear road', hint: finite(d.clear) ? 'how few junctions break it up' : 'its junctions aren\'t counted yet', value: n(d.clear) },
     ];
   }
-  /** The facts under the scores: [label, value]; how sure we are in words, never a code. */
-  function facts(d) {
+  /**
+   * The facts under the scores: [label, value]; how sure we are in words, never a code. With members' data: how much of it
+   * leans ("0.4 mi banked, 0.2 mi off-camber", 50 m or more of either) and the month they felt it repaved ("Mar 2026").
+   * fmtDist(m) and fmtMonth('YYYY-MM') in the driver's words; a row is left out when nobody measured it.
+   */
+  function facts(d, fmtDist = (m) => `${(m / 1000).toFixed(1)} km`, fmtMonth = (ym) => ym) {
     const hp = !d.hairpins ? '' : d.hairpins === d.corners && d.corners > 1 ? ', all hairpins' : ` · ${d.hairpins} ${d.hairpins === 1 ? 'hairpin' : 'hairpins'}`;
-    return [['Corners', `${d.corners}${hp}`], ['Blind corners', finite(d.blind) ? `${d.blind}%` : '--'], ['How sure', CONF[d.confidence]]];
+    const rows = [['Corners', `${d.corners}${hp}`], ['Blind corners', finite(d.blind) ? `${d.blind}%` : '--']];
+    const lean = [[d.bankedKm, 'banked'], [d.offCamberKm, 'off-camber']].filter(([km]) => finite(km) && km >= 0.05).map(([km, w]) => `${fmtDist(km * 1000)} ${w}`);
+    if (lean.length) rows.push(['Camber', lean.join(', ')]);
+    if (typeof d.repavedOn === 'string') rows.push(['Repaved', fmtMonth(d.repavedOn)]);
+    rows.push(['How sure', CONF[d.confidence]]);
+    return rows;
   }
 
   /**

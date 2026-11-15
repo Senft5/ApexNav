@@ -5872,7 +5872,7 @@
           r.setAttribute('role', 'group'); r.setAttribute('aria-label', `${m.label}: ${m.value == null ? 'not known' : `${m.value} out of 100`}, ${m.hint}`);
           return r;
         });
-        const lines = [...meters, ...[...ApexRoadPage.facts(d), ...onRoad].map(([k, v]) => { const r = el('div', 'rp-fact'); r.append(el('span', '', k), el('b', '', v)); return r; })];
+        const lines = [...meters, ...[...ApexRoadPage.facts(d, (m) => ApexUnits.long(m, 1), repavedMonth), ...onRoad].map(([k, v]) => { const r = el('div', 'rp-fact'); r.append(el('span', '', k), el('b', '', v)); return r; })];
         const best = Number.isFinite(s.elevA) && Number.isFinite(s.elevB) && Math.abs(s.elevB - s.elevA) >= 40
           ? ((s.tight || 0) / s.km >= 1.2 ? 'Better climbed: tight corners are safer uphill.' : 'Better descended: it flows.') : null;
         // the climb is a height (feet or metres, heightLabel); ApexUnits.short is an object and printed "[object Object]"

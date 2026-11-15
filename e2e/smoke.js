@@ -9207,7 +9207,8 @@ flow('road page: About a road shows its archetype, axes and how sure it is (IDEA
       : realFetch(path, o));
     // with crests and a rough stretch members felt (2026-11-15); the road goes in with its metres, so rough runs are known
     ApexContributor.measuredAlong = async (r) => { window.__roadAsked = r; return { coverage: 0, avgPasses: 0, crowdBumps: [{ index: 40, p: 0.9 }],
-      crowdCrests: [{ index: 60, g: 0.3 }], crowdRough: [{ index: 80, endIndex: 140 }] }; };
+      crowdCrests: [{ index: 60, g: 0.3 }], crowdRough: [{ index: 80, endIndex: 140 }],
+      bankedKm: 0.3, offCamberKm: 0.1, repavedKm: 0.2, repavedOn: '2026-03' }; };
     const lat = [], lon = []; let x = 0, y = 0, h = Math.PI / 2;
     const step = (n, turn) => { for (let i = 0; i < n; i++) { h += turn; x += 5 * Math.cos(h); y += 5 * Math.sin(h); lat.push(35 + y / 110540); lon.push(-83 + x / 91190); } };
     step(20, 0); for (let k = 0; k < 8; k++) { step(10, (k % 2 ? 1 : -1) * Math.PI / 10); step(16, 0); } step(20, 0);
@@ -9217,6 +9218,7 @@ flow('road page: About a road shows its archetype, axes and how sure it is (IDEA
   const onRoad = await page.textContent('aside.side-pop.open');
   check(/Gravel\s*at [\d.]+ (mi|ft|km|m) · 3 confirmed/.test(onRoad) && !/Animal/.test(onRoad), 'the live report, not the cleared one: ' + onRoad.slice(0, 600));
   check(/Crest members went light over\s*at [\d.]+ (mi|ft|km|m)/.test(onRoad) && /Rough road members felt\s*[\d.]+–[\d.]+ (mi|km)/.test(onRoad), 'crests and rough road members felt: ' + onRoad.slice(0, 600));
+  check(/Camber\s*[\d.]+ (mi|km) banked, [\d.]+ (mi|km|ft|m) off-camber/.test(onRoad) && /Repaved\s*Mar 2026/.test(onRoad), 'members\' camber and repaving: ' + onRoad.slice(0, 600));
   check(await page.evaluate(() => Array.isArray(window.__roadAsked.dist) && window.__roadAsked.dist.length === window.__roadAsked.lat.length), 'the road is asked with its metres');
   await page.click('aside.side-pop.open button:has-text("Close")');
   check(!(await page.isVisible('aside.side-pop.open[aria-label="About this road"]')), 'closes');
