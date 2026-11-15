@@ -584,3 +584,11 @@ def test_a_long_trip_loads_a_band_round_the_quickest_way_not_the_whole_ellipse()
         assert x["routed"], x
         assert x["northmost"] < x["farRow"], x
         assert x["asked"] < x["ellipse"] / 2, x
+
+
+def test_a_plan_past_its_soft_time_answers_with_what_it_has():
+    """On a slow phone a long trip's refinement (more bisection steps, alternates, the spread) stops at K.PLAN_SOFT_MS;
+    the plan still answers with a route rather than running into the page's timeout."""
+    r = case("softBudget")
+    assert r["cutHasPick"] and r["cut"] >= 1, r
+    assert r["full"] >= r["cut"], r

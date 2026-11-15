@@ -114,6 +114,18 @@ const CASES = {
     }
     return out;
   },
+  softBudget() {
+    // past K.PLAN_SOFT_MS a plan answers with what it has (two bisection steps), never nothing
+    const g = H.grid({ seed: 7, nx: 9, ny: 7, holes: 0.1, oneway: 0.1, signals: 0.1, lat0: 39.2, lon0: -84.52, stepDeg: 0.01 });
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles), keep = R.K.PLAN_SOFT_MS;
+    const from = { lat: g.nodes[0].lat + 0.001, lon: g.nodes[0].lon + 0.001 }, to = { lat: g.nodes[g.nodes.length - 1].lat - 0.001, lon: g.nodes[g.nodes.length - 1].lon - 0.001 };
+    const full = R.plan(v, { from, to, level: 'fun' });
+    R.K.PLAN_SOFT_MS = 0;
+    try {
+      const cut = R.plan(v, { from, to, level: 'fun' });
+      return { full: full.routes.length, cut: cut.routes.length, cutHasPick: !!cut.routes[0] };
+    } finally { R.K.PLAN_SOFT_MS = keep; }
+  },
   dirtStage() {
     // two good roads with corners, one of them gravel: with unpaved roads avoided (the app's default) the gravel road is
     // never a stage a loop is built round

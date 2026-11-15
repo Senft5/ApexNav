@@ -102,7 +102,7 @@
     // line. Cincinnati to Asheville at Fun: 580 tiles (258 MB) and 39 s became 72 tiles and 6 s; Long way's 1,271 tiles
     // found nothing at all. The search's own ellipse is unchanged inside the band
     LONG_TILES: 120, SPINE_SHARE: 0.15, SPINE_MIN_M: 20000, SPINE_MAX_M: 40000, BAND_M: { quick: 15000, fun: 20000, max: 30000 },
-    LONG_KM: 150, LONG_TOL: 0.4,
+    LONG_KM: 150, LONG_TOL: 0.4, PLAN_SOFT_MS: 6000,
     OUT_BACK_KM: 2,          // Best roads nearby: a dead-end run of good road this long stays (driven there and back); the stage minimum
   };
 
@@ -1353,7 +1353,11 @@
     let a = K.A_FIRST[level] || 1, first = null;
     // no highway-free way in a sensible time: that way alone (and the quickest, for Quick's card); nothing longer
     if (hwy.absurd) tries = K.BISECT;
-    while (tries < K.BISECT) {
+    // past PLAN_SOFT_MS (a long trip on a slow phone) the plan stops refining and answers with what it has: at least two
+    // steps of the bisection, then no more steps, cheaper weights, alternates or spread (the page's timeout would
+    // otherwise end it with no route at all)
+    const over = () => Date.now() - t0 > K.PLAN_SOFT_MS;
+    while (tries < K.BISECT && !(tries >= 2 && over())) {
       tries++;
       const r = run(a);
       if (!first) first = r;
@@ -1364,13 +1368,13 @@
     // and the cheaper end of the spectrum: the bisection only tries weights from its first one up, so the routes that buy a
     // little good road for a little time were never offered, only the one that spends the whole budget (live 2026-11-04,
     // a cross-suburb trip at Fun: a 9-minute I-275 loop came back and the 7-minute way to the same county road didn't)
-    for (const k of long ? K.LOWER.slice(-1) : K.LOWER) if (lo * k > 0.05) { const r = run(lo * k); if (r && r.timeS <= limitS) keep(r); }
+    for (const k of long ? K.LOWER.slice(-1) : K.LOWER) if (lo * k > 0.05 && !over()) { const r = run(lo * k); if (r && r.timeS <= limitS) keep(r); }
     best.why.role = best === quick ? 'quickest' : best === base ? 'quickest-free' : 'best';
     // alternates by the penalty method: the chosen route's edges cost more, until a route differs by ALT_MIN_DIFF
     const alts = [], chosen = [best];
     const penal = new Float32Array(v.E).fill(1);
     for (const p of hwy.absurd ? [] : K.ALT_PENALTIES) {
-      if (alts.length >= K.ALTS) break;
+      if (alts.length >= K.ALTS || over()) break;
       for (const r of chosen) for (const e of r.edgeIdx) penal[e] = Math.max(penal[e], 1 + p);
       const r = run(lo, penal, 'alternate');
       if (!r) continue;
@@ -1383,7 +1387,7 @@
     // the quickest way), which find the next good road over: the bisection's large weights shun the worst stretches
     // rather than seek the best, so they leave this road unfound (2026-11-08, the levels audit)
     const free2 = free && !hwy.absurd;
-    if (free2 && first && first.timeS <= limitS) {
+    if (free2 && first && first.timeS <= limitS && !over()) {
       for (const p of K.SPREAD[level] || []) {
         const pen = new Float32Array(v.E).fill(1);
         for (const e of first.edgeIdx) pen[e] = 1 + p;
