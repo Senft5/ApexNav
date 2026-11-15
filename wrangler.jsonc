@@ -16,7 +16,7 @@
     // project files). Not a secret: a sha256 of a random 256-bit key can't be turned back into the key. Remove one to revoke it.
     "DATA_OWNER_KEYS": "0184e5e50127f792a32da04c389c4a776ff0281d7f677be17526df1b29dacf0a"
   },
-  "assets": { "directory": "./web", "binding": "ASSETS", "run_worker_first": ["/api/*", "/", "/index.html", "/.well-known/*", "/apple-app-site-association"] },
+  "assets": { "directory": "./web", "binding": "ASSETS", "run_worker_first": ["/api/*", "/", "/index.html", "/.well-known/*", "/apple-app-site-association", "/roads", "/roads/*"] },
   // The owner's domains (2026-11-14, backend/src/hosts.ts): vettadrive.app is the app, the API and shared links; vettadrive.com
   // the information page, data.vettadrive.com the road insights viewer and API docs (web/insights.html). workers.dev stays on: the iOS app and every link shared before now use apexnav.senftns.workers.dev.
   "workers_dev": true,
