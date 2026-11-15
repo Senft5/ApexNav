@@ -12697,7 +12697,9 @@ for (const [when, iso, want] of [['in a school run', '2026-11-16T12:45:00Z', 1],
     window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
   await page.clock.setFixedTime(new Date(iso));                  // a Monday in Cincinnati: 7:45 am, or noon
   for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
-    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [] }) }));
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements:
+      // the places query (events.js) has a school 30 m off the road at 1 km; the road's own query (osm_overpass.js) nothing
+      /place_of_worship/.test(decodeURIComponent(route.request().postData() || '')) ? [{ type: 'node', id: 9, lat: 39.1 + 1000 / 110540, lon: -84.5 + 30 / 86300, tags: { amenity: 'school' } }] : [] }) }));
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
@@ -12706,9 +12708,8 @@ for (const [when, iso, want] of [['in a school run', '2026-11-16T12:45:00Z', 1],
   const coords = []; for (let m = 0; m <= 2500; m += 10) coords.push([LON, lat(m)]);
   await page.evaluate((c) => apexDebug.horizonFrom(c), coords);
   await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'horizon');
-  // the school the map has by the road at 1 km (what attachHorizonMarks / attachMarks would lay from the plan's places)
-  await page.evaluate(() => { const t = apexDebug.track, i = t.dist.findIndex((d) => d >= 1000);
-    t.marks = [...(t.marks || []), { type: 'mark', kind: 'school', code: 'SCHOOL', call: 'School zone', index: i, dist_m: t.dist[i], end_m: t.dist[i], lat: t.lat[i], lon: t.lon[i] }]; });
+  // the road ahead asks the map for its schools (attachHorizonMarks, events.js placesOnly): the one at 1 km becomes a mark
+  await page.waitForFunction(() => (apexDebug.track.marks || []).some((m) => m.kind === "school"), null, { timeout: 15000 });
   const at = (i) => page.evaluate((i) => { const t = apexDebug.track;
     window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
   const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
