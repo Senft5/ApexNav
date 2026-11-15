@@ -98,6 +98,8 @@
     // the A* bound's top speed (view): the fastest edge of at least VMAX_MIN_M, at most VMAX_MPS (the 85 mph of Texas 130,
     // as the tiles time it: the limit x 1.05 flow, 40 m/s)
     VMAX_MIN_M: 200, VMAX_MPS: 40,
+    // a corridor that holds no way (wider()): tried again this much larger, then with none
+    ELLIPSE_GROW: 1.5, ELLIPSE_GROW_M: 10000,
     // loops (loop()): at Quick motorway and trunk cost x LOOP_HWY_X on every leg (a short link to good roads, never the
     // bulk), at Fun and Long way they are never driven (NO_HWY, the same exception); the
     // stages within reach of half the length at LOOP_REACH_MS; at most LOOP_STAGES of them chained, LOOP_TRIES loops
@@ -482,7 +484,8 @@
       if (f.mode === 'link') out.route.hwyReason = hwyReason(v, out);
       return out;
     }
-    const r = search(v, obj, src, dst, 0, null, opts);
+    let r = search(v, obj, src, dst, 0, null, opts);
+    for (const el of r ? [] : wider(opts.ellipse)) { r = search(v, obj, src, dst, 0, null, { ...opts, ellipse: el }); if (r) break; }
     if (!r) throw new Error('no route');
     v.quickMemo = { key: quickKey(req, level, obj), r };
     return assemble(v, r, obj, { level, role: 'quickest', a: 0 });
@@ -517,8 +520,14 @@
       if (!dst.length) { if (k === pts.length - 1) throw new Error('no road near the end'); continue; }   // a via off the network: passed by
       if (free) dst = snapOff(v, p, dst);
       const o = { ...(!legs.length && sc ? { startCost: sc } : {}), ellipse: ellipseFor(at, p, 'quick') };
-      let res = search(v, obj, prev, dst, 0, null, free ? { ...o, ban: is } : o);
-      if (!res && free) res = search(v, obj, prev, dst, 0, null, { ...o, hwyX: { is, x: K.HWY_LINK_X } });
+      let res = null;
+      // (a mountain road can leave the leg's ellipse: wider() ones then)
+      for (const el of [o.ellipse, ...wider(o.ellipse)]) {
+        const oe = { ...o, ellipse: el };
+        res = search(v, obj, prev, dst, 0, null, free ? { ...oe, ban: is } : oe);
+        if (!res && free) res = search(v, obj, prev, dst, 0, null, { ...oe, hwyX: { is, x: K.HWY_LINK_X } });
+        if (res) break;
+      }
       if (!res) throw new Error('no route');
       legs.push(res);
       prev = [{ edge: res.edges[res.edges.length - 1], frac: res.ft, lat: 0, lon: 0 }];
@@ -1229,6 +1238,12 @@
    * trip reach a good road). A loop: the circle its length can reach.
    */
   /** The corridor ellipse a level's budget can reach (as tilesFor sizes it): foci at the ends, the sum of distances. */
+  /**
+   * The larger corridors to try when a level's ellipse holds no way at all (2026-11-15: Estes Park to Grand Lake at
+   * Quick, "no route": Trail Ridge Road winds 78 km for a 28 km crow line and leaves Quick's ellipse by 1.4 km). Then
+   * no ellipse: the loaded tiles bound it.
+   */
+  function wider(el) { return el ? [{ ...el, major: el.major * K.ELLIPSE_GROW + K.ELLIPSE_GROW_M }, null] : []; }
   function ellipseFor(from, to, level = 'fun') {
     const L = levels()[level] || levels().fun, crow = distM(from.lat, from.lon, to.lat, to.lon);
     return { a: from, b: to, major: Math.max(crow * (1 + Math.max(0.1, L.budget)) * 1.3 + 4000, crow + 6000) };
@@ -1429,13 +1444,15 @@
     const sc = startCostFor(v, req.from.heading != null ? req.from.heading : req.heading);
     // a long trip (LONG_KM crow): the searches use the backward bound (timeTo), one Dijkstra per goal
     const crowM = distM(req.from.lat, req.from.lon, req.to.lat, req.to.lon);
-    const opts0 = { ...(sc ? { startCost: sc } : {}), ellipse: ellipseFor(req.from, req.to, level), ...(crowM > K.LONG_KM * 1000 ? { timeTo: true } : {}) };
+    let opts0 = { ...(sc ? { startCost: sc } : {}), ellipse: ellipseFor(req.from, req.to, level), ...(crowM > K.LONG_KM * 1000 ? { timeTo: true } : {}) };
     let opts = opts0;
     const run = (a, penal = null, role = 'step') => { const r = search(v, obj, src, dst, a, penal, opts); return r ? assemble(v, r, obj, { level, role, a }) : null; };
     const free = noHighway(level);
     const memoOf = (kind) => (v.quickMemo && v.quickMemo.key === quickKey(req, level, obj, kind) ? v.quickMemo : null);
     const memo = free ? null : memoOf('any');
-    const quick = memo ? assemble(v, memo.r, obj, { level, role: 'quickest', a: 0 }) : run(0, null, 'quickest');
+    let quick = memo ? assemble(v, memo.r, obj, { level, role: 'quickest', a: 0 }) : run(0, null, 'quickest');
+    // a mountain road can leave the corridor ellipse (wider()): the plan goes on in the one that holds a way
+    for (const el of quick ? [] : wider(opts0.ellipse)) { opts = opts0 = { ...opts0, ellipse: el }; quick = run(0, null, 'quickest'); if (quick) break; }
     if (!quick) throw new Error('no route');
     // the level's own quickest: at Fun and Long way the quickest way off the highways (the first route's search when it
     // was the same: quickest() made it), else `quick` itself

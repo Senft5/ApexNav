@@ -1290,6 +1290,25 @@ const CASES = {
 
   // the Cincinnati-size synthetic network: 16 tiles, ~150k edges; per query and per full plan
   // a long trip (2026-11-15): the backward bound (timeTo) finds the same quickest as the crow line, and settles far less
+  // a pass road that winds out of the level's ellipse (2026-11-15: Estes Park to Grand Lake at Quick, "no route": Trail
+  // Ridge Road is 78 km for a 28 km crow line): the plan, the quickest and a reroute still find it
+  outOfEllipse() {
+    const nodes = [], edges = [];
+    const n = (lat, lon) => { nodes.push(at(lat, lon)); return nodes.length - 1; };
+    const S = n(39.80, -84.70), T = n(39.80, -84.583), N1 = n(39.91, -84.68), N2 = n(39.91, -84.60);
+    two(edges, S, N1, { name: 'Pass Road', cls: 3, quality: 0.85, fun: 3, t: 700 });
+    two(edges, N1, N2, { name: 'Pass Road', cls: 3, quality: 0.85, fun: 3, t: 500 });
+    two(edges, N2, T, { name: 'Pass Road', cls: 3, quality: 0.85, fun: 3, t: 700 });
+    const v = R.view(H.tiles(nodes, edges).tiles);
+    const from = { lat: 39.80, lon: -84.699 }, to = { lat: 39.80, lon: -84.584 };
+    const out = {};
+    for (const level of ['quick', 'fun', 'max']) {
+      try { const p = R.plan(v, { from, to, level }); out[level] = { ok: true, timeS: p.routes[0].timeS }; } catch (e) { out[level] = { ok: false, err: String(e.message) }; }
+    }
+    try { out.quickest = { ok: !!R.quickest(v, { from, to, level: 'quick' }) }; } catch (e) { out.quickest = { ok: false, err: String(e.message) }; }
+    try { out.through = { ok: !!R.through(v, { from, to, level: 'quick' }) }; } catch (e) { out.through = { ok: false, err: String(e.message) }; }
+    return out;
+  },
   longBound() {
     const g = H.grid({ seed: 7, nx: 60, ny: 60, stepDeg: 0.03, lat0: 38.5, lon0: -86.0, holes: 0.05, oneway: 0.05, signals: 0.1 });
     const v = R.view(H.tiles(g.nodes, g.edges).tiles), obj = R.objective(v, {});
