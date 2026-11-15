@@ -2090,6 +2090,8 @@
       /* real-drive review: a framed dash is not news. The limit sign and the Score step aside while unknown */
       #app.replaying .cluster-line .ro-limit.unknown, #app.replaying .cluster-line .g-score.unk { display: none; }
       #app.replaying .cluster-line .g-line .dial-digital.small.unk { visibility: hidden; }
+      /* the ring's BRAKE axis mark read as a state over "Gas 0.07 g": the card beside the ball names the pedal, so the mark goes */
+      #app.replaying .cluster-line .g-line .dial-label { display: none; }
       #app.replaying .cluster-line .odo-digits .lead { display: none; }
       /* the night's quiet Trip key is for a drive; a replay is watched, not driven: the trip shows */
       html[data-mode="night"] #app.replaying #cluster.cluster-line .odo { display: flex; }
