@@ -2,12 +2,14 @@
 // not a bare URL. The app's front page (/, /index.html) gets Open Graph and Twitter tags in its <head> on the way out:
 // a public roadbook's link names the book, its roads and length and who keeps it (what its page shows anyone signed out);
 // every other shared link (an invite, a crew, a convoy, a friend, a post) gets a line of what it is, never whose or
-// where, since those need a member to see; a plain visit gets Vetta's own line. The picture is Vetta's icon.
+// where, since those need a member to see; a plain visit gets Vetta's own line. The picture is the book's roads on the
+// map when its owner's phone made one (roadbooks.ts cardPut), else Vetta's icon.
 // Nothing is stored or logged; a roadbook that is private, friends-only, reported or gone is previewed as a plain link.
 import { reportedSql } from "./reports_sql";
+import { cardShown } from "./roadbooks";
 import { Env } from "./util";
 
-export interface Preview { title: string; description: string; image: string; url: string }
+export interface Preview { title: string; description: string; image: string; url: string; large?: boolean }
 
 const ID_RE = /^[A-Za-z0-9_-]{16}$/;
 const SITE = "Vetta";
@@ -36,7 +38,10 @@ export async function previewFor(env: Env, url: URL): Promise<Preview> {
       .first<{ name: string; about: string | null; roads_n: number; length_m: number; by: string | null }>().catch(() => null);
     if (b) {
       const facts = [`${b.roads_n} ${b.roads_n === 1 ? "road" : "roads"}`, b.length_m > 0 ? miles(b.length_m) : null, b.by ? `kept by @${b.by}` : null].filter(Boolean).join(" · ");
-      return { title: clip(`${b.name} · a roadbook on Vetta`, 90), description: clip(b.about ? `${facts}. ${b.about}` : `${facts}. Open it to drive them.`, 200), image, url: `${at}?roadbook=${book}` };
+      // its roads on the map, when its owner's phone made the picture (roadbooks.ts cardPut); else the icon
+      const pic = await cardShown(env, book);
+      return { title: clip(`${b.name} · a roadbook on Vetta`, 90), description: clip(b.about ? `${facts}. ${b.about}` : `${facts}. Open it to drive them.`, 200),
+        image: pic ? `${url.origin}/api/roadbooks/${book}/card.jpg` : image, url: `${at}?roadbook=${book}`, large: pic };
     }
   }
   for (const [k, title, description] of KINDS) if (url.searchParams.has(k)) return { title, description, image, url: at };
@@ -51,7 +56,8 @@ export function tags(p: Preview): string {
   return [
     m("property", "og:site_name", SITE), m("property", "og:type", "website"), m("property", "og:title", p.title),
     m("property", "og:description", p.description), m("property", "og:image", p.image), m("property", "og:url", p.url),
-    m("name", "twitter:card", "summary"), m("name", "twitter:title", p.title), m("name", "twitter:description", p.description),
+    ...(p.large ? [m("property", "og:image:width", "1200"), m("property", "og:image:height", "630")] : []),
+    m("name", "twitter:card", p.large ? "summary_large_image" : "summary"), m("name", "twitter:title", p.title), m("name", "twitter:description", p.description),
     m("name", "twitter:image", p.image), m("name", "description", p.description),
   ].join("");
 }

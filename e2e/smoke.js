@@ -3998,6 +3998,37 @@ flow('roadbooks on the map: off by default; on, only the books with a road in vi
   check(await page.evaluate(() => apexDebug.map.getSource('apex-books-src').serialize().data.features.some((f) => f.properties.name === 'Foothills Parkway' && f.properties.p === 1)), 'the public book stays on the map after the edit');
 });
 
+flow('roadbooks: sharing your public roadbook sends its link card, its roads on the map as a 1200 x 630 JPEG, once until it changes (free roamer B, 2026-11-15)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    // the real map under the roads (post_map.js) needs tiles; here a plain picture stands in for it
+    const fake = () => { const c = document.createElement('canvas'); c.width = 8; c.height = 8; const g = c.getContext('2d'); g.fillStyle = '#ddd'; g.fillRect(0, 0, 8, 8); return c.toDataURL('image/jpeg'); };
+    Object.defineProperty(window, 'ApexPostMap', { configurable: true, set(v) { this._pm = v; }, get() { return this._pm && Object.assign({}, this._pm, { snapper: () => ({ snap: async () => fake() }) }); } });
+  });
+  const line = (lat, lon) => Array.from({ length: 30 }, (_, i) => [+(lon + i * 2e-3).toFixed(5), +(lat + Math.sin(i / 4) * 1e-3).toFixed(5)]);
+  const book = { id: 'CARDCARDCARDCARD', name: 'Smokies classics', mine: true, visibility: 'public', by: 'me', followers: 2, roads: 2, length_m: 10000, can_add: true,
+    road_list: [{ id: 'r1', name: 'The Dragon', geom: line(35.45, -83.98), length_m: 5000, stamps: 1, stamped: true }, { id: 'r2', name: 'Cherohala', geom: line(35.47, -83.94), length_m: 5000, stamps: 0, stamped: false }] };
+  const cards = [];
+  await page.route('**/api/**', (route) => {
+    const req = route.request(), p = new URL(req.url()).pathname, json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (p === '/api/roadbooks/CARDCARDCARDCARD/card' && req.method() === 'PUT') { const b = req.postDataBuffer(); cards.push({ type: req.headers()['content-type'], n: b ? b.length : 0, head: b ? [...b.slice(0, 3)] : [] }); return route.fulfill({ status: 204, body: '' }); }
+    if (p === '/api/roadbooks/CARDCARDCARDCARD') return json(book);
+    if (p === '/api/roadbooks') return json({ mine: [], following: [], crews: [] });
+    return json([]);
+  });
+  await page.goto(base + '/index.html?roadbook=CARDCARDCARDCARD');
+  await page.waitForSelector('.rb-pop.open .rb-road', { timeout: 15000 });
+  const share = page.locator('.rb-pop.open button', { hasText: /^Share$/ });
+  await share.click();
+  for (let i = 0; i < 40 && !cards.length; i++) await page.waitForTimeout(150);
+  check(cards.length === 1 && cards[0].type === 'image/jpeg' && cards[0].n > 2000 && JSON.stringify(cards[0].head) === '[255,216,255]', 'Share sent the link card as a JPEG: ' + JSON.stringify(cards));
+  const size = await page.evaluate(() => [ApexRoadbooks.CARD.w, ApexRoadbooks.CARD.h]);
+  check(JSON.stringify(size) === '[1200,630]', 'the card is the large preview size');
+  await share.click();
+  await page.waitForTimeout(1200);
+  check(cards.length === 1, 'the same book shared again sends nothing new: ' + cards.length);
+});
+
 flow('drive ended: your best on this road on the card, and the pack closes with the score from its own clips (REVIEW.md 4.4)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     const S = window.speechSynthesis; if (S) S.speak = (u) => setTimeout(() => u.onend && u.onend(), 20); });
