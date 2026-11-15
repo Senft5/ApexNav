@@ -22,9 +22,11 @@ have=$(stat -c %s tiles.tar)
 [ "$have" = "$bytes" ] || { log "size $have, want $bytes"; exit 3; }
 echo "$sha  tiles.tar" | sha256sum -c --status - || { log "sha256 mismatch"; exit 4; }
 log "tiles whole in $(( $(date +%s) - t0 )) s"
-# the tar alone (no tile directory, no traffic, no elevation): what the public server answers, from our tiles
+# the tar alone (no tile directory, no traffic, no elevation): what the public server answers, from our tiles.
+# The matrix's second pass retries pairs the first left empty (Columbus to Louisville came back null without it).
 valhalla_build_config --mjolnir-tile-extract "$dir/tiles.tar" --mjolnir-tile-dir "$dir/none" \
   --mjolnir-traffic-extract "" --additional-data-elevation "" --mjolnir-admin "" --mjolnir-timezone "" \
+  --thor-costmatrix-allow-second-pass True \
   --httpd-service-listen "tcp://*:8002" --loki-actions locate,route,sources_to_targets,optimized_route,trace_route,trace_attributes,status \
   > valhalla.json
 exec valhalla_service valhalla.json "${THREADS:-2}"
