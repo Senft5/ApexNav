@@ -2292,38 +2292,36 @@ extension ApexSensorShell: AVSpeechSynthesizerDelegate {
 
 /// Plays a voice-bank call (one to a few clips) back to back with the page's gaps between them, in the voice session the
 /// page opened with voiceBegin. A new call stops the one playing (the page sends one call at a time; a hazard can cut in).
+/// Every clip is scheduled at once on the audio device's clock (each one's start = the last one's start + its length + the
+/// gap), so the join between two clips is the page's gap exactly: starting each from the one before's didFinish added the
+/// main thread's wake-up to every join, and a call of several clips came out halting (the owner 2026-11-15, "sluggish").
 @MainActor
 final class ApexClipPlayer: NSObject, AVAudioPlayerDelegate {
-    private var queue: [(player: AVAudioPlayer, gap: Double)] = []
-    private var current: AVAudioPlayer?
+    private var players: [AVAudioPlayer] = []
     private var done: ((Bool) -> Void)?
 
     func play(_ files: [URL], gaps: [Double], done: @escaping (Bool) -> Void) {
         finish(false)
-        var players: [(player: AVAudioPlayer, gap: Double)] = []
-        for (i, url) in files.enumerated() {
+        var list: [AVAudioPlayer] = []
+        for url in files {
             guard let p = try? AVAudioPlayer(contentsOf: url) else { done(false); return }
             p.prepareToPlay()
-            players.append((p, i > 0 && i < gaps.count ? max(0, gaps[i]) : 0))
+            p.delegate = self
+            list.append(p)
         }
-        queue = players
+        guard let first = list.first else { done(false); return }
+        players = list
         self.done = done
-        next()
-    }
-
-    private func next() {
-        guard !queue.isEmpty else { finish(true); return }
-        let (p, gap) = queue.removeFirst()
-        p.delegate = self
-        current = p
-        let started = gap > 0 ? p.play(atTime: p.deviceCurrentTime + gap) : p.play()
-        if !started { finish(false) }
+        var at = first.deviceCurrentTime + 0.03
+        for (i, p) in list.enumerated() {
+            if i > 0 { at += list[i - 1].duration + (i < gaps.count ? max(0, gaps[i]) : 0) }
+            if !p.play(atTime: at) { finish(false); return }
+        }
     }
 
     private func finish(_ ok: Bool) {
-        current?.stop()
-        current = nil
-        queue = []
+        for p in players { p.stop() }
+        players = []
         let d = done
         done = nil
         d?(ok)
@@ -2331,13 +2329,13 @@ final class ApexClipPlayer: NSObject, AVAudioPlayerDelegate {
 
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor in
-            guard player === self.current else { return }
-            if flag { self.next() } else { self.finish(false) }
+            guard player === self.players.last else { return }
+            self.finish(flag)
         }
     }
 
     nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
-        Task { @MainActor in if player === self.current { self.finish(false) } }
+        Task { @MainActor in if self.players.contains(where: { $0 === player }) { self.finish(false) } }
     }
 }
 

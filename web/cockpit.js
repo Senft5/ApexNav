@@ -1899,13 +1899,14 @@
         try { const len = ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, cue, Themes.get(state.theme).sounds)); await new Promise(r => setTimeout(r, len * 1000 + 40)); } catch (_) {}
       }
       const duck = ApexSpeechQueue.ducks(item, isSpirited());
-      let played = false;
+      let played = false, voiced = null;   // voiced: the clips this line was given (null: none, so the phone's voice says it)
       try {
         if (state.voiceId !== 'device' && window.ApexVoice) {
           await ApexVoice.load(state.voiceId);
           const own = item.tokens || (item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null);
           // MA-3: the advice's clip in the same breath as the call's (rally words; plain words are spoken whole)
           const tokens = own && item.chain && item.aside && item.aside.kind === 'advice' ? [...own, item.aside.token] : own;
+          voiced = tokens && ApexVoice.covers(tokens) ? tokens : null;
           const promptStyle = await voiceBracket(true, duck);
           if (promptStyle !== 'normal') { voiceBracket(false); speech.busy = false; speech.followUp = null; pumpSpeech(); return; }   // silent or a tone: skip the words
           try {
@@ -1918,7 +1919,12 @@
           } finally { voiceBracket(false); }
         }
       } catch (_) { /* fall back to the device voice */ }
+      // App health: lines said by the chosen pack's voice, and lines a pack voice was chosen for but the phone's voice said
+      // (no clips for them, or the clips failed), so a fallback that creeps back shows in Garage → Account → App health
+      if (state.voiceId !== 'device') health.bump(played ? 'voice_pack' : 'voice_phone');
       if (played) { speech.busy = false; pumpSpeech(); return; }
+      // e2e (VOICE_LOG=1): a line with a pack voice chosen but no clips for it, said by the phone's voice instead
+      if (!voiced && state.voiceId !== 'device' && typeof window.__voiceGap === 'function') { try { window.__voiceGap(String(item.text)); } catch (_) {} }
       deviceSpeak(spokenText(item.text), duck);
       if (speech.queue.hazardWaiting(performance.now(), queueCursor())) preemptForHazard();   // a hazard arrived while the model voice tried
     }
@@ -2376,7 +2382,7 @@
           && (e.type === 'corner' ? spirited : (spirited || noteworthyInCruise(e))));
         const bumpDue = ApexRoadMemory.upcoming(hazardMemory, state.live, 0, quietReach, { has: () => false });
         // a named place: the pack says the line without the name (its clips), the name stays on the screen
-        const bareTokens = quiet.bare && window.ApexVoiceLines ? ApexVoiceLines.compose(quiet.bare) : null;
+        const bareTokens = quiet.bare && window.ApexVoiceLines ? ApexVoiceLines.forText(quiet.bare) || ApexVoiceLines.compose(quiet.bare) : null;
         if (!callDue && !bumpDue) { say(quiet.text, false, null, null, bareTokens ? { tokens: bareTokens, named: true } : {}); if (quiet === limitSay) limitSay = null; else if (quiet === briefSay) briefSay = null; else if (quiet === cornersSay) cornersSay = null; else if (quiet === alongSay) alongSay = null; else if (quiet === brakeSay) brakeSay = null; else if (quiet === sunSay) sunSay = null; else if (quiet === breakSay) breakSay = null; else { flowSay = flowQueue.shift() || null; if (flowSay) flowSay.until = performance.now() + 20000; } }
       }
     }
@@ -10901,13 +10907,15 @@
       bar.classList.toggle('ahead', Number.isFinite(r.gap) && r.gap < -0.05); bar.classList.toggle('behind', Number.isFinite(r.gap) && r.gap > 0.05);
       if (!bar.hidden) { $('stageBar').hidden = true; $('coachBar').hidden = true; }
       const words = (x) => (window.ApexPassCoach && ApexPassCoach.spoken ? ApexPassCoach.spoken(x) : `${x.toFixed(1)} seconds`);
+      // the pack says the gap without the stage's or the friend's name (both on the bar): "Stage done. 1.4 seconds up."
+      const bareGap = (gap) => (Math.abs(gap) < 0.05 ? 'Level.' : `${words(Math.abs(gap))} ${gap > 0 ? 'down' : 'up'}.`);
       if (r.state === 'done') {
         const line = Number.isFinite(r.gap) ? `${r.name} done. ${ApexGhostDuel.spoken(r.gap, name, words)}` : `${r.name} done.`;
-        toast(line); if (isSpirited()) sayQuietLine(line);
+        toast(line); if (isSpirited()) sayQuietLine(line, Number.isFinite(r.gap) ? `Stage done. ${bareGap(r.gap)}` : 'Stage done.');
         (drive.ghosts || (drive.ghosts = [])).push({ stage: r.name, who: r.who, gap_s: Number.isFinite(r.gap) ? Math.round(r.gap * 10) / 10 : null });
         return;
       }
-      if (r.say && isSpirited() && Number.isFinite(r.gap)) sayQuietLine(ApexGhostDuel.spoken(r.gap, name, words));
+      if (r.say && isSpirited() && Number.isFinite(r.gap)) sayQuietLine(ApexGhostDuel.spoken(r.gap, name, words), bareGap(r.gap));
     }
     // ---- live coaching against your best pass, on any road driven before (web/pass_coach.js) ---------------------------
     // Each remembered corner you finish is set against its fastest pass (the time gap, owner 2026-11-14) and its best

@@ -13459,6 +13459,8 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
     // stubbed Valhalla off our tiles: they plan at Quick unless they (or ctxOpts.funLevel) choose a level
     await ctx.addInitScript((lv) => { try { if (!localStorage.getItem('apex.funLevel')) localStorage.setItem('apex.funLevel', lv); } catch (_) {} }, lv0 || 'quick');
     const page = await ctx.newPage();
+    // VOICE_LOG=1: every line the page gives no pack clips, so the phone's own voice says it (cockpit.js pumpSpeech)
+    if (process.env.VOICE_LOG) await page.exposeFunction('__voiceGap', (text) => console.log(`VOICE_GAP ${name} | ${text}`));
     if (process.env.THROTTLE) { const c = await ctx.newCDPSession(page); await c.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.THROTTLE) }); }
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e && e.stack || e)));
