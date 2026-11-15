@@ -6,6 +6,10 @@
 - Tests: backend/test/road_library.test.ts; tests/test_road_library.py.
 - Next: a 1200 x 630 card image per road for link previews (the icon now), the crowd's measured road feel on a road's page once there is enough, a Roads link in the app, and submitting the sitemap to search engines (owner: Search Console).
 
+## Session 2026-11-15 (road pages show the map): a road's page shows its card's real map (claude/project-thread-dpdmcn)
+- Done: when R2 has the road's card, its page shows that picture (the road on the real map), cropped above the card's own name bar; a road with no card keeps the drawn shape. Test in backend/test/road_library.test.ts.
+- Next: another roam item.
+
 # CALL SHEET
 ## 2026-11-15 (road library): built from our graph into a committed JSON, drawn on the Worker
 - What: the library is a file in the repo (~0.5 MB), rebuilt by hand with `node tools/road_library.js`; pages are server-drawn HTML with an SVG of the road's shape, not a map.

@@ -1376,6 +1376,8 @@
 
     // F-15 (REVIEW_FEEL): the map page keeps this page in its frame, loaded once (hidden, while the map is idle) and never
     // again: it says which page of the Log to show and what changed (index.html openLog, ApexLogHost.changed).
+    // the driving words (turn-in, apex, trail-braking) open a one-line meaning on a tap, wherever the Log says them
+    try { if (window.ApexVocabulary && ApexVocabulary.watchTerms) ApexVocabulary.watchTerms(document.querySelector('main')); } catch (_) {}
     window.ApexLogFrame = {
       open(url) {
         let u; try { u = new URL(url, location.href); } catch (_) { return; }

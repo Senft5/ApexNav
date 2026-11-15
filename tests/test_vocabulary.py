@@ -238,3 +238,27 @@ def test_how_fast_the_load_changed_in_a_word():
     assert out == ["gentle", "gentle", "firm", "firm", "sharp", "sharp", None, None]
     for f in ("drive_view.js", "driver_profile.js", "analysis_page.js"):
         assert "g/s" not in re.sub(r"//[^\n]*", "", (WEB / f).read_text()), f"{f}: say g a second"
+
+
+def test_the_driving_words_say_what_they_mean_on_tap():
+    """Nate 2026-11-15 ("what do you mean by turn in and stuff"): turn-in, apex, trail-braking and the rest are marked where
+    they first show in a paragraph, and a tap says what each means in a sentence or two. "Late apex" is one word, not "apex"."""
+    js = r"""
+const V = require(process.argv[1]);
+const t = ['Slowest 12 m before the apex: turn in later', 'Late apex, then the apex', 'Trail-braker',
+  'ApexNav apex-route', 'turn in a moment later. Turn-in again', 'Still braking at turn-in'];
+console.log(JSON.stringify({ spans: t.map((x) => V.termSpans(x)), lines: Object.keys(V.DRIVING).map(V.termLine), keys: Object.keys(V.DRIVING) }));
+"""
+    out = json.loads(subprocess.run([NODE, "-e", js, str(WEB / "vocabulary.js")], capture_output=True, text=True, check=True).stdout)
+    marks = [[(x["text"], x["term"]) for x in s if x.get("term")] for s in out["spans"]]
+    assert marks == [[("apex", "apex"), ("turn in", "turnIn")], [("Late apex", "lateApex"), ("apex", "apex")], [("Trail-braker", "trailBrake")],
+                     [], [("turn in", "turnIn")], [("turn-in", "turnIn")]]
+    for s, src in zip(out["spans"], ['Slowest 12 m before the apex: turn in later', 'Late apex, then the apex', 'Trail-braker',
+                                     'ApexNav apex-route', 'turn in a moment later. Turn-in again', 'Still braking at turn-in']):
+        assert "".join(x["text"] for x in s) == src                     # the sentence is unchanged, only marked
+    for k in ("turnIn", "apex", "lateApex", "earlyApex", "patientApex", "trailBrake", "rhythm"):
+        assert k in out["keys"]
+    for line in out["lines"]:
+        assert line and len(line) <= 160 and line.count(".") <= 3, line    # a sentence or two, never a wall of text
+    for page, call in (("analysis_page.js", "watchTerms(document.querySelector('main'))"), ("cockpit.js", "watchTerms($('endCard'))"), ("cockpit.js", "watchTerms(view)")):
+        assert call in (WEB / page).read_text(), page

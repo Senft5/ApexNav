@@ -7112,6 +7112,15 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
     return { was, shown, t, after: d.hidden, title: row.querySelector('[title]') !== null };
   });
   check(def.was && def.shown && def.after && !def.title && /^You turn in once .+ 0 to 100, averaged over \d+ clean corners; -- until \d+\.$/.test(def.t), 'the definition on a tap: ' + JSON.stringify(def));
+  // the driving words on tap (Nate 2026-11-15, "what do you mean by turn in"): marked in place, one short line under the word
+  await page.waitForSelector('#drivingRoot .vt[data-term="patientApex"]', { timeout: 5000 });
+  await page.click('#drivingRoot .vt[data-term="patientApex"]');
+  const vt = await page.evaluate(() => { const p = document.querySelector('.vt-pop'), b = document.querySelector('#drivingRoot .vt[data-term="patientApex"]');
+    return { pop: p && p.textContent, open: b.getAttribute('aria-expanded'), def: !b.closest('.dp-st').querySelector('.dp-def').hidden, words: [...new Set([...document.querySelectorAll('#drivingRoot .vt')].map((x) => x.dataset.term))] }; });
+  check(/^Patient apex: waiting to be at your slowest until the middle of the corner/.test(vt.pop || '') && vt.open === 'true' && !vt.def && vt.words.includes('turnIn'),
+    'a tap on a driving word says what it means, and does not open the row: ' + JSON.stringify(vt));
+  await page.click('#drivingRoot h2');
+  check(await page.evaluate(() => !document.querySelector('.vt-pop')), 'a tap anywhere closes it');
   check(/Work on: One steering arc\s+Through rights \d+, through lefts 100, on 3 of 3 drives\./.test(text) && !/One steering arc: through rights/.test(text), 'the weak side is named once, in the focus: ' + text);
   check((text.match(/^Back to power: /gm) || []).length <= 1 && /^Back to power: in fast corners \d+, in the rest \d+, on 3 of 3 drives\./m.test(text), 'one finding a skill, as a row: ' + text);
   check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st:not([data-skill="pace"])').length === 6), 'six stations, the weak one marked');

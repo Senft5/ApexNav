@@ -63,6 +63,11 @@ describe("road library", () => {
     const u = await (await get("https://vettadrive.app/roads/ky-22-cincinnati")).text();
     expect(u).toContain('property="og:image" content="https://vettadrive.app/brand/icon-1024.png"');
     expect(u).toContain('name="twitter:card" content="summary"');
+    // the page itself shows the card's map; a road with no card yet shows its drawn shape
+    expect(t).toContain('<div class="map"><img src="/roads/cherohala-skyway-robbinsville.jpg"');
+    expect(t).not.toContain('class="shape"');
+    expect(u).toContain('<svg class="shape"');
+    expect(u).not.toContain('class="map"');
     const img = await get("https://vettadrive.app/roads/cherohala-skyway-robbinsville.jpg");
     expect(img.status).toBe(200);
     expect(img.headers.get("content-type")).toBe("image/jpeg");
