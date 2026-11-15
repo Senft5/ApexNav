@@ -148,7 +148,7 @@ button:not(:disabled):active, a[href]:active, [role="button"]:active, [role="swi
 
 /* The driving words on tap (web/vocabulary.js watchTerms; Nate 2026-11-15 "what do you mean by turn in"): the word keeps its
    place in the sentence with a dotted underline; a tap opens one short line under it, a tap anywhere closes it. */
-.vt { display: inline; padding: 4px 0; margin: 0;   /* the padding only grows the tap area (an inline box), never the line */
+.vt { display: inline; padding: 6px 0; margin: 0;   /* the padding only grows the tap area (an inline box), never the line */
   border: 0; background: none; font: inherit; color: inherit; letter-spacing: inherit;
   text-transform: inherit; text-decoration: underline dotted; text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; }
 .vt[aria-expanded="true"] { text-decoration-style: solid; color: var(--accent); }
