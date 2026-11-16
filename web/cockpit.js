@@ -7277,47 +7277,14 @@
       // the shared states (screen inventory): loading is the chips' row in outline; no answer is one line and Try again
       // (it used to say you had no friends to share with)
       box.replaceChildren(el('div', { className: 'row share-skel', 'aria-busy': 'true', 'aria-label': 'Loading your friends and crews' }, el('i'), el('i'), el('i')));
-      const ask = (path) => apiCall('GET', path).then((r) => (r && r.ok ? jsonOf(r) : null)).catch(() => null);
-      const [friends, crews] = await Promise.all([ask('/api/friends'), ask('/api/crews')]);
-      if (!box.isConnected || !box.childElementCount) return;              // closed while it asked
-      if (!Array.isArray(friends) && !Array.isArray(crews)) {
-        box.replaceChildren(el('div', { className: 'share-lost' }, el('p', { className: 'note', textContent: 'Couldn’t load your friends and crews. Check signal.' }),
-          btn('Try again', () => { box.replaceChildren(); $('routeShareBtn').click(); }, 'ink-btn')));
-        return;
-      }
-      const fr = (Array.isArray(friends) ? friends : []).filter(f => f.status === 'accepted' && f.handle), cr = Array.isArray(crews) ? crews : [];
-      // the road can also go into one of your roadbooks (roadbooks.js addPart), friends or none
-      const bookPart = () => { const p = roadbooks && accountMe && accountMe.member ? roadbooks.addPart(() => box.replaceChildren()) : null; return p ? [p] : []; };
-      if (!fr.length && !cr.length) {
-        const books = bookPart();                                        // signed in with nobody to send it to yet: the roadbook is the way to keep it
-        box.replaceChildren(el('div', { className: 'share-lost' }, el('p', { className: 'note', textContent: 'No friends or crews to send it to yet.' }),
-          btn('Find friends', () => { box.replaceChildren(); showView('friends'); }, 'ink-btn')), ...books);
-        if (books.length) box.scrollIntoView({ block: 'nearest' });
-        return;
-      }
-      const picked = { friends: new Set(), crews: new Set() };
-      if (shareTo && fr.some(f => f.handle === shareTo)) picked.friends.add(shareTo);
-      shareTo = null;
-      // Nate 2026-11-12 (as easy as a big social app): before Send, one line says who gets it and what goes, and follows the picks
-      const goes = el('p', { className: 'note share-goes', 'aria-live': 'polite' });
-      const paintGoes = () => {
-        const who = [...[...picked.friends].map(h => '@' + h), ...cr.filter(c => picked.crews.has(c.id)).map(c => c.name)];
-        const names = who.length > 3 ? `${who.slice(0, 2).join(', ')} and ${who.length - 2} more` : who.length > 1 ? `${who.slice(0, -1).join(', ')} and ${who[who.length - 1]}` : who[0];
-        goes.textContent = who.length ? `Goes to ${names}. The line only, first 400 m hidden.` : 'Pick who gets it. The line only, first 400 m hidden.';
-      };
-      const chip = (label, set, key) => { const b = el('button', { className: 'ink-btn' + (set.has(key) ? ' on' : ''), textContent: label }); b.setAttribute('aria-pressed', String(set.has(key)));
-        b.onclick = () => { if (set.has(key)) set.delete(key); else set.add(key); b.classList.toggle('on', set.has(key)); b.setAttribute('aria-pressed', String(set.has(key))); paintGoes(); }; return b; };
-      paintGoes();
-      box.replaceChildren(el('div', { className: 'row', style: 'flex-wrap:wrap' }, ...fr.map(f => chip('@' + f.handle, picked.friends, f.handle)), ...cr.map(c => chip(c.name, picked.crews, c.id))),
-        goes,
-        el('div', { className: 'row' }, btn('Send', async () => {
-          if (!picked.friends.size && !picked.crews.size) { toast('Pick who to share it with.'); return; }
-          const r = await apiCall('POST', '/api/routes', { name: t.name || 'Route', geom: sharedGeom(t), friends: [...picked.friends], crews: [...picked.crews] });
-          const j = await jsonOf(r);
-          if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of shares today.' : 'Couldn\'t share it. Try again.'); return; }
-          toast(j && j.shared ? `Shared. They'll find it in Social.` : 'Nobody to share it with.'); box.replaceChildren();
-        }, 'ink-btn solid')), ...bookPart());
-      box.scrollIntoView({ block: 'nearest' });
+      // the panel's own code is a Social module (web/route_share.js), loaded on the first Share (startup budget, P-06)
+      try { await ApexLazy.load('social'); } catch (_) {}
+      if (!box.isConnected || !box.childElementCount) return;              // closed while it loaded
+      if (!window.ApexRouteShare) { box.replaceChildren(); toast('Couldn’t open sharing. Check signal.'); return; }
+      const to = shareTo; shareTo = null;
+      ApexRouteShare.open(box, { route: t, to, el, btn, toast, apiCall, jsonOf, geom: sharedGeom, again: () => { box.replaceChildren(); $('routeShareBtn').click(); },
+        findFriends: () => { box.replaceChildren(); showView('friends'); },
+        bookPart: () => { const p = roadbooks && accountMe && accountMe.member ? roadbooks.addPart(() => box.replaceChildren()) : null; return p ? [p] : []; } });
     });
     // From friends (REVIEW_PEOPLE P-13/P-14): what friends shared with you, newest first, with when; `list` is the render's read.
     const sharedWhen = (at) => { const t = Date.parse(String(at || '').replace(' ', 'T') + 'Z'); return Number.isFinite(t) && window.ApexFriendsMap ? ApexFriendsMap.spokenAgo(t) : ''; };

@@ -25,8 +25,10 @@ def test_the_message_carries_the_key_and_a_drive_only_hears_it():
 
 def test_sharing_a_route_with_nobody_to_share_with_says_so_like_the_convoy():
     src = cockpit_source()
-    assert "'No friends or crews to send it to yet.'" in src and "btn('Find friends', () => { box.replaceChildren(); showView('friends'); }" in src
-    assert "'Couldn’t load your friends and crews. Check signal.'" in src      # no answer is not "nobody" (2026-11-16)
+    share = (ROOT / "web" / "route_share.js").read_text(encoding="utf-8")       # the panel is a Social module (startup budget)
+    assert "'No friends or crews to send it to yet.'" in share and "btn('Find friends', o.findFriends, 'ink-btn')" in share
+    assert "findFriends: () => { box.replaceChildren(); showView('friends'); }" in src and "'route_share.js'" in src
+    assert "'Couldn’t load your friends and crews. Check signal.'" in share    # no answer is not "nobody" (2026-11-16)
 
 
 def test_notifications_off_has_the_key_to_settings():
