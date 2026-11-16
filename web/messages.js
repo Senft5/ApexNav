@@ -36,6 +36,11 @@
     .dm-row.unread .dm-who small { color: inherit; font-weight: 600; }
     .dm-row .dm-at { color: var(--panel-dim); font-size: 13px; }
     .dm-row .dm-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent, #c8102e); flex: none; }
+    .dm-skel { display: flex; align-items: center; gap: 12px; min-height: 60px; }
+    .dm-skel i { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--rule); opacity: .55; }
+    .dm-skel b { display: block; height: 14px; width: 55%; border-radius: 7px; background: var(--rule); opacity: .55; }
+    .dm-none { display: grid; gap: 10px; justify-items: start; padding: 8px 0; } .dm-none p { margin: 0; }
+    .dm-new { justify-self: start; }
     .dm-pop { display: flex; flex-direction: column; }
     .dm-pop .dm-head-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .dm-thread { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 8px 0 12px; min-height: 120px; }
@@ -51,7 +56,7 @@
 
   /**
    * page: el, btn, toast, apiCall, jsonOf, avatar(photo_id, handle, px), report({kind,target,label,who}) (safety_ui.js),
-   * badge(n) (the People tab's count of unread messages), openFriend(handle).
+   * badge(n) (the People tab's count of unread messages), openFriend(handle), findFriends() (the Friends side, to add one).
    */
   function mount(page) {
     const { el, btn, toast, apiCall, jsonOf } = page;
@@ -69,9 +74,17 @@
     function list() {
       const box = el('div', { className: 'stack-8 dm-sec' });
       const ul = el('div', { className: 'dm-list', role: 'list' });
-      box.append(ul);
+      // New message (as any messages app has): pick a friend, the conversation opens
+      const fresh = btn('New message', () => pick(draw), 'ink-btn dm-new');
+      box.append(fresh, ul);
+      // the shared states (screen inventory): loading is rows in the list's shape; no answer is one line and Try again
+      const skel = () => el('div', { className: 'dm-skel-list', 'aria-busy': 'true', 'aria-label': 'Loading your messages' },
+        ...[0, 1, 2].map(() => el('div', { className: 'dm-skel' }, el('i'), el('b'))));
+      const lost = () => el('div', { className: 'dm-none' }, el('p', { textContent: 'Couldn’t load your messages. Check signal.' }),
+        btn('Try again', () => { ul.replaceChildren(skel()); draw(); }, 'ink-btn'));
+      ul.append(skel());
       const draw = () => apiCall('GET', '/api/messages').then(jsonOf).then((ts) => {
-        if (!Array.isArray(ts)) return;
+        if (!Array.isArray(ts)) { if (!ul.querySelector('.dm-row')) ul.replaceChildren(lost()); return; }
         ul.replaceChildren(...ts.map((t) => {
           const r = el('button', { type: 'button', className: `dm-row${t.unread ? ' unread' : ''}`, role: 'listitem',
             'aria-label': `@${t.handle}${t.unread ? `, ${t.unread} unread` : ''}: ${lastLine(t)}` },
@@ -80,12 +93,39 @@
           r.addEventListener('click', () => open(t.handle, draw));
           return r;
         }));
-        if (!ts.length) ul.append(el('p', { className: 'note', textContent: 'No messages yet. Message a friend from their profile.' }));
+        if (!ts.length) ul.append(el('p', { className: 'note dm-empty', textContent: 'No messages yet.' }));
         setUnread(ts.reduce((a, t) => a + (t.unread | 0), 0));
-      }).catch(() => { if (!ul.childElementCount) ul.append(el('p', { className: 'note', textContent: 'Couldn’t load your messages. Check signal.' })); });
+      }).catch(() => { if (!ul.querySelector('.dm-row')) ul.replaceChildren(lost()); });
       box._draw = draw;
       draw();
       return box;
+    }
+
+    /** New message: your friends, a face and a handle each; a tap opens the conversation. Friends only (messages.ts). */
+    function pick(after) {
+      const ov = el('div', { className: 'overlay dim show dm-pick' });
+      ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'New message');
+      const shut = () => ov.remove();
+      let downOn = false;
+      ov.addEventListener('pointerdown', (e) => { downOn = e.target === ov; });
+      ov.addEventListener('click', (e) => { if (e.target === ov && downOn) shut(); });
+      const list = el('div', { className: 'dm-list', role: 'list' });
+      const sheet = el('div', { className: 'card-sheet' }, el('div', { className: 'side-pop-head' }, el('h3', { textContent: 'New message' }), btn('Cancel', shut, 'linkbtn')), list);
+      ov.append(sheet); doc.body.append(ov);
+      const load = () => {
+        list.replaceChildren(el('div', { 'aria-busy': 'true', 'aria-label': 'Loading your friends' }, ...[0, 1, 2].map(() => el('div', { className: 'dm-skel' }, el('i'), el('b')))));
+        apiCall('GET', '/api/friends').then((r) => (r && r.ok ? jsonOf(r) : null)).catch(() => null).then((l) => {
+          if (!Array.isArray(l)) { list.replaceChildren(el('div', { className: 'dm-none' }, el('p', { textContent: 'Couldn’t load your friends. Check signal.' }), btn('Try again', load, 'ink-btn'))); return; }
+          const fr = l.filter((f) => f && f.status === 'accepted' && f.handle).sort((a, b) => a.handle.localeCompare(b.handle));
+          if (!fr.length) { list.replaceChildren(el('div', { className: 'dm-none' }, el('p', { textContent: 'Messages are between friends. Add one first.' }), ...(page.findFriends ? [btn('Find friends', () => { shut(); page.findFriends(); }, 'ink-btn solid')] : []))); return; }
+          list.replaceChildren(...fr.map((f) => {
+            const r = el('button', { type: 'button', className: 'dm-row', role: 'listitem', 'aria-label': `Message @${f.handle}` }, face(f, 44), el('span', { className: 'dm-who' }, el('b', { textContent: `@${f.handle}` }), ...(f.name ? [el('small', { textContent: f.name })] : [])));
+            r.addEventListener('click', () => { shut(); open(f.handle, after); });
+            return r;
+          }));
+        });
+      };
+      load();
     }
 
     /** People's Messages row: its count is what you haven't read. `openList` opens the list's sheet. */

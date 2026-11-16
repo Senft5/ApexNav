@@ -7797,6 +7797,7 @@
     onSocial(() => { try { messages = window.ApexMessages ? ApexMessages.mount({ el, btn, toast, apiCall, jsonOf,
       avatar: (id, h, px) => (window.ApexPhotos ? ApexPhotos.avatar(id, h, px) : el('span')),
       report: (o) => (safety ? safety.report(o) : null),
+      findFriends: () => { if (document.querySelector('.dm-pop.open, .people-pop.open')) document.querySelectorAll('.people-pop.open').forEach((p) => p.classList.remove('open')); showView('friends'); },
       badge: (n) => { if (n !== dmUnread) { dmUnread = n; paintPeopleBadge(); } } }) : null; } catch (e) { console.error('messages', e); } });
     // The Social home (web/social_home.js, docs/SOCIAL.md 2.16): the Feed side, rings for today over every posted drive
     let socialHome = null;

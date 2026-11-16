@@ -254,6 +254,8 @@ and in random batches so a trace cannot be re-assembled.
   Drive it, then its name, who came, the caption, "View all n comments", stages and roads.
 - The head's two keys stand on all three sides: For you (a heart, a dot when something is new; a sheet, New then Earlier)
   and Messages (a paper plane with the unread count). Opening For you marks it seen.
+- Messages opens on New message (your friends, a tap opens the conversation; none yet says Find friends), then your
+  conversations. Loading is rows in their shape; no answer is one line and Try again.
 - Offline or no answer: the feed says which, with Try again. Faces in rings: `web/avatar.js` (`ApexAvatar.ring`), shared.
 - No backend change. Screen inventory for the whole restructure: project files `social/screen-inventory.md`.
 

@@ -7972,11 +7972,13 @@ flow('messages: People has Messages with what is unread; a conversation is bubbl
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   const sent = [];
   let thread = [{ id: 'M1', body: 'Skyway Saturday?', at: '2026-11-14 11:00:00', mine: false }], unread = 1;
+  let listFails = true;
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
     if (u.pathname === '/api/me/messages/unread') return json({ unread });
+    if (u.pathname === '/api/messages' && listFails) return route.abort();
     if (u.pathname === '/api/messages') return json(thread.length ? [{ handle: 'bob', photo_id: null, at: thread[thread.length - 1].at, unread, last: thread[thread.length - 1].body, mine: thread[thread.length - 1].mine, friend: true }] : []);
     if (u.pathname === '/api/messages/bob' && m === 'GET') { unread = 0; return json({ with: { handle: 'bob', photo_id: null, friend: true }, messages: thread }); }
     if (u.pathname === '/api/messages/bob' && m === 'POST') { const b = JSON.parse(route.request().postData()); sent.push(b); thread = [...thread, { id: 'M2', body: b.body, at: '2026-11-14 11:01:00', mine: true, seen: false }]; return json({ id: 'M2' }, 201); }
@@ -7989,6 +7991,11 @@ flow('messages: People has Messages with what is unread; a conversation is bubbl
   await page.waitForFunction(() => (document.querySelector('#dmKey .sk-count:not([hidden])') || {}).textContent === '1' && document.getElementById('dmKey').getAttribute('aria-label') === 'Messages, 1 unread');
   await page.waitForFunction(() => /1 unread message/.test((document.querySelector('#crewTab .badge') || { getAttribute: () => '' }).getAttribute('aria-label') || ''));
   await page.click('#dmKey');
+  // no answer: one line and Try again, never an empty sheet (the shared states, screen inventory)
+  await page.waitForSelector('.people-pop.open .dm-none button:text-is("Try again")');
+  check(/^Couldn’t load your messages\. Check signal\./.test(await page.textContent('.people-pop.open .dm-none')), 'the list with no answer says so');
+  listFails = false;
+  await page.click('.people-pop.open .dm-none button:text-is("Try again")');
   await page.waitForSelector('.people-pop.open .dm-row');
   const row = await page.textContent('.people-pop.open .dm-row .dm-who');
   check(/@bob/.test(row) && /Skyway Saturday\?/.test(row) && !!(await page.$('.people-pop.open .dm-row.unread .dm-dot')), 'the list: who, their last line, unread marked: ' + row);
@@ -8010,6 +8017,14 @@ flow('messages: People has Messages with what is unread; a conversation is bubbl
   check(sent.some((x) => x.unsent === 'M2'), 'Unsend takes yours back');
   await page.click('.dm-pop.open .side-pop-head button:has-text("Done")');
   check(!(await page.$('.dm-pop')), 'Done closes the conversation');
+  // New message: your friends to pick from; a tap opens the conversation
+  await page.click('.people-pop.open .dm-new');
+  await page.waitForSelector('.dm-pick .dm-row');
+  check(await page.$$eval('.dm-pick .dm-row', (l) => l.map((r) => r.getAttribute('aria-label')).join('|')) === 'Message @bob', 'New message lists your friends');
+  await page.click('.dm-pick .dm-row');
+  await page.waitForSelector('.dm-pop.open[aria-label="Messages with @bob"] .dm-msg');
+  check(!(await page.$('.dm-pick')), 'the pick closes once one is picked');
+  await page.click('.dm-pop.open .side-pop-head button:has-text("Done")');
   // a friend's profile: Message first
   await page.click('.people-pop.open .side-pop-head button:has-text("Done")');
   await page.click('#accountBody .friend-head:has-text("@bob")');
