@@ -35,7 +35,7 @@
   /** Draws the profile into `box` (replacing what's there); `back` returns to the list. `keys` ([label, run] pairs) are
    *  the things to do with them, first; `foot` ([label, run, className] triples) the ways to end it, last. `avatar` (a node)
    *  and `status` ({ text, live }) put the person at the top. */
-  function show(box, p, { el, btn, back, keys = [], more = [], extra = [], foot = [], partial = false, avatar = null, status = null }) {
+  function show(box, p, { el, btn, back, keys = [], more = [], extra = [], foot = [], partial = false, avatar = null, status = null, retry = null }) {
     const v = lines(p);
     // Nate 2026-11-12 (as easy as a big social app): the person first, their photo, who they are and what they are doing now
     // (status: the friend list's own line, "On the road · Cherohala Skyway" or "Seen 15 min ago"), then what to do with them
@@ -61,7 +61,7 @@
         ...(more.length ? [moreKey(el, btn, v.title, more)] : []))] : []),
       ...extra,
       ...(!partial && p.dna && p.dna.theirs && root.ApexDnaCard ? [dnaSection(p, el, btn)] : []),
-      ...(partial ? [el('p', { className: 'note', textContent: 'Couldn’t load the rest. Check signal.' })]
+      ...(partial ? [el('div', { className: 'stack-8 pv-lost' }, el('p', { className: 'note', textContent: 'Couldn’t load the rest. Check signal.' }), ...(retry ? [btn('Try again', retry, 'ink-btn')] : []))]
         : [...sections.map((s) => el('div', { className: 'stack-8' }, el('b', { textContent: s.head }), ...s.rows.map((r) => el('p', { className: 'note', textContent: r }))))]),   // what they share with you, so no line saying so
       ...(foot.length ? [el('div', { className: 'row profile-foot' }, ...foot.map(([label, run, cls]) => btn(label, run, cls || 'linkbtn')))] : []));
   }

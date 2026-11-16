@@ -8313,7 +8313,19 @@
           btn('Open', () => { closeProfile(); openSharedRoute(last.id); }, 'linkbtn'))] : [];
       };
       const openProfile = async (f) => {
+        const shown = openFriendId === f.id && ppop.classList.contains('open');
         openFriendId = f.id;   // a redraw of People (a grant changed, presence came in) opens it again
+        // loading: the profile's own head at once, its numbers dashed (shared states, screen inventory 2026-11-16); a redraw
+        // of a profile already open keeps it as it is until the answer comes
+        if (!shown && window.ApexProfileHead) {
+          const photo0 = (where.get(f.handle) || {}).photo_id || null;
+          ppop.replaceChildren(el('div', { className: 'stack-8 profile-view skel', 'aria-busy': 'true' },
+            el('div', { className: 'side-pop-head' }, el('span'), btn('‹ Friends', () => closeProfile(), 'linkbtn')),
+            ApexProfileHead.draw({ el, btn, face: window.ApexPhotos ? ApexPhotos.avatar(photo0, f.handle || '?', 56) : el('span', { className: 'ph-ghost' }),
+              title: f.handle ? `@${f.handle}` : (f.name || 'Friend'), sub: '', car: null,
+              counts: [{ n: null, label: 'Days' }, { n: null, label: 'Stages' }, { n: null, label: 'Best' }] })));
+          ppop.classList.add('open');
+        }
         let p = null;
         try { const r = await apiCall('GET', `/api/friends/${encodeURIComponent(f.id)}/profile`); p = r.ok ? await jsonOf(r) : null; } catch (_) {}
         const view = el('div', { className: 'stack-8 profile-view' });
@@ -8322,7 +8334,7 @@
         if (window.ApexVocabulary && ApexVocabulary.watchTerms) ApexVocabulary.watchTerms(view);   // a friend's DNA words, on tap
         ApexProfileView.show(view, p && !Array.isArray(p) ? p : { handle: f.handle, name: f.name }, { el, btn, back: () => closeProfile(), keys: keysFor(f),
           avatar: window.ApexPhotos ? ApexPhotos.avatar(photo, f.handle || '?', 56) : null, status: st && st.text ? { text: st.text, live: !!st.live } : null,
-          more: moreFor(f), partial: !p || Array.isArray(p), extra: [...(duels && f.handle ? [duels.cards({ with: f.handle })] : []), ...lastShare(f), ...(drivePosts && drivePosts.grid ? [drivePosts.grid(f.id, { empty: `@${f.handle || '?'} hasn’t posted a drive you can see yet.` })] : drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), ...(roadbooks && f.handle ? [roadbooks.ofFriend(f.handle)] : []), aboutYou(f)],
+          more: moreFor(f), partial: !p || Array.isArray(p), retry: () => openProfile(f), extra: [...(duels && f.handle ? [duels.cards({ with: f.handle })] : []), ...lastShare(f), ...(drivePosts && drivePosts.grid ? [drivePosts.grid(f.id, { empty: `@${f.handle || '?'} hasn’t posted a drive you can see yet.` })] : drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), ...(roadbooks && f.handle ? [roadbooks.ofFriend(f.handle)] : []), aboutYou(f)],
           });
         ppop.replaceChildren(view); ppop.classList.add('open');
       };

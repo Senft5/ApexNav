@@ -8345,7 +8345,7 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
   await page.click('[data-people="friends"]');
   await page.click('#accountBody .friend-head:has-text("@bob")');   // a tap on the friend opens their profile (2026-11-12)
-  await page.waitForSelector('.profile-view');
+  await page.waitForSelector('.profile-view:not(.skel)');
   const t = await page.textContent('.profile-view');
   check(t.includes('@bob') && /Bob <b>S<\/b> · friends since September( 2026)?/.test(t) && t.includes('Esses · best 812 · 3 days this month') && t.includes('Ridge Runners'), 'the profile, as text: ' + t);
   check(!/Times are never shown|on them this month/.test(t), 'no line saying what is not shown, and "this month" once under its head: ' + t);
@@ -8670,7 +8670,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   // Nate 2026-11-12 (as easy as a big social app): the row is the friend; a tap opens their profile, which holds what you
   // can do with them, their last share and what they see of you (the row used to open five keys and a grants drawer)
   check(!(await page.$('#accountBody .friend .crew-detail, #accountBody .friend button.ink-btn')), 'a friend row is one line, no keys in the list');
-  const profileOf = async (h) => { await page.click(`#accountBody .friend-head:has-text("${h}")`); await page.waitForSelector(`.people-pop.open .profile-view h3:text-is("${h}")`);
+  const profileOf = async (h) => { await page.click(`#accountBody .friend-head:has-text("${h}")`); await page.waitForSelector(`.people-pop.open .profile-view:not(.skel) h3:text-is("${h}")`);
     const k = await page.$$eval('.people-pop.open .profile-keys button', (b) => b.map((x) => x.textContent)); return k; };
   const moreOf = async () => { await page.click('.people-pop.open .pv-more'); await page.waitForSelector('.pv-menu');
     const m = await page.$$eval('.pv-menu button', (b) => b.map((x) => x.textContent)); await page.click('.pv-menu button:text-is("Cancel")'); return m; };
@@ -8680,6 +8680,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
     'her profile opens on what you can do with her, Message first, the rest behind ···: ' + JSON.stringify(acts));
   const cara = await page.textContent('.people-pop.open .profile-view');
   check(/Shared Cherohala loop · /.test(cara) && /What @cara sees of you\s*Scores/.test(cara) && /Couldn’t load the rest/.test(cara) && !/No scores shared/.test(cara), 'her last share and what she sees of you; offline, nothing guessed: ' + cara);
+  check(await page.isVisible('.people-pop.open .pv-lost button:text-is("Try again")'), 'the rest that did not load has Try again');
   await back();
   await profileOf('@bob');
   check((await moreOf()).includes('On the map'), 'bob shares a delayed position: On the map too');
