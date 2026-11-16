@@ -101,7 +101,7 @@
    * `steps` are [{ m, type, street, exits }] in route order; `said` holds keys already said (the page adds them). `id` keeps
    * keys per route. `at` is that turn's index from createProgress (else found here, unlatched).
    */
-  function due(steps, cursorM, vMps, said, id = '', at = null) {
+  function due(steps, cursorM, vMps, said, id = '', at = null, opt = {}) {
     const out = [], v = finite(vMps) ? Math.max(0, vMps) : 0;
     if (!Array.isArray(steps) || !finite(cursorM)) return out;
     const i = Number.isInteger(at) ? at : pendingAt(steps, cursorM), s = steps[i];
@@ -121,6 +121,7 @@
     if (ARRIVE.has(s.type) || d < clearOfNow(v)) return out;
     if (i > 0 && steps[i - 1] && s.m - steps[i - 1].m <= THEN_M && phrase(steps[i - 1])) return out;   // said as the "then" of the one before
     const rung = d <= nearAt(v) ? 'near' : 'early';
+    if (rung === 'early' && opt && opt.brief) return out;              // brief: the near rung and the turn's own call only
     if (said.has(key(rung))) return out;
     if (rung === 'near') said.add(key('early'));                        // first seen inside the near rung: the far one is past
     // the lanes go with the early calls, while there is time to move over: ", use the left 2 lanes"

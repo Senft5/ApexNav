@@ -26,6 +26,10 @@ const steps = [
 const said = new Set(), heard = [];
 for (let m = 0; m <= 9100; m += 10) for (const l of D.due(steps, m, 20, said, 'r1')) { said.add(l.key); heard.push([m, l.text, l.now]); }
 const out = { heard };
+// brief (notes awake, Nate's 11-16 drive): no far rung, the near one and the turn's own call only
+const sb = new Set(), brief = [];
+for (let m = 0; m <= 2000; m += 10) for (const l of D.due(steps, m, 20, sb, 'rb', null, { brief: true })) { sb.add(l.key); brief.push(l.text); }
+out.brief = brief;
 out.words = [50, 120, 300, 480, 805, 1609, 4000].map(D.distWords);
 globalThis.ApexUnits = { metric: () => true };                 // Settings → Units: kilometres (U-22)
 out.metricWords = [50, 320, 960, 1000, 2460].map(D.distWords);
@@ -91,4 +95,11 @@ def test_strip_notes(out):
         {"code": "Roundabout · exit 3", "call": "X", "dir": "O", "angle": 0},
         {"code": "Arrive", "call": "Destination", "dir": "A", "angle": 0},
         None,
+    ]
+
+
+def test_brief_leaves_out_the_far_rung(out):
+    assert out["brief"] == [
+        "In 800 feet, turn left onto Deals Gap Road",
+        "Turn left onto Deals Gap Road, then turn right onto US 129",
     ]

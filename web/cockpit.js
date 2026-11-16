@@ -1829,7 +1829,10 @@
       if ((now - sunAlt.at > 60000 || sunAlt.t !== t) && window.ApexSun && t && t.lat && Number.isFinite(t.lat[i])) { sunAlt.at = now; sunAlt.t = t; sunAlt.v = ApexSun.sunPosition(new Date(), t.lat[i], t.lon[i]).altitude; }
       return sunAlt.v;
     };
-    const noteworthyInCruise = (e) => e.type === 'alpr' || (e.type === 'bump' && (e.severity_g >= 0.45 || !!e.crowd))
+    // Nate's 11-16 drive review: a plate reader was said 28 times in 29 miles ("Camera", often twice a second apart), so a
+    // plate reader is a pin on the map and the strip, never a spoken line; a speed camera is still said in any notes mode.
+    const spokenCamera = (e) => e.type === 'alpr' && e.kind === 'speed';
+    const noteworthyInCruise = (e) => spokenCamera(e) || (e.type === 'bump' && (e.severity_g >= 0.45 || !!e.crowd))
       || (e.type === 'mark' && window.ApexRoadMarks && ApexRoadMarks.cruiseWorthy(e, sunAltNow()));
 
     // -------------------------------------------------------------------------
@@ -2209,6 +2212,19 @@
       const far = d && (d.u === 'MI' || d.u === 'KM') ? ApexUnits.long(ahead, 1, true) : d ? `${d.n} ${d.u.toLowerCase()}` : null;
       return ['Quiet', road, far ? `${compact ? 'corner' : 'next corner'} ${far}` : null].filter(Boolean).join(' · ');   // what Quiet calls is the Notes switch's to say, not the strip's
     }
+    // Nate's 11-16 drive review: "Hidden junction" was said 19 times, four in 160 m on one suburban street and right after
+    // the turn onto it. One is said at most every JUNCTION_GAP_M, and none within JUNCTION_TURN_M of a route turn (the turn's
+    // own call is the junction). It stays on the strip either way.
+    const JUNCTION_GAP_M = 400, JUNCTION_TURN_M = 150;
+    let junctionSaid = { id: null, m: -Infinity };
+    function junctionQuiet(e, steps) {
+      if (e.type !== 'mark' || e.kind !== 'side_road') return false;
+      const m = noteM(e);
+      if (Array.isArray(steps) && steps.some((s) => s && Number.isFinite(s.m) && Math.abs(s.m - m) <= JUNCTION_TURN_M)) return true;
+      if (junctionSaid.id === track.id && m - junctionSaid.m < JUNCTION_GAP_M) return true;
+      junctionSaid = { id: track.id, m };
+      return false;
+    }
     function updateNotes(vMps, live) {
       // Driving somewhere that is not on the loaded route: its calls (and its stale trip distance) must never be read out as if they were this road.
       const offRoute = live && state.cursorIdx < 0;
@@ -2368,7 +2384,8 @@
         let call = chainedCall(e, ev, spirited || first, null, { vMps });
         const apexMps = apexMpsOf(e);
         const startCall = first && stopped && d <= ApexNoteTiming.wakeWindowM({ vMps, apexMps, text: call.text, reactionS: reactS });
-        const voiced = first || (e.type === 'corner' ? spirited : spirited || noteworthyInCruise(e));
+        const voiced = e.type === 'alpr' ? spokenCamera(e) : junctionQuiet(e, steps) ? false
+          : first || (e.type === 'corner' ? spirited : spirited || noteworthyInCruise(e));
         // U-113 / MA-3: the pack's aside, now and then, planned with its call: when one fits, the call starts at the aside's
         // lead (earlier than its own) so both end before the braking; advice is said in the call, colour straight after it.
         // Kit's box shows it from the pre-call.
@@ -2394,7 +2411,9 @@
       // Directions at junctions (IDEAS V-04), in any notes mode: the call at the turn goes ahead of corner notes.
       if (track && track.kind === 'route' && !offRoute) {
         markArrival(track);
-        for (const line of ApexDirections.due(track.steps, state.cursorM, vMps, state.spoken, track.id, pend)) {   // the next turn only
+        // with the notes awake the far rung ("In 0.4 miles, …") is left out: the corners need the air (11-16 review: three
+        // calls a turn, a turn every few tenths of a mile, crowded out the notes on the roads they were there for)
+        for (const line of ApexDirections.due(track.steps, state.cursorM, vMps, state.spoken, track.id, pend, { brief: spirited })) {   // the next turn only
           state.spoken.add(line.key); health.bump('directions_said');
           say(line.text, false, null, null, { kind: line.now ? 'hazard' : 'ordinary', key: line.key, atM: line.atM, duck: true, tokens: line.tokens || undefined, named: true });
         }
@@ -4254,8 +4273,13 @@
         if (long && quiet) { routeWatch.saidAt = now; say('Back on route'); }
         routeWatch.offAt = null;
       }
-      if (r.request) reroute(track);
+      // reached the destination (within ARRIVED_M of a route's end): driving on past it is not off route. 11-16: "Your
+      // destination is on the right", then "Rerouting" and a fresh turn back, in the same second.
+      const arrived = track && !isLoop(track) && Array.isArray(track.dist) && track.dist.length
+        && routeWatch.bestM >= track.dist[track.dist.length - 1] - ARRIVED_M;
+      if (r.request && !arrived) reroute(track);
     }
+    const ARRIVED_M = 150;
     // The route's word in the status line while off it: one word per detour (TestFlight: "it tweaks when finding a new route";
     // it flipped "Checking route…", "Off route", "Rerouting…"). Farther than 40 m but not yet confirmed by the monitor (its
     // 5 s hold): no word, the road's own quiet line (null). Confirmed with a plan to rebuild: "Rerouting…" from then until the
