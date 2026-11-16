@@ -18,3 +18,4 @@
 - An absurd highway-free way at twice the time is no Fun route. The owner's rule is that Valhalla is for Quick only, which the reroute path broke. Undo the pick: remove the `h.absurd` block in web/fun_route.js applyHighways.
 - Undo the reroute change: restore the Valhalla fallback in cockpit.js routePoints, which was valhallaRoutes with levelCosting.
 - Shaping points are hints, not stops, so dropping one beats a detour into a cul-de-sac. Undo: in web/graph_router.js through, snap every via with the plain snap again (drop the shapingEdge branch).
+- when_to_go.js (16 KB) now loads with the route context (lazy.js 'ctx'), not at launch. This PR's ~3 KB pushed the map page 2.5 KB over its 3.7 MB startup budget, and When to go only scans a planned route after needCtx() anyway. The page is now at 3.69 MB. Undo: put its `<script>` tag back in web/index.html after route_engine.js, and drop it from the ctx group.

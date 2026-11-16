@@ -10619,7 +10619,7 @@
     }
     function attachWhen(t) {
       whenReset();
-      if (!window.ApexWhenToGo || !window.ApexRouteEngine || !window.ApexRouteCtx || !t || !Array.isArray(t.lat) || t.lat.length < 2 || !Number.isFinite(t.timeS) || state.mode === 'live') return;
+      if (!window.ApexRouteEngine || !window.ApexRouteCtx || !t || !Array.isArray(t.lat) || t.lat.length < 2 || !Number.isFinite(t.timeS) || state.mode === 'live') return;
       if (window.ApexFlags && (!ApexFlags.on('route_engine') || !ApexFlags.on('when_to_go'))) return;
       whenTimer = setTimeout(() => { whenScan(t).catch(() => {}); }, WHEN_AFTER_MS);
     }
@@ -10634,7 +10634,8 @@
       attachMarks(t, c);
       let sc = null;
       try {
-        await needCtx();
+        await needCtx();                                          // (when_to_go.js loads with the context: lazy.js 'ctx')
+        if (!window.ApexWhenToGo) return;
         sc = await ApexWhenToGo.scan(c, { now: Date.now(), prefs: engineOpts(funLevel).prefs, car: routingCar(), settings: routeCtxSettings(), providerOpts: routeCtxOpts(),
           signal: ac.signal, breathe: () => RouteLoading.yieldToUI() });
       } catch (_) { sc = null; }

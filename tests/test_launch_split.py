@@ -94,7 +94,9 @@ def test_plan_only_route_context_providers_are_lazy_and_plans_wait_for_them():
     for fn in ("async function contextOn(", "async function stagesWithContext("):
         body = js[js.index(fn):js.index(fn) + 400]
         assert "await needCtx();" in body, fn
-    assert "await needCtx();\n        sc = await ApexWhenToGo.scan(" in js
+    w = js[js.index("async function whenScan("):]
+    assert w.index("await needCtx();") < w.index("if (!window.ApexWhenToGo) return;") < w.index("sc = await ApexWhenToGo.scan(")
+    assert "when_to_go.js" in g["ctx"] and 'src="when_to_go.js"' not in html, "When to go loads with the context"
     assert "map.once('idle', () => setTimeout(goCtx, 600))" in js
     sw = (WEB / "sw.js").read_text()
     assert "(?:route_ctx\\/)?[a-z0-9_]+\\.js" in sw, "the offline shell keeps the lazy providers too"
