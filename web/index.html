@@ -998,32 +998,31 @@
     /* finding 11: the alternatives answer a swipe sideways; the card says how many */
     #routeCard { touch-action: pan-y; }
     /* the Options sheet and Best roads nearby: bottom sheets (feedback 04), their keys at the 44 pt floor */
-    .opt-sheet :is(.stamps > button, .switch > button, .detents > button, .linkbtn, .ink-btn), .nearby-sheet :is(.detents > button, .linkbtn, .nb-go) { min-height: 44px; }
+    .opt-sheet :is(.stamps > button, .switch > button, .detents > button, .linkbtn, .ink-btn), .nearby-sheet :is(.detents > button, .linkbtn, .nb-go, .nb-about) { min-height: 44px; }
     .opt-sheet .ctl { margin-top: 4px; }
     .opt-sheet .opt-stamps > button { text-transform: none; letter-spacing: 0; font-size: 15px; }
     .opt-avoid > button[aria-pressed="true"]::before { content: "✕ "; }
     .opt-prefer > button[aria-pressed="true"]::before { content: "✓ "; }
     .opt-mix { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: center; margin-top: 6px; }
     .opt-mix > span { font-size: 15px; font-weight: 600; }
-    .nearby-list { display: grid; }
-    .nb-head, .nb-row { display: grid; grid-template-columns: minmax(0, 1fr) 54px; align-items: center; column-gap: 6px; border-top: 1px solid var(--hair, var(--panel-dim)); }
-    .nb-head { border-top: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--panel-dim); padding-bottom: 4px; }
-    .nb-cells { display: grid; grid-template-columns: minmax(0, 1fr) 64px 60px 58px; column-gap: 6px; align-items: center; text-align: left; }
-    .nb-go { width: 100%; padding: 8px 0; background: none; border: 0; color: inherit; font: inherit; }
-    .nb-cells > b { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
-    .nb-cells > span { font: 700 15px var(--font-num); font-variant-numeric: tabular-nums; text-align: right; }
-    .nb-cells > span small { font: 500 11px var(--font-ui); color: var(--panel-dim); margin-left: 2px; }
-    .nb-head .nb-cells > span { font: inherit; text-align: right; }
-    .nb-head .nb-cells > span:first-child { text-align: left; }
-    .nb-row .linkbtn { justify-self: end; font-size: 13px; }
-    /* a phone: four columns left the name ~80 px, so it broke over three lines. Now the name gets its own line and the
-       three numbers sit under it, left-aligned. The heads name only the numbers, since the name says what it is. */
-    @media (max-width: 520px) {
-      .nb-cells { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 2px; }
-      .nb-cells > :first-child { grid-column: 1 / -1; }
-      .nb-cells > span, .nb-head .nb-cells > span { text-align: left; }
-      .nb-head .nb-cells > span:first-child { display: none; }
-    }
+    /* Best roads nearby: one card of rows, each road's shape on a tile, its name over one line of words (2026-11-16) */
+    .nearby-list { display: grid; margin-top: 4px; padding-left: 12px; border-radius: var(--r-card, 12px); background: var(--well, color-mix(in srgb, var(--panel-ink) 6%, var(--panel))); }
+    .nb-row { display: grid; grid-template-columns: minmax(0, 1fr) 48px; align-items: center; border-top: 1px solid var(--hair, var(--rule)); }
+    .nb-row:first-child { border-top: 0; }
+    .nb-go { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 0; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+    .nb-shape { flex: none; width: 44px; height: 44px; padding: 4px; box-sizing: border-box; border-radius: 10px; background: var(--panel-ink); }
+    .nb-shape path { fill: none; stroke: var(--panel); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+    .nb-shape circle { fill: var(--accent); }
+    .nb-text { display: grid; gap: 2px; min-width: 0; }
+    .nb-text > b { font-size: 17px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+    .nb-sub { font-size: 14px; color: var(--panel-dim); font-variant-numeric: tabular-nums; }
+    .nb-about { display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; background: none; color: var(--panel-dim); cursor: pointer; }
+    .nb-about svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; }
+    .nb-about svg .dot { fill: currentColor; stroke: none; }
+    /* the sheet's two keys are a plain pair, not the dial's ticked detents, and what it found is a quiet line over the card */
+    #nearbySheet .detents > button::after { display: none; }
+    #nearbySheet .rc-progress.found { color: var(--panel-dim); font-weight: 500; }
+    #nearbySheet .rc-progress.found::before { display: none; }
     .place-all { display: block; margin: 6px 0 0; }
     /* ---------------- the drive-ended card (REVIEW.md roadmap 7) ---------------- */
     .end-card { text-align: left; }
@@ -1864,16 +1863,12 @@
     .home-by .hb-label, #endCard :is(.end-meta, .end-line, .linkbtn, p:not(.end-kicker)) { font-size: 17px; }
     #planBody :is(.stamps > button, .switch > button, .detents > button, .linkbtn, .ink-btn, .chip), #endCard :is(.linkbtn, .ink-btn) { min-height: 44px; min-width: 44px; }
     /* the plan flow: the card's progress line, the Options sheet and Best roads nearby hold the same floor and grow with it */
-    #planBody .rc-progress, :is(#optSheet, #nearbySheet) :is(p.note, .ctl-label small, .linkbtn, .rc-progress, .opt-mix > span, .nb-cells > b) { font-size: 17px; }
+    #planBody .rc-progress, :is(#optSheet, #nearbySheet) :is(p.note, .ctl-label small, .linkbtn, .rc-progress, .opt-mix > span, .nb-text > b) { font-size: 17px; }
     :is(#optSheet, #nearbySheet) :is(.stamps > button, .switch > button, .detents > button, .linkbtn, .ink-btn, .nb-go) { min-height: 44px; min-width: 44px; }
     .opt-sheet > :not(.side-pop-head), .nearby-sheet > :not(.side-pop-head) { zoom: var(--type-scale, 1); }
     .opt-sheet, .nearby-sheet { grid-template-columns: minmax(0, 1fr); }   /* one wide child wraps; the sheet never grows past the screen */
     .opt-sheet .ctl-label { flex-wrap: wrap; row-gap: 2px; }
     html[data-type-size] .opt-mix { grid-template-columns: minmax(0, 1fr); }
-    html[data-type-size] .nb-cells { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 2px; }
-    html[data-type-size] .nb-cells > :first-child { grid-column: 1 / -1; text-align: left; }
-    html[data-type-size] .nb-head, html[data-type-size] .nb-row { grid-template-columns: minmax(0, 1fr); }
-    html[data-type-size] .nb-row .linkbtn { justify-self: start; }
     .sheet h3, .plan h3, .side-pop h3 { font-size: 18px; font-weight: 700; font-family: var(--font-num); border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; margin-bottom: 8px; }
     .sheet p.note.err, .plan p.note.err { color: var(--accent); }
     /* The sheet header already draws a rule: the first heading under it doesn't draw a second. */
