@@ -33,6 +33,8 @@ ALLOWED = {
     ("social.ts", "grants"): "leaving or being removed from a crew",
     ("social.ts", "segments"): "leaving or being removed from a crew",
     ("social.ts", "shared_routes"): "leaving or being removed from a crew",
+    ("social.ts", "segment_shares"): "the owner dissolving a crew (rare; members leaving use the segment index)",
+    ("social.ts", "decal_optouts"): "the owner dissolving a crew: the foreign key's cascade; crews are few",
 }
 
 PREPARE = re.compile(r"prepare\(\s*(`(?:[^`\\]|\\.)*`|\"(?:[^\"\\]|\\.)*\"|'(?:[^'\\]|\\.)*')", re.S)

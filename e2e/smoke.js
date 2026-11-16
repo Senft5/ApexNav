@@ -3739,14 +3739,23 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check((await page.textContent('.crew-page h2')) === 'Ridge Runners', 'the Crews side opens the crew');
   check(await page.evaluate(() => document.querySelector('[data-people="crews"]').getAttribute('aria-selected') === 'true' && !document.getElementById('crewsBody').hidden
     && document.getElementById('accountBody').hidden && document.getElementById('sheetTitle').textContent === 'Social'), 'on the Social tab, its Crews side');
-  check(await page.evaluate(() => !!document.querySelector('#crewsBody .crew-head .gear-key') && !document.querySelector('#crewsBody .friend-list')), 'the crew head and its gear are on the Crews side, no friends list there');
-  check(await page.evaluate(() => document.querySelector('#crewsBody .crew-head').textContent.trim() === '' && document.querySelectorAll('#crewsBody .crew-page h2').length === 1), 'one crew: its name once, on its page, not again above it');
-  // one crew: no band of its own for the gear; it sits on the cover's top-left, clear of Edit livery (walkthrough 2026-11-12)
-  const gearSpot = await page.evaluate(() => { const r = (q) => document.querySelector(q).getBoundingClientRect(), g = r('#crewsBody .gear-key'), h = r('.crew-page .cp-head'), e = r('.crew-page .cp-edit');
-    return { onCover: g.top >= h.top && g.bottom <= h.bottom && g.left >= h.left, clear: g.right < e.left || g.bottom < e.top }; });
-  check(gearSpot.onCover && gearSpot.clear, 'the gear sits on the cover, clear of Edit livery: ' + JSON.stringify(gearSpot));
-  // Nate 2026-11-12 (as easy as a big social app): three tabs under the crew's name, Drives open first
-  check(JSON.stringify(await page.$$eval('.cp-tabs [role="tab"]', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-selected')))) === '["Drives:true","Chat:false","Board:false"]', 'Drives | Chat | Board, Drives open');
+  check(await page.evaluate(() => !document.querySelector('#crewsBody .friend-list') && document.querySelector('#crewsBody .crew-head').hidden && document.querySelectorAll('#crewsBody .crew-page h2').length === 1), 'one crew: its page is the side, its name once, no friends list there');
+  // (2026-11-16) a group's page: what it is, who you know in it, then Manage (the owner's settings), Invite and Chat
+  check(await page.textContent('.crew-page .cp-meta') === 'Private crew · 3 members', 'what the crew is, in one line: ' + await page.textContent('.crew-page .cp-meta'));
+  await page.waitForSelector('.crew-page .cp-known:not([hidden])');
+  check(await page.textContent('.crew-page .cp-known small') === 'cara is in it', 'your friend in it: ' + await page.textContent('.crew-page .cp-known'));
+  check(JSON.stringify(await page.$$eval('.crew-page .cp-keys button', (b) => b.map((x) => x.getAttribute('aria-label') || x.textContent))) === '["Manage the crew","Invite","Crew chat"]', 'Manage, Invite, Chat under the name');
+  // Posts open first, the next drive pinned on top; its tap goes to Drives
+  check(JSON.stringify(await page.$$eval('.cp-tabs [role="tab"]', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-selected')))) === '["Posts:true","Drives:false","Chat:false","Board:false","Members:false"]', 'Posts | Drives | Chat | Board | Members, Posts open');
+  check(/PINNED · CREW DRIVE/.test(await page.textContent('#cpPane-posts .cp-next')) && /Dawn run/.test(await page.textContent('#cpPane-posts .cp-next')) && /1 going/.test(await page.textContent('#cpPane-posts .cp-next')), 'the next drive pinned on Posts');
+  await page.waitForSelector('#cpPane-posts .crew-drives:not([hidden]) .feed-card');
+  check(await page.isHidden('#cpPane-posts .cp-posts-hint'), 'with posts, no hint');
+  await page.click('#cpPane-posts .cp-next');
+  check(await page.getAttribute('[data-cp-tab="drives"]', 'aria-selected') === 'true', 'the pinned drive opens Drives');
+  await page.click('.crew-page .cp-chat-key');
+  check(await page.getAttribute('[data-cp-tab="chat"]', 'aria-selected') === 'true', 'the chat key opens Chat');
+  if (process.env.SHOTS) { await page.click('.cp-tabs [data-cp-tab="posts"]'); await page.screenshot({ path: `${process.env.SHOTS}/crew-group.png` }); }
+  await page.click('.cp-tabs [data-cp-tab="posts"]');
   check(await page.isHidden('.cp-board') && await page.isHidden('.cp-say'), 'the board and the chat wait behind their tabs');
   await page.click('.cp-tabs [data-cp-tab="board"]');
   await page.waitForSelector('.cp-board .cp-board-row');
@@ -3763,9 +3772,8 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   // the owner's note 05: no Crew drives row; the crew's Upcoming drives has a + in its corner that plans one
   check(!/Crew drives/.test(await page.$$eval('#crewsBody .nav-rows', (n) => n.map((x) => x.textContent).join('|'))), 'no Crew drives row on Crews');
   await page.click('.cp-tabs [data-cp-tab="drives"]');
-  // (2026-11-14) what members posted to the crew, on the Drives tab after Members
-  await page.waitForSelector('.crew-page .crew-drives:not([hidden]) .feed-card');
-  check(/Dawn run on the Skyway/.test(await page.textContent('.crew-page .crew-drives')) && /Posted to the crew/.test(await page.textContent('.crew-page .crew-drives h3')), 'the crew\'s posted drives on its page, after the members');
+  // (2026-11-14) what members posted to the crew, on Posts since 2026-11-16
+  check(/Dawn run on the Skyway/.test(await page.textContent('.crew-page .crew-drives')) && /Posted to the crew/.test(await page.textContent('.crew-page .crew-drives h3')), 'the crew\'s posted drives on its page');
   check(/Upcoming drives/.test(await page.textContent('.cp-week .cp-sec h3')) && await page.isVisible('.cp-week .cp-sec .plan-plus'), 'Upcoming drives with a + in its corner');
   await page.click('.cp-week .plan-plus');
   await page.waitForSelector('.cp-week .plan-drive');
@@ -3779,7 +3787,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
     const name = (x) => x.classList.contains('cp-week') ? 'run' : (x.querySelector(':scope > .cp-sec h3') || {}).textContent || x.className;
     const body = [...document.querySelectorAll('.crew-page .cp-body > *')].map((x) => x.classList.contains('cp-title') ? 'title' : x.classList.contains('cp-livery-foot') ? 'livery' : x.querySelector('.cp-tabs') ? 'tabs' : x.className);
     return { body, panes: Object.fromEntries([...document.querySelectorAll('.cp-pane')].map((p) => [p.id, [...p.children].map(name).filter(Boolean)])) }; });
-  check(JSON.stringify(order.body) === '["title","tabs"]' && JSON.stringify(order.panes['cpPane-drives'].slice(0, 2)) === '["run","Members"]'
+  check(JSON.stringify(order.body) === '["cp-title-wrap stack-12","tabs"]' && JSON.stringify(order.panes['cpPane-drives'].slice(0, 1)) === '["run"]' && order.panes['cpPane-members'][0] === 'Members'
     && order.panes['cpPane-chat'].length === 1 && order.panes['cpPane-board'][0] === 'Vetta Score board', 'the page in order: ' + JSON.stringify(order));
   // the crew's DNA under the board (dna_card.js crewLeaders): who is cleanest at each skill, your level beside it
   const dnaRows = await page.$$eval('#cpPane-board .cp-dna-row', (r) => r.map((x) => [...x.children].map((c) => c.textContent).filter(Boolean).join(' ')));
@@ -3788,20 +3796,19 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(await page.evaluate(() => ![...document.querySelectorAll('#cpPane-chat h3')].some((h) => h.textContent === 'Chat')), 'the Chat tab names the chat: no second "Chat" heading under it');
   check(!(await page.$$('.crew-page .cp-livery, .crew-page .cp-meter')).length, 'no livery box or meter on the page (they are in Edit livery)');
   check(!/Convoy/.test(await page.$$eval('#crewsBody h3', (h) => h.map((x) => x.textContent).join('|'))), 'no Convoy heading on Crews');
-  // P-06: the members as faces, the owner marked, the one on the road lit
-  await page.click('.cp-tabs [data-cp-tab="drives"]');
-  const mem = await page.$$eval('.cp-member', (b) => b.map((x) => [x.querySelector('small').textContent, !!x.querySelector('em'), x.classList.contains('live')]));
-  check(JSON.stringify(mem) === JSON.stringify([['You', true, false], ['@cara', false, true], ['@sam', false, false]]) && /3 members · 1 out now/.test(await page.textContent('.crew-page')), 'members: ' + JSON.stringify(mem));
-  // the lit ring (a 4 px shadow outside the face) is whole: the scrolling strip clips anything past its padding box
-  const ring = await page.evaluate(() => { const s = document.querySelector('.cp-members').getBoundingClientRect(), f = document.querySelector('.cp-member.live .avatar').getBoundingClientRect();
-    return { top: Math.round(f.top - 4 - s.top), left: Math.round(f.left - 4 - s.left) }; });
-  check(ring.top >= 0 && ring.left >= 0, 'the on-the-road ring is not cut by the members strip: ' + JSON.stringify(ring));
+  // P-06: the members (a group's Members tab, 2026-11-16): the owner marked, the one on the road lit and first after, friends said
+  await page.click('.cp-tabs [data-cp-tab="members"]');
+  await page.waitForSelector('.cp-member-list .cp-member');
+  const mem = await page.$$eval('.cp-member', (b) => b.map((x) => [x.querySelector('.cp-member-who b').textContent, (x.querySelector('.cp-member-who small') || {}).textContent || '', !!x.querySelector('em'), x.classList.contains('live')]));
+  check(JSON.stringify(mem) === JSON.stringify([['You · @me', 'Owner', true, false], ['@cara', 'On the road · Cherohala Skyway · Your friend', false, true], ['@sam', '', false, false]]) && /3 members · 1 out now/.test(await page.textContent('.crew-page')), 'members: ' + JSON.stringify(mem));
+  check(await page.isHidden('.cp-member-find'), 'no search on a short list');
   await page.click('.cp-member:has-text("@sam")');
   await page.waitForSelector('.cp-member-sheet');
   check(await page.isVisible('.cp-member-sheet button:has-text("Report")') && await page.isVisible('.cp-member-sheet button:has-text("Block")'), 'Report and Block are on the member, one tap in');
   // a crew-mate who is not a friend is one tap from one (Nate 2026-11-12: as easy as any social app)
   await page.waitForSelector('.cp-member-sheet button:text-is("Add friend")');
   check(await page.$$eval('.cp-member-sheet .row:last-child button', (b) => b.map((x) => x.textContent).join('|')) === 'Report|Block|Done', 'the foot is Report, Block, then Done last');
+  check(await page.isVisible('.cp-member-sheet button:text-is("Remove from crew")'), 'the owner can remove a member, on their sheet');
   await page.click('.cp-member-sheet button:text-is("Add friend")');
   await page.waitForSelector('.cp-member-sheet button:text-is("Request sent")[disabled]');
   check(sent.some((x) => x.p === '/api/friends/request' && JSON.parse(x.b).handle === 'sam'), 'Add friend sends the request to @sam');
@@ -3842,8 +3849,8 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.waitForSelector('.confirm-sheet .cs-choose');
   check(/Report/.test(await page.textContent('.confirm-sheet')) && !/Pin it/.test(await page.textContent('.confirm-sheet')), 'Report on the message\'s own sheet (a Plain crew pins nothing)');
   await page.click('.confirm-sheet .cs-no');
-  // P-16: one line of crew names in the text face (a single crew: its name), the gear beside it; P-31: the gear is this crew's settings
-  await page.click('#crewsBody .gear-key');
+  // P-31: Manage on the page opens this crew's settings
+  await page.click('.crew-page .cp-keys button[aria-label="Manage the crew"]');
   await page.waitForSelector('.side-pop.open[aria-label="Crew settings"] .crew-settings');
   const gearText = await page.textContent('.side-pop.open[aria-label="Crew settings"]');
   check(/Ridge Runners/.test(gearText) && /What it sees of yours/.test(gearText) && /Leave/.test(gearText) && !(await page.$$('.side-pop.open[aria-label="Crew settings"] .crew-tiles')).length, 'the gear: one crew\'s settings, no tiles: ' + gearText.slice(0, 160));
@@ -5905,6 +5912,7 @@ flow('roadbooks: a crew\'s roadbook: the crew page lists it and starts one; a me
     return json([]);
   });
   await page.goto(base + '/index.html?view=crew');
+  await page.click('.cp-tabs [data-cp-tab="drives"]');   // its roadbooks are on Drives (Posts opens first, 2026-11-16)
   await page.waitForSelector('.crew-page .rb-of-crew .rb-row', { timeout: 15000 });
   const listed = await page.textContent('.crew-page .rb-of-crew');
   check(/Roadbooks/.test(listed) && /Crew favourites/.test(listed) && /@sam/.test(listed), 'the crew page\'s Drives tab lists the crew\'s roadbook: ' + listed);
@@ -6595,6 +6603,7 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   const openDrives = async () => {
     for (const done of await page.$$('.side-pop.open .side-pop-head button')) await done.click();   // Done on the sheet that's open
     await page.click('[data-people="crews"]');
+    await page.click('.cp-tabs [data-cp-tab="drives"]');   // crews as groups: the crew's drives are their own tab
     await page.waitForSelector(`${W} .drive-card`);
   };
   await openDrives();
@@ -6733,7 +6742,7 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
     if (m === 'POST' || m === 'DELETE') return route.fulfill({ status: 204 });
     return json([]);
   });
-  const crewSide = async () => { await page.goto(base + '/index.html?view=crew'); await page.waitForSelector('.crew-page .cp-week .drive-card'); };
+  const crewSide = async () => { await page.goto(base + '/index.html?view=crew'); await page.click('.cp-tabs [data-cp-tab="drives"]'); await page.waitForSelector('.crew-page .cp-week .drive-card'); };
   // a crew-mate started the drive's convoy: the card says so and joins it; no Convoy section anywhere
   await crewSide();
   await page.waitForSelector('.cp-week .drive-card.is-morning button:has-text("Join the convoy")', { timeout: 8000 });
@@ -8564,21 +8573,21 @@ flow('one link in: no "invite-only" anywhere; a crew link joins a newcomer with 
     crest: null, crest_photo_id: null, stripe: null, cover_photo_id: null, livery: 'plain', sharing_scores: false, board: [], next: null };
   await page.goto(base + '/index.html?view=crew');
   await page.waitForSelector('.crew-page .cp-title h2');
-  check(await page.isVisible('.cp-title button:has-text("Invite")'), 'a member\'s crew page has Invite (P-07)');
+  check(await page.isVisible('.cp-keys button:has-text("Invite")'), 'a member\'s crew page has Invite (P-07)');
   await page.evaluate(() => { try { Object.defineProperty(navigator, 'share', { value: undefined, configurable: true }); navigator.clipboard.writeText = async () => {}; } catch (_) {} });
-  await page.click('.cp-title button:has-text("Invite")');
+  await page.click('.cp-keys button:has-text("Invite")');
   for (let i = 0; i < 50 && !sent.some((x) => x.p === '/api/crews/k1/invite'); i++) await page.waitForTimeout(100);
   check(sent.some((x) => x.p === '/api/crews/k1/invite'), 'Invite asks the Worker for a crew link');
   // the owner keeps invites to themselves: the page's Invite goes for a member; the gear has the switch, and it reaches the Worker
   crewPage = { ...crewPage, invites: 'owner', can_invite: false };
   await page.goto(base + '/index.html?view=crew');
   await page.waitForSelector('.crew-page .cp-title h2');
-  check(!(await page.isVisible('.cp-title button:has-text("Invite")')), 'Who can invite: Owner, and a member has no Invite key');
+  check(!(await page.isVisible('.cp-keys button:has-text("Invite")')), 'Who can invite: Owner, and a member has no Invite key');
   crews = [{ ...crews[0], role: 'owner', invites: 'anyone' }];
   crewPage = { ...crewPage, is_owner: true, invites: 'anyone', can_invite: true };
   await page.goto(base + '/index.html?view=crew');
   await page.waitForSelector('.crew-page .cp-title h2');
-  await page.click('#crewsBody .gear-key');
+  await page.click('.crew-page .cp-keys button[aria-label="Manage the crew"]');
   await page.waitForSelector('.side-pop.open [role="radiogroup"][aria-label="Who can invite to Ridge Runners"]');
   check(!(await page.isVisible('.side-pop.open button:has-text("Invite to crew")')), 'the gear has no second Invite key');
   await page.click('.side-pop.open [role="radiogroup"][aria-label="Who can invite to Ridge Runners"] button:has-text("Owner")');
@@ -14114,8 +14123,8 @@ flow('TestFlight 2026-11-05 note 1: in several crews the Crews side is a dashboa
   // the feed's message opens its crew; the key back is the dashboard again
   await page.click('.cd-item:has-text("Pancakes")');
   await page.waitForSelector('#crewsBody .crew-page .cp-title h2');
-  check(await page.textContent('.crew-page .cp-title h2') === 'Blue Ridge Breakfast Club' && await page.isVisible('#crewsBody .crew-head .cd-back') && await page.isVisible('#crewsBody .crew-head .gear-key'),
-    'a crew opens with the key back and its gear');
+  check(await page.textContent('.crew-page .cp-title h2') === 'Blue Ridge Breakfast Club' && await page.isVisible('#crewsBody .crew-head .cd-back') && await page.isVisible('.crew-page .cp-keys button:text-is("Joined")'),
+    'a crew opens with the key back, and Joined (your settings) on its page');
   check(!(await page.$('.crew-dash')), 'and the dashboard gives way to it');
   // a public crew you don't share with asks once on this phone (the owner, 2026-11-11); Cancel keeps it off and it doesn't ask again
   await page.waitForSelector('.confirm-sheet .cs-box');
