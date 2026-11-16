@@ -81,6 +81,11 @@
    *  and how many are out. */
   /** Who you know in a crew, as a group page says it: "cara is in it", "cara and sam are in it", "cara, sam and 3 friends
    *  are in it"; none: null. */
+  /** A one-path line icon (24 × 24), built as nodes: no markup strings on this page. */
+  function icon(d) {
+    const doc = root.document, svg = doc.createElementNS(SVG, 'svg'); svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');
+    const p = doc.createElementNS(SVG, 'path'); p.setAttribute('d', d); svg.append(p); return svg;
+  }
   function knownLine(handles) {
     const h = (Array.isArray(handles) ? handles : []).filter(Boolean);
     if (!h.length) return null;
@@ -487,12 +492,11 @@
       if (page.settings) {
         const k = btn(c.is_owner ? 'Manage' : 'Joined', () => page.settings(c), 'ink-btn');
         k.setAttribute('aria-label', c.is_owner ? 'Manage the crew' : 'Joined: your settings for this crew');
-        if (!c.is_owner) k.prepend(el('span', { className: 'cp-tick', 'aria-hidden': 'true', innerHTML: '<svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>' }));
+        if (!c.is_owner) k.prepend(el('span', { className: 'cp-tick', 'aria-hidden': 'true' }, icon('M5 12l5 5 9-10')));
         keys.append(k);
       }
       if ((c.can_invite ?? c.is_owner) && page.invite) keys.append(btn('Invite', () => page.invite(c), 'ink-btn solid'));   // P-07: any member, unless the owner keeps it
-      const chatKey = el('button', { type: 'button', className: 'ink-btn cp-chat-key', 'aria-label': 'Crew chat',
-        innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z"/></svg>' });
+      const chatKey = el('button', { type: 'button', className: 'ink-btn cp-chat-key', 'aria-label': 'Crew chat' }, icon('M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z'));
       chatKey.addEventListener('click', () => go('chat'));
       keys.append(chatKey);
       return el('div', { className: 'cp-title-wrap stack-12' }, el('div', { className: 'cp-title' }, left), keys);
@@ -515,7 +519,7 @@
     }
     // Posts with nothing posted yet says how one gets there (crew_drives hides itself while there is none)
     function postsHint(c) {
-      const p = el('p', { className: 'note cp-posts-hint', textContent: 'Drives members post to the crew land here. Post one from its card after you drive.' });
+      const p = el('p', { className: 'note cp-posts-hint', textContent: 'Crew drives land here. Post one after you drive.' });
       return p;
     }
     // The livery at the foot of the page (P-03): one line. The people who care (the owner, a Pro supporter) open it: the
