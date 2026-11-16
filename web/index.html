@@ -1656,8 +1656,14 @@
     .friend .crew-detail { border-top: 0; padding-top: 0; margin: 0 0 12px; }   /* its first switch draws the rule */
     .friend-sent { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
     /* REVIEW_PEOPLE P-05: a request in is a card on the list; P-23: you, at the top; P-04: what they see of you, quietly */
-    .request-card { border: 1.5px solid var(--panel-ink); gap: 10px; padding: 12px; }
-    .request-card p { margin: 0; font-size: 16px; } .request-card small { display: block; color: var(--panel-dim); font-size: 13px; margin-top: 2px; }
+    .request-row { border-bottom: 1px solid var(--rule); } .request-row .req-label { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+    .req-faces { display: inline-flex; } .req-faces > * + * { margin-left: -10px; } .req-faces > * { box-shadow: 0 0 0 2px var(--panel-bg, var(--bg)); border-radius: 50%; }
+    .req-list { display: grid; gap: 4px; }
+    .req-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 64px; border-bottom: 1px solid var(--hair, var(--rule)); }
+    .req-who b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .req-who small { display: block; color: var(--panel-dim); font-size: 13px; }
+    .req-keys { display: flex; gap: 8px; } .req-keys .ink-btn { min-height: 40px; padding: 0 12px; }
+    .req-face { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--rule); font-weight: 700; }
+    html[data-type-size] .req-item { grid-template-columns: auto minmax(0, 1fr); } html[data-type-size] .req-keys { grid-column: 1 / -1; padding-bottom: 8px; }
     #accountBody > .you-row { border-bottom: 1px solid var(--hair, var(--panel-dim)); margin-top: -8px; }
     #accountBody > .you-row + .friend-list { border-top: 0; }
     #accountBody > section:not([hidden]) ~ .you-row { border-top: 1px solid var(--hair, var(--panel-dim)); margin-top: 0; }   /* For you or the Feed above: a rule closes it, so your friends don't read as its rows (free roamer B, 2026-11-14) */

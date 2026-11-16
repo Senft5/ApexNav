@@ -63,8 +63,13 @@ export async function friendRequest(env: Env, v: Viewer, req: Request): Promise<
 /** Friends and incoming requests. Requests you sent are not listed (IDEAS Z-12): a row only for handles that exist would
  *  tell you which handles are real. The phone keeps what you sent and shows every one alike. */
 export async function friendList(env: Env, v: Viewer) {
-  return all<{ id: string; handle: string | null; name: string | null; photo_id: string | null; status: string; incoming: number }>(env,
-    `SELECT u.id, u.handle, u.display_name AS name, u.photo_id, f.status, (f.requested_by != ?1) AS incoming
+  // a request in also says how many friends you share with who asks (counted, never named, as People you may know)
+  return all<{ id: string; handle: string | null; name: string | null; photo_id: string | null; status: string; incoming: number; mutual: number | null }>(env,
+    `WITH my AS (SELECT CASE WHEN user_a = ?1 THEN user_b ELSE user_a END AS id FROM friendships WHERE status = 'accepted' AND (user_a = ?1 OR user_b = ?1))
+     SELECT u.id, u.handle, u.display_name AS name, u.photo_id, f.status, (f.requested_by != ?1) AS incoming,
+            CASE WHEN f.status = 'pending' THEN (SELECT COUNT(*) FROM friendships g
+              WHERE g.status = 'accepted' AND (g.user_a = u.id OR g.user_b = u.id)
+                AND (CASE WHEN g.user_a = u.id THEN g.user_b ELSE g.user_a END) IN (SELECT id FROM my)) END AS mutual
        FROM friendships f JOIN users u ON u.id = CASE WHEN f.user_a = ?1 THEN f.user_b ELSE f.user_a END
       WHERE (f.user_a = ?1 OR f.user_b = ?1) AND NOT (f.status = 'pending' AND f.requested_by = ?1) ORDER BY u.handle`, v.id);
 }
