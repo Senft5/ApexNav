@@ -3738,7 +3738,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.waitForSelector('.crew-page .cp-title h2');
   check((await page.textContent('.crew-page h2')) === 'Ridge Runners', 'the Crews side opens the crew');
   check(await page.evaluate(() => document.querySelector('[data-people="crews"]').getAttribute('aria-selected') === 'true' && !document.getElementById('crewsBody').hidden
-    && document.getElementById('accountBody').hidden && document.getElementById('sheetTitle').textContent === 'People'), 'on the People tab, its Crews side');
+    && document.getElementById('accountBody').hidden && document.getElementById('sheetTitle').textContent === 'Social'), 'on the Social tab, its Crews side');
   check(await page.evaluate(() => !!document.querySelector('#crewsBody .crew-head .gear-key') && !document.querySelector('#crewsBody .friend-list')), 'the crew head and its gear are on the Crews side, no friends list there');
   check(await page.evaluate(() => document.querySelector('#crewsBody .crew-head').textContent.trim() === '' && document.querySelectorAll('#crewsBody .crew-page h2').length === 1), 'one crew: its name once, on its page, not again above it');
   // one crew: no band of its own for the gear; it sits on the cover's top-left, clear of Edit livery (walkthrough 2026-11-12)
@@ -7415,19 +7415,19 @@ flow('drive posts: Drive it on a friend\'s post lays a route along their line, t
   const asked = [];
   await page.route('https://valhalla1.openstreetmap.de/route', (route) => { const req = JSON.parse(route.request().postData() || '{}'); asked.push(req.locations);
     route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) }); });
-  await page.goto(base + '/index.html?view=friends');
-  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card', { timeout: 15000 });
-  const keys = await page.evaluate(() => [...document.querySelectorAll('#accountBody .feed-card')].map((k) => { const b = k.querySelector('.feed-drive');
+  await page.goto(base + '/index.html?view=feed');
+  await page.waitForSelector('#feedBody .feed-card', { timeout: 15000 });
+  const keys = await page.evaluate(() => [...document.querySelectorAll('#feedBody .feed-card')].map((k) => { const b = k.querySelector('.feed-drive');
     return b ? { label: b.getAttribute('aria-label'), text: b.textContent, h: Math.round(b.getBoundingClientRect().height) } : null; }));
   check(keys.length === 2 && keys[0] && keys[0].label === 'Drive @bob\'s Cherohala Skyway' && keys[0].text === 'Drive it' && keys[0].h >= 40 && keys[1] === null,
     'Drive it on a post with a line, none on one without: ' + JSON.stringify(keys));
   // on its side (a phone in a landscape mount), the line stays at most half the screen's height (2026-11-14: it filled it)
   const vp = page.viewportSize();
   await page.setViewportSize({ width: 844, height: 390 });
-  const side = await page.evaluate(() => { const r = document.querySelector('#accountBody .feed-card .feed-line').getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), vh: innerHeight }; });
+  const side = await page.evaluate(() => { const r = document.querySelector('#feedBody .feed-card .feed-line').getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), vh: innerHeight }; });
   check(side.h <= side.vh / 2 + 1 && side.w >= 2 * side.h - 2, 'a post\'s line on a phone on its side is half the screen at most, its shape kept: ' + JSON.stringify(side));
   await page.setViewportSize(vp);
-  await page.click('#accountBody .feed-card .feed-drive');
+  await page.click('#feedBody .feed-card .feed-drive');
   await page.waitForFunction(() => window.apexDebug && apexDebug.track && apexDebug.track.id === 'post_P1AAAAAAAAAAAAAA', null, { timeout: 20000 });
   const locs = asked.find((l) => Array.isArray(l) && l.length > 2) || [];
   const near = (a, b) => Math.abs(a.lat - b[0]) < 1e-4 && Math.abs(a.lon - b[1]) < 1e-4;
@@ -7436,14 +7436,14 @@ flow('drive posts: Drive it on a friend\'s post lays a route along their line, t
   const after = await page.evaluate(() => ({ name: apexDebug.track.name, toast: document.getElementById('toast').textContent, feed: !!document.querySelector('.feed-sheet'), view: document.body.dataset.view || '' }));
   check(after.name === 'Cherohala Skyway' && /Cherohala Skyway, @bob's line: [\d.]+ (mi|km)/.test(after.toast) && !after.feed, 'the route is named for the drive and says whose line: ' + JSON.stringify(after));
   // a stage row with its ends is a key of its own: just that stretch of bob's line
-  await page.goto(base + '/index.html?view=friends');
-  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card .feed-stage', { timeout: 15000 });
-  const rows = await page.evaluate(() => [...document.querySelectorAll('#accountBody .feed-card')][0].querySelectorAll('.feed-stages > *').length
-    && [...[...document.querySelectorAll('#accountBody .feed-card')][0].querySelectorAll('.feed-stages > :not(small)')].map((r) => ({ tag: r.tagName, label: r.getAttribute('aria-label'), text: r.textContent })));
+  await page.goto(base + '/index.html?view=feed');
+  await page.waitForSelector('#feedBody .feed-card .feed-stage', { timeout: 15000 });
+  const rows = await page.evaluate(() => [...document.querySelectorAll('#feedBody .feed-card')][0].querySelectorAll('.feed-stages > *').length
+    && [...[...document.querySelectorAll('#feedBody .feed-card')][0].querySelectorAll('.feed-stages > :not(small)')].map((r) => ({ tag: r.tagName, label: r.getAttribute('aria-label'), text: r.textContent })));
   check(rows.length === 2 && rows[0].tag === 'BUTTON' && rows[0].label === 'Drive Skyway summit, @bob\'s Score 801' && rows[0].text === 'Skyway summit801' && rows[1].tag === 'DIV',
     'the stage with its ends is a key, the other a plain row: ' + JSON.stringify(rows));
   asked.length = 0;
-  await page.click('#accountBody .feed-card .feed-stage');
+  await page.click('#feedBody .feed-card .feed-stage');
   await page.waitForFunction(() => apexDebug.track && apexDebug.track.id === 'post_P1AAAAAAAAAAAAAA_s0', null, { timeout: 20000 });
   const part = asked.find((l) => Array.isArray(l) && l.length > 2) || [];
   check(part.length >= 3 && part.length <= 6 && near(part[0], pts[40]) && near(part[part.length - 1], pts[120]) && part.every((l) => pts.slice(40, 121).some((p) => near(l, p))),
@@ -7468,9 +7468,9 @@ flow('drive posts: Drive it from somewhere else leads from where you are to the 
   const asked = [];
   await page.route('https://valhalla1.openstreetmap.de/route', (route) => { const req = JSON.parse(route.request().postData() || '{}'); asked.push(req.locations);
     route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) }); });
-  await page.goto(base + '/index.html?view=friends');
-  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card .feed-drive', { timeout: 15000 });
-  await page.click('#accountBody .feed-card .feed-drive');
+  await page.goto(base + '/index.html?view=feed');
+  await page.waitForSelector('#feedBody .feed-card .feed-drive', { timeout: 15000 });
+  await page.click('#feedBody .feed-card .feed-drive');
   await page.waitForFunction(() => window.apexDebug && apexDebug.track && apexDebug.track.id === 'post_P1AAAAAAAAAAAAAA', null, { timeout: 20000 });
   const locs = asked.find((l) => Array.isArray(l) && l.length > 2) || [];
   const near = (a, b) => Math.abs(a.lat - b[0]) < 1e-4 && Math.abs(a.lon - b[1]) < 1e-4;
@@ -7498,9 +7498,9 @@ flow('drive posts: after you drive a friend\'s posted stage, the end card sets y
   });
   await page.route('https://valhalla1.openstreetmap.de/route', (route) => { const req = JSON.parse(route.request().postData() || '{}');
     route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) }); });
-  await page.goto(base + '/index.html?view=friends');
-  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card .feed-stage', { timeout: 15000 });
-  await page.click('#accountBody .feed-card .feed-stage');
+  await page.goto(base + '/index.html?view=feed');
+  await page.waitForSelector('#feedBody .feed-card .feed-stage', { timeout: 15000 });
+  await page.click('#feedBody .feed-card .feed-stage');
   await page.waitForFunction(() => window.apexDebug && apexDebug.track && apexDebug.track.id === 'post_P1AAAAAAAAAAAAAA_s0', null, { timeout: 20000 });
   // your drive along bob's line, a fix every few metres; its pass of the stage is found by the real segmentPass, scored 780
   const end = (id) => page.evaluate(async ([pts, id]) => {
@@ -7562,40 +7562,44 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
       kudos_from: [{ handle: 'cara', photo_id: null }, { handle: 'dan', photo_id: null }] });
     return json([]);
   });
-  await page.goto(base + '/index.html?view=friends');
-  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card', { timeout: 15000 });
-  const c = await page.evaluate(() => { const k = document.querySelector('#accountBody .feed-card');
+  await page.goto(base + '/index.html?view=feed');
+  await page.waitForSelector('#feedBody .feed-card', { timeout: 15000 });
+  const c = await page.evaluate(() => { const k = document.querySelector('#feedBody .feed-card');
     return { text: k.textContent, path: (k.querySelector('.feed-line path') || {}).getAttribute ? k.querySelector('.feed-line path').getAttribute('d').length : 0,
       kudos: k.querySelector('.feed-acts button').getAttribute('aria-label'), wide: k.scrollWidth - k.clientWidth }; });
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/feed-post.png` });
   check(/@bob/.test(c.text) && /Cherohala Skyway/.test(c.text) && /812/.test(c.text) && /Fog on top/.test(c.text) && /Cherohala Skyway, TN-165 \+1/.test(c.text) && c.path > 100 && c.wide <= 1,
     'a friend\'s post: who, the drive, its Score, its line, the roads and what they said: ' + JSON.stringify(c));
-  // (2026-11-14) This week above the Feed: who posted, how far, how many, the best Score; a friend's card opens their profile
+  // (2026-11-14) This week: who posted, how far, how many, the best Score; a friend's card opens their profile. On Friends
+  // since the Feed is its own side (2026-11-16)
+  await page.click('[data-people="friends"]');
   await page.waitForSelector('#accountBody .feed-week:not([hidden]) .week-card');
   const wk = await page.$$eval('#accountBody .feed-week .week-card', (l) => l.map((b) => [b.tagName, b.querySelector('.week-who').textContent, b.querySelector('small').textContent]));
   check(JSON.stringify(wk) === JSON.stringify([['BUTTON', '1  @bob', '30.0 mi · 2 drives · best 812'], ['DIV', '2  You', '10.0 mi · 1 drive']]), 'this week, most distance first: ' + JSON.stringify(wk));
   await page.click('#accountBody .feed-week button.week-card');
   await page.waitForSelector('.profile-view .profile-drives:not([hidden]) .feed-card', { timeout: 10000 });
   await page.click('.profile-view .side-pop-head button');
-  // the post reads like Strava's: its numbers in one row, the road wide below them, ringed start and red finish, no box around it
-  const look = await page.evaluate(() => { const k = document.querySelector('#accountBody .feed-card'), s = k.querySelector('.feed-stats'), l = k.querySelector('.feed-line'), r = (e) => e.getBoundingClientRect();
-    return { stats: [...s.children].map((d) => d.textContent), wide: Math.round(r(l).width - r(k).width), below: r(l).top >= r(s).bottom, go: !!l.querySelector('circle.go'), end: !!l.querySelector('circle.end'),
+  await page.click('[data-people="feed"]');
+  // the post reads as a road (2026-11-16): the line edge to edge, its numbers in one row right under it, ringed start and red finish, no box
+  const look = await page.evaluate(() => { const k = document.querySelector('#feedBody .feed-card'), s = k.querySelector('.feed-stats'), l = k.querySelector('.feed-line'), r = (e) => e.getBoundingClientRect();
+    return { stats: [...s.children].map((d) => d.textContent), wide: Math.round(r(l).width - r(k).width), sheet: Math.round(r(l).width - r(document.querySelector('#sheet')).width), on: r(s).top >= r(l).bottom - 1 && r(s).top - r(l).bottom < 16, go: !!l.querySelector('circle.go'), end: !!l.querySelector('circle.end'),
       box: getComputedStyle(k).borderLeftWidth, titleRule: getComputedStyle(k.querySelector('.feed-title')).borderTopWidth }; });
-  check(look.stats.length === 2 && /^Vetta Score812$/.test(look.stats[0]) && /^Distance19\.9\s*mi$/.test(look.stats[1]) && look.wide === 0 && look.below && look.go && look.end && look.box === '0px' && look.titleRule === '0px',
-    'a post: Score and Distance in a row, the line full width under them with its start and finish: ' + JSON.stringify(look));
-  const st = await page.evaluate(() => [...document.querySelectorAll('#accountBody .feed-card .feed-stages > div')].map((d) => d.textContent));
+  check(look.stats.length === 2 && /^Vetta Score812$/.test(look.stats[0]) && /^Distance19\.9\s*mi$/.test(look.stats[1]) && look.wide === 0 && Math.abs(look.sheet) <= 1 && look.on && look.go && look.end && look.box === '0px' && look.titleRule === '0px',
+    'a post: the line edge to edge, Score and Distance in a row under it, its start and finish: ' + JSON.stringify(look));
+  const st = await page.evaluate(() => [...document.querySelectorAll('#feedBody .feed-card .feed-stages > div')].map((d) => d.textContent));
   check(JSON.stringify(st) === JSON.stringify(['Skyway summit801', 'Tellico descent--']), 'the stages it went over, each with its Score (unknown stays --): ' + JSON.stringify(st));
   // a tap on bob's name opens his profile, with his drives on it (?author=, his id)
-  await page.click('#accountBody .feed-card .feed-head .who');
+  await page.click('#feedBody .feed-card .feed-head .who');
   // (the profile opened from This week above may still be closing: its empty copy can be the first in the page)
   check(await page.waitForFunction(() => [...document.querySelectorAll('.profile-view .profile-drives:not([hidden])')].some((d) => /Cherohala Skyway/.test(d.textContent)), null, { timeout: 10000 }).then(() => true, () => false),
     'a friend\'s profile shows their drives');
   await page.click('.profile-view .side-pop-head button');
   // kudos: one tap, at once
-  await page.click('#accountBody .feed-card .feed-acts button[aria-label^="Kudos"]');
-  await page.waitForFunction(() => document.querySelector('#accountBody .feed-card .feed-acts button[aria-pressed="true"]'));
-  check(sent.some((x) => x.m === 'POST' && x.p === '/api/posts/P1AAAAAAAAAAAAAA/kudos') && /Kudos, 3/.test(await page.getAttribute('#accountBody .feed-card .feed-acts button[aria-pressed="true"]', 'aria-label')), 'kudos is one tap and counts at once');
+  await page.click('#feedBody .feed-card .feed-acts button[aria-label^="Kudos"]');
+  await page.waitForFunction(() => document.querySelector('#feedBody .feed-card .feed-acts button[aria-pressed="true"]'));
+  check(sent.some((x) => x.m === 'POST' && x.p === '/api/posts/P1AAAAAAAAAAAAAA/kudos') && /Kudos, 3/.test(await page.getAttribute('#feedBody .feed-card .feed-acts button[aria-pressed="true"]', 'aria-label')), 'kudos is one tap and counts at once');
   // comments: one tap opens the post with them, and a line to add one
-  await page.click('#accountBody .feed-card .feed-acts button[aria-label="1 comments"]');
+  await page.click('#feedBody .feed-card .feed-acts button[aria-label="1 comments"]');
   await page.waitForSelector('.feed-sheet .feed-comment');
   check(/Was that you at the overlook\?/.test(await page.textContent('.feed-sheet .feed-comments')), 'the comments, under the post');
   // (2026-11-14) who gave kudos, under the post; a tap lists them
@@ -7689,9 +7693,9 @@ flow('the Feed: Keep in a roadbook on a friend\'s post puts the road it drew int
     if (u.pathname === '/api/roadbooks/KKKKKKKKKKKKKKKK/roads' && m === 'POST') { posted.push(JSON.parse(route.request().postData())); return json({ id: 'r1', length_m: 3500 }, 201); }
     return json([]);
   });
-  await page.goto(base + '/index.html?view=friends');
-  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card', { timeout: 15000 });
-  await page.click('#accountBody .feed-card .feed-head .feed-more');
+  await page.goto(base + '/index.html?view=feed');
+  await page.waitForSelector('#feedBody .feed-card', { timeout: 15000 });
+  await page.click('#feedBody .feed-card .feed-head .feed-more');
   await page.click('.feed-menu button:has-text("Keep in a roadbook")');
   await page.waitForSelector('.rb-pop.open .rb-add button:has-text("Ohio favourites")', { timeout: 8000 });
   check(/Kellogg bends: its line goes in, nothing else of the drive\./.test(await page.textContent('.rb-pop.open .rb-add')), 'the sheet says what goes in, in one line');
@@ -7722,12 +7726,12 @@ flow('the Feed: each post\'s line is on the real map, two posts drawn by one hid
     if (u.pathname === '/api/feed') return json([post('P1AAAAAAAAAAAAAA', 1), post('P2AAAAAAAAAAAAAA', 2)]);
     return json([]);
   });
-  await page.goto(base + '/index.html?view=friends');
-  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card', { timeout: 15000 });
+  await page.goto(base + '/index.html?view=feed');
+  await page.waitForSelector('#feedBody .feed-card', { timeout: 15000 });
   const before = styles;
-  await page.waitForFunction(() => document.querySelectorAll('#accountBody .feed-line.on-map').length === 2, null, { timeout: 20000 })
-    .catch(async () => { throw new Error('both posts on the map: ' + await page.evaluate(() => document.querySelectorAll('#accountBody .feed-line.on-map').length)); });
-  const m = await page.evaluate(() => [...document.querySelectorAll('#accountBody .feed-line.on-map')].map((l) => ({
+  await page.waitForFunction(() => document.querySelectorAll('#feedBody .feed-line.on-map').length === 2, null, { timeout: 20000 })
+    .catch(async () => { throw new Error('both posts on the map: ' + await page.evaluate(() => document.querySelectorAll('#feedBody .feed-line.on-map').length)); });
+  const m = await page.evaluate(() => [...document.querySelectorAll('#feedBody .feed-line.on-map')].map((l) => ({
     bg: getComputedStyle(l).backgroundImage, casing: getComputedStyle(l.querySelector('.casing')).display, line: l.querySelector('path:not(.casing)').getAttribute('d').length,
     hidden: !!document.querySelector('div[aria-hidden="true"][style*="-"] .maplibregl-canvas') })));
   check(m.every((x) => /^url\("blob:/.test(x.bg) && x.casing === 'inline' && x.line > 100 && x.hidden) && styles - before <= 1,
@@ -7757,9 +7761,9 @@ flow('post media: a friend\'s photo shows on their post in the Feed, and Add a p
     if (u.pathname === '/api/posts/P1AAAAAAAAAAAAAA/media') return route.fulfill({ status: 200, contentType: 'image/jpeg', body: JPG });
     return json([]);
   });
-  await page.goto(base + '/index.html?view=friends');
-  await page.waitForSelector('#accountBody .feed-card .feed-media img', { timeout: 15000 });
-  const img = await page.evaluate(() => { const i = document.querySelector('#accountBody .feed-card .feed-media img'); return { w: i.naturalWidth, label: i.closest('.feed-media').getAttribute('aria-label') }; });
+  await page.goto(base + '/index.html?view=feed');
+  await page.waitForSelector('#feedBody .feed-card .feed-media img', { timeout: 15000 });
+  const img = await page.evaluate(() => { const i = document.querySelector('#feedBody .feed-card .feed-media img'); return { w: i.naturalWidth, label: i.closest('.feed-media').getAttribute('aria-label') }; });
   check(img.w === 40 && img.label === 'Photo', 'a friend\'s photo shows on their post: ' + JSON.stringify(img));
   // your drive: Add a photo, Post; the post first, then its photo, as a JPEG
   await page.evaluate(() => document.querySelector('.tab[data-view="map"]').click());
@@ -7800,10 +7804,11 @@ flow('messages: People has Messages with what is unread; a conversation is bubbl
     return json([]);
   });
   await page.goto(base + '/index.html?view=friends');
-  await page.waitForSelector('#accountBody .dm-nav', { timeout: 15000 });
-  await page.waitForFunction(() => (document.querySelector('#accountBody .dm-nav small') || {}).textContent === '1');
+  // (2026-11-16) Messages is a key in the Social head, a paper plane with what is unread on it
+  await page.waitForSelector('#dmKey', { timeout: 15000 });
+  await page.waitForFunction(() => (document.querySelector('#dmKey .sk-count:not([hidden])') || {}).textContent === '1' && document.getElementById('dmKey').getAttribute('aria-label') === 'Messages, 1 unread');
   await page.waitForFunction(() => /1 unread message/.test((document.querySelector('#crewTab .badge') || { getAttribute: () => '' }).getAttribute('aria-label') || ''));
-  await page.click('#accountBody .dm-nav');
+  await page.click('#dmKey');
   await page.waitForSelector('.people-pop.open .dm-row');
   const row = await page.textContent('.people-pop.open .dm-row .dm-who');
   check(/@bob/.test(row) && /Skyway Saturday\?/.test(row) && !!(await page.$('.people-pop.open .dm-row.unread .dm-dot')), 'the list: who, their last line, unread marked: ' + row);
@@ -7856,32 +7861,32 @@ flow('the full Feed picks whose posts (All, Friends or one crew) and mutes a dri
     }
     return json([]);
   });
-  await page.goto(base + '/index.html?view=friends');
-  await page.waitForSelector('#accountBody .feed-sec:not([hidden]) .feed-card', { timeout: 15000 });
-  await page.click('#accountBody .feed-sec .cp-sec button:has-text("See all")');
-  await page.waitForSelector('.people-pop.open .feed-pick:not([hidden]) button');
-  const titles = () => page.$$eval('.people-pop.open .feed-card .feed-title', (l) => l.map((t) => t.textContent.trim()).join(','));
-  const pick = await page.$$eval('.people-pop.open .feed-pick button', (l) => l.map((b) => `${b.textContent}${b.getAttribute('aria-checked') === 'true' ? '*' : ''}`));
+  await page.goto(base + '/index.html?view=feed');
+  await page.waitForSelector('#feedBody .feed-card', { timeout: 15000 });
+  // (2026-11-16) the whole Feed is the Social tab's first side, its pick over it
+  await page.waitForSelector('#feedBody .feed-pick:not([hidden]) button');
+  const titles = () => page.$$eval('#feedBody .feed-card .feed-title', (l) => l.map((t) => t.textContent.trim()).join(','));
+  const pick = await page.$$eval('#feedBody .feed-pick button', (l) => l.map((b) => `${b.textContent}${b.getAttribute('aria-checked') === 'true' ? '*' : ''}`));
   check(JSON.stringify(pick) === JSON.stringify(['All*', 'Friends', 'Ridge Runners']), 'the pick: All, Friends, each crew; All on: ' + JSON.stringify(pick));
   check(/Drive 5.*Drive 1/.test(await titles()), 'All: every post: ' + await titles());
-  const along = await page.$$eval('.people-pop.open .feed-card .feed-with', (l) => l.map((x) => x.textContent));
+  const along = await page.$$eval('#feedBody .feed-card .feed-with', (l) => l.map((x) => x.textContent));
   check(JSON.stringify(along) === '["With you and @cara"]', 'who came, on the crew post only, you first: ' + JSON.stringify(along));
-  await page.click('.people-pop.open .feed-pick button:has-text("Friends")');
-  await page.waitForFunction(() => [...document.querySelectorAll('.people-pop.open .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 4,Drive 2,Drive 1');
-  await page.click('.people-pop.open .feed-pick button:has-text("Ridge Runners")');
-  await page.waitForFunction(() => [...document.querySelectorAll('.people-pop.open .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 5,Drive 3');
+  await page.click('#feedBody .feed-pick button:has-text("Friends")');
+  await page.waitForFunction(() => [...document.querySelectorAll('#feedBody .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 4,Drive 2,Drive 1');
+  await page.click('#feedBody .feed-pick button:has-text("Ridge Runners")');
+  await page.waitForFunction(() => [...document.querySelectorAll('#feedBody .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 5,Drive 3');
   check(asked.includes('?friends=1') && asked.includes('?crew=k1'), 'each pick asks the Worker for its posts: ' + JSON.stringify(asked));
-  check(await page.getAttribute('.people-pop.open .feed-pick button:has-text("Ridge Runners")', 'aria-checked') === 'true', 'the crew is the one on');
+  check(await page.getAttribute('#feedBody .feed-pick button:has-text("Ridge Runners")', 'aria-checked') === 'true', 'the crew is the one on');
   // (2026-11-14) Mute: ··· on bob's post, Mute @bob; his drives leave the Feed, Muted lists him, Unmute brings them back
-  await page.click('.people-pop.open .feed-pick button:has-text("All")');
-  await page.waitForFunction(() => document.querySelectorAll('.people-pop.open .feed-card').length === 5);
-  await page.click('.people-pop.open .feed-card .feed-more');
+  await page.click('#feedBody .feed-pick button:has-text("All")');
+  await page.waitForFunction(() => document.querySelectorAll('#feedBody .feed-card').length === 5);
+  await page.click('#feedBody .feed-card .feed-more');
   await page.click('.feed-menu button:has-text("Mute @bob")');
-  await page.waitForFunction(() => !document.querySelector('.people-pop.open .feed-card') && !document.querySelector('#accountBody .feed-sec .feed-card'));
-  check(await page.textContent('.people-pop.open .feed-muted') === 'Muted@bobUnmute' && await page.evaluate(() => localStorage.getItem('apex.feedMuted')) === '["bob"]',
-    'muted, kept on the phone: ' + await page.textContent('.people-pop.open .feed-muted'));
-  await page.click('.people-pop.open .feed-muted button:has-text("Unmute")');
-  await page.waitForFunction(() => document.querySelectorAll('.people-pop.open .feed-card').length === 5 && document.querySelector('.people-pop.open .feed-muted').hidden);
+  await page.waitForFunction(() => !document.querySelector('#feedBody .feed-card'));
+  check(await page.textContent('#feedBody .feed-muted') === 'Muted@bobUnmute' && await page.evaluate(() => localStorage.getItem('apex.feedMuted')) === '["bob"]',
+    'muted, kept on the phone: ' + await page.textContent('#feedBody .feed-muted'));
+  await page.click('#feedBody .feed-muted button:has-text("Unmute")');
+  await page.waitForFunction(() => document.querySelectorAll('#feedBody .feed-card').length === 5 && document.querySelector('#feedBody .feed-muted').hidden);
 });
 
 flow('Garage → You shows your own drive posts, three and See all, with Delete on each (Worker stubbed, docs/SOCIAL.md 2.13)', async (page, base) => {
@@ -8038,6 +8043,7 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
+  await page.click('[data-people="friends"]');
   await page.click('#accountBody .friend-head:has-text("@bob")');   // a tap on the friend opens their profile (2026-11-12)
   await page.waitForSelector('.profile-view');
   const t = await page.textContent('.profile-view');
@@ -8142,7 +8148,7 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   check(JSON.stringify(sent) === '[{"handle":"bob","segment_id":"MY2","days":3,"kind":"time"}]', 'what was sent: ' + JSON.stringify(sent));
 });
 
-flow('For you: the People badge counts what is new and what waits; People lists it in sentences; seen once drawn; a row\'s key takes you there (Worker stubbed, SOCIAL 2.10)', async (page, base) => {
+flow('For you: the Social badge counts what is new and what waits; the heart lists it in sentences; seen once opened; a row\'s key takes you there (Worker stubbed, SOCIAL 2.10)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const at = (minAgo) => new Date(Date.now() - minAgo * 60e3).toISOString().replace('T', ' ').slice(0, 19);
   const geom = JSON.stringify(Array.from({ length: 80 }, (_, i) => [35.6 + i * 3e-4, -83.9 + i * 4e-4 + Math.sin(i / 6) * 3e-4]));
@@ -8172,31 +8178,36 @@ flow('For you: the People badge counts what is new and what waits; People lists 
   const label = await page.getAttribute('#crewTab .badge', 'aria-label');
   check(label === '1 friend request, 4 new for you', 'the badge says what it counts: ' + label + ' / ' + await page.textContent('#crewTab .badge'));
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
-  await page.waitForSelector('#accountBody .inbox-sec:not([hidden]) .inbox-row');
-  const rows = await page.$$eval('#accountBody .inbox-row', (l) => l.map((r) => [r.classList.contains('new'), r.querySelector('.inbox-kick').textContent, r.querySelector('.inbox-text').textContent]));
-  check(rows.length === 4, 'the request is a card above, not a row: ' + JSON.stringify(rows));
+  // (2026-11-16) Social opens on its Feed; For you is the heart in the head, its dot saying something is new; the request
+  // waiting is a row on the Feed that goes to Friends, where it is a card with its keys
+  await page.waitForFunction(() => !document.getElementById('feedBody').hidden && document.getElementById('forYouKey').getAttribute('aria-label') === 'For you, 4 new'
+    && !document.querySelector('#forYouKey .sk-dot').hidden);
+  check(await page.textContent('#feedBody .sh-asks button') === '1 friend request', 'the request waiting, on the Feed');
+  check(!!(await page.$('#accountBody .request-card:has-text("@dan")')), 'the request stays a card with its keys on Friends');
+  const fy = () => page.click('#forYouKey');
+  await fy();
+  await page.waitForSelector('.for-you-pop.open .inbox-row');
+  const rows = await page.$$eval('.for-you-pop.open .inbox-row', (l) => l.map((r) => [r.classList.contains('new'), r.querySelector('.inbox-kick').textContent, r.querySelector('.inbox-text').textContent]));
+  check(rows.length === 4, 'the request is a card on Friends, not a row: ' + JSON.stringify(rows));
   check(rows[3][2] === '@cara and 1 other commented on Tellico climb.', 'comments on your drive post, one row: ' + JSON.stringify(rows[3]));
   check(rows[0][0] && rows[0][1] === 'Topped · 20 min ago' && rows[0][2] === '@bob scored 850 on Dry Ridge climb, over your best of 800.', 'topped, new, in a sentence: ' + JSON.stringify(rows[0]));
   check(/^Kudos · 2 h ago$/.test(rows[1][1]) && /^Ridge Runners: Cherohala Saturday, .+\. Are you going\?$/.test(rows[2][2]), 'kudos and the crew drive: ' + JSON.stringify(rows));
-  // (free roamer B, 2026-11-14) a rule closes For you before your friends, so they don't read as its fourth and fifth rows
-  const closed = await page.evaluate(() => { const y = document.querySelector('#accountBody > .you-row'), last = [...document.querySelectorAll('#accountBody .inbox-row')].pop();
-    return { rule: parseFloat(getComputedStyle(y).borderTopWidth), below: y.getBoundingClientRect().top >= last.getBoundingClientRect().bottom - 1 }; });
-  check(closed.rule === 1 && closed.below, 'one rule between For you and your friends: ' + JSON.stringify(closed));
-  check(await page.isVisible('#accountBody .request-card:has-text("@dan")'), 'the request stays a card with its keys');
+  check(await page.$$eval('.for-you-pop.open .inbox-group', (l) => l.map((h) => h.textContent).join(',')) === 'New', 'the new ones under New (nothing older here)');
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/for-you.png` });
   // a row with no key (kudos): its sentence sits under the kicker, the full width, not squeezed beside it
-  const kudos = await page.$eval('#accountBody .inbox-row:has-text("Kudos")', (r) => { const k = r.querySelector('.inbox-kick').getBoundingClientRect(), t = r.querySelector('.inbox-text').getBoundingClientRect();
+  const kudos = await page.$eval('.for-you-pop.open .inbox-row:has-text("Kudos")', (r) => { const k = r.querySelector('.inbox-kick').getBoundingClientRect(), t = r.querySelector('.inbox-text').getBoundingClientRect();
     return { under: t.top >= k.bottom - 1, left: Math.abs(t.left - k.left) < 2 }; });
   check(kudos.under && kudos.left, 'the kudos sentence under its kicker: ' + JSON.stringify(kudos));
-  // drawn is seen: the badge keeps only what waits on you
-  await page.waitForFunction(() => (document.querySelector('#crewTab .badge') || {}).textContent === '1');
+  // opened is seen: the badge keeps only what waits on you, and the dot goes
+  await page.waitForFunction(() => (document.querySelector('#crewTab .badge') || {}).textContent === '1' && document.querySelector('#forYouKey .sk-dot').hidden);
   check(await page.evaluate(() => !!localStorage.getItem('apex.inboxSeen')), 'seen is kept on the phone');
-  const small = await page.$$eval('#accountBody .inbox-row button', (l) => l.map((b) => Math.round(b.getBoundingClientRect().height)).filter((h) => h < 32));
+  const small = await page.$$eval('.for-you-pop.open .inbox-row button', (l) => l.map((b) => Math.round(b.getBoundingClientRect().height)).filter((h) => h < 32));
   check(!small.length, 'keys big enough: ' + JSON.stringify(small));
   // Answer goes to the Crews side; Drive it plans the stage
-  await page.click('#accountBody .inbox-row:has-text("Cherohala") button:has-text("Answer")');
+  await page.click('.for-you-pop.open .inbox-row:has-text("Cherohala") button:has-text("Answer")');
   await page.waitForFunction(() => document.getElementById('peopleTabCrews').getAttribute('aria-selected') === 'true');
-  await page.click('#peopleTabFriends');
-  await page.click('#accountBody .inbox-row:has-text("Topped") button:has-text("Drive it")');
+  await fy();
+  await page.click('.for-you-pop.open .inbox-row:has-text("Topped") button:has-text("Drive it")');
   await page.waitForFunction(() => /Dry Ridge climb/.test(document.getElementById('routeCardName').textContent), null, { timeout: 8000 });
   // something new comes in while the app is in the back: it counts again when the app comes to the front
   items = [{ kind: 'passed', at: at(-1), handle: 'sam', stage: 'Tail of the Dragon', gap_s: 4, place: 3 }, ...items];
@@ -8204,9 +8215,11 @@ flow('For you: the People badge counts what is new and what waits; People lists 
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await page.waitForFunction(() => (document.querySelector('#crewTab .badge') || {}).textContent === '2');
   check(asked > before, 'asked again on coming to the front');
-  // (2026-11-14) a comment row opens the post with its comments
+  // (2026-11-14) a comment row opens the post with its comments; the newest is under New, the rest under Earlier
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
-  await page.click('#accountBody .inbox-row:has-text("Tellico climb") button:has-text("Open")');
+  await fy();
+  await page.waitForFunction(() => [...document.querySelectorAll('.for-you-pop.open .inbox-group')].map((h) => h.textContent).join(',') === 'New,Earlier');
+  await page.click('.for-you-pop.open .inbox-row:has-text("Tellico climb") button:has-text("Open")');
   await page.waitForSelector('.feed-sheet .feed-comment:has-text("That fog!")', { timeout: 8000 });
   check(await page.textContent('.feed-sheet .feed-comment p b') === '@bob', 'an @mention in a comment is in bold');
 });
@@ -8267,14 +8280,21 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
     return json([]);
   });
   await page.goto(base + '/index.html?view=people');
+  // the header is underlined tabs (the pushback, accepted), not the slide switch; since 2026-11-16 the tab is Social and it
+  // opens on its Feed for anyone with a friend
+  const side = () => page.evaluate(() => ({ feed: document.querySelector('[data-people="feed"]').getAttribute('aria-selected'), friends: document.querySelector('[data-people="friends"]').getAttribute('aria-selected'), crews: document.querySelector('[data-people="crews"]').getAttribute('aria-selected'),
+    ff: !document.getElementById('feedBody').hidden, fb: !document.getElementById('accountBody').hidden, cb: !document.getElementById('crewsBody').hidden }));
+  await page.waitForFunction(() => !document.getElementById('feedBody').hidden);
+  check(JSON.stringify(await side()) === '{"feed":"true","friends":"false","crews":"false","ff":true,"fb":false,"cb":false}', 'Social opens on its Feed: ' + JSON.stringify(await side()));
+  check(await page.evaluate(() => { const t = document.querySelector('.people-tabs'); return t.getAttribute('role') === 'tablist' && [...t.querySelectorAll('[role="tab"]')].filter((b) => !b.hidden).length === 3 && !document.querySelector('#sheetHead .switch')
+    && getComputedStyle(document.querySelector('[data-people="feed"]'), '::after').transform === 'none'; }), 'Feed | Friends | Crews are ARIA tabs, the open one underlined');
+  check(await page.evaluate(() => document.querySelector('#crewTab').getAttribute('aria-label') === 'Social' && document.querySelector('#crewTab span').textContent === 'Social' && document.getElementById('sheetTitle').textContent === 'Social'), 'the tab is Social');
+  // cara is driving now: her ring leads the Feed's row, in red, and says what a tap does
+  await page.waitForSelector('#feedBody .sh-ring.live');
+  check(await page.getAttribute('#feedBody .sh-ring:first-child', 'aria-label') === '@cara, driving now. See them on the map', 'a live friend\'s ring first');
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/social-home.png` });
+  await page.click('[data-people="friends"]');
   await page.waitForSelector('#accountBody .friend-head:not(.you-row)');
-  // the header is two underlined tabs (the pushback, accepted), not the slide switch
-  const side = () => page.evaluate(() => ({ friends: document.querySelector('[data-people="friends"]').getAttribute('aria-selected'), crews: document.querySelector('[data-people="crews"]').getAttribute('aria-selected'),
-    fb: !document.getElementById('accountBody').hidden, cb: !document.getElementById('crewsBody').hidden }));
-  check(JSON.stringify(await side()) === '{"friends":"true","crews":"false","fb":true,"cb":false}', 'People opens on Friends: ' + JSON.stringify(await side()));
-  check(await page.evaluate(() => { const t = document.querySelector('.people-tabs'); return t.getAttribute('role') === 'tablist' && t.querySelectorAll('[role="tab"]').length === 2 && !document.querySelector('#sheetHead .switch')
-    && getComputedStyle(document.querySelector('[data-people="friends"]'), '::after').transform === 'none'; }), 'Friends | Crews are ARIA tabs, the open one underlined');
-  check(await page.evaluate(() => document.querySelector('#crewTab').getAttribute('aria-label') === 'People' && document.querySelector('#crewTab span').textContent === 'People'), 'the tab is People');
   // every row on People opens a page, so every chevron points the same way (a friend's pointed down, as if it unfolded)
   const chevs = await page.evaluate(() => [...document.querySelectorAll('#accountBody .friend-head .chev')].map((c) => getComputedStyle(c).transform));
   check(chevs.length >= 2 && new Set(chevs).size === 1, 'you and each friend: one chevron, pointing right: ' + JSON.stringify(chevs));
@@ -8283,8 +8303,8 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   // P-05: the request is a card on top; P-23: you next; then the friends, live first, a friend who shares nothing under their name (P-15)
   // (what is on screen: an empty, hidden place for duel cards (SOCIAL 2.7) isn't a part of the order)
   const order = await page.$$eval('#accountBody > *', (k) => k.filter((x) => !x.hidden).map((x) => x.className));
-  // (2026-11-14) Messages, the inbox, sits under the requests, as on any social app
-  check(/request-card/.test(order[0]) && /nav-rows/.test(order[1]) && /you-row/.test(order[2]) && /friend-list/.test(order[3]), 'request card, Messages, You, friends: ' + JSON.stringify(order));
+  // (2026-11-16) Messages is a key in the head now, on every side
+  check(/request-card/.test(order[0]) && /you-row/.test(order[1]) && /friend-list/.test(order[2]), 'request card, You, friends: ' + JSON.stringify(order));
   check(/@dan wants to be your friend/.test(await page.textContent('#accountBody .request-card')), 'the request card names who asks');
   await page.waitForFunction(() => /You · @me/.test(document.querySelector('.you-row').textContent) && /Friends see where you are/.test(document.querySelector('.you-row small').textContent));
   const rows = await page.$$eval('#accountBody .friend-list .friend-head', (r) => r.map((x) => [x.querySelector('.friend-who b').textContent, x.querySelector('.friend-who small').textContent, x.querySelector('.friend-who small').classList.contains('live')]));
@@ -8295,7 +8315,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   check(JSON.stringify(keys) === '["Invite or add a friend"]', 'one Invite key on Friends: ' + JSON.stringify(keys));
   const navs = await page.$$eval('#accountBody > .nav-rows .nav-row > span', (s) => s.map((x) => x.textContent));
   // Roadbooks (SOCIAL 2.6, 2026-11-10) join From friends in the one list under the friends; nothing else does
-  check(JSON.stringify(navs) === '["Messages","From friends","Roadbooks"]', 'Messages on top; then what friends shared and the roadbooks, nothing else: ' + JSON.stringify(navs));
+  check(JSON.stringify(navs) === '["From friends","Roadbooks"]', 'what friends shared and the roadbooks, nothing else: ' + JSON.stringify(navs));
   // Nate 2026-11-12 (as easy as a big social app): the row is the friend; a tap opens their profile, which holds what you
   // can do with them, their last share and what they see of you (the row used to open five keys and a grants drawer)
   check(!(await page.$('#accountBody .friend .crew-detail, #accountBody .friend button.ink-btn')), 'a friend row is one line, no keys in the list');
@@ -8371,7 +8391,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   // Crews: the crew things, none of the friend things; with no crew, one row
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
   await page.click('[data-people="crews"]');
-  check(JSON.stringify(await side()) === '{"friends":"false","crews":"true","fb":false,"cb":true}', 'the tabs flip to Crews');
+  check(JSON.stringify(await side()) === '{"feed":"false","friends":"false","crews":"true","ff":false,"fb":false,"cb":true}', 'the tabs flip to Crews');
   const crews = await page.textContent('#crewsBody');
   check(/Find or start a crew/.test(crews) && !/Crew drives|Crews this month|Your crews|Convoy/.test(crews) && !/Invite or add a friend|From friends/.test(crews), 'Crews with no crew: one row: ' + crews.slice(0, 200));
   await page.focus('[data-people="crews"]'); await page.keyboard.press('ArrowLeft');

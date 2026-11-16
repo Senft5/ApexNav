@@ -235,6 +235,21 @@ and in random batches so a trace cannot be re-assembled.
 - Start enters the loop (if needed) and drives it, the same as Where to? (`timeAttack.go`). Join opens the drive's card.
 - No backend change: `/api/ta` (area point only), `/api/events`, `/api/events/near` (privacy-zone cell). `web/event_markers.js`.
 
+### 2.16 The Social home (members; built 2026-11-16)
+- Nate (2026-11-16): "social should sort of steal instagram's main page", "this is still vetta not instagram". The People
+  tab is **Social** (a home icon) with three sides: **Feed**, Friends, Crews. Feed is the side it opens on for a member with
+  a friend or a crew; without one it isn't shown and Friends (the way to a first friend) opens instead.
+- Across the top, rings (`web/social_home.js` `rings`): friends driving now (a red ring and LIVE, a tap shows them on the
+  map), then friends who posted a drive in the last day (a white ring, a tap opens that post), then your crews (a rounded
+  square, a tap opens the crew). Each friend once, driving now first; your own posts never. At most 20.
+- Under them, a row for friend requests waiting (to Friends), then the whole Feed inline (All / Friends / a crew, More).
+  Each post reads as a road first: who, then its line edge to edge with Score and distance on it, then kudos, comment and
+  Drive it, then its name, who came, the caption, "View all n comments", stages and roads.
+- The head's two keys stand on all three sides: For you (a heart, a dot when something is new; a sheet, New then Earlier)
+  and Messages (a paper plane with the unread count). Opening For you marks it seen.
+- Offline or no answer: the feed says which, with Try again. Faces in rings: `web/avatar.js` (`ApexAvatar.ring`), shared.
+- No backend change. Screen inventory for the whole restructure: project files `social/screen-inventory.md`.
+
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.
 

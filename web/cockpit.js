@@ -6023,18 +6023,26 @@
     // Views: ROUTE / DRIVES / SETUP open the side panel; tapping the open tab again, the map
     // behind it, or swiping it right closes it. ANALYSIS is its own page.
     const LEGAL_SITE = 'https://vettadrive.com';   // the published privacy and terms pages (web/privacy.html, web/terms.html)
-    const VIEW_TITLES = { people: 'People', garage: 'Garage' };
+    const VIEW_TITLES = { people: 'Social', garage: 'Garage' };
     // People (the owner, 2026-10-30): one tab, two sides; 'crew' (old links, a convoy invite) opens its Crews side.
-    const PEOPLE_SIDES = { friends: 'friends', crew: 'crews', crews: 'crews' };
-    let view = null, inviteOpen = false, peopleSide = 'friends';           // inviteOpen: the Friends side's Invite sheet
-    function setPeopleSide(side) {
-      const next = side === 'crews' ? 'crews' : 'friends';
-      if (next !== peopleSide) { inviteOpen = false; document.querySelectorAll('.side-pop.open').forEach(n => n.classList.remove('open')); }   // a sheet belongs to its side
-      peopleSide = next;
-      $('accountBody').hidden = next !== 'friends'; $('crewsBody').hidden = next !== 'crews';
+    // Social (Nate 2026-11-16): the tab is a home feed first (Feed), then Friends and Crews; 'social' and 'feed' open the Feed.
+    const PEOPLE_SIDES = { friends: 'friends', crew: 'crews', crews: 'crews', feed: 'feed', social: 'feed' };
+    // peopleSide: the side asked for. The Feed stands only for a member with a friend or a crew (feedOn, set by renderAccount);
+    // until then, or without one, the Feed asked for shows Friends, where the way to a first friend is.
+    let view = null, inviteOpen = false, peopleSide = 'feed', feedOn = false;   // inviteOpen: the Friends side's Invite sheet
+    const shownSide = () => (peopleSide === 'feed' && !feedOn ? 'friends' : peopleSide);
+    function paintPeopleSide() {
+      const next = shownSide();
+      $('peopleTabFeed').hidden = !feedOn;
+      $('feedBody').hidden = next !== 'feed'; $('accountBody').hidden = next !== 'friends'; $('crewsBody').hidden = next !== 'crews';
       document.querySelectorAll('[data-people]').forEach((b) => { const on = b.dataset.people === next; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
+    }
+    function setPeopleSide(side) {
+      const was = shownSide();
+      peopleSide = side === 'crews' ? 'crews' : side === 'feed' ? 'feed' : 'friends';
+      if (shownSide() !== was) { inviteOpen = false; document.querySelectorAll('.side-pop.open').forEach(n => n.classList.remove('open')); }   // a sheet belongs to its side
+      paintPeopleSide();
       $('sheet').querySelector('.body').scrollTop = 0;
-      if (next === 'friends' && view === 'people') try { if (inbox) inbox.markSeen(); } catch (_) {}
     }
     const logFrame = { el: null, url: null, pending: new Set(), want: null };   // the Log's frame (below, F-15)
     function showView(v) {
@@ -6056,7 +6064,6 @@
       $('app').classList.toggle('sheet-open', !!v);
       $('scrim').classList.toggle('show', !!v);
       document.querySelectorAll('#tabbar .tab').forEach(t => t.classList.toggle('on', v ? t.dataset.view === v : t.dataset.view === 'map'));
-      if (v === 'people' && peopleSide === 'friends') try { if (inbox) inbox.markSeen(); } catch (_) {}   // For you on screen: seen
       if (v === 'garage') try { shelveLooks(); } catch (_) { /* before the picker is built */ }   // the looks' shelf turns to the one in use (not at boot)
     }
     const openSheet = (v = view || 'route') => showView(v);
@@ -6689,11 +6696,14 @@
     const closeSheet = () => showView(null);
     document.querySelectorAll('#tabbar .tab').forEach(t => t.addEventListener('click', () => showView(view === t.dataset.view ? null : t.dataset.view)));
     document.querySelectorAll('[data-people]').forEach((b) => b.addEventListener('click', () => setPeopleSide(b.dataset.people)));
-    // the tabs' keys (ARIA tabs): left and right move between Friends and Crews, focus with them
+    // the tabs' keys (ARIA tabs): left and right move between Feed, Friends and Crews (the ones standing), focus with them
     document.querySelector('.people-tabs').addEventListener('keydown', (e) => {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-      e.preventDefault(); setPeopleSide(peopleSide === 'friends' ? 'crews' : 'friends');
-      document.querySelector(`[data-people="${peopleSide}"]`).focus();
+      e.preventDefault();
+      const sides = [...document.querySelectorAll('.people-tabs [data-people]')].filter((b) => !b.hidden).map((b) => b.dataset.people);
+      const i = sides.indexOf(shownSide()), next = sides[(i + (e.key === 'ArrowRight' ? 1 : sides.length - 1)) % sides.length];
+      setPeopleSide(next);
+      document.querySelector(`[data-people="${next}"]`).focus();
     });
     $('scrim').addEventListener('click', closeSheet);
     $('pinCancelBtn').addEventListener('click', closePin);
@@ -7667,6 +7677,10 @@
       const req = inboxBadge ? inboxBadge.data.items.filter((i) => i.kind === 'request').length : peopleRequests;
       const parts = [[req, 'friend request'], ...peopleAsks, [dmUnread, 'unread message'], ...(inboxBadge && inboxBadge.n - req > 0 ? [[inboxBadge.n - req, 'new for you']] : [])].filter(([k]) => k > 0);
       const n = parts.reduce((a, [k]) => a + k, 0);
+      // the head's two keys (Social home): For you's dot is what's new there, Messages' count what you haven't read
+      const fresh = inboxBadge ? Math.max(0, inboxBadge.n - req) : 0, fy = $('forYouKey'), dk = $('dmKey');
+      if (fy) { fy.querySelector('.sk-dot').hidden = !fresh; fy.setAttribute('aria-label', fresh ? `For you, ${fresh} new` : 'For you'); }
+      if (dk) { const c = dk.querySelector('.sk-count'); c.hidden = !dmUnread; c.textContent = dmUnread > 9 ? '9+' : String(dmUnread); dk.setAttribute('aria-label', dmUnread ? `Messages, ${dmUnread} unread` : 'Messages'); }
       if (!n) return;
       const b = el('span', { className: 'badge', textContent: String(n) });
       b.setAttribute('aria-label', parts.map(([k, w]) => `${k} ${w}${k === 1 || w === 'new for you' ? '' : 's'}`).join(', '));
@@ -7674,7 +7688,7 @@
     }
     onSocial(() => { try { inbox = window.ApexInbox ? ApexInbox.mount({ el, btn, apiCall, jsonOf,
       signedIn: () => !!(accountMe && accountMe.member),
-      onScreen: () => view === 'people' && peopleSide === 'friends' && document.visibilityState === 'visible',
+      onScreen: () => view === 'people' && !!document.querySelector('.for-you-pop.open') && document.visibilityState === 'visible',
       badge: (n, data) => { inboxBadge = data && Array.isArray(data.items) ? { n, data } : null; paintPeopleBadge(); },
       openStage: (canon, name) => (duels ? duels.openStage(canon, name) : null),
       openBoard: () => { closeSheet(); showView(null); openPlan(true); const d = $('planAttack'); if (d && !d.hidden) { d.open = true; d.scrollIntoView({ block: 'nearest' }); } },
@@ -7692,7 +7706,13 @@
       avatar: (id, h, px) => (window.ApexPhotos ? ApexPhotos.avatar(id, h, px) : el('span')),
       report: (o) => (safety ? safety.report(o) : null),
       badge: (n) => { if (n !== dmUnread) { dmUnread = n; paintPeopleBadge(); } } }) : null; } catch (e) { console.error('messages', e); } });
-    // Drive posts and the Feed (web/drive_posts.js, docs/SOCIAL.md 2.13): Post on the drive's card; the Feed on People → Friends
+    // The Social home (web/social_home.js, docs/SOCIAL.md 2.16): the Feed side, rings for today over every posted drive
+    let socialHome = null;
+    onSocial(() => { try { socialHome = window.ApexSocialHome ? ApexSocialHome.mount({ el, btn,
+      avatar: (id, h, px) => (window.ApexPhotos ? ApexPhotos.avatar(id, h, px) : el('span')),
+      ring: (face, kind) => (window.ApexAvatar ? ApexAvatar.ring(face, kind) : face),
+      feed: (fo) => (drivePosts ? drivePosts.full(fo) : el('div')) }) : null; } catch (e) { console.error('social home', e); } });
+    // Drive posts and the Feed (web/drive_posts.js, docs/SOCIAL.md 2.13): Post on the drive's card; the Feed on Social → Feed
     let drivePosts = null;
     onSocial(() => { try { drivePosts = window.ApexDrivePosts ? ApexDrivePosts.mount({ el, btn, toast, apiCall, jsonOf,
       later: (path, body) => outbox.add(path, body, false, { capped: true }),   // posted with no signal: sent when there is one
@@ -7807,6 +7827,7 @@
     async function renderAccount() {
       // People (the owner, 2026-10-30): the Friends side (accountBody) and the Crews side (crewsBody), one switch between them
       const body = $('accountBody'), cbody = $('crewsBody'), gen = ++renderGen;
+      let goCrew = null;                                                    // opens a crew on the Crews side, once that side is drawn
       let me = null;
       accountMe = null;
       try { const r = await apiCall('GET', '/api/me'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) me = await r.json(); } catch (_) {}
@@ -7841,6 +7862,9 @@
       if (me && !me.signed_in) setRoutingCars(null);
       else if (me && me.member) apiCall('GET', '/api/garage').then(r => (r.ok ? r.json() : null)).then(list => { if (list) setRoutingCars(list); }).catch(() => {});
       body.innerHTML = ''; cbody.innerHTML = '';
+      const fbody = $('feedBody'); fbody.innerHTML = '';
+      // the Feed and the head's keys stand only once this draw knows a member with a friend or a crew (below)
+      feedOn = false; $('socialKeys').hidden = true; paintPeopleSide();
       const gbody = $('garageMeBody'); gbody.innerHTML = '';
       // REVIEW5 §2: road feel and the account live behind the Garage's gear (web/garage_settings.js), drawn here as before
       const rfBody = $('garageRoadFeelBody') || gbody, accBody = $('garageAccountBody') || gbody;
@@ -8038,18 +8062,31 @@
       // P-23: you, one tap from People: your face, your handle and who sees where you are; it opens Who sees what (P-09)
       const WHO = { nobody: 'Nobody sees where you are', crew: 'Your private crews see where you are', friends: 'Friends see where you are' };
       const empty = !accepted.length && !(Array.isArray(crews) && crews.length);
-      // For you (inbox.js): what happened to you lately, one sentence a row (a new account's page stays its three parts)
-      if (inbox && !empty) body.append(inbox.section());
-      // the Feed (drive_posts.js): the newest drives your friends and crews posted, kudos and comments one tap in
-      // Messages: your conversations with friends, one row (its count is what you haven't read) over a sheet of them
-      if (messages && accepted.length) {
-        const mpop = popSheet('Messages'); pops.push(mpop);
-        body.append(el('div', { className: 'nav-rows' }, messages.row(() => { mpop.replaceChildren(mpop.firstElementChild, messages.list()); mpop.classList.add('open'); })));
-      }
-      if (drivePosts && !empty) {
-        const fpop = popSheet('Feed'); pops.push(fpop);
-        body.append(drivePosts.section(() => { if (!fpop._filled) { fpop.append(drivePosts.full()); fpop._filled = true; } fpop.classList.add('open'); }));
-      }
+      // The head's keys (Social home, Nate 2026-11-16): For you (inbox.js), what happened to you lately, and Messages, your
+      // conversations with friends. Each opens its sheet over whichever side is showing, on all three sides.
+      const fypop = popSheet('For you'); fypop.classList.add('for-you-pop'); pops.push(fypop);
+      const mpop = popSheet('Messages'); pops.push(mpop);
+      const openForYou = () => { if (!inbox) return; fypop.replaceChildren(fypop.firstElementChild, inbox.section({ sheet: true })); fypop.classList.add('open'); };
+      const openMessages = () => { if (!messages) return; mpop.replaceChildren(mpop.firstElementChild, messages.list()); mpop.classList.add('open'); };
+      $('forYouKey').onclick = openForYou; $('dmKey').onclick = openMessages;
+      $('socialKeys').hidden = !(inbox || messages);
+      if (!$('socialKeys').hidden) paintPeopleBadge();
+      // the Feed side (social_home.js): rings for today, then every drive your friends and crews posted, a road each
+      feedOn = !!(drivePosts && socialHome && !empty);
+      if (feedOn) socialHome.render(fbody, {
+        live: order.filter((x) => x.st && x.st.live).map((x) => x.f),
+        crews: Array.isArray(crews) ? crews.map((c) => ({ id: c.id, name: c.name, photo_id: c.photo_id || null })) : [],
+        requests: incoming.length, hasFriends: accepted.length > 0,
+        // the keys reach things drawn further down this draw (called on a tap, after it has run)
+        seeOnMap: (h) => { const f = accepted.find((x) => x.handle === h); if (f) seeOnMap(f); },
+        openPost: (id) => (drivePosts ? drivePosts.open(id) : null),
+        openCrew: (id) => { openCrewId = id; crewOpen = id; setPeopleSide('crews'); if (goCrew) goCrew(id); },
+        openFriends: () => setPeopleSide('friends'),
+        invite: () => { setPeopleSide('friends'); openInvite(); },
+      });
+      paintPeopleSide();
+      // This week (drive_posts.js): who of your friends drove how far since Monday, a card each, over your friends
+      if (drivePosts && drivePosts.week && !empty) body.append(drivePosts.week());
       if (!empty) {
         const yline = el('small'), yface = window.ApexPhotos ? ApexPhotos.avatar(me.photo_id, me.handle, 40) : el('span');
         const yrow = el('button', { className: 'friend-head you-row', type: 'button', 'aria-label': `You, @${me.handle}: who sees what` }, yface,
@@ -8217,7 +8254,7 @@
           btn('Show my code', () => showFriendQr(qrBox), 'linkbtn'), qrBox),
         reqSec);
       const openInvite = () => { inviteOpen = true; ipop.classList.add('open'); };
-      if (stash('apex.add') && peopleSide === 'friends') inviteOpen = true;   // a friend link opens its sheet, never over the Crews side
+      if (stash('apex.add') && shownSide() === 'friends') inviteOpen = true;   // a friend link opens its sheet, never over the Crews side
       if (inviteOpen) ipop.classList.add('open');
       body.append(el('div', { className: 'row' }, btn('Invite or add a friend', () => openInvite(), 'ink-btn solid')));
       if (!accepted.length && window.ApexPeopleSamples) body.append(ApexPeopleSamples.friend(el));   // U-121: what arrives here, as an example
@@ -8372,6 +8409,7 @@
           const sc = cbody.closest('.body') || cbody.parentElement; if (sc && sc.scrollTop) sc.scrollTop = 0;
         };
         openCrew(crewOpen);
+        goCrew = openCrew;                                                  // a crew's ring on the Feed opens it here
         cbody.append(chead, holder);
       }
       // not in a crew yet: what one is (in one, its settings are the gear's, above)
