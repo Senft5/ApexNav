@@ -12250,6 +12250,9 @@ flow('Where to? while typing is the field and its list: no shortcuts, no Find a 
 
 flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start never moves, the card says the ranked swap (finding 1, 2, 3)', async (page, base) => {
   const asked = [];
+  // the ranking reads the sun and the calendar (no forecast here): pinned to a midday, so the swap's reason doesn't follow
+  // the hour CI runs at (at 11:00 UTC, before sunrise, it said "Weather ahead"; 2026-11-16)
+  await page.clock.setFixedTime(new Date('2026-11-10T17:00:00Z'));
   await planRouter(page, asked);
   await funTiles(page);
   const { taps, tap } = await planPage(page, base);
