@@ -118,10 +118,12 @@
     const call = async (method, path, body) => { try { const r = await apiCall(method, path, body); return { ok: r.ok, status: r.status, data: await jsonOf(r) }; } catch (_) { return { ok: false, status: 0, data: null }; } };
 
     /** The cards for People → Friends, filled when the list arrives; hidden while there is none. */
-    function cards() {
+    /** The duel cards. o.with: only the ones with that friend (their profile); o.asks: only challenges waiting on your answer
+     *  (Friends; the rest live on the friend's profile and in For you, screen inventory 2026-11-16). */
+    function cards(o = {}) {
       const box = el('div', { className: 'duel-cards' }); box.hidden = true;
       call('GET', '/api/duels').then((r) => {
-        const list = r.ok ? shown(r.data) : [];
+        const list = (r.ok ? shown(r.data) : []).filter(({ d, c }) => (!o.with || d.with === o.with) && (!o.asks || c.kind === 'ask'));
         box.replaceChildren(...list.map(({ d, c }) => one(d, c)));
         box.hidden = !list.length;
       });

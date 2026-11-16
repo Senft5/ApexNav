@@ -265,6 +265,8 @@
     .feed-comment small { color: var(--panel-dim); font-size: 12px; }
     .feed-kudos-from { display: flex; align-items: center; gap: 8px; min-height: 44px; background: none; border: 0; padding: 0; color: var(--panel-ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
     .feed-faces { display: inline-flex; } .feed-faces > * + * { margin-left: -8px; }
+    .feed-kudos-line { display: flex; align-items: center; gap: 8px; } .feed-kudos-line .feed-kudos-row { flex: 1; min-width: 0; }
+    .feed-kudos-add .ink-btn { min-height: 36px; padding: 0 12px; font-size: 14px; } .feed-kudos-add small { color: var(--panel-dim); font-size: 13px; }
     .feed-kudos-row { display: flex; align-items: center; gap: 12px; min-height: 48px; width: 100%; background: none; border: 0; padding: 0; color: var(--panel-ink); font: inherit; text-align: left; cursor: pointer; }
     .feed-with { margin: -2px 0 0; font-size: 13px; color: var(--panel-dim); }
     .post-tags { display: grid; gap: 6px; } .post-tags small { color: var(--panel-dim); font-size: 13px; }
@@ -542,11 +544,33 @@
         el('span', { className: 'feed-faces' }, ...who.slice(0, 3).map((k) => face(k, 24))), el('span', { textContent: kudosLine(who.map((k) => k.handle), p.kudos) }));
       b.addEventListener('click', () => {
         const s = sheet('Kudos', 'feed-sheet feed-kudos-sheet');
+        // each a row with their face; Add friend beside the ones who aren't your friends yet (screen inventory 2026-11-16)
+        const slots = new Map();
         s.box.append(el('h3', { textContent: 'Kudos' }), ...who.map((k) => {
           const row = el('button', { type: 'button', className: 'feed-kudos-row' }, face(k, 36), el('b', { textContent: `@${k.handle}` }));
           row.addEventListener('click', () => { s.close(); if (page.openFriend) page.openFriend(k.handle); });
-          return row;
+          const slot = el('span', { className: 'feed-kudos-add' }); slots.set(k.handle, slot);
+          return el('div', { className: 'feed-kudos-line' }, row, slot);
         }), el('div', { className: 'row' }, btn('Done', s.close, 'linkbtn')));
+        const own = page.myHandle ? page.myHandle() : null;
+        let sent = []; try { sent = JSON.parse(root.localStorage.getItem('apex.sentRequests') || '[]'); } catch (_) {}
+        apiCall('GET', '/api/friends').then(jsonOf).then((l) => {
+          if (!Array.isArray(l)) return;                                     // no answer: no keys rather than wrong ones
+          const known = new Map(l.filter((f) => f && f.handle).map((f) => [f.handle, f.status === 'accepted' ? 'friend' : 'asked']));
+          for (const [h, slot] of slots) {
+            if (!h || h === own || known.get(h) === 'friend') continue;
+            if (known.get(h) === 'asked' || (Array.isArray(sent) && sent.includes(h))) { slot.replaceChildren(el('small', { textContent: 'Asked' })); continue; }
+            const add = btn('Add friend', async () => {
+              add.disabled = true;
+              const r = await apiCall('POST', '/api/friends/request', { handle: h }).catch(() => null);
+              if (!r || !r.ok) { add.disabled = false; toast('Couldn’t send that. Try again.'); return; }
+              try { const l2 = JSON.parse(root.localStorage.getItem('apex.sentRequests') || '[]'); root.localStorage.setItem('apex.sentRequests', JSON.stringify([...(Array.isArray(l2) ? l2 : []).filter((x) => x !== h), h].slice(-30))); } catch (_) {}
+              slot.replaceChildren(el('small', { textContent: 'Asked' }));
+            }, 'ink-btn');
+            add.setAttribute('aria-label', `Add @${h} as a friend`);
+            slot.replaceChildren(add);
+          }
+        }).catch(() => {});
       });
       return b;
     }

@@ -83,6 +83,8 @@ and in random batches so a trace cannot be re-assembled.
 - Reads only Scores each already shows the other (grants + board entries); the card says in words when one side's
   don't reach the other. Friends only; a block or unfriend hides it. Kept 60 days after it ends. `web/duels.js`,
   `backend/src/duels.ts`, migration 0047.
+- Where the cards are (2026-11-16): a challenge waiting on your answer is a card on Friends; once on, sent or over, a
+  duel lives on that friend's profile, under their keys, and in For you.
 ### 2.8 Crew drive results (crew members)
 - A remembered crew drive folds out its results: an overall, then each stage as SS1, SS2…, each driver's best Vetta
   Score that day and a place. Overall ranks by stages driven, then the mean Score. Share sends it as text.
@@ -179,6 +181,7 @@ and in random batches so a trace cannot be re-assembled.
 - A post on its own (2026-11-16): loading is the post's shape, not a line of text; no answer is one line and Try again; a
   post taken down says it's gone. No comments is one line. A long press on a comment opens the same keys as its ···; after
   Send the keyboard stays up, and Send waits for words.
+- Kudos on a post lists who gave it; Add friend sits beside anyone who isn't your friend yet (an ordinary request).
 - Edit post (your post's ···) is the post sheet's own shape: the drive's picture and numbers, its name, what you said, Save.
 - `backend/src/drive_posts.ts` (migration 0059: `drive_posts`, `drive_post_kudos`, `drive_comments`), `web/drive_posts.js`.
   10 posts a day, 30 comments an hour, 200 comments a post. In Download my data; gone with the account.
@@ -285,6 +288,8 @@ and in random batches so a trace cannot be re-assembled.
   settings: what it sees of yours, and Leave crew.
 - Posts opens with one composer row, Post your latest drive: the Post sheet with your newest drive from the last 30 days,
   this crew already picked (no drive yet: one line saying so).
+- Invite (2026-11-16) is one sheet: Copy link, Show code (the crew link as a QR code), and your friends not in the crew
+  yet to tick; Send to N messages each the link. One crew link serves all of it.
 - No migration.
 
 ### 2.19 A drive, ready to post (members; built 2026-11-16)
