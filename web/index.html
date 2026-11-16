@@ -460,15 +460,25 @@
     .pin-photo figcaption { position: absolute; right: 0; bottom: 0; max-width: 100%; padding: 3px 8px; font-size: 11px; line-height: 1.3; background: rgba(0, 0, 0, 0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .pin-photo figcaption a { color: #fff; text-decoration: none; }
     .pin-hours { margin: 2px 0 0; font-weight: 700; color: var(--panel-ink); }
+    #pinHours.open { color: var(--panel-ink); }
     .pin-hours.closed { color: var(--panel-dim); }   /* closed is not a warning: the signal colour stays for hazards */
-    .pin-contact { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 2px; }
-    .pin-contact a { flex: 1 1 0; min-width: 0; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    /* Go across the card, the rest one row of short keys under it, as Apple Maps' place card sets them (not a wall of
-       full-width rows); a larger text size wraps them two to a row */
-    .pin-actions { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
-    .pin-actions .ink-btn { width: 100%; min-height: 48px; padding: 8px 6px; text-align: center; line-height: 1.2; white-space: normal; }
-    .pin-actions #pinGoBtn, .pin-actions .linkbtn { grid-column: 1 / -1; }
-    .pin-actions #pinGoBtn { text-align: left; padding: 14px 18px; }
+    /* The place card (2026-11-16): Go across the card, then one row of tiles, each a mark over its word, as Apple Maps' place
+       card sets them; Call and Website join the row when known. Start from here, Add via and Cancel are words at the foot. */
+    .pin-actions { display: grid; gap: 10px; margin-top: 4px; }
+    .pin-actions #pinGoBtn { width: 100%; min-height: 52px; padding: 12px 18px; text-align: center; font-size: 17px; }
+    .pin-tiles { display: flex; gap: 8px; }
+    .pin-contact:not([hidden]) { display: contents; }
+    .pin-tiles > .ink-btn, .pin-contact a { flex: 1 1 0; min-width: 0; min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+      padding: 8px 4px; border-radius: var(--r-card, 12px); font-size: 13px; font-weight: 600; line-height: 1.15; text-align: center; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pin-tiles > .ink-btn::before, .pin-contact a::before { content: ""; flex: none; width: 22px; height: 22px; background: currentColor; -webkit-mask: var(--pin-ico) center / contain no-repeat; mask: var(--pin-ico) center / contain no-repeat; }
+    .pin-contact a[href^="tel:"] { --pin-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2'/%3E%3C/svg%3E"); }
+    .pin-contact a:not([href^="tel:"]) { --pin-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18'/%3E%3C/svg%3E"); }
+    #pinShareBtn { --pin-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v12M8 7l4-4 4 4M6 11H5v10h14V11h-1'/%3E%3C/svg%3E"); }
+    #pinSaveBtn { --pin-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10z'/%3E%3Cpath d='M12 8v6M9 11h6'/%3E%3C/svg%3E"); }
+    .pin-more-words { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .pin-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; }
+    .pin-foot .linkbtn { min-height: 44px; }
+    .pin-foot #pinCancelBtn { margin-left: auto; }
     .spot-chips, .spot-stars { display: flex; flex-wrap: wrap; gap: 6px; }
     .spot-chips button { min-height: 44px; padding: 0 12px; border: 1.5px solid var(--panel-ink); font-size: 15px; font-weight: 600; }
     .spot-chips button.on { background: var(--panel-ink); color: var(--panel); }
@@ -2853,14 +2863,20 @@
           <p class="note" id="pinKind" hidden></p>
           <!-- a named place's hours, phone and site, from its OSM tags (place_info.js); nothing until known -->
           <p class="pin-hours" id="pinHours" hidden></p>
-          <div class="pin-contact" id="pinContact" hidden></div>
+          <!-- Go across the card; under it one row of tiles, a mark over its word (Call and Website only when known), as Apple
+               Maps' place card; the rarer two ways and Cancel as plain words at the foot (2026-11-16) -->
           <div class="pin-actions">
             <button class="ink-btn solid" id="pinGoBtn">Go here</button>
-            <button class="ink-btn" id="pinFromBtn">Start from here</button>
-            <button class="ink-btn" id="pinViaBtn" hidden>Add via</button>
-            <button class="ink-btn" id="pinShareBtn">Share</button>
-            <button class="ink-btn" id="pinSaveBtn">Save as a spot</button>
-            <button class="linkbtn" id="pinCancelBtn">Cancel</button>
+            <div class="pin-tiles">
+              <div class="pin-contact" id="pinContact" hidden></div>
+              <button class="ink-btn pin-tile" id="pinShareBtn" data-mark="share">Share</button>
+              <button class="ink-btn pin-tile" id="pinSaveBtn" data-mark="save">Save<span class="pin-more-words"> as a spot</span></button>
+            </div>
+            <div class="pin-foot">
+              <button class="linkbtn" id="pinFromBtn">Start from here</button>
+              <button class="linkbtn" id="pinViaBtn" hidden>Add via</button>
+              <button class="linkbtn" id="pinCancelBtn">Cancel</button>
+            </div>
           </div>
         </div>
       </div>
