@@ -7495,7 +7495,7 @@
       document.querySelectorAll('.crew-invite').forEach((n) => n.remove());
       const ov = el('div', { className: 'overlay dim show crew-invite' }); ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', `Invite to ${c.name}`);
       const close = () => ov.remove();
-      ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+      onBackdrop(ov, close);
       const body = el('div', { className: 'ci-body', 'aria-busy': 'true' }, el('div', { className: 'feed-skel' }, el('i'), el('i')));
       ov.append(el('div', { className: 'card-sheet' }, el('div', { className: 'post-head' }, el('h2', { textContent: `Invite to ${c.name}` }), btn('Done', close, 'linkbtn post-not-now')), body));
       document.body.append(ov);
@@ -8276,11 +8276,7 @@
         if (window.ApexVocabulary && ApexVocabulary.watchTerms) ApexVocabulary.watchTerms(view);   // a friend's DNA words, on tap
         ApexProfileView.show(view, p && !Array.isArray(p) ? p : { handle: f.handle, name: f.name }, { el, btn, back: () => closeProfile(), keys: keysFor(f),
           avatar: window.ApexPhotos ? ApexPhotos.avatar(photo, f.handle || '?', 56) : null, status: st && st.text ? { text: st.text, live: !!st.live } : null,
-<<<<<<< HEAD
           more: moreFor(f), partial: !p || Array.isArray(p), extra: [...(duels && f.handle ? [duels.cards({ with: f.handle })] : []), ...lastShare(f), ...(drivePosts && drivePosts.grid ? [drivePosts.grid(f.id, { empty: `@${f.handle || '?'} hasn’t posted a drive you can see yet.` })] : drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), ...(roadbooks && f.handle ? [roadbooks.ofFriend(f.handle)] : []), aboutYou(f)],
-=======
-          more: moreFor(f), partial: !p || Array.isArray(p), extra: [...lastShare(f), ...(drivePosts && drivePosts.grid ? [drivePosts.grid(f.id, { empty: `@${f.handle || '?'} hasn’t posted a drive you can see yet.` })] : drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), ...(roadbooks && f.handle ? [roadbooks.ofFriend(f.handle)] : []), aboutYou(f)],
->>>>>>> origin/main
           });
         ppop.replaceChildren(view); ppop.classList.add('open');
       };
