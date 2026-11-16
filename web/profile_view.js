@@ -100,6 +100,6 @@
       ...D.compareLines(p.dna.theirs, p.dna.mine, p.handle).map((t) => el('p', { className: 'note', textContent: t })));
   }
 
-  const api = { lines, show, since, car, dnaSection };
+  const api = { lines, show, since, car, dnaSection, moreKey };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexProfileView = api;
 })(typeof window !== 'undefined' ? window : globalThis);

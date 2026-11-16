@@ -264,6 +264,9 @@ and in random batches so a trace cannot be re-assembled.
 - Your cars as a strip under the head (`garage_ui.js` `strip`, 2026-11-16): each car its cover photo or a car mark, its
   name and Daily; a tap opens its build thread, or shows its card below (Edit, the share switch). The last tile adds a car.
   No cars, no strip: the empty bay below says Park your first car.
+- Signed out, or no answer (2026-11-16): the same head, a dashed face and -- for each number. Signed out its key is
+  Sign in (the empty bay under it has none of its own); with no answer it names you by the handle this phone last knew
+  (`apex.myHandle`), says offline or not answering, and its key is Try again.
 - Edit profile: your photo and handle on one sheet (`PUT /api/me/handle`; a taken one says so), and Who sees what.
   Share profile copies a friend link (`POST /api/invites`, the same link Invite makes).
 - Your drives, three across (`drive_posts.js` `grid`): each tile the road it drew with its Score on it; a tap opens the
@@ -281,8 +284,9 @@ and in random batches so a trace cannot be re-assembled.
 - Five tabs: Posts (the next crew drive pinned on top, then what members posted), Drives, Chat, Board, Members. A drive
   in the next 48 hours opens the page on Drives, where Going is; otherwise Posts. A tab you picked stays while the app runs.
 - Members lists everyone: the owner first, who is driving now, your friends marked, a search past 12. A tap opens their
-  sheet; the owner's has Remove from crew (`DELETE /api/crews/:id/members/:handle`), which takes out what leaving takes out
-  (their grants, board entries, shared Scores and segments, their crew links).
+  sheet: Add friend (or Accept, or Request sent) and ···, which holds Report, Block and, for the owner, Remove from crew
+  last in red (`DELETE /api/crews/:id/members/:handle`), which takes out what leaving takes out (their grants, board
+  entries, shared Scores and segments, their crew links). Making someone an admin needs a server change and isn't built.
 - Manage crew (the owner's key) holds the crew's name (a rename alone, `PUT /api/crews/:id` `{ name }`), who can invite,
   who can find it, what it sees of yours, and Delete crew (the owner leaving ends it). Joined (a member's key) is Your
   settings: what it sees of yours, and Leave crew.

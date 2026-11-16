@@ -3937,11 +3937,20 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(await page.isHidden('.cp-member-find'), 'no search on a short list');
   await page.click('.cp-member:has-text("@sam")');
   await page.waitForSelector('.cp-member-sheet');
-  check(await page.isVisible('.cp-member-sheet button:has-text("Report")') && await page.isVisible('.cp-member-sheet button:has-text("Block")'), 'Report and Block are on the member, one tap in');
-  // a crew-mate who is not a friend is one tap from one (Nate 2026-11-12: as easy as any social app)
+  // a crew-mate who is not a friend is one tap from one (Nate 2026-11-12: as easy as any social app); the rarer things
+  // behind ··· as on a friend's profile (2026-11-16): Report, Block, and the owner's Remove from crew last, in red
   await page.waitForSelector('.cp-member-sheet button:text-is("Add friend")');
-  check(await page.$$eval('.cp-member-sheet .row:last-child button', (b) => b.map((x) => x.textContent).join('|')) === 'Report|Block|Done', 'the foot is Report, Block, then Done last');
-  check(await page.isVisible('.cp-member-sheet button:text-is("Remove from crew")'), 'the owner can remove a member, on their sheet');
+  const mkeys = await page.evaluate(() => { const s = document.querySelector('.cp-member-sheet');
+    return { head: [...s.querySelectorAll('.cp-member-head button')].map((b) => b.textContent), keys: [...s.querySelectorAll('.cp-member-keys button')].map((b) => b.getAttribute('aria-label') || b.textContent),
+      h: [...s.querySelectorAll('.cp-member-keys button')].map((b) => Math.round(b.getBoundingClientRect().height)) }; });
+  check(mkeys.head.join('|') === 'Done' && mkeys.keys.join('|') === 'Add friend|More for @sam' && mkeys.h.every((h) => h >= 44), 'the member sheet: Done at its head, Add friend and ···: ' + JSON.stringify(mkeys));
+  await page.click('.cp-member-sheet .pv-more');
+  await page.waitForSelector('.pv-menu .card-sheet');
+  await page.waitForFunction(() => !document.querySelector('.pv-menu .card-sheet').getAnimations().some((a) => a.playState === 'running'));
+  const mmenu = await page.$$eval('.pv-menu .card-sheet button', (b) => b.map((x) => x.textContent + (x.classList.contains('danger-btn') ? '!' : '')));
+  check(mmenu.join('|') === 'Report|Block|Remove from crew!|Cancel', 'behind ···: Report, Block, Remove from crew in red, Cancel: ' + JSON.stringify(mmenu));
+  await page.click('.pv-menu button:text-is("Cancel")');
+  await page.waitForSelector('.pv-menu', { state: 'detached' });
   await page.click('.cp-member-sheet button:text-is("Add friend")');
   await page.waitForSelector('.cp-member-sheet button:text-is("Request sent")[disabled]');
   check(sent.some((x) => x.p === '/api/friends/request' && JSON.parse(x.b).handle === 'sam'), 'Add friend sends the request to @sam');
@@ -12799,7 +12808,8 @@ flow('no connection: People is a page that says which it is (offline, or Vetta n
   await page.waitForTimeout(500);
   const g = await page.evaluate(() => { const vis = (e) => e.getClientRects().length > 0, b = document.getElementById('garageMeBody');
     return { page: [...document.querySelectorAll('.join-page')].filter(vis).length, text: b.innerText.replace(/\s+/g, ' ').trim() }; });
-  check(g.page === 0 && /^Your cars Your cars and profile will be back when Vetta answers\. Looks, voices and settings work without it\. Try again$/i.test(g.text), 'the Garage says what is missing in its own corner: ' + JSON.stringify(g));
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/garage-no-answer.png` });
+  check(g.page === 0 && /^-- Drives -- Friends -- Crews Your profile Can’t reach Vetta\. Your profile is back when it answers\. Try again Your cars Your cars need a connection\. Looks, voices and settings work without it\.$/i.test(g.text), 'the Garage keeps its profile head, -- for what needs Vetta: ' + JSON.stringify(g));
   // the phone itself offline: the page says that instead
   await page.click('#tabbar .tab[data-view="people"]');
   await page.click('[data-people="friends"]');
@@ -13717,9 +13727,12 @@ flow('the Garage on a phone: the looks are a shelf turned sideways (one in view,
   check(!s2.scroll && s2.cards.every((k) => k.l >= 0 && k.r <= s2.w), 'large text keeps the stack: ' + JSON.stringify(s2.cards));
   await page.evaluate(() => { delete document.documentElement.dataset.typeSize; });
   // Your cars, signed out: the empty bay and its key, which opens People's sign-in
-  const bay = await page.evaluate(() => { const b = document.querySelector('.empty-bay'); b.scrollIntoView(); return { text: b.innerText.replace(/\s+/g, ' '), dashed: getComputedStyle(b.querySelector('.eb-slot')).borderTopStyle, key: Math.round(b.querySelector('.ink-btn').getBoundingClientRect().height) }; });
-  check(/^No car parked here yet Sign in to keep your cars/.test(bay.text) && bay.dashed === 'dashed' && bay.key >= 44, 'Your cars signed out is an empty bay: ' + JSON.stringify(bay));
-  await page.click('.empty-bay .ink-btn');
+  const bay = await page.evaluate(() => { const b = document.querySelector('.empty-bay'), s = document.querySelector('.garage-you.skel'); b.scrollIntoView(); return { text: b.innerText.replace(/\s+/g, ' '), dashed: getComputedStyle(b.querySelector('.eb-slot')).borderTopStyle, keys: b.querySelectorAll('button').length,
+    head: s && s.innerText.replace(/\s+/g, ' ').trim(), ghost: s && getComputedStyle(s.querySelector('.ph-ghost')).borderTopStyle, key: s && Math.round(s.querySelector('.ph-keys .ink-btn').getBoundingClientRect().height) }; });
+  check(/^No car parked here yet Sign in to keep your cars/.test(bay.text) && bay.dashed === 'dashed' && bay.keys === 0, 'Your cars signed out is an empty bay: ' + JSON.stringify(bay));
+  check(bay.head === '-- Drives -- Friends -- Crews Your profile Sign in for your drives, friends and crews. Sign in' && bay.ghost === 'dashed' && bay.key >= 40, 'signed out, the Garage is your profile still to come: ' + JSON.stringify(bay));
+  if (process.env.SHOTS) { await page.evaluate(() => document.querySelector('.garage-you.skel').scrollIntoView({ block: 'start' })); await page.screenshot({ path: `${process.env.SHOTS}/garage-signed-out.png` }); }
+  await page.click('.garage-you.skel .ph-keys .ink-btn');
   await page.waitForSelector('#accountBody >> text=Sign in with Google', { state: 'visible', timeout: 5000 });
 }, { ...IPHONE, isMobile: true });
 
