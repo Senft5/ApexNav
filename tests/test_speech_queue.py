@@ -143,13 +143,35 @@ def test_while_vetta_speaks_lower_or_pause_music():
     # pause: no mixing option at all, so other audio is interrupted; lower: the ducking it always had
     cfg = shell[shell.index("    private func configureVoiceSession("):shell.index("    private func beginVoice(")]
     assert "pauseMusic ? [] : (duck ? [.duckOthers, .interruptSpokenAudioAndMixWithOthers] : [.mixWithOthers])" in cfg
-    assert "setCategory(.playback, mode: .voicePrompt, options: options)" in cfg
+    assert "ApexAudioSession.set(.playback, mode: .voicePrompt, options: options)" in cfg
     # the music is handed back after the line, and told it may resume; lines close together keep it paused
     end = shell[shell.index("    fileprivate func endVoiceIfIdle("):shell.index("    private func speak(")]
-    assert "setActive(false, options: .notifyOthersOnDeactivation)" in end
+    assert "ApexAudioSession.deactivate()" in end
+    assert "setActive(false, options: .notifyOthersOnDeactivation)" in shell[shell.index("enum ApexAudioSession {"):]
     assert "guard pauseMusic else { releaseVoice(); return }" in end and "self.voiceEndGen == gen" in end
     begin = shell[shell.index("    private func beginVoice("):shell.index("    // CarPlay Developer Guide, Voice prompts")]
-    assert "voiceEndGen += 1" in begin and "setActive(true)" in begin
+    assert "voiceEndGen += 1" in begin and "ApexAudioSession.activate()" in begin
     # CarPlay plays no voice of its own: the car's audio is this one session
     car = open(os.path.join(root, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
     assert "AVAudioSession" not in car and "AVSpeechSynthesizer" not in car
+
+
+def test_audio_session_work_stays_off_the_main_thread():
+    """The owner, 2026-11-16 (TestFlight): the replay "stutters" on corner calls. setCategory and setActive block until the
+    audio hardware is set up again, and ran on the main thread twice a call, where the web view's frames are put on the
+    screen. They run on one serial audio queue (ApexAudioSession), in the order asked, and the clip files load there too."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    shell = open(os.path.join(root, "ApexNavApp.swift"), encoding="utf-8").read()
+    i = shell.index("enum ApexAudioSession {")
+    helper = shell[i:shell.index("\n}\n", i)]
+    rest = shell[:i] + shell[i + len(helper):]
+    for blocking in ("setCategory(", "setActive(", "sharedInstance().promptStyle"):
+        assert blocking not in rest, blocking + " outside the audio queue"
+    assert 'DispatchQueue(label: "app.vetta.audio-session"' in helper and helper.count("queue.async {") == 4
+    clips = shell[shell.index("final class ApexClipPlayer"):]
+    load = clips[clips.index("    func play("):clips.index("    private func start(")]
+    assert "ApexAudioSession.queue.async {" in load and "AVAudioPlayer(contentsOf: url)" in load and "prepareToPlay()" in load
+    assert "guard mine == seq, done != nil else { return }" in clips      # a call cut off while loading never plays
+    # the page hears the prompt style once it is known; the voice is held from voiceBegin so no release lands before the clip
+    begin = shell[shell.index("    func webVoiceBegin("):shell.index("    /// The voice bank's clips")]
+    assert begin.index("webVoiceActive = true") < begin.index("withPromptStyle(duck: duck)")
