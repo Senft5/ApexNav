@@ -274,15 +274,19 @@
     .feed-tags .feed-tag { min-height: 44px; }
     .feed-comment .feed-more { width: 44px; height: 44px; display: grid; place-items: center; text-decoration: none; font-size: 20px; color: var(--panel-ink); }
     .feed-say { display: flex; gap: 8px; }
+    .feed-skel { display: grid; gap: 10px; }
+    .feed-skel i { display: block; border-radius: 8px; background: var(--rule); opacity: .55; }
+    .feed-skel i:nth-child(1) { height: 200px; } .feed-skel i:nth-child(2) { height: 16px; width: 60%; } .feed-skel i:nth-child(3) { height: 16px; width: 40%; }
+    .feed-comments-none { margin: 0; color: var(--panel-dim); font-size: 14px; }
     .feed-say .field { flex: 1; min-width: 0; }
-    .post-sheet textarea { width: 100%; min-height: 56px; resize: vertical; }
-    .post-sheet .card-sheet { display: grid; gap: 14px; }
+    .post-sheet textarea, .feed-edit textarea { width: 100%; min-height: 56px; resize: vertical; }
+    .post-sheet .card-sheet, .feed-edit .card-sheet { display: grid; gap: 14px; }
     .post-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
     .post-head h2 { margin: 0; padding: 0; border: 0; font-size: 22px; }
     .post-head .post-not-now { min-height: 44px; color: var(--panel-dim); }
     .post-pic { display: grid; } .post-pic .feed-line { aspect-ratio: 340 / 150; }
     .post-field { display: grid; gap: 6px; } .post-field small { color: var(--panel-dim); font-size: 13px; }
-    .post-sheet .post-go { width: 100%; min-height: 52px; font-size: 17px; }
+    .post-sheet .post-go, .feed-edit .post-go { width: 100%; min-height: 52px; font-size: 17px; }
   `;
   const ICON = {
     kudos: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11v9H4v-9zM7 11l4-7c1.5 0 2.5 1 2 3l-1 4h6a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 16.8 21H7"/></svg>',
@@ -493,10 +497,22 @@
       return b;
     }
 
-    // Edit (your own post, behind ···): its name and what you said, nothing else; Save redraws where it was
+    // The post sheet's picture of a drive (Post and Edit post): its road, its Score and length on the strip under it.
+    function postPic(score, lenM, line, why = 'Too short to show its line.') {
+      const stat = (label, v, unit) => { const b = el('b', { textContent: v }); if (unit) b.append(el('span', { textContent: unit }));
+        return el('div', {}, el('small', { textContent: label }), b); };
+      const fmtLen = page.fmtLen || ((m) => `${(m / 1000).toFixed(1)} km`);
+      const stats = el('div', { className: 'feed-stats' }, stat('Vetta Score', Number.isFinite(score) ? String(Math.round(score)) : '--'));
+      if (Number.isFinite(lenM) && lenM > 0) { const m = /^([\d.,]+)\s*(.*)$/.exec(fmtLen(lenM)) || []; stats.append(m[1] ? stat('Distance', m[1], m[2]) : stat('Distance', fmtLen(lenM))); }
+      return line && line.length > 1 ? el('div', { className: 'feed-pic post-pic' }, roadSvg(line, 340, 150), stats)
+        : el('div', { className: 'post-pic' }, stats, ...(why ? [el('p', { className: 'note', textContent: why })] : []));
+    }
+
+    // Edit (your own post, behind ···): the post sheet's own shape (screen inventory 2026-11-16): its picture, then its name
+    // and what you said, nothing else; Save redraws where it was
     function edit(p, o, node) {
       const s = sheet('Edit post', 'feed-edit');
-      const name = el('input', { className: 'field', maxLength: 60, value: p.title || '', 'aria-label': 'Drive name' });
+      const name = el('input', { type: 'text', className: 'field post-name', maxLength: 60, value: p.title || '', 'aria-label': 'Drive name', autocomplete: 'off' });
       const say = el('textarea', { className: 'field', maxLength: 280, placeholder: 'How was it? (optional)', 'aria-label': 'Caption' });
       say.value = p.caption || '';
       const save = btn('Save', async () => {
@@ -510,8 +526,10 @@
         s.close(); toast('Saved.');
         if (node && node.isConnected) node.replaceChildren(...card(p, o).childNodes);   // this card at once, then the list it sits in
         if (o && o.after) o.after();
-      }, 'ink-btn solid');
-      s.box.append(el('div', { className: 'stack-12' }, el('h3', { textContent: 'Edit post' }), name, say, el('div', { className: 'row' }, save, btn('Cancel', s.close, 'linkbtn'))));
+      }, 'ink-btn solid post-go');
+      let pts = []; try { pts = p.line ? decode(p.line) : []; } catch (_) { pts = []; }
+      s.box.append(el('div', { className: 'post-head' }, el('h2', { textContent: 'Edit post' }), btn('Cancel', s.close, 'linkbtn post-not-now')),
+        postPic(p.score, p.length_m, pts, ''), el('label', { className: 'post-field' }, el('small', { textContent: 'Name' }), name), say, save);
       name.focus();
     }
 
@@ -535,28 +553,46 @@
 
     async function open(id, o = {}) {
       const s = sheet('Drive post', 'feed-sheet');
-      s.box.append(el('p', { className: 'note', textContent: 'Loading…' }));
-      const p = await apiCall('GET', `/api/posts/${encodeURIComponent(id)}`).then(jsonOf).catch(() => null);
-      if (!p || !p.id) { s.box.replaceChildren(el('p', { className: 'note', textContent: 'This post is gone.' }), btn('Done', s.close, 'linkbtn')); return; }
+      // loading is the post's shape, not a line of text; no answer says so with Try again; a post taken down says it's gone
+      const fetchIt = async () => {
+        s.box.replaceChildren(el('div', { className: 'feed-skel', 'aria-busy': 'true', 'aria-label': 'Loading the post' }, el('i'), el('i'), el('i')));
+        const r = await apiCall('GET', `/api/posts/${encodeURIComponent(id)}`).catch(() => null);
+        const j = r && r.ok ? await Promise.resolve().then(() => jsonOf(r)).catch(() => null) : null;
+        if (j && j.id) return j;
+        const gone = r && (r.status === 404 || r.status === 403 || r.ok);
+        s.box.replaceChildren(el('div', { className: 'feed-lost stack-8' }, el('p', { className: 'note', textContent: gone ? 'This post is gone.' : 'Couldn’t load the post. Check signal.' }),
+          gone ? btn('Done', s.close, 'linkbtn') : btn('Try again', () => { fetchIt().then((x) => { if (x) show(x); }); }, 'ink-btn')));
+        return null;
+      };
+      const p0 = await fetchIt();
+      if (p0) show(p0);
+      function show(p) {
+      if (!Array.isArray(p.comment_list)) p.comment_list = [];
       const list = el('div', { className: 'feed-comments' });
-      const draw = () => list.replaceChildren(...p.comment_list.map((c) => {
-        const row = el('div', { className: 'feed-comment' }, face(c, 30),
-          el('div', {}, el('b', { textContent: c.mine ? 'You' : `@${c.handle || '?'}` }), el('small', { textContent: ` ${ago(c.created_at, Date.now())}` }), withMentions(c.body),
-            ...(c.mine || !c.handle ? [] : [btn('Reply', () => {   // as on any social app: their handle in the box, ready to write
-              const at = `@${c.handle} `; if (!field.value.startsWith(at)) field.value = (at + field.value).slice(0, 280);
-              field.focus(); try { field.setSelectionRange(field.value.length, field.value.length); } catch (_) {}
-            }, 'linkbtn feed-reply')])));
-        const k = el('button', { type: 'button', className: 'linkbtn feed-more', textContent: '···' }); k.setAttribute('aria-label', 'More for this comment');
-        k.addEventListener('click', () => {
+      // ··· and a long press open the same few keys for a comment
+      const menuFor = (c) => {
           const m = sheet('This comment', 'feed-menu'); const keys = el('div', { className: 'row', style: 'flex-wrap:wrap' });
           if (c.can_delete) keys.append(btn('Delete', async () => {
             m.close();
             const r = await apiCall('DELETE', `/api/comments/${encodeURIComponent(c.id)}`).catch(() => null);
             if (r && r.ok) { p.comment_list = p.comment_list.filter((x) => x.id !== c.id); draw(); if (o.after) o.after(); } else toast('Couldn’t delete it. Check signal.');
-          }, 'ink-btn'));
+          }, 'danger-btn'));
           if (!c.mine && page.report) keys.append(btn('Report', () => { m.close(); page.report({ kind: 'comment', target: c.id, label: `@${c.handle}: "${c.body.slice(0, 60)}"`, who: c.handle }); }, 'ink-btn'));
           keys.append(btn('Cancel', m.close, 'linkbtn')); m.box.append(keys);
-        });
+      };
+      const draw = () => list.replaceChildren(...(p.comment_list.length ? [] : [el('p', { className: 'feed-comments-none', textContent: 'No comments yet. Say something about the drive.' })]), ...p.comment_list.map((c) => {
+        const row = el('div', { className: 'feed-comment' }, face(c, 30),
+          el('div', {}, el('b', { textContent: c.mine ? 'You' : `@${c.handle || '?'}` }), el('small', { textContent: ` ${ago(c.created_at, Date.now())}` }), withMentions(c.body),
+            ...(c.mine || !c.handle ? [] : [btn('Reply', () => {   // as on any social app: their handle in the box, ready to write
+              const at = `@${c.handle} `; if (!field.value.startsWith(at)) field.value = (at + field.value).slice(0, 280);
+              send.disabled = false;
+              field.focus(); try { field.setSelectionRange(field.value.length, field.value.length); } catch (_) {}
+            }, 'linkbtn feed-reply')])));
+        const k = el('button', { type: 'button', className: 'linkbtn feed-more', textContent: '···' }); k.setAttribute('aria-label', 'More for this comment');
+        k.addEventListener('click', () => menuFor(c));
+        let held = null;   // a long press (half a second, finger still) opens the same keys
+        row.addEventListener('pointerdown', (e) => { if (e.target.closest('button')) return; held = setTimeout(() => { held = null; menuFor(c); }, 500); });
+        for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) row.addEventListener(ev, () => { if (held) { clearTimeout(held); held = null; } });
         row.append(k);
         return row;
       }));
@@ -570,8 +606,11 @@
         if (!r || !r.ok) { toast(r && r.status === 429 ? 'That’s a lot of comments. Try again in a bit.' : 'Couldn’t send it. Check signal.'); return; }
         const { id: cid } = await jsonOf(r);
         p.comment_list.push({ id: cid, body: t, created_at: new Date().toISOString().slice(0, 19).replace('T', ' '), handle: page.myHandle ? page.myHandle() : null, photo_id: null, mine: true, can_delete: true });
-        field.value = ''; draw(); if (o.after) o.after();
+        field.value = ''; send.disabled = true; draw(); if (o.after) o.after();
+        try { field.focus({ preventScroll: true }); } catch (_) {}   // the keyboard stays up for the next one
       }, 'ink-btn solid');
+      send.disabled = true;   // nothing to send yet
+      field.addEventListener('input', () => { send.disabled = !field.value.trim(); });
       field.addEventListener('keydown', (e) => { if (e.key === 'Enter') send.click(); });
       // @ suggests who to mention: the post's driver, who commented, then your friends (one ask, the first time)
       const tags = el('div', { className: 'feed-tags', role: 'list' }); tags.hidden = true;
@@ -581,7 +620,7 @@
         const names = at ? suggest(at.q, [p.handle, ...p.comment_list.map((c) => c.handle), ...(friendHandles || [])], own) : [];
         tags.replaceChildren(...names.map((h) => btn(`@${h}`, () => {
           const end = at.start + 1 + at.q.length, v = field.value;
-          field.value = `${v.slice(0, at.start)}@${h} ${v.slice(end)}`.slice(0, 280);
+          field.value = `${v.slice(0, at.start)}@${h} ${v.slice(end)}`.slice(0, 280); send.disabled = false;
           const c = Math.min(at.start + h.length + 2, field.value.length);
           field.focus(); try { field.setSelectionRange(c, c); } catch (_) {}
           paint();
@@ -593,6 +632,7 @@
       field.addEventListener('input', paint);
       s.box.replaceChildren(card(p, { full: true, after: o.after, gone: s.close }), kudosFrom(p), list, tags, el('div', { className: 'feed-say' }, field, send), el('div', { className: 'row' }, btn('Done', s.close, 'linkbtn')));
       if (o.focus) field.focus();
+      }
     }
 
     /** This week, a weekly board in a row: who posted, how far, best Score; a friend's card opens their profile. Hidden
@@ -905,13 +945,7 @@
           toast(where);
         }, 'ink-btn solid post-go');
         // the drive as it will look: its road, its Score and length on the strip under it, the clip or photo named on it
-        const stat = (label, v, unit) => { const b = el('b', { textContent: v }); if (unit) b.append(el('span', { textContent: unit }));
-          return el('div', {}, el('small', { textContent: label }), b); };
-        const fmtLen = page.fmtLen || ((m) => `${(m / 1000).toFixed(1)} km`);
-        const stats = el('div', { className: 'feed-stats' }, stat('Vetta Score', Number.isFinite(d.score) ? String(Math.round(d.score)) : '--'));
-        if (Number.isFinite(d.len_m) && d.len_m > 0) { const m = /^([\d.,]+)\s*(.*)$/.exec(fmtLen(d.len_m)) || []; stats.append(m[1] ? stat('Distance', m[1], m[2]) : stat('Distance', fmtLen(d.len_m))); }
-        const pic = line ? el('div', { className: 'feed-pic post-pic' }, roadSvg(line, 340, 150), stats)
-          : el('div', { className: 'post-pic' }, stats, el('p', { className: 'note', textContent: 'Too short to show its line.' }));
+        const pic = postPic(d.score, d.len_m, line);
         const name = el('input', { type: 'text', className: 'field post-name', maxLength: 60, value: String(d.name || ''), 'aria-label': 'Name', autocomplete: 'off' });
         const head = el('div', { className: 'post-head' }, el('h2', { textContent: d.ready ? 'Nice drive. Post it?' : 'Post this drive' }), btn('Not now', () => finish(false), 'linkbtn post-not-now'));
         s.box.append(head, pic, el('label', { className: 'post-field' }, el('small', { textContent: 'Name' }), name), withNote, tagRow, chips, say, mrow, post);

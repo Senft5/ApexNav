@@ -23,6 +23,17 @@
     .car-form .wide { grid-column: 1 / -1; }
     .car-card .car-cover { width: calc(100% + 24px); margin: -10px -12px 6px; aspect-ratio: 16 / 9; object-fit: cover; display: block; }
     .car-gallery { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0; }
+    .car-strip { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding: 2px 0 4px; scrollbar-width: none; }
+    .car-strip[hidden] { display: none; }
+    .car-strip::-webkit-scrollbar { display: none; }
+    .car-chip { flex: none; width: 116px; display: grid; gap: 4px; justify-items: start; text-align: left; border: 0; background: none; padding: 0; color: var(--panel-ink); font: inherit; cursor: pointer; scroll-snap-align: start; }
+    .car-chip .cc-pic { width: 116px; height: 76px; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; display: grid; place-items: center; background: var(--panel-2, transparent); }
+    .car-chip .cc-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .car-chip .cc-pic svg { width: 40px; height: 40px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; color: var(--panel-dim); }
+    .car-chip b { font-size: 14px; max-width: 116px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .car-chip small { font-size: 12px; color: var(--panel-dim); min-height: 15px; }
+    .car-chip.add .cc-pic { border-style: dashed; }
+    .car-card.lit { outline: 2px solid var(--panel-ink); outline-offset: 2px; }
     .car-gallery img { width: 64px; height: 64px; object-fit: cover; flex: none; border: 1px solid var(--rule); }
   `;
 
@@ -36,6 +47,8 @@
   const title = (c) => [c.year, c.make, c.model, c.trim].filter((x) => x !== null && x !== undefined && x !== '').join(' ');
   /** Power-to-weight, the number car people actually compare: lb per hp. */
   const lbPerHp = (c) => (c.power_hp && c.weight_kg ? (c.weight_kg * LB) / c.power_hp : null);
+
+  const CSS_ESC = (v) => (root.CSS && root.CSS.escape ? root.CSS.escape(String(v)) : String(v).replace(/["\\]/g, '\\$&'));
 
   function mount(page) {
     const { el, btn, toast, apiCall, jsonOf, report } = page;
@@ -194,7 +207,30 @@
     /** The Garage section: mine, then theirs. */
     function section() {
       const host = el('div', { className: 'stack-8' });
+      // Your cars as a strip under the profile's head (screen inventory 2026-11-16): one tap opens the car's build thread, or
+      // shows its card below; the last one adds a car. The caller puts host.strip under the head; no cars, no strip.
+      const strip = el('div', { className: 'car-strip' }); strip.hidden = true; strip.setAttribute('aria-label', 'Your cars');
+      host.strip = strip;
       let editing = null;   // a car id, 'new', or null
+      const toCard = (sel) => { const n = host.querySelector(sel); if (!n) return; try { n.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
+        n.classList.add('lit'); setTimeout(() => n.classList.remove('lit'), 1600); };
+      const chip = (pic, name, small, run, add) => { const b = el('button', { type: 'button', className: 'car-chip' + (add ? ' add' : '') },
+        pic, el('b', { textContent: name }), el('small', { textContent: small })); b.addEventListener('click', run); return b; };
+      const glyph = (d) => { const p = el('span', { className: 'cc-pic' }); p.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`; return p; };
+      const CAR_D = '<path d="M3 16v-3l2.2-5h13.6L21 13v3M3 16h18M3 16v2M21 16v2"/><circle cx="7.5" cy="13" r="1"/><circle cx="16.5" cy="13" r="1"/>';
+      function fillStrip(mine) {
+        const P = root.ApexPhotos;
+        strip.hidden = !(mine && mine.length);
+        if (strip.hidden) { strip.replaceChildren(); return; }
+        strip.replaceChildren(...mine.map((c) => {
+          const pic = c.cover_photo_id && P ? (() => { const w = el('span', { className: 'cc-pic' }); w.append(P.img(c.cover_photo_id, '', title(c))); return w; })() : glyph(CAR_D);
+          const name = c.nickname || [c.make, c.model].filter(Boolean).join(' ') || title(c) || 'Your car';
+          return chip(pic, name, c.is_primary ? 'Daily' : (c.build_id ? 'Build thread' : ''), () => {
+            if (c.build_id && page.builds) page.builds.open(c.build_id, { onClose: render });
+            else toCard(`.car-card[data-car="${CSS_ESC(c.id)}"]`);
+          });
+        }), ...(mine.length < 10 ? [chip(glyph('<path d="M12 6v12M6 12h12"/>'), 'Add a car', '', () => { editing = 'new'; render().then(() => toCard('.car-form')); }, true)] : []));
+      }
       // A change, then a fresh look; a failed call (or no signal) says so instead of failing quietly.
       const act = (call, failed) => async () => {
         let r = null;
@@ -208,6 +244,7 @@
         catch (_) { mineR = { ok: false }; theirsR = { ok: false }; }
         const mine = mineR.ok ? (await jsonOf(mineR)) || [] : null, theirs = theirsR.ok ? (await jsonOf(theirsR)) || [] : [];
         if (mine && page.onCars) page.onCars(mine);
+        fillStrip(mine);
         const kids = [el('h3', { textContent: 'Your cars' })];
         if (mine === null) { kids.push(el('p', { className: 'note', textContent: 'Couldn\'t load your garage. Check signal.' })); host.replaceChildren(...kids); return; }
         // An empty garage is a bay waiting for a car (the People pages' drawing): a road pulls in to a dashed bay, the red puck on it
@@ -230,11 +267,11 @@
             ...(page.builds ? [btn(c.build_id ? 'Build thread' : 'Start a build thread', () => (c.build_id ? page.builds.open(c.build_id, { onClose: render }) : page.builds.start(c, render)), 'ink-btn')] : []),
             btn('Edit', () => { editing = c.id; render(); }, 'linkbtn'),
             shownSwitch(c, act(() => apiCall('PUT', `/api/garage/${encodeURIComponent(c.id)}`, { ...c, shared: !c.shared, is_primary: !!c.is_primary }), 'Couldn\'t change that. Try again.')));
-          cards.append(card(c, acts));
+          const cc = card(c, acts); if (c.id) cc.dataset.car = String(c.id); cards.append(cc);
         }
         if (editing === 'new') cards.append(form({}, () => { editing = null; render(); }));
         if (cards.childNodes.length) kids.push(cards);
-        if (editing !== 'new' && mine.length < 10) kids.push(el('div', { className: 'row' }, btn('Add a car', () => { editing = 'new'; render(); }, first ? 'ink-btn solid' : undefined)));
+        if (editing !== 'new' && mine.length < 10 && !(strip.isConnected && mine.length)) kids.push(el('div', { className: 'row' }, btn('Add a car', () => { editing = 'new'; render(); }, first ? 'ink-btn solid' : undefined)));
         if (theirs.length) {
           kids.push(el('h3', { textContent: 'Friends\' and crew cars' }));
           const list = el('div', { className: 'garage-cards' });

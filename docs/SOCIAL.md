@@ -176,6 +176,10 @@ and in random batches so a trace cannot be re-assembled.
   kudos (one tap, counted at once) and comments (one tap opens the post with them and a line to add one). Report and
   Block are behind ··· on a post or comment, never on its face; the author deletes a post, and a comment's author or
   the post's author deletes a comment. Blocks hide both ways; three established reports hide; the owner's queue removes.
+- A post on its own (2026-11-16): loading is the post's shape, not a line of text; no answer is one line and Try again; a
+  post taken down says it's gone. No comments is one line. A long press on a comment opens the same keys as its ···; after
+  Send the keyboard stays up, and Send waits for words.
+- Edit post (your post's ···) is the post sheet's own shape: the drive's picture and numbers, its name, what you said, Save.
 - `backend/src/drive_posts.ts` (migration 0059: `drive_posts`, `drive_post_kudos`, `drive_comments`), `web/drive_posts.js`.
   10 posts a day, 30 comments an hour, 200 comments a post. In Download my data; gone with the account.
 - A clip or a photo on a post (built 2026-11-13, `backend/src/post_media.ts`, migration 0061): Add a photo on the Post
@@ -254,6 +258,9 @@ and in random batches so a trace cannot be re-assembled.
 - Nate (2026-11-16): "garage stealing their [Instagram's] profile page". The Garage opens on you as a profile
   (`web/profile_head.js`): your face (a tap changes it), your numbers (drives you posted, friends, crews; each a tap to
   them), your handle, the car you drive (your daily car, else your first), then Edit profile and Share profile.
+- Your cars as a strip under the head (`garage_ui.js` `strip`, 2026-11-16): each car its cover photo or a car mark, its
+  name and Daily; a tap opens its build thread, or shows its card below (Edit, the share switch). The last tile adds a car.
+  No cars, no strip: the empty bay below says Park your first car.
 - Edit profile: your photo and handle on one sheet (`PUT /api/me/handle`; a taken one says so), and Who sees what.
   Share profile copies a friend link (`POST /api/invites`, the same link Invite makes).
 - Your drives, three across (`drive_posts.js` `grid`): each tile the road it drew with its Score on it; a tap opens the
