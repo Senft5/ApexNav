@@ -316,6 +316,12 @@
     .btn-start.start-more { width: 34px; padding: 0; justify-content: center; margin-left: -8px; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.28), inset 1.5px 0 0 rgba(0,0,0,0.22); }
     .btn-start.start-more svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .start-sheet .card-sheet .rec-key { width: 100%; }
+    /* What's new: each line a row, its mark on an ink tile, the title over its words (2026-11-16) */
+    #newsSheet .news-row { display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 14px; align-items: start; margin: 0 0 16px; }
+    #newsSheet .news-mark { grid-row: 1 / span 2; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--panel-ink); color: var(--panel); }
+    #newsSheet .news-mark svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    #newsSheet .news-row b { font-size: 16px; }
+    #newsSheet .news-row span { font-size: 15px; line-height: 1.35; color: var(--panel-dim); }
     /* Ways to go: the convoy's two ways as tiles under Just drive, each its mark over its word (2026-11-16) */
     .start-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .start-tiles .start-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 96px; padding: 12px 8px; text-align: center; white-space: normal; }
