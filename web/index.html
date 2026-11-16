@@ -942,6 +942,26 @@
     .deck-chips { display: none; padding: 8px 2px 0; }
     #app.idle:not(.plan-open):not(.routed):not(.drive-today-on) .deck-chips { display: flex; }
     /* finding 3: the main key follows the task: once you type, the loop gives way and the key goes to the place */
+    /* The plan sheet's list is one card of rows, each led by its own mark on an ink tile (2026-11-16, Nate: "always just kind
+       of a list of things"); the rows and what they open are unchanged. The mark is cut out of the tile (mask), so it takes the
+       look's own ink and card in every theme, day and night. */
+    #planBody .plan-list { margin-top: 14px; padding-left: 14px; border-radius: var(--r-card, 12px); background: var(--well, color-mix(in srgb, var(--panel-ink) 6%, var(--panel))); }
+    #planBody .plan-list > :is(.plan-loop, .plan-more) { margin: 0; border-top: 0; border-bottom: 0; }
+    #planBody .plan-list #loopRow::before { margin-right: 4px; }   /* the loop row's own gap is 8 px */
+    #planBody .plan-list > :not([hidden]) ~ :is(.plan-loop, .plan-more):not([hidden]) { border-top: 1px solid var(--hair, var(--rule)); }
+    #planBody .plan-list .loop-row { border-top: 0; padding-right: 14px; }
+    #planBody .plan-list .plan-more > summary, #planBody .plan-list .plan-opt > .opt-chip { justify-content: flex-start; padding-right: 8px; }
+    #planBody .plan-list .plan-more > summary::after, #planBody .plan-list .plan-opt > .opt-chip::after { margin-left: auto; }
+    #planBody .plan-list .plan-more > :not(summary) { padding-right: 14px; }
+    #planBody .plan-list :is(#loopRow, #planSpots > summary, #planAttack > summary, #planBooks > summary, #planOptionsChip)::before {
+      content: ""; flex: none; width: 30px; height: 30px; margin-right: 12px; border-radius: 8px; background: var(--panel-ink);
+      -webkit-mask: var(--row-ico) center / 18px 18px no-repeat, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+      mask: var(--row-ico) center / 18px 18px no-repeat exclude, linear-gradient(#000 0 0); }
+    #planBody #loopRow { --row-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4a8 8 0 1 1-7.4 5'/%3E%3Cpath d='M4 4v5h5'/%3E%3C/svg%3E"); }
+    #planBody #planSpots > summary { --row-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10z'/%3E%3Ccircle cx='12' cy='11' r='2'/%3E%3C/svg%3E"); }
+    #planBody #planAttack > summary { --row-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='13.5' r='7'/%3E%3Cpath d='M12 13.5V10M10 3h4M12 3v3.5'/%3E%3C/svg%3E"); }
+    #planBody #planBooks > summary { --row-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 5a2 2 0 0 1 2-2h11v15H7a2 2 0 0 0-2 2z'/%3E%3Cpath d='M5 20a2 2 0 0 0 2 1h11v-3'/%3E%3C/svg%3E"); }
+    #planBody #planOptionsChip { --row-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h9M17 7h3M4 17h3M11 17h9'/%3E%3Ccircle cx='15' cy='7' r='2'/%3E%3Ccircle cx='9' cy='17' r='2'/%3E%3C/svg%3E"); }
     .plan.typing .plan-loop, .plan.typing .plan-links, .plan.typing #planSpots, .plan.typing #planBooks, .plan.typing #planAttack, .plan.typing #findLoopBtn { display: none; }
     #findGoBtn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     /* finding 1: the plan's progress on the card, then what the ranking did */
