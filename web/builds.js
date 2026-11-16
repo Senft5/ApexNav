@@ -34,6 +34,9 @@
 
   const STYLE = `
     .build-view { padding: 0 env(safe-area-inset-right) calc(84px + env(safe-area-inset-bottom)) env(safe-area-inset-left); }
+    .bv-skel { display: grid; gap: 12px; padding: 16px; } .bv-skel i { display: block; border-radius: 8px; background: var(--rule); opacity: .55; height: 18px; }
+    .bv-skel i:first-child { height: 200px; } .bv-skel i:nth-child(3) { width: 60%; }
+    .bv-lost { display: grid; gap: 10px; justify-items: start; padding: 16px; } .bv-lost p { margin: 0; }
     .bv-top { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: center; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; margin: 0 calc(-1 * env(safe-area-inset-right)) 0 calc(-1 * env(safe-area-inset-left)); padding-left: calc(16px + env(safe-area-inset-left)); padding-right: calc(16px + env(safe-area-inset-right)); background: var(--panel); border-bottom: 2px solid var(--panel-ink); }
     .bv-head { display: grid; grid-template-columns: 96px 1fr; gap: 14px; padding: 14px 16px; align-items: center; }
     .bv-head h2 { margin: 0; font-size: 26px; line-height: 1.1; overflow-wrap: anywhere; }
@@ -106,11 +109,20 @@
       ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Build thread');
       const close = () => { ov.remove(); if (onClose) onClose(); };
       let replyTo = null;
+      // the shared states (screen inventory): loading is the thread's shape; no answer is one line and Try again; a build
+      // that's gone (deleted, or no longer shown to you) says so and has no key
+      const backTop = () => el('div', { className: 'bv-top' }, btn('‹ Back', close, 'linkbtn'));
+      ov.append(backTop(), el('div', { className: 'bv-skel', 'aria-busy': 'true', 'aria-label': 'Loading the build' }, el('i'), el('i'), el('i')));
       const draw = async () => {
         const r = await call('GET', `/api/builds/${encodeURIComponent(id)}`);
-        const b = r && r.ok ? await r.json() : null;
-        const top = el('div', { className: 'bv-top' }, btn('‹ Back', close, 'linkbtn'));
-        if (!b) { ov.replaceChildren(top, el('p', { className: 'note', style: 'padding:16px', textContent: 'Couldn’t load the build. Check signal.' })); return; }
+        const b = r && r.ok ? await r.json().catch(() => null) : null;
+        const top = backTop();
+        if (!b) {
+          const gone = r && (r.status === 404 || r.status === 403);
+          ov.replaceChildren(top, el('div', { className: 'bv-lost' }, el('p', { textContent: gone ? 'This build isn\u2019t here any more.' : 'Couldn\u2019t load the build. Check signal.' }),
+            ...(gone ? [] : [btn('Try again', (e) => { const k = e && e.currentTarget; if (k) { k.disabled = true; k.textContent = 'Trying\u2026'; } draw(); }, 'ink-btn solid')])));
+          return;
+        }
         if (b.mine) top.append(btn('Stages', () => editStages(b, draw), 'linkbtn'));
         else {
           const f = btn(b.following ? 'Following' : 'Follow', async () => {
@@ -173,7 +185,7 @@
       const fill = async () => {
         const r = await call('GET', `/api/builds/${encodeURIComponent(b.id)}/chat`);
         const msgs = r && r.ok ? await r.json() : null;
-        if (!msgs) { list.replaceChildren(el('p', { className: 'note', textContent: 'Couldn\u2019t load the chat. Check signal.' })); return; }
+        if (!msgs) { list.replaceChildren(el('div', { className: 'bv-lost' }, el('p', { textContent: 'Couldn\u2019t load the chat. Check signal.' }), btn('Try again', fill, 'ink-btn'))); return; }
         list.replaceChildren(...(msgs.length ? msgs.map((m) => {
           const acts = [];
           if (m.mine || b.mine) acts.push(btn('Delete', async () => { const x = await call('DELETE', `/api/builds/${encodeURIComponent(b.id)}/chat/${encodeURIComponent(m.id)}`); if (x && x.ok) fill(); }, 'linkbtn'));
