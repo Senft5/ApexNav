@@ -114,3 +114,14 @@
 /* the floating messages (2026-11-16): a toast and the map's own note were square boxes ruled in ink, the last of the old
    look on the map. They float like the other things over it: rounded, lifted, no outline, words at a readable 14 px. */
 [data-theme="roadbook"] .toast, [data-theme="roadbook"] .map-note { border: 0; border-radius: var(--r-key); box-shadow: var(--elev-1); padding: 12px 16px; font-size: 14px; line-height: 1.3; }
+
+/* the Log's quiet lines (2026-11-16, Nate: "always just kind of a list of things"): the year, your week, your roads, corner
+   by corner and kudos were bare lines with a + at the end, between cards. Each is now a card like Your driving above it,
+   its chevron turning down when it opens, and what it holds stays inside the card. */
+[data-theme="roadbook"] .log-page details.quiet { padding: 0 14px; border: 0; border-radius: var(--r-card); background: var(--raised); }
+[data-theme="roadbook"] .log-page details.quiet > summary { min-height: 56px; font-size: 16px; }
+[data-theme="roadbook"] .log-page details.quiet > summary::after { content: "\203A"; font-size: 22px; font-weight: 400; line-height: 1; color: var(--panel-ink); transition: transform 0.15s; }
+[data-theme="roadbook"] .log-page details.quiet[open] > summary::after { content: "\203A"; transform: rotate(90deg); }
+[data-theme="roadbook"] .log-page details.quiet > :not(summary) { margin-bottom: 14px; }
+[data-theme="roadbook"] .log-page details.quiet :is(button.btn, a.btn, label.btn):not(.solid):not(.on):not([aria-pressed="true"]):not(.danger) { background: var(--panel); }   /* a key on the card stands off it */
+[data-theme="roadbook"] .log-page details.quiet .stamps > :is(button, .chip):not(.on):not([aria-pressed="true"]):not([aria-checked="true"]) { background: var(--panel); }
