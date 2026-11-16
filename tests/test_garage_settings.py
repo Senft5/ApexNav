@@ -71,7 +71,7 @@ def test_no_browser_scrollbar_in_sheets():
 def test_default_on_data_rows_say_anonymous_on_the_row():
     # U-135: what the default-on switches send is on the row, not behind the fold
     assert "<span>Share app health (anonymous counts)</span>" in HTML
-    assert "Attach diagnostics (app version, device, language, error count; never your position)" in (WEB / "feedback.js").read_text()
+    assert "tick('Attach diagnostics', 'App version, device, language, error count. Never your position.', true)" in (WEB / "feedback.js").read_text()
 
 
 def test_crash_check_says_what_it_does_without_a_contact():
@@ -102,6 +102,8 @@ process.stdout.write(JSON.stringify({
   pick: [G.summaryOf(group(btn('Miles and feet', { on: true }), btn('Kilometres and metres'))), G.summaryOf(group(btn('Steady'), btn(' Lean ', { 'aria-pressed': 'true' }))), G.summaryOf(group(btn('a'), btn('b')))],
   count: [G.summaryOf(group(btn('No zones yet.', { note: true })), 'place,places'), G.summaryOf(group(btn('Home')), 'place,places'), G.summaryOf(group(btn('Home'), btn('Work')), 'place,places')],
   said: [G.summaryOf({ dataset: { summaryText: '2 changed' }, matches: () => false, querySelectorAll: () => [], children: [] }), G.summaryOf({ dataset: {}, matches: () => false, querySelectorAll: () => [], children: [] })],
+  several: [G.summaryOf([btn('Share', { on: true }), btn('Help', { on: true })]), G.summaryOf([btn('Share'), btn('Help')]), G.summaryOf([btn('Share'), btn('Help', { on: true })]),
+            G.summaryOf([btn('Share', { on: true })]), G.summaryOf([])],
   none: G.summaryOf(null), groups: G.GROUPS, order: G.ORDER }));
 """
     out = json.loads(subprocess.run([NODE, "-e", js, str(WEB / "garage_settings.js")], capture_output=True, text=True, check=True, timeout=30).stdout)
@@ -109,10 +111,12 @@ process.stdout.write(JSON.stringify({
     assert out["pick"] == ["Miles and feet", "Lean", ""]                 # nothing on: nothing said
     assert out["count"] == ["None", "1 place", "2 places"]               # the list's own "none yet" line is not an entry
     assert out["none"] == ""
+    # Road feel names two switches: the row reads both (it said Off while Help improve Vetta roads was on)
+    assert out["several"] == ["On", "Off", "1 of 2 on", "On", ""]
     assert out["said"] == ["2 changed", ""]                              # a sheet's own words; without them, nothing
     assert all(k in out["order"] for k in out["groups"]) and len(out["groups"]) == 3
     for key, sel in (("zones", "#zoneList"), ("crash", "[data-toggle=&quot;crash&quot;]"), ("nudge", "[data-toggle=&quot;nudge&quot;]"), ("units", "#unitsRow"), ("motion", "#camList"),
-                     ("roadfeel", "#garageRoadFeelBody .sw, #ambientSignIn:not([hidden])"), ("tuning", "#garageTuneBody"), ("spots", "#hlList")):
+                     ("roadfeel", "#garageRoadFeelBody .sw, [data-toggle=improve], #ambientSignIn:not([hidden])"), ("tuning", "#garageTuneBody"), ("spots", "#hlList")):
         assert f'data-setting="{key}"' in HTML and f'data-summary="{sel}"' in HTML, key
 
 
