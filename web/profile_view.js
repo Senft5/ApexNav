@@ -41,15 +41,24 @@
     // (status: the friend list's own line, "On the road · Cherohala Skyway" or "Seen 15 min ago"), then what to do with them
     const said = [...(v.sub ? [el('p', { className: 'note', textContent: v.sub })] : []),
       ...(status && status.text ? [el('small', { className: status.live ? 'live' : '', textContent: status.text })] : [])];
-    const who = avatar ? [el('div', { className: 'profile-who' }, avatar, el('div', {}, ...said))] : said;
+    const H = root.ApexProfileHead, t = p.totals || {};
+    // Garage as a profile (Nate 2026-11-16): a friend's page has the same head as yours: their face (ringed while driving),
+    // their month in numbers, their handle, what they're doing, the car they drive. Partial (no signal): nothing guessed.
+    const head = H && avatar ? H.draw({ el, btn,
+      face: root.ApexAvatar ? root.ApexAvatar.ring(avatar, status && status.live ? 'live' : null) : avatar,
+      title: v.title, sub: [status && status.text, v.sub].filter(Boolean).join(' · '), live: !!(status && status.live), car: partial ? null : H.carName(p.cars),
+      counts: [{ n: partial ? null : t.days_month, label: 'Days' }, { n: partial ? null : t.stages, label: 'Stages' }, { n: partial ? null : t.best, label: 'Best' }] }) : null;
+    const who = head ? [head] : avatar ? [el('div', { className: 'profile-who' }, avatar, el('div', {}, ...said))] : said;
+    // with the head, its numbers are This month and its car is the Garage line: the rest below says what they don't
+    const sections = head ? v.sections.filter((x) => x.head !== 'This month' && !(x.head === 'Garage' && (p.cars || []).length < 2)) : v.sections;
     // partial: the profile didn't load (no signal): the person and what you can do with them, nothing guessed about the rest
-    box.replaceChildren(el('div', { className: 'side-pop-head' }, el('h3', { textContent: v.title }), btn('‹ Friends', back, 'linkbtn')),
+    box.replaceChildren(el('div', { className: 'side-pop-head' }, ...(head ? [el('span')] : [el('h3', { textContent: v.title })]), btn('‹ Friends', back, 'linkbtn')),
       ...who,
       ...(keys.length ? [el('div', { className: 'row profile-keys' }, ...keys.map(([label, run], i) => btn(label, run, i ? 'ink-btn' : 'ink-btn solid')))] : []),
       ...extra,
       ...(!partial && p.dna && p.dna.theirs && root.ApexDnaCard ? [dnaSection(p, el, btn)] : []),
       ...(partial ? [el('p', { className: 'note', textContent: 'Couldn’t load the rest. Check signal.' })]
-        : [...v.sections.map((s) => el('div', { className: 'stack-8' }, el('b', { textContent: s.head }), ...s.rows.map((r) => el('p', { className: 'note', textContent: r }))))]),   // what they share with you, so no line saying so
+        : [...sections.map((s) => el('div', { className: 'stack-8' }, el('b', { textContent: s.head }), ...s.rows.map((r) => el('p', { className: 'note', textContent: r }))))]),   // what they share with you, so no line saying so
       ...(foot.length ? [el('div', { className: 'row profile-foot' }, ...foot.map(([label, run, cls]) => btn(label, run, cls || 'linkbtn')))] : []));
   }
 

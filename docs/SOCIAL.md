@@ -250,6 +250,18 @@ and in random batches so a trace cannot be re-assembled.
 - Offline or no answer: the feed says which, with Try again. Faces in rings: `web/avatar.js` (`ApexAvatar.ring`), shared.
 - No backend change. Screen inventory for the whole restructure: project files `social/screen-inventory.md`.
 
+### 2.17 The Garage as your profile (members; built 2026-11-16)
+- Nate (2026-11-16): "garage stealing their [Instagram's] profile page". The Garage opens on you as a profile
+  (`web/profile_head.js`): your face (a tap changes it), your numbers (drives you posted, friends, crews; each a tap to
+  them), your handle, the car you drive (your daily car, else your first), then Edit profile and Share profile.
+- Edit profile: your photo and handle on one sheet (`PUT /api/me/handle`; a taken one says so), and Who sees what.
+  Share profile copies a friend link (`POST /api/invites`, the same link Invite makes).
+- Your drives, three across (`drive_posts.js` `grid`): each tile the road it drew with its Score on it; a tap opens the
+  post (kudos, comments, ··· Edit and Delete). More for older ones. Offline says so, with Try again.
+- A friend's profile has the same head: their face ringed while they drive, their month in numbers (Days, Stages, Best;
+  `--` when it didn't load), what they're doing, their car; then Message and the rest, and their drives as the same grid.
+- No backend change.
+
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.
 

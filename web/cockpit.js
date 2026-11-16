@@ -8009,22 +8009,60 @@
       const putGrant = async (type, id, scores, times) => { await apiCall('PUT', '/api/grants', { audience_type: type, audience_id: id, share_scores: scores, share_times: times }); redo(); };
 
       // you (in the Garage: REVIEW.md 3.2, your own identity lives with your cars)
-      const you = section('You');
-      // your profile photo (REVIEW.md 5.2): a round face beside your handle, or your initial until you add one
-      // TestFlight 2026-11-05: the photo itself is the key, as in every other app: a tap adds one, or changes or removes it
-      // on a small sheet; no separate keys and no note (the toast after an upload says its location data stayed on the phone)
-      const face = window.ApexPhotos ? ApexPhotos.avatar(me.photo_id, me.handle, 72) : null;
-      const faceKey = face && me.member && ApexPhotos.mine ? ApexPhotos.mine(face, me.photo_id, 'profile', redo, { toast, name: 'your profile photo' }) : face;
-      you.append(el('div', { className: 'row', style: 'align-items:center;gap:12px' }, ...(faceKey ? [faceKey] : []), el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' })));   // no "points": a number with no unit (REVIEW2.md U-41)
+      // You, as a profile (Nate 2026-11-16: "garage stealing their profile page", "this is still vetta"): your face, your
+      // numbers (drives you posted, friends, crews; each a tap to them), your handle and the car you drive, Edit profile and
+      // Share, then your drives three across, each the road it drew. Who sees what stays one row under it (P-09).
+      const you = el('div', { className: 'stack-12 garage-you' });
+      you.append(el('h3', { className: 'sr-only', textContent: 'You' }));
+      // TestFlight 2026-11-05: the photo itself is the key (a tap adds one, or changes or removes it on a small sheet)
+      const myFace = (px) => { const f = window.ApexPhotos ? ApexPhotos.avatar(me.photo_id, me.handle, px) : el('span');
+        return me.member && window.ApexPhotos && ApexPhotos.mine ? ApexPhotos.mine(f, me.photo_id, 'profile', redo, { toast, name: 'your profile photo' }) : f; };
+      const nFriends = friends.filter((f) => f.status === 'accepted').length, nCrews = Array.isArray(crews) ? crews.length : null;
+      const editPop = el('aside', { className: 'side-pop people-pop' }); editPop.setAttribute('aria-label', 'Edit profile');
+      const openEdit = () => {
+        const hin = el('input', { className: 'field', value: me.handle, autocomplete: 'off', autocapitalize: 'none', 'aria-label': 'Handle', maxLength: 20 });
+        const save = btn('Save', async (e) => {
+          const b = e && e.currentTarget, v = hin.value.trim().toLowerCase();
+          if (v === me.handle) { editPop.classList.remove('open'); return; }
+          if (b) b.disabled = true;
+          try {
+            const r = await apiCall('PUT', '/api/me/handle', { handle: v });
+            if (r.ok) { toast(`You're @${v} now.`); editPop.classList.remove('open'); redo(); }
+            else toast(r.status === 409 ? 'That handle is taken.' : 'Use 3 to 20 letters, numbers or _.');
+          } catch (_) { toast('Couldn’t save. Check signal.'); } finally { if (b) b.disabled = false; }
+        }, 'ink-btn solid');
+        editPop.replaceChildren(el('div', { className: 'side-pop-head' }, el('h3', { textContent: 'Edit profile' }), btn('Done', () => editPop.classList.remove('open'), 'linkbtn')),
+          el('div', { className: 'edit-face' }, myFace(96), el('small', { textContent: 'Tap your photo to change it' })),
+          el('label', { className: 'stack-8' }, el('b', { textContent: 'Handle' }), hin, el('small', { className: 'note', textContent: 'How friends and crews find you. 3 to 20 letters, numbers or _.' })),
+          el('div', { className: 'row' }, save),
+          el('div', { className: 'nav-rows' }, ...(whoSees ? [whoSees.row()] : [])));
+        editPop.classList.add('open');
+        setTimeout(() => { try { hin.focus({ preventScroll: true }); } catch (_) {} }, 50);
+      };
+      const shareMe = async () => {
+        try { const r = await apiCall('POST', '/api/invites'), j = await jsonOf(r); if (r.ok && j && j.url) copyText(j.url, 'Link copied. Whoever opens it is your friend.'); else toast('Couldn’t make a link. Try again.'); }
+        catch (_) { toast('Couldn’t make a link. Check signal.'); }
+      };
+      const head = window.ApexProfileHead ? ApexProfileHead.draw({ el, btn,
+        face: window.ApexAvatar ? ApexAvatar.ring(myFace(84), null) : myFace(84), title: `@${me.handle}`, sub: '', car: null,
+        counts: [{ n: null, label: 'Drives', run: () => { const g = gbody.querySelector('.post-grid-sec'); if (g) g.scrollIntoView({ block: 'start', behavior: 'smooth' }); } },
+          { n: nFriends, label: 'Friends', run: () => showView('friends') }, { n: nCrews, label: nCrews === 1 ? 'Crew' : 'Crews', run: () => showView('crews') }],
+        keys: me.member ? [['Edit profile', openEdit], ['Share profile', shareMe]] : [] }) : null;
+      if (head) {
+        you.append(head);
+        // the car you drive: your daily car, else your first (Your cars, below, is where it changes)
+        apiCall('GET', '/api/garage').then(jsonOf).then((l) => { if (head.isConnected || gen === renderGen) head.setCar(ApexProfileHead.carName(l)); }).catch(() => {});
+      } else you.append(el('div', { className: 'row', style: 'align-items:center;gap:12px' }, myFace(72), el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' })));
       // Who sees what (P-09): under You, every audience and what it gets
       if (whoSees) you.append(el('div', { className: 'nav-rows' }, whoSees.row()));
-      // your drive posts, as your friends see them on your profile (docs/SOCIAL.md 2.13), with kudos, comments and Delete
       gbody.append(you);
-      if (drivePosts && drivePosts.drivesOf && me.member && me.id) gbody.append(drivePosts.drivesOf(me.id));
+      // your drive posts, three across, as your friends see them (docs/SOCIAL.md 2.13); a tap opens one, with Delete on ···
+      if (drivePosts && me.member && me.id) gbody.append(drivePosts.grid ? drivePosts.grid(me.id, { empty: 'Your drives show here once you post one. Post from the card after a drive.', count: (n) => { if (head && n != null) head.setCount(0, n); } })
+        : drivePosts.drivesOf(me.id));
       // Lists one tap away open as side sheets over People (REVIEW2.md U-30): each a row with its count and a chevron.
       const popSheet = (title) => { const p = el('aside', { className: 'side-pop people-pop' }); p.setAttribute('aria-label', title);
         p.append(el('div', { className: 'side-pop-head' }, el('h3', { textContent: title }), btn('Done', () => p.classList.remove('open'), 'linkbtn'))); return p; };
-      const pops = [];
+      const pops = [editPop];   // Edit profile (above) is one of them
       const rowKey = (label, open) => { const count = el('small'), b = el('button', { className: 'nav-row', type: 'button' }, el('span', { textContent: label }), count, el('i', { 'aria-hidden': 'true' }));
         b.addEventListener('click', open); b._count = count; return b; };
       const navRow = (label, content) => { const pop = popSheet(label); pop.append(content); pops.push(pop);
@@ -8146,7 +8184,7 @@
         if (window.ApexVocabulary && ApexVocabulary.watchTerms) ApexVocabulary.watchTerms(view);   // a friend's DNA words, on tap
         ApexProfileView.show(view, p && !Array.isArray(p) ? p : { handle: f.handle, name: f.name }, { el, btn, back: () => closeProfile(), keys: keysFor(f),
           avatar: window.ApexPhotos ? ApexPhotos.avatar(photo, f.handle || '?', 56) : null, status: st && st.text ? { text: st.text, live: !!st.live } : null,
-          partial: !p || Array.isArray(p), extra: [...lastShare(f), ...(drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), ...(roadbooks && f.handle ? [roadbooks.ofFriend(f.handle)] : []), aboutYou(f)],
+          partial: !p || Array.isArray(p), extra: [...lastShare(f), ...(drivePosts && drivePosts.grid ? [drivePosts.grid(f.id, { empty: `@${f.handle || '?'} hasn’t posted a drive you can see yet.` })] : drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), ...(roadbooks && f.handle ? [roadbooks.ofFriend(f.handle)] : []), aboutYou(f)],
           foot: [['Unfriend', async () => { if (await ApexConfirm.ask(`Unfriend @${f.handle}? This also stops all sharing.`, 'Unfriend')) { await apiCall('DELETE', `/api/friends/${f.id}`); closeProfile(); redo(); } }, 'danger-btn'],
             ...(safety && f.handle ? [['Report', () => safety.report({ kind: 'user', target: f.handle, label: `@${f.handle}`, who: f.handle, done: redo })],
                                      ['Block', () => safety.block(f.handle, () => { closeProfile(); redo(); })]] : [])] });
