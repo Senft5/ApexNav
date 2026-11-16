@@ -8824,6 +8824,7 @@
     }
     // Your data (my_data.js, IDEAS Z-03 / Z-04): what this phone holds, drives as GPX, delete and erase.
     async function renderMyData() {
+      renderAreas();
       // the summaries (F-06): each drive's length and battery, never its rows (the Garage opened with every drive read)
       let sums = await ApexRecording.summaries(null);
       if (sums.missing) sums = (await ApexAnalysis.job('summaries')).list;   // drives saved before summaries: built in the worker
@@ -8850,7 +8851,6 @@
       let est = {};
       try { est = (navigator.storage && navigator.storage.estimate) ? await navigator.storage.estimate() : {}; } catch (_) {}
       const o = { ...ApexMyData.offlineSummary(localStorage, await voiceCacheBytes(), est.usage, est.quota), carBytes: carOfflineBytes };
-      renderAreas();
       const note = $('myOfflineNote'); if (note) note.textContent = ApexMyData.offlineText(o);
       $('myOfflineDelBtn').hidden = !(o.routes > 0) && !(o.areas > 0) && !(o.voiceBytes > 0);   // "Nothing saved for offline": nothing to delete
     }
@@ -11018,6 +11018,7 @@
       animal: '<circle cx="6.5" cy="10.5" r="1.8"/><circle cx="10" cy="6.5" r="1.8"/><circle cx="14" cy="6.5" r="1.8"/><circle cx="17.5" cy="10.5" r="1.8"/><path d="M8 17.3c0-3 1.8-5.3 4-5.3s4 2.3 4 5.3c0 1.6-1.6 2.7-4 2.7s-4-1.1-4-2.7z"/>',
       police: '<path d="M12 3l7 2.8v5.4c0 4.6-3 7.9-7 9.8-4-1.9-7-5.2-7-9.8V5.8z"/><path d="M12 8.2l1.2 2.5 2.7.3-2 1.9.6 2.7-2.5-1.4-2.5 1.4.6-2.7-2-1.9 2.7-.3z"/>',
       closure: '<rect x="3" y="7.5" width="18" height="6" rx="1"/><path d="M7.5 7.5l-3 6M13 7.5l-3 6M18.5 7.5l-3 6M6 13.5V20M18 13.5V20"/>' };
+    window.ApexHazardIcons = HZ_ICON;   // convoy_ui.js draws its calls with them
     for (const k of ApexHazardReports.KINDS) {
       const b = document.createElement('button'); b.className = 'ink-btn hz-btn' + (HZ_ICON[k] ? ' hz-drawn' : ''); b.dataset.kind = k;
       if (HZ_ICON[k]) b.innerHTML = `<svg class="hz-ico" viewBox="0 0 24 24" aria-hidden="true">${HZ_ICON[k]}</svg>`;
