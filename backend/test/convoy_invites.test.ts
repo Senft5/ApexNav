@@ -66,6 +66,41 @@ describe("in-app convoy invites", () => {
     expect((await accept(friend, id)).status).toBe(200);
   });
 
+  it("the invite's card: who leads and how many are in, or why not (ran out, not yours, already in)", async () => {
+    const lead = await makeUser("lead"), friend = await makeUser("friend"), stranger = await makeUser("stranger");
+    await befriend(lead, friend);
+    const id = (await create(lead)).context.sessionId;
+    const card = (u: TestUser) => api(u, "GET", `/api/convoy/invites/${id}`);
+    expect((await card(friend)).status).toBe(400);                                       // not invited yet
+    await ok(invite(lead, id, ["friend"]));
+    const c = await json(card(friend));
+    expect(c).toEqual({ name: "Sunday run", leader: { handle: "lead" }, members: 1, max: 16, expiresAtMs: expect.any(Number), untilMs: expect.any(Number), member: false });
+    expect(c.untilMs).toBeLessThanOrEqual(c.expiresAtMs);
+    expect((await card(stranger)).status).toBe(400);
+    await ok(accept(friend, id));
+    expect((await json(card(friend))).member).toBe(true);                               // tapped again once in: "You're in"
+    await ok(api(lead, "POST", `/api/convoy/${id}/leave`));                              // the leader ends it
+    expect((await card(friend)).status).toBe(404);
+    expect((await api(friend, "GET", "/api/convoy/invites/not-a-convoy")).status).toBe(404);
+  });
+
+  it("Not now tells the leader: their convoy lists who's invited, and who can't make it", async () => {
+    const lead = await makeUser("lead"), a = await makeUser("amy"), b = await makeUser("ben");
+    await befriend(lead, a); await befriend(lead, b);
+    const id = (await create(lead)).context.sessionId;
+    await ok(invite(lead, id, ["amy", "ben"]));
+    const status = (u: TestUser) => json(api(u, "GET", `/api/convoy/${id}`));
+    expect((await status(lead)).invited).toEqual([
+      { handle: "amy", untilMs: expect.any(Number), declined: false }, { handle: "ben", untilMs: expect.any(Number), declined: false }]);
+    await ok(api(b, "DELETE", `/api/convoy/invites/${id}`));
+    expect((await status(lead)).invited.map((x: Msg) => [x.handle, x.declined])).toEqual([["amy", false], ["ben", true]]);
+    expect(await invites(b)).toEqual([]);
+    await ok(accept(a, id));
+    expect((await status(lead)).invited.map((x: Msg) => x.handle)).toEqual(["ben"]);     // joined: no longer "invited"
+    expect((await status(a)).invited).toBeUndefined();                                   // only the leader sees the list
+    expect((await accept(b, id)).status).toBe(200);                                      // changed their mind: still lets them in
+  });
+
   it("refuses a bad request", async () => {
     const lead = await makeUser("lead");
     const id = (await create(lead)).context.sessionId;

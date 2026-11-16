@@ -3599,8 +3599,8 @@ flow('convoy: an invite that comes in while you drive waits until the drive ends
   check(!(await page.evaluate(() => window.__toasts.some((t) => /invited you to a convoy/.test(t)))), 'nothing said while driving');
   await page.click('#driveEnd');
   await page.waitForFunction(() => !window.apexDebug.driveActive, null, { timeout: 12000 });
-  await page.waitForFunction(() => window.__toasts.some((t) => /@lead invited you to a convoy: Sunday run/.test(t)), null, { timeout: 8000 }).catch(() => {});
-  check(await page.evaluate(() => window.__toasts.some((t) => /@lead invited you to a convoy: Sunday run/.test(t))), 'said once the drive ended');
+  await page.waitForFunction(() => window.__toasts.some((t) => /@lead invited you to a convoy\./.test(t)), null, { timeout: 8000 }).catch(() => {});
+  check(await page.evaluate(() => window.__toasts.some((t) => /@lead invited you to a convoy\./.test(t))), 'said once the drive ended');
 });
 
 flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stubbed, IDEAS S-22)', async (page, base) => {
@@ -3612,6 +3612,7 @@ flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stub
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/convoy/invites') return json(accepted ? [] : [{ id, name: 'Sunday run', from: 'lead', expiresAtMs: until }]);
+    if (u.pathname === `/api/convoy/invites/${id}`) return json({ name: 'Sunday run', leader: { handle: 'lead' }, members: 1, max: 16, expiresAtMs: until, untilMs: until, member: accepted });
     if (u.pathname === `/api/convoy/${id}/accept` && m === 'POST') {
       accepted = JSON.parse(route.request().postData()).consent === true;
       return json({ sessionId: id, name: 'Sunday run', role: 'member', you: 'k2', leaderKey: 'k1', expiresAtMs: until, seq: 0, leaderEpoch: 1,
@@ -3629,15 +3630,20 @@ flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stub
       .observe(t, { childList: true, characterData: true, subtree: true }); });
   });
   await page.goto(base + '/index.html');
-  await page.waitForFunction(() => window.__toasts.some((t) => /@lead invited you to a convoy: Sunday run/.test(t)), null, { timeout: 10000 });
+  await page.waitForFunction(() => window.__toasts.some((t) => /@lead invited you to a convoy\./.test(t)), null, { timeout: 10000 });
   // P-21: the invite waits on the idle map as one line under the place plate; a tap opens the convoy sheet (P-11: no Convoy section)
   await page.waitForSelector('.convoy-bar.show .cv-line');
   check(/Sunday run/.test(await page.textContent('.convoy-bar .cv-line')) && /@lead invited you/.test(await page.textContent('.convoy-bar .cv-line'))
     && (await page.$$('.convoy-bar.show > *')).length === 1, 'the map says it in one line: ' + await page.textContent('.convoy-bar'));
+  // Nate 2026-11-16: a tap opens the invite's own card, one question: Join or Not now
   await page.click('.convoy-bar .cv-line');
-  await page.waitForSelector('.convoy-sheet button:has-text("Join")');
-  check(/@lead invited you: Sunday run/.test(await page.textContent('.convoy-sheet')), 'the convoy sheet says who invited you and to what');
-  await page.click('.convoy-sheet button:text-is("Join")');
+  await page.waitForSelector('.cv-invite button:text-is("Join")');
+  const cardText = await page.textContent('.cv-invite');
+  check(/Sunday run/.test(cardText) && /1 car in/.test(cardText) && /Not now/.test(cardText) && /shares your position/.test(cardText), 'the card says which convoy, how many are in, and what joining shares: ' + cardText);
+  await page.click('.cv-invite button:text-is("Join")');
+  await page.waitForFunction(() => !document.querySelector('.cv-invite') && window.__toasts.some((t) => /You're in\. @lead sees you on the map\./.test(t)), null, { timeout: 5000 })
+    .catch(async () => { throw new Error('after Join: ' + JSON.stringify(await page.evaluate(() => [!!document.querySelector('.cv-invite') && document.querySelector('.cv-invite').textContent, window.__toasts.slice(-4)]))); });
+  await page.click('.convoy-bar .cv-line');
   await page.waitForFunction(() => /you're following/i.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
   check(/left/.test(await page.textContent('.convoy-sheet')) && !/ends \d/.test(await page.textContent('.convoy-sheet')), 'how long it has left, not a clock time (P-28): ' + await page.textContent('.convoy-sheet .note'));
   check(accepted, 'joined with consent, without a link');
@@ -3645,6 +3651,96 @@ flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stub
   check(/Sunday run/.test(await page.textContent('.convoy-bar .cv-line')), 'in the convoy, the line names it');
   await page.evaluate(() => { document.querySelector('.tab[data-view="people"]').click(); document.querySelector('[data-people="crews"]').click(); });
   check(!(await page.$$eval('#crewsBody h3', (h) => h.filter((x) => /Convoy/.test(x.textContent)).length)), 'no Convoy heading on Crews');
+});
+
+flow('convoy: two taps to convoy up, faces then Invite, and the friend is told (Worker stubbed, Nate 2026-11-16)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const id = 'DDDDDDDDDDDDDDDDDDDDDD', until = Date.now() + 120 * 60000, posts = [];
+  const ctx = { sessionId: id, name: 'Convoy', role: 'leader', you: 'k1', leaderKey: 'k1', expiresAtMs: until, seq: 0, leaderEpoch: 1, invited: [],
+                members: [{ key: 'k1', handle: 'me', role: 'leader', online: true }] };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'u2', handle: 'sam', status: 'accepted', photo_id: null }, { id: 'u3', handle: 'rae', status: 'accepted', photo_id: null }, { id: 'u4', handle: 'pend', status: 'pending', photo_id: null }]);
+    if (m === 'POST' && u.pathname.startsWith('/api/convoy') && !u.pathname.endsWith('/ticket')) posts.push([u.pathname, JSON.parse(route.request().postData() || 'null')]);
+    if (u.pathname === '/api/convoy' && m === 'POST') return json({ invite: `${id}.${'s'.repeat(32)}`, context: ctx }, 201);
+    if (u.pathname === `/api/convoy/${id}/invite-people`) return json({ invited: 1 });
+    if (u.pathname === `/api/convoy/${id}/ticket`) return json({ error: 'unavailable' }, 503);
+    if (u.pathname === `/api/convoy/${id}`) return json(ctx);
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.evaluate(() => document.getElementById('startMore').click());
+  await page.click('.start-sheet button:text-is("Convoy")');
+  await page.waitForSelector('.convoy-sheet .cv-face');
+  const faces = await page.$$eval('.convoy-sheet .cv-face', (b) => b.map((x) => x.lastElementChild.textContent));
+  check(JSON.stringify(faces) === '["rae","sam"]', 'Who\'s coming? shows accepted friends\' faces, no pending ones: ' + JSON.stringify(faces));
+  check(!(await page.$('.convoy-sheet input[aria-label="Convoy name"]')), 'no name to type before going');
+  await page.click('.convoy-sheet .cv-face[aria-label="@sam"]');
+  check((await page.textContent('.convoy-sheet .cv-send')) === 'Invite 1', 'the key counts who is picked');
+  await page.click('.convoy-sheet .cv-send');
+  await page.waitForFunction(() => /Invited @sam\./.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  check(posts.length === 2 && posts[0][0] === '/api/convoy' && posts[0][1].consent === true && posts[1][0] === `/api/convoy/${id}/invite-people` && JSON.stringify(posts[1][1].handles) === '["sam"]',
+    'one key started the convoy and invited @sam: ' + JSON.stringify(posts));
+  await page.waitForFunction(() => /you're leading/i.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
+  check(await page.isVisible('.convoy-sheet button:text-is("Add friends")'), 'the leader adds more from the same faces');
+});
+
+flow('convoy: a push\'s tap opens the invite\'s card in every state, and its Join convoy joins at once (Worker stubbed, Nate 2026-11-16)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const id = 'EEEEEEEEEEEEEEEEEEEEEE', until = Date.now() + 25 * 60000, del = [];
+  let card = 'ok', accepted = false;
+  const member = { sessionId: id, name: 'Convoy', role: 'member', you: 'k2', leaderKey: 'k1', expiresAtMs: until, seq: 0, leaderEpoch: 1,
+                   members: [{ key: 'k1', handle: 'lead', role: 'leader', online: true }, { key: 'k2', handle: 'me', role: 'member', online: true }] };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/convoy/invites') return json([]);
+    if (u.pathname === `/api/convoy/invites/${id}` && m === 'DELETE') { del.push(id); return json({ ok: true }); }
+    if (u.pathname === `/api/convoy/invites/${id}`) {
+      if (card === 'offline') return route.abort();
+      if (card === 'gone') return json({ error: 'no_convoy' }, 404);
+      if (card === 'full') return json({ error: 'convoy_full' }, 409);
+      return json({ name: 'Convoy', leader: { handle: 'lead' }, members: 2, max: 16, expiresAtMs: until, untilMs: until, member: accepted });
+    }
+    if (u.pathname === `/api/convoy/${id}/accept` && m === 'POST') { accepted = JSON.parse(route.request().postData()).consent === true; return json(member); }
+    if (u.pathname === `/api/convoy/${id}/ticket`) return json({ error: 'unavailable' }, 503);
+    if (u.pathname === `/api/convoy/${id}`) return json(member);
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function');
+  const tap = (params) => page.evaluate((p) => window.apex.onNative({ type: 'link', params: p }), params);
+  const text = () => page.textContent('.cv-invite');
+  const seen = {};
+  for (const st of ['gone', 'full', 'offline', 'ok']) {
+    card = st;
+    await tap({ convoy: id });
+    await page.waitForFunction(() => document.querySelector('.cv-invite') && !/Checking/.test(document.querySelector('.cv-invite').textContent), null, { timeout: 8000 });
+    seen[st] = await text();
+    if (st !== 'ok') await page.click('.cv-invite button:text-is("' + (st === 'offline' ? 'Not now' : 'Close') + '")');
+  }
+  check(/ran out/.test(seen.gone) && /Message @lead|Close/.test(seen.gone), 'an invite that ran out says so: ' + seen.gone);
+  check(/is full/.test(seen.full) && /16 cars/.test(seen.full), 'a full convoy says so: ' + seen.full);
+  check(/No connection/.test(seen.offline) && /Try again/.test(seen.offline), 'no signal: try again: ' + seen.offline);
+  check(/@lead's convoy/.test(seen.ok) && /2 cars in/.test(seen.ok) && /Join/.test(seen.ok), 'the card names the leader and who\'s in: ' + seen.ok);
+  check(del.length === 1, 'Not now tells the leader (once): ' + del.length);
+  check(await page.evaluate(() => !!document.querySelector('.convoy-sheet.cv-invite .card-sheet')), 'the card sits over the map, wherever you were');
+  await page.click('.cv-invite button:text-is("Not now")');
+  check(del.length === 2 && !(await page.$('.cv-invite')), 'Not now closes the card and tells the leader');
+  // the notification's long-press Join convoy: in at once, no card to answer
+  await tap({ convoy: id, join: '1' });
+  await page.waitForFunction(() => /You're in/.test(document.getElementById('toast').textContent), null, { timeout: 8000 });
+  check(accepted && !(await page.$('.cv-invite')), 'Join convoy joined with consent and left no card');
+  // tapped again once in: You're in, Open convoy
+  await tap({ convoy: id });
+  await page.waitForSelector('.cv-invite button:text-is("Open convoy")', { timeout: 8000 });
+  check(/Already in/.test(await text()), 'already in it: ' + await text());
 });
 
 flow('convoy voice: Talk joins the channel, the one key mutes and unmutes, and a new voice is listened to (Worker, socket and WebRTC stubbed)', async (page, base) => {
@@ -3739,14 +3835,23 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check((await page.textContent('.crew-page h2')) === 'Ridge Runners', 'the Crews side opens the crew');
   check(await page.evaluate(() => document.querySelector('[data-people="crews"]').getAttribute('aria-selected') === 'true' && !document.getElementById('crewsBody').hidden
     && document.getElementById('accountBody').hidden && document.getElementById('sheetTitle').textContent === 'Social'), 'on the Social tab, its Crews side');
-  check(await page.evaluate(() => !!document.querySelector('#crewsBody .crew-head .gear-key') && !document.querySelector('#crewsBody .friend-list')), 'the crew head and its gear are on the Crews side, no friends list there');
-  check(await page.evaluate(() => document.querySelector('#crewsBody .crew-head').textContent.trim() === '' && document.querySelectorAll('#crewsBody .crew-page h2').length === 1), 'one crew: its name once, on its page, not again above it');
-  // one crew: no band of its own for the gear; it sits on the cover's top-left, clear of Edit livery (walkthrough 2026-11-12)
-  const gearSpot = await page.evaluate(() => { const r = (q) => document.querySelector(q).getBoundingClientRect(), g = r('#crewsBody .gear-key'), h = r('.crew-page .cp-head'), e = r('.crew-page .cp-edit');
-    return { onCover: g.top >= h.top && g.bottom <= h.bottom && g.left >= h.left, clear: g.right < e.left || g.bottom < e.top }; });
-  check(gearSpot.onCover && gearSpot.clear, 'the gear sits on the cover, clear of Edit livery: ' + JSON.stringify(gearSpot));
-  // Nate 2026-11-12 (as easy as a big social app): three tabs under the crew's name, Drives open first
-  check(JSON.stringify(await page.$$eval('.cp-tabs [role="tab"]', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-selected')))) === '["Drives:true","Chat:false","Board:false"]', 'Drives | Chat | Board, Drives open');
+  check(await page.evaluate(() => !document.querySelector('#crewsBody .friend-list') && document.querySelector('#crewsBody .crew-head').hidden && document.querySelectorAll('#crewsBody .crew-page h2').length === 1), 'one crew: its page is the side, its name once, no friends list there');
+  // (2026-11-16) a group's page: what it is, who you know in it, then Manage (the owner's settings), Invite and Chat
+  check(await page.textContent('.crew-page .cp-meta') === 'Private crew · 3 members', 'what the crew is, in one line: ' + await page.textContent('.crew-page .cp-meta'));
+  await page.waitForSelector('.crew-page .cp-known:not([hidden])');
+  check(await page.textContent('.crew-page .cp-known small') === 'cara is in it', 'your friend in it: ' + await page.textContent('.crew-page .cp-known'));
+  check(JSON.stringify(await page.$$eval('.crew-page .cp-keys button', (b) => b.map((x) => x.getAttribute('aria-label') || x.textContent))) === '["Manage the crew","Invite","Crew chat"]', 'Manage, Invite, Chat under the name');
+  // Posts open first, the next drive pinned on top; its tap goes to Drives
+  check(JSON.stringify(await page.$$eval('.cp-tabs [role="tab"]', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-selected')))) === '["Posts:true","Drives:false","Chat:false","Board:false","Members:false"]', 'Posts | Drives | Chat | Board | Members, Posts open');
+  check(/PINNED · CREW DRIVE/.test(await page.textContent('#cpPane-posts .cp-next')) && /Dawn run/.test(await page.textContent('#cpPane-posts .cp-next')) && /1 going/.test(await page.textContent('#cpPane-posts .cp-next')), 'the next drive pinned on Posts');
+  await page.waitForSelector('#cpPane-posts .crew-drives:not([hidden]) .feed-card');
+  check(await page.isHidden('#cpPane-posts .cp-posts-hint'), 'with posts, no hint');
+  await page.click('#cpPane-posts .cp-next');
+  check(await page.getAttribute('[data-cp-tab="drives"]', 'aria-selected') === 'true', 'the pinned drive opens Drives');
+  await page.click('.crew-page .cp-chat-key');
+  check(await page.getAttribute('[data-cp-tab="chat"]', 'aria-selected') === 'true', 'the chat key opens Chat');
+  if (process.env.SHOTS) { await page.click('.cp-tabs [data-cp-tab="posts"]'); await page.screenshot({ path: `${process.env.SHOTS}/crew-group.png` }); }
+  await page.click('.cp-tabs [data-cp-tab="posts"]');
   check(await page.isHidden('.cp-board') && await page.isHidden('.cp-say'), 'the board and the chat wait behind their tabs');
   await page.click('.cp-tabs [data-cp-tab="board"]');
   await page.waitForSelector('.cp-board .cp-board-row');
@@ -3763,9 +3868,8 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   // the owner's note 05: no Crew drives row; the crew's Upcoming drives has a + in its corner that plans one
   check(!/Crew drives/.test(await page.$$eval('#crewsBody .nav-rows', (n) => n.map((x) => x.textContent).join('|'))), 'no Crew drives row on Crews');
   await page.click('.cp-tabs [data-cp-tab="drives"]');
-  // (2026-11-14) what members posted to the crew, on the Drives tab after Members
-  await page.waitForSelector('.crew-page .crew-drives:not([hidden]) .feed-card');
-  check(/Dawn run on the Skyway/.test(await page.textContent('.crew-page .crew-drives')) && /Posted to the crew/.test(await page.textContent('.crew-page .crew-drives h3')), 'the crew\'s posted drives on its page, after the members');
+  // (2026-11-14) what members posted to the crew, on Posts since 2026-11-16
+  check(/Dawn run on the Skyway/.test(await page.textContent('.crew-page .crew-drives')) && /Posted to the crew/.test(await page.textContent('.crew-page .crew-drives h3')), 'the crew\'s posted drives on its page');
   check(/Upcoming drives/.test(await page.textContent('.cp-week .cp-sec h3')) && await page.isVisible('.cp-week .cp-sec .plan-plus'), 'Upcoming drives with a + in its corner');
   await page.click('.cp-week .plan-plus');
   await page.waitForSelector('.cp-week .plan-drive');
@@ -3779,7 +3883,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
     const name = (x) => x.classList.contains('cp-week') ? 'run' : (x.querySelector(':scope > .cp-sec h3') || {}).textContent || x.className;
     const body = [...document.querySelectorAll('.crew-page .cp-body > *')].map((x) => x.classList.contains('cp-title') ? 'title' : x.classList.contains('cp-livery-foot') ? 'livery' : x.querySelector('.cp-tabs') ? 'tabs' : x.className);
     return { body, panes: Object.fromEntries([...document.querySelectorAll('.cp-pane')].map((p) => [p.id, [...p.children].map(name).filter(Boolean)])) }; });
-  check(JSON.stringify(order.body) === '["title","tabs"]' && JSON.stringify(order.panes['cpPane-drives'].slice(0, 2)) === '["run","Members"]'
+  check(JSON.stringify(order.body) === '["cp-title-wrap stack-12","tabs"]' && JSON.stringify(order.panes['cpPane-drives'].slice(0, 1)) === '["run"]' && order.panes['cpPane-members'][0] === 'Members'
     && order.panes['cpPane-chat'].length === 1 && order.panes['cpPane-board'][0] === 'Vetta Score board', 'the page in order: ' + JSON.stringify(order));
   // the crew's DNA under the board (dna_card.js crewLeaders): who is cleanest at each skill, your level beside it
   const dnaRows = await page.$$eval('#cpPane-board .cp-dna-row', (r) => r.map((x) => [...x.children].map((c) => c.textContent).filter(Boolean).join(' ')));
@@ -3788,20 +3892,19 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(await page.evaluate(() => ![...document.querySelectorAll('#cpPane-chat h3')].some((h) => h.textContent === 'Chat')), 'the Chat tab names the chat: no second "Chat" heading under it');
   check(!(await page.$$('.crew-page .cp-livery, .crew-page .cp-meter')).length, 'no livery box or meter on the page (they are in Edit livery)');
   check(!/Convoy/.test(await page.$$eval('#crewsBody h3', (h) => h.map((x) => x.textContent).join('|'))), 'no Convoy heading on Crews');
-  // P-06: the members as faces, the owner marked, the one on the road lit
-  await page.click('.cp-tabs [data-cp-tab="drives"]');
-  const mem = await page.$$eval('.cp-member', (b) => b.map((x) => [x.querySelector('small').textContent, !!x.querySelector('em'), x.classList.contains('live')]));
-  check(JSON.stringify(mem) === JSON.stringify([['You', true, false], ['@cara', false, true], ['@sam', false, false]]) && /3 members · 1 out now/.test(await page.textContent('.crew-page')), 'members: ' + JSON.stringify(mem));
-  // the lit ring (a 4 px shadow outside the face) is whole: the scrolling strip clips anything past its padding box
-  const ring = await page.evaluate(() => { const s = document.querySelector('.cp-members').getBoundingClientRect(), f = document.querySelector('.cp-member.live .avatar').getBoundingClientRect();
-    return { top: Math.round(f.top - 4 - s.top), left: Math.round(f.left - 4 - s.left) }; });
-  check(ring.top >= 0 && ring.left >= 0, 'the on-the-road ring is not cut by the members strip: ' + JSON.stringify(ring));
+  // P-06: the members (a group's Members tab, 2026-11-16): the owner marked, the one on the road lit and first after, friends said
+  await page.click('.cp-tabs [data-cp-tab="members"]');
+  await page.waitForSelector('.cp-member-list .cp-member');
+  const mem = await page.$$eval('.cp-member', (b) => b.map((x) => [x.querySelector('.cp-member-who b').textContent, (x.querySelector('.cp-member-who small') || {}).textContent || '', !!x.querySelector('em'), x.classList.contains('live')]));
+  check(JSON.stringify(mem) === JSON.stringify([['You · @me', 'Owner', true, false], ['@cara', 'On the road · Cherohala Skyway · Your friend', false, true], ['@sam', '', false, false]]) && /3 members · 1 out now/.test(await page.textContent('.crew-page')), 'members: ' + JSON.stringify(mem));
+  check(await page.isHidden('.cp-member-find'), 'no search on a short list');
   await page.click('.cp-member:has-text("@sam")');
   await page.waitForSelector('.cp-member-sheet');
   check(await page.isVisible('.cp-member-sheet button:has-text("Report")') && await page.isVisible('.cp-member-sheet button:has-text("Block")'), 'Report and Block are on the member, one tap in');
   // a crew-mate who is not a friend is one tap from one (Nate 2026-11-12: as easy as any social app)
   await page.waitForSelector('.cp-member-sheet button:text-is("Add friend")');
   check(await page.$$eval('.cp-member-sheet .row:last-child button', (b) => b.map((x) => x.textContent).join('|')) === 'Report|Block|Done', 'the foot is Report, Block, then Done last');
+  check(await page.isVisible('.cp-member-sheet button:text-is("Remove from crew")'), 'the owner can remove a member, on their sheet');
   await page.click('.cp-member-sheet button:text-is("Add friend")');
   await page.waitForSelector('.cp-member-sheet button:text-is("Request sent")[disabled]');
   check(sent.some((x) => x.p === '/api/friends/request' && JSON.parse(x.b).handle === 'sam'), 'Add friend sends the request to @sam');
@@ -3842,8 +3945,8 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.waitForSelector('.confirm-sheet .cs-choose');
   check(/Report/.test(await page.textContent('.confirm-sheet')) && !/Pin it/.test(await page.textContent('.confirm-sheet')), 'Report on the message\'s own sheet (a Plain crew pins nothing)');
   await page.click('.confirm-sheet .cs-no');
-  // P-16: one line of crew names in the text face (a single crew: its name), the gear beside it; P-31: the gear is this crew's settings
-  await page.click('#crewsBody .gear-key');
+  // P-31: Manage on the page opens this crew's settings
+  await page.click('.crew-page .cp-keys button[aria-label="Manage the crew"]');
   await page.waitForSelector('.side-pop.open[aria-label="Crew settings"] .crew-settings');
   const gearText = await page.textContent('.side-pop.open[aria-label="Crew settings"]');
   check(/Ridge Runners/.test(gearText) && /What it sees of yours/.test(gearText) && /Leave/.test(gearText) && !(await page.$$('.side-pop.open[aria-label="Crew settings"] .crew-tiles')).length, 'the gear: one crew\'s settings, no tiles: ' + gearText.slice(0, 160));
@@ -4352,9 +4455,10 @@ flow('the Log coaches first: the news from the latest drive, why, and the one th
   const got = await page.evaluate(() => { const v = (id) => { const e = document.getElementById(id); return e.hidden ? null : e.textContent; };
     const box = document.getElementById('logCoach').getBoundingClientRect(), hero = document.getElementById('historyCards').getBoundingClientRect();
     return { head: v('logCoachHead'), why: v('logCoachWhy'), trend: v('logCoachTrend'), next: v('logCoachNext'), go: !document.getElementById('logCoachGoRow').hidden, first: box.top < hero.top }; });
-  check(/^Your best drive yet on [A-Z][a-z]{2} \d{1,2}$/.test(got.head) && got.first, 'the Log opens on the news, above the numbers: ' + JSON.stringify(got));
-  check(got.why === '700, 40 above your previous best. Smoothness carried it: 78 out of 100 (usually 60).', 'why, from the measured part beside your usual: ' + JSON.stringify(got));
+  check(got.head === 'Your best drive yet' && got.first, 'the Log opens on the news, above the numbers: ' + JSON.stringify(got));
+  check(got.why === '40 above your previous best. Smoothness carried it: 78 out of 100 (usually 60).', 'why, from the measured part beside your usual: ' + JSON.stringify(got));
   check(got.trend === null && /^Next drive, work on /.test(got.next || '') && got.go, 'no steady trend said twice; one thing to work on next; a key to the drive: ' + JSON.stringify(got));
+  check((await page.textContent('#logCoachGo')) === 'See the drive', 'a drive\'s news opens the drive (a corner\'s, the corner)');
   await page.click('#logCoachGo');
   await page.waitForFunction(() => document.getElementById('dvPick') && document.getElementById('dvPick').value === 'c4', null, { timeout: 15000 });
   check(true, 'See the drive opens the drive the news is about');
@@ -4931,8 +5035,9 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
   // P-11: an ad-hoc convoy is the map's Start key: Convoy now, and the sheet opens on the code for the car park
   await page.click('#startMore');
   await page.waitForSelector('.start-sheet .rec-key');
-  check(/^Just drive$/.test((await page.textContent('.start-sheet .rec-key')).trim()), 'the key\'s chevron offers Just drive and Convoy now');
-  await page.click('.start-sheet button:has-text("Convoy now")');
+  check(/^Just drive$/.test((await page.textContent('.start-sheet .rec-key')).trim()), 'the key\'s chevron offers Just drive and Convoy');
+  await page.click('.start-sheet button:text-is("Convoy")');
+  await page.click('.convoy-sheet button:text-is("QR code")');
   await page.waitForSelector('.convoy-sheet canvas.cv-qr');
   check(/you're leading/i.test(await page.textContent('.convoy-sheet')) && await page.isVisible('.convoy-sheet button:has-text("Start the drive")'), 'leading, the code up, the drive one key away');
   const dark = await page.evaluate(() => { const c = document.querySelector('canvas.cv-qr'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
@@ -5008,7 +5113,8 @@ flow('convoy: ten minutes before it ends the leader is told and can keep it goin
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.evaluate(() => document.getElementById('startMore').click());
-  await page.click('.start-sheet button:has-text("Convoy now")');
+  await page.click('.start-sheet button:text-is("Convoy")');
+  await page.click('.convoy-sheet button:text-is("QR code")');
   await page.waitForSelector('.convoy-sheet button:has-text("Keep going 1 h")');
   check(/\b[89] min left/.test(await page.locator('.convoy-sheet').innerText()), 'the card says how long is left');
   // the heads-up, once, with the key on it
@@ -5044,7 +5150,8 @@ flow('convoy: leading a drive, the convoy is one line behind the car and the cal
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   // (a script's tap: Playwright's click scrolls the clipped stage to bring the plan bar's key "into view", which a finger can't)
   await page.evaluate(() => document.getElementById('startMore').click());
-  await page.click('.start-sheet button:has-text("Convoy now")');
+  await page.click('.start-sheet button:text-is("Convoy")');
+  await page.click('.convoy-sheet button:text-is("QR code")');
   await page.waitForSelector('.convoy-sheet canvas.cv-qr');
   await page.click('.convoy-sheet button:has-text("Start the drive")');
   check(await page.evaluate(() => { const s = document.querySelector('.stage'); return !s.scrollLeft && !s.scrollTop; }), 'the map stage is where it was');
@@ -5906,6 +6013,7 @@ flow('roadbooks: a crew\'s roadbook: the crew page lists it and starts one; a me
     return json([]);
   });
   await page.goto(base + '/index.html?view=crew');
+  await page.click('.cp-tabs [data-cp-tab="drives"]');   // its roadbooks are on Drives (Posts opens first, 2026-11-16)
   await page.waitForSelector('.crew-page .rb-of-crew .rb-row', { timeout: 15000 });
   const listed = await page.textContent('.crew-page .rb-of-crew');
   check(/Roadbooks/.test(listed) && /Crew favourites/.test(listed) && /@sam/.test(listed), 'the crew page\'s Drives tab lists the crew\'s roadbook: ' + listed);
@@ -6596,6 +6704,7 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   const openDrives = async () => {
     for (const done of await page.$$('.side-pop.open .side-pop-head button')) await done.click();   // Done on the sheet that's open
     await page.click('[data-people="crews"]');
+    await page.click('.cp-tabs [data-cp-tab="drives"]');   // crews as groups: the crew's drives are their own tab
     await page.waitForSelector(`${W} .drive-card`);
   };
   await openDrives();
@@ -6734,7 +6843,7 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
     if (m === 'POST' || m === 'DELETE') return route.fulfill({ status: 204 });
     return json([]);
   });
-  const crewSide = async () => { await page.goto(base + '/index.html?view=crew'); await page.waitForSelector('.crew-page .cp-week .drive-card'); };
+  const crewSide = async () => { await page.goto(base + '/index.html?view=crew'); await page.click('.cp-tabs [data-cp-tab="drives"]'); await page.waitForSelector('.crew-page .cp-week .drive-card'); };
   // a crew-mate started the drive's convoy: the card says so and joins it; no Convoy section anywhere
   await crewSide();
   await page.waitForSelector('.cp-week .drive-card.is-morning button:has-text("Join the convoy")', { timeout: 8000 });
@@ -8020,7 +8129,7 @@ flow('push notifications: Garage > Notifications asks iOS only at the switch, ha
   // (2026-11-14) each kind has its own switch under it, as the server keeps them (duels off here)
   await page.waitForSelector('.garage-pop.open #pushKinds:not([hidden]) .sw');
   const sw = await page.$$eval('.garage-pop.open #pushKinds .sw', (l) => l.map((b) => [b.textContent, b.getAttribute('aria-checked')]));
-  check(JSON.stringify(sw) === JSON.stringify([['Friend requests', 'true'], ['Kudos', 'true'], ['Comments and mentions', 'true'], ['Duels', 'false'], ['Someone beat you', 'true'], ['Crew drives', 'true'], ['Messages', 'true']]), 'one switch per kind: ' + JSON.stringify(sw));
+  check(JSON.stringify(sw) === JSON.stringify([['Friend requests', 'true'], ['Kudos', 'true'], ['Comments and mentions', 'true'], ['Duels', 'false'], ['Someone beat you', 'true'], ['Crew drives', 'true'], ['Messages', 'true'], ['Convoy invites', 'true']]), 'one switch per kind: ' + JSON.stringify(sw));
   await page.click('.garage-pop.open #pushKinds .sw:has-text("Kudos")');
   for (let i = 0; i < 40 && !kinds.length; i++) await page.waitForTimeout(50);
   check(JSON.stringify(kinds) === '[["duels","kudos"]]' && await page.getAttribute('.garage-pop.open #pushKinds .sw:has-text("Kudos")', 'aria-checked') === 'false', 'Kudos off is kept on the server: ' + JSON.stringify(kinds));
@@ -8094,7 +8203,7 @@ flow('friend profile: a friend on People → Profile shows what the friend share
     'the profile opens on the person, photo, status and their month: ' + JSON.stringify(who));
   const pk = await page.evaluate(() => ({ keys: [...document.querySelectorAll('.profile-view .profile-keys button')].map((b) => b.textContent), foot: [...document.querySelectorAll('.profile-view .profile-foot button')].map((b) => b.textContent),
     last: document.querySelector('.profile-view > :last-child').className }));
-  check(JSON.stringify(pk.keys) === '["Message","On the map","Share a route","Invite to a drive","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
+  check(JSON.stringify(pk.keys) === '["Message","On the map","Share a route","Convoy","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
   await page.click('.profile-view button:has-text("Friends")');   // one back glyph and where it goes (REVIEW2.md)
   await page.waitForSelector('.side-pop.open .profile-view', { state: 'detached', timeout: 3000 }).catch(() => {});
   check(await page.evaluate(() => !document.querySelector('.side-pop.open') && !!document.querySelector('#accountBody .friend-head:not(.you-row)')), 'Back returns to the friends list');
@@ -8349,7 +8458,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
     const k = await page.$$eval('.people-pop.open .profile-keys button', (b) => b.map((x) => x.textContent)); return k; };
   const back = () => page.click('.people-pop.open .profile-view button:has-text("Friends")');
   const acts = await profileOf('@cara');
-  check(JSON.stringify(acts) === '["Message","On the map","Share a route","Invite to a drive","Challenge on a stage"]' && await page.evaluate(() => getComputedStyle(document.querySelector('.people-pop.open .profile-keys > :last-child')).gridColumnEnd) === '-1',
+  check(JSON.stringify(acts) === '["Message","On the map","Share a route","Convoy","Challenge on a stage"]' && await page.evaluate(() => getComputedStyle(document.querySelector('.people-pop.open .profile-keys > :last-child')).gridColumnEnd) === '-1',
     'her profile opens on what you can do with her, Message first; an odd last key spans the row: ' + JSON.stringify(acts));
   const cara = await page.textContent('.people-pop.open .profile-view');
   check(/Shared Cherohala loop · /.test(cara) && /What @cara sees of you\s*Scores/.test(cara) && /Couldn’t load the rest/.test(cara) && !/No scores shared/.test(cara), 'her last share and what she sees of you; offline, nothing guessed: ' + cara);
@@ -8565,21 +8674,21 @@ flow('one link in: no "invite-only" anywhere; a crew link joins a newcomer with 
     crest: null, crest_photo_id: null, stripe: null, cover_photo_id: null, livery: 'plain', sharing_scores: false, board: [], next: null };
   await page.goto(base + '/index.html?view=crew');
   await page.waitForSelector('.crew-page .cp-title h2');
-  check(await page.isVisible('.cp-title button:has-text("Invite")'), 'a member\'s crew page has Invite (P-07)');
+  check(await page.isVisible('.cp-keys button:has-text("Invite")'), 'a member\'s crew page has Invite (P-07)');
   await page.evaluate(() => { try { Object.defineProperty(navigator, 'share', { value: undefined, configurable: true }); navigator.clipboard.writeText = async () => {}; } catch (_) {} });
-  await page.click('.cp-title button:has-text("Invite")');
+  await page.click('.cp-keys button:has-text("Invite")');
   for (let i = 0; i < 50 && !sent.some((x) => x.p === '/api/crews/k1/invite'); i++) await page.waitForTimeout(100);
   check(sent.some((x) => x.p === '/api/crews/k1/invite'), 'Invite asks the Worker for a crew link');
   // the owner keeps invites to themselves: the page's Invite goes for a member; the gear has the switch, and it reaches the Worker
   crewPage = { ...crewPage, invites: 'owner', can_invite: false };
   await page.goto(base + '/index.html?view=crew');
   await page.waitForSelector('.crew-page .cp-title h2');
-  check(!(await page.isVisible('.cp-title button:has-text("Invite")')), 'Who can invite: Owner, and a member has no Invite key');
+  check(!(await page.isVisible('.cp-keys button:has-text("Invite")')), 'Who can invite: Owner, and a member has no Invite key');
   crews = [{ ...crews[0], role: 'owner', invites: 'anyone' }];
   crewPage = { ...crewPage, is_owner: true, invites: 'anyone', can_invite: true };
   await page.goto(base + '/index.html?view=crew');
   await page.waitForSelector('.crew-page .cp-title h2');
-  await page.click('#crewsBody .gear-key');
+  await page.click('.crew-page .cp-keys button[aria-label="Manage the crew"]');
   await page.waitForSelector('.side-pop.open [role="radiogroup"][aria-label="Who can invite to Ridge Runners"]');
   check(!(await page.isVisible('.side-pop.open button:has-text("Invite to crew")')), 'the gear has no second Invite key');
   await page.click('.side-pop.open [role="radiogroup"][aria-label="Who can invite to Ridge Runners"] button:has-text("Owner")');
@@ -14129,8 +14238,8 @@ flow('TestFlight 2026-11-05 note 1: in several crews the Crews side is a dashboa
   // the feed's message opens its crew; the key back is the dashboard again
   await page.click('.cd-item:has-text("Pancakes")');
   await page.waitForSelector('#crewsBody .crew-page .cp-title h2');
-  check(await page.textContent('.crew-page .cp-title h2') === 'Blue Ridge Breakfast Club' && await page.isVisible('#crewsBody .crew-head .cd-back') && await page.isVisible('#crewsBody .crew-head .gear-key'),
-    'a crew opens with the key back and its gear');
+  check(await page.textContent('.crew-page .cp-title h2') === 'Blue Ridge Breakfast Club' && await page.isVisible('#crewsBody .crew-head .cd-back') && await page.isVisible('.crew-page .cp-keys button:text-is("Joined")'),
+    'a crew opens with the key back, and Joined (your settings) on its page');
   check(!(await page.$('.crew-dash')), 'and the dashboard gives way to it');
   // a public crew you don't share with asks once on this phone (the owner, 2026-11-11); Cancel keeps it off and it doesn't ask again
   await page.waitForSelector('.confirm-sheet .cs-box');

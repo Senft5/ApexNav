@@ -34,6 +34,11 @@ const out = {
   stale: b([drive('a', 60, 600), drive('b', 59, 610), drive('c', 58, 605), drive('d', 40, 680), drive('e', 39, 690), drive('f', 38, 700, { braking: 0.9 }), drive('g', 30, 690)].slice(0, 7)),
   focus: b([...base, drive('e', 1, 652)], { focus: { skill: 'line', where: { split: 'size', worse: 'tight' } } }),
   unscoredLast: b([...base, { id: 'z', date: day(0), ds: { score: null } }]).go,
+  corners: L.brief([...base, drive('e', 1, 652)], null, words, NOW, { id: 'e', bests: [{ k: 3, by_s: 0.4, name: 'Left 4' }, { k: 8, by_s: 0.93, name: 'Right 3' }] }),
+  oneCorner: L.brief([...base, drive('e', 1, 652)], null, words, NOW, { id: 'e', bests: [{ k: 2, by_s: 0.31, name: null }] }),
+  otherDrive: L.brief([...base, drive('e', 1, 652)], null, words, NOW, { id: 'd', bests: [{ k: 2, by_s: 0.5 }] }).kind,
+  bestOverCorners: L.brief([...base, drive('e', 1, 700)], null, words, NOW, { id: 'e', bests: [{ k: 2, by_s: 0.5 }] }).kind,
+  latest: L.latestScored([...base, { id: 'z', date: day(0), ds: { score: null } }]),
 };
 console.log(JSON.stringify(out));
 """
@@ -52,15 +57,15 @@ def test_too_few_drives_say_nothing(out):
 
 def test_a_best_drive_is_only_one_above_every_earlier_drive(out):
     b = out["best"]
-    assert b["kind"] == "best" and b["go"] == "e" and b["headline"].startswith("Your best drive yet on Nov ")
-    assert b["why"].startswith("700, 40 above your previous best.") and "Smoothness carried it: 75 out of 100 (usually 60)." in b["why"]
+    assert b["kind"] == "best" and b["go"] == "e" and b["headline"] == "Your best drive yet"
+    assert b["why"].startswith("40 above your previous best.") and "Smoothness carried it: 75 out of 100 (usually 60)." in b["why"]
     assert out["tie"]["kind"] == "usual"                     # level with the best is not a new best
 
 
 def test_a_rough_drive_is_said_as_plainly_as_a_clean_one(out):
     r = out["rougher"]
     assert r["kind"] == "rougher" and r["headline"] == "Your latest drive was rougher than usual"
-    assert "against your usual 650. Braking is where it went: 70 out of 100 (usually 90)." in r["why"]
+    assert "Well under your usual 650. Braking is where it went: 70 out of 100 (usually 90)." in r["why"]
     c = out["cleaner"]
     assert c["kind"] == "cleaner" and c["headline"] == "Your latest drive was one of your cleanest"
     assert "Smoothness made the difference" in c["why"]
@@ -68,15 +73,15 @@ def test_a_rough_drive_is_said_as_plainly_as_a_clean_one(out):
 
 def test_a_usual_drive_is_called_one_and_no_noise_is_named(out):
     u = out["usual"]
-    assert u["kind"] == "usual" and u["headline"].startswith("A typical drive for you on Nov ") and u["why"] == "652, against your usual 650."
-    assert out["noisy"]["why"] == "652, against your usual 650."   # rhythm swings this much drive to drive: not a reason
+    assert u["kind"] == "usual" and u["headline"] == "A typical drive for you" and u["why"] == "Close to your usual 650."
+    assert out["noisy"]["why"] == "Close to your usual 650."   # rhythm swings this much drive to drive: not a reason
     assert out["usual"]["trend"] is None                     # a steady trend is the headline's "usual", not said twice
 
 
 def test_a_part_at_its_best_is_news_on_a_usual_score(out):
     p = out["partBest"]
     assert p["kind"] == "part_best" and p["headline"] == "Your braking was the best it has been"
-    assert p["why"].startswith("99 out of 100 (usually 90) on Nov ")
+    assert p["why"] == "99 out of 100 (usually 90)."
 
 
 def test_an_old_latest_drive_leaves_the_trend_as_the_news(out):
@@ -93,3 +98,15 @@ def test_next_is_the_profile_focus_where_it_shows_most(out):
 
 def test_an_unscored_latest_drive_is_not_the_news(out):
     assert out["unscoredLast"] == "d"
+
+
+def test_corners_quicker_than_ever_are_the_news_on_a_usual_drive(out):
+    c = out["corners"]
+    assert c["kind"] == "corners" and c["headline"] == "Two corners quicker than ever"
+    assert c["why"] == "Most at corner 9 (Right 3): 0.9 s under your best pass before."
+    assert c["go"] == {"drive": "e", "cornerIndex": 8}
+    o = out["oneCorner"]
+    assert o["headline"] == "A corner quicker than ever" and o["why"] == "Corner 3: 0.3 s under your best pass before."
+    assert out["otherDrive"] == "usual"                      # news about another drive is not this one's
+    assert out["bestOverCorners"] == "best"                  # a best drive is the bigger news
+    assert out["latest"] == "d"

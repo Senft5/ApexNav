@@ -60,8 +60,8 @@ export async function friendRequest(env: Env, v: Viewer, req: Request): Promise<
 /** Friends and incoming requests. Requests you sent are not listed (IDEAS Z-12): a row only for handles that exist would
  *  tell you which handles are real. The phone keeps what you sent and shows every one alike. */
 export async function friendList(env: Env, v: Viewer) {
-  return all<{ id: string; handle: string | null; name: string | null; status: string; incoming: number }>(env,
-    `SELECT u.id, u.handle, u.display_name AS name, f.status, (f.requested_by != ?1) AS incoming
+  return all<{ id: string; handle: string | null; name: string | null; photo_id: string | null; status: string; incoming: number }>(env,
+    `SELECT u.id, u.handle, u.display_name AS name, u.photo_id, f.status, (f.requested_by != ?1) AS incoming
        FROM friendships f JOIN users u ON u.id = CASE WHEN f.user_a = ?1 THEN f.user_b ELSE f.user_a END
       WHERE (f.user_a = ?1 OR f.user_b = ?1) AND NOT (f.status = 'pending' AND f.requested_by = ?1) ORDER BY u.handle`, v.id);
 }
@@ -325,18 +325,41 @@ export async function crewInvitePreview(env: Env, v: Viewer, req: Request) {
   return { id: row.id, name: row.name, visibility: row.visibility, owner: row.owner_handle, from: row.from_handle, members: row.members, member: !!row.mine };
 }
 
+/** What leaving a crew takes with it for one member: their grants and published entries for it, then the membership. */
+const memberGone = (env: Env, crewId: string, userId: string) => [
+  env.DB.prepare("DELETE FROM grants WHERE audience_type = 'crew' AND audience_id = ?1 AND user_id = ?2").bind(crewId, userId),
+  env.DB.prepare("DELETE FROM board_entries WHERE audience_type = 'crew' AND audience_id = ?1 AND user_id = ?2").bind(crewId, userId),
+  env.DB.prepare("DELETE FROM drive_scores WHERE crew_id = ?1 AND user_id = ?2").bind(crewId, userId),
+  env.DB.prepare("DELETE FROM segment_shares WHERE audience_type = 'crew' AND audience_id = ?1 AND segment_id IN (SELECT id FROM segments WHERE owner = ?2)").bind(crewId, userId),
+  env.DB.prepare("DELETE FROM crew_invites WHERE crew_id = ?1 AND created_by = ?2").bind(crewId, userId),   // their links die with them
+  env.DB.prepare("DELETE FROM crew_members WHERE crew_id = ?1 AND user_id = ?2").bind(crewId, userId),
+];
+
 /** Leaving removes your grants and published entries for that crew. The owner leaving dissolves the crew. */
 export async function crewLeave(env: Env, v: Viewer, crewId: string): Promise<void> {
   const crew = await first<{ owner: string }>(env, "SELECT owner FROM crews WHERE id = ?", crewId);
   if (!crew || !(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
-  const dissolve = crew.owner === v.id;
+  if (crew.owner !== v.id) { await env.DB.batch(memberGone(env, crewId, v.id)); return; }
   await env.DB.batch([
-    env.DB.prepare(dissolve ? "DELETE FROM grants WHERE audience_type = 'crew' AND audience_id = ?1" : "DELETE FROM grants WHERE audience_type = 'crew' AND audience_id = ?1 AND user_id = ?2").bind(...(dissolve ? [crewId] : [crewId, v.id])),
-    env.DB.prepare(dissolve ? "DELETE FROM board_entries WHERE audience_type = 'crew' AND audience_id = ?1" : "DELETE FROM board_entries WHERE audience_type = 'crew' AND audience_id = ?1 AND user_id = ?2").bind(...(dissolve ? [crewId] : [crewId, v.id])),
-    env.DB.prepare(dissolve ? "DELETE FROM drive_scores WHERE crew_id = ?1" : "DELETE FROM drive_scores WHERE crew_id = ?1 AND user_id = ?2").bind(...(dissolve ? [crewId] : [crewId, v.id])),
-    env.DB.prepare(dissolve ? "DELETE FROM segment_shares WHERE audience_type = 'crew' AND audience_id = ?1" : "DELETE FROM segment_shares WHERE audience_type = 'crew' AND audience_id = ?1 AND segment_id IN (SELECT id FROM segments WHERE owner = ?2)").bind(...(dissolve ? [crewId] : [crewId, v.id])),
-    env.DB.prepare(dissolve ? "DELETE FROM crews WHERE id = ?1" : "DELETE FROM crew_members WHERE crew_id = ?1 AND user_id = ?2").bind(...(dissolve ? [crewId] : [crewId, v.id])),
+    env.DB.prepare("DELETE FROM grants WHERE audience_type = 'crew' AND audience_id = ?1").bind(crewId),
+    env.DB.prepare("DELETE FROM board_entries WHERE audience_type = 'crew' AND audience_id = ?1").bind(crewId),
+    env.DB.prepare("DELETE FROM drive_scores WHERE crew_id = ?1").bind(crewId),
+    env.DB.prepare("DELETE FROM segment_shares WHERE audience_type = 'crew' AND audience_id = ?1").bind(crewId),
+    env.DB.prepare("DELETE FROM crews WHERE id = ?1").bind(crewId),
   ]);
+}
+
+/** Crews as groups (2026-11-16): the owner removes a member, the same as that member leaving (their shares, entries and
+ *  invite links go). Not the owner themselves; a stranger or a member who isn't the owner sees no crew (404) or 403. */
+export async function crewRemoveMember(env: Env, v: Viewer, crewId: string, handle: string): Promise<void> {
+  const crew = await first<{ owner: string }>(env, "SELECT owner FROM crews WHERE id = ?", crewId);
+  if (!crew || !(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
+  if (crew.owner !== v.id) throw new HttpError(403, "owner_only");
+  const who = await first<{ id: string }>(env, "SELECT u.id FROM users u JOIN crew_members m ON m.user_id = u.id AND m.crew_id = ?1 WHERE u.handle = ?2",
+    crewId, str(handle, "handle", 1, 40).toLowerCase());
+  if (!who) throw new HttpError(404, "no_member");
+  if (who.id === crew.owner) throw new HttpError(400, "owner_stays");
+  await env.DB.batch(memberGone(env, crewId, who.id));
 }
 
 // ---- grants: one row per friend or crew (on by default for friends and private crews, share_defaults.ts) --------------------------------------------------

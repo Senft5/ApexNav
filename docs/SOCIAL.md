@@ -262,6 +262,17 @@ and in random batches so a trace cannot be re-assembled.
   `--` when it didn't load), what they're doing, their car; then Message and the rest, and their drives as the same grid.
 - No backend change.
 
+### 2.18 Crews as groups (members; built 2026-11-16)
+- Nate (2026-11-16): "crews should be implemented like facebook groups essentially". A crew's page (`web/crew_page.js`)
+  opens on its cover and name, then one line ("Private crew · 3 members"), which of your friends are in it, and three keys:
+  Joined (your settings for the crew; Manage for the owner), Invite, and Chat.
+- Five tabs: Posts (the next crew drive pinned on top, then what members posted), Drives, Chat, Board, Members. A drive
+  in the next 48 hours opens the page on Drives, where Going is; otherwise Posts. A tab you picked stays while the app runs.
+- Members lists everyone: the owner first, who is driving now, your friends marked, a search past 12. A tap opens their
+  sheet; the owner's has Remove from crew (`DELETE /api/crews/:id/members/:handle`), which takes out what leaving takes out
+  (their grants, board entries, shared Scores and segments, their crew links).
+- No migration.
+
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.
 

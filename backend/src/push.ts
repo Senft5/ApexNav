@@ -67,7 +67,7 @@ export async function pushQuiet(env: Env, v: Viewer, req: Request): Promise<void
 
 /** The kinds a driver can each turn off (Garage → Settings → Notifications), and which pushes each holds. */
 export const PUSH_GROUPS: Record<string, string[]> = {
-  friends: ["request", "friend"], kudos: ["kudos", "post_kudos"], comments: ["post_comment", "post_tag"], duels: ["duel"], beaten: ["topped", "passed"], crews: ["crew_drive"], messages: ["message"],
+  friends: ["request", "friend"], kudos: ["kudos", "post_kudos"], comments: ["post_comment", "post_tag"], duels: ["duel"], beaten: ["topped", "passed"], crews: ["crew_drive"], messages: ["message"], convoys: ["convoy"],
 };
 const offKey = (userId: string) => `pushoff/${userId}`;
 const groupOf = (kind: string) => Object.keys(PUSH_GROUPS).find((g) => PUSH_GROUPS[g].includes(kind)) || null;
@@ -92,14 +92,21 @@ export async function pushKindsPut(env: Env, v: Viewer, req: Request): Promise<{
 }
 
 /** What a push says and where its tap goes: `link` is an app link the shell opens as any other (apexnav://open?view=friends). */
-export interface Push { kind: string; title: string; body: string; link: string }
+export interface Push {
+  kind: string; title: string; body: string; link: string;
+  /** The notification's long-press keys (ApexPush.swift registers each category): action id -> the link it opens. */
+  category?: string; actions?: Record<string, string>;
+  /** A newer push with this id replaces the older one; seconds it may wait for a phone that is off (default a day). */
+  collapse?: string; ttlS?: number;
+}
 
 /** Send one push to each phone of each person. Never throws: a push is a courtesy, never the reason a request fails. */
 export async function notify(env: Env, userIds: string[], p: Push): Promise<number> {
   if (!pushConfigured(env) || !userIds.length) return 0;
   let sent = 0;
   try {
-    const alert = { title: p.title.slice(0, 80), body: p.body.slice(0, 180), thread: p.kind, url: p.link };
+    const alert = { title: p.title.slice(0, 80), body: p.body.slice(0, 180), thread: p.kind, url: p.link,
+      ...(p.category ? { category: p.category, actions: p.actions } : {}), ...(p.collapse ? { collapse: p.collapse } : {}), ...(p.ttlS !== undefined ? { ttlS: p.ttlS } : {}) };
     for (const id of [...new Set(userIds)].slice(0, 60)) {
       const list = await readTokens(env, id);
       if (!list.length || (await env.PHOTOS!.get(`pushquiet/${id}`))) continue;   // no phone, or driving now
@@ -135,6 +142,12 @@ export const PUSH = {
   topped: (from: string | null, stage: string, score: number, yours: number): Push => ({ kind: "topped", title: "Topped", body: `${at(from)} scored ${score} on ${stage}, over your best of ${yours}.`, link: `${LINK}?view=friends` }),
   passed: (from: string | null, stage: string): Push => ({ kind: "passed", title: "Time attack", body: `${at(from)} went quicker than you on ${stage}.`, link: `${LINK}?view=friends` }),
   message: (from: string | null): Push => ({ kind: "message", title: "Message", body: `${at(from)} sent you a message.`, link: `${LINK}?view=friends${from ? `&chat=${encodeURIComponent(from)}` : ""}` }),
+  // A convoy invite (in the app, no link): a tap opens its card (Join / Not now); long-press Join convoy joins at once. It
+  // lives only as long as the invite, and a second invite to the same convoy replaces the first.
+  convoy: (from: string | null, name: string, id: string, untilMs: number, now = Date.now()): Push => ({
+    kind: "convoy", title: "Convoy", body: name && name !== "Convoy" ? `${at(from)} invited you to ${name}.` : `${at(from)} invited you to drive with them now.`,
+    link: `${LINK}?convoy=${id}`, category: "convoy", actions: { join: `${LINK}?convoy=${id}&join=1` },
+    collapse: `convoy-${id}`, ttlS: Math.max(60, Math.round((untilMs - now) / 1000)) }),
   crewDrive: (crew: string, title: string, by: string | null): Push => ({ kind: "crew_drive", title: crew, body: `${at(by)} planned ${title}. Are you going?`, link: `${LINK}?view=crews` }),
 };
 

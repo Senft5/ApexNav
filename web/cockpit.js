@@ -7379,6 +7379,8 @@
     let convoy = null;
     onSocial(() => { try { convoy = window.ApexConvoyUI && window.ApexConvoy ? ApexConvoyUI.mount({
       map, maplibregl, el, btn, toast, copyText, showView, apiFetch: ApexSync.apiFetch, overlayParent: $('toast').parentElement,
+      avatar: (id, h, px) => (window.ApexPhotos ? ApexPhotos.avatar(id, h, px) : null), message: (h) => { if (messages) messages.open(h); },
+      clearToast: () => { const t = $('toast'); t._holdUntil = 0; t.classList.remove('show'); },
       reportSheet: $('hzOverlay'),                                     // the Report key's sheet: the leader's convoy calls go on top
       driving: () => driveActive,
       siteOrigin: () => ApexSync.siteBase,
@@ -7464,11 +7466,16 @@
       else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : j && j.error === 'owner_invites_only' ? `Only the owner invites to ${c.name}.` : 'Couldn\'t make a link. Try again.');
     };
     // The crew page (web/crew_page.js, REVIEW.md roadmap 20): the Crew tab opens your crew.
+    let crewGear = null;   // opens the open crew's settings sheet (renderAccount sets it)
     let crewPage = null, crewDrivesEl = null;
     // in a crew, Crew drives is a row on the Crews side that opens its sheet; not in one, the section on the side itself
     const toDrives = () => { const pop = crewDrivesEl && crewDrivesEl.closest('.side-pop'); if (pop) pop.classList.add('open'); else if (crewDrivesEl) crewDrivesEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     onSocial(() => { try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, askPublicSharing,
       invite: (c) => crewInviteLink(c),
+      // a group's keys (2026-11-16): Joined / Manage opens this crew's settings sheet (the Crews side's, crewSettingsFor)
+      settings: () => { if (crewGear) crewGear(); },
+      // your friends' handles, for "cara and sam are in it" and the Members tab's "Your friend"
+      friendHandles: () => apiCall('GET', '/api/friends').then(jsonOf).then((l) => new Set((Array.isArray(l) ? l : []).filter((f) => f && f.status === 'accepted' && f.handle).map((f) => f.handle))),
       openRoute: (id) => openSharedRoute(id), builds: () => builds, onAllDrives: toDrives,
       posts: (c) => (drivePosts && drivePosts.crewDrives ? drivePosts.crewDrives(c.id) : null),
       // the drives members posted to this crew (posts), and its roadbooks, every member adding roads (roadbooks.js)
@@ -8151,19 +8158,17 @@
         friendsMap.setLayer(true);
         if (mapReady) map.flyTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 11), duration: 900 });
       };
+      // Nate 2026-11-16: one tap. Your convoy (or a new one) and they get a notification; no dialog, the toast opens it.
       const driveWith = async (f) => {
-        if (!convoy) return;
-        if (convoy.active) { toast(`You're in a convoy: invite @${f.handle} from its Invite friends.`); return; }
-        if (!(await ApexConfirm.ask(`Start a convoy with @${f.handle}? You see each other on the map for two hours. Nothing is kept.`, 'Start convoy'))) return;
-        const r = await convoy.startFor(`@${me.handle} and @${f.handle}`, [f.handle]);
-        toast(r.ok ? (r.invited ? `Convoy started. @${f.handle} has the invite in the app.` : `Convoy started, but @${f.handle} couldn't be invited. Share its link.`) : 'Couldn\'t start a convoy. Check signal.');
+        if (!convoy || !f.handle) return;
+        const r = await convoy.inviteFriend(f.handle);
         if (r.ok) closeSheet();
       };
       const keysFor = (f) => [
         ...(messages && f.handle ? [['Message', () => { closeProfile(); messages.open(f.handle); }]] : []),
         ...(where.get(f.handle) && friendsMap ? [['On the map', () => seeOnMap(f)]] : []),
         ['Share a route', () => { closeProfile(); shareRouteWith(f.handle); }],
-        ...(convoy ? [['Invite to a drive', () => driveWith(f)]] : []),
+        ...(convoy ? [['Convoy', () => driveWith(f)]] : []),
         ...(duels ? [['Challenge on a stage', () => duels.challenge(f)]] : [])];
       // Nate 2026-11-12 (as easy as a big social app): a tap on a friend opens their profile; what you do with them, their last
       // share and what they see of you are on it (the row used to open five keys, a share and a grants drawer in the list)
@@ -8437,6 +8442,7 @@
         const holder = el('div', { className: 'stack-8' }), chead = el('div', { className: 'crew-head' });
         const gear = el('button', { className: 'gear-key', type: 'button', 'aria-label': 'Crew settings', innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="8" stroke-width="3.2" stroke-dasharray="3.1 3.18"/></svg>' });
         gear.addEventListener('click', () => crewSettings.classList.add('open'));
+        crewGear = () => crewSettings.classList.add('open');   // the crew page's Joined / Manage key opens it
         const openCrew = (id) => {
           crewOpen = id || null;
           const cur = myCrews.find((c) => c.id === crewOpen);
@@ -8445,7 +8451,8 @@
             chead.hidden = false; chead.classList.toggle('solo', !many);
             const back = many ? btn('Your crews', () => { openCrew(null); const k = holder.querySelector('.cd-open'); if (k) k.focus({ preventScroll: true }); }, 'linkbtn cd-back') : el('span');   // one crew: its page's title says the name, so the head is the gear alone (it said it twice)
             if (many) back.setAttribute('aria-label', 'Back to your crews');
-            chead.replaceChildren(back, gear);
+            chead.replaceChildren(back);                                    // the page's own Joined / Manage key holds the settings now
+            chead.hidden = !many;
             holder.replaceChildren(crewPage.view(cur.id));
             crewSettings.replaceChildren(crewSettings.firstElementChild, crewSettingsFor(cur));
           }
@@ -9250,7 +9257,7 @@
       paintPushKinds();
     }
     // each kind its own switch, under the main one while it is on (the server keeps which are off: GET/PUT /api/push/kinds)
-    const PUSH_KINDS = [['friends', 'Friend requests'], ['kudos', 'Kudos'], ['comments', 'Comments and mentions'], ['duels', 'Duels'], ['beaten', 'Someone beat you'], ['crews', 'Crew drives'], ['messages', 'Messages']];
+    const PUSH_KINDS = [['friends', 'Friend requests'], ['kudos', 'Kudos'], ['comments', 'Comments and mentions'], ['duels', 'Duels'], ['beaten', 'Someone beat you'], ['crews', 'Crew drives'], ['messages', 'Messages'], ['convoys', 'Convoy invites']];
     let pushOff = null;
     function paintPushKinds() {
       const box = $('pushKinds'); if (!box) return;
@@ -12143,11 +12150,11 @@
       const esc = (e) => { if (e.key === 'Escape') close(); };
       const drive = el('button', { className: 'rec-key' }, el('i'), 'Just drive');
       drive.addEventListener('click', () => { close(); startDrive(); });
-      const name = (accountMe && accountMe.handle ? `@${accountMe.handle}'s convoy` : 'Convoy');
       back.append(el('div', { className: 'card-sheet' }, el('h2', { textContent: 'Ways to go' }), drive,
-        btn('Convoy now', () => { close(); needSocial().then(() => { if (convoy) convoy.now(name); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
+        // Nate 2026-11-16 (convoy up in two taps): Who's coming? first, your friends' faces; Invite starts it and tells them
+        btn('Convoy', () => { close(); needSocial().then(() => { if (convoy) convoy.open(); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
         // IDEAS S-22: a friend's convoy, by the code they read out (the convoy sheet's Join code field)
-        btn('Join with a code', () => { close(); needSocial().then(() => { if (convoy) convoy.open(); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
+        btn('Join with a code', () => { close(); needSocial().then(() => { if (convoy) convoy.open({ code: true }); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
         // TestFlight 2026-11-12 (note 6, the owner circled it): no paragraph under the keys; the convoy sheet says the rest
         btn('Cancel', close, 'linkbtn')));
       onBackdrop(back, () => close());
@@ -12359,7 +12366,9 @@
         if (ok(p.crew)) sessionStorage.setItem('apex.crew', p.crew);
         if (ok(p.add)) sessionStorage.setItem('apex.add', p.add.toLowerCase());
       } catch (_) {}
-      if (ok(p.convoy)) needSocial().then(() => { if (convoy && convoy.takeInvite) convoy.takeInvite(p.convoy); });
+      // a convoy link (<id>.<secret>), or an in-app invite's push (the convoy id alone; join=1 its long-press Join convoy):
+      // its card over the map, wherever you were, never a jump to another tab
+      if (ok(p.convoy)) { needSocial().then(() => { if (convoy && convoy.takeInvite) convoy.takeInvite(p.convoy, { join: p.join === '1' }); }); return; }
       if (ok(p.roadbook)) { openRoadbookLink(p.roadbook); return; }      // a roadbook someone sent: its page
       if (ok(p.road)) { closeSheet(); openRoadLink(p.road); return; }   // DA-4: a road someone sent, as a route card
       if (ok(p.place)) { openPlaceToken(p.place); return; }             // a place someone sent (place_link.js): its card
@@ -12375,7 +12384,7 @@
         return;
       }
       // a push's tap (backend/src/push.ts): the post it is about, or the friend, or People's side
-      showView(ok(p.crew) || ok(p.convoy) || p.view === 'crews' ? 'crews' : 'friends');
+      showView(ok(p.crew) || p.view === 'crews' ? 'crews' : 'friends');
       if (ok(p.post)) needSocial().then(() => { if (drivePosts) drivePosts.open(p.post); });
       if (ok(p.chat) && /^[A-Za-z0-9_]{1,20}$/.test(p.chat)) needSocial().then(() => { if (messages) messages.open(p.chat); });
       if (ok(p.friend) && /^[A-Za-z0-9_]{3,20}$/.test(p.friend)) window.apexOpenFriend(p.friend.toLowerCase()); else renderAccount();
