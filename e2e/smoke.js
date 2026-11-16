@@ -4330,6 +4330,36 @@ flow('end card best corner: a filmed drive loops its best corner over the keys a
   check(!gone.shown && !gone.src, 'the next drive, unfilmed, shows no clip and plays nothing: ' + JSON.stringify(gone));
 });
 
+flow('the Log coaches first: the news from the latest drive, why, and the one thing to work on next, a tap to the drive (Nate 2026-11-16)', async (page, base) => {
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexRecording && window.ApexCore);
+  // four drives with Scores of their own (their summaries as a scored library keeps them), the newest the best by 40
+  await page.evaluate(async () => {
+    const scores = { c1: 640, c2: 650, c3: 660, c4: 700 };
+    for (const [id, n] of [['c1', 4], ['c2', 3], ['c3', 2], ['c4', 1]]) { const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + Math.sin(i / 20) * 0.001); }
+      await ApexRecording.store({ id, name: 'Road ' + id, date: new Date(Date.now() - n * 86400e3).toISOString().slice(0, 16), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+        lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }); }
+    const db = await new Promise((ok, no) => { const r = indexedDB.open('apexnav'); r.onsuccess = () => ok(r.result); r.onerror = no; });
+    await ApexRecording.summaries(ApexCore);
+    await new Promise((ok) => { const t = db.transaction('summaries', 'readwrite'), st = t.objectStore('summaries');
+      for (const id of Object.keys(scores)) st.get(id).onsuccess = (e) => { const x = e.target.result;
+        x.ds = { score: scores[id], corners: 12, components: { pace: 0.7, smoothness: id === 'c4' ? 0.78 : 0.6, braking: 0.9, consistency: 0.6 } }; st.put(x); };
+      t.oncomplete = ok; });
+    db.close(); });
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#logCoach:not([hidden])', { timeout: 15000 });
+  const got = await page.evaluate(() => { const v = (id) => { const e = document.getElementById(id); return e.hidden ? null : e.textContent; };
+    const box = document.getElementById('logCoach').getBoundingClientRect(), hero = document.getElementById('historyCards').getBoundingClientRect();
+    return { head: v('logCoachHead'), why: v('logCoachWhy'), trend: v('logCoachTrend'), next: v('logCoachNext'), go: !document.getElementById('logCoachGoRow').hidden, first: box.top < hero.top }; });
+  check(/^Your best drive yet on [A-Z][a-z]{2} \d{1,2}$/.test(got.head) && got.first, 'the Log opens on the news, above the numbers: ' + JSON.stringify(got));
+  check(got.why === '700, 40 above your previous best. Smoothness carried it: 78 out of 100 (usually 60).', 'why, from the measured part beside your usual: ' + JSON.stringify(got));
+  check(got.trend === null && /^Next drive, work on /.test(got.next || '') && got.go, 'no steady trend said twice; one thing to work on next; a key to the drive: ' + JSON.stringify(got));
+  await page.click('#logCoachGo');
+  await page.waitForFunction(() => document.getElementById('dvPick') && document.getElementById('dvPick').value === 'c4', null, { timeout: 15000 });
+  check(true, 'See the drive opens the drive the news is about');
+});
+
 flow('the Log list: each drive has its road\'s shape beside its name; a summary from before shapes gets one without being scored again (2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
