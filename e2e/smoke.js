@@ -3755,6 +3755,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.click('.crew-page .cp-chat-key');
   check(await page.getAttribute('[data-cp-tab="chat"]', 'aria-selected') === 'true', 'the chat key opens Chat');
   if (process.env.SHOTS) { await page.click('.cp-tabs [data-cp-tab="posts"]'); await page.screenshot({ path: `${process.env.SHOTS}/crew-group.png` }); }
+  await page.click('.cp-tabs [data-cp-tab="posts"]');
   check(await page.isHidden('.cp-board') && await page.isHidden('.cp-say'), 'the board and the chat wait behind their tabs');
   await page.click('.cp-tabs [data-cp-tab="board"]');
   await page.waitForSelector('.cp-board .cp-board-row');
@@ -6602,6 +6603,7 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   const openDrives = async () => {
     for (const done of await page.$$('.side-pop.open .side-pop-head button')) await done.click();   // Done on the sheet that's open
     await page.click('[data-people="crews"]');
+    await page.click('.cp-tabs [data-cp-tab="drives"]');   // crews as groups: the crew's drives are their own tab
     await page.waitForSelector(`${W} .drive-card`);
   };
   await openDrives();
@@ -8585,7 +8587,7 @@ flow('one link in: no "invite-only" anywhere; a crew link joins a newcomer with 
   crewPage = { ...crewPage, is_owner: true, invites: 'anyone', can_invite: true };
   await page.goto(base + '/index.html?view=crew');
   await page.waitForSelector('.crew-page .cp-title h2');
-  await page.click('#crewsBody .gear-key');
+  await page.click('.crew-page .cp-keys button[aria-label="Manage the crew"]');
   await page.waitForSelector('.side-pop.open [role="radiogroup"][aria-label="Who can invite to Ridge Runners"]');
   check(!(await page.isVisible('.side-pop.open button:has-text("Invite to crew")')), 'the gear has no second Invite key');
   await page.click('.side-pop.open [role="radiogroup"][aria-label="Who can invite to Ridge Runners"] button:has-text("Owner")');

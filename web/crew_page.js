@@ -402,9 +402,9 @@
           chat: [chat(c, draw)],
           board: [boardSec, ...(c.house ? [houseBoard(c)] : []), ...[crewDna(c)].filter(Boolean), buildsRow(c)],
         };
-        // what you came for (Nate: "knows what you want before you do"): a drive within a day and a half opens on Drives,
+        // what you came for (Nate: "knows what you want before you do"): a drive today or tomorrow (within 48 h) opens on Drives,
         // where Going and the morning's convoy are; otherwise Posts. A tab you picked stays picked while the app runs.
-        const soon = c.next && Date.parse(String(c.next.starts_at).replace(' ', 'T') + (/Z$|[+-]\d\d:?\d\d$/.test(c.next.starts_at) ? '' : 'Z')) - Date.now() < 36 * 3600e3;
+        const soon = c.next && Date.parse(String(c.next.starts_at).replace(' ', 'T') + (/Z$|[+-]\d\d:?\d\d$/.test(c.next.starts_at) ? '' : 'Z')) - Date.now() < 48 * 3600e3;
         tabsBox = tabs(c.id, panes, soon ? 'drives' : 'posts');
         box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c, (k) => tabsBox.pick(k)), tabsBox, ...[liveryFoot(c, draw)].filter(Boolean)));
         // a public crew (joined as one, or made public since: social.ts crewUpdate turns members' sharing off) asks once on
