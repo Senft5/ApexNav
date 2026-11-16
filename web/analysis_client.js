@@ -296,6 +296,25 @@
       return out;
     },
 
+    /** The Log's coach (log_coach.js): a stored drive's corners it drove quicker than every earlier pass of them
+     *  (drive_view.js newBests over the coach against your other drives, like with like), each with its note
+     *  fields; { driveId, bests: [{ k, by_s, corner }] }, bests [] when none or the drive is not stored. */
+    async cornerNews({ id }) {
+      const Core = CoreOf(), sums = await Rec().summaries(Core), me = sums.find((s) => s.id === id);
+      let bests = [];
+      try {
+        const d = me && root.ApexDriveView ? await full(id, me) : null;
+        if (d) {
+          const { co } = await coachOf(Core, d, sums, true);
+          // the corner's own note fields, so the page names it in the driver's words (drive_view.js cornerCall)
+          const note = (c) => (c ? { dir: c.dir, severity: c.severity, code: c.code, call: c.call, shape: c.shape, caution: c.caution, mods: c.mods, turn_rad: c.turn_rad } : null);
+          bests = root.ApexDriveView.newBests(co).map((w) => ({ k: w.k, by_s: w.by_s, corner: note(d.corners[w.k]) }));
+        }
+      } catch (_) { bests = []; }
+      release();
+      return { driveId: id, bests };   // (never `id`: the message's own)
+    },
+
     /** IDEAS D-27: how the practised skill went on a stored drive (practiceOf); { practice: null } without a plan or corners. */
     async practiceLine({ id, plan }) {
       const Core = CoreOf(), raw = plan ? await Rec().get(id) : null;

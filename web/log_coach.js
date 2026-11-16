@@ -19,14 +19,12 @@
     braking: { name: 'Braking', tip: 'finish braking before you turn in, nothing hard after the apex' },
     consistency: { name: 'Rhythm', tip: 'commit evenly from corner to corner rather than in bursts' },
   };
-  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
   const median = (xs) => { const s = xs.slice().sort((a, b) => a - b), k = s.length >> 1; return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2; };
   const round10 = (x) => Math.round(x / 10) * 10;
   const pct = (x) => Math.round(x * 100);
   const of100 = (now, usual) => `${pct(now)} out of 100 (usually ${pct(usual)})`;
-  const dayOf = (d) => (d && typeof d.date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d.date) && d.dateKnown !== false && d.date_known !== false
-    ? `${MONTHS[+d.date.slice(5, 7) - 1]} ${+d.date.slice(8, 10)}` : null);
+  const ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
   const lc = (t) => t.charAt(0).toLowerCase() + t.slice(1);
 
   /** The part of drive d furthest from your usual (the median of the drives before it), when it is PART_BY or more:
@@ -86,10 +84,12 @@
   /**
    * The brief. drives: the Log's drives ({ id, date, ds: { score, components } }), any order; profile: the driver
    * profile (driver_profile.js profile, or null); words: { [skill]: { name, tip }, sideWords(split, x) } (its WORDS);
-   * now: ms. { headline, why, next, trend, go, kind } with headline/why/next/trend null where too little is known; go: the
-   * drive id the headline is about (null for none).
+   * now: ms; news: the latest scored drive's corner news ({ id, bests: [{ k, by_s, name }] }, analysis_client.js
+   * cornerNews, names in the driver's words), or null. { headline, why, next, trend, go, kind } with headline/why/next/
+   * trend null where too little is known; go: the drive id the headline is about, { drive, cornerIndex } for a corner,
+   * null for none.
    */
-  function brief(drives, profile = null, words = null, now = Date.now()) {
+  function brief(drives, profile = null, words = null, now = Date.now(), news = null) {
     const scored = (drives || []).filter((d) => d && d.id && d.ds && finite(d.ds.score))
       .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
     const out = { headline: null, why: null, next: null, trend: null, go: null, kind: null };
@@ -97,24 +97,23 @@
     const t = trendOf(scored), nx = nextOf(scored, profile, words);
     out.trend = t && t.dir !== 'steady' ? trendLine(t) : null;     // a steady trend is the headline's "usual", not said twice
     out.next = nx ? nx.text : null;
-    const last = scored[scored.length - 1], before = scored.slice(0, -1), day = dayOf(last);
+    const last = scored[scored.length - 1], before = scored.slice(0, -1);   // its Score and day sit above the brief (the Log's card)
     const fresh = !finite(Date.parse(last.date)) || now - Date.parse(last.date) <= RECENT_DAYS * 864e5;
-    const on = day ? ` on ${day}` : '';
     if (fresh) {
       const prevBest = Math.max(...before.map((d) => d.ds.score)), usual = median(before.map((d) => d.ds.score));
       const up = partMoved(last, before, +1), down = partMoved(last, before, -1);
       if (last.ds.score > prevBest) {
         out.kind = 'best'; out.go = last.id;
-        out.headline = `Your best drive yet${on}`;
-        out.why = `${last.ds.score}, ${last.ds.score - prevBest} above your previous best.${up ? ` ${PARTS[up.k].name} carried it: ${of100(up.now, up.usual)}.` : ''}`;
+        out.headline = 'Your best drive yet';
+        out.why = `${last.ds.score - prevBest} above your previous best.${up ? ` ${PARTS[up.k].name} carried it: ${of100(up.now, up.usual)}.` : ''}`;
       } else if (last.ds.score - usual >= CLEAR_BY) {
         out.kind = 'cleaner'; out.go = last.id;
         out.headline = `Your latest drive was one of your cleanest`;
-        out.why = `${last.ds.score}${on}, against your usual ${round10(usual)}.${up ? ` ${PARTS[up.k].name} made the difference: ${of100(up.now, up.usual)}.` : ''}`;
+        out.why = `Well above your usual ${round10(usual)}.${up ? ` ${PARTS[up.k].name} made the difference: ${of100(up.now, up.usual)}.` : ''}`;
       } else if (usual - last.ds.score >= CLEAR_BY) {
         out.kind = 'rougher'; out.go = last.id;
         out.headline = `Your latest drive was rougher than usual`;
-        out.why = `${last.ds.score}${on}, against your usual ${round10(usual)}.${down ? ` ${PARTS[down.k].name} is where it went: ${of100(down.now, down.usual)}.` : ''}`;
+        out.why = `Well under your usual ${round10(usual)}.${down ? ` ${PARTS[down.k].name} is where it went: ${of100(down.now, down.usual)}.` : ''}`;
       } else {
         // a part of the latest drive above every earlier drive's (MIN_DRIVES of them at least): news even on a usual Score
         for (const k of Object.keys(PARTS)) {
@@ -122,14 +121,23 @@
           if (!finite(now) || was.length < MIN_DRIVES || !(now > Math.max(...was)) || now - median(was) < PART_BY) continue;
           out.kind = 'part_best'; out.go = last.id;
           out.headline = `Your ${lc(PARTS[k].name)} was the best it has been`;
-          out.why = `${of100(now, median(was))}${on}.`;
+          out.why = `${of100(now, median(was))}.`;
           break;
+        }
+        // corners this drive took quicker than every earlier pass of them (drive_view.js newBests: 0.2 s or more, inside the
+        // sane limit), news on a usual Score: the count, and the biggest by name
+        const bests = news && news.id === last.id && Array.isArray(news.bests) ? news.bests.filter((w) => w && Number.isInteger(w.k) && finite(w.by_s)) : [];
+        if (!out.headline && bests.length) {
+          const top = bests.reduce((m, w) => (w.by_s > m.by_s ? w : m));
+          out.kind = 'corners'; out.go = { drive: last.id, cornerIndex: top.k };
+          out.headline = bests.length === 1 ? 'A corner quicker than ever' : `${ONES[bests.length] || bests.length} corners quicker than ever`;
+          out.why = `${bests.length === 1 ? 'Corner' : 'Most at corner'} ${top.k + 1}${top.name ? ` (${top.name})` : ''}: ${top.by_s.toFixed(1)} s under your best pass before.`;
         }
         if (!out.headline) {                                           // a usual drive, said as one: what you want to know first
           const moved = down || up;
           out.kind = 'usual'; out.go = last.id;
-          out.headline = `A typical drive for you${on}`;
-          out.why = `${last.ds.score}, against your usual ${round10(usual)}.${moved ? ` ${PARTS[moved.k].name} ${moved.by < 0 ? 'dipped' : 'was up'} to ${of100(moved.now, moved.usual)}.` : ''}`;
+          out.headline = 'A typical drive for you';
+          out.why = `Close to your usual ${round10(usual)}.${moved ? ` ${PARTS[moved.k].name} ${moved.by < 0 ? 'dipped' : 'was up'} to ${of100(moved.now, moved.usual)}.` : ''}`;
         }
       }
     }
@@ -141,6 +149,12 @@
     return out;
   }
 
-  const api = { brief, trendOf, trendLine, partMoved, nextOf, PARTS, MIN_DRIVES, CLEAR_BY, PART_BY, TREND_BY };
+  /** The drive the brief's news is about: the newest scored drive's id, or null (the page asks its corner news first). */
+  function latestScored(drives) {
+    const s = (drives || []).filter((d) => d && d.id && d.ds && finite(d.ds.score)).sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+    return s.length ? s[s.length - 1].id : null;
+  }
+
+  const api = { brief, latestScored, trendOf, trendLine, partMoved, nextOf, PARTS, MIN_DRIVES, CLEAR_BY, PART_BY, TREND_BY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexLogCoach = api;
 })(typeof window !== 'undefined' ? window : globalThis);

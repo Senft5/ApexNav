@@ -644,16 +644,21 @@
     // drives' summaries and the driver profile (its focus); nothing under a few scored drives
     function renderLogCoach() {
       const box = $('logCoach'); if (!box || !window.ApexLogCoach) return;
-      const paint = (p) => {
-        const words = { ...ApexDriverProfile.WORDS, sideWords: ApexDriverProfile.sideWords };
-        const b = ApexLogCoach.brief(drives.map((d) => ({ ...d, dateKnown: monthOf(d) !== null })), p || null, words);
+      const list = drives.map((d) => ({ ...d, dateKnown: monthOf(d) !== null })), latest = ApexLogCoach.latestScored(list);
+      // the latest drive's corners quicker than ever (the worker's cornerNews), named in the driver's words
+      const newsOf = latest ? ApexAnalysis.job('cornerNews', { id: latest }).then((r) => ({ id: r.driveId, bests: (r.bests || []).map((w) => ({ ...w,
+        name: w.corner && ApexDriveView.cornerCall ? ApexDriveView.cornerCall(w.corner, ApexDriveView.noteWordsPref()) || null : null })) })).catch(() => null) : Promise.resolve(null);
+      const paint = async (p) => {
+        const words = { ...ApexDriverProfile.WORDS, sideWords: ApexDriverProfile.sideWords }, news = await newsOf;
+        const b = ApexLogCoach.brief(list, p || null, words, Date.now(), news);
         box.hidden = !(b.headline || b.next);
         $('logCoachHead').textContent = b.headline || 'What to work on';
         $('logCoachWhy').textContent = b.why || ''; $('logCoachWhy').hidden = !b.why;
         $('logCoachTrend').textContent = b.trend || ''; $('logCoachTrend').hidden = !b.trend;
         $('logCoachNext').textContent = b.next || ''; $('logCoachNext').hidden = !b.next;
         $('logCoachGoRow').hidden = !b.go;
-        $('logCoachGo').onclick = b.go ? () => openDrive(b.go) : null;
+        $('logCoachGo').textContent = b.go && b.go.drive ? 'See the corner' : 'See the drive';
+        $('logCoachGo').onclick = b.go ? () => openDrive(b.go.drive || b.go, b.go.cornerIndex) : null;
       };
       if (drives.some((d) => d.corners.length)) drivingProfile((p) => paint(p)); else paint(null);
     }
@@ -1188,6 +1193,8 @@
       renderVote(d);
       renderRecce(d);
       renderFlyby(d).catch(() => { $('dvFlyby').hidden = true; });
+      // a corner the Log's coach pointed at: shown once its drive is drawn
+      if (wantCorner && wantCorner.id === id && dvView.showCorner) { const k = wantCorner.k; wantCorner = null; dvView.showCorner(k); }
     }
     // the map page hosting the Log (index.html), when it can post (drive_posts.js): null on its own (the website's analysis.html)
     function hostPosts() {
@@ -1341,7 +1348,8 @@
     // the focus ring is for the keyboard: it shows once a key has been pressed to move focus, never after a tap or a sheet's own focus()
     document.addEventListener('keydown', (e) => { if (e.key === 'Tab' || e.key.startsWith('Arrow')) document.documentElement.classList.add('kbd'); }, true);
     document.addEventListener('pointerdown', () => document.documentElement.classList.remove('kbd'), true);
-    function openDrive(id) { wantDrive = id; dirty.add('drive'); showTab('drive'); toTop(); }
+    let wantCorner = null;                                             // { id, k }: a corner to show once that drive is up
+    function openDrive(id, k = null) { wantDrive = id; wantCorner = Number.isInteger(k) ? { id, k } : null; dirty.add('drive'); showTab('drive'); toTop(); }
     $('dvReplay').addEventListener('click', () => {
       const id = $('dvPick').value;
       if (id) ApexReturn.open('index.html?drive=' + encodeURIComponent(id) + '&play=1');   // the map page, also from inside its Log frame
