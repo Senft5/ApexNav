@@ -12266,8 +12266,9 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   const card = await page.evaluate(() => ({ note: document.getElementById('routeProgress').textContent, found: document.getElementById('routeProgress').classList.contains('found'),
     note2: document.getElementById('routeCardPager').textContent.replace(/\s/g, ' '), name: apexDebug.track.name, h: document.getElementById('planPanel').getBoundingClientRect().height,
     stage: document.querySelector('.stage').getBoundingClientRect().height, dials: document.getElementById('routeCardBars').innerText.replace(/\s+/g, ' ') }));
-  // (on our router the swap can come from the context's refresh: "Conditions ahead: switched to the way by ...")
-  check(card.found && /^(Better route found: \+\d+ min, \d+ more corners|Conditions ahead: switched to the way by .+)$/.test(card.note), 'the card says the ranked route replaced the first one, and why: ' + JSON.stringify(card));
+  // (on our router the swap can come from the context's refresh: "Conditions ahead: switched to the way by ...", or "Weather ahead" when
+  // the weather on the way is what moved it, which depends on the hour the flow runs)
+  check(card.found && /^(Better route found: \+\d+ min, \d+ more corners|(Conditions|Weather) ahead: switched to the way by .+)$/.test(card.note), 'the card says the ranked route replaced the first one, and why: ' + JSON.stringify(card));
   // one control: the level cards are the choices, each its pick's time and corners, counted as the card counts them
   const cards = await levelCards(page);
   check(cards.length === 3 && cards.filter((c) => !c.further).every((c) => /^(Quick|Fun|Long way) (\d+:\d\d|\d+ min) \d+ corners?$/i.test(c.text)) && !cards.some((c) => /good corners/i.test(c.text))
