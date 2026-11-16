@@ -174,6 +174,11 @@ export async function crewUpdate(env: Env, v: Viewer, crewId: string, req: Reque
   const crew = await first<{ owner: string; name: string; visibility: string }>(env, "SELECT owner, name, visibility FROM crews WHERE id = ?", crewId);
   if (!crew || crew.owner !== v.id) throw new HttpError(404, "no_crew");
   const b = await body<CrewBody>(req);
+  // Manage crew (2026-11-16): a new name alone leaves who can find it and its area as they are
+  if (b.name !== undefined && b.visibility === undefined && b.about === undefined && b.area === undefined) {
+    await run(env, "UPDATE crews SET name = ? WHERE id = ?", str(b.name, "name", 2, 40), crewId);
+    return;
+  }
   const set = crewSettings(b), name = b.name === undefined ? crew.name : str(b.name, "name", 2, 40);
   if (set.visibility === "public" && (await first(env, `SELECT 1 WHERE ${removedSql("crew", "?1")}`, crewId))) throw new HttpError(403, "removed_by_moderator");
   await run(env, "UPDATE crews SET name = ?, visibility = ?, about = ?, area_name = ?, area_lat = ?, area_lon = ? WHERE id = ?",

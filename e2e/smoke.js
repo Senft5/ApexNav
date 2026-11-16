@@ -3945,22 +3945,29 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.waitForSelector('.confirm-sheet .cs-choose');
   check(/Report/.test(await page.textContent('.confirm-sheet')) && !/Pin it/.test(await page.textContent('.confirm-sheet')), 'Report on the message\'s own sheet (a Plain crew pins nothing)');
   await page.click('.confirm-sheet .cs-no');
-  // P-31: Manage on the page opens this crew's settings
+  // P-31: Manage on the page opens this crew's settings: Manage crew (2026-11-16, the owner's)
   await page.click('.crew-page .cp-keys button[aria-label="Manage the crew"]');
-  await page.waitForSelector('.side-pop.open[aria-label="Crew settings"] .crew-settings');
-  const gearText = await page.textContent('.side-pop.open[aria-label="Crew settings"]');
-  check(/Ridge Runners/.test(gearText) && /What it sees of yours/.test(gearText) && /Leave/.test(gearText) && !(await page.$$('.side-pop.open[aria-label="Crew settings"] .crew-tiles')).length, 'the gear: one crew\'s settings, no tiles: ' + gearText.slice(0, 160));
+  await page.waitForSelector('.side-pop.open[aria-label="Manage crew"] .crew-settings');
+  const gearText = await page.textContent('.side-pop.open[aria-label="Manage crew"]');
+  check(/Ridge Runners/.test(gearText) && /What it sees of yours/.test(gearText) && /Delete crew/.test(gearText) && !/Leave crew/.test(gearText) && !(await page.$$('.side-pop.open[aria-label="Manage crew"] .crew-tiles')).length, 'the gear: one crew\'s settings, no tiles: ' + gearText.slice(0, 160));
   // 2026-11-10: the sheet in the Settings list's shape: a small-caps name over each part on one line, text keys at the left
   // edge like the rows, the area field's hint whole
-  const gs = await page.evaluate(() => { const box = document.querySelector('.side-pop.open[aria-label="Crew settings"] .crew-settings'), L = box.getBoundingClientRect().left;
+  const gs = await page.evaluate(() => { const box = document.querySelector('.side-pop.open[aria-label="Manage crew"] .crew-settings'), L = box.getBoundingClientRect().left;
     const heads = [...box.querySelectorAll('h4.nav-group')].map((h) => ({ t: h.textContent, lines: Math.round(h.getBoundingClientRect().height / parseFloat(getComputedStyle(h).lineHeight)) || 1 }));
-    const off = box.querySelector('button.linkbtn'), area = box.querySelector('input.field'), leave = box.querySelector('.danger-btn');
+    const off = box.querySelector('button.linkbtn'), area = box.querySelector('input[aria-label="Area people nearby will see"]'), leave = box.querySelector('.danger-btn');
     return { heads, offLeft: Math.round(off.getBoundingClientRect().left - L), leaveLeft: Math.round(leave.getBoundingClientRect().left - L), offWide: off.getBoundingClientRect().width < box.getBoundingClientRect().width * 0.8,
       hintCut: (() => { const c = document.createElement('canvas').getContext('2d'); c.font = getComputedStyle(area).font; const cs = getComputedStyle(area);
         return c.measureText(area.placeholder).width > area.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight); })() }; });
-  check(gs.heads.map((h) => h.t).join('|') === 'What it sees of yours|Who can invite|Who can find it' && gs.heads.every((h) => h.lines === 1), 'three parts, each named on one line: ' + JSON.stringify(gs.heads));
+  check(gs.heads.map((h) => h.t).join('|') === 'Name|Who can invite|Who can find it|What it sees of yours' && gs.heads.every((h) => h.lines === 1), 'Manage crew: its name, who can invite, who can find it, then yours, each named on one line: ' + JSON.stringify(gs.heads));
   check(gs.offLeft <= 4 && gs.leaveLeft <= 4 && gs.offWide && !gs.hintCut, 'text keys start at the left, the area hint is whole: ' + JSON.stringify(gs));
-  await page.click('.side-pop.open[aria-label="Crew settings"] button:has-text("Done")');
+  // the name is changed where it is read: Save shows once it differs, and reaches the Worker as the name alone
+  check(await page.isHidden('.side-pop.open[aria-label="Manage crew"] .crew-settings button:text-is("Save")'), 'no Save until the name changes');
+  await page.fill('.side-pop.open[aria-label="Manage crew"] input[aria-label="Crew name"]', 'Dragon Runners');
+  await page.click('.side-pop.open[aria-label="Manage crew"] .crew-settings button:text-is("Save")');
+  for (let i = 0; i < 30 && !sent.some((x) => x.m === 'PUT' && x.p === '/api/crews/CREW1'); i++) await page.waitForTimeout(100);
+  const ren = sent.find((x) => x.m === 'PUT' && /^\/api\/crews\/[^/]+$/.test(x.p));
+  check(ren && JSON.stringify(JSON.parse(ren.b)) === '{"name":"Dragon Runners"}', 'Save sends the new name alone: ' + JSON.stringify(ren));
+  if (await page.isVisible('.side-pop.open[aria-label="Manage crew"]')) await page.click('.side-pop.open[aria-label="Manage crew"] button:has-text("Done")');
   await page.click('.cp-tabs [data-cp-tab="drives"]');
   await page.click('.cp-drive .switch button:text-is("Going")');
   // a line half written survives the page redrawing: the livery saves, the page redraws
@@ -14227,6 +14234,12 @@ flow('TestFlight 2026-11-05 note 1: in several crews the Crews side is a dashboa
   check(/public crew/.test(await page.textContent('.confirm-sheet .cs-box')), 'the public crew asks whether to share');
   await page.click('.confirm-sheet button:has-text("Cancel")');
   check(await page.evaluate(() => localStorage.getItem('apex.askedShare.k4') === '1'), 'asked once');
+  // a member's Joined is their own settings for it: what it sees of theirs and Leave crew; nothing of the owner's
+  await page.click('.crew-page .cp-keys button:text-is("Joined")');
+  await page.waitForSelector('.side-pop.open[aria-label="Your settings"] .crew-settings');
+  const yours = await page.textContent('.side-pop.open[aria-label="Your settings"] .crew-settings');
+  check(/What it sees of yours/.test(yours) && /Leave crew/.test(yours) && !/Who can invite|Who can find it|Delete crew/.test(yours) && !(await page.$('.side-pop.open input[aria-label="Crew name"]')), 'Joined: your settings, Leave crew, nothing of the owner\'s: ' + yours.slice(0, 160));
+  await page.click('.side-pop.open[aria-label="Your settings"] button:has-text("Done")');
   await page.click('#crewsBody .cd-back');
   await page.waitForSelector('.crew-dash .cd-row');
   check(await page.waitForFunction(() => document.activeElement && document.activeElement.classList.contains('cd-open'), null, { timeout: 3000 }).then(() => true, () => false), 'back on the dashboard, the focus on its first crew');
