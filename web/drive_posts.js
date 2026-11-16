@@ -707,6 +707,7 @@
     // the Feed's pick (All, Friends, a crew) outlives a redraw of the page round it: the Social tab redraws when what it
     // shows changes (a request, a crew), and a fresh Feed used to fall back to All under the driver's finger
     let feedOnly = '';
+    const onPick = new Set();   // every Feed on the page follows a pick made on any of them (a redraw can swap the one under a tap)
     function full(fo = {}) {
       const list = el('div', { className: 'feed' }), more = btn('More', () => load(), 'linkbtn feed-more-key');
       const pick = el('div', { className: 'switch feed-pick', role: 'radiogroup', 'aria-label': 'Show' }); pick.hidden = true;
@@ -731,8 +732,12 @@
           list.replaceChildren(lost); more.hidden = true;
         });
       };
-      const show = (q) => {
+      let wasOn = false;
+      const follow = (q) => { if (!list.isConnected) { if (wasOn) onPick.delete(follow); return; } wasOn = true; if (q !== only) show(q, true); };
+      onPick.add(follow);
+      const show = (q, followed) => {
         only = q; feedOnly = q; last = null; gen += 1; list.replaceChildren();
+        if (!followed) onPick.forEach((f) => { if (f !== follow) f(q); });
         paintMuted();
         pick.querySelectorAll('button').forEach((b) => { const on = b.dataset.q === q; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
         load();

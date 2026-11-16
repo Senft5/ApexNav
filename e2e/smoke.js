@@ -8018,6 +8018,13 @@ flow('the full Feed picks whose posts (All, Friends or one crew) and mutes a dri
     }
     return json([]);
   });
+  // how many Feeds the page drew, and what one showed when a wait ran out (CI timed out here and couldn't say on which wait)
+  await page.addInitScript(() => { window.__feeds = 0; new MutationObserver((ms) => { for (const m of ms) for (const x of m.addedNodes) if (x.nodeType === 1 && (x.matches('.feed-pick') || x.querySelector('.feed-pick'))) window.__feeds++; }).observe(document, { childList: true, subtree: true }); });
+  const until = (fn, what) => page.waitForFunction(fn).catch(async (e) => {
+    const now = await page.evaluate(() => ({ feeds: window.__feeds, titles: [...document.querySelectorAll('#feedBody .feed-card .feed-title')].map((t) => t.textContent.trim()).join(','),
+      on: [...document.querySelectorAll('#feedBody .feed-pick button[aria-checked="true"]')].map((b) => b.textContent).join(','), muted: (document.querySelector('#feedBody .feed-muted') || {}).hidden })).catch(() => null);
+    throw new Error(`${what}: ${e.message.split('\n')[0]} ${JSON.stringify(now)} asked ${JSON.stringify(asked)}`);
+  });
   await page.goto(base + '/index.html?view=feed');
   await page.waitForSelector('#feedBody .feed-card', { timeout: 15000 });
   // (2026-11-16) the whole Feed is the Social tab's first side, its pick over it
@@ -8029,21 +8036,21 @@ flow('the full Feed picks whose posts (All, Friends or one crew) and mutes a dri
   const along = await page.$$eval('#feedBody .feed-card .feed-with', (l) => l.map((x) => x.textContent));
   check(JSON.stringify(along) === '["With you and @cara"]', 'who came, on the crew post only, you first: ' + JSON.stringify(along));
   await page.click('#feedBody .feed-pick button:has-text("Friends")');
-  await page.waitForFunction(() => [...document.querySelectorAll('#feedBody .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 4,Drive 2,Drive 1');
+  await until(() => [...document.querySelectorAll('#feedBody .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 4,Drive 2,Drive 1', 'Friends');
   await page.click('#feedBody .feed-pick button:has-text("Ridge Runners")');
-  await page.waitForFunction(() => [...document.querySelectorAll('#feedBody .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 5,Drive 3');
+  await until(() => [...document.querySelectorAll('#feedBody .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 5,Drive 3', 'the crew');
   check(asked.includes('?friends=1') && asked.includes('?crew=k1'), 'each pick asks the Worker for its posts: ' + JSON.stringify(asked));
   check(await page.getAttribute('#feedBody .feed-pick button:has-text("Ridge Runners")', 'aria-checked') === 'true', 'the crew is the one on');
   // (2026-11-14) Mute: ··· on bob's post, Mute @bob; his drives leave the Feed, Muted lists him, Unmute brings them back
   await page.click('#feedBody .feed-pick button:has-text("All")');
-  await page.waitForFunction(() => document.querySelectorAll('#feedBody .feed-card').length === 5);
+  await until(() => document.querySelectorAll('#feedBody .feed-card').length === 5, 'All again');
   await page.click('#feedBody .feed-card .feed-more');
   await page.click('.feed-menu button:has-text("Mute @bob")');
-  await page.waitForFunction(() => !document.querySelector('#feedBody .feed-card'));
+  await until(() => !document.querySelector('#feedBody .feed-card'), 'muted');
   check(await page.textContent('#feedBody .feed-muted') === 'Muted@bobUnmute' && await page.evaluate(() => localStorage.getItem('apex.feedMuted')) === '["bob"]',
     'muted, kept on the phone: ' + await page.textContent('#feedBody .feed-muted'));
   await page.click('#feedBody .feed-muted button:has-text("Unmute")');
-  await page.waitForFunction(() => document.querySelectorAll('#feedBody .feed-card').length === 5 && document.querySelector('#feedBody .feed-muted').hidden);
+  await until(() => document.querySelectorAll('#feedBody .feed-card').length === 5 && document.querySelector('#feedBody .feed-muted').hidden, 'unmuted');
 });
 
 flow('Garage → You is your profile: your numbers, Edit profile, and your drive posts three across, each opening with Edit and Delete (Worker stubbed, docs/SOCIAL.md 2.13, 2.17)', async (page, base) => {
