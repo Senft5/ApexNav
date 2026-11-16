@@ -39,12 +39,24 @@
   function markSeen(storage, news = NEWS) { try { storage.setItem(KEY, news.id); } catch (_) {} }
   function seen(storage) { try { return storage.getItem(KEY); } catch (_) { return null; } }
 
+  // each line's mark, by its title (2026-11-16: four bold-led sentences read as a block; a mark per line, its title over
+  // its words, reads as a phone's own update notes). A title with no mark here gets a plain dot.
+  const MARKS = {
+    'Drive posts': '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 15l4.5-4.5 4 4 2.5-2.5L20 17"/><circle cx="15.5" cy="8.5" r="1.5"/>',
+    'Places on the map': '<path d="M12 21s-6.5-5.8-6.5-10.5a6.5 6.5 0 0 1 13 0C18.5 15.2 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.2"/>',
+    'Turn by turn': '<path d="M7 20v-7a4 4 0 0 1 4-4h7"/><path d="M14.5 5.5L18 9l-3.5 3.5"/>',
+    'Traffic': '<path d="M12 3.5l9 16H3z"/><path d="M12 10v4.5M12 17.2v.3"/>',
+  };
+  const DOT = '<circle cx="12" cy="12" r="3.5"/>';
   function show(el, news, onClose) {
     const overlay = el('div', { className: 'overlay dim show', id: 'newsSheet' });
     overlay.setAttribute('role', 'dialog'); overlay.setAttribute('aria-modal', 'true'); overlay.setAttribute('aria-label', 'What\'s new');
     const ok = el('button', { className: 'ink-btn solid', textContent: 'Got it' });
     const card = el('div', { className: 'card-sheet' }, el('h2', { textContent: 'What\'s new' }),
-      ...news.items.slice(0, 4).map(([title, text]) => el('p', {}, el('b', { textContent: title + '. ' }), text)), ok);
+      ...news.items.slice(0, 4).map(([title, text]) => {
+        const mark = el('i', { className: 'news-mark' }); mark.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${MARKS[title] || DOT}</svg>`;
+        return el('p', { className: 'news-row' }, mark, el('b', { textContent: title + '. ' }), el('span', { textContent: text }));
+      }), ok);
     overlay.append(card);
     const close = () => { overlay.remove(); if (onClose) onClose(); };
     ok.addEventListener('click', close);
