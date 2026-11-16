@@ -1356,7 +1356,8 @@ flow('design pass 2: the route card\'s last row is one ruled strip of keys, and 
       const c = getComputedStyle(a), b = a.querySelector('.maplibregl-ctrl-attrib-button'), cb = getComputedStyle(b), panel = getComputedStyle(document.querySelector('.plan')).backgroundColor;
       const box = b.getBoundingClientRect();
       return { radius: c.borderTopLeftRadius, bg: c.backgroundColor, panel, border: c.borderTopWidth, img: cb.backgroundImage, i: getComputedStyle(b, '::before').content, bradius: cb.borderTopLeftRadius, w: box.width, h: box.height }; });
-    check(credit && credit.radius === '0px' && credit.bradius === '0px' && credit.bg === credit.panel && parseFloat(credit.border) >= 1 && credit.img === 'none' && /^"i"/.test(credit.i) && credit.w >= 44 && credit.h >= 44, 'the credit is a square plate on the page\'s paper with its own "i", a 44 pt key (Apple\'s audit, U-15): ' + JSON.stringify(credit));
+    // 2026-11-16: in the main look it is a small lifted round button, as the map's other keys (it was the last square ink box)
+    check(credit && credit.radius === '12px' && credit.bg === credit.panel && parseFloat(credit.border) === 0 && credit.img === 'none' && /^"i"/.test(credit.i) && credit.w >= 44 && credit.h >= 44, 'the credit is a round plate on the page\'s paper with its own "i", a 44 pt key (Apple\'s audit, U-15): ' + JSON.stringify(credit));
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
