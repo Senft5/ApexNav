@@ -222,6 +222,9 @@ and in random batches so a trace cannot be re-assembled.
   with Add (the same request the Invite sheet sends) and × (hidden on this phone, `apex.suggestHidden`).
 - Never a friend, a request either way, someone blocked either way, or someone three reports hid. Crew-mates come first.
 - `GET /api/friends/suggested` (`friendSuggestions` in `backend/src/social.ts`), `web/people_suggest.js`. No table.
+- Requests (2026-11-16): on Friends, requests in are one row at the top (their faces, how many; with one, "@dan wants to be
+  your friend"). A tap opens a sheet: each with face, handle, how many friends you share ("2 mutual friends", counted,
+  never named, the `mutual` field of `GET /api/friends` on a request only) and Accept / Not now. The last answer closes it.
 - Find people (2026-11-14): typing in the Invite sheet's handle field lists the members whose handle starts with it
   (two characters at least, eight at most, the exact one first, then friends), each with Add, Accept (they asked you) or
   where you stand. Never you, someone blocked either way, or someone three reports hid. `GET /api/users/search`

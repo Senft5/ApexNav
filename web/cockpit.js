@@ -8189,12 +8189,21 @@
       if (gen !== renderGen) return;
       const shared = Array.isArray(sharedList) ? sharedList : [];
 
-      // P-05: a request in is a card at the top of the list until it is answered (the ask is in the list, not in a drawer)
-      for (const f of incoming) body.append(el('div', { className: 'card request-card' },
-        el('p', {}, el('b', { textContent: `@${f.handle || '?'}` }), document.createTextNode(' wants to be your friend'), ...(f.name ? [el('small', { textContent: f.name })] : [])),
-        el('div', { className: 'row' },
-          btn('Accept', async () => { await apiCall('POST', '/api/friends/accept', { user_id: f.id }); toast(`You and @${f.handle} are friends.`); redo(); }, 'ink-btn solid'),
-          btn('Not now', async () => { await apiCall('DELETE', `/api/friends/${f.id}`); toast(`Declined. @${f.handle} isn’t told.`); redo(); }, 'linkbtn'))));
+      // Requests (screen inventory 2026-11-16, as Instagram's): one row at the top, their faces and how many, a tap opens a
+      // sheet with each ask: face, handle, how many friends you share (counted, never named), Accept / Not now
+      const reqFace = (f, size) => (window.ApexPhotos ? ApexPhotos.avatar(f.photo_id || null, f.handle || '?', size) : el('span', { className: 'req-face', textContent: (f.handle || '?')[0].toUpperCase() }));
+      if (incoming.length) {
+        const row = el('button', { className: 'nav-row request-row', type: 'button' },
+          el('span', { className: 'req-faces' }, ...incoming.slice(0, 3).map((f) => reqFace(f, 28))),
+          el('span', { className: 'req-label', textContent: incoming.length === 1 ? `@${incoming[0].handle || '?'} wants to be your friend` : 'Requests' }),
+          el('small', { textContent: String(incoming.length) }), el('i', { 'aria-hidden': 'true' }));
+        row.setAttribute('aria-label', `${incoming.length} friend request${incoming.length === 1 ? '' : 's'}`);
+        row.addEventListener('click', async () => {   // the sheet is a Social module (web/friend_requests.js; startup budget, P-06)
+          try { await ApexLazy.load('social'); } catch (_) {}
+          if (window.ApexFriendRequests) ApexFriendRequests.open({ incoming, el, btn, toast, apiCall, onBackdrop, face: reqFace, done: redo });
+        });
+        body.append(row);
+      }
 
       // Duels (duels.js): one asked of you, one on, a result: cards under the requests, while there is a friend to duel
       if (duels && accepted.length) body.append(duels.cards({ asks: true }));   // the rest are on each friend's profile
@@ -8280,7 +8289,19 @@
           btn('Open', () => { closeProfile(); openSharedRoute(last.id); }, 'linkbtn'))] : [];
       };
       const openProfile = async (f) => {
+        const shown = openFriendId === f.id && ppop.classList.contains('open');
         openFriendId = f.id;   // a redraw of People (a grant changed, presence came in) opens it again
+        // loading: the profile's own head at once, its numbers dashed (shared states, screen inventory 2026-11-16); a redraw
+        // of a profile already open keeps it as it is until the answer comes
+        if (!shown && window.ApexProfileHead) {
+          const photo0 = (where.get(f.handle) || {}).photo_id || null;
+          ppop.replaceChildren(el('div', { className: 'stack-8 profile-view skel', 'aria-busy': 'true' },
+            el('div', { className: 'side-pop-head' }, el('span'), btn('‹ Friends', () => closeProfile(), 'linkbtn')),
+            ApexProfileHead.draw({ el, btn, face: window.ApexPhotos ? ApexPhotos.avatar(photo0, f.handle || '?', 56) : el('span', { className: 'ph-ghost' }),
+              title: f.handle ? `@${f.handle}` : (f.name || 'Friend'), sub: '', car: null,
+              counts: [{ n: null, label: 'Days' }, { n: null, label: 'Stages' }, { n: null, label: 'Best' }] })));
+          ppop.classList.add('open');
+        }
         let p = null;
         try { const r = await apiCall('GET', `/api/friends/${encodeURIComponent(f.id)}/profile`); p = r.ok ? await jsonOf(r) : null; } catch (_) {}
         const view = el('div', { className: 'stack-8 profile-view' });
@@ -8289,7 +8310,7 @@
         if (window.ApexVocabulary && ApexVocabulary.watchTerms) ApexVocabulary.watchTerms(view);   // a friend's DNA words, on tap
         ApexProfileView.show(view, p && !Array.isArray(p) ? p : { handle: f.handle, name: f.name }, { el, btn, back: () => closeProfile(), keys: keysFor(f),
           avatar: window.ApexPhotos ? ApexPhotos.avatar(photo, f.handle || '?', 56) : null, status: st && st.text ? { text: st.text, live: !!st.live } : null,
-          more: moreFor(f), partial: !p || Array.isArray(p), extra: [...(duels && f.handle ? [duels.cards({ with: f.handle })] : []), ...lastShare(f), ...(drivePosts && drivePosts.grid ? [drivePosts.grid(f.id, { empty: `@${f.handle || '?'} hasn’t posted a drive you can see yet.` })] : drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), ...(roadbooks && f.handle ? [roadbooks.ofFriend(f.handle)] : []), aboutYou(f)],
+          more: moreFor(f), partial: !p || Array.isArray(p), retry: () => openProfile(f), extra: [...(duels && f.handle ? [duels.cards({ with: f.handle })] : []), ...lastShare(f), ...(drivePosts && drivePosts.grid ? [drivePosts.grid(f.id, { empty: `@${f.handle || '?'} hasn’t posted a drive you can see yet.` })] : drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), ...(roadbooks && f.handle ? [roadbooks.ofFriend(f.handle)] : []), aboutYou(f)],
           });
         ppop.replaceChildren(view); ppop.classList.add('open');
       };

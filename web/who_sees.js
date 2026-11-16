@@ -57,6 +57,7 @@
     .who-grid > .who-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; padding: 0 4px 0 0; min-height: 48px; line-height: 48px; border-bottom: 1px solid var(--hair, var(--rule)); }
     .who-grid > .who-c { min-height: 48px; display: grid; place-items: center; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--hair, var(--rule)); color: var(--panel-dim); }
     .who-grid > .who-c.on { color: var(--panel-ink); }
+    .who-skel { display: grid; gap: 10px; padding: 12px 0; } .who-skel i { display: block; height: 48px; border-radius: 8px; background: var(--rule); opacity: .55; }
     .who-grid > .who-n.focus, .who-grid > .who-c.focus { background: color-mix(in srgb, var(--panel-ink) 8%, transparent); }
     .who-cell { width: 40px; height: 32px; border: 1.5px solid var(--panel-dim); background: transparent; color: var(--panel-dim); font: inherit; font-size: 15px; font-weight: 700; }
     .who-cell[aria-checked="true"] { background: var(--panel-ink); border-color: var(--panel-ink); color: var(--panel); }
@@ -88,7 +89,7 @@
       ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Who sees what');
       const box = el('div', { className: 'who-sees' });
       const head = el('div', { className: 'row', style: 'justify-content:space-between;align-items:baseline' }, el('h2', { textContent: 'Who sees what' }), btn('Done', close, 'linkbtn'));
-      box.append(head, el('p', { className: 'note', textContent: 'Loading…' }));
+      box.append(head, el('div', { className: 'who-skel', 'aria-busy': 'true', 'aria-label': 'Loading who sees what' }, el('i'), el('i'), el('i'), el('i')));   // loading: the grid's own place, no "Loading…" line
       ov.append(box); d.body.append(ov);
       const me = ov;
       let data = await load();

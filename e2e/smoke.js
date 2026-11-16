@@ -8358,7 +8358,7 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
   await page.click('[data-people="friends"]');
   await page.click('#accountBody .friend-head:has-text("@bob")');   // a tap on the friend opens their profile (2026-11-12)
-  await page.waitForSelector('.profile-view');
+  await page.waitForSelector('.profile-view:not(.skel)');
   const t = await page.textContent('.profile-view');
   check(t.includes('@bob') && /Bob <b>S<\/b> · friends since September( 2026)?/.test(t) && t.includes('Esses · best 812 · 3 days this month') && t.includes('Ridge Runners'), 'the profile, as text: ' + t);
   check(!/Times are never shown|on them this month/.test(t), 'no line saying what is not shown, and "this month" once under its head: ' + t);
@@ -8547,7 +8547,7 @@ flow('For you: the Social badge counts what is new and what waits; the heart lis
   await page.waitForFunction(() => !document.getElementById('feedBody').hidden && document.getElementById('forYouKey').getAttribute('aria-label') === 'For you, 4 new'
     && !document.querySelector('#forYouKey .sk-dot').hidden);
   check(await page.textContent('#feedBody .sh-asks button') === '1 friend request', 'the request waiting, on the Feed');
-  check(!!(await page.$('#accountBody .request-card:has-text("@dan")')), 'the request stays a card with its keys on Friends');
+  check(!!(await page.$('#accountBody .request-row:has-text("@dan")')), 'the request is a row on Friends that opens its keys');
   const fy = () => page.click('#forYouKey');
   await fy();
   await page.waitForSelector('.for-you-pop.open .inbox-row');
@@ -8620,7 +8620,7 @@ flow('People you may know: crew-mates and friends of friends on People, Add send
   check(!(await page.$('#accountBody .suggest-card:has-text("@dave")')) && await page.evaluate(() => localStorage.getItem('apex.suggestHidden')) === '["dave"]', '× hides dave on this phone');
 });
 
-flow('People: two tabs; a request is a card on top, then you, then friends with where they are; a friend row is about the friend; one Invite key; links open their side (the owner, 2026-10-30; REVIEW_PEOPLE steps 5, 6)', async (page, base) => {
+flow('People: two tabs; a request is a row on top, then you, then friends with where they are; a friend row is about the friend; one Invite key; links open their side (the owner, 2026-10-30; REVIEW_PEOPLE steps 5, 6)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const now = Date.now(), iso = (ms) => new Date(ms).toISOString();
   const posted = [];
@@ -8632,7 +8632,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
     if (m !== 'GET' && u.pathname !== '/api/crews/invite/preview') { posted.push([m, u.pathname, route.request().postData()]); return route.fulfill({ status: 204 }); }
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me', requests: 1 });
     if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }, { id: 'U2', handle: 'cara', name: null, status: 'accepted', incoming: 0 },
-      { id: 'U3', handle: 'eve', name: 'Eve K', status: 'accepted', incoming: 0 }, { id: 'U4', handle: 'dan', name: null, status: 'pending', incoming: 1 }]);
+      { id: 'U3', handle: 'eve', name: 'Eve K', status: 'accepted', incoming: 0 }, { id: 'U4', handle: 'dan', name: null, status: 'pending', incoming: 1, mutual: 2 }]);
     if (u.pathname === '/api/grants') return json([{ audience_type: 'friend', audience_id: 'U2', share_scores: 1, share_times: 0 }]);
     if (u.pathname === '/api/presence') return json([{ handle: 'cara', photo_id: null, delay_s: 0, fuzz: false, road: 'Cherohala Skyway', lat: 35.3, lon: -84.1, at: iso(now - 30e3) },
       { handle: 'bob', photo_id: null, delay_s: 600, fuzz: true, road: null, lat: 35.3, lon: -84.1, at: iso(now - 15 * 60e3) }]);
@@ -8668,8 +8668,8 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   // (what is on screen: an empty, hidden place for duel cards (SOCIAL 2.7) isn't a part of the order)
   const order = await page.$$eval('#accountBody > *', (k) => k.filter((x) => !x.hidden).map((x) => x.className));
   // (2026-11-16) Messages is a key in the head now, on every side
-  check(/request-card/.test(order[0]) && /you-row/.test(order[1]) && /friend-list/.test(order[2]), 'request card, You, friends: ' + JSON.stringify(order));
-  check(/@dan wants to be your friend/.test(await page.textContent('#accountBody .request-card')), 'the request card names who asks');
+  check(/request-row/.test(order[0]) && /you-row/.test(order[1]) && /friend-list/.test(order[2]), 'requests row, You, friends: ' + JSON.stringify(order));
+  check(/@dan wants to be your friend/.test(await page.textContent('#accountBody .request-row')), 'one request: the row names who asks');
   await page.waitForFunction(() => /You · @me/.test(document.querySelector('.you-row').textContent) && /Friends see where you are/.test(document.querySelector('.you-row small').textContent));
   const rows = await page.$$eval('#accountBody .friend-list .friend-head', (r) => r.map((x) => [x.querySelector('.friend-who b').textContent, x.querySelector('.friend-who small').textContent, x.querySelector('.friend-who small').classList.contains('live')]));
   check(JSON.stringify(rows) === JSON.stringify([['@cara', 'On the road · Cherohala Skyway', true], ['@bob', 'Seen 15 min ago', false], ['@eve', 'Eve K', false]]), 'friends and where they are: ' + JSON.stringify(rows));
@@ -8683,7 +8683,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   // Nate 2026-11-12 (as easy as a big social app): the row is the friend; a tap opens their profile, which holds what you
   // can do with them, their last share and what they see of you (the row used to open five keys and a grants drawer)
   check(!(await page.$('#accountBody .friend .crew-detail, #accountBody .friend button.ink-btn')), 'a friend row is one line, no keys in the list');
-  const profileOf = async (h) => { await page.click(`#accountBody .friend-head:has-text("${h}")`); await page.waitForSelector(`.people-pop.open .profile-view h3:text-is("${h}")`);
+  const profileOf = async (h) => { await page.click(`#accountBody .friend-head:has-text("${h}")`); await page.waitForSelector(`.people-pop.open .profile-view:not(.skel) h3:text-is("${h}")`);
     const k = await page.$$eval('.people-pop.open .profile-keys button', (b) => b.map((x) => x.textContent)); return k; };
   const moreOf = async () => { await page.click('.people-pop.open .pv-more'); await page.waitForSelector('.pv-menu');
     const m = await page.$$eval('.pv-menu button', (b) => b.map((x) => x.textContent)); await page.click('.pv-menu button:text-is("Cancel")'); return m; };
@@ -8693,6 +8693,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
     'her profile opens on what you can do with her, Message first, the rest behind ···: ' + JSON.stringify(acts));
   const cara = await page.textContent('.people-pop.open .profile-view');
   check(/Shared Cherohala loop · /.test(cara) && /What @cara sees of you\s*Scores/.test(cara) && /Couldn’t load the rest/.test(cara) && !/No scores shared/.test(cara), 'her last share and what she sees of you; offline, nothing guessed: ' + cara);
+  check(await page.isVisible('.people-pop.open .pv-lost button:text-is("Try again")'), 'the rest that did not load has Try again');
   await back();
   await profileOf('@bob');
   check((await moreOf()).includes('On the map'), 'bob shares a delayed position: On the map too');
@@ -8719,9 +8720,14 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   await page.click('.overlay[aria-label="Who sees what"] button:has-text("Done")');
   if (await page.isVisible('.people-pop.open')) await back();
   // Accept on the card
-  await page.click('#accountBody .request-card button:has-text("Accept")');
-  await page.waitForTimeout(200);
-  check(posted.some(([m, p, b]) => p === '/api/friends/accept' && /U4/.test(b)), 'Accept on the card answers the request');
+  await page.click('#accountBody .request-row');
+  await page.waitForSelector('.req-sheet .req-item');
+  check(/@dan/.test(await page.textContent('.req-sheet .req-item')) && JSON.stringify(await page.$$eval('.req-sheet .req-item button', (b) => b.map((x) => x.textContent))) === '["Accept","Not now"]',
+    'the sheet: who asks, then Accept and Not now');
+  check(/2 mutual friends/.test(await page.textContent('.req-sheet .req-item')), 'and how many friends you share');
+  await page.click('.req-sheet .req-item button:text-is("Accept")');
+  await page.waitForSelector('.req-sheet', { state: 'detached', timeout: 3000 });
+  check(posted.some(([m, p, b]) => p === '/api/friends/accept' && /U4/.test(b)), 'Accept in the sheet answers the request, and the last one closes it');
   // the Invite sheet is only for inviting and adding (P-05)
   await page.click('#accountBody button:has-text("Invite or add a friend")');
   await page.waitForSelector('.side-pop.open[aria-label="Invite"]');
