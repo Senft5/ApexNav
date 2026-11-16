@@ -7168,10 +7168,13 @@ const PROFILE_CSV = `(fault, seed) => {
 
 flow('Stages: a stage with no runs says so under its name, with no "-- best" beside it (free roamer B, 2026-11-14)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1');
-    localStorage.setItem('apex.segments', JSON.stringify([{ id: 's1', name: 'Tail of the Dragon (US 129)', lat0: 35.47, lon0: -83.92, lat1: 35.52, lon1: -83.95, length_m: 17000 }])); } catch (_) {} });
+    localStorage.setItem('apex.segments', JSON.stringify([{ id: 's1', name: 'Tail of the Dragon (US 129)', lat0: 35.47, lon0: -83.92, lat1: 35.52, lon1: -83.95, length_m: 17000,
+      geom: JSON.stringify([[35.47, -83.92], [35.49, -83.93], [35.5, -83.94], [35.52, -83.95]]) }])); } catch (_) {} });
   await page.goto(base + '/analysis.html');
   await page.click('[data-seg="segments"]');
   await page.waitForSelector('#segList button.seg');
+  // the stage's own shape beside its name, as a drive's in the Drives list (2026-11-16)
+  check(await page.evaluate(() => { const i = document.querySelector('#segList button.seg > .seg-shape'); return !!i && !!i.querySelector('svg path, svg polyline') && i.getBoundingClientRect().width === 48; }), 'the stage\'s shape is drawn beside its name');
   const r = await page.evaluate(() => { const b = document.querySelector('#segList button.seg'), vis = (e) => e.getClientRects().length > 0, sp = [...b.querySelectorAll('span')].filter(vis);
     const name = b.querySelector('b').getBoundingClientRect(), line = sp[0] && sp[0].getBoundingClientRect();
     return { shown: sp.map((x) => x.textContent), under: !!line && line.top >= name.bottom - 1 }; });

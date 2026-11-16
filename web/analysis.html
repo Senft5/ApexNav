@@ -284,6 +284,10 @@
     .switch > button { font-family: inherit; }
     .empty-line { margin: 4px 0; font-size: 16px; line-height: 1.45; } .empty-line a { display: inline-block; color: var(--panel-ink); font-weight: 600; }   /* a link never breaks across lines */
     a.btn { display: inline-flex; align-items: center; text-decoration: none; font-weight: 600; }
+    .seg:has(> .seg-shape) { grid-template-columns: 48px minmax(0, 1fr) auto; column-gap: 12px; align-items: center; }
+    .seg-shape { grid-row: 1 / span 2; display: block; } .seg-shape svg { width: 48px; height: 48px; display: block; background: var(--well, transparent); }
+    html[data-type-size] .seg-shape { display: none; } html[data-type-size] .seg:has(> .seg-shape) { grid-template-columns: minmax(0, 1fr) auto; }
+    .seg > .seg-wide { grid-column: 1 / -1; } .seg:has(> .seg-shape) > .seg-wide { grid-column: 2 / -1; } html[data-type-size] .seg > .seg-wide { grid-column: 1 / -1; }
     .seg b { font-size: 15px; } .seg span { font-size: 12px; color: var(--panel-dim); }
     :focus-visible { outline: 2px solid var(--panel-ink); outline-offset: 2px; }
     html:not(.kbd) :focus-visible { outline: none; }   /* the ring is for the keyboard; a key the page focused draws none */

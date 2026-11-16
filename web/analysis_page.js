@@ -981,11 +981,14 @@
         const passes = passesFor(s), best = passes.reduce((m, x) => (x.p.score != null && (m == null || x.p.score > m) ? x.p.score : m), null);
         const b = document.createElement('button');
         b.className = 'seg' + (s.id === activeSeg ? ' on' : '');
-        b.innerHTML = `<b></b><span class="score" style="font-size:20px">${best ?? UNK}</span><span></span><span>best</span>`;
+        // the stage's own shape beside its name, as the Drives list draws a drive's: from its geom; none kept, nothing drawn
+        let g = null; try { g = JSON.parse(s.geom || 'null'); } catch (_) {}
+        const shape = Array.isArray(g) && g.length > 1 && window.ApexRouteThumb ? (ApexRouteThumb.svg(g.map((q) => q[0]), g.map((q) => q[1]), { w: 48, h: 48, pad: 6, line: C.accent, hi: C.panelInk, width: 2 }) || '').replace(' role="img" aria-label="Route map"', ' aria-hidden="true"') : '';
+        b.innerHTML = `${shape ? `<i class="seg-shape">${shape}</i>` : ''}<b></b><span class="score" style="font-size:20px">${best ?? UNK}</span><span></span><span>best</span>`;
         b.querySelector('b').textContent = s.name;
         const sp = b.querySelectorAll('span');
         sp[1].textContent = `${ApexUnits.long(s.length_m, 1)} · ${passes.length ? `${passes.length} run${passes.length === 1 ? '' : 's'}` : 'no runs yet'}`;   // a tenth, as everywhere else (it said 21.34 mi)
-        if (!passes.length) { sp[0].hidden = true; sp[2].hidden = true; sp[1].style.gridColumn = "1 / -1"; }   // no runs: no "-- best" beside it; the line under the name says so
+        if (!passes.length) { sp[0].hidden = true; sp[2].hidden = true; sp[1].className = 'seg-wide'; }   // no runs: no "-- best" beside it; the line under the name says so
         b.onclick = () => { activeSeg = activeSeg === s.id ? null : s.id; renderSegments().then(syncSegments); };
         list.appendChild(b);
       }
