@@ -60,7 +60,7 @@ Anyone can make an account (Sign in with Apple or Google) to add friends and joi
 
 | field | value |
 |---|---|
-| Support URL | https://vettadrive.com (the info page, with the contact address hello@vettadrive.com once Email Routing is on) |
+| Support URL | https://vettadrive.com (the info page, with the contact address support@vettadrive.com, Nate's pick 2026-11-16, once Email Routing forwards it) |
 | Marketing URL | https://vettadrive.com |
 | Privacy policy URL | https://vettadrive.com/privacy |
 
