@@ -426,12 +426,13 @@ def test_the_highway_exception_takes_the_shortest_link_and_says_why():
 
 
 def test_no_highway_free_way_in_a_sensible_time():
-    """The only way without the motorway is three times as long: Fun still keeps off it (the hard rule), plans nothing
-    longer, and the card says Quick is the way; Quick takes the motorway."""
+    """The only way without the motorway is three times as long: the router's Fun search still keeps off it (the hard
+    rule) and plans nothing longer, but the card's Fun pick is the quickest, saying Quick is the way (the owner, 2026-11-16:
+    a highway-free way at twice the time is no Fun route); Quick takes the motorway."""
     r = case("levelsHighway")["absurd"]
     assert r["absurd"] and r["mode"] == "free" and r["hwyKm"] == 0 and r["ratio"] > 2, r
     assert r["names"] == ["Start Lane", "Loop Road", "End Lane"] and r["routes"] == 2, r
-    assert r["rankHwy"] == [0] and r["rankAbsurd"] == [True], r
+    assert len(r["rankHwy"]) == 1 and r["rankHwy"][0] > 8 and r["rankAbsurd"] == [True], r
     assert r["why"] == "No highway-free way in a sensible time; Quick is the way", r["why"]
     assert r["quickPick"] > 8, "Quick: the motorway"
 
@@ -699,3 +700,11 @@ def test_a_plan_past_its_soft_time_answers_with_what_it_has():
     r = case("softBudget")
     assert r["cutHasPick"] and r["cut"] >= 1, r
     assert r["full"] >= r["cut"], r
+
+
+def test_a_fun_reroutes_shaping_points_stay_off_side_streets_and_dead_ends():
+    # the owner's 2026-11-16 Fun reroute drove a dead end (Devonian Dr) and a neighbourhood loop to reach shaping points
+    r = case("shapingVia")
+    assert r["fun"] == ["Main Road"] and r["max"] == ["Main Road"] and r["far"] == ["Main Road"], r
+    # a stop the driver added, and Quick, still go where they're asked
+    assert "Devonian Dr" in r["stop"] and "Devonian Dr" in r["quick"], r

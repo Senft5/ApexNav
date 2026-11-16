@@ -69,6 +69,17 @@
   function applyHighways(valued, level, quickS, limit) {
     const h = levelHighways(valued, level, quickS);
     if (h.rule === 'any' || h.rule === 'unknown') return { list: valued, limit };
+    // no highway-free way in a sensible time (absurd): the level's pick is the quickest, and its card says Quick is the way.
+    // A highway-free way at twice the time is no Fun route (the owner, 2026-11-16, Blue Ash to Colerain: 44 min of suburban
+    // side streets for a 19 min trip, "was that route meant to be a joke")
+    if (h.absurd) {
+      const timed = valued.filter((c) => Number.isFinite(c.timeS));
+      const q = timed.length ? timed.reduce((a, b) => (b.timeS < a.timeS ? b : a)) : null;
+      if (q) {
+        Object.assign(q, { hwyRule: 'absurd', hwyKm: highwayKm(q), hwyAbsurd: true, hwyFreeS: h.freeS });
+        return { list: [q], limit: Math.max(limit, q.timeS + HWY.SLACK_S) };
+      }
+    }
     const times = h.list.map((c) => c.timeS).filter(Number.isFinite);
     const lim = Math.max(limit, (times.length ? Math.min(...times) : 0) + HWY.SLACK_S);
     for (const c of h.list) Object.assign(c, { hwyRule: h.rule, hwyKm: highwayKm(c), hwyAbsurd: h.absurd, hwyFreeS: h.freeS });

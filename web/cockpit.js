@@ -4379,7 +4379,16 @@
       const ahead = waysAhead(t);
       const points = [{ lat: L.lat, lon: L.lon, heading: headingOf(L) }, ...ahead, req.to];
       let r;
-      try { [r] = await routePoints(points, { osrm: true, level: t.funLevel || (isLoop(t) ? LOOP_STYLE : 'quick') }); } catch (_) { failed(); return; }
+      try { [r] = await routePoints(points, { osrm: true, level: rerouteLevel(t) }); } catch (e) {
+        if (!(e && e.noFunWay)) { failed(); return; }
+        // no highway-free way on our tiles from here: said plainly, with the Quick way one tap (or the car's key) away
+        routeWatch.note = 'Off route · no Fun way from here'; rerouter.requestFailed(Date.now());
+        if (!t.quickOffered) {
+          t.quickOffered = true;
+          offerKey('No Fun way from here. Quick way?', 'No Fun way', { label: 'Quick way', ms: 15000, onClick: () => { t.rerouteLevel = 'quick'; reroute(t); } });
+        }
+        return;
+      }
       if (track !== t || state.mode !== 'live') return;           // the driver loaded something else meanwhile
       if (!rerouter.off) return;                                  // back on the planned route meanwhile: it stays
       const nt = await trackAhead(t, r, ahead);
@@ -4390,9 +4399,14 @@
     function waysAhead(t) {
       return t.request.via.filter(v => v.distM == null || v.distM > routeWatch.bestM).map(v => ({ lat: v.lat, lon: v.lon, ...(v.shaping ? { shaping: true } : {}), ...(v.planned ? { planned: true } : {}), ...(v.label ? { label: v.label } : {}) }));
     }
+    // The level a reroute of t is routed at: the level it was planned at (a loop: its style), kept by every reroute after it;
+    // Quick for a Fun or Long way pick that is the quickest because no highway-free way takes a sensible time (hwyAbsurd)
+    function rerouteLevel(t) {
+      return t.rerouteLevel || t.funLevel || (isLoop(t) ? LOOP_STYLE : 'quick');
+    }
     async function trackAhead(t, r, ahead) {
       const nt = await trackFromPolyline(r.coords, t.id, t.name);
-      Object.assign(nt, { request: { from: null, to: t.request.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(nt, r), steps: stepsOf(nt, r) });
+      Object.assign(nt, { funLevel: t.funLevel, rerouteLevel: t.rerouteLevel, request: { from: null, to: t.request.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(nt, r), steps: stepsOf(nt, r) });
       ownInstructLater(nt, r);
       if (t.stageSpans) nt.stageSpans = FunRoute.stageSpans(nt, t.stageSpans.filter(s => s.endM > routeWatch.bestM));
       return nt;
@@ -4420,7 +4434,7 @@
       if (track !== t || !L || !t.request) return;
       const ahead = waysAhead(t);
       let r;
-      try { [r] = await routePoints([{ lat: L.lat, lon: L.lon, heading: headingOf(L) }, ...ahead, t.request.to], { osrm: true, level: t.funLevel || (isLoop(t) ? LOOP_STYLE : 'quick'), avoid: { ...avoid, points: pts } }); }
+      try { [r] = await routePoints([{ lat: L.lat, lon: L.lon, heading: headingOf(L) }, ...ahead, t.request.to], { osrm: true, level: rerouteLevel(t), avoid: { ...avoid, points: pts } }); }
       catch (_) { toast('Couldn\'t plan a way round. Check signal.'); return; }
       if (track !== t || state.mode !== 'live') return;
       if (!r || ApexHazardReports.passesNear(r.coords, [hit])) { toast('No way round that police report. Staying on this route.'); return; }
@@ -4471,7 +4485,7 @@
       if (track !== t || !L || !t.request) return;
       const ahead = waysAhead(t);
       let r;
-      try { [r] = await routePoints([{ lat: L.lat, lon: L.lon, heading: headingOf(L) }, ...ahead, t.request.to], { osrm: true, level: t.funLevel || (isLoop(t) ? LOOP_STYLE : 'quick'), avoid: { ...avoid, closed: pts } }); }
+      try { [r] = await routePoints([{ lat: L.lat, lon: L.lon, heading: headingOf(L) }, ...ahead, t.request.to], { osrm: true, level: rerouteLevel(t), avoid: { ...avoid, closed: pts } }); }
       catch (_) { toast('Couldn\'t plan a way round. Check signal.'); return; }
       if (track !== t || state.mode !== 'live') return;
       if (!r || ApexHazardReports.passesNear(r.coords, [hit], 40)) { toast(`No way round ${that}. Staying on this route.`); return; }
@@ -4970,18 +4984,22 @@
     // Points routed (a reroute, a road from Best roads nearby, a suggestion, a road someone sent, a drive again, a link's or
     // a file's stops): on our tiles where they cover every point (no network needed: offline as well), else Valhalla (and
     // OSRM after it where the caller had that), as before. Ours get Valhalla's maneuvers later (ownInstructLater).
-    const OWN_THROUGH_MS = 3000;
-    // o.level: a reroute of a route planned at Fun or Long way keeps off the highways as it did (graph_router.js through;
-    // Valhalla asked with use_highways 0); everything else is the quickest way between the points ('quick')
+    const OWN_THROUGH_MS = 3000, OWN_THROUGH_FUN_MS = 8000;
+    // o.level: a reroute of a route planned at Fun or Long way keeps off the highways as it did (graph_router.js through);
+    // everything else is the quickest way between the points ('quick')
     async function routePoints(points, o = {}) {
       const level = FunRoute.LEVELS[o.level] ? o.level : 'quick';
+      // Fun and Long way are ours only (the owner's rule: Valhalla is for Quick, never a fallback): no way on our tiles in
+      // OWN_THROUGH_FUN_MS throws, and the caller says so honestly (2026-11-16: a Fun reroute that fell back to Valhalla
+      // through side-street shaping points drove a dead end, a neighbourhood loop and zigzags)
+      const ours = FunRoute.LEVELS[level].noHighway;
       if (ownOn()) {
-        const r = await RouteLoading.optional(ApexOwnRouting.through(ownRouter(), points, { level, avoid: o.avoid || avoid, prefs: searchPrefs() }), OWN_THROUGH_MS);
+        const r = await RouteLoading.optional(ApexOwnRouting.through(ownRouter(), points, { level, avoid: o.avoid || avoid, prefs: searchPrefs() }), ours ? OWN_THROUGH_FUN_MS : OWN_THROUGH_MS);
         if (r) { tlSpan('own through (worker)', performance.now()); return [r]; }
       }
-      const extra = FunRoute.LEVELS[level].noHighway && window.ApexRouteEngine ? ApexRouteEngine.levelCosting(avoid, routingCar(), level) : {};
-      if (o.osrm) { try { return await valhallaRoutes(points, false, 0, extra); } catch (_) { return osrmRoutes(points); } }
-      return valhallaRoutes(points, false, 0, extra);
+      if (ours) throw Object.assign(new Error('no Fun way from here'), { noFunWay: true });
+      if (o.osrm) { try { return await valhallaRoutes(points, false, 0, {}); } catch (_) { return osrmRoutes(points); } }
+      return valhallaRoutes(points, false, 0, {});
     }
     /** One of our routes on track t: Valhalla's spoken maneuvers replace ours when they come (never waited for). */
     function ownInstructLater(t, r) {
@@ -5149,7 +5167,7 @@
       const overLine = rival ? ApexRouteEngine.whyOver(c, rival) : null;
       // Fun and Long way: the exception's highway, or no highway-free way in a sensible time (first: it's what you'd ask)
       const hwyLine = window.ApexRouteEngine && ApexRouteEngine.whyHighway ? ApexRouteEngine.whyHighway(c, { metric: ApexUnits.metric() }) : null;
-      Object.assign(t, { tasteBonus: Number.isFinite(c.tasteBonus) ? c.tasteBonus : null, measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
+      Object.assign(t, { tasteBonus: Number.isFinite(c.tasteBonus) ? c.tasteBonus : null, measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, rerouteLevel: c.hwyAbsurd ? 'quick' : o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
                          engine: c.ev ? { quality: c.ev.quality, confidence: c.ev.confidence, poorKm: c.ev.poorKm, hard: c.ev.hard, penalties: c.ev.penalties } : null,
                          unavoided: FunRoute.unavoided(avoid, c.route), why: (hwyLine && hwyLine.kind === 'absurd' ? [hwyLine.text] : [hwyLine && hwyLine.text, (engineWhy && engineWhy.text) || (quickLine && quickLine.text) || whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS), overLine && overLine.text]).filter(Boolean).join('. ') || null,
                          request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) }, tuned: o.tuned || null });

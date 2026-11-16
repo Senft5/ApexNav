@@ -82,6 +82,20 @@ const CASES = {
     const names = R.plan(v, { from: { lat: 39.3, lon: -84.5999 }, to: { lat: 39.3, lon: -84.5001 }, level: 'fun' }).routes[0].names.map((x) => x.name);
     return { names, hwy };
   },
+  shapingVia() {
+    // Main Road west to east, and Devonian Dr: a residential dead end off its middle. A shaping point (a hint along a
+    // planned line) nearer the dead end than Main Road: at Fun it lands on Main Road (never a side street or a dead end),
+    // one only near the dead end is passed by; a plain via (a stop) and Quick still go to the nearest road
+    const nodes = [at(39.3, -84.62), at(39.3, -84.6), at(39.3, -84.58), at(39.3, -84.56), at(39.3, -84.54), at(39.3006, -84.58)];
+    const edges = [];
+    for (let k = 0; k < 4; k++) two(edges, k, k + 1, { quality: 0.7, cls: 4, name: 'Main Road', t: 100 });
+    two(edges, 2, 5, { quality: 0.6, cls: 6, name: 'Devonian Dr', t: 10 });
+    const v = R.view(H.tiles(nodes, edges).tiles);
+    const from = { lat: 39.3, lon: -84.615 }, to = { lat: 39.3, lon: -84.545 }, near = { lat: 39.3005, lon: -84.5795 }, far = { lat: 39.3015, lon: -84.58 };
+    const go = (via, level) => [...new Set(R.through(v, { from, to, via: [via], level }).names.map((x) => x.name))];
+    return { fun: go({ ...near, shaping: true }, 'fun'), max: go({ ...near, shaping: true }, 'max'), far: go({ ...far, shaping: true }, 'fun'),
+      stop: go(near, 'fun'), quick: go({ ...near, shaping: true }, 'quick') };
+  },
   byway(lv) {
     // A to B by the Skyline Drive (a ridge road that sweeps more than it winds: fewer corner points) or US 59 (more corners,
     // the same time and scenery). With the Drive a scenic byway (the tiles' byway channel: lv 1 state, 2 National Scenic
