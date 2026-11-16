@@ -12,6 +12,9 @@
   The drive page's "Your best yet" list reads the same function.
 - Tests: tests/test_log_coach.py (corner news, one corner, another drive's news, a best drive outranks it),
   tests/test_new_bests.py (a quicker pass over the ceiling is not beaten).
-- Next: open the drive at that corner from the Log (go.cornerIndex); the redesign thread owns the card.
+- "See the corner" opens the drive at that corner: openDrive(id, k) keeps { id, k } and, once the drive is drawn, calls
+  the drive view's new showCorner(k) (its Your best yet row opened, with the overlay, or the corner picked). Checked on
+  Nate's drives: corner 15 opens with its overlay.
+- Next: the redesign thread owns the card; more corner news (where the most time is left) once it is styled.
 - Wording (asked by the redesign thread, whose Log card shows the latest Score and its day right above the brief): no
   day in the headline, no Score at the head of why ("40 above your previous best", "Close to your usual 650").

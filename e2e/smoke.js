@@ -4355,6 +4355,7 @@ flow('the Log coaches first: the news from the latest drive, why, and the one th
   check(got.head === 'Your best drive yet' && got.first, 'the Log opens on the news, above the numbers: ' + JSON.stringify(got));
   check(got.why === '40 above your previous best. Smoothness carried it: 78 out of 100 (usually 60).', 'why, from the measured part beside your usual: ' + JSON.stringify(got));
   check(got.trend === null && /^Next drive, work on /.test(got.next || '') && got.go, 'no steady trend said twice; one thing to work on next; a key to the drive: ' + JSON.stringify(got));
+  check((await page.textContent('#logCoachGo')) === 'See the drive', 'a drive\'s news opens the drive (a corner\'s, the corner)');
   await page.click('#logCoachGo');
   await page.waitForFunction(() => document.getElementById('dvPick') && document.getElementById('dvPick').value === 'c4', null, { timeout: 15000 });
   check(true, 'See the drive opens the drive the news is about');
