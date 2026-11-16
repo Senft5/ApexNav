@@ -176,6 +176,9 @@ and in random batches so a trace cannot be re-assembled.
   kudos (one tap, counted at once) and comments (one tap opens the post with them and a line to add one). Report and
   Block are behind ··· on a post or comment, never on its face; the author deletes a post, and a comment's author or
   the post's author deletes a comment. Blocks hide both ways; three established reports hide; the owner's queue removes.
+- A post on its own (2026-11-16): loading is the post's shape, not a line of text; no answer is one line and Try again; a
+  post taken down says it's gone. No comments is one line. A long press on a comment opens the same keys as its ···; after
+  Send the keyboard stays up, and Send waits for words.
 - `backend/src/drive_posts.ts` (migration 0059: `drive_posts`, `drive_post_kudos`, `drive_comments`), `web/drive_posts.js`.
   10 posts a day, 30 comments an hour, 200 comments a post. In Download my data; gone with the account.
 - A clip or a photo on a post (built 2026-11-13, `backend/src/post_media.ts`, migration 0061): Add a photo on the Post

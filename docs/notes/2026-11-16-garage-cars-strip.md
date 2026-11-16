@@ -2,7 +2,8 @@
 
 ## 2026-11-16 Your cars sit under the Garage profile's head
 - Done: the Garage profile shows your cars as a horizontal strip right under the head (screen inventory, Garage row "Your cars"): cover photo or a car mark, the name, Daily; a tap opens the car's build thread, or scrolls to its card below and lights it; the last tile, dashed, is Add a car (the section's own Add a car key goes, so there is one). No cars: no strip, the empty bay stays. e2e "Garage → You is your profile" checks it.
-- Next: the comments sheet (avatars, reply to a name, empty line) and Edit post with the post sheet's fields.
+- Done: a post on its own (`drive_posts.js` `open`): its shape while loading (no "Loading…"), "Couldn't load the post. Check signal." with Try again, "This post is gone." for one taken down; no comments is one line; a long press on a comment opens its keys (Delete now a danger key); after Send the box keeps focus and Send waits for words. e2e: a new "a post that can not load" flow; "drive posts: Post on a scored…" checks the long press and the focus.
+- Next: Edit post with the post sheet's fields; then the inventory's Friends rows (a friend's row opens their profile).
 
 # CALL SHEET
 
