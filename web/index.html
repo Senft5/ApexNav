@@ -1252,6 +1252,17 @@
     .crew-link-card .cl-meta, .crew-link-card .cl-why, .crew-link-card .cl-from { margin: 0; }
     .crew-link-card .cl-from { font-weight: 600; }
     .crew-link-card .cl-keys > .solid { flex: 1 1 auto; }
+    /* Invite to a crew (2026-11-16): the link, its code, friends to tick */
+    .crew-invite > .card-sheet { display: grid; gap: 14px; } .crew-invite .ci-body { display: grid; gap: 14px; }
+    .crew-invite .ci-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .crew-invite .ci-keys .ink-btn { min-height: 48px; }
+    .crew-invite .ci-friends { display: grid; gap: 2px; } .crew-invite .ci-friends > b { margin-bottom: 6px; }
+    .ci-friend { display: flex; align-items: center; gap: 12px; min-height: 52px; width: 100%; background: none; border: 0; padding: 0; color: var(--panel-ink); font: inherit; text-align: left; cursor: pointer; }
+    .ci-friend b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ci-tick { flex: none; width: 24px; height: 24px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--panel-dim); }
+    .ci-tick svg { width: 24px; height: 24px; display: block; fill: none; stroke: var(--panel); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; visibility: hidden; }
+    .ci-friend[aria-checked="true"] .ci-tick { background: var(--panel-ink); box-shadow: none; } .ci-friend[aria-checked="true"] .ci-tick svg { visibility: visible; }
+    .crew-invite .post-go { width: 100%; min-height: 52px; font-size: 17px; }
+    .near-crew .cl-badge { width: 48px; height: 48px; border-radius: 12px; font-size: 22px; } .near-crew .crew-tile-head b { font-size: 18px; } .near-crew .cl-keys { align-items: center; }
     #accountSection .join-head { margin: 22px 0 0; padding: 0; border: 0; font: 700 34px/1.02 var(--font-num); letter-spacing: 0.005em; text-transform: none; }
     .join-line { margin: 8px 0 0; font-size: 15px; line-height: 1.4; color: var(--panel-dim); }
     .join-gets { list-style: none; margin: 18px 0 0; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }

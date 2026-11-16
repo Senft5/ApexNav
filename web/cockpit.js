@@ -7473,10 +7473,73 @@
     }
     // A crew link (P-02, P-07): any member makes one unless the owner keeps invites; whoever opens it and signs in joins the
     // crew and is friends with the sender, so the one link is the whole way in.
+    // A link as a QR code (vendor/qrcode.js, loaded the first time): a canvas, or null when it can't be drawn.
+    const qrCanvas = async (url, label) => {
+      let qrcode = window.qrcode;
+      if (!qrcode) {
+        try { qrcode = await new Promise((ok, fail) => { const sc = document.createElement('script'); sc.src = 'vendor/qrcode.js'; sc.onload = () => (window.qrcode ? ok(window.qrcode) : fail(new Error('qr'))); sc.onerror = fail; document.head.append(sc); }); }
+        catch (_) { return null; }
+      }
+      const qr = qrcode(0, 'M'); qr.addData(url); qr.make();
+      const n = qr.getModuleCount(), cell = Math.max(4, Math.floor(232 / (n + 8))), size = (n + 8) * cell;
+      const cv = el('canvas', { width: size, height: size, className: 'friend-qr-code', 'aria-label': label });
+      cv.setAttribute('role', 'img'); cv.style.cssText = 'width:232px;height:232px;image-rendering:pixelated;border-radius:8px;justify-self:center';
+      const g = cv.getContext('2d');
+      g.fillStyle = '#fff'; g.fillRect(0, 0, size, size); g.fillStyle = '#000';
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (qr.isDark(y, x)) g.fillRect((x + 4) * cell, (y + 4) * cell, cell, cell);
+      return cv;
+    };
+    // Invite to a crew (screen inventory 2026-11-16): one sheet with the link (Copy link), its code to scan at a meet, and your
+    // friends who aren't in it yet to tick; Send gives each a message with the link. One crew link serves all of it.
     const crewInviteLink = async (c) => {
-      const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r);
-      if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, `Crew link copied. Whoever opens it joins ${c.name} and is your friend.`, `Join ${c.name} on Vetta`);
-      else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : j && j.error === 'owner_invites_only' ? `Only the owner invites to ${c.name}.` : 'Couldn\'t make a link. Try again.');
+      document.querySelectorAll('.crew-invite').forEach((n) => n.remove());
+      const ov = el('div', { className: 'overlay dim show crew-invite' }); ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', `Invite to ${c.name}`);
+      const close = () => ov.remove();
+      onBackdrop(ov, close);
+      const body = el('div', { className: 'ci-body', 'aria-busy': 'true' }, el('div', { className: 'feed-skel' }, el('i'), el('i')));
+      ov.append(el('div', { className: 'card-sheet' }, el('div', { className: 'post-head' }, el('h2', { textContent: `Invite to ${c.name}` }), btn('Done', close, 'linkbtn post-not-now')), body));
+      document.body.append(ov);
+      let r = null, j = null;
+      try { r = await apiCall('POST', `/api/crews/${c.id}/invite`); j = await jsonOf(r); } catch (_) {}
+      body.removeAttribute('aria-busy');
+      if (!r || !r.ok || !j || !j.token) {
+        const why = j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : j && j.error === 'owner_invites_only' ? `Only the owner invites to ${c.name}.` : 'Couldn’t make a link. Check signal.';
+        body.replaceChildren(el('div', { className: 'cp-lost' }, el('p', { className: 'note', textContent: why }), ...(r && r.status < 500 && r.status >= 400 ? [] : [btn('Try again', () => { close(); crewInviteLink(c); }, 'ink-btn')])));
+        return;
+      }
+      const url = `${shareOrigin()}/?crew=${j.token}`;
+      const qrBox = el('div', { className: 'stack-8 friend-qr' });
+      const showCode = btn('Show code', async () => {
+        if (qrBox.childElementCount) { qrBox.replaceChildren(); showCode.textContent = 'Show code'; return; }
+        const cv = await qrCanvas(url, `A code that joins ${c.name}`);
+        if (!cv) { copyText(url, 'Couldn’t draw the code, so the link is copied instead.'); return; }
+        qrBox.replaceChildren(cv, el('p', { className: 'note', textContent: 'They point their camera at it and join. You’re friends once they do.' })); showCode.textContent = 'Hide code';
+      }, 'ink-btn');
+      body.replaceChildren(el('div', { className: 'ci-keys' }, btn('Copy link', () => copyText(url, `Crew link copied. Whoever opens it joins ${c.name} and is your friend.`, `Join ${c.name} on Vetta`), 'ink-btn solid'), showCode), qrBox);
+      // your friends not in the crew yet, each a row to tick; Send messages them the link (a friend-to-friend message, as Messages sends)
+      const [fr, mem] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf).catch(() => null), apiCall('GET', `/api/crews/${encodeURIComponent(c.id)}/members`).then(jsonOf).catch(() => null)]);
+      if (!ov.isConnected || !Array.isArray(fr)) return;
+      const inIt = new Set((Array.isArray(mem) ? mem : []).map((m) => m && m.handle).filter(Boolean));
+      const can = fr.filter((f) => f && f.status === 'accepted' && f.handle && !inIt.has(f.handle));
+      if (!can.length) return;
+      const picked = new Set();
+      const send = btn('Send', async () => {
+        if (!picked.size || send.disabled) return; send.disabled = true;
+        const text = `Join ${c.name} on Vetta: ${url}`;
+        const got = await Promise.all([...picked].map((h) => apiCall('POST', `/api/messages/${encodeURIComponent(h)}`, { body: text }).then((x) => !!(x && x.ok)).catch(() => false)));
+        const ok = got.filter(Boolean).length;
+        if (!ok) { send.disabled = false; toast('Couldn’t send it. Check signal.'); return; }
+        close(); toast(ok === 1 ? `Sent the link to @${[...picked][got.indexOf(true)]}.` : `Sent the link to ${ok} friends.`);
+      }, 'ink-btn solid post-go');
+      const paint = () => { send.disabled = !picked.size; send.textContent = picked.size ? `Send to ${picked.size}` : 'Send'; };
+      const rows = can.map((f) => {
+        const row = el('button', { type: 'button', className: 'ci-friend', role: 'checkbox', 'aria-checked': 'false' },
+          window.ApexPhotos ? ApexPhotos.avatar(f.photo_id || null, f.handle, 36) : el('span'), el('b', { textContent: `@${f.handle}` }), el('i', { className: 'ci-tick', 'aria-hidden': 'true', innerHTML: '<svg viewBox="0 0 24 24"><path d="M6.5 12.5l3.8 3.8 7.2-8"/></svg>' }));
+        row.addEventListener('click', () => { if (picked.has(f.handle)) picked.delete(f.handle); else picked.add(f.handle); row.setAttribute('aria-checked', String(picked.has(f.handle))); paint(); });
+        return row;
+      });
+      paint();
+      body.append(el('div', { className: 'ci-friends' }, el('b', { textContent: 'Send to friends' }), ...rows), send);
     };
     // The crew page (web/crew_page.js, REVIEW.md roadmap 20): the Crew tab opens your crew.
     let crewGear = null;   // opens the open crew's settings sheet (renderAccount sets it)
@@ -8121,7 +8184,7 @@
           btn('Not now', async () => { await apiCall('DELETE', `/api/friends/${f.id}`); toast(`Declined. @${f.handle} isn’t told.`); redo(); }, 'linkbtn'))));
 
       // Duels (duels.js): one asked of you, one on, a result: cards under the requests, while there is a friend to duel
-      if (duels && accepted.length) body.append(duels.cards());
+      if (duels && accepted.length) body.append(duels.cards({ asks: true }));   // the rest are on each friend's profile
 
       // P-23: you, one tap from People: your face, your handle and who sees where you are; it opens Who sees what (P-09)
       const WHO = { nobody: 'Nobody sees where you are', crew: 'Your private crews see where you are', friends: 'Friends see where you are' };
@@ -8213,7 +8276,7 @@
         if (window.ApexVocabulary && ApexVocabulary.watchTerms) ApexVocabulary.watchTerms(view);   // a friend's DNA words, on tap
         ApexProfileView.show(view, p && !Array.isArray(p) ? p : { handle: f.handle, name: f.name }, { el, btn, back: () => closeProfile(), keys: keysFor(f),
           avatar: window.ApexPhotos ? ApexPhotos.avatar(photo, f.handle || '?', 56) : null, status: st && st.text ? { text: st.text, live: !!st.live } : null,
-          more: moreFor(f), partial: !p || Array.isArray(p), extra: [...lastShare(f), ...(drivePosts && drivePosts.grid ? [drivePosts.grid(f.id, { empty: `@${f.handle || '?'} hasn’t posted a drive you can see yet.` })] : drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), ...(roadbooks && f.handle ? [roadbooks.ofFriend(f.handle)] : []), aboutYou(f)],
+          more: moreFor(f), partial: !p || Array.isArray(p), extra: [...(duels && f.handle ? [duels.cards({ with: f.handle })] : []), ...lastShare(f), ...(drivePosts && drivePosts.grid ? [drivePosts.grid(f.id, { empty: `@${f.handle || '?'} hasn’t posted a drive you can see yet.` })] : drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), ...(roadbooks && f.handle ? [roadbooks.ofFriend(f.handle)] : []), aboutYou(f)],
           });
         ppop.replaceChildren(view); ppop.classList.add('open');
       };
@@ -8265,18 +8328,8 @@
       async function showFriendQr(box) {
         const r = await apiCall('POST', '/api/invites').catch(() => null), j = r && r.ok ? await jsonOf(r) : null;
         if (!j || !j.url) { toast(r && r.status === 429 ? 'You have 10 open friend links. Wait for some to be used.' : 'Couldn\'t make a code. Try again.'); return; }
-        let qrcode = window.qrcode;
-        if (!qrcode) {
-          try { qrcode = await new Promise((ok, fail) => { const sc = document.createElement('script'); sc.src = 'vendor/qrcode.js'; sc.onload = () => (window.qrcode ? ok(window.qrcode) : fail(new Error('qr'))); sc.onerror = fail; document.head.append(sc); }); }
-          catch (_) { copyText(j.url, 'Couldn\'t draw the code, so the link is copied instead.'); return; }
-        }
-        const qr = qrcode(0, 'M'); qr.addData(j.url); qr.make();
-        const n = qr.getModuleCount(), cell = Math.max(4, Math.floor(232 / (n + 8))), size = (n + 8) * cell;
-        const cv = el('canvas', { width: size, height: size, className: 'friend-qr-code', 'aria-label': 'Your friend code' });
-        cv.setAttribute('role', 'img'); cv.style.cssText = 'width:232px;height:232px;image-rendering:pixelated;border-radius:8px;justify-self:center';
-        const g = cv.getContext('2d');
-        g.fillStyle = '#fff'; g.fillRect(0, 0, size, size); g.fillStyle = '#000';
-        for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (qr.isDark(y, x)) g.fillRect((x + 4) * cell, (y + 4) * cell, cell, cell);
+        const cv = await qrCanvas(j.url, 'Your friend code');
+        if (!cv) { copyText(j.url, 'Couldn\'t draw the code, so the link is copied instead.'); return; }
         box.replaceChildren(cv, el('p', { className: 'note', textContent: 'They point their camera at it and tap Accept. One person per code.' }),
           el('div', { className: 'row' }, btn('New code', () => showFriendQr(box), 'linkbtn'), btn('Hide', () => box.replaceChildren(), 'linkbtn')));
       }
@@ -8549,15 +8602,16 @@
         if (found === 'private') { nsec.append(el('p', { className: 'note', textContent: 'You\'re in a privacy zone, so crews nearby aren\'t looked up from here.' })); return; }
         const nearby = Array.isArray(found) ? found : [];
         if (nearbyRow) nearbyRow._count.textContent = nearby.length ? `${nearby.length} crew${nearby.length === 1 ? '' : 's'} near you` : '';   // U-125
-        if (!nearby.length) { nsec.append(el('p', { className: 'note', textContent: found ? 'No public crews near you yet.' : 'Couldn\'t look for crews nearby. Check signal.' })); return; }
+        if (!nearby.length) { nsec.append(el('p', { className: 'note', textContent: found ? 'No public crews near you yet. Start one below.' : 'Couldn\'t look for crews nearby. Check signal.' }), ...(found ? [] : [btn('Try again', redo, 'ink-btn')])); return; }
         const ntiles = el('div', { className: 'crew-tiles one' });   // P-26: one a row, the name whole
         for (const c of nearby) {
-          const t = el('div', { className: 'card' });
-          t.append(el('div', { className: 'crew-tile-head' }, el('b', { textContent: c.name }),
+          // a crew near you reads as its preview, the crew link's card (screen inventory 2026-11-16): its mark, name, one line, Join
+          const t = el('div', { className: 'card crew-link-card near-crew' });
+          t.append(el('div', { className: 'cl-head' }, el('span', { className: 'cl-badge', 'aria-hidden': 'true', textContent: String(c.name || '?').trim().charAt(0).toUpperCase() }), el('div', { className: 'crew-tile-head cl-words' }, el('b', { textContent: c.name }),
             el('span', { textContent: `${c.members} ${c.members === 1 ? 'member' : 'members'} · ${c.area_name}${Number.isFinite(c.km) ? ` · ${ApexUnits.long(Math.max(1609.344, c.km * 1000), 0)}` : ''}` }),
-            ...(c.about ? [el('em', { textContent: c.about })] : [])),
-            el('div', { className: 'row' },
-              btn('Join', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/join`); if (r.ok) { toast(`You joined ${c.name}.`); await askPublicSharing(c.id, c.name); openCrewId = c.id; redo(); } else toast(r.status === 429 ? 'You\'re in 10 crews already.' : 'Couldn\'t join. Try again.'); }, 'ink-btn solid'),
+            ...(c.about ? [el('em', { textContent: c.about })] : []))),
+            el('div', { className: 'row cl-keys' },
+              btn('Join crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/join`); if (r.ok) { toast(`You joined ${c.name}.`); await askPublicSharing(c.id, c.name); openCrewId = c.id; redo(); } else toast(r.status === 429 ? 'You\'re in 10 crews already.' : 'Couldn\'t join. Try again.'); }, 'ink-btn solid'),
               ...(safety ? [btn('Report', () => safety.report({ kind: 'crew', target: c.id, label: c.name, done: redo }), 'linkbtn')] : [])));
           ntiles.append(t);
         }
