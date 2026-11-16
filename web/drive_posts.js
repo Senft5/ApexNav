@@ -707,6 +707,7 @@
     // the Feed's pick (All, Friends, a crew) outlives a redraw of the page round it: the Social tab redraws when what it
     // shows changes (a request, a crew), and a fresh Feed used to fall back to All under the driver's finger
     let feedOnly = '';
+    const onPick = new Set();   // every Feed on the page follows a pick made on any of them (a redraw can swap the one under a tap)
     function full(fo = {}) {
       const list = el('div', { className: 'feed' }), more = btn('More', () => load(), 'linkbtn feed-more-key');
       const pick = el('div', { className: 'switch feed-pick', role: 'radiogroup', 'aria-label': 'Show' }); pick.hidden = true;
@@ -731,15 +732,22 @@
           list.replaceChildren(lost); more.hidden = true;
         });
       };
-      const show = (q) => {
+      let wasOn = false;
+      const follow = (q) => { if (!list.isConnected) { if (wasOn) onPick.delete(follow); return; } wasOn = true; if (q !== only) show(q, true); };
+      onPick.add(follow);
+      const show = (q, followed) => {
         only = q; feedOnly = q; last = null; gen += 1; list.replaceChildren();
+        if (!followed) onPick.forEach((f) => { if (f !== follow) f(q); });
         paintMuted();
         pick.querySelectorAll('button').forEach((b) => { const on = b.dataset.q === q; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
         load();
       };
       Promise.resolve(page.crews ? page.crews() : []).then((crews) => {
         const opts = Array.isArray(crews) && crews.length ? [['', 'All'], ['friends=1', 'Friends'], ...crews.map((c) => [`crew=${encodeURIComponent(c.id)}`, c.name])] : [];
-        if (only && !opts.some(([q]) => q === only)) show('');               // a crew picked before, left since: All again
+        // a crew picked before, left since: All again. Crews that didn't load (no list) change nothing: a redraw while the
+        // list was being asked for used to drop the driver's pick back to All
+        if (!Array.isArray(crews)) return;
+        if (only && !opts.some(([q]) => q === only)) show('');
         if (!opts.length) return;
         if (opts.length > 3) pick.className = 'stamps feed-pick';
         pick.replaceChildren(...opts.map(([q, label]) => { const b = btn(label, () => show(q), 'chip'); b.dataset.q = q; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(q === only)); b.classList.toggle('on', q === only); return b; }));
@@ -752,7 +760,9 @@
         mutedBox.replaceChildren(el('b', { textContent: 'Muted' }), ...[...muted].map((h) => el('div', { className: 'row feed-muted-row' },
           el('span', { textContent: `@${h}` }), btn('Unmute', () => setMuted(h, false), 'linkbtn'))));
       };
-      onMute.add(() => show(only));
+      // a Feed the page has drawn over since lets go of mutes (it used to call show() and move the pick under the new one)
+      const onMuted = () => { if (!list.isConnected) { onMute.delete(onMuted); return; } show(only); };
+      onMute.add(onMuted);
       paintMuted();
       load();
       return el('div', { className: 'stack-12' }, pick, list, more, mutedBox);
