@@ -74,6 +74,8 @@
   }
 
   const STYLE = `
+    .inbox-skel { display: grid; gap: 12px; padding: 4px 0; } .inbox-skel i { display: block; height: 52px; border-radius: 8px; background: var(--rule); opacity: .55; }
+    .inbox-lost { display: grid; gap: 10px; justify-items: start; } .inbox-lost p { margin: 0; }
     .inbox { display: grid; gap: 0; }
     .inbox-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--panel-rule, rgba(0,0,0,0.12)); }
     .inbox-row:first-of-type, .inbox-group + .inbox-row { border-top: 0; }
@@ -136,7 +138,9 @@
       // what was seen when this list was drawn, read now: an earlier draw's answer landing once People is on screen marks
       // the list seen, and this draw's rows would lose their dot before the driver saw them (CI, PR #677)
       const seen = seenGet();
-      refresh().then((data) => {
+      // the sheet loads as rows in its shape (the shared states, screen inventory), never an empty sheet
+      if (sheet) box.append(el('div', { className: 'inbox-skel', 'aria-busy': 'true', 'aria-label': 'Loading For you' }, el('i'), el('i'), el('i')));
+      const fill = () => refresh().then((data) => {
         const now = data && data.now ? tsOf(data.now) : Date.now();
         const rows = (data && Array.isArray(data.items) ? data.items : []).filter((i) => !CARDED.has(i.kind)).map((i) => ({ i, l: line(i) })).filter((x) => x.l).slice(0, sheet ? SHEET_SHOWN : SHOWN);
         const list = el('div', { className: 'inbox', role: 'list' });
@@ -154,12 +158,14 @@
           list.append(row);
         }
         if (sheet) {
-          if (!data) list.append(el('p', { className: 'note', textContent: root.navigator && root.navigator.onLine === false ? 'You’re offline. This fills in when you’re back.' : 'Can’t reach Vetta. Try again in a moment.' }));
+          if (!data) list.append(el('div', { className: 'inbox-lost' }, el('p', { textContent: root.navigator && root.navigator.onLine === false ? 'You’re offline. This fills in when you’re back.' : 'Can’t reach Vetta.' }),
+            btn('Try again', (e) => { const k = e && e.currentTarget; if (k) { k.disabled = true; k.textContent = 'Trying\u2026'; } fill(); }, 'ink-btn')));
           else if (!rows.length) list.append(el('p', { className: 'note', textContent: 'Nothing yet. Kudos, comments and challenges land here.' }));
           box.replaceChildren(list);
         } else { box.replaceChildren(head, list); box.hidden = !rows.length; }
         if (page.onScreen()) markSeen();
       });
+      fill();
       return box;
     }
 

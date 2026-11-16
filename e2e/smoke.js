@@ -8473,6 +8473,26 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   check(JSON.stringify(sent) === '[{"handle":"bob","segment_id":"MY2","days":3,"kind":"time"}]', 'what was sent: ' + JSON.stringify(sent));
 });
 
+flow('For you with no answer: the sheet loads as rows, says it can\'t reach Vetta with Try again, and fills in on the tap (the shared states, 2026-11-16)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  let fails = true;
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b, s = 200) => route.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/inbox') return fails ? route.abort() : json({ items: [{ kind: 'kudos', at: '2026-11-16 09:00:00', handle: 'cara', stage: 'Dry Ridge climb', canon_id: 'SEG1', driven_on: '2026-11-10' }], waiting: 0, now: '2026-11-16 10:00:00' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=feed');
+  await page.waitForSelector('#forYouKey', { timeout: 15000 });
+  await page.click('#forYouKey');
+  await page.waitForSelector('.for-you-pop.open .inbox-lost button:text-is("Try again")');
+  check(/^Can’t reach Vetta\./.test(await page.textContent('.for-you-pop.open .inbox-lost')), 'no answer says so, with Try again');
+  fails = false;
+  await page.click('.for-you-pop.open .inbox-lost button:text-is("Try again")');
+  await page.waitForSelector('.for-you-pop.open .inbox-row');
+});
+
 flow('For you: the Social badge counts what is new and what waits; the heart lists it in sentences; seen once opened; a row\'s key takes you there (Worker stubbed, SOCIAL 2.10)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const at = (minAgo) => new Date(Date.now() - minAgo * 60e3).toISOString().replace('T', ' ').slice(0, 19);
