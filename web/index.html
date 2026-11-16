@@ -668,14 +668,18 @@
        component in Layers, the Garage and Friends. A 52 x 30 track. Off is hollow: a dim border, a dim thumb on the left
        and an O mark in the empty half. On is solid: the track fills with ink, the thumb turns paper and slides right, and
        an I mark shows in the half it left. Two cues besides position (fill and the I/O mark), so it reads at a glance. */
-    .sw i { width: 52px; height: 30px; flex: none; box-sizing: border-box; border: 2px solid var(--panel-dim); background: var(--panel); position: relative; display: block;
-      transition: background-color 0.15s ease-out, border-color 0.15s ease-out; }
-    .sw i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; background: var(--panel-dim);
-      transition: transform 0.15s ease-out, background-color 0.15s ease-out; }
-    .sw i::before { content: ""; position: absolute; top: 50%; right: 7px; width: 6px; height: 6px; margin-top: -5px; border: 2px solid var(--panel-dim); border-radius: 50%; }   /* O */
+    /* 2026-11-16 (Nate: "functions and menus … simply aren't polished"): the same two cues on a rounder part. A pill track and
+       a round thumb, as on the phone's own switches. Off is quiet: a well, a grey thumb left, an O in the empty half. On is
+       loud: the track fills with ink, the thumb (paper) slides right and an I shows where it was. */
+    .sw i { width: 51px; height: 31px; flex: none; box-sizing: border-box; border: 1.5px solid color-mix(in srgb, var(--panel-ink) 24%, var(--panel)); border-radius: 999px; position: relative; display: block;
+      background: color-mix(in srgb, var(--panel-ink) 16%, var(--panel));
+      transition: background-color 0.2s ease-out, border-color 0.2s ease-out; }
+    .sw i::after { content: ""; position: absolute; top: 0.5px; left: 0.5px; width: 27px; height: 27px; border-radius: 50%; background: color-mix(in srgb, var(--panel-ink) 50%, var(--panel));
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); transition: transform 0.22s cubic-bezier(0.3, 0.7, 0.4, 1.15); }
+    .sw i::before { content: ""; position: absolute; top: 50%; right: 8px; width: 7px; height: 7px; margin-top: -5.5px; border: 2px solid color-mix(in srgb, var(--panel-ink) 45%, transparent); border-radius: 50%; }   /* O */
     .sw.on i { background: var(--panel-ink); border-color: var(--panel-ink); }
-    .sw.on i::after { transform: translateX(22px); background: var(--panel); }
-    .sw.on i::before { right: auto; left: 12px; width: 2px; height: 12px; margin-top: -6px; border: 0; border-radius: 0; background: var(--panel); }   /* I */
+    .sw.on i::after { transform: translateX(20px); background: var(--panel); }
+    .sw.on i::before { right: auto; left: 12px; width: 2px; height: 11px; margin-top: -5.5px; border: 0; border-radius: 1px; background: var(--panel); }   /* I */
     .sw span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
     @media (prefers-reduced-motion: reduce) { .sw i, .sw i::after { transition: none; } }
     .sheet .sw, .edge-panel .sw, .side-pop .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
@@ -1484,6 +1488,34 @@
     .garage-pop { min-height: min(82%, 680px); transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.2s; visibility: hidden; }
     .garage-pop.open { visibility: visible; transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s; }
     .garage-pop:focus { outline: none; }
+    /* Settings as a flow, not sheets on sheets (Nate 2026-11-16: "menus just don't feel cohesive like there is a flow"): on a
+       phone the list is a full page, and a setting slides in from the right over it as the next page, "‹ Settings" back, the
+       way the phone's own Settings app reads. A desk keeps its side panels (below). */
+    @media not ((min-width: 1100px) and (min-height: 600px)) {
+      #garageSettings, .garage-pop { top: 0; bottom: 0; min-height: 0; max-height: none; border-top: 0; box-shadow: none;
+        padding-top: calc(14px + var(--safe-top)); }
+      #garageSettings::before, .garage-pop::before { content: none; }
+      #garageSettings { transform: translateY(100%); }
+      #garageSettings.open { transform: none; }
+      #garageSettings.open:has(~ .garage-pop.open) { transform: translateX(-28%); transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1); }
+      .garage-pop { z-index: 31; transform: translateX(100%); box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18);
+        transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.32s; }
+      .garage-pop.open { transform: none; transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s; }
+      .garage-pop .side-pop-head { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: start; text-align: left; gap: 0; }
+      .garage-pop .side-pop-head .linkbtn { order: -1; margin-left: -2px; min-height: 44px; padding: 0; text-decoration: none; font-size: 17px; font-weight: 600; color: var(--panel-ink); }
+      .garage-pop .side-pop-head h3 { font-size: 30px; line-height: 1.05; margin-top: 2px; }
+      #garageSettings .side-pop-head h3 { font-size: 30px; line-height: 1.05; justify-self: start; }
+      #garageSettings .side-pop-head .linkbtn { justify-self: end; order: -1; min-height: 44px; text-decoration: none; font-size: 17px; font-weight: 600; color: var(--panel-ink); }
+    }
+    /* a privacy zone is a row you can read and remove, as a saved place is in Maps: its name, its size, Remove at the end */
+    #zoneList { gap: 0; border-radius: var(--r-card, 12px); overflow: hidden; }
+    #zoneList > .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 52px; margin: 0; padding: 0 14px;
+      background: var(--well, color-mix(in srgb, var(--panel-ink) 6%, var(--panel))); font-size: 16px; }
+    #zoneList > .row + .row { border-top: 1px solid var(--hair, var(--rule)); }
+    #zoneList > .row .linkbtn { min-height: 44px; padding: 0 2px; text-decoration: none; font-weight: 600; color: var(--panel-dim); }
+    @media not ((min-width: 1100px) and (min-height: 600px)) and (prefers-reduced-motion: reduce) {
+      #garageSettings, .garage-pop, #garageSettings.open:has(~ .garage-pop.open) { transition: none; }
+    }
     .garage-pop > section { display: grid; gap: 8px; zoom: var(--type-scale, 1); }
     .garage-pop p.note { font-size: 13px; color: var(--panel-dim); line-height: 1.45; margin-top: 6px; }
     .garage-pop p.note.err { color: var(--accent); }
