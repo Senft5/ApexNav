@@ -45,15 +45,16 @@
     const text = el('textarea', { className: 'field', maxLength: MAX, rows: 4, placeholder: 'What happened, or what would make it better?', style: 'width:100%;box-sizing:border-box' });
     text.setAttribute('aria-label', 'Your feedback');
     // a yes/no is the slide switch (never the browser's box); read through .checked like the box it replaces
-    const tick = (label, on) => {
-      const b = el('button', { type: 'button', className: 'sw' + (on ? ' on' : '') }, el('i'), el('span', { textContent: label }));
+    // what a switch sends stays on its row (U-135), as a small line under its name (2026-11-16; it was one long label in brackets)
+    const tick = (label, sub, on) => {
+      const b = el('button', { type: 'button', className: 'sw' + (on ? ' on' : '') }, el('i'), el('span', {}, label, el('small', { textContent: sub })));
       b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on));
       Object.defineProperty(b, 'checked', { get: () => b.classList.contains('on'), set: (v) => { b.classList.toggle('on', !!v); b.setAttribute('aria-checked', String(!!v)); } });
       b.addEventListener('click', () => { b.checked = !b.checked; });
       return [b, b];
     };
-    const [attach, attachRow] = tick('Attach diagnostics (app version, device, language, error count; never your position)', true);
-    const [reply, replyRow] = tick('I’d like a reply (shares your handle with the owner)', false);
+    const [attach, attachRow] = tick('Attach diagnostics', 'App version, device, language, error count. Never your position.', true);
+    const [reply, replyRow] = tick('I’d like a reply', 'Shares your handle with the owner.', false);
     const send = btn('Send', async () => {
       const body = payload({ kind, message: text.value, app: page.app, attach: attach.checked, reply: reply.checked && page.signedIn(), env: page.env() });
       if (!body) { toast('Write something first.'); return; }
@@ -65,7 +66,7 @@
       else toast(r && r.status === 429 ? 'Too much feedback today. Try again tomorrow.' : 'Couldn’t send it. Check signal and try again.');
     }, 'ink-btn solid');
     const refresh = () => { replyRow.hidden = !page.signedIn(); };
-    box.replaceChildren(chips, text, attachRow, replyRow, el('div', { className: 'row' }, send));
+    box.replaceChildren(chips, text, el('div', { className: 'fb-switches' }, attachRow, replyRow), el('div', { className: 'row' }, send));
     refresh();
     return { refresh };
   }

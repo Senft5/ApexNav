@@ -71,7 +71,7 @@ def test_no_browser_scrollbar_in_sheets():
 def test_default_on_data_rows_say_anonymous_on_the_row():
     # U-135: what the default-on switches send is on the row, not behind the fold
     assert "<span>Share app health (anonymous counts)</span>" in HTML
-    assert "Attach diagnostics (app version, device, language, error count; never your position)" in (WEB / "feedback.js").read_text()
+    assert "tick('Attach diagnostics', 'App version, device, language, error count. Never your position.', true)" in (WEB / "feedback.js").read_text()
 
 
 def test_crash_check_says_what_it_does_without_a_contact():
