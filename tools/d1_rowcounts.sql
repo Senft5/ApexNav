@@ -84,5 +84,6 @@ SELECT
   (SELECT COUNT(*) FROM driver_dna) AS driver_dna,
   (SELECT COUNT(*) FROM direct_messages) AS direct_messages,
   (SELECT COUNT(*) FROM drive_post_tags) AS drive_post_tags,
+  (SELECT COUNT(*) FROM crew_admins) AS crew_admins,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;
