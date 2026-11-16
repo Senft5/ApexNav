@@ -26,6 +26,13 @@ const steps = [
 const said = new Set(), heard = [];
 for (let m = 0; m <= 9100; m += 10) for (const l of D.due(steps, m, 20, said, 'r1')) { said.add(l.key); heard.push([m, l.text, l.now]); }
 const out = { heard };
+// brief (notes awake, Nate's 11-16 drive): no far rung, the near one and the turn's own call only
+const sb = new Set(), brief = [], short = [{ m: 0, type: 1, street: 'A' }, { m: 1000, type: 15, street: 'Ross Road' }, { m: 1400, type: 10, street: 'Devonian Drive' }];
+for (let m = 0; m <= 1450; m += 10) for (const l of D.due(short, m, 20, sb, 'rb', null, { brief: true })) { sb.add(l.key); brief.push(l.text); }
+out.brief = brief;
+const sl = new Set(), long = [];   // a long leg keeps its far call, brief or not
+for (let m = 0; m <= 2000; m += 10) for (const l of D.due(steps, m, 20, sl, 'rl', null, { brief: true })) { sl.add(l.key); long.push(l.text); }
+out.briefLong = long;
 out.words = [50, 120, 300, 480, 805, 1609, 4000].map(D.distWords);
 globalThis.ApexUnits = { metric: () => true };                 // Settings → Units: kilometres (U-22)
 out.metricWords = [50, 320, 960, 1000, 2460].map(D.distWords);
@@ -92,3 +99,13 @@ def test_strip_notes(out):
         {"code": "Arrive", "call": "Destination", "dir": "A", "angle": 0},
         None,
     ]
+
+
+def test_brief_leaves_out_the_far_rung(out):
+    assert out["brief"] == [
+        "In 800 feet, turn left onto Ross Road",            # legs under 1200 m: no far call
+        "Turn left onto Ross Road",
+        "In 800 feet, turn right onto Devonian Drive",
+        "Turn right onto Devonian Drive",
+    ]
+    assert out["briefLong"][0] == "In 0.4 miles, turn left onto Deals Gap Road"

@@ -1829,7 +1829,8 @@
       if ((now - sunAlt.at > 60000 || sunAlt.t !== t) && window.ApexSun && t && t.lat && Number.isFinite(t.lat[i])) { sunAlt.at = now; sunAlt.t = t; sunAlt.v = ApexSun.sunPosition(new Date(), t.lat[i], t.lon[i]).altitude; }
       return sunAlt.v;
     };
-    const noteworthyInCruise = (e) => e.type === 'alpr' || (e.type === 'bump' && (e.severity_g >= 0.45 || !!e.crowd))
+    const spokenCamera = (e) => e.kind === 'speed';   // plate readers: pins only
+    const noteworthyInCruise = (e) => (e.type === 'alpr' && spokenCamera(e)) || (e.type === 'bump' && (e.severity_g >= 0.45 || !!e.crowd))
       || (e.type === 'mark' && window.ApexRoadMarks && ApexRoadMarks.cruiseWorthy(e, sunAltNow()));
 
     // -------------------------------------------------------------------------
@@ -1887,10 +1888,8 @@
     // opts: kind 'hazard' (goes first, may cut off an ordinary line), key (never twice in a row), atM (route metres: dropped once passed).
     // review recordings (.github/workflows/app-review.yml, debug builds only): every line said goes to the system log, a
     // transcript to read beside the video, which has no sound
-    // The drive's own log of what was said (kept with the drive on the phone as `said`, never in an anonymous upload, whose
-    // columns are listed in anon_drives.js): when (s from the drive's start), where (m along it), the line, which voice said
-    // it (pack: the chosen voice's clips; phone: the phone's voice; a prompt style such as a tone when the words were skipped; null: cut off) and, for a note, how far ahead of it the call began, so
-    // a review can see where it fell back to the phone's voice and how early or late each call landed.
+    // The drive's log of what was said (`said`, phone only, never in an anonymous upload): t (s), m, the line, eng (pack, phone,
+    // a prompt style when skipped, null: cut off) and, for a note, how far ahead of it the call began.
     function saidOnDrive(item) {
       let rec = null;
       try { rec = driveActive ? drive.rec : null; } catch (_) { return null; }   // (a line said while the page is still starting)
@@ -2209,6 +2208,13 @@
       const far = d && (d.u === 'MI' || d.u === 'KM') ? ApexUnits.long(ahead, 1, true) : d ? `${d.n} ${d.u.toLowerCase()}` : null;
       return ['Quiet', road, far ? `${compact ? 'corner' : 'next corner'} ${far}` : null].filter(Boolean).join(' · ');   // what Quiet calls is the Notes switch's to say, not the strip's
     }
+    let jSaid = [];
+    function junctionQuiet(e, steps) {
+      if (e.kind !== 'side_road') return false;
+      const m = noteM(e);
+      if ((steps || []).some((s) => Math.abs(s.m - m) <= 150) || (jSaid[0] === track.id && m - jSaid[1] > 20 && m - jSaid[1] < 400)) return true;
+      jSaid = [track.id, m];
+    }
     function updateNotes(vMps, live) {
       // Driving somewhere that is not on the loaded route: its calls (and its stale trip distance) must never be read out as if they were this road.
       const offRoute = live && state.cursorIdx < 0;
@@ -2259,8 +2265,7 @@
       }
       const firstKey = track && state.firstNoteKey && state.firstNoteKey.startsWith(`${track.id}:`) ? state.firstNoteKey : null;
       const isFirst = (e) => !!firstKey && `${track.id}:${e.type}:${e.index}` === firstKey;
-      // Real-drive review round 2: a measured hazard (bump, crest, dip) shows only inside the voice's own lead for it (twice
-      // the lead, at least 200 m), and one at a time. Two BUMP cards counting down from 0.9 mi on a 35 mph street were noise.
+      // a measured hazard shows only inside twice its call lead (200 m at least), one at a time (real-drive review 2)
       let hazardUp = false;
       const hazardNear = (e) => {
         if (!HAZARD_NOTE.has(e.type)) return true;
@@ -2368,7 +2373,7 @@
         let call = chainedCall(e, ev, spirited || first, null, { vMps });
         const apexMps = apexMpsOf(e);
         const startCall = first && stopped && d <= ApexNoteTiming.wakeWindowM({ vMps, apexMps, text: call.text, reactionS: reactS });
-        const voiced = first || (e.type === 'corner' ? spirited : spirited || noteworthyInCruise(e));
+        const voiced = e.type === 'alpr' ? spokenCamera(e) : (first || (e.type === 'corner' ? spirited : spirited || noteworthyInCruise(e))) && !junctionQuiet(e, steps);
         // U-113 / MA-3: the pack's aside, now and then, planned with its call: when one fits, the call starts at the aside's
         // lead (earlier than its own) so both end before the braking; advice is said in the call, colour straight after it.
         // Kit's box shows it from the pre-call.
@@ -2394,7 +2399,7 @@
       // Directions at junctions (IDEAS V-04), in any notes mode: the call at the turn goes ahead of corner notes.
       if (track && track.kind === 'route' && !offRoute) {
         markArrival(track);
-        for (const line of ApexDirections.due(track.steps, state.cursorM, vMps, state.spoken, track.id, pend)) {   // the next turn only
+        for (const line of ApexDirections.due(track.steps, state.cursorM, vMps, state.spoken, track.id, pend, { brief: spirited })) {   // the next turn only
           state.spoken.add(line.key); health.bump('directions_said');
           say(line.text, false, null, null, { kind: line.now ? 'hazard' : 'ordinary', key: line.key, atM: line.atM, duck: true, tokens: line.tokens || undefined, named: true });
         }
@@ -4254,7 +4259,7 @@
         if (long && quiet) { routeWatch.saidAt = now; say('Back on route'); }
         routeWatch.offAt = null;
       }
-      if (r.request) reroute(track);
+      if (r.request && !(!isLoop(track) && routeWatch.bestM >= track.dist[track.dist.length - 1] - 150)) reroute(track);
     }
     // The route's word in the status line while off it: one word per detour (TestFlight: "it tweaks when finding a new route";
     // it flipped "Checking route…", "Off route", "Rerouting…"). Farther than 40 m but not yet confirmed by the monitor (its
