@@ -4699,7 +4699,8 @@ flow('the status line wraps between its parts, never "25 min left…", at every 
   const fits = () => page.evaluate(() => {
     const m = document.getElementById('dsMain'), box = m.getBoundingClientRect(), end = document.getElementById('driveEnd').getBoundingClientRect();
     // on a route the figures (arrival, time left, distance left) and each part of the small line under them are the parts
-    const parts = [...m.querySelectorAll(m.classList.contains('has-trip') ? '.tf, .ds-sub > span' : ':scope > span')].map((x) => x.getBoundingClientRect());
+    const parts = [...m.querySelectorAll(m.classList.contains('has-trip') ? '.tf, .ds-sub > span' : ':scope > span')].map((x) => x.getBoundingClientRect())
+      .filter((r) => r.width > 0);   // the calm drive (2026-11-16) shows only the time left; the arrival and distance wait for a tap
     return { text: m.textContent, cut: getComputedStyle(m).textOverflow === 'ellipsis' && m.scrollWidth > m.clientWidth,
       inside: parts.every((r) => r.left >= box.left - 0.5 && r.right <= box.right + 0.5 && r.right <= end.left), lines: new Set(parts.map((r) => Math.round(r.top))).size,
       trip: [...m.querySelectorAll('.tf')].map((x) => x.textContent) };
@@ -13963,6 +13964,19 @@ flow('the drive screen, Vetta Line: one hero speed over a ruled line, Limit, Sig
   check(start.panel === 'hud-rise' && start.strip === 'hud-drop' && start.panelMs === '0.42s' && start.fill === 'backwards' && start.ring === 'hud-ring', 'the paper arrives once, 420 ms, and leaves nothing held: ' + JSON.stringify(start));
   await page.waitForTimeout(1500);                                   // the set piece is over inside 1.4 s
   await drive(12);
+  // a calm drive (Nate, 2026-11-16): upright at speed the panel is one row, the speed and the limit, then Report and End; the
+  // G-ball, the ruler and the ledger wait for a tap on the speed
+  const calm = await page.evaluate(() => {
+    const q = (s) => document.querySelector(s), shown = (s) => !!q(s) && q(s).getClientRects().length > 0, mid = (s) => { const b = q(s).getBoundingClientRect(); return b.top + b.height / 2; };
+    const d = q('#cluster .dial-speed .dial-digital');
+    return { px: Math.round(parseFloat(getComputedStyle(d).fontSize) * d.getScreenCTM().a), g: shown('#cluster .dial-g'), ruler: shown('#cluster .speed-line'), ledger: shown('#cluster .ledger'),
+      row: Math.max(...['#cluster .dial-speed', '#hzReportBtn', '#driveEnd'].map(mid)) - Math.min(...['#cluster .dial-speed', '#hzReportBtn', '#driveEnd'].map(mid)),
+      panel: Math.round(q('#binnacle').getBoundingClientRect().height), report: q('#hzReportBtn').getAttribute('aria-label') || q('#hzReportBtn').textContent,
+      limitOk: shown('#cluster .ro-limit') === !q('#cluster .ro-limit').classList.contains('unknown') };   // a sign only with a limit to show
+  });
+  check(calm.px >= 84 && !calm.g && !calm.ruler && !calm.ledger && calm.row <= 24 && calm.panel <= 140 && /Report/.test(calm.report) && calm.limitOk, 'a calm drive: the speed, then Report and End, on one row; the rest waits: ' + JSON.stringify(calm));
+  await page.click('#cluster .dial-speed');
+  check(await page.evaluate(() => document.getElementById('app').classList.contains('drive-more')), 'a tap on the speed brings the rest of the panel');
   const r = await page.evaluate(() => {
     const q = (s) => document.querySelector(s), box = (s) => { const b = q(s).getBoundingClientRect(); return { x: b.left, y: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
     const d = q('#cluster .dial-speed .dial-digital'), cs = (s, pe) => getComputedStyle(q(s), pe);
@@ -13987,7 +14001,8 @@ flow('the drive screen, Vetta Line: one hero speed over a ruled line, Limit, Sig
   check(r.limitMark === 'none', 'no limit known: no limit mark on the line (unknown stays unknown)');
   check(r.nums === '0 20 40 60 80 100 120 140', 'the ruler is numbered: ' + r.nums);
   check(r.line.w >= r.cluster.w - 16 && r.line.y >= r.speedBox.b - 1 && r.ledger.y >= r.line.b - 1, 'the line runs the width of the panel, under the numeral, over the ledger: ' + JSON.stringify([r.line, r.cluster, r.ledger]));
-  check(r.limit.x >= r.speedBox.r - 1 && r.sight.x >= r.limit.r && r.meter.x >= r.sight.r - 1 && Math.abs(r.limit.y - r.sight.y) < 12, 'Limit, Sight and the meter stand to the right of the speed, in that order: ' + JSON.stringify([r.speedBox, r.limit, r.sight, r.meter]));
+  // no limit known: no sign at all (#929, 2026-11-16), so Sight stands next to the speed
+  check(r.limit.w === 0 && r.sight.x >= r.speedBox.r - 1 && r.meter.x >= r.sight.r - 1, 'Limit, Sight and the meter stand to the right of the speed, in that order: ' + JSON.stringify([r.speedBox, r.limit, r.sight, r.meter]));
   check(r.speedBox.h > 1.6 * r.limit.h && r.speedBox.w > 1.5 * r.meter.w, 'the speed is the hero, the rest clearly second: ' + JSON.stringify([r.speedBox, r.limit, r.meter]));
   // real-drive reviews (2026-11-15): an unknown Score steps aside rather than reading "--"; the trip holds the ledger line
   check(r.scoreIn && /^--SCORE$/.test(r.scoreText) && r.score.w === 0 && r.trip.y >= r.ledger.y - 1 && r.trip.b <= r.ledger.b + 1, 'the trip holds the ledger line; the Score is not shown until known: ' + JSON.stringify([r.scoreText, r.score, r.trip, r.ledger]));
@@ -13999,9 +14014,9 @@ flow('the drive screen, Vetta Line: one hero speed over a ruled line, Limit, Sig
   check(r.side <= 0, 'no sideways scroll');
   // faster: three digits fit their box, and the line follows
   await drive(46);
-  const f = await page.evaluate(() => { const d = document.querySelector('#cluster .dial-speed .dial-digital').getBoundingClientRect(), b = document.querySelector('#cluster .dial-speed').getBoundingClientRect(), l = document.querySelector('#cluster .ro-limit').getBoundingClientRect();
+  const f = await page.evaluate(() => { const d = document.querySelector('#cluster .dial-speed .dial-digital').getBoundingClientRect(), b = document.querySelector('#cluster .dial-speed').getBoundingClientRect(), l = ['#cluster .ro-limit', '#cluster .ro-sight', '#cluster .dial-g'].map((x) => document.querySelector(x).getBoundingClientRect()).find((x) => x.width > 0);   // the next thing shown (no limit known: no sign)
     return { text: document.querySelector('#cluster .dial-speed .dial-digital').textContent, right: d.right, limit: l.left, box: b.right, fillTo: parseFloat(document.querySelector('#cluster .sl-fill').getAttribute('x2')) }; });
-  check(f.text === '103' && f.right <= f.limit - 4 && Math.abs(f.fillTo - 100 * 103 / 140) < 0.6, 'three digits clear the Limit sign: ' + JSON.stringify(f));
+  check(f.text === '103' && f.right <= f.limit - 4 && Math.abs(f.fillTo - 100 * 103 / 140) < 0.6, 'three digits clear what stands beside them: ' + JSON.stringify(f));
   // on its side, and on the narrowest phone: the numeral keeps its size, the meter moves down beside the ledger, nothing overprints
   const boxes = () => { const q = (sel, label) => [...document.querySelectorAll(sel)].filter((e) => e.getClientRects().length && !e.closest('[hidden]')).map((e) => { const b = e.getBoundingClientRect(); return { label, x: b.left, y: b.top, r: b.right, b: b.bottom }; });
     const bs = [...q('#cluster .dial-speed', 'speed'), ...q('#cluster .ro-limit', 'limit'), ...q('#cluster .ro-sight', 'sight'), ...q('#cluster .speed-line', 'line'), ...q('#cluster .odo', 'trip'), ...q('#cluster .dna-arch', 'road'),

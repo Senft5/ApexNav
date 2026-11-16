@@ -2706,6 +2706,11 @@
       $(id).addEventListener('click', (ev) => {
         const t = ev.target && ev.target.closest ? ev.target.closest('[data-explain]') : null;
         if (!t || ev.target.closest('button, a')) return;                // the Trip key and links keep their own taps
+        // a calm drive (index.html #app.drive-more): in a drive the speed is the way to the rest of the panel and back
+        const app = $('app');
+        if (id === 'cluster' && t.dataset.explain === 'speed' && $('cluster').classList.contains('cluster-line') && app.classList.contains('live') && !app.classList.contains('replaying')) {
+          app.classList.toggle('drive-more'); return;   // the map follows its box (ResizeObserver)
+        }
         openExplain(t.dataset.explain);
       });
     }
@@ -9844,6 +9849,7 @@
       const on = state.mode === 'live';
       $('driveBar').hidden = !on; $('transport').hidden = on;
       $('app').classList.toggle('live', on);
+      if (!on) $('app').classList.remove('drive-more');                  // each drive starts calm
       if (!on) { $('hzPlate').hidden = true; measurePlanBar(); }
       if (on) { $('app').classList.remove('sheet-open'); openPlan(false); }
       if (on !== drawDetail.edges) { drawDetail.edges = on; setDriveEdges(on); }   // F-02/F-05: once per start and end
