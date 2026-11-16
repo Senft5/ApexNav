@@ -273,6 +273,13 @@ and in random batches so a trace cannot be re-assembled.
   (their grants, board entries, shared Scores and segments, their crew links).
 - No migration.
 
+### 2.19 A drive, ready to post (members; built 2026-11-16)
+- Nate (2026-11-16): "i want it to feel magic". The drive's card has one Post key. It opens the drive already made into a
+  post ("Nice drive. Post it?"): its road with the Score and distance under it, the name filled in (changeable), the
+  crew whose drive you were at today picked with who came, and on a post to friends the friends from your convoy tapped
+  in as who came. One more tap on Post sends it; Not now (or a tap outside) closes it and Post stays on the card.
+- Replaces the one-tap Post to friends with Undo and the ··· sheet (2026-11-14). No backend change.
+
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.
 

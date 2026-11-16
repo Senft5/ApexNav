@@ -1075,14 +1075,12 @@
        the drive is stored (it was two keys and an orphan). Nothing changes place when the score lands (U-118): Mark a stage
        only gives up its right half. */
     .end-acts > .solid:not([hidden]) { grid-column: 1 / -1; }
-    /* (2026-11-14) one tap posts the drive to your friends; ··· beside it is the sheet: a caption, or a crew */
+    /* (2026-11-16) Post opens the drive ready to post (drive_posts.js compose, ready) */
     .end-acts > .end-post { grid-column: 1 / -1; display: flex; gap: 10px; }
     .end-post > #endPost { flex: 1 1 auto; }
-    .end-post > .end-post-more { flex: none; width: 52px; min-height: 0; height: auto; align-self: stretch; padding: 0; display: grid; place-items: center; }
     /* the quiet keys under it in one row of three when Drive it again is there (it sat alone on a third row) */
     .end-acts:has(#endAgain:not([hidden])):has(#endStage:not([hidden])) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .end-acts:has(#endAgain:not([hidden])):has(#endStage:not([hidden])) .ink-btn:not(.solid) { padding: 0 4px; font-size: 14px; }
-    .end-post-more svg { width: 22px; height: 22px; fill: currentColor; }
     .end-acts > .end-post[hidden] { display: none; }
     /* (2026-11-14, big bet 5) a filmed drive's best corner (best_clip.js), looping over the keys; one tap makes the clip to share */
     .end-acts > .end-clip { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 76px; padding: 0; border: 1px solid var(--hair, var(--rule)); background: var(--well, var(--face)); color: var(--panel-ink); font: inherit; text-align: left; cursor: pointer; }
@@ -2627,7 +2625,7 @@
           <p class="end-line" id="endLine"></p>
           <!-- U-75: the solid key is Share card only when there is a score to share; otherwise it is Open in the Log, and Share
                waits as a link -->
-          <div class="end-acts"><button class="end-clip" id="endClip" type="button" hidden><video id="endClipVideo" muted playsinline loop preload="metadata" aria-hidden="true"></video><span class="end-clip-txt"><small>Best corner</small><b id="endClipLabel">--</b><em id="endClipAct">Share clip</em></span></button><div class="end-post" id="endPostRow" hidden><button class="ink-btn solid" id="endPost">Post to friends</button><button class="ink-btn end-post-more" id="endPostMore" aria-label="Post with a caption or to a crew"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div><button class="ink-btn solid" id="endShare">Share card</button><a class="ink-btn solid" id="endLogKey" href="analysis.html" hidden>Open in the Log</a><button class="ink-btn" id="endStage">Mark a stage</button><button class="ink-btn" id="endAgain" hidden>Drive it again</button></div>
+          <div class="end-acts"><button class="end-clip" id="endClip" type="button" hidden><video id="endClipVideo" muted playsinline loop preload="metadata" aria-hidden="true"></video><span class="end-clip-txt"><small>Best corner</small><b id="endClipLabel">--</b><em id="endClipAct">Share clip</em></span></button><div class="end-post" id="endPostRow" hidden><button class="ink-btn solid" id="endPost">Post</button></div><button class="ink-btn solid" id="endShare">Share card</button><a class="ink-btn solid" id="endLogKey" href="analysis.html" hidden>Open in the Log</a><button class="ink-btn" id="endStage">Mark a stage</button><button class="ink-btn" id="endAgain" hidden>Drive it again</button></div>
           <div class="end-links"><a class="linkbtn" id="endLog" href="analysis.html">Open in the Log</a><button class="linkbtn" id="endShareLink" hidden>Share card</button><button class="linkbtn" id="endDone">Done</button></div>
         </div>
         <div class="end-portrait" id="endPortrait" aria-hidden="true" hidden></div>

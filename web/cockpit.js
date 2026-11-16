@@ -11562,8 +11562,7 @@
       $('endAgain').hidden = true;                                     // panel D-1: once the drive is stored (endCardScored)
       // Post (drive_posts.js), for a member: there from the first frame like Share card (U-118), waiting for the score
       const member = !!drivePosts && !!(accountMe && accountMe.member);
-      $('endPostRow').hidden = !member; $('endPost').disabled = false; $('endPost').textContent = 'Post to friends'; $('endPost').setAttribute('aria-disabled', 'true');
-      $('endPostMore').hidden = false; $('endPostMore').setAttribute('aria-disabled', 'true');
+      $('endPostRow').hidden = !member; $('endPost').disabled = false; $('endPost').textContent = 'Post'; $('endPost').setAttribute('aria-disabled', 'true');
       $('endShare').classList.toggle('solid', !member);
       if (window.ApexVocabulary && ApexVocabulary.watchTerms) ApexVocabulary.watchTerms($('endCard'));   // the coaching's driving words, on tap
       $('endCard').classList.add('show');
@@ -11689,7 +11688,7 @@
       // Post (drive_posts.js) is the solid key for a member with a score: the drive goes to friends first; Share card, the
       // picture for other apps, stays beside it
       const posting = scored && !!drivePosts && !!(accountMe && accountMe.member);
-      $('endPostRow').hidden = !posting; $('endPost').removeAttribute('aria-disabled'); $('endPostMore').removeAttribute('aria-disabled');
+      $('endPostRow').hidden = !posting; $('endPost').removeAttribute('aria-disabled');
       $('endShare').classList.toggle('solid', !posting);
       $('endShare').hidden = !scored; $('endShareLink').hidden = scored;
       $('endLogKey').hidden = scored; $('endLog').hidden = !scored;
@@ -11815,9 +11814,9 @@
     $('endDone').addEventListener('click', () => $('endCard').classList.remove('show'));
     $('endAgain').addEventListener('click', () => { const d = endDrive; if (!d) return; $('endCard').classList.remove('show'); driveAgain(d.id, d.name); });
     $('endShareLink').addEventListener('click', () => $('endShare').click());
-    // Post (drive_posts.js): the drive's card to your friends or a crew, for a member with a scored drive; once posted it says so
-    // (2026-11-14) one tap: Post to friends sends it at once, with Undo in the toast; ··· beside it is the sheet (a caption,
-    // or a crew instead)
+    // Post (drive_posts.js): the drive's card to your friends or a crew, for a member with a scored drive; once posted it says so.
+    // (Nate 2026-11-16, "magic") Post opens it ready: named, its road and Score on it, the friends from your convoy tapped in
+    // as who came, the crew whose drive you were at today picked; one more tap on Post sends it. Not now closes it.
     const endPostOf = () => {
       const roads = Object.entries(drive.roads || {}).filter(([, m]) => m >= 500).sort((a, b) => b[1] - a[1]).map(([n]) => n);
       const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -11825,22 +11824,17 @@
     };
     // your saved stages (the Log's, apex.segments), for the stages a drive's post shows with their Scores
     function savedStages() { try { const l = JSON.parse(localStorage.getItem('apex.segments') || '[]'); return Array.isArray(l) ? l : []; } catch (_) { return []; } }
-    const endPosted = (said) => { $('endPost').textContent = said; $('endPost').disabled = true; $('endPostMore').hidden = true; };
+    const endPosted = (said) => { $('endPost').textContent = said; $('endPost').disabled = true; };
+    // who drove with you: the convoy you're in (its members' handles but yours); only friends of yours end up tagged
+    const convoyWith = () => { try { const me = accountMe && accountMe.handle, ms = convoy && convoy.client && convoy.client.members;
+      return ms ? [...ms.values()].map((m) => m && m.handle).filter((h) => h && h !== me) : []; } catch (_) { return []; } };
     const endPostReady = () => !!endDrive && !!drivePosts && !$('endPost').disabled && $('endPost').getAttribute('aria-disabled') !== 'true';   // not while scoring
     $('endPost').addEventListener('click', async () => {
-      if (!endDrive || !drivePosts || !drivePosts.post || !endPostReady()) return;
+      if (!endPostReady()) return;
       $('endPost').disabled = true;
-      const id = await drivePosts.post(endPostOf());
-      if (!id) { $('endPost').disabled = false; return; }
-      endPosted('Posted to friends'); pushOffer();
-      if (typeof id === 'string') toast('Posted to your friends.', { label: 'Undo', ms: 8000, onClick: async () => {
-        if (await drivePosts.remove(id)) { $('endPost').textContent = 'Post to friends'; $('endPost').disabled = false; $('endPostMore').hidden = false; toast('Taken back.'); }
-        else toast('Couldn’t take it back. Check signal.');
-      } });
-    });
-    $('endPostMore').addEventListener('click', async () => {
-      if (!endPostReady() || $('endPostMore').getAttribute('aria-disabled') === 'true') return;
-      if (await drivePosts.compose(endPostOf())) { endPosted('Posted'); pushOffer(); }
+      let ok = false;
+      try { ok = !!(await drivePosts.compose({ ...endPostOf(), ready: true, with: convoyWith() })); } finally { if (!ok) $('endPost').disabled = false; }
+      if (ok) { endPosted('Posted'); pushOffer(); }
     });
     $('endStage').addEventListener('click', () => { if (endDrive) openLog(`analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`); });
     // Big bet 5: a filmed drive's best corner (best_clip.js: ranked by its own Driver Score, cut from the app's own film),
