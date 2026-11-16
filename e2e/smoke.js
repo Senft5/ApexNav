@@ -7778,6 +7778,12 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   await page.click('.feed-sheet .feed-say button:has-text("Send")');
   await page.waitForFunction(() => document.querySelectorAll('.feed-sheet .feed-comment').length === 2);
   check(sent.some((x) => x.p === '/api/posts/P1AAAAAAAAAAAAAA/comments' && JSON.parse(x.b).body === 'Yes! Waved.'), 'Send posts the comment');
+  // (2026-11-16) the keyboard stays for the next one, Send waits for words; a long press on a comment opens its keys
+  check(await page.evaluate(() => document.activeElement && document.activeElement.matches('.feed-sheet .feed-say .field')) && await page.isDisabled('.feed-sheet .feed-say button:has-text("Send")'), 'after Send: the box keeps focus, Send waits');
+  { const b = await page.locator('.feed-sheet .feed-comment').first().boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + 8); await page.mouse.down(); await page.waitForTimeout(650); await page.mouse.up(); }
+  await page.waitForSelector('.feed-menu button:text-is("Report")');
+  await page.click('.feed-menu button:text-is("Cancel")');
   // Report is behind ··· on the post, never on its face
   check(!(await page.$('.feed-sheet .feed-card button:text-is("Report")')), 'no Report on the card\'s face');
   await page.click('.feed-sheet .feed-card .feed-more');
@@ -8047,12 +8053,41 @@ flow('the full Feed picks whose posts (All, Friends or one crew) and mutes a dri
   await page.click('#feedBody .feed-pick button:has-text("All")');
   await until(() => document.querySelectorAll('#feedBody .feed-card').length === 5, 'All again');
   await page.click('#feedBody .feed-card .feed-more');
+  // the menu slides up (sheet-up, 0.2 s); on a busy runner a tap mid-slide landed on the backdrop and closed it (CI 2026-11-16)
+  await page.waitForSelector('.feed-menu button:has-text("Mute @bob")');
+  await page.waitForFunction(() => !document.getAnimations().some((a) => a.animationName === 'sheet-up' && a.playState === 'running'));
   await page.click('.feed-menu button:has-text("Mute @bob")');
   await until(() => !document.querySelector('#feedBody .feed-card'), 'muted');
   check(await page.textContent('#feedBody .feed-muted') === 'Muted@bobUnmute' && await page.evaluate(() => localStorage.getItem('apex.feedMuted')) === '["bob"]',
     'muted, kept on the phone: ' + await page.textContent('#feedBody .feed-muted'));
   await page.click('#feedBody .feed-muted button:has-text("Unmute")');
   await until(() => document.querySelectorAll('#feedBody .feed-card').length === 5 && document.querySelector('#feedBody .feed-muted').hidden, 'unmuted');
+});
+
+flow('a post that can not load: its shape while loading, one line and Try again, then the post; no comments is one line (screen inventory 2026-11-16)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  let down = true;
+  const p = { id: 'P7AAAAAAAAAAAAAA', handle: 'bob', photo_id: null, mine: false, crew: null, title: 'Skyway', caption: null, driven_on: '2026-11-12',
+    length_m: 12000, score: 700, roads: [], stages: [], line: null, created_at: '2026-11-15 10:00:00', kudos: 0, my_kudos: false, comments: 0, comment_list: [], kudos_from: [] };
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/posts/P7AAAAAAAAAAAAAA') return down ? route.fulfill({ status: 503, body: '' }) : json(p);
+    if (u.pathname === '/api/posts/P8AAAAAAAAAAAAAA') return json({ error: 'not_found' }, 404);
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=feed');
+  await page.waitForFunction(() => window.apex && window.apex.onNative && window.ApexDrivePosts);
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { view: 'friends', post: 'P7AAAAAAAAAAAAAA' } }));
+  check(await page.waitForSelector('.feed-sheet .feed-lost button:text-is("Try again")', { timeout: 10000 }).then(() => true, () => false), 'no answer: one line and Try again');
+  check(await page.textContent('.feed-sheet .feed-lost .note') === 'Couldn’t load the post. Check signal.' && !(/Loading…/.test(await page.textContent('.feed-sheet'))), 'it says which, never Loading…');
+  down = false;
+  await page.click('.feed-sheet .feed-lost button:text-is("Try again")');
+  await page.waitForSelector('.feed-sheet .feed-card');
+  check(await page.textContent('.feed-sheet .feed-comments') === 'No comments yet. Say something about the drive.' && await page.isDisabled('.feed-sheet .feed-say button:has-text("Send")'), 'no comments: one line; Send waits for words');
+  await page.click('.feed-sheet button:text-is("Done")');
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { view: 'friends', post: 'P8AAAAAAAAAAAAAA' } }));
+  await page.waitForFunction(() => /This post is gone\./.test((document.querySelector('.feed-sheet .feed-lost') || {}).textContent || ''));
 });
 
 flow('Garage → You is your profile: your numbers, Edit profile, and your drive posts three across, each opening with Edit and Delete (Worker stubbed, docs/SOCIAL.md 2.13, 2.17)', async (page, base) => {
@@ -8085,6 +8120,17 @@ flow('Garage → You is your profile: your numbers, Edit profile, and your drive
   const grid = await page.evaluate(() => { const t = [...document.querySelectorAll('#garageMeBody .post-grid .post-tile')], r = t[0].getBoundingClientRect(), r2 = t[1].getBoundingClientRect(), r4 = t[3].getBoundingClientRect();
     return { n: t.length, square: Math.abs(r.width - r.height) < 2, row: Math.abs(r.top - r2.top) < 1 && r4.top > r.bottom - 1, score: t[0].querySelector('.post-tile-score').textContent, label: t[0].getAttribute('aria-label') }; });
   check(grid.n === 5 && grid.square && grid.row && grid.score === '701' && grid.label === 'Drive 1, Vetta Score 701, 2026-11-12', 'three across, square tiles with their Score: ' + JSON.stringify(grid));
+  // your cars: a strip right under the head, each car one tap; the last chip adds one (screen inventory 2026-11-16)
+  await page.waitForSelector('#garageMeBody .ph + .car-strip:not([hidden]) .car-chip');
+  if (process.env.SHOTS) { await page.evaluate(() => document.querySelector('#garageMeBody .ph').scrollIntoView()); await page.screenshot({ path: `${process.env.SHOTS}/garage-cars-strip.png` }); }
+  const strip = await page.evaluate(() => [...document.querySelectorAll('#garageMeBody .car-strip .car-chip')].map((b) => b.innerText.replace(/\s+/g, ' ').trim()));
+  check(JSON.stringify(strip) === JSON.stringify(['Honda S2000', 'Mazda MX-5 Daily', 'Add a car']), 'the car strip: ' + JSON.stringify(strip));
+  check(!(await page.$('#garageMeBody .garage-cards ~ .row button:text-is("Add a car")')), 'one Add a car, on the strip');
+  await page.click('#garageMeBody .car-strip .car-chip:has-text("MX-5")');
+  await page.waitForSelector('#garageMeBody .car-card.lit[data-car="C2"]');
+  await page.click('#garageMeBody .car-strip .car-chip.add');
+  await page.waitForSelector('#garageMeBody .car-form');
+  await page.click('#garageMeBody .car-form ~ .row button:text-is("Cancel"), #garageMeBody button:text-is("Cancel")');
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/garage-profile.png` });
   // Edit profile: your photo and handle on one sheet; a taken handle says so and stays open
   await page.click('#garageMeBody .ph-keys button:text-is("Edit profile")');
@@ -8102,6 +8148,12 @@ flow('Garage → You is your profile: your numbers, Edit profile, and your drive
   await page.click('.feed-menu button:text-is("Edit")');
   await page.waitForSelector('.feed-edit input[aria-label="Drive name"]');
   check(await page.inputValue('.feed-edit input[aria-label="Drive name"]') === 'Drive 1', 'the sheet holds the name as it is');
+  // (2026-11-16) the post sheet's own shape: its head with Cancel, the drive's picture and numbers, Name, the caption, one wide Save
+  const ed = await page.evaluate(() => { const b = document.querySelector('.feed-edit .card-sheet');
+    return { head: b.querySelector('.post-head h2').textContent, cancel: !!b.querySelector('.post-head button.post-not-now'), score: b.querySelector('.post-pic .feed-stats').textContent,
+      save: Math.round(b.querySelector('.post-go').getBoundingClientRect().width - b.querySelector('.post-name').getBoundingClientRect().width) }; });
+  check(ed.head === 'Edit post' && ed.cancel && /Vetta Score701/.test(ed.score) && Math.abs(ed.save) <= 2, 'Edit post is the post sheet: ' + JSON.stringify(ed));
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/edit-post.png` });
   await page.fill('.feed-edit input[aria-label="Drive name"]', 'Skyway at dawn');
   await page.fill('.feed-edit textarea', 'Fog on top.');
   await page.click('.feed-edit button:text-is("Save")');
@@ -8185,7 +8237,7 @@ flow('push notifications: Garage > Notifications asks iOS only at the switch, ha
   // a push's tap: kudos on your post opens that post with its comments
   await page.evaluate(() => window.apex.onNative({ type: 'link', params: { view: 'friends', post: 'P1AAAAAAAAAAAAAA' } }));
   await page.waitForSelector('.feed-sheet', { timeout: 8000 });
-  // the sheet opens at once with "Loading…" and fills when the post arrives (CI 2026-11-14: read before it had, twice)
+  // the sheet opens at once in the post's shape and fills when the post arrives (CI 2026-11-14: read before it had, twice)
   await page.waitForFunction(() => /That fog!/.test((document.querySelector('.feed-sheet') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
   const sheet = await page.textContent('.feed-sheet');
   check(/Cherohala Skyway/.test(sheet) && /That fog!/.test(sheet), 'the tap opens the post it is about: ' + sheet.slice(0, 160));
