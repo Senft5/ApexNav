@@ -1938,6 +1938,10 @@
     /* the report sheet's buttons are the plate others will see (REVIEW.md 1.2, Hazard report) */
     .hz-grid .hz-btn { background: var(--hz-bg); color: var(--hz-ink); border: 2px solid var(--hz-edge); text-align: left; padding: 0 14px; display: flex; align-items: center; gap: 10px; }
     .hz-grid .hz-btn::before { content: ""; flex: none; width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 16px solid var(--hz-edge); }
+    /* a drawn kind is a tile: its mark over its word (2026-11-16); a crew's own kind keeps the triangle */
+    .hz-grid .hz-btn.hz-drawn { flex-direction: column; justify-content: center; align-items: center; gap: 6px; min-height: 92px; padding: 10px 8px; text-align: center; }
+    .hz-grid .hz-btn.hz-drawn::before { content: none; }
+    .hz-ico { width: 40px; height: 40px; flex: none; fill: none; stroke: var(--hz-edge); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     /* Along the route (IDEAS R-24): viewpoints named, cafés and fuel small; map data, quieter than hazards. */
     .poi-pin { font: 700 10px var(--font-ui, sans-serif); letter-spacing: 0.04em; padding: 1px 4px; border: 1px solid var(--panel-ink, #222); color: var(--panel-ink, #222); background: var(--panel, #fff); white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; opacity: 0.9; }
     .poi-pin.poi-view { border-color: #2e7d5b; color: color-mix(in srgb, #2e7d5b 60%, var(--panel-ink, #222)); }   /* the hue, pulled to the ink so it reads at 10 px day and night */
@@ -2025,6 +2029,8 @@
       #onboard .stack { grid-column: 2; grid-row: 4 / span 2; margin-top: 12px; }
       #hzOverlay .hz-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }                                 /* 4 */
       #hzOverlay .hz-grid button { min-height: 56px; }
+      #hzOverlay .hz-grid .hz-btn.hz-drawn { flex-direction: row; justify-content: flex-start; min-height: 56px; padding: 0 12px; }   /* on its side: the mark beside the word */
+      #hzOverlay .hz-ico { width: 26px; height: 26px; }
       .overlay.dim .card-sheet { max-height: 100dvh; overflow-y: auto; }
       #endCard .end-card { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); column-gap: 28px; align-items: start; }   /* 5 */
       #endCard .end-card > * { grid-column: 1; }
