@@ -14404,6 +14404,11 @@ for (const [orient, d] of Object.entries(SAFE)) flow(`safe areas (${orient}): th
     await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });   // the opening cover (boot.js) hides everything for up to 2.5 s
     await page.waitForTimeout(300);
     if (act) { await page.evaluate('(async () => { ' + act + ' })()'); await page.waitForTimeout(700); }
+    // measure the resting layout: the replay starts once its drive has loaded (slow on CI), and its panel then slides in
+    // from the side for 420 ms (hud-side); measured mid-slide, CI saw every control 27 px into the right corner
+    if (/[?&]play=1/.test(url)) await page.waitForFunction(() => document.getElementById('app').classList.contains('replaying'), null, { timeout: 10000 });
+    await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.playState === 'running' && Number.isFinite(a.effect && a.effect.getComputedTiming().endTime))
+      .map((a) => a.finished.catch(() => {}))));
     for (const b of await unsafe(page, d)) bad.push(`${orient} · ${name}: ${b}`);
     if (process.env.SHOTS) shots.push({ name, png: (await page.screenshot()).toString('base64') });
   }
