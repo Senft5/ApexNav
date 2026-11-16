@@ -234,6 +234,14 @@
     .feed-pic { display: grid; }
     /* the numbers on a strip under the road, never over it (an overlay hid the line's end) */
     .feed-pic .feed-stats { padding: 10px 0 0; }
+    .post-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; margin: 0 -16px; }
+    .post-tile { position: relative; aspect-ratio: 1; border: 0; padding: 0; background: var(--well, var(--raised, rgba(0,0,0,0.05))); color: var(--panel-ink); cursor: pointer; overflow: hidden; display: grid; place-items: center; }
+    .post-tile svg { width: 100%; height: 100%; display: block; }
+    .post-tile path { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .post-tile-name { padding: 8px; font-weight: 600; font-size: 13px; text-align: center; overflow-wrap: anywhere; }
+    .post-tile-score { position: absolute; left: 6px; bottom: 6px; padding: 1px 6px; border-radius: 6px; background: rgb(10 10 11 / 0.82); color: #F5F5F7; font: 700 14px var(--font-num); }
+    .post-tile-media { position: absolute; right: 6px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: #F5F5F7; box-shadow: 0 0 0 2px rgb(10 10 11 / 0.6); }
+    .post-grid-say { display: grid; justify-items: start; gap: 8px; padding-top: 10px; }
     .feed-view-all { justify-self: start; border: 0; background: none; padding: 0; min-height: 32px; color: var(--panel-dim); font: inherit; font-size: 14px; cursor: pointer; }
     .feed-line { width: 100%; max-width: 90vh; height: auto; aspect-ratio: 2 / 1; display: block; background: var(--well, rgba(0,0,0,0.05)); }
     /* a phone on its side: the line at most half the screen's height, so the post's words and keys stay in view */
@@ -624,6 +632,49 @@
     function drivesOf(author) { return listOf(`author=${encodeURIComponent(author)}`, 'profile-drives', el('b', { textContent: 'Drives' })); }
     /** A crew's page: the drives its members posted to the crew, newest first (Drives tab). Hidden while there is none. */
     function crewDrives(crewId) { return listOf(`crew=${encodeURIComponent(crewId)}`, 'crew-drives', el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Posted to the crew' }))); }
+    /** A profile's grid (Garage as a profile, 2026-11-16): someone's posted drives three across, each tile the road it drew
+     *  with its Score in the corner; a tap opens the post. o.count(n) after each answer (n: how many came, null: unknown);
+     *  o.empty: the line when there are none. With no signal it says so, with Try again. More for older ones. */
+    function grid(author, o = {}) {
+      const box = el('section', { className: 'post-grid-sec' });
+      const tiles = el('div', { className: 'post-grid', role: 'list', 'aria-label': 'Drives' });
+      const more = btn('More', () => load(), 'linkbtn feed-more-key'); more.hidden = true;
+      const say = el('div', { className: 'post-grid-say' });
+      box.append(tiles, say, more);
+      let last = null, n = 0;
+      const NS = 'http://www.w3.org/2000/svg';
+      const tile = (p) => {
+        const b = el('button', { type: 'button', className: 'post-tile', role: 'listitem',
+          'aria-label': `${p.title || 'Drive'}${p.score == null ? '' : `, Vetta Score ${p.score}`}${p.driven_on ? `, ${p.driven_on}` : ''}` });
+        const pts = p.line ? decode(p.line) : [];
+        if (pts.length > 1) {
+          const svg = doc.createElementNS(NS, 'svg'), path = doc.createElementNS(NS, 'path');
+          svg.setAttribute('viewBox', '0 0 120 120'); svg.setAttribute('aria-hidden', 'true');
+          path.setAttribute('d', lineSvg(pts, 120, 120, 16)); svg.append(path); b.append(svg);
+        } else b.append(el('span', { className: 'post-tile-name', textContent: p.title || 'Drive' }));
+        if (p.score != null) b.append(el('b', { className: 'post-tile-score', textContent: String(p.score) }));
+        if (p.media) b.append(el('i', { className: 'post-tile-media', 'aria-hidden': 'true' }));
+        b.addEventListener('click', () => open(p.id, { after: () => { last = null; n = 0; tiles.replaceChildren(); load(); } }));
+        return b;
+      };
+      const load = () => apiCall('GET', `/api/feed?author=${encodeURIComponent(author)}${last ? `&before=${encodeURIComponent(last)}` : ''}`).then(jsonOf).then((rows) => {
+        if (!Array.isArray(rows)) throw new Error('feed');
+        say.replaceChildren();
+        tiles.append(...rows.map(tile));
+        n += rows.length;
+        last = rows.length ? rows[rows.length - 1].created_at : last;
+        more.hidden = rows.length < 30;
+        if (!n) say.append(el('p', { className: 'note', textContent: o.empty || 'No drives posted yet.' }));
+        if (o.count) o.count(more.hidden ? n : null);
+      }).catch(() => {
+        if (n) return;
+        const offline = root.navigator && root.navigator.onLine === false;
+        say.replaceChildren(el('p', { className: 'note', textContent: offline ? 'You’re offline. Drives show when you’re back.' : 'Can’t reach Vetta.' }), btn('Try again', () => load(), 'ink-btn'));
+        if (o.count) o.count(null);
+      });
+      load();
+      return box;
+    }
     function listOf(query, cls, head) {
       const box = el('section', { className: `stack-8 feed-sec ${cls}` }); box.hidden = true;
       const list = el('div', { className: 'feed' });
@@ -826,7 +877,7 @@
       });
     }
 
-    return { section, week, full, open, compose, post, remove, card, drivesOf, crewDrives, friendStages: () => keepStages(kept(), [], Date.now()) };
+    return { section, week, full, grid, open, compose, post, remove, card, drivesOf, crewDrives, friendStages: () => keepStages(kept(), [], Date.now()) };
   }
 
   const api = { unmuted, trimLine, encode, decode, throughPoints, stretch, rivalsOf, rivalLine, keepStages, lineSvg, ago, facts, weekLine, weekShown, mentionParts, mentionAt, suggest, kudosLine, withLine, mount, CUT_M, MAX_POINTS };

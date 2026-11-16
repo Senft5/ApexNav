@@ -7676,7 +7676,7 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   const wk = await page.$$eval('#accountBody .feed-week .week-card', (l) => l.map((b) => [b.tagName, b.querySelector('.week-who').textContent, b.querySelector('small').textContent]));
   check(JSON.stringify(wk) === JSON.stringify([['BUTTON', '1  @bob', '30.0 mi · 2 drives · best 812'], ['DIV', '2  You', '10.0 mi · 1 drive']]), 'this week, most distance first: ' + JSON.stringify(wk));
   await page.click('#accountBody .feed-week button.week-card');
-  await page.waitForSelector('.profile-view .profile-drives:not([hidden]) .feed-card', { timeout: 10000 });
+  await page.waitForSelector('.profile-view .post-grid .post-tile', { timeout: 10000 });
   await page.click('.profile-view .side-pop-head button');
   await page.click('[data-people="feed"]');
   // the post reads as a road (2026-11-16): the line edge to edge, its numbers in one row right under it, ringed start and red finish, no box
@@ -7690,7 +7690,7 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   // a tap on bob's name opens his profile, with his drives on it (?author=, his id)
   await page.click('#feedBody .feed-card .feed-head .who');
   // (the profile opened from This week above may still be closing: its empty copy can be the first in the page)
-  check(await page.waitForFunction(() => [...document.querySelectorAll('.profile-view .profile-drives:not([hidden])')].some((d) => /Cherohala Skyway/.test(d.textContent)), null, { timeout: 10000 }).then(() => true, () => false),
+  check(await page.waitForFunction(() => [...document.querySelectorAll('.profile-view .post-grid .post-tile')].some((d) => /Cherohala Skyway/.test(d.getAttribute('aria-label'))), null, { timeout: 10000 }).then(() => true, () => false),
     'a friend\'s profile shows their drives');
   await page.click('.profile-view .side-pop-head button');
   // kudos: one tap, at once
@@ -7988,37 +7988,58 @@ flow('the full Feed picks whose posts (All, Friends or one crew) and mutes a dri
   await page.waitForFunction(() => document.querySelectorAll('#feedBody .feed-card').length === 5 && document.querySelector('#feedBody .feed-muted').hidden);
 });
 
-flow('Garage → You shows your own drive posts, three and See all, with Delete on each (Worker stubbed, docs/SOCIAL.md 2.13)', async (page, base) => {
+flow('Garage → You is your profile: your numbers, Edit profile, and your drive posts three across, each opening with Edit and Delete (Worker stubbed, docs/SOCIAL.md 2.13, 2.17)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const at = new Date(Date.now() - 3600e3).toISOString().slice(0, 19).replace('T', ' ');
   const post = (n) => ({ id: `P${n}AAAAAAAAAAAAAAA`.slice(0, 16), handle: 'me', photo_id: null, mine: true, crew: null, title: `Drive ${n}`, caption: null, driven_on: '2026-11-12',
     length_m: 20000, score: 700 + n, roads: [], stages: [], line: null, created_at: at, kudos: 0, my_kudos: false, comments: 0 });
-  const asked = [], edited = {};
+  const asked = [], edited = {}, handleSent = [];
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, id: 'ME1', member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', status: 'accepted', incoming: 0 }, { id: 'U2', handle: 'cara', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/garage') return json([{ id: 'C1', year: 2004, make: 'Honda', model: 'S2000', is_primary: 0 }, { id: 'C2', year: 2019, make: 'Mazda', model: 'MX-5', is_primary: 1 }]);
+    if (u.pathname === '/api/me/handle') { handleSent.push(JSON.parse(route.request().postData()).handle); return route.fulfill({ status: 409 }); }
+    if (u.pathname.startsWith('/api/posts/P1') && route.request().method() === 'GET') return json({ ...post(1), ...(edited[1] || {}), comment_list: [], kudos_from: [] });
     if (u.pathname === '/api/feed') { asked.push(u.searchParams.get('author')); return json([1, 2, 3, 4, 5].map((n) => ({ ...post(n), ...(edited[n] || {}) }))); }
     if (route.request().method() === 'PUT' && /^\/api\/posts\/P1/.test(u.pathname)) { const b = JSON.parse(route.request().postData()); edited[1] = { title: b.title, caption: b.caption || null }; return json(edited[1]); }
     return json([]);
   });
   await page.goto(base + '/index.html?view=garage');
-  await page.waitForSelector('#garageMeBody .profile-drives:not([hidden]) .feed-card', { timeout: 15000 });
+  // the head: your face, your numbers (drives posted, friends, crews), your handle and your daily car, Edit profile and Share
+  await page.waitForSelector('#garageMeBody .ph .ph-car:not([hidden])', { timeout: 15000 });
+  await page.waitForSelector('#garageMeBody .post-grid .post-tile', { timeout: 15000 });
   check(asked.includes('ME1'), 'asked for your own posts by your id: ' + JSON.stringify(asked));
-  check(await page.$$eval('#garageMeBody .profile-drives .feed-card', (l) => l.length) === 3, 'three at first');
-  check(await page.$$eval('#garageMeBody .profile-drives .feed-card .feed-more', (l) => l.length) === 3, 'each has its ··· (Delete)');
-  await page.click('#garageMeBody .profile-drives button:has-text("See all")');
-  await page.waitForFunction(() => document.querySelectorAll('#garageMeBody .profile-drives .feed-card').length === 5);
-  check(!(await page.$('#garageMeBody .profile-drives button:has-text("See all")')), 'See all goes once all are shown');
-  // (2026-11-14) Edit behind ···: the name and what you said, saved and shown at once
-  await page.click('#garageMeBody .profile-drives .feed-card[data-id="P1AAAAAAAAAAAAAA"] .feed-more');
+  const head = await page.evaluate(() => { const h = document.querySelector('#garageMeBody .ph');
+    return { counts: [...h.querySelectorAll('.ph-count')].map((c) => c.innerText.replace(/\s+/g, ' ')), name: h.querySelector('.ph-name h3').textContent, car: h.querySelector('.ph-car').textContent,
+      keys: [...h.querySelectorAll('.ph-keys button')].map((b) => b.textContent) }; });
+  check(JSON.stringify(head) === JSON.stringify({ counts: ['5 Drives', '2 Friends', '0 Crews'], name: '@me', car: '2019 Mazda MX-5', keys: ['Edit profile', 'Share profile'] }), 'your profile head: ' + JSON.stringify(head));
+  // the grid: every post, three across, square, its Score on it
+  const grid = await page.evaluate(() => { const t = [...document.querySelectorAll('#garageMeBody .post-grid .post-tile')], r = t[0].getBoundingClientRect(), r2 = t[1].getBoundingClientRect(), r4 = t[3].getBoundingClientRect();
+    return { n: t.length, square: Math.abs(r.width - r.height) < 2, row: Math.abs(r.top - r2.top) < 1 && r4.top > r.bottom - 1, score: t[0].querySelector('.post-tile-score').textContent, label: t[0].getAttribute('aria-label') }; });
+  check(grid.n === 5 && grid.square && grid.row && grid.score === '701' && grid.label === 'Drive 1, Vetta Score 701, 2026-11-12', 'three across, square tiles with their Score: ' + JSON.stringify(grid));
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/garage-profile.png` });
+  // Edit profile: your photo and handle on one sheet; a taken handle says so and stays open
+  await page.click('#garageMeBody .ph-keys button:text-is("Edit profile")');
+  await page.waitForSelector('.side-pop.open[aria-label="Edit profile"] input[aria-label="Handle"]');
+  check(await page.inputValue('.side-pop.open input[aria-label="Handle"]') === 'me', 'the handle as it is');
+  await page.fill('.side-pop.open input[aria-label="Handle"]', 'Taken_One');
+  await page.click('.side-pop.open button:text-is("Save")');
+  await page.waitForFunction(() => /handle is taken/.test(document.body.innerText));
+  check(JSON.stringify(handleSent) === '["taken_one"]' && await page.isVisible('.side-pop.open[aria-label="Edit profile"]'), 'sent lowercased; taken stays open: ' + JSON.stringify(handleSent));
+  await page.click('.side-pop.open[aria-label="Edit profile"] button:text-is("Done")');
+  // a tile opens the post, where ··· has Edit: the name and what you said, saved and shown at once
+  await page.click('#garageMeBody .post-tile[aria-label^="Drive 1,"]');
+  await page.waitForSelector('.feed-sheet .feed-card .feed-more');
+  await page.click('.feed-sheet .feed-card .feed-more');
   await page.click('.feed-menu button:text-is("Edit")');
   await page.waitForSelector('.feed-edit input[aria-label="Drive name"]');
   check(await page.inputValue('.feed-edit input[aria-label="Drive name"]') === 'Drive 1', 'the sheet holds the name as it is');
   await page.fill('.feed-edit input[aria-label="Drive name"]', 'Skyway at dawn');
   await page.fill('.feed-edit textarea', 'Fog on top.');
   await page.click('.feed-edit button:text-is("Save")');
-  await page.waitForFunction(() => /Skyway at dawn/.test(document.querySelector('#garageMeBody .profile-drives .feed-card[data-id="P1AAAAAAAAAAAAAA"]').textContent));
-  check(/Fog on top\./.test(await page.textContent('#garageMeBody .profile-drives .feed-card[data-id="P1AAAAAAAAAAAAAA"]')) && !(await page.$('.feed-edit')), 'the card shows the new name and caption: ' + await page.textContent('#garageMeBody .profile-drives .feed-card[data-id="P1AAAAAAAAAAAAAA"] .feed-title'));
+  await page.waitForFunction(() => /Skyway at dawn/.test((document.querySelector('.feed-sheet .feed-card') || {}).textContent || ''));
+  check(/Fog on top\./.test(await page.textContent('.feed-sheet .feed-card')) && !(await page.$('.feed-edit')), 'the post shows the new name and caption');
 });
 
 flow('a drive posted with no signal waits on the phone and goes up once there is one (Worker stubbed, IDEAS F-05)', async (page, base) => {
@@ -8163,9 +8184,12 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   const rbs = await page.locator('.profile-view .rb-of-friend .rb-row b').allInnerTexts();
   check(JSON.stringify(rbs) === '["Bob\'s Kentucky"]', 'their roadbooks are on their profile, nobody else\'s: ' + JSON.stringify(rbs));
   // the person first, as a social app opens a profile: their photo, who they are and what they are doing now (the list's line)
-  const who = await page.evaluate(() => { const w = document.querySelector('.profile-view .profile-who'); return w && { photo: !!w.firstElementChild && w.firstElementChild.getBoundingClientRect().width >= 48,
-    text: w.innerText, live: !!w.querySelector('small.live'), first: w.previousElementSibling.classList.contains('side-pop-head') }; });
-  check(who && who.photo && who.live && who.first && /friends since September/.test(who.text) && /On the road · Dry Ridge Rd/.test(who.text), 'the profile opens on the person, photo and status: ' + JSON.stringify(who));
+  // (2026-11-16) the same head as your Garage: their face ringed while they drive, their month in numbers, their car
+  const who = await page.evaluate(() => { const w = document.querySelector('.profile-view .ph'); return w && { photo: w.querySelector('.ph-face').getBoundingClientRect().width >= 48,
+    text: w.innerText, live: !!w.querySelector('.av-ring.live') && !!w.querySelector('.ph-name p.live'), first: w.previousElementSibling.classList.contains('side-pop-head'),
+    counts: [...w.querySelectorAll('.ph-count small')].map((x) => x.textContent) }; });
+  check(who && who.photo && who.live && who.first && /friends since September/.test(who.text) && /On the road · Dry Ridge Rd/.test(who.text) && JSON.stringify(who.counts) === '["Days","Stages","Best"]',
+    'the profile opens on the person, photo, status and their month: ' + JSON.stringify(who));
   const pk = await page.evaluate(() => ({ keys: [...document.querySelectorAll('.profile-view .profile-keys button')].map((b) => b.textContent), foot: [...document.querySelectorAll('.profile-view .profile-foot button')].map((b) => b.textContent),
     last: document.querySelector('.profile-view > :last-child').className }));
   check(JSON.stringify(pk.keys) === '["Message","On the map","Share a route","Convoy","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
@@ -8213,6 +8237,7 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
+  await page.click('[data-people="friends"]');   // duels are on Friends (Social opens on its Feed since 2026-11-16)
   await page.waitForSelector('#accountBody .duel-card.ask');
   check(/@bob challenged you/.test(await page.textContent('.duel-card.ask')) && /Dry Ridge climb · 7 days\. The higher Vetta Score on it wins\./.test(await page.textContent('.duel-card.ask')), 'the ask says who, where, how long and what wins');
   await page.click('.duel-card.ask button:has-text("Accept")');
@@ -8754,9 +8779,9 @@ flow('the Log opens over the map and its tabs come back without loading the map 
   await page.click('.tab[data-view="log"]');
   await page.waitForSelector('#logFrame:not([hidden])');
   check(await page.evaluate(() => document.getElementById('logFrame').contentWindow.__kept === true), 'the Log was kept, not loaded again');
-  await log.locator('nav.tabbar a:has-text("People")').click();
+  await log.locator('nav.tabbar a:has-text("Social")').click();
   await page.waitForFunction(() => document.querySelector('#sheet.open[data-view="people"]'));
-  check(await page.evaluate(() => window.__samePage === true), 'People from the Log: still no reload');
+  check(await page.evaluate(() => window.__samePage === true), 'Social from the Log: still no reload');
   // a switch: off is hollow with a dim border, on is filled with ink (two cues besides the thumb's position)
   const sw = await page.evaluate(() => {
     const b = document.querySelector('.sw[data-toggle]'); if (!b) return null;
@@ -11453,7 +11478,7 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   // Map idle: four tabs, Layers and Recenter as keys, the deck with the search and the record key, one suggested loop
   const idle = await page.evaluate(() => ({ tabs: [...document.querySelectorAll('#tabbar .tab')].map((t) => t.textContent), layers: document.getElementById('swTab').className,
     recenter: document.getElementById('recenterBtn').className, start: document.getElementById('startDrive').className, loop: document.getElementById('loopSuggest').innerText }));
-  check(JSON.stringify(idle.tabs) === '["Map","Log","People","Garage"]', 'four tabs: ' + idle.tabs);
+  check(JSON.stringify(idle.tabs) === '["Map","Log","Social","Garage"]', 'four tabs: ' + idle.tabs);
   check(/map-key/.test(idle.layers) && /map-key/.test(idle.recenter) && /btn-start/.test(idle.start) && await page.evaluate(() => document.getElementById('startDrive').textContent.trim()) === 'Just drive',
     'Layers and Recenter are keys, Just drive the record key: ' + JSON.stringify(idle));
   check(/^Loop from here · \d+ mi/.test(idle.loop) && /On the twistiest roads nearby\s*Plan$/.test(idle.loop), 'one suggested loop, one clause under it (U-87): ' + idle.loop);
@@ -14277,7 +14302,7 @@ flow('TestFlight 2026-11-05 note 3: your own photo is the key: no photo, a tap p
   await page.goto(base + '/index.html?view=garage');
   await page.waitForFunction(() => !document.getElementById('boot') && document.querySelector('.my-photo'), null, { timeout: 10000 });
   await page.waitForTimeout(400);
-  const you = () => page.evaluate(() => { const sec = document.querySelector('.my-photo').closest('.stack-8');
+  const you = () => page.evaluate(() => { const sec = document.querySelector('.my-photo').closest('.ph') || document.querySelector('.my-photo').closest('.stack-8');
     return { text: sec.innerText, keys: [...sec.querySelectorAll('button, label')].filter((b) => b.offsetParent).map((b) => b.getAttribute('aria-label') || b.textContent.trim()) }; });
   let y = await you();
   check(!/Change photo|Remove photo|Add a photo|location data/.test(y.text) && y.keys[0] === 'Add your profile photo', 'no photo: the face is the key, no other key, no note: ' + JSON.stringify(y));
