@@ -2212,7 +2212,7 @@
     function junctionQuiet(e, steps) {
       if (e.kind !== 'side_road') return false;
       const m = noteM(e);
-      if ((steps || []).some((s) => Math.abs(s.m - m) <= 150) || (jSaid[0] === track.id && m - jSaid[1] < 400)) return true;
+      if ((steps || []).some((s) => Math.abs(s.m - m) <= 150) || (jSaid[0] === track.id && m - jSaid[1] > 20 && m - jSaid[1] < 400)) return true;
       jSaid = [track.id, m];
     }
     function updateNotes(vMps, live) {
@@ -2373,7 +2373,7 @@
         let call = chainedCall(e, ev, spirited || first, null, { vMps });
         const apexMps = apexMpsOf(e);
         const startCall = first && stopped && d <= ApexNoteTiming.wakeWindowM({ vMps, apexMps, text: call.text, reactionS: reactS });
-        const voiced = e.type === 'alpr' ? spokenCamera(e) : !junctionQuiet(e, steps) && (first || (e.type === 'corner' ? spirited : spirited || noteworthyInCruise(e)));
+        const voiced = e.type === 'alpr' ? spokenCamera(e) : (first || (e.type === 'corner' ? spirited : spirited || noteworthyInCruise(e))) && !junctionQuiet(e, steps);
         // U-113 / MA-3: the pack's aside, now and then, planned with its call: when one fits, the call starts at the aside's
         // lead (earlier than its own) so both end before the braking; advice is said in the call, colour straight after it.
         // Kit's box shows it from the pre-call.

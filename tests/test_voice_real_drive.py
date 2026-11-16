@@ -14,8 +14,8 @@ def test_plate_readers_silent_speed_cameras_spoken():
 
 
 def test_hidden_junctions_thinned():
-    assert "Math.abs(s.m - m) <= 150) || (jSaid[0] === track.id && m - jSaid[1] < 400)" in SRC
-    assert "!junctionQuiet(e, steps) && (first" in SRC
+    assert "Math.abs(s.m - m) <= 150) || (jSaid[0] === track.id && m - jSaid[1] > 20 && m - jSaid[1] < 400)" in SRC
+    assert "&& !junctionQuiet(e, steps);" in SRC
 
 
 def test_brief_turn_calls_when_awake_and_no_reroute_after_arrival():

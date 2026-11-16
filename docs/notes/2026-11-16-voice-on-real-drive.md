@@ -4,7 +4,7 @@
 - Done:
   - Plate readers are no longer spoken (the pin stays); speed cameras still are.
   - "Hidden junction" is said at most once every 400 m, and never within 150 m of a route turn.
-  - With the notes awake, a turn gets the near call and the at-turn call only, without "In 0.4 miles".
+  - With the notes awake, a turn less than 1200 m after the one before gets the near call and the at-turn call only, without "In 0.4 miles"; a longer leg keeps all three.
   - Within 150 m of a route's end, driving on is not off route: no reroute and no "Rerouting".
 - Still open: the first ~1 km of this drive has spoken lines but no recorded rows (`said[].t` is null at m = 0), so the replay starts on Reed Hartman Hwy. Next task: find why the recording's rows started late.
 

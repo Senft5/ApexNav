@@ -121,7 +121,7 @@
     if (ARRIVE.has(s.type) || d < clearOfNow(v)) return out;
     if (i > 0 && steps[i - 1] && s.m - steps[i - 1].m <= THEN_M && phrase(steps[i - 1])) return out;   // said as the "then" of the one before
     const rung = d <= nearAt(v) ? 'near' : 'early';
-    if (rung === 'early' && opt.brief) return out;
+    if (rung === 'early' && opt.brief && i > 0 && s.m - steps[i - 1].m < 1200) return out;   // brief: a short leg's turn has no far call
     if (said.has(key(rung))) return out;
     if (rung === 'near') said.add(key('early'));                        // first seen inside the near rung: the far one is past
     // the lanes go with the early calls, while there is time to move over: ", use the left 2 lanes"
