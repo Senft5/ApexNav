@@ -8836,6 +8836,7 @@
     }
     // Your data (my_data.js, IDEAS Z-03 / Z-04): what this phone holds, drives as GPX, delete and erase.
     async function renderMyData() {
+      renderAreas();
       // the summaries (F-06): each drive's length and battery, never its rows (the Garage opened with every drive read)
       let sums = await ApexRecording.summaries(null);
       if (sums.missing) sums = (await ApexAnalysis.job('summaries')).list;   // drives saved before summaries: built in the worker
@@ -8862,7 +8863,6 @@
       let est = {};
       try { est = (navigator.storage && navigator.storage.estimate) ? await navigator.storage.estimate() : {}; } catch (_) {}
       const o = { ...ApexMyData.offlineSummary(localStorage, await voiceCacheBytes(), est.usage, est.quota), carBytes: carOfflineBytes };
-      renderAreas();
       const note = $('myOfflineNote'); if (note) note.textContent = ApexMyData.offlineText(o);
       $('myOfflineDelBtn').hidden = !(o.routes > 0) && !(o.areas > 0) && !(o.voiceBytes > 0);   // "Nothing saved for offline": nothing to delete
     }
