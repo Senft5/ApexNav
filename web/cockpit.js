@@ -344,8 +344,20 @@
     // the car's map keeps its own copy of the saved areas (CarPlay/ApexCarOffline.swift): the list as it is now, at launch,
     // so areas saved before this build (or while the car's map couldn't keep them) are caught up
     try { if (window.ApexOfflineTiles && ApexOfflineTiles.tellShell) ApexOfflineTiles.tellShell(); } catch (_) {}
+    const MAP_MSAA = (() => {   // a real GPU only: a software renderer (SwiftShader, llvmpipe) pays for every sample on the CPU
+      try {
+        const c = document.createElement('canvas'), o = { failIfMajorPerformanceCaveat: true };
+        const gl = c.getContext('webgl2', o) || c.getContext('webgl', o);
+        if (!gl) return false;
+        const info = gl.getExtension('WEBGL_debug_renderer_info'), name = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : '';
+        const lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext();
+        return !/swiftshader|llvmpipe|softpipe|software/i.test(name);
+      } catch (_) { return false; }
+    })();
     const map = new maplibregl.Map({ container: 'map', style: MAP_STYLE,
       center: startPos ? [startPos.lon, startPos.lat] : [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0,
+      // the map is tilted (and buildings and 3D terrain stand up): without multisampling their edges stair-step on a phone
+      antialias: MAP_MSAA,
       trackResize: false,   // F-02: the page's own observer resizes it (below), once, not again after setPixelRatio already did
       transformRequest: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
     // No silent blank (as the drive page's map, drive_basemap.js): when no base map tile can be drawn here (no signal and no
@@ -9012,6 +9024,7 @@
       // text (not shown), so the plate still reads "Tellico Plains · Dry · 61°" to a screen reader and to textContent.
       const fill = () => {
         const pp = $('placePlate'), m = ApexPlacePlate.parts(d, ApexUnits.metric()), b = document.createElement('b');
+        if (!m.head && !m.rest) return;   // nothing came back (a dropped signal): the plate keeps what it last knew
         b.textContent = m.head; pp.replaceChildren(...(m.head ? [b] : []));
         if (m.rest) { const i = document.createElement('i'), sp = document.createElement('span'); i.textContent = ' · '; sp.textContent = m.rest; pp.append(i, sp); }
         paintPlacePlate();

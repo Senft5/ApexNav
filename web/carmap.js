@@ -376,8 +376,19 @@
     // opens from them the next time instead of fetching them again
     const offline = root.ApexOfflineTiles;
     try { if (offline) offline.install(root.maplibregl); } catch (_) {}
+    // multisampling, as the phone's map (cockpit.js MAP_MSAA): a real GPU only, a software renderer pays for every sample on the CPU
+    const msaa = (() => {
+      try {
+        const c = document.createElement('canvas'), o = { failIfMajorPerformanceCaveat: true };
+        const gl = c.getContext('webgl2', o) || c.getContext('webgl', o);
+        if (!gl) return false;
+        const info = gl.getExtension('WEBGL_debug_renderer_info'), name = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : '';
+        const lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext();
+        return !/swiftshader|llvmpipe|softpipe|software/i.test(name);
+      } catch (_) { return false; }
+    })();
     // at most 2 device pixels to a CSS pixel: a 3x car screen drew 2.25 times the pixels for no sharper a glance
-    map = new root.maplibregl.Map({ container: 'map', style: MAP_STYLE, center: [-84.29, 35.36], zoom: 14, attributionControl: false, interactive: false, fadeDuration: 0,
+    map = new root.maplibregl.Map({ container: 'map', style: MAP_STYLE, center: [-84.29, 35.36], zoom: 14, attributionControl: false, interactive: false, fadeDuration: 0, antialias: msaa,   // tilted while guiding: smooth edges
       pixelRatio: Math.min(2, root.devicePixelRatio || 1), transformRequest: offline ? offline.transform : undefined });
     const el = document.createElement('div'); el.className = 'car-puck';
     puck = new root.maplibregl.Marker({ element: el, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat([-84.29, 35.36]).addTo(map);
