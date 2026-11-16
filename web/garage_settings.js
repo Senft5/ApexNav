@@ -20,6 +20,16 @@
    * a row never guesses.
    */
   function summaryOf(node, count) {
+    // a section that names several switches (Road feel: Share road feel, Help improve Vetta roads) is read as all of them:
+    // the first alone said Off while the other was on
+    if (Array.isArray(node)) {
+      const sw = node.filter((n) => n && n.matches && n.matches('button'));
+      if (node.length > 1 && sw.length === node.length && !count) {
+        const n = sw.filter((b) => b.classList.contains('on') || b.getAttribute('aria-checked') === 'true' || b.getAttribute('aria-pressed') === 'true').length;
+        return n === sw.length ? 'On' : n === 0 ? 'Off' : `${n} of ${sw.length} on`;
+      }
+      node = node[0];
+    }
     if (!node) return '';
     if (node.dataset && typeof node.dataset.summaryText === 'string') return node.dataset.summaryText;   // the sheet's own words (Route tuning)
     const on = (b) => b.classList.contains('on') || b.getAttribute('aria-checked') === 'true' || b.getAttribute('aria-pressed') === 'true';
@@ -83,7 +93,7 @@
         r.hidden = isEmpty(k);
         const s = byKey.get(k).find((x) => x.dataset.summary);
         let text = '';
-        try { text = s ? summaryOf(pops.get(k).querySelector(s.dataset.summary), s.dataset.summaryCount) : ''; } catch (_) { text = ''; }
+        try { text = s ? summaryOf([...pops.get(k).querySelectorAll(s.dataset.summary)], s.dataset.summaryCount) : ''; } catch (_) { text = ''; }
         r.querySelector('small').textContent = text;
         r.setAttribute('aria-label', text ? `${r.querySelector('span').textContent}: ${text}` : r.querySelector('span').textContent);
       }
