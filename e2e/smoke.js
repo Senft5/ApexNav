@@ -8145,6 +8145,7 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
+  await page.click('[data-people="friends"]');   // duels are on Friends (Social opens on its Feed since 2026-11-16)
   await page.waitForSelector('#accountBody .duel-card.ask');
   check(/@bob challenged you/.test(await page.textContent('.duel-card.ask')) && /Dry Ridge climb · 7 days\. The higher Vetta Score on it wins\./.test(await page.textContent('.duel-card.ask')), 'the ask says who, where, how long and what wins');
   await page.click('.duel-card.ask button:has-text("Accept")');
@@ -8686,9 +8687,9 @@ flow('the Log opens over the map and its tabs come back without loading the map 
   await page.click('.tab[data-view="log"]');
   await page.waitForSelector('#logFrame:not([hidden])');
   check(await page.evaluate(() => document.getElementById('logFrame').contentWindow.__kept === true), 'the Log was kept, not loaded again');
-  await log.locator('nav.tabbar a:has-text("People")').click();
+  await log.locator('nav.tabbar a:has-text("Social")').click();
   await page.waitForFunction(() => document.querySelector('#sheet.open[data-view="people"]'));
-  check(await page.evaluate(() => window.__samePage === true), 'People from the Log: still no reload');
+  check(await page.evaluate(() => window.__samePage === true), 'Social from the Log: still no reload');
   // a switch: off is hollow with a dim border, on is filled with ink (two cues besides the thumb's position)
   const sw = await page.evaluate(() => {
     const b = document.querySelector('.sw[data-toggle]'); if (!b) return null;
@@ -11385,7 +11386,7 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   // Map idle: four tabs, Layers and Recenter as keys, the deck with the search and the record key, one suggested loop
   const idle = await page.evaluate(() => ({ tabs: [...document.querySelectorAll('#tabbar .tab')].map((t) => t.textContent), layers: document.getElementById('swTab').className,
     recenter: document.getElementById('recenterBtn').className, start: document.getElementById('startDrive').className, loop: document.getElementById('loopSuggest').innerText }));
-  check(JSON.stringify(idle.tabs) === '["Map","Log","People","Garage"]', 'four tabs: ' + idle.tabs);
+  check(JSON.stringify(idle.tabs) === '["Map","Log","Social","Garage"]', 'four tabs: ' + idle.tabs);
   check(/map-key/.test(idle.layers) && /map-key/.test(idle.recenter) && /btn-start/.test(idle.start) && await page.evaluate(() => document.getElementById('startDrive').textContent.trim()) === 'Just drive',
     'Layers and Recenter are keys, Just drive the record key: ' + JSON.stringify(idle));
   check(/^Loop from here · \d+ mi/.test(idle.loop) && /On the twistiest roads nearby\s*Plan$/.test(idle.loop), 'one suggested loop, one clause under it (U-87): ' + idle.loop);
