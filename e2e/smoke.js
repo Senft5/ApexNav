@@ -13776,6 +13776,18 @@ flow('the drive screen, Vetta Line: one hero speed over a ruled line, Limit, Sig
   check(start.panel === 'hud-rise' && start.strip === 'hud-drop' && start.panelMs === '0.42s' && start.fill === 'backwards' && start.ring === 'hud-ring', 'the paper arrives once, 420 ms, and leaves nothing held: ' + JSON.stringify(start));
   await page.waitForTimeout(1500);                                   // the set piece is over inside 1.4 s
   await drive(12);
+  // a calm drive (Nate, 2026-11-16): upright at speed the panel is one row, the speed and the limit, then Report and End; the
+  // G-ball, the ruler and the ledger wait for a tap on the speed
+  const calm = await page.evaluate(() => {
+    const q = (s) => document.querySelector(s), shown = (s) => !!q(s) && q(s).getClientRects().length > 0, mid = (s) => { const b = q(s).getBoundingClientRect(); return b.top + b.height / 2; };
+    const d = q('#cluster .dial-speed .dial-digital');
+    return { px: Math.round(parseFloat(getComputedStyle(d).fontSize) * d.getScreenCTM().a), g: shown('#cluster .dial-g'), ruler: shown('#cluster .speed-line'), ledger: shown('#cluster .ledger'),
+      row: Math.max(...['#cluster .dial-speed', '#hzReportBtn', '#driveEnd'].map(mid)) - Math.min(...['#cluster .dial-speed', '#hzReportBtn', '#driveEnd'].map(mid)),
+      panel: Math.round(q('#binnacle').getBoundingClientRect().height), report: q('#hzReportBtn').getAttribute('aria-label') || q('#hzReportBtn').textContent };
+  });
+  check(calm.px >= 84 && !calm.g && !calm.ruler && !calm.ledger && calm.row <= 24 && calm.panel <= 140 && /Report/.test(calm.report), 'a calm drive: the speed, then Report and End, on one row; the rest waits: ' + JSON.stringify(calm));
+  await page.click('#cluster .dial-speed');
+  check(await page.evaluate(() => document.getElementById('app').classList.contains('drive-more')), 'a tap on the speed brings the rest of the panel');
   const r = await page.evaluate(() => {
     const q = (s) => document.querySelector(s), box = (s) => { const b = q(s).getBoundingClientRect(); return { x: b.left, y: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
     const d = q('#cluster .dial-speed .dial-digital'), cs = (s, pe) => getComputedStyle(q(s), pe);
