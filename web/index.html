@@ -1578,7 +1578,9 @@
     .sample-crest svg { width: 28px; height: 28px; fill: none; stroke: var(--panel-ink); stroke-width: 1.8; display: block; }
     .crew-tiles.one { grid-template-columns: minmax(0, 1fr); }
     .crew-tiles.one .crew-tile-head b { white-space: normal; overflow-wrap: anywhere; }
-    .row.profile-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .profile-keys .ink-btn, .profile-keys .ink-btn.solid { height: 44px; padding: 0 8px; }
+    .row.profile-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .row.profile-keys.with-more { display: flex; } .profile-keys.with-more > * { flex: 1 1 0; min-width: 0; } .profile-keys.with-more > .pv-more { flex: 0 0 48px; padding: 0; font-size: 20px; }
+    .pv-menu > .card-sheet { display: grid; gap: 8px; } .pv-menu > .card-sheet h3 { margin: 0 0 4px; } .pv-menu > .card-sheet .ink-btn, .pv-menu > .card-sheet .danger-btn { min-height: 48px; } .pv-menu > .card-sheet .danger-btn { justify-self: stretch; text-align: center; padding: 0; } .profile-keys .ink-btn, .profile-keys .ink-btn.solid { height: 44px; padding: 0 8px; }
     .profile-foot { gap: 16px; border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 8px; } .profile-foot > :first-child { padding-left: 0; }
     /* a friend's profile opens on the person: their photo, name and what they are doing now, as a social app's would */
     .profile-who { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; } .profile-who .note { margin: 0; }

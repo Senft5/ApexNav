@@ -267,6 +267,8 @@ and in random batches so a trace cannot be re-assembled.
   post (kudos, comments, ··· Edit and Delete). More for older ones. Offline says so, with Try again.
 - A friend's profile has the same head: their face ringed while they drive, their month in numbers (Days, Stages, Best;
   `--` when it didn't load), what they're doing, their car; then Message and the rest, and their drives as the same grid.
+- Under a friend's head (2026-11-16): Message, Drive with (your convoy, they get a notification) and Challenge, then ···
+  for On the map, Share a route, Report, Block and Unfriend (red, last). No foot of keys any more.
 - No backend change.
 
 ### 2.18 Crews as groups (members; built 2026-11-16)
