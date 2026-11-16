@@ -14203,7 +14203,7 @@ flow('TestFlight 2026-11-05 note 3: your own photo is the key: no photo, a tap p
   await page.goto(base + '/index.html?view=garage');
   await page.waitForFunction(() => !document.getElementById('boot') && document.querySelector('.my-photo'), null, { timeout: 10000 });
   await page.waitForTimeout(400);
-  const you = () => page.evaluate(() => { const sec = document.querySelector('.my-photo').closest('.stack-8');
+  const you = () => page.evaluate(() => { const sec = document.querySelector('.my-photo').closest('.ph') || document.querySelector('.my-photo').closest('.stack-8');
     return { text: sec.innerText, keys: [...sec.querySelectorAll('button, label')].filter((b) => b.offsetParent).map((b) => b.getAttribute('aria-label') || b.textContent.trim()) }; });
   let y = await you();
   check(!/Change photo|Remove photo|Add a photo|location data/.test(y.text) && y.keys[0] === 'Add your profile photo', 'no photo: the face is the key, no other key, no note: ' + JSON.stringify(y));
