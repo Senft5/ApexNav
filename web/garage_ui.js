@@ -21,6 +21,15 @@
     .car-card .car-mods { font-size: 13px; color: var(--panel-dim); white-space: pre-wrap; }
     .car-form { display: grid; gap: 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .car-form .wide { grid-column: 1 / -1; }
+    .car-more { border-radius: var(--r-card, 0); background: var(--raised, transparent); border: 1px solid var(--hair, var(--rule)); padding: 0 12px; }
+    .car-more[open] { padding-bottom: 12px; }
+    .car-more > summary { list-style: none; cursor: pointer; min-height: 56px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: center; column-gap: 10px; }
+    .car-more > summary::-webkit-details-marker { display: none; }
+    .car-more > summary b { font-size: 16px; } .car-more > summary small { grid-column: 1; font-size: 13px; color: var(--panel-dim); }
+    .car-more > summary::after { content: "\\203A"; grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 22px; transition: transform 0.15s; }
+    .car-more[open] > summary::after { transform: rotate(90deg); }
+    .car-more .car-group { margin: 14px 0 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--panel-dim); }
+    .car-more .note { margin: 6px 0 10px; }
     .car-card .car-cover { width: calc(100% + 24px); margin: -10px -12px 6px; aspect-ratio: 16 / 9; object-fit: cover; display: block; }
     .car-gallery { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0; }
     .car-strip { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding: 2px 0 4px; scrollbar-width: none; }
@@ -99,7 +108,7 @@
     }
 
     function form(c, onDone, more = null) {
-      const f = (name, ph, v, extra = {}) => { const i = el('input', { className: 'field', name, placeholder: ph, value: v ?? '', autocomplete: 'off', ...extra }); i.setAttribute('aria-label', ph); return i; };
+      const f = (name, ph, v, extra = {}) => { const i = el('input', { type: 'text', className: 'field', name, placeholder: ph, value: v ?? '', autocomplete: 'off', ...extra }); i.setAttribute('aria-label', ph); return i; };
       const sel = (name, label, opts, v) => {
         const s = el('select', { className: 'field', name }); s.setAttribute('aria-label', label);
         s.append(el('option', { value: '', textContent: label }));
@@ -121,6 +130,9 @@
         mods: el('textarea', { className: 'field', name: 'mods', placeholder: 'Mods', maxLength: 500, rows: 3, value: c.mods ?? '' }),
       };
       inputs.mods.setAttribute('aria-label', 'Mods');
+      // the rest of the car folds under one row (2026-11-16, Nate: no walls of text): a new car is year, make, model and a
+      // nickname; specs, routing and mods are one tap down, open when editing a car or once a lookup fills them in
+      const moreBox = el('details', { className: 'car-more', open: !!c.id });
       // Look the car up (car_lookup.js, IDEAS S-21): a VIN, or year + make + model; the specs fill in and you change what differs.
       const L = root.ApexCarLookup;
       const lookupNote = el('p', { className: 'note', role: 'status' });
@@ -132,6 +144,7 @@
         for (const k of ['year', 'make', 'model', 'trim', 'power_hp', 'drivetrain', 'transmission']) inputs[k].value = m[k] ?? '';
         inputs.weight_lb.value = m.weight_kg ? Math.round(m.weight_kg * LB) : '';
         const missing = [!m.power_hp && 'power', !m.weight_kg && 'weight', !m.drivetrain && 'drive', !m.transmission && 'gearbox'].filter(Boolean);
+        moreBox.open = true;                                             // what was filled in is in view, to check
         lookupNote.textContent = (typical ? 'Filled with typical factory specs. ' : 'Filled in. ') +
           (missing.length ? `Add ${missing.join(', ')} yourself. ` : '') + 'Change anything that differs on yours.';
       };
@@ -189,11 +202,16 @@
       };
       const built = el('div', { className: 'stack-8' },
         lookups,
-        el('div', { className: 'car-form' }, named('year', 'Year'), named('make', 'Make'), named('model', 'Model'), named('trim', 'Trim'), named('nickname', 'Nickname'), named('color', 'Colour'),
-          named('power_hp', 'Power (hp)'), named('weight_lb', 'Weight (lb)'), named('drivetrain', 'Drive'), named('transmission', 'Gearbox'),
-          el('div', { className: 'wide' }, named('tyres', 'Tyres')), named('clearance', 'Ride height'), named('width', metric() ? 'Width with mirrors (cm)' : 'Width with mirrors (in)'),
-          named('fuel', 'Fuel'), named('range', metric() ? 'Range on a full tank (km)' : 'Range on a full tank (mi)'), el('div', { className: 'wide' }, named('mods', 'Mods'))),
-        el('p', { className: 'note', textContent: 'Ride height, width, fuel and range plan your daily car\'s routes: a lowered car stays off unpaved roads, and a long stretch without fuel gets a stop. Fuel and range are never shown to friends.' }),
+        el('div', { className: 'car-form' }, named('year', 'Year'), named('make', 'Make'), named('model', 'Model'), named('nickname', 'Nickname')),
+        (moreBox.append(el('summary', {}, el('b', { textContent: 'Specs, routing and mods' }), el('small', { textContent: 'Power, weight, ride height, fuel' })),
+          el('div', { className: 'car-form' }, named('trim', 'Trim'), named('color', 'Colour'),
+            named('power_hp', 'Power (hp)'), named('weight_lb', 'Weight (lb)'), named('drivetrain', 'Drive'), named('transmission', 'Gearbox'),
+            el('div', { className: 'wide' }, named('tyres', 'Tyres'))),
+          el('p', { className: 'car-group' , textContent: 'For your routes' }),
+          el('div', { className: 'car-form' }, named('clearance', 'Ride height'), named('width', metric() ? 'Width with mirrors (cm)' : 'Width with mirrors (in)'),
+            named('fuel', 'Fuel'), named('range', metric() ? 'Range on a full tank (km)' : 'Range on a full tank (mi)')),
+          el('p', { className: 'note', textContent: 'A lowered car stays off unpaved roads; a long stretch without fuel gets a stop. Fuel and range are never shown to friends.' }),
+          el('div', { className: 'car-form' }, el('div', { className: 'wide' }, named('mods', 'Mods')))), moreBox),
         share,
         el('div', { className: 'row' }, btn(c.id ? 'Save' : 'Add car', save, 'ink-btn solid'), btn('Cancel', onDone, 'linkbtn')),
         ...(more ? [more] : []));
