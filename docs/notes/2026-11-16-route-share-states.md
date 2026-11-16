@@ -3,3 +3,8 @@
 ## 2026-11-16 Sharing a route: loading, no answer and nobody yet
 - Done: a route card's Share loads as its row of chips in outline (not "Loading your friends and crews…"); with no answer it says "Couldn't load your friends and crews." with Try again (it used to say you had nobody to share with); with nobody yet it says so in one line with Find friends. The Shared toast says Social, the tab's name now. e2e "shared routes:" checks the no-answer state.
 - Next: keep sweeping Social for the shared states.
+
+## 2026-11-16: the Share panel is a Social module
+- What: the panel's code moved from web/cockpit.js to web/route_share.js, in lazy.js's social group, loaded on the first Share.
+- Why: the new states pushed the launch to 3,700,697 script bytes, 697 over the startup budget; sharing is a Social action and doesn't need to be at launch.
+- Undo: move `ApexRouteShare.open` back inline in the routeShareBtn handler and drop route_share.js from lazy.js.
