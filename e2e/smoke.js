@@ -8358,6 +8358,7 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   let duel = { id: 'D1', stage: 'Dry Ridge climb', canon_id: 'SEG1', days: 7, with: 'bob', with_id: 'U1', challenger: false, status: 'pending', starts_on: null, ends_on: null, today,
     have_stage: false, you: null, them: null, you_share: false, they_share: true };
   const sent = [], grants = [];
+  let segs = 'ok';
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method(), json = (b, s = 200) => route.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
@@ -8366,6 +8367,8 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
     if (u.pathname === '/api/duels' && m === 'POST') { sent.push(JSON.parse(route.request().postData())); return json({ id: 'D2' }, 201); }
     if (u.pathname === '/api/duels/D1/accept') { duel = { ...duel, status: 'on', starts_on: today, ends_on: plus(6), have_stage: true, them: { score: 812, on: today } }; return json({ stage_added: true }); }
     if (u.pathname === '/api/grants' && m === 'PUT') { grants.push(JSON.parse(route.request().postData())); duel = { ...duel, you_share: true, you: { score: 845, on: today } }; return route.fulfill({ status: 204, body: '' }); }
+    if (u.pathname === '/api/segments' && segs === 'fail') return route.abort();
+    if (u.pathname === '/api/segments' && segs === 'none') return json([]);
     if (u.pathname === '/api/segments') return json([{ id: 'MY1', origin_id: 'SEG1', name: 'Dry Ridge climb', geom, start_lat: 35.6, start_lon: -83.9 }, { id: 'MY2', origin_id: null, name: 'Esses', geom: '[]', start_lat: 35.7, start_lon: -83.8 }]);
     if (u.pathname === '/api/points') return json({ total: 0 });
     return json([]);
@@ -8398,6 +8401,18 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   // challenging: from the friend's row, pick a stage and the days, Send
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
   await page.click('#accountBody .friend-head:has-text("@bob")');
+  // no answer: one line and Try again; no stages: one line and the key to them (the shared states, screen inventory)
+  segs = 'fail';
+  await page.click('.profile-view .profile-keys button:text-is("Challenge")');
+  await page.waitForSelector('.duel-pop.open .duel-none button:text-is("Try again")');
+  check(/^Couldn’t load your stages\. Check signal\./.test(await page.textContent('.duel-pop.open .duel-none')), 'no answer says so, with Try again');
+  segs = 'none';
+  await page.click('.duel-pop.open .duel-none button:text-is("Try again")');
+  await page.waitForSelector('.duel-pop.open .duel-none button:text-is("Open Stages")');
+  check(/^A duel is on one of your stages\. Save one from a drive first\./.test(await page.textContent('.duel-pop.open .duel-none')), 'no stages: one line and Open Stages');
+  segs = 'ok';
+  await page.click('.duel-pop.open .side-pop-head button:text-is("Done")');
+  await page.waitForSelector('.duel-pop', { state: 'detached' });
   await page.click('.profile-view .profile-keys button:text-is("Challenge")');
   await page.waitForSelector('.duel-pop.open [aria-label="Stage"] button:has-text("Esses")');
   await page.click('.duel-pop.open [aria-label="Stage"] button:has-text("Esses")');

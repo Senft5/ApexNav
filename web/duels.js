@@ -95,6 +95,9 @@
     .duel-card p { margin: 0; } .duel-head { font-size: 16px; font-weight: 700; } .duel-line { font-size: 14px; font-variant-numeric: tabular-nums; }
     .duel-kicker { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--panel-dim); }
     .duel-pick { display: grid; gap: 8px; }
+    .duel-skel { display: grid; gap: 10px; } .duel-skel i { display: block; height: 44px; border-radius: 8px; background: var(--rule); opacity: .55; }
+    .duel-skel i:nth-child(2n) { width: 70%; }
+    .duel-none { display: grid; gap: 10px; justify-items: start; } .duel-none p { margin: 0; }
   `;
   // the one line under a Challenge sheet's choices (it was three sentences)
   const BEST = 'Your best run counts. Drive within the law.';
@@ -115,6 +118,10 @@
       root.requestAnimationFrame(() => p.classList.add('open'));
       return { pop: p, close };
     };
+    // the shared states (screen inventory): loading is the sheet's shape, empty and no answer are one line and one key
+    const skel = (label) => el('div', { className: 'duel-skel', 'aria-busy': 'true', 'aria-label': label }, el('i'), el('i'), el('i'), el('i'));
+    const none = (line, key, run) => el('div', { className: 'duel-none' }, el('p', { textContent: line }), ...(key && run ? [btn(key, run, 'ink-btn solid')] : []));
+    const lost = (what, again) => none(`Couldn\u2019t load ${what}. Check signal.`, 'Try again', again);
     const call = async (method, path, body) => { try { const r = await apiCall(method, path, body); return { ok: r.ok, status: r.status, data: await jsonOf(r) }; } catch (_) { return { ok: false, status: 0, data: null }; } };
 
     /** The cards for People → Friends, filled when the list arrives; hidden while there is none. */
@@ -190,11 +197,14 @@
     /** The Challenge sheet for one friend: one of your stages, how many days, Send. */
     async function challenge(f) {
       const s = sheet(`Challenge @${f.handle}`);
-      const bodyEl = el('div', { className: 'stack-12 duel-pick' }, el('p', { className: 'note', textContent: 'Loading your stages…' }));
+      const bodyEl = el('div', { className: 'stack-12 duel-pick' });
       s.pop.append(bodyEl);
+      const load = async () => {
+      bodyEl.replaceChildren(skel('Loading your stages'));
       const r = await call('GET', '/api/segments');
+      if (!r.ok) { bodyEl.replaceChildren(lost('your stages', load)); return; }
       const stages = Array.isArray(r.data) ? r.data : [];
-      if (!stages.length) { bodyEl.replaceChildren(el('p', { className: 'people-lead', textContent: 'Duels are on your stages. Save one from a drive in the Log.' })); return; }
+      if (!stages.length) { bodyEl.replaceChildren(none('A duel is on one of your stages. Save one from a drive first.', page.openStages ? 'Open Stages' : '', page.openStages ? () => { s.close(); page.openStages(); } : null)); return; }
       let pick = stages[0].id, days = 7, kind = 'score';
       const send1 = btn(`Send to @${f.handle}`, async () => {
         send1.disabled = true;
@@ -208,17 +218,22 @@
         el('b', { textContent: 'For' }), chips(DAYS.map((n) => [n, `${n} days`]), () => days, (v) => { days = v; }, 'How long'),
         el('p', { className: 'note', textContent: BEST }),
         el('div', { className: 'row' }, send1));
+      };
+      load();
     }
 
     /** The Challenge sheet the other way round (the week's time attack loop, IDEAS S-24): the stage is given, pick a friend.
      *  Won by time unless you say Score. `stage` is { id, name }, one of your own stages (the loop's copy in your Stages). */
     async function challengeOn(stage) {
       const s = sheet(`Challenge on ${stage.name}`);
-      const bodyEl = el('div', { className: 'stack-12 duel-pick' }, el('p', { className: 'note', textContent: 'Loading your friends…' }));
+      const bodyEl = el('div', { className: 'stack-12 duel-pick' });
       s.pop.append(bodyEl);
+      const load = async () => {
+      bodyEl.replaceChildren(skel('Loading your friends'));
       const r = await call('GET', '/api/friends');
+      if (!r.ok) { bodyEl.replaceChildren(lost('your friends', load)); return; }
       const friends = (Array.isArray(r.data) ? r.data : []).filter((f) => f && f.status === 'accepted' && f.handle);
-      if (!friends.length) { bodyEl.replaceChildren(el('p', { className: 'people-lead', textContent: r.ok ? 'A duel is with a friend. Add one on People, then come back.' : 'Couldn’t load your friends. Check signal.' })); return; }
+      if (!friends.length) { bodyEl.replaceChildren(none('A duel is with a friend.', page.findFriends ? 'Find friends' : '', page.findFriends ? () => { s.close(); page.findFriends(); } : null)); return; }
       let who = friends[0].handle, days = 7, kind = 'time';
       const send1 = btn('Send', async () => {
         send1.disabled = true;
@@ -231,6 +246,8 @@
         el('b', { textContent: 'For' }), chips(DAYS.map((n) => [n, `${n} days`]), () => days, (v) => { days = v; }, 'How long'),
         el('p', { className: 'note', textContent: BEST }),
         el('div', { className: 'row' }, send1));
+      };
+      load();
     }
 
     return { cards, challenge, challengeOn, openStage: page.openStage };
