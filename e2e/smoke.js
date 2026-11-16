@@ -1455,6 +1455,9 @@ flow('a loop our router fails to finish says so (not "try another length") and r
 // built from the ranking's own data, in your units, after the card is up; nothing it says is unknown to the data.
 flow('route overview: the card says what the drive is like in plain words, from the route\'s own data', async (page, base) => {
   graphDir = graphFixture();
+  // the conditions read the clock (school buses, deer, dark): pinned to a weekday midday, so no line follows the hour CI
+  // runs at (at 11:20 UTC it said "school buses out after dark", 2026-11-16)
+  await page.clock.setFixedTime(new Date('2026-11-10T17:00:00Z'));
   try {
     await ownTrip(page, base, 'fun');
     await page.waitForFunction(() => !document.getElementById('routeCardStory').hidden, null, { timeout: 5000 });
@@ -5882,6 +5885,7 @@ flow('shared routes: one a friend shared shows on People, Friends, under From fr
     if (u.pathname === '/api/routes/shared') return json([{ id: 'RRRRRRRRRRRRRRRR', name: 'Cherohala loop', created_at: '2026-10-28 05:00:00', from_handle: 'alice' }]);
     if (u.pathname === '/api/routes/RRRRRRRRRRRRRRRR') return json({ id: 'RRRRRRRRRRRRRRRR', name: 'Cherohala loop', geom, from_handle: 'alice' });
     if (u.pathname === '/api/routes' && m === 'POST') { posted.push(JSON.parse(route.request().postData() || '{}')); return json({ id: 'S1', shared: 2 }, 201); }
+    if ((u.pathname === '/api/friends' || u.pathname === '/api/crews') && friendsOn === 'fail') return route.abort();
     if (u.pathname === '/api/friends') return json(friendsOn ? [{ id: 'U1', handle: 'alice', name: null, status: 'accepted', incoming: 0 }, { id: 'U2', handle: 'bob', name: null, status: 'accepted', incoming: 0 }] : []);
     if (u.pathname === '/api/crews') return json(friendsOn ? [{ id: 'k1', name: 'Ridge Runners' }] : []);
     if (m === 'GET') return json([]);
@@ -5899,9 +5903,14 @@ flow('shared routes: one a friend shared shows on People, Friends, under From fr
   await page.click('.side-pop.open button:has-text("Open")');
   await page.waitForFunction(() => /Cherohala loop/.test(document.getElementById('routeCardName').textContent), null, { timeout: 8000 });
   check(/corners/.test(await page.textContent('#routeCardMeta')), 'the route card has its corners (notes rebuilt from the shape)');
+  // Share it on, with no answer: it says so with Try again, never "no friends" (the shared states, 2026-11-16)
+  friendsOn = 'fail';
+  await page.click('#routeShareBtn');
+  await page.waitForSelector('#routeSharePick .share-lost button:text-is("Try again")');
+  check(/^Couldn’t load your friends and crews\./.test(await page.textContent('#routeSharePick .share-lost')), 'no answer is not "nobody"');
   // Share it on: one line says who gets it and what goes, before Send, and follows the picks
   friendsOn = true;
-  await page.click('#routeShareBtn');
+  await page.click('#routeSharePick .share-lost button:text-is("Try again")');
   await page.waitForSelector('#routeSharePick .share-goes');
   const goes = () => page.textContent('#routeSharePick .share-goes');
   check(/^Pick who gets it\. The line only, first 400 m hidden\.$/.test(await goes()), 'nobody picked: it asks: ' + await goes());
@@ -12251,6 +12260,9 @@ flow('Where to? while typing is the field and its list: no shortcuts, no Find a 
 
 flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start never moves, the card says the ranked swap (finding 1, 2, 3)', async (page, base) => {
   const asked = [];
+  // the ranking reads the sun and the calendar (no forecast here): pinned to a midday, so the swap's reason doesn't follow
+  // the hour CI runs at (at 11:00 UTC, before sunrise, it said "Weather ahead"; 2026-11-16)
+  await page.clock.setFixedTime(new Date('2026-11-10T17:00:00Z'));
   await planRouter(page, asked);
   await funTiles(page);
   const { taps, tap } = await planPage(page, base);

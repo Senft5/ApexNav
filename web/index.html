@@ -287,7 +287,8 @@
     #map .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-button { top: 0; right: 0; width: 24px; height: 100%; min-height: 24px; background: none; border-left: 1.5px solid var(--panel-ink); }
     .plates { position: absolute; left: 10px; bottom: 10px; z-index: 4; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 90px); }
     .trial-plate { font-variant-numeric: tabular-nums; } .trial-plate .linkbtn { font: inherit; color: inherit; text-decoration: underline; padding: 0; min-height: 0; }
-    .trial-plate .linkbtn { display: inline-block; padding: 10px 6px; margin: -10px -6px; }   /* Stop and Watch were 15 px tall: the tap area grows, the line doesn't */
+    .trial-plate .linkbtn { display: inline-block; padding: 10px 4px; margin: -10px -4px; }   /* Stop and Watch were 15 px tall: the tap area grows, the line doesn't */
+    .trial-plate .trial-keys { white-space: nowrap; }   /* Watch and Stop wrap as one, so one's tap area never lies over the other's on the next line (6 px each side met over the dot) */
     .plate { background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); padding: 8px 12px; font-size: 13px; font-weight: 600; min-height: 36px; }
     .plate.gear { width: 44px; height: 44px; min-height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
     .plate.gear svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
@@ -1342,6 +1343,8 @@
     .empty-bay p { margin: 0; } .empty-bay b { display: block; font-size: 16px; font-weight: 600; }
     .empty-bay small { display: block; margin-top: 2px; font-size: 13px; line-height: 1.35; color: var(--panel-dim); }
     .empty-bay .ink-btn { min-height: 44px; padding: 0 14px; }
+    .share-skel { gap: 8px; } .share-skel i { display: block; width: 84px; height: 40px; border-radius: 20px; background: var(--rule); opacity: .55; }
+    .share-lost { display: grid; gap: 8px; justify-items: start; } .share-lost p { margin: 0; }
     .ph-ghost { display: grid; place-items: center; width: 84px; height: 84px; border-radius: 50%; border: 1.5px dashed var(--panel-dim); }
     .ph-ghost svg { width: 40px; height: 40px; fill: none; stroke: var(--panel-dim); stroke-width: 1.6; stroke-linecap: round; }
     .garage-you.skel .ph-keys { grid-template-columns: minmax(0, 1fr); }
@@ -2386,7 +2389,7 @@
       <div class="plates">
         <div class="plate" id="modePlate" role="status">Replay</div>
         <!-- a Pro theme on trial: its status line, not a box over the hazard plate's place (REVIEW2.md U-39) -->
-        <div class="plate trial-plate" id="trialPlate" role="status" hidden><span id="trialText"></span><span id="trialWatchSep"> · </span><button class="linkbtn" id="trialWatch">Watch a replay</button> · <button class="linkbtn" id="trialStop">Stop</button></div>
+        <div class="plate trial-plate" id="trialPlate" role="status" hidden><span id="trialText"></span><span id="trialWatchSep"> · </span><span class="trial-keys"><button class="linkbtn" id="trialWatch">Watch a replay</button> · <button class="linkbtn" id="trialStop">Stop</button></span></div>
       </div>
       <button class="map-key recenter-key" id="recenterBtn" aria-label="Recenter"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="1.5"/></svg><span class="rc-left"></span></button>
       <button class="map-key compass-key" id="compassBtn" aria-label="Face north" title="Face north" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path class="cp-n" d="M12 3 L15.5 12 H8.5 Z"/><path class="cp-s" d="M12 21 L8.5 12 H15.5 Z"/></svg></button>
