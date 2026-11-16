@@ -3599,8 +3599,8 @@ flow('convoy: an invite that comes in while you drive waits until the drive ends
   check(!(await page.evaluate(() => window.__toasts.some((t) => /invited you to a convoy/.test(t)))), 'nothing said while driving');
   await page.click('#driveEnd');
   await page.waitForFunction(() => !window.apexDebug.driveActive, null, { timeout: 12000 });
-  await page.waitForFunction(() => window.__toasts.some((t) => /@lead invited you to a convoy: Sunday run/.test(t)), null, { timeout: 8000 }).catch(() => {});
-  check(await page.evaluate(() => window.__toasts.some((t) => /@lead invited you to a convoy: Sunday run/.test(t))), 'said once the drive ended');
+  await page.waitForFunction(() => window.__toasts.some((t) => /@lead invited you to a convoy\./.test(t)), null, { timeout: 8000 }).catch(() => {});
+  check(await page.evaluate(() => window.__toasts.some((t) => /@lead invited you to a convoy\./.test(t))), 'said once the drive ended');
 });
 
 flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stubbed, IDEAS S-22)', async (page, base) => {
@@ -3612,6 +3612,7 @@ flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stub
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/convoy/invites') return json(accepted ? [] : [{ id, name: 'Sunday run', from: 'lead', expiresAtMs: until }]);
+    if (u.pathname === `/api/convoy/invites/${id}`) return json({ name: 'Sunday run', leader: { handle: 'lead' }, members: 1, max: 16, expiresAtMs: until, untilMs: until, member: accepted });
     if (u.pathname === `/api/convoy/${id}/accept` && m === 'POST') {
       accepted = JSON.parse(route.request().postData()).consent === true;
       return json({ sessionId: id, name: 'Sunday run', role: 'member', you: 'k2', leaderKey: 'k1', expiresAtMs: until, seq: 0, leaderEpoch: 1,
@@ -3629,15 +3630,20 @@ flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stub
       .observe(t, { childList: true, characterData: true, subtree: true }); });
   });
   await page.goto(base + '/index.html');
-  await page.waitForFunction(() => window.__toasts.some((t) => /@lead invited you to a convoy: Sunday run/.test(t)), null, { timeout: 10000 });
+  await page.waitForFunction(() => window.__toasts.some((t) => /@lead invited you to a convoy\./.test(t)), null, { timeout: 10000 });
   // P-21: the invite waits on the idle map as one line under the place plate; a tap opens the convoy sheet (P-11: no Convoy section)
   await page.waitForSelector('.convoy-bar.show .cv-line');
   check(/Sunday run/.test(await page.textContent('.convoy-bar .cv-line')) && /@lead invited you/.test(await page.textContent('.convoy-bar .cv-line'))
     && (await page.$$('.convoy-bar.show > *')).length === 1, 'the map says it in one line: ' + await page.textContent('.convoy-bar'));
+  // Nate 2026-11-16: a tap opens the invite's own card, one question: Join or Not now
   await page.click('.convoy-bar .cv-line');
-  await page.waitForSelector('.convoy-sheet button:has-text("Join")');
-  check(/@lead invited you: Sunday run/.test(await page.textContent('.convoy-sheet')), 'the convoy sheet says who invited you and to what');
-  await page.click('.convoy-sheet button:text-is("Join")');
+  await page.waitForSelector('.cv-invite button:text-is("Join")');
+  const cardText = await page.textContent('.cv-invite');
+  check(/Sunday run/.test(cardText) && /1 car in/.test(cardText) && /Not now/.test(cardText) && /shares your position/.test(cardText), 'the card says which convoy, how many are in, and what joining shares: ' + cardText);
+  await page.click('.cv-invite button:text-is("Join")');
+  await page.waitForFunction(() => !document.querySelector('.cv-invite') && window.__toasts.some((t) => /You're in\. @lead sees you on the map\./.test(t)), null, { timeout: 5000 })
+    .catch(async () => { throw new Error('after Join: ' + JSON.stringify(await page.evaluate(() => [!!document.querySelector('.cv-invite') && document.querySelector('.cv-invite').textContent, window.__toasts.slice(-4)]))); });
+  await page.click('.convoy-bar .cv-line');
   await page.waitForFunction(() => /you're following/i.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
   check(/left/.test(await page.textContent('.convoy-sheet')) && !/ends \d/.test(await page.textContent('.convoy-sheet')), 'how long it has left, not a clock time (P-28): ' + await page.textContent('.convoy-sheet .note'));
   check(accepted, 'joined with consent, without a link');
@@ -3645,6 +3651,96 @@ flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stub
   check(/Sunday run/.test(await page.textContent('.convoy-bar .cv-line')), 'in the convoy, the line names it');
   await page.evaluate(() => { document.querySelector('.tab[data-view="people"]').click(); document.querySelector('[data-people="crews"]').click(); });
   check(!(await page.$$eval('#crewsBody h3', (h) => h.filter((x) => /Convoy/.test(x.textContent)).length)), 'no Convoy heading on Crews');
+});
+
+flow('convoy: two taps to convoy up, faces then Invite, and the friend is told (Worker stubbed, Nate 2026-11-16)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const id = 'DDDDDDDDDDDDDDDDDDDDDD', until = Date.now() + 120 * 60000, posts = [];
+  const ctx = { sessionId: id, name: 'Convoy', role: 'leader', you: 'k1', leaderKey: 'k1', expiresAtMs: until, seq: 0, leaderEpoch: 1, invited: [],
+                members: [{ key: 'k1', handle: 'me', role: 'leader', online: true }] };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'u2', handle: 'sam', status: 'accepted', photo_id: null }, { id: 'u3', handle: 'rae', status: 'accepted', photo_id: null }, { id: 'u4', handle: 'pend', status: 'pending', photo_id: null }]);
+    if (m === 'POST' && u.pathname.startsWith('/api/convoy') && !u.pathname.endsWith('/ticket')) posts.push([u.pathname, JSON.parse(route.request().postData() || 'null')]);
+    if (u.pathname === '/api/convoy' && m === 'POST') return json({ invite: `${id}.${'s'.repeat(32)}`, context: ctx }, 201);
+    if (u.pathname === `/api/convoy/${id}/invite-people`) return json({ invited: 1 });
+    if (u.pathname === `/api/convoy/${id}/ticket`) return json({ error: 'unavailable' }, 503);
+    if (u.pathname === `/api/convoy/${id}`) return json(ctx);
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.evaluate(() => document.getElementById('startMore').click());
+  await page.click('.start-sheet button:text-is("Convoy")');
+  await page.waitForSelector('.convoy-sheet .cv-face');
+  const faces = await page.$$eval('.convoy-sheet .cv-face', (b) => b.map((x) => x.lastElementChild.textContent));
+  check(JSON.stringify(faces) === '["rae","sam"]', 'Who\'s coming? shows accepted friends\' faces, no pending ones: ' + JSON.stringify(faces));
+  check(!(await page.$('.convoy-sheet input[aria-label="Convoy name"]')), 'no name to type before going');
+  await page.click('.convoy-sheet .cv-face[aria-label="@sam"]');
+  check((await page.textContent('.convoy-sheet .cv-send')) === 'Invite 1', 'the key counts who is picked');
+  await page.click('.convoy-sheet .cv-send');
+  await page.waitForFunction(() => /Invited @sam\./.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  check(posts.length === 2 && posts[0][0] === '/api/convoy' && posts[0][1].consent === true && posts[1][0] === `/api/convoy/${id}/invite-people` && JSON.stringify(posts[1][1].handles) === '["sam"]',
+    'one key started the convoy and invited @sam: ' + JSON.stringify(posts));
+  await page.waitForFunction(() => /you're leading/i.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
+  check(await page.isVisible('.convoy-sheet button:text-is("Add friends")'), 'the leader adds more from the same faces');
+});
+
+flow('convoy: a push\'s tap opens the invite\'s card in every state, and its Join convoy joins at once (Worker stubbed, Nate 2026-11-16)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const id = 'EEEEEEEEEEEEEEEEEEEEEE', until = Date.now() + 25 * 60000, del = [];
+  let card = 'ok', accepted = false;
+  const member = { sessionId: id, name: 'Convoy', role: 'member', you: 'k2', leaderKey: 'k1', expiresAtMs: until, seq: 0, leaderEpoch: 1,
+                   members: [{ key: 'k1', handle: 'lead', role: 'leader', online: true }, { key: 'k2', handle: 'me', role: 'member', online: true }] };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/convoy/invites') return json([]);
+    if (u.pathname === `/api/convoy/invites/${id}` && m === 'DELETE') { del.push(id); return json({ ok: true }); }
+    if (u.pathname === `/api/convoy/invites/${id}`) {
+      if (card === 'offline') return route.abort();
+      if (card === 'gone') return json({ error: 'no_convoy' }, 404);
+      if (card === 'full') return json({ error: 'convoy_full' }, 409);
+      return json({ name: 'Convoy', leader: { handle: 'lead' }, members: 2, max: 16, expiresAtMs: until, untilMs: until, member: accepted });
+    }
+    if (u.pathname === `/api/convoy/${id}/accept` && m === 'POST') { accepted = JSON.parse(route.request().postData()).consent === true; return json(member); }
+    if (u.pathname === `/api/convoy/${id}/ticket`) return json({ error: 'unavailable' }, 503);
+    if (u.pathname === `/api/convoy/${id}`) return json(member);
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function');
+  const tap = (params) => page.evaluate((p) => window.apex.onNative({ type: 'link', params: p }), params);
+  const text = () => page.textContent('.cv-invite');
+  const seen = {};
+  for (const st of ['gone', 'full', 'offline', 'ok']) {
+    card = st;
+    await tap({ convoy: id });
+    await page.waitForFunction(() => document.querySelector('.cv-invite') && !/Checking/.test(document.querySelector('.cv-invite').textContent), null, { timeout: 8000 });
+    seen[st] = await text();
+    if (st !== 'ok') await page.click('.cv-invite button:text-is("' + (st === 'offline' ? 'Not now' : 'Close') + '")');
+  }
+  check(/ran out/.test(seen.gone) && /Message @lead|Close/.test(seen.gone), 'an invite that ran out says so: ' + seen.gone);
+  check(/is full/.test(seen.full) && /16 cars/.test(seen.full), 'a full convoy says so: ' + seen.full);
+  check(/No connection/.test(seen.offline) && /Try again/.test(seen.offline), 'no signal: try again: ' + seen.offline);
+  check(/@lead's convoy/.test(seen.ok) && /2 cars in/.test(seen.ok) && /Join/.test(seen.ok), 'the card names the leader and who\'s in: ' + seen.ok);
+  check(del.length === 1, 'Not now tells the leader (once): ' + del.length);
+  check(await page.evaluate(() => !!document.querySelector('.convoy-sheet.cv-invite .card-sheet')), 'the card sits over the map, wherever you were');
+  await page.click('.cv-invite button:text-is("Not now")');
+  check(del.length === 2 && !(await page.$('.cv-invite')), 'Not now closes the card and tells the leader');
+  // the notification's long-press Join convoy: in at once, no card to answer
+  await tap({ convoy: id, join: '1' });
+  await page.waitForFunction(() => /You're in/.test(document.getElementById('toast').textContent), null, { timeout: 8000 });
+  check(accepted && !(await page.$('.cv-invite')), 'Join convoy joined with consent and left no card');
+  // tapped again once in: You're in, Open convoy
+  await tap({ convoy: id });
+  await page.waitForSelector('.cv-invite button:text-is("Open convoy")', { timeout: 8000 });
+  check(/Already in/.test(await text()), 'already in it: ' + await text());
 });
 
 flow('convoy voice: Talk joins the channel, the one key mutes and unmutes, and a new voice is listened to (Worker, socket and WebRTC stubbed)', async (page, base) => {
@@ -4900,8 +4996,9 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
   // P-11: an ad-hoc convoy is the map's Start key: Convoy now, and the sheet opens on the code for the car park
   await page.click('#startMore');
   await page.waitForSelector('.start-sheet .rec-key');
-  check(/^Just drive$/.test((await page.textContent('.start-sheet .rec-key')).trim()), 'the key\'s chevron offers Just drive and Convoy now');
-  await page.click('.start-sheet button:has-text("Convoy now")');
+  check(/^Just drive$/.test((await page.textContent('.start-sheet .rec-key')).trim()), 'the key\'s chevron offers Just drive and Convoy');
+  await page.click('.start-sheet button:text-is("Convoy")');
+  await page.click('.convoy-sheet button:text-is("QR code")');
   await page.waitForSelector('.convoy-sheet canvas.cv-qr');
   check(/you're leading/i.test(await page.textContent('.convoy-sheet')) && await page.isVisible('.convoy-sheet button:has-text("Start the drive")'), 'leading, the code up, the drive one key away');
   const dark = await page.evaluate(() => { const c = document.querySelector('canvas.cv-qr'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
@@ -4977,7 +5074,8 @@ flow('convoy: ten minutes before it ends the leader is told and can keep it goin
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.evaluate(() => document.getElementById('startMore').click());
-  await page.click('.start-sheet button:has-text("Convoy now")');
+  await page.click('.start-sheet button:text-is("Convoy")');
+  await page.click('.convoy-sheet button:text-is("QR code")');
   await page.waitForSelector('.convoy-sheet button:has-text("Keep going 1 h")');
   check(/\b[89] min left/.test(await page.locator('.convoy-sheet').innerText()), 'the card says how long is left');
   // the heads-up, once, with the key on it
@@ -5013,7 +5111,8 @@ flow('convoy: leading a drive, the convoy is one line behind the car and the cal
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   // (a script's tap: Playwright's click scrolls the clipped stage to bring the plan bar's key "into view", which a finger can't)
   await page.evaluate(() => document.getElementById('startMore').click());
-  await page.click('.start-sheet button:has-text("Convoy now")');
+  await page.click('.start-sheet button:text-is("Convoy")');
+  await page.click('.convoy-sheet button:text-is("QR code")');
   await page.waitForSelector('.convoy-sheet canvas.cv-qr');
   await page.click('.convoy-sheet button:has-text("Start the drive")');
   check(await page.evaluate(() => { const s = document.querySelector('.stage'); return !s.scrollLeft && !s.scrollTop; }), 'the map stage is where it was');
@@ -8033,7 +8132,7 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   check(who && who.photo && who.live && who.first && /friends since September/.test(who.text) && /On the road · Dry Ridge Rd/.test(who.text), 'the profile opens on the person, photo and status: ' + JSON.stringify(who));
   const pk = await page.evaluate(() => ({ keys: [...document.querySelectorAll('.profile-view .profile-keys button')].map((b) => b.textContent), foot: [...document.querySelectorAll('.profile-view .profile-foot button')].map((b) => b.textContent),
     last: document.querySelector('.profile-view > :last-child').className }));
-  check(JSON.stringify(pk.keys) === '["Message","On the map","Share a route","Invite to a drive","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
+  check(JSON.stringify(pk.keys) === '["Message","On the map","Share a route","Convoy","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
   await page.click('.profile-view button:has-text("Friends")');   // one back glyph and where it goes (REVIEW2.md)
   await page.waitForSelector('.side-pop.open .profile-view', { state: 'detached', timeout: 3000 }).catch(() => {});
   check(await page.evaluate(() => !document.querySelector('.side-pop.open') && !!document.querySelector('#accountBody .friend-head:not(.you-row)')), 'Back returns to the friends list');
@@ -8273,7 +8372,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
     const k = await page.$$eval('.people-pop.open .profile-keys button', (b) => b.map((x) => x.textContent)); return k; };
   const back = () => page.click('.people-pop.open .profile-view button:has-text("Friends")');
   const acts = await profileOf('@cara');
-  check(JSON.stringify(acts) === '["Message","On the map","Share a route","Invite to a drive","Challenge on a stage"]' && await page.evaluate(() => getComputedStyle(document.querySelector('.people-pop.open .profile-keys > :last-child')).gridColumnEnd) === '-1',
+  check(JSON.stringify(acts) === '["Message","On the map","Share a route","Convoy","Challenge on a stage"]' && await page.evaluate(() => getComputedStyle(document.querySelector('.people-pop.open .profile-keys > :last-child')).gridColumnEnd) === '-1',
     'her profile opens on what you can do with her, Message first; an odd last key spans the row: ' + JSON.stringify(acts));
   const cara = await page.textContent('.people-pop.open .profile-view');
   check(/Shared Cherohala loop · /.test(cara) && /What @cara sees of you\s*Scores/.test(cara) && /Couldn’t load the rest/.test(cara) && !/No scores shared/.test(cara), 'her last share and what she sees of you; offline, nothing guessed: ' + cara);

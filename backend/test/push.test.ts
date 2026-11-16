@@ -155,12 +155,45 @@ describe("push notifications", () => {
     expect(calls).toEqual([]);
   });
 
+  it("a convoy invite reaches each friend invited: a tap opens its card, long-press Join convoy joins; it lives as long as the invite", async () => {
+    await configure();
+    const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara")];
+    await befriend(a, b); await befriend(a, c); await befriend(b, c);
+    await phone(b, 2); await phone(c, 3); await phone(a, 1);
+    const id = (await json(api(a, "POST", "/api/convoy", { consent: true, name: "Sunday run" }))).context.sessionId;
+    expect(await json(api(a, "POST", `/api/convoy/${id}/invite-people`, { handles: ["bob"] }))).toEqual({ invited: 1 });
+    await settle(1);
+    expect(calls.map((x) => [x.token, x.body.aps.alert.title, x.body.aps.alert.body, x.body.aps.category, x.body.url, x.body.actions])).toEqual([
+      [tok(2), "Convoy", "@alice invited you to Sunday run.", "convoy", `apexnav://open?convoy=${id}`, { join: `apexnav://open?convoy=${id}&join=1` }]]);
+    const h = calls[0].headers;
+    expect(h["apns-collapse-id"]).toBe(`convoy-${id}`);
+    const ttl = Number(h["apns-expiration"]) - Math.floor(Date.now() / 1000);
+    expect(ttl).toBeGreaterThan(25 * 60); expect(ttl).toBeLessThanOrEqual(30 * 60 + 2);   // the invite's 30 minutes, not a day
+    calls.length = 0;
+    // a convoy with no name of its own says so plainly; turned off, nothing
+    await ok(api(c, "PUT", "/api/push/kinds", { off: ["convoys"] }));
+    const id2 = (await json(api(b, "POST", "/api/convoy", { consent: true }))).context.sessionId;
+    await ok(api(b, "POST", `/api/convoy/${id2}/invite-people`, { handles: ["cara"] }));
+    await settle(0);
+    expect(calls).toEqual([]);
+    await ok(api(b, "POST", `/api/convoy/${id2}/invite-people`, { handles: ["alice"] }));
+    await settle(1);
+    calls.length = 0;
+    expect(await json(api(b, "POST", `/api/convoy/${id2}/invite-people`, { handles: ["alice"] }))).toEqual({ invited: 0 });   // already invited: no second push
+    await settle(0);
+    expect(calls).toEqual([]);
+    const id3 = (await json(api(c, "POST", "/api/convoy", { consent: true }))).context.sessionId;
+    await ok(api(c, "POST", `/api/convoy/${id3}/invite-people`, { handles: ["alice"] }));
+    await settle(1);
+    expect(calls.map((x) => x.body.aps.alert.body)).toEqual(["@cara invited you to drive with them now."]);
+  });
+
   it("each kind can be turned off: kudos off still lets a comment through; bad kinds are refused", async () => {
     await configure();
     const [a, b] = [await makeUser("alice"), await makeUser("bob")];
     await befriend(a, b);
     await phone(a, 1);
-    expect(await json(api(a, "GET", "/api/push/kinds"))).toEqual({ off: [], kinds: ["friends", "kudos", "comments", "duels", "beaten", "crews", "messages"] });
+    expect(await json(api(a, "GET", "/api/push/kinds"))).toEqual({ off: [], kinds: ["friends", "kudos", "comments", "duels", "beaten", "crews", "messages", "convoys"] });
     expect(await json(api(a, "PUT", "/api/push/kinds", { off: ["duels", "kudos"] }))).toEqual({ off: ["kudos", "duels"] });
     expect((await api(a, "PUT", "/api/push/kinds", { off: ["everything"] })).status).toBe(400);
     const line = encodeLine(Array.from({ length: 91 }, (_, i) => [35 + i * 0.001, -84] as [number, number]));

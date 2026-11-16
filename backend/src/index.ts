@@ -5,7 +5,7 @@ import {
   APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, invitePreview, logout, redeemInvite, requireMember, requireUser, sessionCookie, sessionHash, viewer,
 } from "./auth";
 import { voiceAnswer, voicePull, voiceStart, voiceStop } from "./convoy_voice";
-import { convoyAccept, convoyCode, convoyCodeJoin, convoyCodePreview, convoyConnect, convoyCreate, convoyDismiss, convoyInvitePeople, convoyInvites, convoyJoin, convoyPreview, convoyRoom, unwrap } from "./convoy_routes";
+import { convoyAccept, convoyCode, convoyCodeJoin, convoyCodePreview, convoyConnect, convoyCreate, convoyDismiss, convoyInvitePeople, convoyInvitePreview, convoyInvites, convoyJoin, convoyPreview, convoyRoom, unwrap } from "./convoy_routes";
 import { Env, HttpError, body, json, str } from "./util";
 import { rateCheck } from "./ratelimit";
 import { clientError, countError, errorSummary, failingRoutes, serverError } from "./errors";
@@ -32,7 +32,7 @@ import * as messages from "./messages";
 import { mediaGet, mediaPut } from "./post_media";
 import { devDriveGet, devDriveList, devDrivePut } from "./dev_drives";
 import { anonDriveGet, anonDriveList, anonDrivePut } from "./anon_drives";
-import { afterCrewDrive, afterDuel, afterMessage, afterFriend, afterKudos, afterPassed, afterTopped, bestBefore, afterPostComment, afterPostKudos, afterPostTag, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
+import { afterCrewDrive, afterDuel, afterMessage, afterFriend, afterKudos, afterPassed, afterTopped, bestBefore, afterPostComment, afterPostKudos, afterPostTag, notify, pushForget, pushKindsGet, pushKindsPut, pushQuiet, pushRegister } from "./push";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewBadge, crewFeed, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
 import { decalsPlace } from "./livery";
@@ -502,6 +502,7 @@ on("POST", "/api/convoy/preview", async (req, env) => json(await convoyPreview(e
 on("POST", "/api/convoy/code/join", async (req, env) => json(await convoyCodeJoin(env, await requireMember(req, env), req)));
 on("POST", "/api/convoy/code/preview", async (req, env) => json(await convoyCodePreview(env, await requireMember(req, env), req)));
 on("GET", "/api/convoy/invites", async (req, env) => json(await convoyInvites(env, await requireMember(req, env))));
+on("GET", "/api/convoy/invites/:id", async (req, env, m) => json(await convoyInvitePreview(env, await requireMember(req, env), m.groups!.id)));
 on("DELETE", "/api/convoy/invites/:id", async (req, env, m) => json(await convoyDismiss(env, await requireMember(req, env), m.groups!.id)));
 on("GET", "/api/convoy/:id", async (req, env, m) => json(await convoyRoom(env, m.groups!.id).status((await requireMember(req, env)).id).then(unwrap)));
 on("POST", "/api/convoy/:id/code", async (req, env, m) => json(await convoyCode(env, await requireMember(req, env), m.groups!.id), 201));
@@ -510,7 +511,11 @@ on("POST", "/api/convoy/:id/ticket", async (req, env, m) => {
   const v = await requireMember(req, env);
   return json(await convoyRoom(env, m.groups!.id).ticket(v.id, (await sessionHash(req))!).then(unwrap), 201);
 });
-on("POST", "/api/convoy/:id/invite-people", async (req, env, m) => json(await convoyInvitePeople(env, await requireMember(req, env), m.groups!.id, req)));
+on("POST", "/api/convoy/:id/invite-people", async (req, env, m, ctx) => {
+  const { invited, push } = await convoyInvitePeople(env, await requireMember(req, env), m.groups!.id, req);
+  if (push) await later(ctx, notify(env, push.to, push.p));
+  return json({ invited });
+});
 on("POST", "/api/convoy/:id/accept", async (req, env, m) => json(await convoyAccept(env, await requireMember(req, env), m.groups!.id, req)));
 on("POST", "/api/convoy/:id/keep", async (req, env, m) => json(await convoyRoom(env, m.groups!.id).keepGoing((await requireMember(req, env)).id).then(unwrap)));
 on("POST", "/api/convoy/:id/leave", async (req, env, m) => json(await convoyRoom(env, m.groups!.id).leave((await requireMember(req, env)).id).then(unwrap)));

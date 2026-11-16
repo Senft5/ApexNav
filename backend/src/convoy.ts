@@ -29,6 +29,9 @@ interface Room { id: string; name: string; leaderId: string; epoch: number; crea
 interface Member { key: string; role: "leader" | "member"; joinedAt: number }
 interface Ticket { userId: string; sessionHash: string; expiresAt: number }
 interface Conn { ws: WebSocket; ip: string; userId: string | null; key: string | null; sessionHash: string | null; state: "new" | "auth" | "open" | "closed"; frames: number; windowAt: number; openedAt: number; checkedAt: number; timer: ReturnType<typeof setTimeout> | null }
+/** An in-app invite (IDEAS S-22): when it was sent, until when it lets them in, and when they said Not now (the leader
+ *  sees "can't make it"; the invite still works if they change their mind). */
+interface Invited { at: number; until: number; no?: number }
 interface Anchor { lat: number; lon: number; pathId: string | null; routeVersion: number | null; direction: 1 | -1 | null; progressM: number | null }
 interface LiveEvent {
   version: 1; eventId: string; sessionId: string; leaderEpoch: number; leaderKey: string; seq: number; action: "hazard" | "retract";
@@ -62,7 +65,7 @@ export class ConvoyRoom extends DurableObject<Env> {
   private members: Record<string, Member> = {};
   private revoked: Record<string, number> = {};      // user id -> when they left; an invite older than that cannot bring them back
   private banned: Record<string, true> = {};         // removed by the leader: out for the life of the convoy
-  private invited: Record<string, { at: number; until: number }> = {};   // invited in the app by the leader (IDEAS S-22): join without a link
+  private invited: Record<string, Invited> = {};   // invited in the app by the leader (IDEAS S-22): join without a link
   private names = new Map<string, { handle: string | null }>();   // memory only, from D1; handles only, real names stay with friends
   private tickets = new Map<string, Ticket>();       // sha256(ticket) -> ticket, memory only
   private conns = new Set<Conn>();
@@ -89,7 +92,7 @@ export class ConvoyRoom extends DurableObject<Env> {
       this.members = (await ctx.storage.get<Record<string, Member>>("members")) ?? {};
       this.revoked = (await ctx.storage.get<Record<string, number>>("revoked")) ?? {};
       this.banned = (await ctx.storage.get<Record<string, true>>("banned")) ?? {};
-      this.invited = (await ctx.storage.get<Record<string, { at: number; until: number }>>("invited")) ?? {};
+      this.invited = (await ctx.storage.get<Record<string, Invited>>("invited")) ?? {};
       await ctx.storage.put("room", room);
     });
   }
@@ -133,9 +136,11 @@ export class ConvoyRoom extends DurableObject<Env> {
       if (!(await this.index(who.id, (ix) => ix.add(room.id, room.expiresAt)))) return fail(429, "too_many_convoys");
       this.members[who.id] = { key: randomToken(6), role: "member", joinedAt: now };
       this.names.set(who.id, { handle: who.handle });
+      const wasAsked = !!this.invited[who.id];
       delete this.revoked[who.id]; delete this.invited[who.id];
       await this.save();
       this.broadcast({ type: "member", action: "joined", member: this.pub(who.id) });
+      if (wasAsked) await this.tellLeader(null);
       return okR(await this.context(who.id));
     });
   }
@@ -159,6 +164,37 @@ export class ConvoyRoom extends DurableObject<Env> {
                  expiresAtMs: room.expiresAt, member: already });
   }
 
+  /** An in-app invite's card (the push's tap): the same checks as accepting it, without the join. Only the leader's handle,
+   *  as a link's preview. 404 the convoy ended, 400 no invite (expired, or never), 403 can't use it, 409 full. */
+  async invitedPreview(userId: string): Promise<Result<{ name: string; leader: { handle: string | null }; members: number; max: number; expiresAtMs: number; untilMs: number; member: boolean }>> {
+    const room = await this.live();
+    if (!room) return fail(404, "no_convoy");
+    const already = !!this.members[userId], asked = this.invited[userId], now = Date.now();
+    if (!already) {
+      if (!asked || asked.until <= now) return fail(400, "invalid_invite");
+      if (this.banned[userId] || (this.revoked[userId] ?? -1) >= asked.at) return fail(403, "invite_revoked");
+      if (Object.keys(this.members).length >= LIMITS.members) return fail(409, "convoy_full");
+      if ((await this.blockedPairs([userId], Object.keys(this.members))).length) return fail(403, "cannot_join");
+    }
+    await this.loadNames();
+    if (this.room !== room) return fail(404, "no_convoy");
+    return okR({ name: room.name, leader: { handle: this.names.get(room.leaderId)?.handle ?? null }, members: Object.keys(this.members).length,
+                 max: LIMITS.members, expiresAtMs: room.expiresAt, untilMs: asked ? asked.until : room.expiresAt, member: already });
+  }
+
+  /** Not now on an in-app invite: the leader's list says "can't make it" (and a toast), at once. Nothing else changes. */
+  decline(userId: string): Promise<Result<{ ok: true }>> {
+    return this.serial(async () => {
+      const room = await this.live(), asked = this.invited[userId];
+      if (!room || !asked || asked.no || asked.until <= Date.now()) return okR({ ok: true as const });
+      asked.no = Date.now();
+      await this.save();
+      await this.loadNames(false, [userId]);
+      await this.tellLeader(this.names.get(userId)?.handle ?? null);
+      return okR({ ok: true as const });
+    });
+  }
+
   /** Leader only: a fresh invite link. The old one stops working. */
   /** The leader invites people in the app (the Worker already checked they are friends or private crew-mates, no blocks).
    *  Each can join without a link until the invite expires. Members, the banned and people who just left are skipped. */
@@ -168,11 +204,13 @@ export class ConvoyRoom extends DurableObject<Env> {
       if (!room || this.members[leaderId]?.role !== "leader") return fail(404, "no_convoy");
       const now = Date.now(), until = Math.min(now + LIMITS.inviteMs, room.expiresAt);
       for (const [id, inv] of Object.entries(this.invited)) if (inv.until <= now) delete this.invited[id];
-      const fresh = userIds.filter((id) => !this.members[id] && !this.banned[id]);
+      // already waiting on an invite: not asked twice (no second push); one who said Not now can be asked again
+      const fresh = userIds.filter((id) => !this.members[id] && !this.banned[id] && !(this.invited[id] && !this.invited[id].no));
       if (Object.keys(this.invited).length + fresh.length > LIMITS.members * 2) return fail(429, "too_many_invites");
       for (const id of fresh) this.invited[id] = { at: now, until };
       await this.save();
       await this.loadNames();
+      await this.tellLeader(null);
       return okR({ name: room.name, leader: this.names.get(leaderId)?.handle ?? null, expiresAtMs: until, invited: fresh });
     });
   }
@@ -481,7 +519,25 @@ export class ConvoyRoom extends DurableObject<Env> {
       voiceReady: !!(this.env.REALTIME_APP_ID && this.env.REALTIME_APP_TOKEN),   // the owner set up Realtime: voice can be offered
       voice: this.voicePub(),
       members: Object.keys(this.members).map((id) => ({ ...this.pub(id), online: this.online(this.members[id].key) })),
+      ...(me.role === "leader" ? { invited: await this.invitedPub() } : {}),
     };
+  }
+  /** The leader's view of who they invited in the app and haven't joined: handle, until when, and whether they said Not now. */
+  private async invitedPub(): Promise<{ handle: string; untilMs: number; declined: boolean }[]> {
+    const now = Date.now(), ids = Object.keys(this.invited).filter((id) => this.invited[id].until > now && !this.members[id]);
+    await this.loadNames(false, ids);
+    return ids.map((id) => ({ handle: this.names.get(id)?.handle ?? null, untilMs: this.invited[id].until, declined: !!this.invited[id].no }))
+      .filter((x): x is { handle: string; untilMs: number; declined: boolean } => !!x.handle)
+      .sort((a, b) => Number(a.declined) - Number(b.declined) || a.handle.localeCompare(b.handle));
+  }
+  /** Who's invited changed: to the leader's open sockets only (`declined`: the handle that just said Not now). */
+  private async tellLeader(declined: string | null): Promise<void> {
+    const room = this.room;
+    if (!room) return;
+    const open = [...this.conns].filter((c) => c.state === "open" && c.userId === room.leaderId);
+    if (!open.length) return;
+    const msg = { type: "invited", invited: await this.invitedPub(), declined };
+    for (const c of open) this.send(c, msg);
   }
   private pub(userId: string) {
     const m = this.members[userId], n = this.names.get(userId);
@@ -490,8 +546,8 @@ export class ConvoyRoom extends DurableObject<Env> {
   private online(key: string) { return [...this.conns].some((c) => c.state === "open" && c.key === key); }
 
   /** Names are read from the accounts, never stored with the convoy. A deleted account leaves the convoy. */
-  private async loadNames(force = false): Promise<string[]> {
-    const ids = Object.keys(this.members).filter((id) => force || !this.names.has(id));
+  private async loadNames(force = false, also: string[] = []): Promise<string[]> {
+    const ids = [...new Set([...Object.keys(this.members), ...also])].filter((id) => force || !this.names.has(id));
     if (!ids.length) return [];
     const rows = (await this.env.DB.prepare(`SELECT id, handle FROM users WHERE id IN (${ids.map(() => "?").join(",")})`)
       .bind(...ids).all<{ id: string; handle: string | null }>()).results;

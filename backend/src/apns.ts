@@ -55,6 +55,8 @@ export interface Alert {
   ttlS?: number;
   /** Quiet: no sound, delivered when the phone is ready (APNs priority 5). */
   passive?: boolean;
+  /** The notification category the app registered (its long-press keys), and the link each key opens. */
+  category?: string; actions?: Record<string, string>;
 }
 
 /** What APNs said. `drop`: the token is dead (uninstalled, or never valid here), forget it. `retry`: try again later. */
@@ -67,8 +69,9 @@ export async function sendAlert(env: Env, token: string, a: Alert, where: ApnsEn
   if (!TOKEN.test(token)) return { ok: false, status: 0, reason: "BadDeviceToken", drop: true, retry: false, id: null };
   const payload = {
     aps: { alert: { title: a.title.slice(0, 120), body: a.body.slice(0, 400) }, ...(a.passive ? {} : { sound: "default" }),
-      ...(a.thread ? { "thread-id": a.thread.slice(0, 64) } : {}), ...(a.passive ? { "interruption-level": "passive" } : {}) },
-    ...(a.url ? { url: a.url } : {}),
+      ...(a.thread ? { "thread-id": a.thread.slice(0, 64) } : {}), ...(a.passive ? { "interruption-level": "passive" } : {}),
+      ...(a.category ? { category: a.category.slice(0, 64) } : {}) },
+    ...(a.url ? { url: a.url } : {}), ...(a.category && a.actions ? { actions: a.actions } : {}),
   };
   const headers: Record<string, string> = {
     authorization: `bearer ${await providerToken(env, Math.floor(now / 1000))}`,
