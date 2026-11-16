@@ -79,6 +79,16 @@
   function writePins(p) { try { root.localStorage.setItem('apex.crewPins', JSON.stringify(p)); } catch (_) {} }
   /** The members strip (P-06): the owner first, then who is on the road now (`liveSet`, handles), then the rest by handle;
    *  and how many are out. */
+  /** Who you know in a crew, as a group page says it: "cara is in it", "cara and sam are in it", "cara, sam and 3 friends
+   *  are in it"; none: null. */
+  function knownLine(handles) {
+    const h = (Array.isArray(handles) ? handles : []).filter(Boolean);
+    if (!h.length) return null;
+    if (h.length === 1) return `${h[0]} is in it`;
+    if (h.length === 2) return `${h[0]} and ${h[1]} are in it`;
+    const rest = h.length - 2;
+    return `${h[0]}, ${h[1]} and ${rest} ${rest === 1 ? 'friend' : 'friends'} are in it`;
+  }
   function outNow(members, liveSet) {
     const live = new Set(liveSet || []);
     const list = (members || []).filter((m) => m && m.handle).map((m) => ({ ...m, live: live.has(m.handle) && !m.mine }));
@@ -250,6 +260,32 @@
     .cd-row .cd-text small { -webkit-line-clamp: 1; }   /* a crew's row is one line under its name, like a chat list: the date never wraps alone */
     .cd-what { font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
     .cd-more { justify-self: start; }
+    .cp-tabs { overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
+    .cp-tabs::-webkit-scrollbar { display: none; }
+    .cp-tabs > button { flex: none; }
+    .cp-keys { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px; gap: 8px; }
+    .cp-keys .ink-btn { height: 40px; min-height: 40px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+    .cp-keys .cp-chat-key { padding: 0; }
+    .cp-keys svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+    .cp-tick { display: inline-grid; } .cp-tick svg { width: 16px; height: 16px; }
+    .cp-known { display: flex; align-items: center; gap: 8px; margin-top: 6px; } .cp-known[hidden] { display: none; }
+    .cp-known-faces { display: inline-flex; } .cp-known-faces > * + * { margin-left: -8px; } .cp-known-faces .avatar { box-shadow: 0 0 0 2px var(--panel); }
+    .cp-known small { font-size: 13px; color: var(--panel-dim); }
+    .cp-next { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 14px; align-items: center; width: 100%; padding: 12px; border: 0; border-radius: var(--r-card, 16px); background: var(--raised, rgba(0,0,0,0.05)); color: var(--panel-ink); font: inherit; text-align: left; cursor: pointer; }
+    .cp-next-day { display: grid; justify-items: center; padding: 6px 0; border-radius: 12px; background: var(--panel); }
+    .cp-next-day small { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; color: var(--accent); }
+    .cp-next-day b { font: 800 28px/1 var(--font-num); }
+    .cp-next-what { display: grid; gap: 2px; min-width: 0; line-height: 1.3; }
+    .cp-next-what small { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--panel-dim); }
+    .cp-next-what b { font-size: 16px; overflow-wrap: anywhere; } .cp-next-what span { font-size: 13px; color: var(--panel-dim); }
+    .crew-drives:not([hidden]) ~ .cp-posts-hint { display: none; }
+    .cp-member-list { display: grid; }
+    .cp-member-list .cp-member { width: 100%; grid-template-columns: auto minmax(0, 1fr) auto; justify-items: start; align-items: center; gap: 12px; min-height: 60px; border-bottom: 1px solid var(--hair, var(--rule)); text-align: left; cursor: pointer; }
+    .cp-member-list .cp-member[hidden] { display: none; }
+    .cp-member-who { display: grid; min-width: 0; } .cp-member-who b { overflow-wrap: anywhere; }
+    .cp-member-list .cp-member small { max-width: none; white-space: normal; font-size: 13px; }
+    .cp-member-list .cp-member em { position: static; transform: none; }
+    .cp-member-list .cp-member.live .avatar { box-shadow: 0 0 0 2px var(--panel); }
     .cp-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--rule, rgba(0,0,0,0.15)); }
     .cp-tabs > button { position: relative; min-height: 44px; padding: 0 2px 10px; border: 0; background: transparent; color: var(--panel-dim); font: inherit; font-size: 17px; font-weight: 700; cursor: pointer; }
     .cp-tabs > button[aria-selected="true"] { color: var(--panel-ink); }
@@ -274,7 +310,8 @@
     all: 'Every Score added up.',
   };
   // The crew page's tabs (Nate 2026-11-12): which one is open, per crew, while the app runs
-  const CREW_TABS = [['drives', 'Drives'], ['chat', 'Chat'], ['board', 'Board']];
+  // Crews as groups (Nate 2026-11-16: "crews should be implemented like facebook groups"): Posts first, as a group's feed
+  const CREW_TABS = [['posts', 'Posts'], ['drives', 'Drives'], ['chat', 'Chat'], ['board', 'Board'], ['members', 'Members']];
   const CREW_TAB = new Map();
   // An unsent chat line per crew, kept while the app runs, through redraws and tab changes
   const CHAT_DRAFT = new Map();
@@ -355,12 +392,21 @@
         driveSec = thisWeek(c, redoDrive); boardSec = board(c, redoBoard);
         // P-03: the run, the people, what they said, then the board. Nate 2026-11-12 (as easy as a big social app): three tabs
         // under the crew's name, Drives (with the members), Chat and Board, not one long page of all of it; the livery last
+        // Crews as groups (2026-11-16): Posts (the next drive pinned on top, then what members posted), Drives, Chat, Board,
+        // Members (everyone, the owner's Remove one tap in); the keys under the name: Joined or Manage, Invite, Chat
+        let tabsBox = null;
         const panes = {
-          drives: [driveSec, members(c), ...(page.posts ? [page.posts(c)] : []), ...(page.books ? [page.books(c)].filter(Boolean) : []), ...(c.pinned ? [pinnedRow(c)] : []), meetShare(c)],   // posts: what members posted to the crew (drive_posts.js)
+          posts: [nextPinned(c, () => tabsBox && tabsBox.pick('drives')), ...(page.posts ? [page.posts(c)] : []), postsHint(c)],
+          drives: [driveSec, ...(page.books ? [page.books(c)].filter(Boolean) : []), ...(c.pinned ? [pinnedRow(c)] : []), meetShare(c)],
+          members: [members(c, draw)],   // posts: what members posted to the crew (drive_posts.js)
           chat: [chat(c, draw)],
           board: [boardSec, ...(c.house ? [houseBoard(c)] : []), ...[crewDna(c)].filter(Boolean), buildsRow(c)],
         };
-        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), tabs(c.id, panes), ...[liveryFoot(c, draw)].filter(Boolean)));
+        // what you came for (Nate: "knows what you want before you do"): a drive within a day and a half opens on Drives,
+        // where Going and the morning's convoy are; otherwise Posts. A tab you picked stays picked while the app runs.
+        const soon = c.next && Date.parse(String(c.next.starts_at).replace(' ', 'T') + (/Z$|[+-]\d\d:?\d\d$/.test(c.next.starts_at) ? '' : 'Z')) - Date.now() < 36 * 3600e3;
+        tabsBox = tabs(c.id, panes, soon ? 'drives' : 'posts');
+        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c, (k) => tabsBox.pick(k)), tabsBox, ...[liveryFoot(c, draw)].filter(Boolean)));
         // a public crew (joined as one, or made public since: social.ts crewUpdate turns members' sharing off) asks once on
         // this phone whether to share with it (the owner, 2026-11-11: public crews off by default, asked)
         if (c.visibility === 'public' && !c.is_owner && !c.sharing_scores && page.askPublicSharing) {
@@ -374,7 +420,7 @@
     }
 
     // The crew page's tabs (ARIA tabs, the People tabs' look): one pane shown, the pick kept for this crew while the app runs
-    function tabs(crewId, panes) {
+    function tabs(crewId, panes, first) {
       const bar = el('div', { className: 'cp-tabs', role: 'tablist' }); bar.setAttribute('aria-label', 'Crew');
       const wrap = el('div', { className: 'cp-panes' });
       const keys = CREW_TABS.filter(([k]) => panes[k]);
@@ -401,8 +447,10 @@
         const i = keys.findIndex(([k]) => k === CREW_TAB.get(crewId)), n = keys.length;
         pick(keys[(i + (e.key === 'ArrowRight' ? 1 : n - 1)) % n][0], true);
       });
-      pick(keys.some(([k]) => k === CREW_TAB.get(crewId)) ? CREW_TAB.get(crewId) : 'drives');
-      return el('div', { className: 'stack-12' }, bar, wrap);
+      pick(keys.some(([k]) => k === CREW_TAB.get(crewId)) ? CREW_TAB.get(crewId) : keys.some(([k]) => k === first) ? first : keys[0][0]);
+      const node = el('div', { className: 'stack-12' }, bar, wrap);
+      node.pick = (k) => { if (boxes[k]) pick(k); };
+      return node;
     }
 
     function header(c, redo) {
@@ -417,15 +465,59 @@
       return el('div', {}, head, band, crest);
     }
 
-    function titleBlock(c) {
-      const meta = [`${c.members} ${c.members === 1 ? 'member' : 'members'}`, c.visibility === 'public' ? 'Public' : 'Private', c.area_name].filter(Boolean).join(' · ');
+    // The crew's name, what it is, who you know in it, then its keys (a group's page, 2026-11-16): Joined (your settings,
+    // Leave) or Manage for the owner, Invite while you may, and Chat. The settings sheet is the Crews side's (page.settings).
+    function titleBlock(c, go) {
+      const meta = [c.visibility === 'public' ? 'Public crew' : 'Private crew', `${c.members} ${c.members === 1 ? 'member' : 'members'}`, c.area_name].filter(Boolean).join(' · ');
       const left = el('div', { style: 'min-width:0' }, el('h2', { textContent: c.name }));
       if (c.motto) left.append(el('p', { className: 'cp-motto', textContent: c.motto }));
       left.append(el('p', { className: 'cp-meta', textContent: meta }));
-      const right = el('div', { className: 'stack-8', style: 'align-items:flex-end' }, ...((c.can_invite ?? c.is_owner) && page.invite ? [btn('Invite', () => page.invite(c), 'ink-btn')] : []));   // P-07: any member, unless the owner keeps invites. No image-card Share (feedback 08): Invite shares the link
-      return el('div', { className: 'cp-title' }, left, right);
+      const known = el('div', { className: 'cp-known' }); known.hidden = true;
+      left.append(known);
+      // who you know in it: your friends among the members, faces and one line ("cara and sam are in it")
+      if (page.friendHandles) Promise.all([page.friendHandles(), apiCall('GET', `/api/crews/${encodeURIComponent(c.id)}/members`).then(jsonOf).catch(() => null)]).then(([fr, list]) => {
+        if (!(fr instanceof Set) || !Array.isArray(list)) return;
+        const mates = list.filter((m) => !m.mine && m.handle && fr.has(m.handle));
+        const line = knownLine(mates.map((m) => m.handle));
+        if (!line) return;
+        known.replaceChildren(el('span', { className: 'cp-known-faces' }, ...mates.slice(0, 3).map((m) => (P() ? P().avatar(m.photo_id || null, m.handle, 26) : el('span')))), el('small', { textContent: line }));
+        known.hidden = false;
+      }).catch(() => {});
+      const keys = el('div', { className: 'cp-keys' });
+      if (page.settings) {
+        const k = btn(c.is_owner ? 'Manage' : 'Joined', () => page.settings(c), 'ink-btn');
+        k.setAttribute('aria-label', c.is_owner ? 'Manage the crew' : 'Joined: your settings for this crew');
+        if (!c.is_owner) k.prepend(el('span', { className: 'cp-tick', 'aria-hidden': 'true', innerHTML: '<svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>' }));
+        keys.append(k);
+      }
+      if ((c.can_invite ?? c.is_owner) && page.invite) keys.append(btn('Invite', () => page.invite(c), 'ink-btn solid'));   // P-07: any member, unless the owner keeps it
+      const chatKey = el('button', { type: 'button', className: 'ink-btn cp-chat-key', 'aria-label': 'Crew chat',
+        innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z"/></svg>' });
+      chatKey.addEventListener('click', () => go('chat'));
+      keys.append(chatKey);
+      return el('div', { className: 'cp-title-wrap stack-12' }, el('div', { className: 'cp-title' }, left), keys);
     }
-
+    // the next drive, pinned at the top of Posts (a group's pinned post): its day, its name, when and where, who's going;
+    // a tap goes to Drives, where Going is. None planned: nothing pinned.
+    function nextPinned(c, toDrives) {
+      const e = c.next;
+      if (!e || !e.starts_at) return null;
+      const t = new Date(String(e.starts_at).replace(' ', 'T') + (/Z$/.test(e.starts_at) ? '' : 'Z'));
+      if (!Number.isFinite(t.getTime())) return null;
+      const going = Array.isArray(e.going) ? e.going.length : Number.isFinite(e.going) ? e.going : null;
+      const b = el('button', { type: 'button', className: 'cp-next' },
+        el('span', { className: 'cp-next-day' }, el('small', { textContent: t.toLocaleDateString([], { weekday: 'short' }).toUpperCase() }), el('b', { textContent: String(t.getDate()) })),
+        el('span', { className: 'cp-next-what' }, el('small', { textContent: 'PINNED · CREW DRIVE' }), el('b', { textContent: e.title || 'Crew drive' }),
+          el('span', { textContent: [t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), e.meet_name || e.place || '', going != null ? `${going} going` : ''].filter(Boolean).join(' · ') })));
+      b.setAttribute('aria-label', `Pinned: ${e.title || 'crew drive'}, ${t.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' })}. Open Drives`);
+      b.addEventListener('click', toDrives);
+      return b;
+    }
+    // Posts with nothing posted yet says how one gets there (crew_drives hides itself while there is none)
+    function postsHint(c) {
+      const p = el('p', { className: 'note cp-posts-hint', textContent: 'Drives members post to the crew land here. Post one from its card after you drive.' });
+      return p;
+    }
     // The livery at the foot of the page (P-03): one line. The people who care (the owner, a Pro supporter) open it: the
     // owner's Edit livery, or for a supporter the meter and their own Decals; for everyone else it is a line, not a key.
     function liveryFoot(c, redo) {
@@ -547,34 +639,49 @@
       return sec;
     }
 
-    // The members (P-06): faces, the owner marked, the ones on the road now lit (from what they share with you on the map:
-    // friends_map.js friendState; nothing shared, no light); a tap is the person, with Report and Block one tap in.
-    function members(c) {
-      const strip = el('div', { className: 'cp-members', role: 'list' });
+    // The members (P-06; a group's Members tab since 2026-11-16): everyone, the owner first, then who is on the road now
+    // (from what they share with you on the map: friends_map.js friendState; nothing shared, no light), then the rest; a
+    // search over a long list. A tap is the person: Add friend, Report and Block, and for the owner Remove from the crew.
+    function members(c, redraw) {
+      const list = el('div', { className: 'cp-member-list', role: 'list' });
       const note = el('span', { className: 'note' });
-      const sec = el('div', { className: 'stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Members' }), note), strip);
+      const find = el('input', { className: 'field cp-member-find', type: 'search', placeholder: 'Find a member', 'aria-label': 'Find a member', autocomplete: 'off', autocapitalize: 'none' });
+      find.hidden = true;
+      const sec = el('div', { className: 'stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Members' }), note), find, list);
       const get = (path) => apiCall('GET', path).then((r) => (r && r.ok ? r.json() : null)).catch(() => null);
-      Promise.all([get(`/api/crews/${encodeURIComponent(c.id)}/members`), get('/api/presence')]).then(([list, where]) => {
-        if (!Array.isArray(list) || !list.length) { strip.replaceChildren(el('p', { className: 'note', textContent: 'Couldn\u2019t load the members. Check signal.' })); return; }
+      const load = () => Promise.all([get(`/api/crews/${encodeURIComponent(c.id)}/members`), get('/api/presence'), page.friendHandles ? page.friendHandles().catch(() => null) : null]).then(([all, where, fr]) => {
+        if (!Array.isArray(all) || !all.length) { list.replaceChildren(el('p', { className: 'note', textContent: 'Couldn\u2019t load the members. Check signal.' }), btn('Try again', load, 'ink-btn')); return; }
         const FM = root.ApexFriendsMap, at = new Map((Array.isArray(where) ? where : []).map((p) => [p.handle, p]));
         const lit = [...at.keys()].filter((h) => FM && FM.friendState(at.get(h)).live);
-        const m = outNow(list, lit);
+        const m = outNow(all, lit);
         note.textContent = [`${m.list.length} ${m.list.length === 1 ? 'member' : 'members'}`, m.out ? `${m.out} out now` : ''].filter(Boolean).join(' \u00b7 ');
-        strip.replaceChildren(...m.list.map((x) => {
+        const rows = m.list.map((x) => {
+          const friend = fr instanceof Set && fr.has(x.handle);
+          const line = [x.role === 'owner' ? 'Owner' : '', x.live && FM ? FM.friendState(at.get(x.handle)).text : '', friend && !x.mine ? 'Your friend' : ''].filter(Boolean).join(' \u00b7 ');
+          const face = P() ? P().avatar(x.photo_id || null, x.handle, 44) : el('b', { textContent: String(x.handle).charAt(0).toUpperCase() });
           const b = el('button', { type: 'button', className: 'cp-member' + (x.live ? ' live' : ''), role: 'listitem' },
-            P() ? P().avatar(x.photo_id || null, x.handle, 44) : el('b', { textContent: String(x.handle).charAt(0).toUpperCase() }),
-            ...(x.role === 'owner' ? [el('em', { textContent: 'OWNER' })] : []), el('small', { textContent: x.mine ? 'You' : `@${x.handle}` }));
-          b.setAttribute('aria-label', `@${x.handle}${x.mine ? ' (you)' : ''}${x.role === 'owner' ? ', owner' : ''}${x.live ? ', on the road now' : ''}`);
-          b.addEventListener('click', () => member(c, x, x.live && FM ? FM.friendState(at.get(x.handle)).text : null));
+            root.ApexAvatar ? root.ApexAvatar.ring(face, x.live ? 'live' : null) : face,
+            el('span', { className: 'cp-member-who' }, el('b', { textContent: x.mine ? `You \u00b7 @${x.handle}` : `@${x.handle}` }), ...(line ? [el('small', { textContent: line })] : [])),
+            ...(x.role === 'owner' ? [el('em', { textContent: 'OWNER' })] : []));
+          b.dataset.handle = x.handle;
+          b.setAttribute('aria-label', `@${x.handle}${x.mine ? ' (you)' : ''}${x.role === 'owner' ? ', owner' : ''}${x.live ? ', on the road now' : ''}${friend && !x.mine ? ', your friend' : ''}`);
+          b.addEventListener('click', () => member(c, x, x.live && FM ? FM.friendState(at.get(x.handle)).text : null, redraw));
           return b;
-        }));
+        });
+        list.replaceChildren(...rows);
+        find.hidden = rows.length <= 12;
       });
+      find.addEventListener('input', () => {
+        const q = find.value.trim().replace(/^@/, '').toLowerCase();
+        list.querySelectorAll('.cp-member').forEach((r) => { r.hidden = !!q && !String(r.dataset.handle || '').toLowerCase().includes(q); });
+      });
+      load();
       return sec;
     }
     // a handle on a drive card (who's going) opens the same sheet as the members strip
     const crewMate = (c) => (h) => member(c, { handle: h, photo_id: null, mine: false, role: 'member' }, null);
     // A member, one tap in: who they are in this crew, and Report and Block at the foot (P-06), never on the strip.
-    function member(c, m, state) {
+    function member(c, m, state, redraw) {
       const ov = el('div', { className: 'overlay dim show cp-member-sheet' });
       ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', `@${m.handle}`);
       const close = () => ov.remove();
@@ -602,10 +709,17 @@
       const foot = el('div', { className: 'row' });
       if (!m.mine && page.report) foot.append(btn('Report', () => { close(); page.report({ kind: 'user', target: m.handle, label: `@${m.handle} in ${c.name}`, who: m.handle }); }, 'linkbtn'));
       if (!m.mine && page.block) foot.append(btn('Block', () => { close(); page.block(m.handle); }, 'linkbtn'));
+      // the owner runs the crew: Remove takes someone out (their shares and invite links go with them; social.ts crewRemoveMember)
+      const own = c.is_owner && !m.mine && m.role !== 'owner' ? btn('Remove from crew', async () => {
+        const ok = root.ApexConfirm ? await root.ApexConfirm.ask(`Remove @${m.handle} from ${c.name}? Their shared Scores leave the crew. They can come back only with a new invite.`, 'Remove') : true;
+        if (!ok) return;
+        const r = await apiCall('DELETE', `/api/crews/${encodeURIComponent(c.id)}/members/${encodeURIComponent(m.handle)}`).catch(() => null);
+        if (r && r.ok) { toast(`@${m.handle} is out of ${c.name}.`); close(); if (redraw) redraw(); } else toast('Couldn\u2019t remove them. Try again.');
+      }, 'danger-btn') : null;
       foot.append(btn('Done', close, 'linkbtn'));   // last: the sheet's way out, after what it holds
       ov.append(el('div', { className: 'card-sheet' },
         el('div', { className: 'row', style: 'align-items:center;gap:12px' }, P() ? P().avatar(m.photo_id || null, m.handle, 56) : '', el('h2', { textContent: `@${m.handle}` })),
-        sub, ...(state ? [el('p', { textContent: state })] : []), key, foot));
+        sub, ...(state ? [el('p', { textContent: state })] : []), key, ...(own ? [own] : []), foot));
       root.document.body.append(ov);
     }
 
@@ -949,6 +1063,6 @@
     return { view, dashboard };
   }
 
-  const api = { mount, dateBlock, ago, goingFaces, stripeOk, dashOrder, dashLine, readPins, outNow, liveryShort, crestSvg, liveryLine, stripeCss, atLeast, dayOf, drivesToSend, publishDrives, CRESTS: Object.keys(CRESTS), STRIPES, PATTERNS };
+  const api = { knownLine, mount, dateBlock, ago, goingFaces, stripeOk, dashOrder, dashLine, readPins, outNow, liveryShort, crestSvg, liveryLine, stripeCss, atLeast, dayOf, drivesToSend, publishDrives, CRESTS: Object.keys(CRESTS), STRIPES, PATTERNS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCrewPage = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -128,6 +128,29 @@ describe("crew invite links (IDEAS Z-15)", () => {
   });
 });
 
+describe("crews as groups: the owner removes a member (2026-11-16)", () => {
+  const invite = async (who: Awaited<ReturnType<typeof makeUser>>, id: string) =>
+    ((await (await ok(api(who, "POST", `/api/crews/${id}/invite`))).json()) as { token: string }).token;
+  it("only the owner removes, never themselves; the removed member's shares and links go with them", async () => {
+    const owner = await makeUser("owner"), sam = await makeUser("sam"), cara = await makeUser("cara"), late = await makeUser("late");
+    const id = await make(owner, { name: "Ridge Runners" });
+    for (const u of [sam, cara]) await ok(api(u, "POST", "/api/crews/join", { token: await invite(owner, id) }));
+    const samLink = await invite(sam, id);
+    expect((await api(cara, "DELETE", `/api/crews/${id}/members/sam`)).status).toBe(403);       // a member can't
+    expect((await api(late, "DELETE", `/api/crews/${id}/members/sam`)).status).toBe(404);       // a stranger sees no crew
+    expect((await api(owner, "DELETE", `/api/crews/${id}/members/owner`)).status).toBe(400);    // the owner stays (leaving dissolves)
+    expect((await api(owner, "DELETE", `/api/crews/${id}/members/nobody`)).status).toBe(404);
+    await ok(api(owner, "DELETE", `/api/crews/${id}/members/SAM`));
+    const members = (await (await ok(api(owner, "GET", `/api/crews/${id}/members`))).json()) as { handle: string }[];
+    expect(members.map((m) => m.handle).sort()).toEqual(["cara", "owner"]);
+    expect((await api(sam, "GET", `/api/crews/${id}/page`)).status).toBe(404);                // out
+    const { env } = await import("cloudflare:workers");
+    const g = await env.DB.prepare("SELECT COUNT(*) AS n FROM grants WHERE audience_type = 'crew' AND audience_id = ? AND user_id = ?").bind(id, sam.id).first<{ n: number }>();
+    expect(g!.n).toBe(0);
+    expect((await api(late, "POST", "/api/crews/join", { token: samLink })).status).toBe(400);  // sam's link is void
+  });
+});
+
 describe("one link in (P-02)", () => {
   const invite = async (who: Awaited<ReturnType<typeof makeUser>>, id: string) =>
     ((await (await ok(api(who, "POST", `/api/crews/${id}/invite`))).json()) as { token: string }).token;
