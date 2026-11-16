@@ -357,8 +357,11 @@
     // The calls as a sheet's block, in rows that wrap (never a row cut off at the screen's edge); a call closes the sheet.
     function callsBox(done) {
       const grid = el('div', { className: 'hz-grid cv-call-grid' });
-      for (const k of LEADER_CALLS) grid.append(labelled(btn(C.KINDS[k], () => { done(); callOut(k); }, 'ink-btn hz-btn'), `Call ${C.KINDS[k]} to the convoy`));
-      grid.append(regroupKey(done));
+      // each call its mark over its word, as the public kinds below it (cockpit.js ApexHazardIcons); words alone without it
+      const mark = (b, k) => { const d = window.ApexHazardIcons && window.ApexHazardIcons[k]; if (!d) return b;
+        b.classList.add('hz-btn', 'hz-drawn'); b.insertAdjacentHTML('afterbegin', `<svg class="hz-ico" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`); return b; };
+      for (const k of LEADER_CALLS) grid.append(labelled(mark(btn(C.KINDS[k], () => { done(); callOut(k); }, 'ink-btn hz-btn'), k), `Call ${C.KINDS[k]} to the convoy`));
+      grid.append(mark(regroupKey(done), 'regroup'));
       return el('div', { className: 'cv-callbox' }, el('h3', { textContent: 'Call to the convoy' }),
         el('p', { className: 'note', textContent: 'Only your convoy hears these.' }), grid);
     }
