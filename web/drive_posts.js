@@ -279,14 +279,14 @@
     .feed-skel i:nth-child(1) { height: 200px; } .feed-skel i:nth-child(2) { height: 16px; width: 60%; } .feed-skel i:nth-child(3) { height: 16px; width: 40%; }
     .feed-comments-none { margin: 0; color: var(--panel-dim); font-size: 14px; }
     .feed-say .field { flex: 1; min-width: 0; }
-    .post-sheet textarea { width: 100%; min-height: 56px; resize: vertical; }
-    .post-sheet .card-sheet { display: grid; gap: 14px; }
+    .post-sheet textarea, .feed-edit textarea { width: 100%; min-height: 56px; resize: vertical; }
+    .post-sheet .card-sheet, .feed-edit .card-sheet { display: grid; gap: 14px; }
     .post-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
     .post-head h2 { margin: 0; padding: 0; border: 0; font-size: 22px; }
     .post-head .post-not-now { min-height: 44px; color: var(--panel-dim); }
     .post-pic { display: grid; } .post-pic .feed-line { aspect-ratio: 340 / 150; }
     .post-field { display: grid; gap: 6px; } .post-field small { color: var(--panel-dim); font-size: 13px; }
-    .post-sheet .post-go { width: 100%; min-height: 52px; font-size: 17px; }
+    .post-sheet .post-go, .feed-edit .post-go { width: 100%; min-height: 52px; font-size: 17px; }
   `;
   const ICON = {
     kudos: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11v9H4v-9zM7 11l4-7c1.5 0 2.5 1 2 3l-1 4h6a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 16.8 21H7"/></svg>',
@@ -497,10 +497,22 @@
       return b;
     }
 
-    // Edit (your own post, behind ···): its name and what you said, nothing else; Save redraws where it was
+    // The post sheet's picture of a drive (Post and Edit post): its road, its Score and length on the strip under it.
+    function postPic(score, lenM, line, why = 'Too short to show its line.') {
+      const stat = (label, v, unit) => { const b = el('b', { textContent: v }); if (unit) b.append(el('span', { textContent: unit }));
+        return el('div', {}, el('small', { textContent: label }), b); };
+      const fmtLen = page.fmtLen || ((m) => `${(m / 1000).toFixed(1)} km`);
+      const stats = el('div', { className: 'feed-stats' }, stat('Vetta Score', Number.isFinite(score) ? String(Math.round(score)) : '--'));
+      if (Number.isFinite(lenM) && lenM > 0) { const m = /^([\d.,]+)\s*(.*)$/.exec(fmtLen(lenM)) || []; stats.append(m[1] ? stat('Distance', m[1], m[2]) : stat('Distance', fmtLen(lenM))); }
+      return line && line.length > 1 ? el('div', { className: 'feed-pic post-pic' }, roadSvg(line, 340, 150), stats)
+        : el('div', { className: 'post-pic' }, stats, ...(why ? [el('p', { className: 'note', textContent: why })] : []));
+    }
+
+    // Edit (your own post, behind ···): the post sheet's own shape (screen inventory 2026-11-16): its picture, then its name
+    // and what you said, nothing else; Save redraws where it was
     function edit(p, o, node) {
       const s = sheet('Edit post', 'feed-edit');
-      const name = el('input', { className: 'field', maxLength: 60, value: p.title || '', 'aria-label': 'Drive name' });
+      const name = el('input', { type: 'text', className: 'field post-name', maxLength: 60, value: p.title || '', 'aria-label': 'Drive name', autocomplete: 'off' });
       const say = el('textarea', { className: 'field', maxLength: 280, placeholder: 'How was it? (optional)', 'aria-label': 'Caption' });
       say.value = p.caption || '';
       const save = btn('Save', async () => {
@@ -514,8 +526,10 @@
         s.close(); toast('Saved.');
         if (node && node.isConnected) node.replaceChildren(...card(p, o).childNodes);   // this card at once, then the list it sits in
         if (o && o.after) o.after();
-      }, 'ink-btn solid');
-      s.box.append(el('div', { className: 'stack-12' }, el('h3', { textContent: 'Edit post' }), name, say, el('div', { className: 'row' }, save, btn('Cancel', s.close, 'linkbtn'))));
+      }, 'ink-btn solid post-go');
+      let pts = []; try { pts = p.line ? decode(p.line) : []; } catch (_) { pts = []; }
+      s.box.append(el('div', { className: 'post-head' }, el('h2', { textContent: 'Edit post' }), btn('Cancel', s.close, 'linkbtn post-not-now')),
+        postPic(p.score, p.length_m, pts, ''), el('label', { className: 'post-field' }, el('small', { textContent: 'Name' }), name), say, save);
       name.focus();
     }
 
@@ -921,13 +935,7 @@
           toast(where);
         }, 'ink-btn solid post-go');
         // the drive as it will look: its road, its Score and length on the strip under it, the clip or photo named on it
-        const stat = (label, v, unit) => { const b = el('b', { textContent: v }); if (unit) b.append(el('span', { textContent: unit }));
-          return el('div', {}, el('small', { textContent: label }), b); };
-        const fmtLen = page.fmtLen || ((m) => `${(m / 1000).toFixed(1)} km`);
-        const stats = el('div', { className: 'feed-stats' }, stat('Vetta Score', Number.isFinite(d.score) ? String(Math.round(d.score)) : '--'));
-        if (Number.isFinite(d.len_m) && d.len_m > 0) { const m = /^([\d.,]+)\s*(.*)$/.exec(fmtLen(d.len_m)) || []; stats.append(m[1] ? stat('Distance', m[1], m[2]) : stat('Distance', fmtLen(d.len_m))); }
-        const pic = line ? el('div', { className: 'feed-pic post-pic' }, roadSvg(line, 340, 150), stats)
-          : el('div', { className: 'post-pic' }, stats, el('p', { className: 'note', textContent: 'Too short to show its line.' }));
+        const pic = postPic(d.score, d.len_m, line);
         const name = el('input', { type: 'text', className: 'field post-name', maxLength: 60, value: String(d.name || ''), 'aria-label': 'Name', autocomplete: 'off' });
         const head = el('div', { className: 'post-head' }, el('h2', { textContent: d.ready ? 'Nice drive. Post it?' : 'Post this drive' }), btn('Not now', () => finish(false), 'linkbtn post-not-now'));
         s.box.append(head, pic, el('label', { className: 'post-field' }, el('small', { textContent: 'Name' }), name), withNote, tagRow, chips, say, mrow, post);

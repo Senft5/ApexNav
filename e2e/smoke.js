@@ -8116,6 +8116,12 @@ flow('Garage → You is your profile: your numbers, Edit profile, and your drive
   await page.click('.feed-menu button:text-is("Edit")');
   await page.waitForSelector('.feed-edit input[aria-label="Drive name"]');
   check(await page.inputValue('.feed-edit input[aria-label="Drive name"]') === 'Drive 1', 'the sheet holds the name as it is');
+  // (2026-11-16) the post sheet's own shape: its head with Cancel, the drive's picture and numbers, Name, the caption, one wide Save
+  const ed = await page.evaluate(() => { const b = document.querySelector('.feed-edit .card-sheet');
+    return { head: b.querySelector('.post-head h2').textContent, cancel: !!b.querySelector('.post-head button.post-not-now'), score: b.querySelector('.post-pic .feed-stats').textContent,
+      save: Math.round(b.querySelector('.post-go').getBoundingClientRect().width - b.querySelector('.post-name').getBoundingClientRect().width) }; });
+  check(ed.head === 'Edit post' && ed.cancel && /Vetta Score701/.test(ed.score) && Math.abs(ed.save) <= 2, 'Edit post is the post sheet: ' + JSON.stringify(ed));
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/edit-post.png` });
   await page.fill('.feed-edit input[aria-label="Drive name"]', 'Skyway at dawn');
   await page.fill('.feed-edit textarea', 'Fog on top.');
   await page.click('.feed-edit button:text-is("Save")');
