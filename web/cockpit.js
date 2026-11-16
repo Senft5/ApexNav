@@ -5796,26 +5796,44 @@
       paintExplore();
       if (!e) { box.hidden = true; box.replaceChildren(); return; }
       lastExplore = e;
-      // finding 7: every number under a named column, its unit beside it: no bare "10 · 2.1 mi · 9 min"
-      const cells = (name, good, len, away) => { const g = document.createElement('span'); g.className = 'nb-cells'; g.append(name, good, len, away); return g; };
-      const span = (text, unit) => { const x = document.createElement('span'); x.textContent = text; if (unit) { const u = document.createElement('small'); u.textContent = unit; x.append(u); } return x; };
-      const head = document.createElement('div'); head.className = 'nb-head'; head.setAttribute('aria-hidden', 'true');
-      head.append(cells(span('Road'), span('Good corners'), span('Length'), span('Drive there')), span(''));
+      // Each road is a row of one card (2026-11-16, Nate: "always just kind of a list of things"; it was a table under four
+      // column heads): the road's own shape on a tile, its name, and one line under it where every number carries its word
+      // (finding 7: never a bare "10 · 2.1 mi · 9 min"). The row plans the road; ⓘ opens About.
+      const NS = 'http://www.w3.org/2000/svg';
+      const shape = (s) => {
+        const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', '0 0 40 40'); svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('class', 'nb-shape');
+        const n = s.lat.length; if (!n) return svg;
+        const k = Math.cos(s.lat[0] * Math.PI / 180);
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+        for (let i = 0; i < n; i++) { const x = s.lon[i] * k, y = -s.lat[i]; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+        const f = 30 / Math.max(x1 - x0, y1 - y0, 1e-9), ox = 20 - (x1 - x0) * f / 2, oy = 20 - (y1 - y0) * f / 2;
+        const pt = (i) => [ox + (s.lon[i] * k - x0) * f, oy + (-s.lat[i] - y0) * f].map((v) => v.toFixed(1));
+        const step = Math.max(1, Math.floor(n / 60)), d = [];
+        for (let i = 0; i < n; i += step) d.push((d.length ? 'L' : 'M') + pt(i).join(' '));
+        d.push('L' + pt(n - 1).join(' '));
+        const path = document.createElementNS(NS, 'path'); path.setAttribute('d', d.join(''));
+        const dot = document.createElementNS(NS, 'circle'); const [cx, cy] = pt(0); dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dot.setAttribute('r', '2.6');
+        svg.append(path, dot); return svg;
+      };
       const rows = e.picks.map((p, i) => {
         const b = document.createElement('button'); b.className = 'nb-go';
         const name = document.createElement('b'); name.textContent = roadLabel(p.s.name);
-        const [lv, ...lu] = ApexUnits.long((p.s.km) * 1000, 1).split(' '), away = Math.max(1, Math.round(p.awayS / 60));
-        b.append(cells(name, span(String(p.s.good)), span(lv, lu.join(' ')), span(String(away), 'min')));
-        b.setAttribute('aria-label', `${name.textContent}: ${p.s.good} good corners, ${lv} ${lu.join(' ')} long, ${away} minutes to drive there. Plan it.`);
+        const len = ApexUnits.long((p.s.km) * 1000, 1), away = Math.max(1, Math.round(p.awayS / 60));
+        const sub = document.createElement('span'); sub.className = 'nb-sub';
+        sub.textContent = `${p.s.good} good ${p.s.good === 1 ? 'corner' : 'corners'} · ${len} · ${away} min away`;
+        const text = document.createElement('span'); text.className = 'nb-text'; text.append(name, sub);
+        b.append(shape(p.s), text);
+        b.setAttribute('aria-label', `${name.textContent}: ${p.s.good} good ${p.s.good === 1 ? 'corner' : 'corners'}, ${len} long, ${away} minutes to drive there. Plan it.`);
         b.addEventListener('click', () => driveStage(i));
         // what the road is like (road_page.js, IDEAS Q-13)
-        const about = document.createElement('button'); about.className = 'linkbtn'; about.textContent = 'About';
+        const about = document.createElement('button'); about.className = 'nb-about'; about.type = 'button';
         about.setAttribute('aria-label', `About ${name.textContent}`);
+        about.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle class="dot" cx="12" cy="7.6" r="1.2"/></svg>';
         about.addEventListener('click', () => openRoadPage(p.s, () => driveStage(i)));
         const row = document.createElement('div'); row.className = 'nb-row'; row.append(b, about);
         return row;
       });
-      box.replaceChildren(...(e.picks.length ? [head, ...rows] : []));
+      box.replaceChildren(...rows);
       box.hidden = !e.picks.length;
       if (e.picks.length && mapReady && state.mode !== 'live') {
         let w = e.here.lon, ea = e.here.lon, so = e.here.lat, n = e.here.lat;

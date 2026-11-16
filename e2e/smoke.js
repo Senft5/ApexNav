@@ -13999,7 +13999,7 @@ flow('the map\'s viewpoint, café and fuel stamps along a route never pile up: o
   check(named && close === 'Big Overlook', 'close in, the viewpoint stamp says its name: ' + close);
 }, IPHONE);
 
-flow('plan flow (c) best roads nearby in 3 taps: the chip under Where to?, a road in a list with named columns, Start (finding 7)', async (page, base) => {
+flow('plan flow (c) best roads nearby in 3 taps: the chip under Where to?, a road in a card of rows, Start (finding 7)', async (page, base) => {
   await planRouter(page);
   const { taps, tap } = await planPage(page, base);
   // the tiles are blocked here: the roads come from a stand-in for the map's stage finder, near the phone
@@ -14013,15 +14013,14 @@ flow('plan flow (c) best roads nearby in 3 taps: the chip under Where to?, a roa
   await tap('#deckNearby', 'Best roads nearby');
   await page.waitForSelector('#nearbySheet.open #exploreList .nb-go', { timeout: 15000 });
   await page.waitForTimeout(300);
-  const list = await page.evaluate(() => ({ head: [...document.querySelectorAll('#exploreList .nb-head .nb-cells > span')].map((s) => s.textContent),
-    row: [...document.querySelectorAll('#exploreList .nb-row')[0].querySelectorAll('.nb-cells > *')].map((s) => s.textContent), label: document.querySelector('#exploreList .nb-go').getAttribute('aria-label'),
-    status: document.getElementById('nearbyStatus').textContent, sheetBottom: document.getElementById('nearbySheet').getBoundingClientRect().bottom,
-    nameW: document.querySelector('#exploreList .nb-go .nb-cells > b').getBoundingClientRect().width / document.querySelector('#exploreList .nb-go').getBoundingClientRect().width,
-    roadHead: !!document.querySelector('#exploreList .nb-head .nb-cells > span').offsetParent }));
-  check(JSON.stringify(list.head) === '["Road","Good corners","Length","Drive there"]', 'the columns are named: ' + JSON.stringify(list));
-  // a phone: the name has the row's whole width (four columns left it ~80 px, three lines), the numbers under it; no Road head
-  check(list.nameW > 0.95 && !list.roadHead, 'on a phone the road name gets its own line: ' + JSON.stringify({ nameW: list.nameW, roadHead: list.roadHead }));
-  check(list.row[0] === 'Test Ridge Road' && /^\d+$/.test(list.row[1]) && /^\d+(\.\d)?mi$/.test(list.row[2]) && /^\d+min$/.test(list.row[3]) && /good corners/.test(list.label), 'each number under its name, with its unit: ' + JSON.stringify(list));
+  const list = await page.evaluate(() => { const go = document.querySelector('#exploreList .nb-go');
+    return { name: go.querySelector('.nb-text > b').textContent, sub: go.querySelector('.nb-sub').textContent, label: go.getAttribute('aria-label'), shape: !!go.querySelector('svg.nb-shape path'),
+      about: document.querySelector('#exploreList .nb-row .nb-about').getAttribute('aria-label'), table: !!document.querySelector('#exploreList .nb-head'),
+      status: document.getElementById('nearbyStatus').textContent, sheetBottom: document.getElementById('nearbySheet').getBoundingClientRect().bottom }; });
+  // 2026-11-16: a card of rows, not a table under four heads: each road's shape, its name, one line where every number has its word
+  check(list.name === 'Test Ridge Road' && list.shape && !list.table, 'each road is a row with its shape and name: ' + JSON.stringify(list));
+  check(/^\d+ good corners? · \d+(\.\d)? mi · \d+ min away$/.test(list.sub) && /good corners?/.test(list.label), 'each number with its word, never bare: ' + JSON.stringify(list.sub));
+  check(list.about === 'About Test Ridge Road', 'the row has its own About key: ' + list.about);
   check(Math.abs(list.sheetBottom - 852) <= 1, 'the list slides up from the bottom: ' + list.sheetBottom);
   await scan(page, 'Best roads nearby');
   await tap('#exploreList .nb-go', 'the road');
@@ -14049,7 +14048,7 @@ flow('best roads nearby: About a road has its own Plan this road key, which plan
   await tap('#deckNearby', 'Best roads nearby');
   await page.waitForSelector('#nearbySheet.open #exploreList .nb-go', { timeout: 15000 });
   await page.waitForTimeout(300);
-  await page.click('#exploreList .nb-row:nth-child(3) .linkbtn');          // the second road's About (the head is the first child)
+  await page.click('#exploreList .nb-row:nth-child(2) .nb-about');        // the second road's About
   await page.waitForSelector('aside.side-pop.open[aria-label="About this road"] .find-key');
   const key = await page.evaluate(() => { const k = document.querySelector('aside.side-pop.open[aria-label="About this road"] .find-key'), r = k.getBoundingClientRect();
     return { text: k.textContent, inView: r.top >= 0 && r.bottom <= innerHeight, title: document.querySelector('aside.side-pop.open[aria-label="About this road"] h3').textContent }; });
