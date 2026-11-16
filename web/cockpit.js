@@ -8549,15 +8549,16 @@
         if (found === 'private') { nsec.append(el('p', { className: 'note', textContent: 'You\'re in a privacy zone, so crews nearby aren\'t looked up from here.' })); return; }
         const nearby = Array.isArray(found) ? found : [];
         if (nearbyRow) nearbyRow._count.textContent = nearby.length ? `${nearby.length} crew${nearby.length === 1 ? '' : 's'} near you` : '';   // U-125
-        if (!nearby.length) { nsec.append(el('p', { className: 'note', textContent: found ? 'No public crews near you yet.' : 'Couldn\'t look for crews nearby. Check signal.' })); return; }
+        if (!nearby.length) { nsec.append(el('p', { className: 'note', textContent: found ? 'No public crews near you yet. Start one below.' : 'Couldn\'t look for crews nearby. Check signal.' }), ...(found ? [] : [btn('Try again', redo, 'ink-btn')])); return; }
         const ntiles = el('div', { className: 'crew-tiles one' });   // P-26: one a row, the name whole
         for (const c of nearby) {
-          const t = el('div', { className: 'card' });
-          t.append(el('div', { className: 'crew-tile-head' }, el('b', { textContent: c.name }),
+          // a crew near you reads as its preview, the crew link's card (screen inventory 2026-11-16): its mark, name, one line, Join
+          const t = el('div', { className: 'card crew-link-card near-crew' });
+          t.append(el('div', { className: 'cl-head' }, el('span', { className: 'cl-badge', 'aria-hidden': 'true', textContent: String(c.name || '?').trim().charAt(0).toUpperCase() }), el('div', { className: 'crew-tile-head cl-words' }, el('b', { textContent: c.name }),
             el('span', { textContent: `${c.members} ${c.members === 1 ? 'member' : 'members'} · ${c.area_name}${Number.isFinite(c.km) ? ` · ${ApexUnits.long(Math.max(1609.344, c.km * 1000), 0)}` : ''}` }),
-            ...(c.about ? [el('em', { textContent: c.about })] : [])),
-            el('div', { className: 'row' },
-              btn('Join', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/join`); if (r.ok) { toast(`You joined ${c.name}.`); await askPublicSharing(c.id, c.name); openCrewId = c.id; redo(); } else toast(r.status === 429 ? 'You\'re in 10 crews already.' : 'Couldn\'t join. Try again.'); }, 'ink-btn solid'),
+            ...(c.about ? [el('em', { textContent: c.about })] : []))),
+            el('div', { className: 'row cl-keys' },
+              btn('Join crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/join`); if (r.ok) { toast(`You joined ${c.name}.`); await askPublicSharing(c.id, c.name); openCrewId = c.id; redo(); } else toast(r.status === 429 ? 'You\'re in 10 crews already.' : 'Couldn\'t join. Try again.'); }, 'ink-btn solid'),
               ...(safety ? [btn('Report', () => safety.report({ kind: 'crew', target: c.id, label: c.name, done: redo }), 'linkbtn')] : [])));
           ntiles.append(t);
         }

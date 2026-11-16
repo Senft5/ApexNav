@@ -8729,6 +8729,9 @@ flow('People, a new account: Friends is one sentence and the Invite key; Crews i
   await page.waitForSelector('.side-pop.open >> text=Tail of the Dragon Regulars');
   const tile = await page.evaluate(() => { const b = [...document.querySelectorAll('.side-pop.open .crew-tiles.one .crew-tile-head b')].find((x) => /Dragon/.test(x.textContent)); return { whole: b.scrollWidth <= b.clientWidth + 1, line: b.nextElementSibling.textContent }; });
   check(tile.whole && /118 members · Deals Gap · 34 mi/.test(tile.line), 'one crew a row, the name whole, the area and the distance under it (P-26): ' + JSON.stringify(tile));
+  // (2026-11-16) a crew near you is its preview card: its mark, the name, one line, Join crew
+  check(await page.textContent('.side-pop.open .near-crew:has-text("Tail of the Dragon") .cl-badge') === 'T' && await page.isVisible('.side-pop.open .near-crew:has-text("Tail of the Dragon") .cl-keys button.solid:text-is("Join crew")'), 'a crew near you: its mark and Join crew');
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/crews-near.png` });
   check(await page.isVisible('.side-pop.open input[aria-label="Crew name"]'), 'and Start a crew in the same sheet');
   // a public crew starts with nothing shared and asks on joining (the owner, 2026-11-11: on by default for friends and private crews)
   await page.click('.side-pop.open .crew-tiles .card:has-text("Tail of the Dragon") button:has-text("Join")');
