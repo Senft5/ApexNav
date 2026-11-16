@@ -117,7 +117,7 @@ enum ApexWebBundle {
 
     /// "Open in the app" links from the web (apexnav://open?invite=…): the page's own link parameters, and only those, carried
     /// over to the cockpit page, which handles them exactly as it does on the web. Anything else opens the app as usual.
-    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy", "go", "q", "road", "roadbook", "view", "friend", "post", "place", "chat"]   // q: a place said to Siri (base64url, ApexIntents.swift); go=drive: start a drive (IDEAS C-05); road: a road someone sent (web/road_link.js); view/friend/post/chat: a push's tap (ApexPush.swift)
+    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy", "go", "q", "road", "roadbook", "view", "friend", "post", "place", "chat", "join"]   // join=1: a convoy invite's Join convoy (ApexPush.swift); q: a place said to Siri (base64url, ApexIntents.swift); go=drive: start a drive (IDEAS C-05); road: a road someone sent (web/road_link.js); view/friend/post/chat: a push's tap (ApexPush.swift)
     private static let linkValue = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
     /// Universal links (the owner's domain, 2026-11-14): a shared link on vettadrive.app opens here when the app is installed
     /// (project.yml associated-domains; the Worker's apple-app-site-association lists which). A road comes in the fragment

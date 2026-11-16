@@ -171,11 +171,12 @@
    * `onChange(snapshot, what)` after anything changes: what = 'structure' (members, status, role, route, regroup) or 'motion'
    * (positions only), so the page can rebuild buttons rarely and move text often. `onHazard(event)` once per new hazard,
    * `onRetract(event)` when the leader takes one back, `onError(code, eventId)` when the server refused something,
-   * `onExtended({ expiresAtMs })` when the leader kept the convoy going.
+   * `onExtended({ expiresAtMs })` when the leader kept the convoy going, `onDeclined(handle)` when someone the leader
+   * invited in the app said Not now.
    */
   class ConvoyClient {
-    constructor({ apiFetch, wsUrl, WebSocketImpl, onChange = () => {}, onHazard = () => {}, onRetract = () => {}, onError = () => {}, onExtended = () => {}, onVoice = () => {}, now = () => Date.now(), setTimer = (f, ms) => setTimeout(f, ms), clearTimer = (t) => clearTimeout(t) }) {
-      Object.assign(this, { apiFetch, wsUrl, WS: WebSocketImpl || root.WebSocket, onChange, onHazard, onRetract, onError, onExtended, onVoice, now, setTimer, clearTimer });
+    constructor({ apiFetch, wsUrl, WebSocketImpl, onChange = () => {}, onHazard = () => {}, onRetract = () => {}, onError = () => {}, onExtended = () => {}, onVoice = () => {}, onDeclined = () => {}, now = () => Date.now(), setTimer = (f, ms) => setTimeout(f, ms), clearTimer = (t) => clearTimeout(t) }) {
+      Object.assign(this, { apiFetch, wsUrl, WS: WebSocketImpl || root.WebSocket, onChange, onHazard, onRetract, onError, onExtended, onVoice, onDeclined, now, setTimer, clearTimer });
       this.reset();
     }
     reset() {
@@ -183,12 +184,13 @@
       this.members = new Map(); this.positions = new Map(); this.events = new Map(); this.route = null; this.routeIdx = null; this.regroup = null;
       this.retry = 0; this.failedTries = 0; this.timer = null; this.lastPosAt = 0; this.pending = []; this.sent = new Map(); this.myProgress = null;
       this.voice = new Map();  // member key -> { key, muted }: who is on the convoy's voice channel (convoy_voice.js)
+      this.invited = [];       // the leader's only: [{ handle, untilMs, declined }] asked in the app who haven't joined
       this.routeVersion = 0;   // highest version seen or sent: a new share never reuses one that old hazards are anchored to
     }
     snapshot() {
       return { id: this.id, status: this.status, ctx: this.ctx, members: [...this.members.values()], positions: new Map(this.positions),
                events: [...this.events.values()].filter((e) => e.action === 'hazard'), route: this.route, routeIdx: this.routeIdx, regroup: this.regroup,
-               voice: new Map(this.voice), voiceReady: !!(this.ctx && this.ctx.voiceReady),
+               voice: new Map(this.voice), voiceReady: !!(this.ctx && this.ctx.voiceReady), invited: this.invited.slice(),
                unreachable: this.failedTries >= 5 };
     }
     changed(what = 'structure') { try { this.onChange(this.snapshot(), what); } catch (_) { /* UI errors never break the link */ } }
@@ -239,6 +241,7 @@
     adopt(ctx) {
       this.id = ctx.sessionId; this.ctx = ctx; this.status = 'connecting';
       for (const m of ctx.members || []) this.members.set(m.key, m);
+      this.invited = Array.isArray(ctx.invited) ? ctx.invited : [];
       this.changed();
     }
     /** The current link while it has 5+ minutes left; a fresh one (which kills the old) only when asked or when it is running out. */
@@ -338,6 +341,7 @@
           if (this.epoch !== null && m.context.leaderEpoch !== this.epoch) { this.events.clear(); this.lastSeq = 0; }   // server restarted: old events are void
           this.epoch = m.context.leaderEpoch; this.ctx = m.context; this.status = 'live';
           this.members = new Map(m.context.members.map((x) => [x.key, x]));
+          this.invited = Array.isArray(m.context.invited) ? m.context.invited : [];
           this.positions = new Map((m.positions || []).map((p) => [p.key, p]));
           this.setRoute(m.route); this.regroup = m.regroup || null;
           this.voice = new Map((m.context.voice || []).map((v) => [v.key, { key: v.key, muted: !!v.muted }]));
@@ -363,6 +367,12 @@
         case 'event': this.takeEvent(m.event); break;
         case 'route': this.setRoute(m.route); break;
         case 'regroup': this.regroup = m.regroup; break;
+        case 'invited': {                                                   // the leader's: who's invited changed (a Not now, a join)
+          if (!Array.isArray(m.invited)) return;
+          this.invited = m.invited;
+          if (m.declined) { try { this.onDeclined(m.declined); } catch (_) { /* UI */ } }
+          break;
+        }
         case 'extended': {                                                  // the leader kept it going: a later end, for everyone
           if (!this.ctx || !Number.isFinite(m.expiresAtMs)) return;
           const was = this.ctx.expiresAtMs;

@@ -60,8 +60,8 @@ export async function friendRequest(env: Env, v: Viewer, req: Request): Promise<
 /** Friends and incoming requests. Requests you sent are not listed (IDEAS Z-12): a row only for handles that exist would
  *  tell you which handles are real. The phone keeps what you sent and shows every one alike. */
 export async function friendList(env: Env, v: Viewer) {
-  return all<{ id: string; handle: string | null; name: string | null; status: string; incoming: number }>(env,
-    `SELECT u.id, u.handle, u.display_name AS name, f.status, (f.requested_by != ?1) AS incoming
+  return all<{ id: string; handle: string | null; name: string | null; photo_id: string | null; status: string; incoming: number }>(env,
+    `SELECT u.id, u.handle, u.display_name AS name, u.photo_id, f.status, (f.requested_by != ?1) AS incoming
        FROM friendships f JOIN users u ON u.id = CASE WHEN f.user_a = ?1 THEN f.user_b ELSE f.user_a END
       WHERE (f.user_a = ?1 OR f.user_b = ?1) AND NOT (f.status = 'pending' AND f.requested_by = ?1) ORDER BY u.handle`, v.id);
 }

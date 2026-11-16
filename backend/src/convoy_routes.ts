@@ -1,6 +1,7 @@
 // The Worker side of convoys: checks the account and the request, then hands over to the convoy's Durable Object.
 import { APP_ORIGIN, type Viewer } from "./auth";
 import { type Result, CODE_ALPHABET, LIMITS, cleanText, codeHolder, roomStub, userIndex } from "./convoy";
+import { PUSH } from "./push";
 import { Env, HttpError, body, randomToken, str } from "./util";
 
 const ROOM_RE = /^[A-Za-z0-9_-]{22}$/;
@@ -85,10 +86,18 @@ export async function convoyInvitePeople(env: Env, v: Viewer, id: string, req: R
                       WHERE a.user_id = ?1 AND b.user_id = u.id AND c.visibility = 'private'))
         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = u.id) OR (b.blocker = u.id AND b.blocked = ?1))`)
     .bind(v.id, ...list).all<{ id: string }>()).results.map((r) => r.id);
-  if (!ok.length) return { invited: 0 };
+  if (!ok.length) return { invited: 0, push: null };
   const r = unwrap(await convoyRoom(env, id).inviteUsers(v.id, ok));
   await Promise.all(r.invited.map((uid) => userIndex(env, uid).addInvite(id, { name: r.name, from: r.leader, expiresAtMs: r.expiresAtMs }).catch(() => {})));
-  return { invited: r.invited.length };
+  // the push goes after the answer (index.ts): each one invited, told on their phone, its tap opening the invite's card
+  return { invited: r.invited.length, push: r.invited.length ? { to: r.invited, p: PUSH.convoy(r.leader, r.name, id, r.expiresAtMs) } : null };
+}
+
+/** The card an in-app invite opens (a push's tap, the convoy line): who leads, how many are in, until when; or why not. */
+export async function convoyInvitePreview(env: Env, v: Viewer, id: string) {
+  const r = await convoyRoom(env, id).invitedPreview(v.id);
+  if (!r.ok && (r.status === 404 || r.status === 400)) await userIndex(env, v.id).dropInvite(id).catch(() => {});   // gone for good
+  return unwrap(r);
 }
 
 export async function convoyInvites(env: Env, v: Viewer) {
@@ -103,9 +112,11 @@ export async function convoyAccept(env: Env, v: Viewer, id: string, req: Request
   return ctx;
 }
 
+/** Not now: gone from your invites, and the leader sees you can't make it. */
 export async function convoyDismiss(env: Env, v: Viewer, id: string) {
   if (!ROOM_RE.test(id)) throw new HttpError(404, "no_convoy");
   await userIndex(env, v.id).dropInvite(id);
+  await roomStub(env, id).decline(v.id).catch(() => {});
   return { ok: true };
 }
 
