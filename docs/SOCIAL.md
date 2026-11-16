@@ -254,6 +254,9 @@ and in random batches so a trace cannot be re-assembled.
 - Nate (2026-11-16): "garage stealing their [Instagram's] profile page". The Garage opens on you as a profile
   (`web/profile_head.js`): your face (a tap changes it), your numbers (drives you posted, friends, crews; each a tap to
   them), your handle, the car you drive (your daily car, else your first), then Edit profile and Share profile.
+- Your cars as a strip under the head (`garage_ui.js` `strip`, 2026-11-16): each car its cover photo or a car mark, its
+  name and Daily; a tap opens its build thread, or shows its card below (Edit, the share switch). The last tile adds a car.
+  No cars, no strip: the empty bay below says Park your first car.
 - Edit profile: your photo and handle on one sheet (`PUT /api/me/handle`; a taken one says so), and Who sees what.
   Share profile copies a friend link (`POST /api/invites`, the same link Invite makes).
 - Your drives, three across (`drive_posts.js` `grid`): each tile the road it drew with its Score on it; a tap opens the

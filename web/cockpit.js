@@ -8585,7 +8585,9 @@
       if (crewStandings && myCrews.length) cbody.append(crewStandings.section());
       document.querySelectorAll('.side-pop.people-pop').forEach(n => n.remove());       // People's sheets: on the page, not inside the sliding sheet
       document.body.append(...pops);
-      if (garage) gbody.append(garage.section());
+      if (garage) { const gsec = garage.section();
+        if (gsec.strip && head && head.parentNode) head.after(gsec.strip);   // your cars, under the profile's head (screen inventory)
+        gbody.append(gsec); }
       if (builds) gbody.append(builds.followingSection());
 
       // road feel + account

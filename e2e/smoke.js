@@ -8056,6 +8056,17 @@ flow('Garage → You is your profile: your numbers, Edit profile, and your drive
   const grid = await page.evaluate(() => { const t = [...document.querySelectorAll('#garageMeBody .post-grid .post-tile')], r = t[0].getBoundingClientRect(), r2 = t[1].getBoundingClientRect(), r4 = t[3].getBoundingClientRect();
     return { n: t.length, square: Math.abs(r.width - r.height) < 2, row: Math.abs(r.top - r2.top) < 1 && r4.top > r.bottom - 1, score: t[0].querySelector('.post-tile-score').textContent, label: t[0].getAttribute('aria-label') }; });
   check(grid.n === 5 && grid.square && grid.row && grid.score === '701' && grid.label === 'Drive 1, Vetta Score 701, 2026-11-12', 'three across, square tiles with their Score: ' + JSON.stringify(grid));
+  // your cars: a strip right under the head, each car one tap; the last chip adds one (screen inventory 2026-11-16)
+  await page.waitForSelector('#garageMeBody .ph + .car-strip:not([hidden]) .car-chip');
+  if (process.env.SHOTS) { await page.evaluate(() => document.querySelector('#garageMeBody .ph').scrollIntoView()); await page.screenshot({ path: `${process.env.SHOTS}/garage-cars-strip.png` }); }
+  const strip = await page.evaluate(() => [...document.querySelectorAll('#garageMeBody .car-strip .car-chip')].map((b) => b.innerText.replace(/\s+/g, ' ').trim()));
+  check(JSON.stringify(strip) === JSON.stringify(['Honda S2000', 'Mazda MX-5 Daily', 'Add a car']), 'the car strip: ' + JSON.stringify(strip));
+  check(!(await page.$('#garageMeBody .garage-cards ~ .row button:text-is("Add a car")')), 'one Add a car, on the strip');
+  await page.click('#garageMeBody .car-strip .car-chip:has-text("MX-5")');
+  await page.waitForSelector('#garageMeBody .car-card.lit[data-car="C2"]');
+  await page.click('#garageMeBody .car-strip .car-chip.add');
+  await page.waitForSelector('#garageMeBody .car-form');
+  await page.click('#garageMeBody .car-form ~ .row button:text-is("Cancel"), #garageMeBody button:text-is("Cancel")');
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/garage-profile.png` });
   // Edit profile: your photo and handle on one sheet; a taken handle says so and stays open
   await page.click('#garageMeBody .ph-keys button:text-is("Edit profile")');
