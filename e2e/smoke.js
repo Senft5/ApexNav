@@ -8053,6 +8053,9 @@ flow('the full Feed picks whose posts (All, Friends or one crew) and mutes a dri
   await page.click('#feedBody .feed-pick button:has-text("All")');
   await until(() => document.querySelectorAll('#feedBody .feed-card').length === 5, 'All again');
   await page.click('#feedBody .feed-card .feed-more');
+  // the menu slides up (sheet-up, 0.2 s); on a busy runner a tap mid-slide landed on the backdrop and closed it (CI 2026-11-16)
+  await page.waitForSelector('.feed-menu button:has-text("Mute @bob")');
+  await page.waitForFunction(() => !document.getAnimations().some((a) => a.animationName === 'sheet-up' && a.playState === 'running'));
   await page.click('.feed-menu button:has-text("Mute @bob")');
   await until(() => !document.querySelector('#feedBody .feed-card'), 'muted');
   check(await page.textContent('#feedBody .feed-muted') === 'Muted@bobUnmute' && await page.evaluate(() => localStorage.getItem('apex.feedMuted')) === '["bob"]',
