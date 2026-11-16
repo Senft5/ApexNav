@@ -1454,6 +1454,9 @@ flow('a loop our router fails to finish says so (not "try another length") and r
 // built from the ranking's own data, in your units, after the card is up; nothing it says is unknown to the data.
 flow('route overview: the card says what the drive is like in plain words, from the route\'s own data', async (page, base) => {
   graphDir = graphFixture();
+  // the conditions read the clock (school buses, deer, dark): pinned to a weekday midday, so no line follows the hour CI
+  // runs at (at 11:20 UTC it said "school buses out after dark", 2026-11-16)
+  await page.clock.setFixedTime(new Date('2026-11-10T17:00:00Z'));
   try {
     await ownTrip(page, base, 'fun');
     await page.waitForFunction(() => !document.getElementById('routeCardStory').hidden, null, { timeout: 5000 });

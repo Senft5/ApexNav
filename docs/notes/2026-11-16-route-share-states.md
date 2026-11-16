@@ -13,3 +13,8 @@
 - What: the e2e flow "plan flow (a)" now pins the page clock to 2026-11-10 17:00 UTC.
 - Why: with no forecast, the ranking reads the sun and the calendar; run at 11:00 UTC (before sunrise) the swap's reason became "Weather ahead" and the check failed, on main too.
 - Undo: drop the setFixedTime line at the top of that flow.
+
+## 2026-11-16: route overview flow pins its clock; the trial plate's keys wrap as one
+- What: the e2e flow "route overview" pins the page clock to 2026-11-10 17:00 UTC; on the theme trial plate, Watch a replay and Stop sit in one nowrap span with 4 px (was 6 px) side tap padding.
+- Why: at 11:20 UTC the overview said "school buses out after dark" (the clock, not the data); the plate's two keys' tap areas met over the dot, or across a line break, so the safe-areas check failed some runs.
+- Undo: drop the setFixedTime line in that flow; put the old padding back and remove the `.trial-keys` span (web/index.html).
