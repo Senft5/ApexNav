@@ -155,6 +155,7 @@
     .cp-who-row { display: flex; align-items: center; gap: 12px; min-height: 48px; border: 0; border-top: 1px solid var(--rule); background: none; padding: 4px 0; font: inherit; font-weight: 600; color: inherit; text-align: left; }
     .cp-who-row:first-child { border-top: 0; } button.cp-who-row { cursor: pointer; }
     .cp-now { display: grid; gap: 8px; border-top: 1px solid var(--rule); padding-top: 8px; }
+    .cp-now-skel { display: block; height: 32px; width: 60%; border-radius: 8px; background: var(--rule); opacity: .55; }
     .cp-now .row { flex-wrap: wrap; gap: 8px; align-items: center; }
     .cp-now p { margin: 0; }
     .cp-best { font-family: var(--font-num); font-size: 26px; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; margin-right: 6px; }
@@ -361,9 +362,11 @@
     }
     // Remembered (P-03): who came, the best Score that day, and "I was there" for a crew-mate the convoy didn't count.
     function remembered(e, redo, person) {
-      const now = el('div', { className: 'cp-now' }, el('p', { className: 'note', textContent: 'Loading the drive\u2026' }));
-      apiCall('GET', `/api/events/${id(e)}/record`).then(jsonOf).catch(() => null).then((r) => {
-        if (!r || !Array.isArray(r.came)) { now.replaceChildren(el('p', { className: 'note', textContent: 'Couldn\u2019t load who came. Check signal.' })); return; }
+      // loading is the faces' place, quiet; no answer is one line and Try again (the shared states, screen inventory)
+      const now = el('div', { className: 'cp-now', 'aria-busy': 'true' }, el('i', { className: 'cp-now-skel', 'aria-label': 'Loading who came' }));
+      const load = () => apiCall('GET', `/api/events/${id(e)}/record`).then(jsonOf).catch(() => null).then((r) => {
+        now.removeAttribute('aria-busy');
+        if (!r || !Array.isArray(r.came)) { now.replaceChildren(el('p', { className: 'note', textContent: 'Couldn\u2019t load who came. Check signal.' }), el('div', { className: 'row' }, btn('Try again', () => { now.setAttribute('aria-busy', 'true'); now.replaceChildren(el('i', { className: 'cp-now-skel' })); load(); }, 'ink-btn'))); return; }
         const kids = [];
         if (r.i_came) keep(r, true);                                     // kept on the phone for Your year
         if (r.came.length && person) {
@@ -385,6 +388,7 @@
         }, 'linkbtn')));
         now.replaceChildren(...kids);
       });
+      load();
       return now;
     }
 

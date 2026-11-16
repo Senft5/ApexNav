@@ -7744,6 +7744,7 @@
     // Duels (web/duels.js, docs/SOCIAL.md 2.7): a friend against a friend on a stage, the higher Score in the days wins.
     let duels = null;
     onSocial(() => { try { duels = window.ApexDuels ? ApexDuels.mount({ el, btn, toast, apiCall, jsonOf, redo: () => renderAccount(),
+      openStages: () => showView('stages'), findFriends: () => showView('friends'),
       openStage: async (canon, name) => {
         let s = null;
         try { const r = await apiCall('GET', '/api/segments'); const l = r.ok ? await jsonOf(r) : null; s = Array.isArray(l) ? l.find((x) => (x.origin_id || x.id) === canon) : null; } catch (_) {}
