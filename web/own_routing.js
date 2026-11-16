@@ -343,7 +343,7 @@
     try {
       if (!(await client.covers(points))) return null;
       const from = points[0], to = points[points.length - 1];
-      const res = await client.through({ from, to, via: points.slice(1, -1).map((p) => ({ lat: p.lat, lon: p.lon })), level: o.level || 'quick', avoid: o.avoid, prefs: o.prefs, heading: from.heading });
+      const res = await client.through({ from, to, via: points.slice(1, -1).map((p) => ({ lat: p.lat, lon: p.lon, ...(p.shaping ? { shaping: true } : {}) })), level: o.level || 'quick', avoid: o.avoid, prefs: o.prefs, heading: from.heading });
       const c = res && res.route ? candidates({ routes: [res.route] })[0] : null;
       return c ? Object.assign(c.route, { timeS: c.timeS, own: c.own }) : null;
     } catch (_) { return null; }

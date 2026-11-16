@@ -109,7 +109,7 @@
     // is dropped
     LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 12, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_ALONG_N: 10, OUT_BACK_ROUTES: 2, OUT_BACK_NEXT_KM: 5, LOOP_MAX_RETRACED: 0.4, LOOP_DIRT_KM: 2, LOOP_DIRT_TRY: [0.7, 0.5, 1.4], STAGE_KM: 40, STAGE_ON_TURN: 0.5, STAGE_GAP_M: 4000, STAGE_JOIN_M: 6000, STAGE_NAME_TURN: 2.6, STAGE_PLAIN: 1,
     LOOP_CONN_FACTOR: 1.7, LOOP_CONN_A: 3, LOOP_MAX_OFF: 0.6, LOOP_NEAR_OFF: 0.15, LOOP_RING_OFF: 0.3, LOOP_RETRIES: 4, LOOP_REFITS: 2, LOOP_CONN_A_SHORT: 1, LOOP_CONN_A_LONG: 6, LOOP_FIT_OFF: 0.12,   // a connector's road length over its crow line, the router's detours to good road in it (Cincinnati, 2026-11-04)
-    SNAP_M: 1500, GRID_DEG: 0.01, LIVE_NODES: 200, LIVE_TRIES: 4,   // a snap's road reaches LIVE_NODES or it's an island (snapLive)
+    SNAP_M: 1500, SHAPE_SNAP_M: 60, GRID_DEG: 0.01, LIVE_NODES: 200, LIVE_TRIES: 4,   // a snap's road reaches LIVE_NODES or it's an island (snapLive)
     // long trips (2026-11-15): a corridor over LONG_TILES tiles (about 150 km crow at Fun, 100 at Long way) is cut to a
     // band of BAND_M round a spine, the quickest way on a band of SPINE_M (SPINE_SHARE x the crow line) round the straight
     // line. Cincinnati to Asheville at Fun: 580 tiles (258 MB) and 39 s became 72 tiles and 6 s; Long way's 1,271 tiles
@@ -518,8 +518,12 @@
     const legs = [], pts = [...(req.via || []), req.to];
     let at = req.from;
     for (const [k, p] of pts.entries()) {
-      let dst = snap(v, p.lat, p.lon);
-      if (!dst.length) { if (k === pts.length - 1) throw new Error('no road near the end'); continue; }   // a via off the network: passed by
+      const end = k === pts.length - 1;
+      // At Fun and Long way a shaping point (a hint along the planned line, not a stop) lands only on a through road within
+      // SHAPE_SNAP_M, never a residential or service street, a neighbourhood street or a dead end; with none it is passed
+      // by (the owner's 2026-11-16 Fun reroute drove a dead end and a neighbourhood loop to reach points like these)
+      let dst = free && !end && p.shaping ? snap(v, p.lat, p.lon, (e) => shapingEdge(v, e), K.SHAPE_SNAP_M) : snap(v, p.lat, p.lon);
+      if (!dst.length) { if (end) throw new Error('no road near the end'); continue; }   // a via off the network: passed by
       if (free) dst = snapOff(v, p, dst);
       const o = { ...(!legs.length && sc ? { startCost: sc } : {}), ellipse: ellipseFor(at, p, 'quick') };
       let res = null;
@@ -2129,6 +2133,13 @@
   function throughEdge(v, e) {
     const B = v.bits || flagBits();
     return v.cls[e] > CLS.trunk && v.cls[e] <= CLS.unclassified && !(v.flags[e] & (B.ramp | B.private | B.destination)) && !neighbourhoodEdge(v, e);
+  }
+  /** An edge a shaping point may land on: a road to drive through (trunk to unclassified), no ramp, private or destination
+   * road, no neighbourhood street, and no dead end at either end. */
+  function shapingEdge(v, e) {
+    const B = v.bits || flagBits();
+    return v.cls[e] <= CLS.unclassified && !(v.flags[e] & (B.ramp | B.private | B.destination)) && !neighbourhoodEdge(v, e)
+      && !deadEndAt(v, v.to[e]) && !deadEndAt(v, v.tail[e]);
   }
   /** A real dead end at node n (one neighbour), not the edge of the tiles loaded (an edge into a tile not in the view). */
   function deadEndAt(v, n) {

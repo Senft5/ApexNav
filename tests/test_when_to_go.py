@@ -171,4 +171,7 @@ def test_the_page_loads_the_sun_and_the_forecast_words_before_the_providers_that
             assert at("sun.js") < at(provider)
     if "'route_ctx/conditions.js'" not in lazy:
         assert at("route_weather.js") < at("route_ctx/conditions.js")
-    assert at("route_ctx/registry.js") < at("when_to_go.js") and at("route_engine.js") < at("when_to_go.js")
+    if "'when_to_go.js'" in lazy:   # loads with the context, after the launch's registry and engine
+        assert '<script src="when_to_go.js"' not in html and at("route_ctx/registry.js") >= 0 and at("route_engine.js") >= 0
+    else:
+        assert at("route_ctx/registry.js") < at("when_to_go.js") and at("route_engine.js") < at("when_to_go.js")
