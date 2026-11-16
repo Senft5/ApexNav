@@ -6,6 +6,11 @@
 
 # CALL SHEET
 
+## 2026-11-16 Feedback's switches on one card, Send across the page
+- What: feedback.js: a switch's name is short ("Attach diagnostics", "I'd like a reply") with what it sends as a small line under it, still on the row (U-135); the two sit in `.fb-switches`, one card. Send is full width.
+- Why: the labels were one long sentence in brackets and Send a small pill at the foot of the page.
+- Undo: revert feedback.js and the "Feedback:" CSS block.
+
 ## 2026-11-16 One label style over a setting's controls; Account's keys as rows
 - What: Privacy zones' "Size of a new zone", Units' "Driving side" and Spots' "How far loops go out of their way" get `group-label` (the small caps line "Take a copy" already used). On Account, Download my data and Sign out are rows on one card and Delete account sits on its own card, in red, as Your data's rows are. CSS only, scoped to `.garage-pop`.
 - Why: the same Settings pages mixed grey sentences and small caps as labels, and Account was the one page of loose pills.
