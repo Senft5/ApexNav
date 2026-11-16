@@ -1526,6 +1526,25 @@
     #zoneList > .row .linkbtn { min-height: 44px; padding: 0 2px; text-decoration: none; font-weight: 600; color: var(--panel-dim); }
     /* a setting's page reads as grouped rows, as the phone's own Settings does: each switch a row on a quiet card, each field a
        well of its own, full width; the words about it sit under it, small */
+    /* The Garage's own page (2026-11-16): Look and voice and Co-driver read as titled groups with their rows on one card, as a
+       Settings page does, not a run of labels and hairlines. A control's label is the group's small caps line over its control. */
+    :is(#lookSection, #coSection) > h3, .sheet #garageMeBody > h3, .sheet #garageMeBody > :is(section, div) > h3:first-child { font-size: 22px; border-top: 0; padding-top: 22px; margin: 0 0 12px; }
+    .sheet :is(#lookSection, #coSection) .ctl { margin-top: 18px; }
+    .sheet :is(#lookSection, #coSection) .ctl-label { font-size: 12px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--panel-dim); margin: 0 0 8px 2px; }
+    :is(#lookSection, #coSection) > p.note { margin: 8px 2px 0; font-size: 13px; }
+    .co-card { margin-top: 18px; padding: 0 14px; border-radius: var(--r-card, 12px); background: var(--well, color-mix(in srgb, var(--panel-ink) 6%, var(--panel))); }
+    .co-card .switches { display: block; }
+    .sheet .co-card .sw { min-height: 52px; }
+    .co-card > :first-child { border-top: 0; }
+    .co-card .co-row { min-height: 52px; }
+    .co-card .co-row + .switches > .sw:first-child, .co-card > .sw { border-top: 1px solid var(--hair, var(--panel-dim)); }
+    #coNotesHere { font-size: 15px; }
+    #coNotesHere .linkbtn { font-size: 15px; font-weight: 600; text-decoration: none; }
+    #coNotesHere .linkbtn::after { content: "  \203A"; }
+    /* the Soundtrack's sample hangs off its own row, not as a row of its own */
+    .co-card #soundtrackRow { min-height: 0; margin: -10px 0 0; padding: 0 0 12px; }
+    .co-card #soundtrackRow .linkbtn { font-size: 14px; font-weight: 500; color: var(--panel-dim); min-height: 32px; text-decoration: none; }
+    .co-card #soundtrackRow .linkbtn::before { content: "\25B6\FE0E  "; font-size: 10px; }
     .garage-pop .sw { min-height: 52px; padding: 0 14px; border-top: 0; border-radius: var(--r-card, 12px); background: var(--well, color-mix(in srgb, var(--panel-ink) 6%, var(--panel))); }
     .garage-pop .sw span { font-size: 16px; }
     .garage-pop .sw + .sw { margin-top: 8px; }
@@ -2650,6 +2669,8 @@
             <!-- SO-1 (panel round 2): one setting, one home. Notes and Voice live in the map's Layers, where a drive reaches them -->
             <!-- design pass 2026-11-10: a row like the ones under it (what it is now on the left, where to change it on the right); the
                  sentence broke over two lines with the link dropped under its own full stop -->
+            <!-- 2026-11-16 (Nate: "always just kind of a list of things"): what else the co-driver does is one card of rows, like a Settings page -->
+            <div class="co-card">
             <p class="co-row" id="coNotesHere"><span id="coNotesNow">Notes: Auto</span><button class="linkbtn" id="coNotesLink">Change in Layers</button></p>
             <div class="switches">
               <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
@@ -2660,6 +2681,7 @@
             <!-- TestFlight 2026-11-12 (the owner: "walls of text"): the switch and its sample, no essay under them -->
             <p class="co-row" id="soundtrackRow"><button class="linkbtn" id="soundtrackHear">Hear a sample</button></p>
             <button class="sw" id="liveVoiceBtn" role="switch" aria-checked="false"><i></i><span>Speak road names</span></button>
+            </div>
             <p class="note" id="liveNote" role="status" aria-live="polite"></p>
           </section>
           <!-- dev mode (the owner, 2026-11-09): filled only while /api/me says this account is a developer (cockpit.js
