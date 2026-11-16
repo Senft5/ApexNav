@@ -52,6 +52,7 @@
   <script src="flyby.js"></script>
   <script src="challenges.js"></script>
   <script src="week_digest.js"></script>
+  <script src="log_coach.js"></script>
   <script src="corner_trace.js"></script>   <!-- one corner, two passes: the drive page's corner overlay -->
   <script src="driver_profile.js"></script>   <!-- Your driving: the profile across every drive -->
   <script src="legends.js"></script>
@@ -474,6 +475,9 @@
         <a class="fp-alt" href="index.html?drive=dry_ridge&amp;play=1">Watch a replay first</a>
       </div>
       <!-- the Log (REVIEW.md roadmap 13): one hero number, a quiet year line, challenges in one line, then the drives -->
+      <!-- the coach first (log_coach.js, Nate 2026-11-16): the news from your drives and the one thing to work on next -->
+      <section class="log-coach" id="logCoach" aria-label="Your coach" hidden><h2 id="logCoachHead"></h2><p id="logCoachWhy"></p><p class="note" id="logCoachTrend"></p><p id="logCoachNext"></p>
+        <div class="row mt-8" id="logCoachGoRow" hidden><button type="button" class="btn" id="logCoachGo">See the drive</button></div></section>
       <div class="log-hero" id="historyCards"></div>
       <!-- one quiet summary row (REVIEW2.md U-32): the year and this month's challenges in one line, the detail when opened -->
       <details class="quiet" id="yearPanel" hidden><summary id="yearTitle">--</summary><div id="yearLines" class="stack-8"></div>
@@ -551,7 +555,7 @@
   <nav class="tabbar" aria-label="Views">
     <a href="index.html" aria-label="Map"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span aria-hidden="true">Map</span></a>
     <a href="analysis.html?tab=log" id="navLog" aria-label="Log"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span aria-hidden="true">Log</span></a>
-    <a href="index.html?view=people" aria-label="People"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M15.5 14.2c2.6 0 5 1.8 5 5"/></svg><span aria-hidden="true">People</span></a>
+    <a href="index.html?view=people" aria-label="Social"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20h-5v-6H9v6H4z"/></svg><span aria-hidden="true">Social</span></a>
     <a href="index.html?view=garage" aria-label="Garage"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 10l9-6 9 6v10H3z"/><path d="M7 20v-7h10v7M7 16h10"/></svg><span aria-hidden="true">Garage</span></a>
   </nav>
 

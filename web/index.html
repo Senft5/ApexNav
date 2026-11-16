@@ -1647,6 +1647,18 @@
     .people-tabs > button[aria-selected="true"] { color: var(--panel-ink); }
     .people-tabs > button::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--panel-ink); transform: scaleX(0); transition: transform 0.18s ease-out; }
     .people-tabs > button[aria-selected="true"]::after { transform: none; }
+    .people-tabs > button:not([aria-selected="true"])::after { opacity: 0; }   /* a collapsed bar can still leave a pixel's sliver */
+    .people-tabs > button[hidden] { display: none; }
+    .people-tabs:has(> #peopleTabFeed:not([hidden])) { gap: 18px; }
+    .people-tabs:has(> #peopleTabFeed:not([hidden])) > button { font-size: 20px; }
+    /* Social home (2026-11-16): For you and Messages, two keys at the head's right on every side, as a feed app's are */
+    .social-keys { display: flex; gap: 2px; margin: -6px -4px -6px 4px; }
+    .social-keys[hidden] { display: none; }
+    .social-key { position: relative; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: none; color: var(--panel-ink); padding: 0; cursor: pointer; }
+    .social-key svg { width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+    .social-key .sk-dot { position: absolute; top: 9px; right: 8px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--panel); }
+    .social-key .sk-count { position: absolute; top: 4px; right: 2px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: var(--accent); color: #fff; font: 700 11px/18px var(--font-ui, inherit); text-align: center; box-shadow: 0 0 0 2px var(--panel); }
+    .social-key [hidden] { display: none; }
     /* In a crew, the Crews side opens on it: its name (in several, the key back to your crews) and the gear for its
        settings (REVIEW2.md U-30; TestFlight 2026-11-05) */
     .crew-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
@@ -2421,10 +2433,11 @@
       </div>
       <div class="scrim" id="scrim"></div>
       <aside class="sheet" id="sheet" aria-label="Menu" data-view="garage">
-        <header><h2 id="sheetTitle">Settings</h2><div class="sheet-head-slot" id="sheetHead"><div class="people-tabs" role="tablist" aria-label="People"><button type="button" role="tab" id="peopleTabFriends" data-people="friends" aria-selected="true" aria-controls="accountBody">Friends</button><button type="button" role="tab" id="peopleTabCrews" data-people="crews" aria-selected="false" aria-controls="crewsBody" tabindex="-1">Crews</button></div></div></header>
+        <header><h2 id="sheetTitle">Settings</h2><div class="sheet-head-slot" id="sheetHead"><div class="people-tabs" role="tablist" aria-label="Social"><button type="button" role="tab" id="peopleTabFeed" data-people="feed" aria-selected="false" aria-controls="feedBody" tabindex="-1" hidden>Feed</button><button type="button" role="tab" id="peopleTabFriends" data-people="friends" aria-selected="true" aria-controls="accountBody">Friends</button><button type="button" role="tab" id="peopleTabCrews" data-people="crews" aria-selected="false" aria-controls="crewsBody" tabindex="-1">Crews</button></div><div class="social-keys" id="socialKeys" hidden><button type="button" class="social-key" id="forYouKey" aria-label="For you"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z"/></svg><i class="sk-dot" hidden></i></button><button type="button" class="social-key" id="dmKey" aria-label="Messages"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 3 3 10.5l7 2.5 2.5 7z"/><path d="M10 13l11-10"/></svg><b class="sk-count" hidden></b></button></div></div></header>
         <div class="body">
           <!-- People (the owner, 2026-10-30): Friends, then Crews, two tabs in the header between them (REVIEW_PEOPLE pushback) -->
           <section data-panel="people" id="accountSection">
+            <div id="feedBody" class="stack-12" data-people-pane="feed" role="tabpanel" aria-labelledby="peopleTabFeed" hidden></div>
             <div id="accountBody" class="stack-12" data-people-pane="friends" role="tabpanel" aria-labelledby="peopleTabFriends"></div>
             <div id="crewsBody" class="stack-12" data-people-pane="crews" role="tabpanel" aria-labelledby="peopleTabCrews" hidden></div>
           </section>
@@ -2745,7 +2758,7 @@
       <nav class="tabbar" id="tabbar" aria-label="Views">
         <button class="tab on" data-view="map" aria-label="Map"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></button>
         <button class="tab" data-view="log" aria-label="Log"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></button>
-        <button class="tab" data-view="people" id="crewTab" aria-label="People"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M15.5 14.2c2.6 0 5 1.8 5 5"/></svg><span>People</span></button>
+        <button class="tab" data-view="people" id="crewTab" aria-label="Social"><svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20h-5v-6H9v6H4z"/></svg><span>Social</span></button>
         <button class="tab" data-view="garage" aria-label="Garage"><svg viewBox="0 0 24 24"><path d="M3 10l9-6 9 6v10H3z"/><path d="M7 20v-7h10v7M7 16h10"/></svg><span>Garage</span></button>
       </nav>
     </section>

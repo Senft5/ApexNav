@@ -7,7 +7,7 @@
 // line(), fresh(), ago() are pure (tests/test_inbox.py); mount() draws the section on People → Friends.
 (function (root) {
   'use strict';
-  const SEEN_KEY = 'apex.inboxSeen', SHOWN = 8;
+  const SEEN_KEY = 'apex.inboxSeen', SHOWN = 8, SHEET_SHOWN = 40;
   /** Rows People already shows as cards with their own keys: counted in the badge, not repeated in the list. */
   const CARDED = new Set(['request', 'duel_ask']);
   const tsOf = (at) => { const t = Date.parse(String(at || '').replace(' ', 'T') + 'Z'); return Number.isFinite(t) ? t : NaN; };
@@ -76,7 +76,8 @@
   const STYLE = `
     .inbox { display: grid; gap: 0; }
     .inbox-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--panel-rule, rgba(0,0,0,0.12)); }
-    .inbox-row:first-of-type { border-top: 0; }
+    .inbox-row:first-of-type, .inbox-group + .inbox-row { border-top: 0; }
+    .inbox-group { margin: 14px 0 2px; font-size: 13px; font-weight: 700; color: var(--panel-dim); } .inbox-group:first-child { margin-top: 0; }
     .inbox-row p { margin: 0; } .inbox-text { font-size: 15px; line-height: 1.35; }
     .inbox-kick { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--panel-dim); }
     .inbox-row.new .inbox-kick::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 6px; vertical-align: 1px; }
@@ -126,18 +127,25 @@
     }
     /** The For you section on People → Friends: filled when the list arrives, hidden while there is nothing to say. The
      *  rows newer than last time keep their dot until People is drawn again. */
-    function section() {
-      const box = el('section', { className: 'inbox-sec' }); box.hidden = true;
+    function section(so = {}) {
+      // so.sheet: For you as its own sheet (the Social head's heart, 2026-11-16): the sheet's head names it, the new rows
+      // stand under New and the rest under Earlier, more of them, and an empty list says so in a line
+      const sheet = !!so.sheet;
+      const box = el('section', { className: `inbox-sec${sheet ? ' inbox-sheet' : ''}` }); box.hidden = !sheet;
       const head = el('h3', { textContent: 'For you' });
       // what was seen when this list was drawn, read now: an earlier draw's answer landing once People is on screen marks
       // the list seen, and this draw's rows would lose their dot before the driver saw them (CI, PR #677)
       const seen = seenGet();
       refresh().then((data) => {
         const now = data && data.now ? tsOf(data.now) : Date.now();
-        const rows = (data && Array.isArray(data.items) ? data.items : []).filter((i) => !CARDED.has(i.kind)).map((i) => ({ i, l: line(i) })).filter((x) => x.l).slice(0, SHOWN);
+        const rows = (data && Array.isArray(data.items) ? data.items : []).filter((i) => !CARDED.has(i.kind)).map((i) => ({ i, l: line(i) })).filter((x) => x.l).slice(0, sheet ? SHEET_SHOWN : SHOWN);
         const list = el('div', { className: 'inbox', role: 'list' });
+        let group = null;
         for (const { i, l } of rows) {
           const isNew = typeof i.at === 'string' && i.at > seen;
+          // newest first, so the new rows come first: New over them, Earlier once the old ones start (none if nothing is new)
+          if (sheet && isNew && group === null) { group = true; list.append(el('h4', { className: 'inbox-group', textContent: 'New' })); }
+          else if (sheet && !isNew && group === true) { group = false; list.append(el('h4', { className: 'inbox-group', textContent: 'Earlier' })); }
           const row = el('div', { className: `inbox-row${isNew ? ' new' : ''}`, role: 'listitem' },
             el('p', { className: 'inbox-kick', textContent: `${l.kicker}${ago(i.at, now) ? ` · ${ago(i.at, now)}` : ''}` }));
           if (isNew) row.setAttribute('aria-label', `New. ${l.kicker}. ${l.text}`);
@@ -145,8 +153,11 @@
           row.append(el('p', { className: 'inbox-text', textContent: l.text }));
           list.append(row);
         }
-        box.replaceChildren(head, list);
-        box.hidden = !rows.length;
+        if (sheet) {
+          if (!data) list.append(el('p', { className: 'note', textContent: root.navigator && root.navigator.onLine === false ? 'You’re offline. This fills in when you’re back.' : 'Can’t reach Vetta. Try again in a moment.' }));
+          else if (!rows.length) list.append(el('p', { className: 'note', textContent: 'Nothing yet. Kudos, comments and challenges land here.' }));
+          box.replaceChildren(list);
+        } else { box.replaceChildren(head, list); box.hidden = !rows.length; }
         if (page.onScreen()) markSeen();
       });
       return box;

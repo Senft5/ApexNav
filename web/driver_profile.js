@@ -1131,7 +1131,7 @@
     }
   }
 
-  const api = { SKILLS, observe, cornerResult, MISS, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadEvenedLine, roadsToWork, skillRoadLine, skillRoad, roadUnevenLine, roadEndLine, cardLine, focusLines, scopeLine, skillDef, trendLabel, sayFindings, render,
+  const api = { SKILLS, sideWords, observe, cornerResult, MISS, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadEvenedLine, roadsToWork, skillRoadLine, skillRoad, roadUnevenLine, roadEndLine, cardLine, focusLines, scopeLine, skillDef, trendLabel, sayFindings, render,
     PRACTICE_MIN, practice, drivePractice, onPlanRoad, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

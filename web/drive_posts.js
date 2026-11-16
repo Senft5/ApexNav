@@ -230,6 +230,19 @@
     .feed-stats small { color: var(--panel-dim); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
     .feed-stats b { font-family: var(--font-num); font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
     .feed-stats b span { font-family: inherit; font-size: 15px; font-weight: 600; color: var(--panel-dim); margin-left: 3px; }
+    .feed-pic { position: relative; }
+    .feed-pic { display: grid; }
+    /* the numbers on a strip under the road, never over it (an overlay hid the line's end) */
+    .feed-pic .feed-stats { padding: 10px 0 0; }
+    .post-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; margin: 0 -16px; }
+    .post-tile { position: relative; aspect-ratio: 1; border: 0; padding: 0; background: var(--well, var(--raised, rgba(0,0,0,0.05))); color: var(--panel-ink); cursor: pointer; overflow: hidden; display: grid; place-items: center; }
+    .post-tile svg { width: 100%; height: 100%; display: block; }
+    .post-tile path { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .post-tile-name { padding: 8px; font-weight: 600; font-size: 13px; text-align: center; overflow-wrap: anywhere; }
+    .post-tile-score { position: absolute; left: 6px; bottom: 6px; padding: 1px 6px; border-radius: 6px; background: rgb(10 10 11 / 0.82); color: #F5F5F7; font: 700 14px var(--font-num); }
+    .post-tile-media { position: absolute; right: 6px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: #F5F5F7; box-shadow: 0 0 0 2px rgb(10 10 11 / 0.6); }
+    .post-grid-say { display: grid; justify-items: start; gap: 8px; padding-top: 10px; }
+    .feed-view-all { justify-self: start; border: 0; background: none; padding: 0; min-height: 32px; color: var(--panel-dim); font: inherit; font-size: 14px; cursor: pointer; }
     .feed-line { width: 100%; max-width: 90vh; height: auto; aspect-ratio: 2 / 1; display: block; background: var(--well, rgba(0,0,0,0.05)); }
     /* a phone on its side: the line at most half the screen's height, so the post's words and keys stay in view */
     .feed-line path { fill: none; stroke: var(--accent); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
@@ -360,10 +373,13 @@
         head.style.cursor = 'pointer'; head.addEventListener('click', (e) => { if (!e.target.closest('.feed-more')) page.openFriend(p.handle); });
       }
       head.append(moreKey(p, o));
-      box.append(head, el('h3', { className: 'feed-title', textContent: p.title }));
+      // the post reads as a road first (Nate 2026-11-16, Social home): who, then the road it drew with its numbers on it, then
+      // the keys, then its name and words. The words come after the picture, as in every feed people know.
+      box.append(head);
+      const words = [el('h3', { className: 'feed-title', textContent: p.title })];
       const along = withLine(p.with, page.myHandle ? page.myHandle() : null);   // who came, from the crew drive's record
-      if (along) box.append(el('p', { className: 'feed-with', textContent: along }));
-      if (p.caption) box.append(el('p', { className: 'feed-caption', textContent: p.caption }));
+      if (along) words.push(el('p', { className: 'feed-with', textContent: along }));
+      if (p.caption) words.push(el('p', { className: 'feed-caption', textContent: p.caption }));
       // the numbers a driver reads first, Strava's row: Score, then the length (unknown stays --)
       const stat = (label, v, unit) => { const b = el('b', { textContent: v }); if (unit) b.append(el('span', { textContent: unit }));
         return el('div', {}, el('small', { textContent: label }), b); };
@@ -371,8 +387,8 @@
       const stats = el('div', { className: 'feed-stats' }, stat('Vetta Score', p.score == null ? '--' : String(p.score)));
       if (Number.isFinite(p.length_m) && p.length_m > 0) { const m = /^([\d.,]+)\s*(.*)$/.exec(fmtLen(p.length_m)) || [];
         stats.append(m[1] ? stat('Distance', m[1], m[2]) : stat('Distance', fmtLen(p.length_m))); }
-      box.append(stats);
       const pts = p.line ? decode(p.line) : [];
+      if (pts.length < 2) box.append(stats);                           // no line kept: the numbers stand on their own
       if (pts.length > 1) {                                             // the road it drew, wide, from the start ring to the red finish dot
         const W = 340, H = 170, NS = 'http://www.w3.org/2000/svg', svg = doc.createElementNS(NS, 'svg'), path = doc.createElementNS(NS, 'path');
         svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('class', 'feed-line'); svg.setAttribute('aria-hidden', 'true');
@@ -381,7 +397,8 @@
         const xy = d.match(/-?[\d.]+ -?[\d.]+/g) || [];
         [[xy[0], 'go', 5.5], [xy[xy.length - 1], 'end', 6]].forEach(([q, cls, r]) => { if (!q) return; const [x, y] = q.split(' ');
           const c = doc.createElementNS(NS, 'circle'); c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', r); c.setAttribute('class', cls); svg.append(c); });
-        box.append(svg);
+        // the picture: the road, then its numbers on a strip right under it
+        box.append(el('div', { className: 'feed-pic' }, svg, stats));
         // the streets round it (post_map.js): one still picture of the real map, laid exactly under the line once drawn
         if (page.mapUnder) near(svg, () => Promise.resolve(page.mapUnder(p.id, pts, W, H, 18)).then((url) => {
           if (!url || !svg.isConnected) return;
@@ -389,8 +406,9 @@
         }).catch(() => {}));
       }
       if (p.media) box.append(mediaBox(p));
+      const after = [];   // under the words: the stages it went over, the roads
       if (Array.isArray(p.stages) && p.stages.length) {                // the saved stages it went over, each with its Score
-        box.append(el('div', { className: 'feed-stages' }, el('small', { textContent: p.stages.length === 1 ? 'Stage' : 'Stages' }),
+        after.push(el('div', { className: 'feed-stages' }, el('small', { textContent: p.stages.length === 1 ? 'Stage' : 'Stages' }),
           ...p.stages.map((x, si) => {
             const row = el('div', {}, el('span', { textContent: x.name }), el('b', { textContent: x.score == null ? '--' : String(x.score) }));
             const part = page.driveLine && Array.isArray(x.ends) ? stretch(pts, x.ends) : null;
@@ -403,7 +421,7 @@
           })));
       }
       const f = facts({ roads: p.roads }, fmtLen);
-      if (f) box.append(el('p', { className: 'feed-facts', textContent: f }));
+      if (f) after.push(el('p', { className: 'feed-facts', textContent: f }));
       const acts = el('div', { className: 'feed-acts' }, kudosKey(p));
       if (!o.full) {
         const c = el('button', { type: 'button' }); c.innerHTML = ICON.comment;
@@ -419,7 +437,13 @@
         d.addEventListener('click', () => { doc.querySelectorAll('.feed-sheet').forEach((n) => n.remove()); page.driveLine(throughPoints(pts), { ...p, rivals: rivalsOf(p) }); });
         acts.append(d);
       }
-      box.append(acts);
+      box.append(acts, ...words);
+      if (!o.full && p.comments > 1) {                                  // the conversation, one tap: "View all 6 comments"
+        const v = el('button', { type: 'button', className: 'feed-view-all', textContent: `View all ${p.comments} comments` });
+        v.addEventListener('click', () => open(p.id, { after: o.after }));
+        box.append(v);
+      }
+      box.append(...after);
       return box;
     }
     // ··· on the post: Delete for yours; Report and Block for anyone else's (P-06: never on the card's face)
@@ -559,12 +583,9 @@
       if (o.focus) field.focus();
     }
 
-    /** The Feed on People → Friends: the newest PREVIEW posts, and See all for the rest. Hidden while there is none. */
-    function section(onAll) {
-      const box = el('section', { className: 'stack-8 feed-sec' }); box.hidden = true;
-      const list = el('div', { className: 'feed' });
-      const all = btn('See all', () => onAll && onAll(), 'linkbtn');
-      // this week, a weekly board in a row: who posted, how far, best Score; a friend's card opens their profile
+    /** This week, a weekly board in a row: who posted, how far, best Score; a friend's card opens their profile. Hidden
+     *  while only you are on it. `shown()` after each answer. On Social → Friends since 2026-11-16 (the Feed is its own side). */
+    function week(shown) {
       const week = el('div', { className: 'stack-8 feed-week' }); week.hidden = true;
       const wrow = el('div', { className: 'week-row', role: 'group', 'aria-label': 'This week' });
       week.append(el('b', { textContent: 'This week' }), wrow);
@@ -580,17 +601,26 @@
           if (tap) c.addEventListener('click', () => page.openFriend(r.handle));
           return c;
         }));
-        box.hidden = false;
+        if (shown) shown();
       }).catch(() => {});
       wk();
-      box.append(el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Feed' }), all), week, list);
+      week._redo = wk;
+      return week;
+    }
+    /** The Feed as a section: the newest PREVIEW posts, This week, and See all for the rest. Hidden while there is none. */
+    function section(onAll) {
+      const box = el('section', { className: 'stack-8 feed-sec' }); box.hidden = true;
+      const list = el('div', { className: 'feed' });
+      const all = btn('See all', () => onAll && onAll(), 'linkbtn');
+      const wkBox = week(() => { box.hidden = false; }), wk = wkBox._redo;
+      box.append(el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Feed' }), all), wkBox, list);
       const redo = () => apiCall('GET', '/api/feed').then(jsonOf).then((got) => {
         const rows = unmuted(got, muted);
         if (!Array.isArray(rows)) return;
         keep(got);
         list.replaceChildren(...rows.slice(0, PREVIEW).map((p) => card(p, { after: redo, mute })));
         all.hidden = rows.length <= PREVIEW;
-        box.hidden = !rows.length && week.hidden;
+        box.hidden = !rows.length && wkBox.hidden;
       }).catch(() => {});
       redo();
       const again = () => { if (!box.isConnected) { onMute.delete(again); return; } wk(); redo(); };   // a redrawn People drops the old one
@@ -602,6 +632,49 @@
     function drivesOf(author) { return listOf(`author=${encodeURIComponent(author)}`, 'profile-drives', el('b', { textContent: 'Drives' })); }
     /** A crew's page: the drives its members posted to the crew, newest first (Drives tab). Hidden while there is none. */
     function crewDrives(crewId) { return listOf(`crew=${encodeURIComponent(crewId)}`, 'crew-drives', el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Posted to the crew' }))); }
+    /** A profile's grid (Garage as a profile, 2026-11-16): someone's posted drives three across, each tile the road it drew
+     *  with its Score in the corner; a tap opens the post. o.count(n) after each answer (n: how many came, null: unknown);
+     *  o.empty: the line when there are none. With no signal it says so, with Try again. More for older ones. */
+    function grid(author, o = {}) {
+      const box = el('section', { className: 'post-grid-sec' });
+      const tiles = el('div', { className: 'post-grid', role: 'list', 'aria-label': 'Drives' });
+      const more = btn('More', () => load(), 'linkbtn feed-more-key'); more.hidden = true;
+      const say = el('div', { className: 'post-grid-say' });
+      box.append(tiles, say, more);
+      let last = null, n = 0;
+      const NS = 'http://www.w3.org/2000/svg';
+      const tile = (p) => {
+        const b = el('button', { type: 'button', className: 'post-tile', role: 'listitem',
+          'aria-label': `${p.title || 'Drive'}${p.score == null ? '' : `, Vetta Score ${p.score}`}${p.driven_on ? `, ${p.driven_on}` : ''}` });
+        const pts = p.line ? decode(p.line) : [];
+        if (pts.length > 1) {
+          const svg = doc.createElementNS(NS, 'svg'), path = doc.createElementNS(NS, 'path');
+          svg.setAttribute('viewBox', '0 0 120 120'); svg.setAttribute('aria-hidden', 'true');
+          path.setAttribute('d', lineSvg(pts, 120, 120, 16)); svg.append(path); b.append(svg);
+        } else b.append(el('span', { className: 'post-tile-name', textContent: p.title || 'Drive' }));
+        if (p.score != null) b.append(el('b', { className: 'post-tile-score', textContent: String(p.score) }));
+        if (p.media) b.append(el('i', { className: 'post-tile-media', 'aria-hidden': 'true' }));
+        b.addEventListener('click', () => open(p.id, { after: () => { last = null; n = 0; tiles.replaceChildren(); load(); } }));
+        return b;
+      };
+      const load = () => apiCall('GET', `/api/feed?author=${encodeURIComponent(author)}${last ? `&before=${encodeURIComponent(last)}` : ''}`).then(jsonOf).then((rows) => {
+        if (!Array.isArray(rows)) throw new Error('feed');
+        say.replaceChildren();
+        tiles.append(...rows.map(tile));
+        n += rows.length;
+        last = rows.length ? rows[rows.length - 1].created_at : last;
+        more.hidden = rows.length < 30;
+        if (!n) say.append(el('p', { className: 'note', textContent: o.empty || 'No drives posted yet.' }));
+        if (o.count) o.count(more.hidden ? n : null);
+      }).catch(() => {
+        if (n) return;
+        const offline = root.navigator && root.navigator.onLine === false;
+        say.replaceChildren(el('p', { className: 'note', textContent: offline ? 'You’re offline. Drives show when you’re back.' : 'Can’t reach Vetta.' }), btn('Try again', () => load(), 'ink-btn'));
+        if (o.count) o.count(null);
+      });
+      load();
+      return box;
+    }
     function listOf(query, cls, head) {
       const box = el('section', { className: `stack-8 feed-sec ${cls}` }); box.hidden = true;
       const list = el('div', { className: 'feed' });
@@ -619,8 +692,8 @@
     }
     /** Every post, newest first, More for older ones. For a side sheet of its own. Above it one pick of whose posts:
      *  All, Friends (the ones posted to your friends) or one of your crews; shown once you are in a crew. */
-    function full() {
-      const list = el('div', { className: 'feed' }), more = btn('More', () => load(), 'linkbtn');
+    function full(fo = {}) {
+      const list = el('div', { className: 'feed' }), more = btn('More', () => load(), 'linkbtn feed-more-key');
       const pick = el('div', { className: 'switch feed-pick', role: 'radiogroup', 'aria-label': 'Show' }); pick.hidden = true;
       let last = null, only = '', gen = 0;
       const load = () => {
@@ -628,11 +701,20 @@
         return apiCall('GET', `/api/feed${q ? `?${q}` : ''}`).then(jsonOf).then((rows) => {
           if (g !== gen || !Array.isArray(rows)) return;   // a newer pick is loading
           keep(rows);
+          list.querySelectorAll(':scope > .feed-lost').forEach((n) => n.remove());
           list.append(...unmuted(rows, muted).map((p) => card(p, { mute })));
+          if (!only && fo.onRows) try { fo.onRows(rows); } catch (_) {}
           last = rows.length ? rows[rows.length - 1].created_at : last;
           more.hidden = rows.length < 30;
           if (!list.childElementCount) list.append(el('p', { className: 'note', textContent: only ? 'Nothing posted here yet.' : 'No drives posted yet. Post yours from the card after a drive.' }));
-        }).catch(() => {});
+        }).catch(() => {
+          // no signal, or Vetta didn't answer: say which, and a key to ask again (never an empty page)
+          if (g !== gen || list.querySelector('.feed-card, .feed-lost')) return;
+          const offline = root.navigator && root.navigator.onLine === false;
+          const lost = el('div', { className: 'feed-lost stack-8' }, el('p', { className: 'note', textContent: offline ? 'You’re offline. Drives show when you’re back.' : 'Can’t reach Vetta.' }),
+            btn('Try again', () => { lost.remove(); load(); }, 'ink-btn'));
+          list.replaceChildren(lost); more.hidden = true;
+        });
       };
       const show = (q) => {
         only = q; last = null; gen += 1; list.replaceChildren();
@@ -795,7 +877,7 @@
       });
     }
 
-    return { section, full, open, compose, post, remove, card, drivesOf, crewDrives, friendStages: () => keepStages(kept(), [], Date.now()) };
+    return { section, week, full, grid, open, compose, post, remove, card, drivesOf, crewDrives, friendStages: () => keepStages(kept(), [], Date.now()) };
   }
 
   const api = { unmuted, trimLine, encode, decode, throughPoints, stretch, rivalsOf, rivalLine, keepStages, lineSvg, ago, facts, weekLine, weekShown, mentionParts, mentionAt, suggest, kudosLine, withLine, mount, CUT_M, MAX_POINTS };
