@@ -946,6 +946,7 @@
         // the owner, 2026-11-11: the one fuel stamp of a drive says which station it is, when the map names it
         const label = f === next && f.name ? `FUEL · ${f.name}` : 'FUEL';
         if (f.el.textContent !== label) f.el.textContent = label;
+        f.el.classList.toggle('poi-named', label !== 'FUEL');                // a named stamp is a pill; the bare word is its mark alone
       }
       declutterSoon();
     }
@@ -966,7 +967,7 @@
       const tagPins = callouts.map((mk) => ({ marker: mk, el: mk.getElement(), kind: 'callout', fixed: true, m: 0, tag: true }));
       const shown = poiDeclutter.pins.concat(notePins, tagPins).filter((p) => p.el.style.display !== 'none' && p.el.isConnected), c = map.getContainer();
       const close = map.getZoom() >= VIEW_NAME_ZOOM;                    // a named viewpoint's name, only where it has room
-      for (const p of shown) if (p.kind === 'view' && p.name) { const t = close ? p.name : SCENIC_LABEL.view; if (p.el.textContent !== t) p.el.textContent = t; }
+      for (const p of shown) if (p.kind === 'view' && p.name) { const t = close ? p.name : SCENIC_LABEL.view; if (p.el.textContent !== t) p.el.textContent = t; p.el.classList.toggle('poi-named', close); }
       const keep = ApexScenic.declutter(shown.map((p) => {
         const xy = map.project(p.marker.getLngLat()), h = p.el.offsetHeight;
         return { kind: p.kind, named: p.named, fixed: !!p.fixed, m: p.m, x: xy.x, y: p.tag ? xy.y - 6 - h / 2 : xy.y, w: p.el.offsetWidth, h };   // a tag's box is above its point
