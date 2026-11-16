@@ -4558,7 +4558,7 @@ flow('the Log coaches first: the news from the latest drive, why, and the one th
   check(true, 'See the drive opens the drive the news is about');
 });
 
-flow('the Log list: each drive has its road\'s shape beside its name; a summary from before shapes gets one without being scored again (2026-11-14)', async (page, base) => {
+flow('the Log list: each drive has its road\'s shape beside its name; a summary from before shapes gets one, scored again since Rhythm changed (2026-11-14, 2026-11-16)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.goto(base + '/index.html');
@@ -4574,7 +4574,7 @@ flow('the Log list: each drive has its road\'s shape beside its name; a summary 
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.ApexRecording && window.ApexCore);
   await page.evaluate(async () => {
-    // sh2's summary as the app before this kept it: version 2, no shape, a score of its own that must survive
+    // sh2's summary as an older build kept it: version 2, no shape, a score from before Rhythm left out corners by a stop
     const db = await new Promise((ok, no) => { const r = indexedDB.open('apexnav'); r.onsuccess = () => ok(r.result); r.onerror = no; });
     await new Promise((ok) => { const t = db.transaction('summaries', 'readwrite'), st = t.objectStore('summaries');
       st.get('sh2').onsuccess = (e) => { const x = e.target.result; delete x.shape; x.sv = 2; x.ds = { ...x.ds, score: 777 }; st.put(x); };
@@ -4590,9 +4590,9 @@ flow('the Log list: each drive has its road\'s shape beside its name; a summary 
   const sum = await page.evaluate(async () => (await ApexRecording.summaries(null)).map((x) => ({ id: x.id, sv: x.sv, n: (x.shape || []).length, score: x.ds.score })));
   check(rows.length === 2 && rows.every((r) => r.svg && r.hidden === 'true' && r.d > 100 && r.w === 48), 'each row draws its road, 48 pt, quiet to VoiceOver: ' + JSON.stringify(rows));
   const old = sum.find((x) => x.id === 'sh2');
-  check(old && old.sv === 4 && old.n === 32 && old.score === 777 && rows.find((r) => r.id === 'sh2').score.trim() === '777', 'the old summary got its shape and kept its score (not scored again): ' + JSON.stringify(sum));
+  check(old && old.sv === 5 && old.n === 32 && old.score !== 777 && rows.find((r) => r.id === 'sh2').score.trim() !== '777', 'an old summary is scored again (5: Rhythm leaves out corners by a stop) and gets its shape: ' + JSON.stringify(sum));
   const cam = sum.find((x) => x.id === 'sh1');
-  check(cam && cam.sv === 4 && cam.score !== 555, 'a drive with camber from before the fix is scored again, its camber unknown: ' + JSON.stringify(sum));
+  check(cam && cam.sv === 5 && cam.score !== 555, 'a drive with camber from before the fix is scored again, its camber unknown: ' + JSON.stringify(sum));
 });
 
 flow('the Log marks your best drive on a road you have scored twice or more, once, and never a road driven once (free roamer B, 2026-11-14)', async (page, base) => {
