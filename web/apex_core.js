@@ -508,6 +508,7 @@
   // Drive analysis — port of core/drive_analysis.py (parity-tested).
   // -------------------------------------------------------------------------
   const MATCH_RADIUS_M = 20, SEARCH_WINDOW = 400, BRAKE_G = -0.15, BRAKE_LOOKBACK = 40, DELTA_STRIDE = 5, STOPPED_MPS = 2.5;
+  const STOP_BEFORE_BINS = 20, STOP_AFTER_BINS = 10;   // a stop within 100 m before a corner or 50 m after it: Rhythm leaves the corner out
 
   function elapsedS(v, ds = 5) {
     const t = new Float64Array(v.length);
@@ -652,7 +653,11 @@
     let mn = Infinity;
     for (let q = c.apex; q <= c.end; q++) mn = Math.min(mn, lonG[q]);
     const late = Math.max(0, -mn);
-    return { use: m.envelope_use, smooth: Math.exp(-(nd ? Math.sqrt(sq / nd) : 0) / 0.15), brake: 1 - Math.min(1, Math.max(0, (late - 0.10) / 0.30)) };
+    // A stop just before or after (a sign, a light, traffic): the pace through this corner was set for you, not chosen.
+    let stop = false;
+    for (let q = Math.max(0, c.start - STOP_BEFORE_BINS); q < c.start && !stop; q++) stop = v[q] < STOPPED_MPS;
+    for (let q = c.end + 1; q <= Math.min(v.length - 1, c.end + STOP_AFTER_BINS) && !stop; q++) stop = v[q] < STOPPED_MPS;
+    return { use: m.envelope_use, smooth: Math.exp(-(nd ? Math.sqrt(sq / nd) : 0) / 0.15), brake: 1 - Math.min(1, Math.max(0, (late - 0.10) / 0.30)), near_stop: stop };
   }
   // Per-car grip (IDEAS D-19) — port of drive_analysis.car_grip / corners_for_car (parity-tested). Only ever lower than the
   // street default: a tall, heavy or winter-shod car isn't marked down for its own lower limit; grippy tyres raise nothing.
@@ -687,7 +692,9 @@
     for (const t of ts) { uses.push(t.use); pace.push(paceCredit(t.use)); smooth.push(t.smooth); brake.push(t.brake); }
     if (!uses.length) return { score: null, corners: 0, components: null };
     const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
-    const consistency = 1 - Math.min(1, std(uses) / 0.25);
+    // Rhythm judges the corners whose pace you chose: one by a stop is left out of it (while two or more others remain)
+    const chosen = ts.filter((t) => !t.near_stop).map((t) => t.use);
+    const consistency = 1 - Math.min(1, std(chosen.length >= 2 ? chosen : uses) / 0.25);
     const comp = { pace: mean(pace), smoothness: mean(smooth), braking: mean(brake), consistency };
     const raw = 0.40 * comp.pace + 0.25 * comp.smoothness + 0.15 * comp.braking + 0.20 * comp.consistency;
     const r4 = (x) => Math.round(x * 1e4) / 1e4;

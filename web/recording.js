@@ -9,7 +9,7 @@
   // so the Log lists a year of drives without reading 1.6 MB of rows each. Opening v3 only adds the store: 'drives' is
   // never touched by the upgrade, so every drive already on a phone stays; summaries() builds the missing ones from the
   // drives' own rows the first time it is asked (in the analysis worker, off the page's thread).
-  const DB_VERSION = 3, SUMMARY_VERSION = 4;   // 2: run (flow.js, IDEAS D-30); 3: shape (the Log's row thumbnail); 4: old camber unknown
+  const DB_VERSION = 3, SUMMARY_VERSION = 5;   // 2: run (flow.js, IDEAS D-30); 3: shape (the Log's row thumbnail); 4: old camber unknown; 5: Rhythm by a stop
   function idb() {
     if (dbp) return dbp;
     dbp = new Promise((res, rej) => {
@@ -128,17 +128,7 @@
     const t0 = db.transaction(['drives', 'summaries']);
     const [keys, sums] = await Promise.all([req(t0.objectStore('drives').getAllKeys()), req(t0.objectStore('summaries').getAll())]);
     const have = new Map((sums || []).filter((x) => x && x.sv === SUMMARY_VERSION).map((x) => [x.id, x]));
-    // a version-2 or 3 summary of a drive with no old camber only lacks the shape (2): added from the drive's points, never
-    // scored again (no core needed). A drive with old camber is scored again below (4: its camber is unknown now).
-    for (const x of sums || []) {
-      if (!x || (x.sv !== 2 && x.sv !== 3) || have.has(x.id)) continue;
-      const t = db.transaction(['drives', 'summaries'], 'readwrite');
-      t.objectStore('drives').get(x.id).onsuccess = (e) => {
-        const d = e.target.result; if (!d || staleCamber(d)) return;
-        const y = { ...x, sv: SUMMARY_VERSION, shape: x.shape || shapeOf(d) }; t.objectStore('summaries').put(y); have.set(x.id, y);
-      };
-      try { await done(t); } catch (_) {}
-    }
+    // an older summary is scored again below (4: old camber unknown; 5: Rhythm leaves out corners by a stop)
     const live = new Set(keys), gone = (sums || []).filter((x) => x && !live.has(x.id)).map((x) => x.id);
     for (const id of keys) {
       if (have.has(id) || !Core) continue;
