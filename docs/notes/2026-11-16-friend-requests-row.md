@@ -13,3 +13,8 @@
 - What: the count of shared friends on a request in, as People you may know already does.
 - Why: the inventory asks for mutual friends on the request; naming them would tell a stranger who your friends are.
 - Undo: drop the `mutual` column in `friendList` (backend/src/social.ts) and the line in the sheet (web/cockpit.js requestsSheet).
+
+## 2026-11-16: the requests sheet is a Social module
+- What: the sheet's code is web/friend_requests.js in lazy.js's social group; the row stays in cockpit.js.
+- Why: inline it took the launch 1,272 bytes over the startup budget.
+- Undo: move `ApexFriendRequests.open` back into cockpit.js and drop the file from lazy.js.
