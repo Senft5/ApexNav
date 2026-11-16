@@ -2696,7 +2696,8 @@
       let now = '';
       try { now = e.now(renderIn.cluster || {}, ApexUnits.speedU()); } catch (_) { now = ''; }
       $('explainTitle').textContent = e.title;
-      $('explainNow').textContent = now ? `Now: ${now}` : ''; $('explainNow').hidden = !now;
+      $('explainNow').replaceChildren(...(now ? [Object.assign(document.createElement('small'), { textContent: 'Now' }), ' ', Object.assign(document.createElement('b'), { textContent: now })] : [])); $('explainNow').hidden = !now;
+      $('explainCard').querySelector('.explain-how').open = false;
       $('explainWhat').textContent = e.what; $('explainHow').textContent = e.how;
       $('explainCard').classList.add('show');
       return true;
@@ -11000,8 +11001,18 @@
     }
     $('hzStill').addEventListener('click', () => answerStill(true));
     $('hzGone').addEventListener('click', () => answerStill(false));
+    // each kind is drawn, so a glance finds it at speed (2026-11-16; six identical warning triangles had to be read)
+    const HZ_ICON = {
+      pothole: '<ellipse cx="12" cy="15.5" rx="8.5" ry="3.5"/><path d="M6.5 15.5c1.4-1.6 3.3-2.3 5.5-2.3s4.1.7 5.5 2.3M12 4v4.5M7.5 6l1.6 3M16.5 6l-1.6 3"/>',
+      gravel: '<circle cx="6" cy="16" r="2.2"/><circle cx="12" cy="17" r="1.6"/><circle cx="17.5" cy="15.5" r="2.4"/><circle cx="9" cy="11" r="1.5"/><circle cx="15" cy="10" r="1.8"/><path d="M3 20h18"/>',
+      debris: '<path d="M3 19h18M5 19l3.5-6 3 3.5 2.5-4.5 4.5 7"/><path d="M14 8l3-3M15.5 9.5L19 8"/>',
+      animal: '<circle cx="6.5" cy="10.5" r="1.8"/><circle cx="10" cy="6.5" r="1.8"/><circle cx="14" cy="6.5" r="1.8"/><circle cx="17.5" cy="10.5" r="1.8"/><path d="M8 17.3c0-3 1.8-5.3 4-5.3s4 2.3 4 5.3c0 1.6-1.6 2.7-4 2.7s-4-1.1-4-2.7z"/>',
+      police: '<path d="M12 3l7 2.8v5.4c0 4.6-3 7.9-7 9.8-4-1.9-7-5.2-7-9.8V5.8z"/><path d="M12 8.2l1.2 2.5 2.7.3-2 1.9.6 2.7-2.5-1.4-2.5 1.4.6-2.7-2-1.9 2.7-.3z"/>',
+      closure: '<rect x="3" y="7.5" width="18" height="6" rx="1"/><path d="M7.5 7.5l-3 6M13 7.5l-3 6M18.5 7.5l-3 6M6 13.5V20M18 13.5V20"/>' };
     for (const k of ApexHazardReports.KINDS) {
-      const b = document.createElement('button'); b.className = 'ink-btn hz-btn'; b.textContent = ApexHazardReports.LABEL[k];
+      const b = document.createElement('button'); b.className = 'ink-btn hz-btn' + (HZ_ICON[k] ? ' hz-drawn' : ''); b.dataset.kind = k;
+      if (HZ_ICON[k]) b.innerHTML = `<svg class="hz-ico" viewBox="0 0 24 24" aria-hidden="true">${HZ_ICON[k]}</svg>`;
+      b.append(ApexHazardReports.LABEL[k]);
       b.addEventListener('click', () => reportHazard(k));
       $('hzKinds').append(b);
     }

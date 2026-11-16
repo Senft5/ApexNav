@@ -3373,7 +3373,7 @@ flow('one red that means act now: Sight is ink until you are over it, then colou
   await page.waitForSelector('#explainCard.show', { timeout: 3000 });
   const sheet = await page.evaluate(() => ({ title: document.getElementById('explainTitle').textContent, what: document.getElementById('explainWhat').textContent,
     how: document.getElementById('explainHow').textContent, now: document.getElementById('explainNow').textContent }));
-  check(sheet.title === 'Grip ball and Bank' && /rolls forward under braking/.test(sheet.what) && /^Now: BANK --$/.test(sheet.now), 'the g-ball sheet: ' + JSON.stringify(sheet));
+  check(sheet.title === 'Grip ball and Bank' && /rolls forward under braking/.test(sheet.what) && /^Now BANK --$/.test(sheet.now), 'the g-ball sheet: ' + JSON.stringify(sheet));
   await page.click('#explainDone');
   // waited for, not read once: on a busy runner the class can come off a frame after the click returns (CI 2026-11-11)
   check(await page.waitForFunction(() => !document.getElementById('explainCard').classList.contains('show'), null, { timeout: 2000 }).then(() => true, () => false), 'Done closes it');
