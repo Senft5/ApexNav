@@ -999,8 +999,16 @@
     .end-card { text-align: left; }
     .end-feel { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--panel-ink); }   /* HE-1: measured, in ink */
     .explain-card h2 { margin: 0; }
-    .explain-now { margin: 0; font: 700 20px/1.1 var(--font-num); font-variant-numeric: tabular-nums; }
-    .explain-what { margin: 0; font-size: 16px; line-height: 1.4; }
+    /* the reading leads: a well with a small Now over the number, then what it means; how it is measured is one tap away (2026-11-16) */
+    .explain-now { margin: 0; display: grid; gap: 2px; padding: 12px 14px; border-radius: var(--r-card, 12px); background: var(--well, color-mix(in srgb, var(--panel-ink) 6%, var(--panel)));
+      font: 700 34px/1.05 var(--font-num); font-variant-numeric: tabular-nums; }
+    .explain-card .explain-now b { font: 700 34px/1.05 var(--font-num); font-variant-numeric: tabular-nums; color: var(--panel-ink); }
+    .explain-now small { font: 700 12px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
+    .explain-how summary { display: flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600; color: var(--panel-ink); cursor: pointer; list-style: none; }
+    .explain-how summary::-webkit-details-marker { display: none; }
+    .explain-how summary::after { content: "+"; margin-left: 8px; font-weight: 500; color: var(--panel-dim); }
+    .explain-how[open] summary::after { content: "\2212"; }
+    .explain-what { margin: 0; font-size: 17px; line-height: 1.4; }
     .explain-card .note { margin: 0; font-size: 15px; line-height: 1.4; color: var(--panel-dim); }
     /* an instrument says what it is when tapped, parked or in a replay (PR-1); the cursor says so on a desktop */
     #cluster [data-explain], #notes [data-explain] { cursor: help; }
@@ -1951,6 +1959,10 @@
     /* the report sheet's buttons are the plate others will see (REVIEW.md 1.2, Hazard report) */
     .hz-grid .hz-btn { background: var(--hz-bg); color: var(--hz-ink); border: 2px solid var(--hz-edge); text-align: left; padding: 0 14px; display: flex; align-items: center; gap: 10px; }
     .hz-grid .hz-btn::before { content: ""; flex: none; width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 16px solid var(--hz-edge); }
+    /* a drawn kind is a tile: its mark over its word (2026-11-16); a crew's own kind keeps the triangle */
+    .hz-grid .hz-btn.hz-drawn { flex-direction: column; justify-content: center; align-items: center; gap: 6px; min-height: 92px; padding: 10px 8px; text-align: center; }
+    .hz-grid .hz-btn.hz-drawn::before { content: none; }
+    .hz-ico { width: 40px; height: 40px; flex: none; fill: none; stroke: var(--hz-edge); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     /* Along the route (IDEAS R-24): viewpoints named, cafés and fuel small; map data, quieter than hazards. */
     .poi-pin { font: 700 10px var(--font-ui, sans-serif); letter-spacing: 0.04em; padding: 1px 4px; border: 1px solid var(--panel-ink, #222); color: var(--panel-ink, #222); background: var(--panel, #fff); white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; opacity: 0.9; }
     .poi-pin.poi-view { border-color: #2e7d5b; color: color-mix(in srgb, #2e7d5b 60%, var(--panel-ink, #222)); }   /* the hue, pulled to the ink so it reads at 10 px day and night */
@@ -2038,6 +2050,8 @@
       #onboard .stack { grid-column: 2; grid-row: 4 / span 2; margin-top: 12px; }
       #hzOverlay .hz-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }                                 /* 4 */
       #hzOverlay .hz-grid button { min-height: 56px; }
+      #hzOverlay .hz-grid .hz-btn.hz-drawn { gap: 2px; min-height: 60px; padding: 6px; }   /* on its side: a small mark over the word (beside it, "Pothole" was cut on CI's fonts) */
+      #hzOverlay .hz-ico { width: 22px; height: 22px; }
       .overlay.dim .card-sheet { max-height: 100dvh; overflow-y: auto; }
       #endCard .end-card { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); column-gap: 28px; align-items: start; }   /* 5 */
       #endCard .end-card > * { grid-column: 1; }
@@ -2783,7 +2797,8 @@
           <h2 id="explainTitle">--</h2>
           <p class="explain-now" id="explainNow" hidden></p>
           <p class="explain-what" id="explainWhat"></p>
-          <p class="note" id="explainHow"></p>
+          <!-- 2026-11-16 (Nate: no walls of text): how it is measured waits behind its own line -->
+          <details class="explain-how"><summary>How it’s measured</summary><p class="note" id="explainHow"></p></details>
           <button class="ink-btn solid" id="explainDone">Done</button>
         </div>
       </div>
