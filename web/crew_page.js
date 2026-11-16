@@ -81,6 +81,10 @@
    *  and how many are out. */
   /** Who you know in a crew, as a group page says it: "cara is in it", "cara and sam are in it", "cara, sam and 3 friends
    *  are in it"; none: null. */
+  /** What can't load says so in one line, with one key to try again (the shared state, screen inventory 2026-11-16). */
+  function lostLine(el, btn, what, retry) {
+    return el('div', { className: 'cp-lost' }, el('p', { className: 'note', textContent: `Couldn’t load ${what}. Check signal.` }), ...(retry ? [btn('Try again', retry, 'ink-btn')] : []));
+  }
   /** A one-path line icon (24 × 24), built as nodes: no markup strings on this page. */
   function icon(d) {
     const doc = root.document, svg = doc.createElementNS(SVG, 'svg'); svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');
@@ -284,6 +288,9 @@
     .cp-next-what small { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--panel-dim); }
     .cp-next-what b { font-size: 16px; overflow-wrap: anywhere; } .cp-next-what span { font-size: 13px; color: var(--panel-dim); }
     .crew-drives:not([hidden]) ~ .cp-posts-hint { display: none; }
+    .cp-lost { display: grid; justify-items: start; gap: 10px; padding: 8px 0; }
+    .cp-lost .note { margin: 0; }
+    .crew-page > .cp-lost { padding: 8px 16px; }
     .cp-compose { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 52px; padding: 0 14px;
       border: 1px solid var(--hair, var(--rule)); border-radius: 14px; background: var(--raised, transparent); color: var(--panel-ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
     .cp-compose svg { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
@@ -391,7 +398,7 @@
       const box = el('div', { className: 'crew-page' });
       const draw = async () => {
         const c = await load(id);
-        if (!c || !c.id || !Array.isArray(c.board)) { box.replaceChildren(el('p', { className: 'note', style: 'padding:0 16px', textContent: 'Couldn’t load the crew. Check signal.' }), btn('Try again', draw, 'ink-btn')); return; }
+        if (!c || !c.id || !Array.isArray(c.board)) { box.replaceChildren(lostLine(el, btn, 'the crew', draw)); return; }
         if (stripeOk(c.stripe)) box.style.setProperty('--cp-stripe', c.stripe);
         // Going and Share redraw only their own part, so a half-typed chat message stays put
         let driveSec = null, boardSec = null;
@@ -672,7 +679,7 @@
       const sec = el('div', { className: 'stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Members' }), note), find, list);
       const get = (path) => apiCall('GET', path).then((r) => (r && r.ok ? r.json() : null)).catch(() => null);
       const load = () => Promise.all([get(`/api/crews/${encodeURIComponent(c.id)}/members`), get('/api/presence'), page.friendHandles ? page.friendHandles().catch(() => null) : null]).then(([all, where, fr]) => {
-        if (!Array.isArray(all) || !all.length) { list.replaceChildren(el('p', { className: 'note', textContent: 'Couldn\u2019t load the members. Check signal.' }), btn('Try again', load, 'ink-btn')); return; }
+        if (!Array.isArray(all) || !all.length) { list.replaceChildren(lostLine(el, btn, 'the members', load)); return; }
         const FM = root.ApexFriendsMap, at = new Map((Array.isArray(where) ? where : []).map((p) => [p.handle, p]));
         const lit = [...at.keys()].filter((h) => FM && FM.friendState(at.get(h)).live);
         const m = outNow(all, lit);
@@ -773,7 +780,7 @@
         const j = r && r.ok ? await r.json().catch(() => null) : null;
         if (boardPeriod() !== p) return;   // another period was picked meanwhile
         list.removeAttribute('aria-busy');
-        if (!j || !Array.isArray(j.rows)) { list.replaceChildren(el('p', { className: 'note', textContent: 'Couldn’t load the board. Check signal.' })); return; }
+        if (!j || !Array.isArray(j.rows)) { list.replaceChildren(lostLine(el, btn, 'the board', () => fill(p))); return; }
         list.replaceChildren(...j.rows.map((x, i) => {
           const who = el('span', { className: 'who' }, el('b', { textContent: `@${x.handle || '?'}` }));
           if (x.badge) who.append(el('span', { className: 'cp-badge', textContent: x.badge }));   // Works livery
@@ -845,7 +852,7 @@
       const fill = async () => {
         const r = await apiCall('GET', `/api/crews/${encodeURIComponent(c.id)}/chat`).catch(() => null);
         const msgs = r && r.ok ? await r.json() : null;
-        if (!msgs) { list.replaceChildren(el('p', { className: 'note', textContent: 'Couldn’t load the chat. Check signal.' })); return; }
+        if (!msgs) { list.replaceChildren(lostLine(el, btn, 'the chat', fill)); return; }
         if (!msgs.length) { list.replaceChildren(el('p', { className: 'note', textContent: 'Nothing said yet.' })); return; }
         list.replaceChildren(...msgs.map((m) => {
           // P-17: Delete, Report and Pin behind one key on the message, chosen on the app's own sheet
@@ -1052,7 +1059,7 @@
       const feedHead = el('div', { className: 'cp-sec cd-head' }, el('h3', { textContent: 'Latest from your crews' }));
       const paintFeed = (items) => {
         feedHead.hidden = !!items && !items.length;
-        if (!items) { feedBox.replaceChildren(el('p', { className: 'note', textContent: 'Couldn’t load the latest from your crews. Check signal.' })); return; }
+        if (!items) { feedBox.replaceChildren(lostLine(el, btn, 'the latest from your crews', loadFeed)); return; }
         if (!items.length) { feedBox.replaceChildren(); return; }   // TestFlight 2026-11-12 (note 2): nothing new, no heading and no line
         const name = (id) => (crews.find((c) => c.id === id) || {}).name || 'A crew';
         const rows = items.slice(0, shown).map((it) => {
@@ -1074,11 +1081,16 @@
       };
       box.append(head, list, feedHead, feedBox);
       paintList();
-      feedBox.replaceChildren(el('p', { className: 'note', textContent: 'Loading…' }));
-      apiCall('GET', '/api/crews/feed').then((r) => (r && r.ok ? r.json() : null)).catch(() => null).then((j) => {
-        if (j && Array.isArray(j.crews)) { info = Object.fromEntries(j.crews.map((c) => [c.id, c])); paintList(); }
-        paintFeed(j && Array.isArray(j.items) ? j.items : null);
-      });
+      // loading: the feed's own place, quiet (no "Loading…" line); can't load: one line and Try again
+      function loadFeed() {
+        feedBox.replaceChildren(); feedBox.setAttribute('aria-busy', 'true');
+        apiCall('GET', '/api/crews/feed').then((r) => (r && r.ok ? r.json() : null)).catch(() => null).then((j) => {
+          feedBox.removeAttribute('aria-busy');
+          if (j && Array.isArray(j.crews)) { info = Object.fromEntries(j.crews.map((c) => [c.id, c])); paintList(); }
+          paintFeed(j && Array.isArray(j.items) ? j.items : null);
+        });
+      }
+      loadFeed();
       return box;
     }
 

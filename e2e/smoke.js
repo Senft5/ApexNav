@@ -3802,6 +3802,26 @@ flow('convoy voice: Talk joins the channel, the one key mutes and unmutes, and a
   check(calls.at(-1) === 'DELETE /voice' && !(await page.evaluate(() => localStorage.getItem('apex.convoyVoice'))), 'Leave voice takes us off, and the next convoy will not join by itself');
 });
 
+flow('crew page offline: one line and Try again, which brings the crew back (screen inventory 2026-11-16)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  let down = true;
+  const crewPage = { id: 'k1', name: 'Ridge Runners', motto: null, visibility: 'private', area_name: null, members: 2, is_owner: false, invites: 'anyone', can_invite: true,
+    crest: null, crest_photo_id: null, stripe: null, cover_photo_id: null, livery: 'plain', sharing_scores: false, board: [], next: null };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/crews') return json([{ id: 'k1', name: 'Ridge Runners', role: 'member', visibility: 'private', members: 2 }]);
+    if (u.pathname === '/api/crews/k1/page' || u.pathname === '/api/crews/k1/board') return down ? route.fulfill({ status: 503, body: '' }) : json(u.pathname.endsWith('/board') ? { period: 'month', rows: [] } : crewPage);
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=crew');
+  await page.waitForSelector('.crew-page .cp-lost button:has-text("Try again")', { timeout: 15000 });
+  check(await page.textContent('.crew-page .cp-lost .note') === 'Couldn’t load the crew. Check signal.', 'the crew that can not load: one line and one key');
+  down = false;
+  await page.click('.crew-page .cp-lost button:has-text("Try again")');
+  await page.waitForSelector('.crew-page .cp-title h2');
+  check(await page.textContent('.crew-page .cp-title h2') === 'Ridge Runners' && !(await page.$('.crew-page > .cp-lost')), 'Try again brings the crew back');
+});
 flow('crew page: an old ?view=crew link opens People on Crews, at your crew; going, chat and the livery reach the Worker (Worker stubbed, REVIEW.md roadmap 20)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const sent = [], boardAsks = [], soon = new Date(Date.now() + 3 * 86400e3).toISOString();
