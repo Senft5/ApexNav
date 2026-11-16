@@ -75,7 +75,7 @@ Primary **Navigation**, secondary **Travel**.
 
 Every content question (violence, mature themes, gambling, horror, medical, alcohol, profanity): **None**.
 Unrestricted web access: **No** (links open in Safari). **User-generated content: Yes** (handles, crew names, spots, shared
-routes, hazard reports), with block, report and moderation in the app (guideline 1.2). Messaging and chat: **No**.
+routes, hazard reports), with block, report and moderation in the app (guideline 1.2). Messaging and chat: **Yes** (crew chat, and Messages between friends since 2026-11-16, each message reportable).
 Location sharing with others: **Yes** (convoys, while one runs).
 
 ## App Privacy ("nutrition label")

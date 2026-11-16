@@ -22,6 +22,5 @@ a { color: var(--panel-ink); text-decoration-thickness: 1px; text-underline-offs
 /* the way back, as drive detail's "‹ Log": one glyph everywhere */
 .back { display: inline-block; min-height: 44px; padding: 10px 0; font-weight: 600; text-decoration: none; }
 /* until the owner approves the words: an ink rule with pencil text, not a yellow box */
-.draft { border-top: 2px solid var(--rule); padding: 8px 0 0; color: var(--panel-dim); font-size: 0.92rem; }
 
 .license { font-size: 13px; line-height: 1.45; }
