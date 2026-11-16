@@ -288,6 +288,8 @@ and in random batches so a trace cannot be re-assembled.
   settings: what it sees of yours, and Leave crew.
 - Posts opens with one composer row, Post your latest drive: the Post sheet with your newest drive from the last 30 days,
   this crew already picked (no drive yet: one line saying so).
+- Invite (2026-11-16) is one sheet: Copy link, Show code (the crew link as a QR code), and your friends not in the crew
+  yet to tick; Send to N messages each the link. One crew link serves all of it.
 - No migration.
 
 ### 2.19 A drive, ready to post (members; built 2026-11-16)
