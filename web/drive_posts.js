@@ -704,10 +704,13 @@
     }
     /** Every post, newest first, More for older ones. For a side sheet of its own. Above it one pick of whose posts:
      *  All, Friends (the ones posted to your friends) or one of your crews; shown once you are in a crew. */
+    // the Feed's pick (All, Friends, a crew) outlives a redraw of the page round it: the Social tab redraws when what it
+    // shows changes (a request, a crew), and a fresh Feed used to fall back to All under the driver's finger
+    let feedOnly = '';
     function full(fo = {}) {
       const list = el('div', { className: 'feed' }), more = btn('More', () => load(), 'linkbtn feed-more-key');
       const pick = el('div', { className: 'switch feed-pick', role: 'radiogroup', 'aria-label': 'Show' }); pick.hidden = true;
-      let last = null, only = '', gen = 0;
+      let last = null, only = feedOnly, gen = 0;
       const load = () => {
         const g = gen, q = [only, last ? `before=${encodeURIComponent(last)}` : ''].filter(Boolean).join('&');
         return apiCall('GET', `/api/feed${q ? `?${q}` : ''}`).then(jsonOf).then((rows) => {
@@ -729,14 +732,15 @@
         });
       };
       const show = (q) => {
-        only = q; last = null; gen += 1; list.replaceChildren();
+        only = q; feedOnly = q; last = null; gen += 1; list.replaceChildren();
         paintMuted();
         pick.querySelectorAll('button').forEach((b) => { const on = b.dataset.q === q; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
         load();
       };
       Promise.resolve(page.crews ? page.crews() : []).then((crews) => {
-        if (!Array.isArray(crews) || !crews.length) return;
-        const opts = [['', 'All'], ['friends=1', 'Friends'], ...crews.map((c) => [`crew=${encodeURIComponent(c.id)}`, c.name])];
+        const opts = Array.isArray(crews) && crews.length ? [['', 'All'], ['friends=1', 'Friends'], ...crews.map((c) => [`crew=${encodeURIComponent(c.id)}`, c.name])] : [];
+        if (only && !opts.some(([q]) => q === only)) show('');               // a crew picked before, left since: All again
+        if (!opts.length) return;
         if (opts.length > 3) pick.className = 'stamps feed-pick';
         pick.replaceChildren(...opts.map(([q, label]) => { const b = btn(label, () => show(q), 'chip'); b.dataset.q = q; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(q === only)); b.classList.toggle('on', q === only); return b; }));
         pick.hidden = false;
