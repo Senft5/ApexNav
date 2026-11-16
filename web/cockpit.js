@@ -7274,15 +7274,24 @@
       // Share opens and closes its panel, so the panel has no Cancel of its own under the route card's Cancel (which drops the route)
       if (box.childElementCount) { box.replaceChildren(); return; }
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
-      box.replaceChildren(el('p', { className: 'note', textContent: 'Loading your friends and crews…' }));
-      let friends = [], crews = [];
-      try { [friends, crews] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/crews').then(jsonOf)]); } catch (_) {}
-      const fr = (friends || []).filter(f => f.status === 'accepted' && f.handle), cr = crews || [];
+      // the shared states (screen inventory): loading is the chips' row in outline; no answer is one line and Try again
+      // (it used to say you had no friends to share with)
+      box.replaceChildren(el('div', { className: 'row share-skel', 'aria-busy': 'true', 'aria-label': 'Loading your friends and crews' }, el('i'), el('i'), el('i')));
+      const ask = (path) => apiCall('GET', path).then((r) => (r && r.ok ? jsonOf(r) : null)).catch(() => null);
+      const [friends, crews] = await Promise.all([ask('/api/friends'), ask('/api/crews')]);
+      if (!box.isConnected || !box.childElementCount) return;              // closed while it asked
+      if (!Array.isArray(friends) && !Array.isArray(crews)) {
+        box.replaceChildren(el('div', { className: 'share-lost' }, el('p', { className: 'note', textContent: 'Couldn’t load your friends and crews. Check signal.' }),
+          btn('Try again', () => { box.replaceChildren(); $('routeShareBtn').click(); }, 'ink-btn')));
+        return;
+      }
+      const fr = (Array.isArray(friends) ? friends : []).filter(f => f.status === 'accepted' && f.handle), cr = Array.isArray(crews) ? crews : [];
       // the road can also go into one of your roadbooks (roadbooks.js addPart), friends or none
       const bookPart = () => { const p = roadbooks && accountMe && accountMe.member ? roadbooks.addPart(() => box.replaceChildren()) : null; return p ? [p] : []; };
       if (!fr.length && !cr.length) {
         const books = bookPart();                                        // signed in with nobody to send it to yet: the roadbook is the way to keep it
-        box.replaceChildren(el('p', { className: 'note', textContent: books.length ? 'Add friends or a crew in People to send routes to them.' : 'No friends or crews to share with yet. Add them in People.' }), ...books);
+        box.replaceChildren(el('div', { className: 'share-lost' }, el('p', { className: 'note', textContent: 'No friends or crews to send it to yet.' }),
+          btn('Find friends', () => { box.replaceChildren(); showView('friends'); }, 'ink-btn')), ...books);
         if (books.length) box.scrollIntoView({ block: 'nearest' });
         return;
       }
@@ -7306,7 +7315,7 @@
           const r = await apiCall('POST', '/api/routes', { name: t.name || 'Route', geom: sharedGeom(t), friends: [...picked.friends], crews: [...picked.crews] });
           const j = await jsonOf(r);
           if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of shares today.' : 'Couldn\'t share it. Try again.'); return; }
-          toast(j && j.shared ? `Shared. They'll find it in People.` : 'Nobody to share it with.'); box.replaceChildren();
+          toast(j && j.shared ? `Shared. They'll find it in Social.` : 'Nobody to share it with.'); box.replaceChildren();
         }, 'ink-btn solid')), ...bookPart());
       box.scrollIntoView({ block: 'nearest' });
     });

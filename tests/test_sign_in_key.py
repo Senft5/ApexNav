@@ -25,7 +25,8 @@ def test_the_message_carries_the_key_and_a_drive_only_hears_it():
 
 def test_sharing_a_route_with_nobody_to_share_with_says_so_like_the_convoy():
     src = cockpit_source()
-    assert "'No friends or crews to share with yet. Add them in People.'" in src
+    assert "'No friends or crews to send it to yet.'" in src and "btn('Find friends', () => { box.replaceChildren(); showView('friends'); }" in src
+    assert "'Couldn’t load your friends and crews. Check signal.'" in src      # no answer is not "nobody" (2026-11-16)
 
 
 def test_notifications_off_has_the_key_to_settings():

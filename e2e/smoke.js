@@ -5875,6 +5875,7 @@ flow('shared routes: one a friend shared shows on People, Friends, under From fr
     if (u.pathname === '/api/routes/shared') return json([{ id: 'RRRRRRRRRRRRRRRR', name: 'Cherohala loop', created_at: '2026-10-28 05:00:00', from_handle: 'alice' }]);
     if (u.pathname === '/api/routes/RRRRRRRRRRRRRRRR') return json({ id: 'RRRRRRRRRRRRRRRR', name: 'Cherohala loop', geom, from_handle: 'alice' });
     if (u.pathname === '/api/routes' && m === 'POST') { posted.push(JSON.parse(route.request().postData() || '{}')); return json({ id: 'S1', shared: 2 }, 201); }
+    if ((u.pathname === '/api/friends' || u.pathname === '/api/crews') && friendsOn === 'fail') return route.abort();
     if (u.pathname === '/api/friends') return json(friendsOn ? [{ id: 'U1', handle: 'alice', name: null, status: 'accepted', incoming: 0 }, { id: 'U2', handle: 'bob', name: null, status: 'accepted', incoming: 0 }] : []);
     if (u.pathname === '/api/crews') return json(friendsOn ? [{ id: 'k1', name: 'Ridge Runners' }] : []);
     if (m === 'GET') return json([]);
@@ -5892,9 +5893,14 @@ flow('shared routes: one a friend shared shows on People, Friends, under From fr
   await page.click('.side-pop.open button:has-text("Open")');
   await page.waitForFunction(() => /Cherohala loop/.test(document.getElementById('routeCardName').textContent), null, { timeout: 8000 });
   check(/corners/.test(await page.textContent('#routeCardMeta')), 'the route card has its corners (notes rebuilt from the shape)');
+  // Share it on, with no answer: it says so with Try again, never "no friends" (the shared states, 2026-11-16)
+  friendsOn = 'fail';
+  await page.click('#routeShareBtn');
+  await page.waitForSelector('#routeSharePick .share-lost button:text-is("Try again")');
+  check(/^Couldn’t load your friends and crews\./.test(await page.textContent('#routeSharePick .share-lost')), 'no answer is not "nobody"');
   // Share it on: one line says who gets it and what goes, before Send, and follows the picks
   friendsOn = true;
-  await page.click('#routeShareBtn');
+  await page.click('#routeSharePick .share-lost button:text-is("Try again")');
   await page.waitForSelector('#routeSharePick .share-goes');
   const goes = () => page.textContent('#routeSharePick .share-goes');
   check(/^Pick who gets it\. The line only, first 400 m hidden\.$/.test(await goes()), 'nobody picked: it asks: ' + await goes());
