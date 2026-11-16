@@ -491,6 +491,7 @@
       setTimeout(renderRecords, 0);
       setTimeout(renderSteadiness, 0);                                  // the coach runs per road: after the Log has painted
       setTimeout(renderDrivingCard, 0);
+      setTimeout(renderLogCoach, 0);
     }
 
     // Your records (IDEAS D-08): the best Score on each road you have driven twice or more (roads by name), and this month's
@@ -638,6 +639,23 @@
         const r = await ApexSync.apiFetch('/api/me/dna', { method: 'PUT', headers: { 'content-type': 'application/json' }, body });
         if (r && r.ok) localStorage.setItem('vetta.dnaSent', body);
       } catch (_) {}
+    }
+    // The Log's coach (log_coach.js): the news from your drives, why, the trend and the one thing to work on next, from the
+    // drives' summaries and the driver profile (its focus); nothing under a few scored drives
+    function renderLogCoach() {
+      const box = $('logCoach'); if (!box || !window.ApexLogCoach) return;
+      const paint = (p) => {
+        const words = { ...ApexDriverProfile.WORDS, sideWords: ApexDriverProfile.sideWords };
+        const b = ApexLogCoach.brief(drives.map((d) => ({ ...d, dateKnown: monthOf(d) !== null })), p || null, words);
+        box.hidden = !(b.headline || b.next);
+        $('logCoachHead').textContent = b.headline || 'What to work on';
+        $('logCoachWhy').textContent = b.why || ''; $('logCoachWhy').hidden = !b.why;
+        $('logCoachTrend').textContent = b.trend || ''; $('logCoachTrend').hidden = !b.trend;
+        $('logCoachNext').textContent = b.next || ''; $('logCoachNext').hidden = !b.next;
+        $('logCoachGoRow').hidden = !b.go;
+        $('logCoachGo').onclick = b.go ? () => openDrive(b.go) : null;
+      };
+      if (drives.some((d) => d.corners.length)) drivingProfile((p) => paint(p)); else paint(null);
     }
     function renderDrivingCard() {
       const card = $('drivingCard'); if (!card) return;

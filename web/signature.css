@@ -252,3 +252,7 @@ body .cp-say textarea:focus { box-shadow: inset 0 0 0 2px var(--panel-ink); outl
 
 /* Theme cards with no essay (TestFlight 2026-11-12): the voice line keeps a breath under the Use key */
 .theme-card .tc-voice { margin-top: 10px; }
+/* the Log's coach (log_coach.js): the news in a heading, the rest a few short lines; its look is the redesign's to set */
+.log-page .log-coach { padding: 16px; margin: 0 0 12px; border-radius: 14px; background: var(--face, var(--panel)); box-shadow: var(--lift-0); }
+.log-page .log-coach h2 { margin: 0 0 6px; font-size: 22px; line-height: 1.2; }
+.log-page .log-coach p { margin: 4px 0 0; }

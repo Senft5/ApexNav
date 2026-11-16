@@ -52,6 +52,7 @@
   <script src="flyby.js"></script>
   <script src="challenges.js"></script>
   <script src="week_digest.js"></script>
+  <script src="log_coach.js"></script>
   <script src="corner_trace.js"></script>   <!-- one corner, two passes: the drive page's corner overlay -->
   <script src="driver_profile.js"></script>   <!-- Your driving: the profile across every drive -->
   <script src="legends.js"></script>
@@ -474,6 +475,9 @@
         <a class="fp-alt" href="index.html?drive=dry_ridge&amp;play=1">Watch a replay first</a>
       </div>
       <!-- the Log (REVIEW.md roadmap 13): one hero number, a quiet year line, challenges in one line, then the drives -->
+      <!-- the coach first (log_coach.js, Nate 2026-11-16): the news from your drives and the one thing to work on next -->
+      <section class="log-coach" id="logCoach" aria-label="Your coach" hidden><h2 id="logCoachHead"></h2><p id="logCoachWhy"></p><p class="note" id="logCoachTrend"></p><p id="logCoachNext"></p>
+        <div class="row mt-8" id="logCoachGoRow" hidden><button type="button" class="btn" id="logCoachGo">See the drive</button></div></section>
       <div class="log-hero" id="historyCards"></div>
       <!-- one quiet summary row (REVIEW2.md U-32): the year and this month's challenges in one line, the detail when opened -->
       <details class="quiet" id="yearPanel" hidden><summary id="yearTitle">--</summary><div id="yearLines" class="stack-8"></div>
