@@ -2696,7 +2696,8 @@
       let now = '';
       try { now = e.now(renderIn.cluster || {}, ApexUnits.speedU()); } catch (_) { now = ''; }
       $('explainTitle').textContent = e.title;
-      $('explainNow').textContent = now ? `Now: ${now}` : ''; $('explainNow').hidden = !now;
+      $('explainNow').replaceChildren(...(now ? [Object.assign(document.createElement('small'), { textContent: 'Now' }), ' ', Object.assign(document.createElement('b'), { textContent: now })] : [])); $('explainNow').hidden = !now;
+      $('explainCard').querySelector('.explain-how').open = false;
       $('explainWhat').textContent = e.what; $('explainHow').textContent = e.how;
       $('explainCard').classList.add('show');
       return true;

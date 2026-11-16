@@ -999,8 +999,16 @@
     .end-card { text-align: left; }
     .end-feel { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--panel-ink); }   /* HE-1: measured, in ink */
     .explain-card h2 { margin: 0; }
-    .explain-now { margin: 0; font: 700 20px/1.1 var(--font-num); font-variant-numeric: tabular-nums; }
-    .explain-what { margin: 0; font-size: 16px; line-height: 1.4; }
+    /* the reading leads: a well with a small Now over the number, then what it means; how it is measured is one tap away (2026-11-16) */
+    .explain-now { margin: 0; display: grid; gap: 2px; padding: 12px 14px; border-radius: var(--r-card, 12px); background: var(--well, color-mix(in srgb, var(--panel-ink) 6%, var(--panel)));
+      font: 700 34px/1.05 var(--font-num); font-variant-numeric: tabular-nums; }
+    .explain-card .explain-now b { font: 700 34px/1.05 var(--font-num); font-variant-numeric: tabular-nums; color: var(--panel-ink); }
+    .explain-now small { font: 700 12px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
+    .explain-how summary { display: flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600; color: var(--panel-ink); cursor: pointer; list-style: none; }
+    .explain-how summary::-webkit-details-marker { display: none; }
+    .explain-how summary::after { content: "+"; margin-left: 8px; font-weight: 500; color: var(--panel-dim); }
+    .explain-how[open] summary::after { content: "\2212"; }
+    .explain-what { margin: 0; font-size: 17px; line-height: 1.4; }
     .explain-card .note { margin: 0; font-size: 15px; line-height: 1.4; color: var(--panel-dim); }
     /* an instrument says what it is when tapped, parked or in a replay (PR-1); the cursor says so on a desktop */
     #cluster [data-explain], #notes [data-explain] { cursor: help; }
@@ -2778,7 +2786,8 @@
           <h2 id="explainTitle">--</h2>
           <p class="explain-now" id="explainNow" hidden></p>
           <p class="explain-what" id="explainWhat"></p>
-          <p class="note" id="explainHow"></p>
+          <!-- 2026-11-16 (Nate: no walls of text): how it is measured waits behind its own line -->
+          <details class="explain-how"><summary>How it’s measured</summary><p class="note" id="explainHow"></p></details>
           <button class="ink-btn solid" id="explainDone">Done</button>
         </div>
       </div>
