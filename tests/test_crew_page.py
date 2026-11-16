@@ -101,6 +101,13 @@ def test_members_strip_owner_then_out_now():
 
 
 @needs_node
+def test_members_admins_come_after_the_owner():
+    """Crew admins (0069): the owner, then admins, then who is out, then the rest."""
+    got = run("C.outNow([{ handle: 'zed' }, { handle: 'cara', admin: 1 }, { handle: 'sam', role: 'owner' }, { handle: 'bob' }], ['bob'])")
+    assert [m["handle"] for m in got["list"]] == ["sam", "cara", "bob", "zed"]
+
+
+@needs_node
 def test_livery_is_one_line():
     """P-03: the livery's line at the foot of the page; the meter lives in Edit livery."""
     assert run("C.liveryShort({ tier: 'factory', decals: 6, supporters: [{ handle: 'bob' }] })") == "Factory livery · dressed by @bob"

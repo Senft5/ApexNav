@@ -14,6 +14,9 @@ export async function isAcceptedFriend(env: Env, a: string, b: string): Promise<
   const [x, y] = pair(a, b);
   return !!(await first(env, "SELECT 1 FROM friendships WHERE user_a = ? AND user_b = ? AND status = 'accepted'", x, y));
 }
+/** Crew admins (0069): the owner's helpers. ?crew ?user. */
+export const isCrewAdmin = async (env: Env, crewId: string, userId: string) =>
+  !!(await env.DB.prepare("SELECT 1 FROM crew_admins WHERE crew_id = ? AND user_id = ?").bind(crewId, userId).first());
 export const isCrewMember = async (env: Env, crewId: string, userId: string) =>
   !!(await first(env, "SELECT 1 FROM crew_members WHERE crew_id = ? AND user_id = ?", crewId, userId));
 // A Google display name is a real name. It is shown to yourself and to accepted friends only: a handle is what crew-mates,
@@ -239,12 +242,13 @@ export async function crewJoinPublic(env: Env, v: Viewer, crewId: string): Promi
 
 export async function crewMembers(env: Env, v: Viewer, crewId: string) {
   if (!(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
-  return all<{ handle: string | null; name: string | null; role: string; mine: number; photo_id: string | null }>(env,
-    `SELECT u.handle, ${NAME_FOR("m.user_id", "?2")} AS name, m.role, (m.user_id = ?2) AS mine, u.photo_id
+  return all<{ handle: string | null; name: string | null; role: string; mine: number; photo_id: string | null; admin: number }>(env,
+    `SELECT u.handle, ${NAME_FOR("m.user_id", "?2")} AS name, m.role, (m.user_id = ?2) AS mine, u.photo_id,
+            EXISTS (SELECT 1 FROM crew_admins a WHERE a.crew_id = m.crew_id AND a.user_id = m.user_id) AS admin
        FROM crew_members m JOIN users u ON u.id = m.user_id
       WHERE m.crew_id = ?1
         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?2 AND b.blocked = m.user_id) OR (b.blocker = m.user_id AND b.blocked = ?2))
-      ORDER BY m.role DESC, u.handle`, crewId, v.id);
+      ORDER BY m.role DESC, admin DESC, u.handle`, crewId, v.id);
 }
 
 /** P-07: any member makes a link to their crew, unless the owner set "Who can invite: Owner"; then a member is told so (403),
@@ -252,7 +256,7 @@ export async function crewMembers(env: Env, v: Viewer, crewId: string) {
 export async function crewInvite(env: Env, v: Viewer, crewId: string): Promise<{ token: string }> {
   const crew = await first<{ owner: string; invites: string }>(env, "SELECT owner, invites FROM crews WHERE id = ?", crewId);
   if (!crew || !(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
-  if (crew.invites === "owner" && crew.owner !== v.id) throw new HttpError(403, "owner_invites_only");
+  if (crew.invites === "owner" && crew.owner !== v.id && !(await isCrewAdmin(env, crewId, v.id))) throw new HttpError(403, "owner_invites_only");
   // Same cap as account invites: at most 10 live links per person across their crews (IDEAS Z-15).
   const open = await first<{ n: number }>(env, "SELECT COUNT(*) AS n FROM crew_invites WHERE created_by = ? AND expires_at > datetime('now')", v.id);
   if ((open?.n ?? 0) >= CREW_INVITE_CAP) throw new HttpError(429, "too_many_open_invites");
@@ -281,7 +285,7 @@ export async function crewInvitesBy(env: Env, v: Viewer, crewId: string, req: Re
   if (by !== "anyone" && by !== "owner") throw new HttpError(400, "bad_by");
   await env.DB.batch([
     env.DB.prepare("UPDATE crews SET invites = ? WHERE id = ?").bind(by, crewId),
-    ...(by === "owner" ? [env.DB.prepare("DELETE FROM crew_invites WHERE crew_id = ? AND created_by != ?").bind(crewId, v.id)] : []),
+    ...(by === "owner" ? [env.DB.prepare("DELETE FROM crew_invites WHERE crew_id = ?1 AND created_by != ?2 AND created_by NOT IN (SELECT user_id FROM crew_admins WHERE crew_id = ?1)").bind(crewId, v.id)] : []),
   ]);
   return { by };
 }
@@ -292,7 +296,7 @@ export async function crewInvitesBy(env: Env, v: Viewer, crewId: string, req: Re
 const CREW_INVITE_OK = `i.token_hash = ?1 AND i.expires_at > datetime('now')
   AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?2 AND b.blocked = c.owner) OR (b.blocker = c.owner AND b.blocked = ?2))
   AND EXISTS (SELECT 1 FROM crew_members im WHERE im.crew_id = c.id AND im.user_id = i.created_by)
-  AND (c.invites = 'anyone' OR i.created_by = c.owner)
+  AND (c.invites = 'anyone' OR i.created_by = c.owner OR EXISTS (SELECT 1 FROM crew_admins ia WHERE ia.crew_id = c.id AND ia.user_id = i.created_by))
   AND NOT ${reportedSql("crew", "c.id")}`;
 
 /** POST /api/crews/join { token }: one link is the whole way in (P-02). Anyone signed in (a member, since Vetta opened) joins the
@@ -337,6 +341,7 @@ const memberGone = (env: Env, crewId: string, userId: string) => [
   env.DB.prepare("DELETE FROM drive_scores WHERE crew_id = ?1 AND user_id = ?2").bind(crewId, userId),
   env.DB.prepare("DELETE FROM segment_shares WHERE audience_type = 'crew' AND audience_id = ?1 AND segment_id IN (SELECT id FROM segments WHERE owner = ?2)").bind(crewId, userId),
   env.DB.prepare("DELETE FROM crew_invites WHERE crew_id = ?1 AND created_by = ?2").bind(crewId, userId),   // their links die with them
+  env.DB.prepare("DELETE FROM crew_admins WHERE crew_id = ?1 AND user_id = ?2").bind(crewId, userId),      // and an admin's role
   env.DB.prepare("DELETE FROM crew_members WHERE crew_id = ?1 AND user_id = ?2").bind(crewId, userId),
 ];
 
@@ -354,17 +359,39 @@ export async function crewLeave(env: Env, v: Viewer, crewId: string): Promise<vo
   ]);
 }
 
-/** Crews as groups (2026-11-16): the owner removes a member, the same as that member leaving (their shares, entries and
- *  invite links go). Not the owner themselves; a stranger or a member who isn't the owner sees no crew (404) or 403. */
+/** Crews as groups (2026-11-16): the owner, or an admin, removes a member, the same as that member leaving (their shares,
+ *  entries and invite links go). Never the owner; an admin removes only plain members, the owner anyone else. A stranger sees
+ *  no crew (404); a plain member gets 403. */
 export async function crewRemoveMember(env: Env, v: Viewer, crewId: string, handle: string): Promise<void> {
   const crew = await first<{ owner: string }>(env, "SELECT owner FROM crews WHERE id = ?", crewId);
   if (!crew || !(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
-  if (crew.owner !== v.id) throw new HttpError(403, "owner_only");
+  const owner = crew.owner === v.id;
+  if (!owner && !(await isCrewAdmin(env, crewId, v.id))) throw new HttpError(403, "owner_only");
+  const who = await crewMemberByHandle(env, crewId, handle);
+  if (who.id === crew.owner) throw new HttpError(400, "owner_stays");
+  if (!owner && (await isCrewAdmin(env, crewId, who.id))) throw new HttpError(403, "owner_only");   // admins are the owner's to remove
+  await env.DB.batch(memberGone(env, crewId, who.id));
+}
+
+const crewMemberByHandle = async (env: Env, crewId: string, handle: string) => {
   const who = await first<{ id: string }>(env, "SELECT u.id FROM users u JOIN crew_members m ON m.user_id = u.id AND m.crew_id = ?1 WHERE u.handle = ?2",
     crewId, str(handle, "handle", 1, 40).toLowerCase());
   if (!who) throw new HttpError(404, "no_member");
-  if (who.id === crew.owner) throw new HttpError(400, "owner_stays");
-  await env.DB.batch(memberGone(env, crewId, who.id));
+  return who;
+};
+
+/** PUT / DELETE /api/crews/:id/admins/:handle (the owner only): make a member an admin, or not. At most 10 per crew. */
+export const CREW_ADMIN_CAP = 10;
+export async function crewSetAdmin(env: Env, v: Viewer, crewId: string, handle: string, on: boolean): Promise<void> {
+  const crew = await first<{ owner: string }>(env, "SELECT owner FROM crews WHERE id = ?", crewId);
+  if (!crew || !(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
+  if (crew.owner !== v.id) throw new HttpError(403, "owner_only");
+  const who = await crewMemberByHandle(env, crewId, handle);
+  if (who.id === crew.owner) throw new HttpError(400, "owner_is_owner");
+  if (!on) { await run(env, "DELETE FROM crew_admins WHERE crew_id = ? AND user_id = ?", crewId, who.id); return; }
+  const r = await env.DB.prepare(`INSERT OR IGNORE INTO crew_admins (crew_id, user_id) SELECT ?1, ?2
+      WHERE (SELECT COUNT(*) FROM crew_admins WHERE crew_id = ?1) < ${CREW_ADMIN_CAP}`).bind(crewId, who.id).run();
+  if (!r.meta.changes && !(await isCrewAdmin(env, crewId, who.id))) throw new HttpError(429, "too_many_admins");
 }
 
 // ---- grants: one row per friend or crew (on by default for friends and private crews, share_defaults.ts) --------------------------------------------------

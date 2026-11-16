@@ -21,7 +21,7 @@ import { duelAccept, duelCreate, duelEnd, duelList } from "./duels";
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
 import {
-  boardActivity, boardFor, crewCreate, crewDiscover, crewInvite, crewInvitePreview, crewInvitesBy, crewInvitesRevoke, crewJoin, crewJoinPublic, crewLeave, crewRemoveMember, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendSuggestions, userSearch, friendRequest, friendRequestCancel,
+  boardActivity, boardFor, crewCreate, crewDiscover, crewInvite, crewInvitePreview, crewInvitesBy, crewInvitesRevoke, crewJoin, crewJoinPublic, crewLeave, crewRemoveMember, crewSetAdmin, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendSuggestions, userSearch, friendRequest, friendRequestCancel,
   ghosts, myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
@@ -310,6 +310,8 @@ on("GET", "/api/crews/discover", async (req, env) => json(await crewDiscover(env
 on("GET", "/api/crews/standings", async (req, env) => json(await crewStandings(env, await requireMember(req, env))));
 on("PUT", "/api/crews/:id", async (req, env, m) => { await crewUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("POST", "/api/crews/:id/join", async (req, env, m) => json(await crewJoinPublic(env, await requireMember(req, env), m.groups!.id)));
+on("PUT", "/api/crews/:id/admins/:handle", async (req, env, m) => { await crewSetAdmin(env, await requireMember(req, env), m.groups!.id, decodeURIComponent(m.groups!.handle), true); return noContent(); });
+on("DELETE", "/api/crews/:id/admins/:handle", async (req, env, m) => { await crewSetAdmin(env, await requireMember(req, env), m.groups!.id, decodeURIComponent(m.groups!.handle), false); return noContent(); });
 on("DELETE", "/api/crews/:id/members/:handle", async (req, env, m) => { await crewRemoveMember(env, await requireMember(req, env), m.groups!.id, decodeURIComponent(m.groups!.handle)); return noContent(); });
 on("DELETE", "/api/crews/:id/membership", async (req, env, m) => { await crewLeave(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 

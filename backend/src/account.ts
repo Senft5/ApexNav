@@ -48,7 +48,7 @@ export async function exportMyData(env: Env, v: Viewer): Promise<Record<string, 
     fixed_time_attack_entered: q("SELECT e.circuit_id, c.name, c.cell, e.created_at FROM ta_entered e JOIN ta_circuits c ON c.id = e.circuit_id WHERE e.user_id = ?"),
     crew_drives_came_to: q("SELECT e.title, e.starts_at, a.created_at FROM crew_event_attendance a JOIN crew_events e ON e.id = a.event_id WHERE a.user_id = ?"),
     // home_area: the 0.1-degree cell you share with that crew for fair meeting points (crew_meet.js), null when off
-    crews: q("SELECT c.name, m.role, m.joined_at, m.home_cell AS home_area FROM crew_members m JOIN crews c ON c.id = m.crew_id WHERE m.user_id = ?"),
+    crews: q("SELECT c.name, m.role, m.joined_at, m.home_cell AS home_area, EXISTS (SELECT 1 FROM crew_admins a WHERE a.crew_id = m.crew_id AND a.user_id = m.user_id) AS admin FROM crew_members m JOIN crews c ON c.id = m.crew_id WHERE m.user_id = ?"),
     segments: q("SELECT id, name, length_m, geom, origin_id, created_at FROM segments WHERE owner = ?"),
     // audiences are named by what you see in the app (a friend's handle, a crew's name), never by someone else's internal id
     grants: q(`SELECT g.audience_type, COALESCE(u.handle, c.name) AS audience, g.share_scores, g.share_times FROM grants g

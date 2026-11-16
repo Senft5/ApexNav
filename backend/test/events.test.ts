@@ -69,6 +69,18 @@ describe("crew drives", () => {
     expect((await api(b, "POST", `/api/events/${id}/rsvp`, { status: "going" })).status).toBe(404);
   });
 
+  it("a crew admin (0069) changes or cancels a crew-mate's drive, as the owner can", async () => {
+    const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara")];
+    const crew = await crewOf(a, b, c);
+    const { id } = await json(api(b, "POST", `/api/crews/${crew}/events`, DRIVE));
+    expect((await json(api(c, "GET", `/api/crews/${crew}/events`)))[0].can_cancel).toBeFalsy();
+    await ok(api(a, "PUT", `/api/crews/${crew}/admins/cara`));
+    expect((await json(api(c, "GET", `/api/crews/${crew}/events`)))[0].can_cancel).toBeTruthy();
+    await ok(api(c, "PUT", `/api/events/${id}`, { notes: "Meet at 8" }));
+    await ok(api(c, "DELETE", `/api/events/${id}`));
+    expect(await json(api(b, "GET", `/api/crews/${crew}/events`))).toEqual([]);
+  });
+
   it("can be reported; the owner's removal cancels it; a blocked person isn't listed as going", async () => {
     const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara")];
     const crew = await crewOf(a, b, c);
