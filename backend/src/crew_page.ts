@@ -60,6 +60,7 @@ export async function crewPage(env: Env, v: Viewer, crewId: string) {
   const house = works && c.house_canon_id ? await houseStage(env, v, crewId, c.house_canon_id) : null;
   const stages = c.owner === v.id ? (await env.DB.prepare(`SELECT DISTINCT COALESCE(s.origin_id, s.id) AS id, s.name FROM segment_shares sh JOIN segments s ON s.id = sh.segment_id
       WHERE sh.audience_type = 'crew' AND sh.audience_id = ? LIMIT 30`).bind(crewId).all<{ id: string; name: string }>()).results : undefined;
+  const admin = c.owner !== v.id && !!(await env.DB.prepare("SELECT 1 FROM crew_admins WHERE crew_id = ? AND user_id = ?").bind(crewId, v.id).first());
   const grant = await env.DB.prepare("SELECT share_scores FROM grants WHERE user_id = ? AND audience_type = 'crew' AND audience_id = ?").bind(v.id, crewId).first<{ share_scores: number }>();
   // fair meeting points (crew_meet.ts): whether YOU share your rough home area with this crew; never anyone else's
   const home = await env.DB.prepare("SELECT home_cell FROM crew_members WHERE crew_id = ? AND user_id = ?").bind(crewId, v.id).first<{ home_cell: string | null }>();
@@ -73,8 +74,8 @@ export async function crewPage(env: Env, v: Viewer, crewId: string) {
   return {
     dna,
     id: c.id, name: c.name, motto: c.motto, about: c.about, visibility: c.visibility, area_name: c.area_name, members: c.members,
-    is_owner: c.owner === v.id, crest: c.crest, stripe: c.stripe, cover_photo_id: c.cover_photo_id,
-    invites: c.invites, can_invite: c.owner === v.id || c.invites === "anyone",          // P-07: who can invite, and whether you can
+    is_owner: c.owner === v.id, is_admin: admin, crest: c.crest, stripe: c.stripe, cover_photo_id: c.cover_photo_id,
+    invites: c.invites, can_invite: c.owner === v.id || admin || c.invites === "anyone",          // P-07: who can invite, and whether you can
     livery: { ...livery, mine }, stripe2: club ? c.stripe2 : null, stripe3: works ? c.stripe3 : null, pattern: works ? c.pattern : null,
     crest_photo_id: club ? c.crest_photo_id : null, pinned: club && c.pinned_route_id && c.pinned_name ? { id: c.pinned_route_id, name: c.pinned_name } : null, routes,
     pinned_chat: pinnedChat, house, stages, call_sign: works ? c.call_sign : null,
@@ -250,10 +251,10 @@ export async function chatPost(env: Env, v: Viewer, crewId: string, req: Request
   return { id };
 }
 
-/** DELETE /api/crews/:id/chat/:msg: its author, or the crew's owner. */
+/** DELETE /api/crews/:id/chat/:msg: its author, the crew's owner or an admin. */
 export async function chatDelete(env: Env, v: Viewer, crewId: string, msgId: string): Promise<void> {
   const r = await env.DB.prepare(`DELETE FROM crew_chat WHERE id = ?1 AND crew_id = ?2
-      AND (author = ?3 OR EXISTS (SELECT 1 FROM crews c WHERE c.id = ?2 AND c.owner = ?3))`).bind(msgId, crewId, v.id).run();
+      AND (author = ?3 OR EXISTS (SELECT 1 FROM crews c WHERE c.id = ?2 AND c.owner = ?3) OR EXISTS (SELECT 1 FROM crew_admins a WHERE a.crew_id = ?2 AND a.user_id = ?3))`).bind(msgId, crewId, v.id).run();
   if (!r.meta.changes) throw new HttpError(404, "no_message");
 }
 

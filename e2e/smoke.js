@@ -3828,6 +3828,7 @@ flow('crew page offline: one line and Try again, which brings the crew back (scr
 flow('crew page: an old ?view=crew link opens People on Crews, at your crew; going, chat and the livery reach the Worker (Worker stubbed, REVIEW.md roadmap 20)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const sent = [], boardAsks = [], soon = new Date(Date.now() + 3 * 86400e3).toISOString();
+  let samAdmin = false; const adminCalls = [];
   const crewPage = { id: 'k1', name: 'Ridge Runners', motto: 'Slow in, smooth out.', visibility: 'private', area_name: null, members: 3, is_owner: true,
     crest: null, crest_photo_id: null, stripe: null, cover_photo_id: null, livery: 'plain', sharing_scores: true,
     board: [{ handle: 'sam', score: 811, car: 'Mazda MX-5', mine: false }, { handle: 'me', score: null, car: null, mine: true }],
@@ -3836,6 +3837,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method();
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/crews/k1/admins/sam') { adminCalls.push(route.request().method()); samAdmin = route.request().method() === 'PUT'; return route.fulfill({ status: 204, body: '' }); }
     if (m !== 'GET') { sent.push({ m, p: u.pathname, b: route.request().postData() }); return m === 'POST' ? json({ id: 'x' }, 201) : route.fulfill({ status: 204 }); }
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/crews') return json([{ id: 'k1', name: 'Ridge Runners', role: 'owner', visibility: 'private', members: 3 }]);
@@ -3846,7 +3848,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
       ? [{ handle: 'sam', photo_id: null, total: 12840, drives: 17, car: 'Mazda MX-5', mine: false }, { handle: 'me', photo_id: null, total: 702, drives: 1, mine: true }]
       : [{ handle: 'sam', photo_id: null, total: 1622, drives: 2, car: 'Mazda MX-5', mine: false }, { handle: 'me', photo_id: null, total: null, drives: 0, mine: true }] }); }
     if (u.pathname === '/api/crews/k1/chat') return json([{ id: 'm1', handle: 'sam', body: '<b>Fog</b> by 7?', created_at: '2026-10-29 10:00:00', mine: false, photo_id: null }]);
-    if (u.pathname === '/api/crews/k1/members') return json([{ handle: 'me', role: 'owner', mine: true }, { handle: 'sam', role: 'member', mine: false }, { handle: 'cara', role: 'member', mine: false }]);
+    if (u.pathname === '/api/crews/k1/members') return json([{ handle: 'me', role: 'owner', mine: true }, { handle: 'sam', role: 'member', mine: false, admin: samAdmin ? 1 : 0 }, { handle: 'cara', role: 'member', mine: false }]);
     if (u.pathname === '/api/feed' && u.searchParams.get('crew') === 'k1') return json([{ id: 'P9AAAAAAAAAAAAAA', handle: 'sam', photo_id: null, mine: false, crew: { id: 'k1', name: 'Ridge Runners' }, title: 'Dawn run on the Skyway', caption: null,
       driven_on: '2026-11-13', length_m: 30000, score: 780, roads: [], stages: [], line: null, media: null, created_at: '2026-11-13 08:00:00', kudos: 0, my_kudos: false, comments: 0 }]);
     if (u.pathname === '/api/presence') return json([{ handle: 'cara', photo_id: null, delay_s: 0, fuzz: false, road: 'Cherohala Skyway', lat: 35.3, lon: -84.1, at: new Date(Date.now() - 30e3).toISOString() }]);
@@ -3948,7 +3950,19 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.waitForSelector('.pv-menu .card-sheet');
   await page.waitForFunction(() => !document.querySelector('.pv-menu .card-sheet').getAnimations().some((a) => a.playState === 'running'));
   const mmenu = await page.$$eval('.pv-menu .card-sheet button', (b) => b.map((x) => x.textContent + (x.classList.contains('danger-btn') ? '!' : '')));
-  check(mmenu.join('|') === 'Report|Block|Remove from crew!|Cancel', 'behind ···: Report, Block, Remove from crew in red, Cancel: ' + JSON.stringify(mmenu));
+  check(mmenu.join('|') === 'Report|Block|Make admin|Remove from crew!|Cancel', 'behind ···: Report, Block, Make admin, Remove from crew in red, Cancel: ' + JSON.stringify(mmenu));
+  // the owner makes sam an admin (0069): sam moves up under the owner, marked ADMIN
+  await page.click('.pv-menu button:text-is("Make admin")');
+  const adm = await (await page.waitForFunction(() => { const r = [...document.querySelectorAll('.cp-member-list .cp-member')].map((x) => [x.querySelector('.cp-member-who b').textContent, (x.querySelector('em') || {}).textContent || '']);
+    return r[1] && r[1][1] === 'ADMIN' ? r : null; }, null, { timeout: 8000 })).jsonValue();
+  check(JSON.stringify(adminCalls) === '["PUT"]' && adm[1][0] === '@sam' && adm[1][1] === 'ADMIN', 'Make admin: sam second, marked ADMIN: ' + JSON.stringify(adm));
+  await page.click('.cp-member:has-text("@sam")');
+  await page.waitForSelector('.cp-member-sheet .pv-more');
+  check(/Helps run Ridge Runners/.test(await page.textContent('.cp-member-sheet')), 'an admin helps run the crew');
+  await page.click('.cp-member-sheet .pv-more');
+  await page.waitForSelector('.pv-menu .card-sheet');
+  await page.waitForFunction(() => !document.querySelector('.pv-menu .card-sheet').getAnimations().some((a) => a.playState === 'running'));
+  check(await page.isVisible('.pv-menu button:text-is("Remove as admin")'), 'and the owner can take it back');
   await page.click('.pv-menu button:text-is("Cancel")');
   await page.waitForSelector('.pv-menu', { state: 'detached' });
   await page.click('.cp-member-sheet button:text-is("Add friend")');

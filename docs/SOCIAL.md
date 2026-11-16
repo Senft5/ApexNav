@@ -288,7 +288,10 @@ and in random batches so a trace cannot be re-assembled.
 - Members lists everyone: the owner first, who is driving now, your friends marked, a search past 12. A tap opens their
   sheet: Add friend (or Accept, or Request sent) and ···, which holds Report, Block and, for the owner, Remove from crew
   last in red (`DELETE /api/crews/:id/members/:handle`), which takes out what leaving takes out (their grants, board
-  entries, shared Scores and segments, their crew links). Making someone an admin needs a server change and isn't built.
+  entries, shared Scores and segments, their crew links). Admins (2026-11-16, `crew_admins`, migration 0069): the owner's
+  ··· on a member has Make admin / Remove as admin (`PUT`/`DELETE /api/crews/:id/admins/:handle`, 10 at most). Admins
+  are listed under the owner, marked ADMIN; they can invite even when the owner keeps invites, remove plain members,
+  delete chat messages, and change or cancel crew drives. Renaming, settings and admins stay the owner's.
 - Manage crew (the owner's key) holds the crew's name (a rename alone, `PUT /api/crews/:id` `{ name }`), who can invite,
   who can find it, what it sees of yours, and Delete crew (the owner leaving ends it). Joined (a member's key) is Your
   settings: what it sees of yours, and Leave crew.

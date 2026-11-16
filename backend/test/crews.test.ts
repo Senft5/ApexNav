@@ -205,3 +205,42 @@ describe("one link in (P-02)", () => {
     expect((await api(banned, "POST", "/api/crews/join", { token: await invite(owner, id) })).status).toBe(403);
   });
 });
+
+describe("crew admins (0069)", () => {
+  it("the owner makes an admin, who invites, removes plain members and deletes chat; never the owner's settings or other admins", async () => {
+    const owner = await makeUser("owner"), sam = await makeUser("sam"), cara = await makeUser("cara"), dan = await makeUser("dan"), late = await makeUser("late");
+    const id = await make(owner, { name: "Ridge Runners" });
+    const invite = async (who: Awaited<ReturnType<typeof makeUser>>) => ((await (await ok(api(who, "POST", `/api/crews/${id}/invite`))).json()) as { token: string }).token;
+    for (const u of [sam, cara, dan]) await ok(api(u, "POST", "/api/crews/join", { token: await invite(owner) }));
+    expect((await api(sam, "PUT", `/api/crews/${id}/admins/cara`)).status).toBe(403);           // only the owner names admins
+    expect((await api(owner, "PUT", `/api/crews/${id}/admins/owner`)).status).toBe(400);
+    expect((await api(late, "PUT", `/api/crews/${id}/admins/sam`)).status).toBe(404);
+    await ok(api(owner, "PUT", `/api/crews/${id}/admins/sam`));
+    await ok(api(owner, "PUT", `/api/crews/${id}/admins/cara`));
+    const list = (await (await ok(api(dan, "GET", `/api/crews/${id}/members`))).json()) as { handle: string; admin: number }[];
+    expect(list.map((m) => `${m.handle}${m.admin ? "*" : ""}`)).toEqual(["owner", "cara*", "sam*", "dan"]);   // owner, admins, the rest
+    const page = (await (await ok(api(sam, "GET", `/api/crews/${id}/page`))).json()) as { is_admin: boolean; is_owner: boolean; can_invite: boolean };
+    expect(page).toMatchObject({ is_admin: true, is_owner: false });
+    // "Who can invite: Owner" still lets an admin invite, and keeps the admin's links
+    await ok(api(owner, "PUT", `/api/crews/${id}/invites`, { by: "owner" }));
+    const samLink = await invite(sam);
+    expect((await api(dan, "POST", `/api/crews/${id}/invite`)).status).toBe(403);
+    expect((await (await ok(api(sam, "GET", `/api/crews/${id}/page`))).json() as { can_invite: boolean }).can_invite).toBe(true);
+    // an admin removes a plain member, never another admin or the owner, and can't touch the settings
+    expect((await api(sam, "DELETE", `/api/crews/${id}/members/cara`)).status).toBe(403);
+    expect((await api(sam, "DELETE", `/api/crews/${id}/members/owner`)).status).toBe(400);
+    expect((await api(sam, "PUT", `/api/crews/${id}/invites`, { by: "anyone" })).status).toBe(404);
+    // chat: an admin deletes a member's message
+    const msg = ((await (await ok(api(dan, "POST", `/api/crews/${id}/chat`, { body: "hi" }))).json()) as { id: string }).id;
+    await ok(api(sam, "DELETE", `/api/crews/${id}/chat/${msg}`));
+    await ok(api(sam, "DELETE", `/api/crews/${id}/members/dan`));
+    await ok(api(late, "POST", "/api/crews/join", { token: samLink }));                          // the admin's link still works
+    // the owner takes the role back; leaving drops it too
+    await ok(api(owner, "DELETE", `/api/crews/${id}/admins/sam`));
+    expect((await api(sam, "DELETE", `/api/crews/${id}/members/late`)).status).toBe(403);
+    await ok(api(cara, "DELETE", `/api/crews/${id}/membership`));
+    const { env } = await import("cloudflare:workers");
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM crew_admins WHERE crew_id = ?").bind(id).first<{ n: number }>();
+    expect(n!.n).toBe(0);
+  });
+});

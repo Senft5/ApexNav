@@ -77,7 +77,7 @@
     return Array.isArray(p) ? p.filter((id) => typeof id === 'string' && (!have || have.includes(id))) : [];
   }
   function writePins(p) { try { root.localStorage.setItem('apex.crewPins', JSON.stringify(p)); } catch (_) {} }
-  /** The members strip (P-06): the owner first, then who is on the road now (`liveSet`, handles), then the rest by handle;
+  /** The members strip (P-06): the owner first, its admins (0069), then who is on the road now (`liveSet`, handles), then the rest by handle;
    *  and how many are out. */
   /** Who you know in a crew, as a group page says it: "cara is in it", "cara and sam are in it", "cara, sam and 3 friends
    *  are in it"; none: null. */
@@ -101,7 +101,7 @@
   function outNow(members, liveSet) {
     const live = new Set(liveSet || []);
     const list = (members || []).filter((m) => m && m.handle).map((m) => ({ ...m, live: live.has(m.handle) && !m.mine }));
-    list.sort((a, b) => (b.role === 'owner') - (a.role === 'owner') || b.live - a.live || String(a.handle).localeCompare(String(b.handle)));
+    list.sort((a, b) => (b.role === 'owner') - (a.role === 'owner') || !!b.admin - !!a.admin || b.live - a.live || String(a.handle).localeCompare(String(b.handle)));
     return { list, out: list.filter((m) => m.live).length };
   }
   /** The livery's one line on the page (P-03): "Factory livery · dressed by @bob"; Plain says nothing it lacks (UX-06). */
@@ -689,15 +689,15 @@
         note.textContent = [`${m.list.length} ${m.list.length === 1 ? 'member' : 'members'}`, m.out ? `${m.out} out now` : ''].filter(Boolean).join(' \u00b7 ');
         const rows = m.list.map((x) => {
           const friend = fr instanceof Set && fr.has(x.handle);
-          const line = [x.role === 'owner' ? 'Owner' : '', x.live && FM ? FM.friendState(at.get(x.handle)).text : '', friend && !x.mine ? 'Your friend' : ''].filter(Boolean).join(' \u00b7 ');
+          const line = [x.role === 'owner' ? 'Owner' : x.admin ? 'Admin' : '', x.live && FM ? FM.friendState(at.get(x.handle)).text : '', friend && !x.mine ? 'Your friend' : ''].filter(Boolean).join(' \u00b7 ');
           const face = P() ? P().avatar(x.photo_id || null, x.handle, 44) : el('b', { textContent: String(x.handle).charAt(0).toUpperCase() });
           const b = el('button', { type: 'button', className: 'cp-member' + (x.live ? ' live' : ''), role: 'listitem' },
             root.ApexAvatar ? root.ApexAvatar.ring(face, x.live ? 'live' : null) : face,
             el('span', { className: 'cp-member-who' }, el('b', { textContent: x.mine ? `You \u00b7 @${x.handle}` : `@${x.handle}` }), ...(line ? [el('small', { textContent: line })] : [])),
-            ...(x.role === 'owner' ? [el('em', { textContent: 'OWNER' })] : []));
+            ...(x.role === 'owner' ? [el('em', { textContent: 'OWNER' })] : x.admin ? [el('em', { textContent: 'ADMIN' })] : []));
           b.dataset.handle = x.handle;
-          b.setAttribute('aria-label', `@${x.handle}${x.mine ? ' (you)' : ''}${x.role === 'owner' ? ', owner' : ''}${x.live ? ', on the road now' : ''}${friend && !x.mine ? ', your friend' : ''}`);
-          b.addEventListener('click', () => member(c, x, x.live && FM ? FM.friendState(at.get(x.handle)).text : null, redraw));
+          b.setAttribute('aria-label', `@${x.handle}${x.mine ? ' (you)' : ''}${x.role === 'owner' ? ', owner' : x.admin ? ', admin' : ''}${x.live ? ', on the road now' : ''}${friend && !x.mine ? ', your friend' : ''}`);
+          b.addEventListener('click', () => member(c, x, x.live && FM ? FM.friendState(at.get(x.handle)).text : null, redraw || load));
           return b;
         });
         list.replaceChildren(...rows);
@@ -718,7 +718,7 @@
       ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', `@${m.handle}`);
       const close = () => ov.remove();
       ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
-      const subText = [m.name, m.role === 'owner' ? `Runs ${c.name}` : `In ${c.name}`].filter(Boolean).join(' \u00b7 ');
+      const subText = [m.name, m.role === 'owner' ? `Runs ${c.name}` : m.admin ? `Helps run ${c.name}` : `In ${c.name}`].filter(Boolean).join(' \u00b7 ');
       const sub = el('p', { className: 'note', textContent: subText });
       // a crew-mate is one tap from a friend, as on any social app (Nate 2026-11-12): Add friend, Accept when they asked
       // first, Request sent once asked; a friend already says so on the line under the name
@@ -743,7 +743,13 @@
       const more = [];
       if (!m.mine && page.report) more.push(['Report', () => { close(); page.report({ kind: 'user', target: m.handle, label: `@${m.handle} in ${c.name}`, who: m.handle }); }]);
       if (!m.mine && page.block) more.push(['Block', () => { close(); page.block(m.handle); }]);
-      if (c.is_owner && !m.mine && m.role !== 'owner') more.push(['Remove from crew', async () => {
+      // admins (0069): the owner names them; an admin helps run the crew and removes plain members
+      if (c.is_owner && !m.mine && m.role !== 'owner') more.push([m.admin ? 'Remove as admin' : 'Make admin', async () => {
+        const r = await apiCall(m.admin ? 'DELETE' : 'PUT', `/api/crews/${encodeURIComponent(c.id)}/admins/${encodeURIComponent(m.handle)}`).catch(() => null);
+        if (r && r.ok) { toast(m.admin ? `@${m.handle} isn\u2019t an admin now.` : `@${m.handle} is an admin of ${c.name}.`); close(); if (redraw) redraw(); }
+        else toast(r && r.status === 429 ? 'A crew has 10 admins at most.' : 'Couldn\u2019t change that. Try again.');
+      }]);
+      if ((c.is_owner || (c.is_admin && !m.admin)) && !m.mine && m.role !== 'owner') more.push(['Remove from crew', async () => {
         const ok = root.ApexConfirm ? await root.ApexConfirm.ask(`Remove @${m.handle} from ${c.name}? Their shared Scores leave the crew. They can come back only with a new invite.`, 'Remove') : true;
         if (!ok) return;
         const r = await apiCall('DELETE', `/api/crews/${encodeURIComponent(c.id)}/members/${encodeURIComponent(m.handle)}`).catch(() => null);
@@ -862,7 +868,7 @@
         list.replaceChildren(...msgs.map((m) => {
           // P-17: Delete, Report and Pin behind one key on the message, chosen on the app's own sheet
           const acts = [];
-          if (m.mine || c.is_owner) acts.push(['delete', 'Delete', true]);
+          if (m.mine || c.is_owner || c.is_admin) acts.push(['delete', 'Delete', true]);   // admins moderate the chat too (0069)
           if (!m.mine && page.report) acts.push(['report', 'Report', false]);
           if (c.is_owner && club && m.id !== pinnedId) acts.push(['pin', 'Pin it', false]);   // Club livery
           const dots = acts.length ? el('button', { type: 'button', className: 'cp-dots', textContent: '\u2026' }) : null;

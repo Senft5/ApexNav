@@ -152,7 +152,7 @@ export async function eventsList(env: Env, v: Viewer, crewId: string | null) {
     `SELECT e.id, e.crew_id, c.name AS crew_name, e.title, e.starts_at, e.meet_name, e.meet_lat, e.meet_lon, e.route_id, e.notes, e.public,
             u.handle AS by_handle, (e.created_by = ?1) AS mine, e.regroup, c.call_sign, e.repeat_weeks, e.series_id,
             (SELECT lu.handle FROM users lu JOIN crew_members lm ON lm.user_id = lu.id AND lm.crew_id = e.crew_id WHERE lu.id = e.lead_id) AS lead,
-            (SELECT su.handle FROM users su JOIN crew_members sm ON sm.user_id = su.id AND sm.crew_id = e.crew_id WHERE su.id = e.sweep_id) AS sweep, (e.created_by = ?1 OR c.owner = ?1) AS can_cancel,
+            (SELECT su.handle FROM users su JOIN crew_members sm ON sm.user_id = su.id AND sm.crew_id = e.crew_id WHERE su.id = e.sweep_id) AS sweep, (e.created_by = ?1 OR c.owner = ?1 OR EXISTS (SELECT 1 FROM crew_admins ca WHERE ca.crew_id = e.crew_id AND ca.user_id = ?1)) AS can_cancel,
             (SELECT status FROM crew_event_rsvps r WHERE r.event_id = e.id AND r.user_id = ?1) AS my_rsvp,
             (SELECT json_group_array(COALESCE(gu.handle, '?')) FROM crew_event_rsvps g JOIN users gu ON gu.id = g.user_id
                JOIN crew_members gm ON gm.crew_id = e.crew_id AND gm.user_id = g.user_id
@@ -199,7 +199,8 @@ export async function eventsNear(env: Env, v: Viewer, url: URL) {
 
 async function visibleEvent(env: Env, v: Viewer, id: string) {
   if (!ID_RE.test(id)) throw new HttpError(404, "no_event");
-  const e = await env.DB.prepare(`SELECT e.id, e.crew_id, e.created_by, c.owner FROM crew_events e JOIN crews c ON c.id = e.crew_id
+  // owner: the crew's owner, or one of its admins (0069), for what the owner may do to a drive
+  const e = await env.DB.prepare(`SELECT e.id, e.crew_id, e.created_by, CASE WHEN EXISTS (SELECT 1 FROM crew_admins a WHERE a.crew_id = e.crew_id AND a.user_id = ?2) THEN ?2 ELSE c.owner END AS owner FROM crew_events e JOIN crews c ON c.id = e.crew_id
       JOIN crew_members me ON me.crew_id = e.crew_id AND me.user_id = ?2 WHERE e.id = ?1 AND ${VISIBLE("e")}`)
     .bind(id, v.id).first<{ id: string; crew_id: string; created_by: string; owner: string }>();
   if (!e) throw new HttpError(404, "no_event");
