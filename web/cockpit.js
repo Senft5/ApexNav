@@ -12269,11 +12269,16 @@
       const esc = (e) => { if (e.key === 'Escape') close(); };
       const drive = el('button', { className: 'rec-key' }, el('i'), 'Just drive');
       drive.addEventListener('click', () => { close(); startDrive(); });
+      // 2026-11-16 (Nate: menus are "a list of things"): the two convoy ways are tiles, each its mark over its word, beside each other
+      const tile = (b, d) => { b.classList.add('start-tile'); b.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`); return b; };
       back.append(el('div', { className: 'card-sheet' }, el('h2', { textContent: 'Ways to go' }), drive,
-        // Nate 2026-11-16 (convoy up in two taps): Who's coming? first, your friends' faces; Invite starts it and tells them
-        btn('Convoy', () => { close(); needSocial().then(() => { if (convoy) convoy.open(); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
-        // IDEAS S-22: a friend's convoy, by the code they read out (the convoy sheet's Join code field)
-        btn('Join with a code', () => { close(); needSocial().then(() => { if (convoy) convoy.open({ code: true }); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
+        el('div', { className: 'start-tiles' },
+          // Nate 2026-11-16 (convoy up in two taps): Who's coming? first, your friends' faces; Invite starts it and tells them
+          tile(btn('Convoy', () => { close(); needSocial().then(() => { if (convoy) convoy.open(); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
+            '<circle cx="8" cy="8" r="3"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M2.5 19c.6-3.4 2.8-5.5 5.5-5.5s4.9 2.1 5.5 5.5M13.6 14.6c.9-.7 1.8-1 2.9-1 2.3 0 4.1 1.8 4.6 5"/>'),
+          // IDEAS S-22: a friend's convoy, by the code they read out (the convoy sheet's Join code field)
+          tile(btn('Join with a code', () => { close(); needSocial().then(() => { if (convoy) convoy.open({ code: true }); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
+            '<rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M7 12h.01M10.5 12h.01M14 12h.01M17.5 12h.01" stroke-width="3"/>')),
         // TestFlight 2026-11-12 (note 6, the owner circled it): no paragraph under the keys; the convoy sheet says the rest
         btn('Cancel', close, 'linkbtn')));
       onBackdrop(back, () => close());
