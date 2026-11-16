@@ -25,7 +25,7 @@ def test_a_pin_is_named_and_an_unnamed_one_is_not_kept():
 
 
 def test_the_words_match_the_screen():
-    assert "Save as highlight" not in HTML and ">Save as a spot<" in HTML      # the app calls them spots everywhere else
+    assert "Save as highlight" not in HTML and 'data-mark="save">Save<span class="pin-more-words"> as a spot</span><' in HTML   # spots everywhere else; "Save" on its tile
     assert "Press Go" not in JS                                                 # the key under the note says Search
     assert "Press Search to look everywhere." in JS and "Press Search to try." in JS
 
