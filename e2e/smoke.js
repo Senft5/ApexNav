@@ -1470,7 +1470,9 @@ flow('route overview: the card says what the drive is like in plain words, from 
         more: [...document.querySelectorAll('#routeCardStoryMore p')].map((p) => p.textContent), open: box.open, one: box.classList.contains('one'),
         streets: [dep, ...(t.steps || []).map((x) => x.street)].filter(Boolean), cardW: document.getElementById('routeCard').scrollWidth - document.getElementById('routeCard').clientWidth,
         // deer hours need no tiles: the clock, the sun and the month (wildlife.js) times the land along the road
-        deerKnown: (() => { const c = t.ranked, v = c && c.ctx && ApexRouteEngine.channel(c.ctx, 'deer_risk'); return !!v && [...v].some((x) => Number.isFinite(x) && x > 1); })() };
+        deerKnown: (() => { const c = t.ranked, v = c && c.ctx && ApexRouteEngine.channel(c.ctx, 'deer_risk'); return !!v && [...v].some((x) => Number.isFinite(x) && x > 1); })(),
+        // school-bus hours are the clock too (route_ctx/events.js: bus-run hours on a school day, no tiles needed)
+        busKnown: (() => { const c = t.ranked, v = c && c.ctx && ApexRouteEngine.channel(c.ctx, 'school_bus_hour'); return !!v && [...v].some((x) => x === 1); })() };
     });
     check(r.settled, 'the lines up are built from the route\'s present steps');
     const texts = r.lines.map((l) => l.text);
@@ -1485,8 +1487,9 @@ flow('route overview: the card says what the drive is like in plain words, from 
     const hl = r.lines.find((l) => l.kind === 'highlight');
     if (hl) check(hl.facts.m >= 1500 && hl.facts.toM <= r.coverage.km * 1000 + 30, 'the best part is a real stretch of this route: ' + JSON.stringify(hl.facts));
     // the grid's tiles carry no weather or members' data here: nothing said about them; deer only where the route's deer
-    // channel says so (it is evening in November on CI's clock some of the time, and the wildlife provider runs offline)
-    const deerOnly = (l) => l.kind === 'conditions' && l.facts.items.every((x) => x.key === 'deer') && r.deerKnown;
+    // channel says so (it is evening in November on CI's clock some of the time, and the wildlife provider runs offline); school buses only
+    // in the clock's bus-run hours (06:15 ET on CI's clock gave "Deer likely and school buses out after dark.")
+    const deerOnly = (l) => l.kind === 'conditions' && l.facts.items.every((x) => (x.key === 'deer' && r.deerKnown) || (x.key === 'school buses' && r.busKnown));
     check(!r.lines.some((l) => l.kind === 'members' || (l.kind === 'conditions' && !deerOnly(l))), 'no members\' or conditions line without their data: ' + JSON.stringify(texts));
     check(r.cardW <= 1, 'the card does not grow sideways: ' + r.cardW);
     // a tap opens the rest
