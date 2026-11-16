@@ -1756,7 +1756,10 @@ flow('valhalla down: planning inside our tiles is unaffected', async (page, base
     for (const r of runs) {
       const lab = `${r.mode} ${r.warm ? 'warm' : 'cold'}`;
       check(r.own.covered && r.own.used && r.kinds[0] === 'own' && r.kind === 'route', `${lab}: our route, from our tiles: ` + JSON.stringify(r));
-      check(Number.isFinite(r.card) && r.card <= (r.warm ? 700 : 1000), `${lab}: the final card within ${r.warm ? 700 : 1000} ms of Enter (${r.card} ms; first route ${r.first} ms)`);
+      // warm 900 ms: here 400 to 530 ms, the same before and after the long-trip router work (2026-11-16), but busy CI
+      // runners hit 707 and 741 ms on social-only PRs; the first route's 400 ms is what a driver sees first, and stays
+      const cardMs = r.warm ? 900 : 1000;
+      check(Number.isFinite(r.card) && r.card <= cardMs, `${lab}: the final card within ${cardMs} ms of Enter (${r.card} ms; first route ${r.first} ms)`);
       if (r.warm) check(Number.isFinite(r.first) && r.first <= 400, `${lab}: the first route within 400 ms of Enter (${r.first} ms)`);
       check(r.steps.length >= 2 && r.steps.includes(4), `${lab}: turn instructions on the route (ours): ` + JSON.stringify(r.steps));
       check(r.limits > 0, `${lab}: the posted limits from our tiles: ` + r.limits);
