@@ -110,3 +110,7 @@
 [data-theme="roadbook"] .nav-rows > .nav-row.danger { color: var(--accent-raised); }
 /* the same red inside the Log's raised cards (a corner's number, a lost tenth): the cards hand their words the inked red */
 [data-theme="roadbook"] .log-page :is(.dp-card, .seg, .dv-corner, .dv-time button, .card, .empty) { --signal: var(--accent-raised); --accent: var(--accent-raised); }
+
+/* the floating messages (2026-11-16): a toast and the map's own note were square boxes ruled in ink, the last of the old
+   look on the map. They float like the other things over it: rounded, lifted, no outline, words at a readable 14 px. */
+[data-theme="roadbook"] .toast, [data-theme="roadbook"] .map-note { border: 0; border-radius: var(--r-key); box-shadow: var(--elev-1); padding: 12px 16px; font-size: 14px; line-height: 1.3; }
