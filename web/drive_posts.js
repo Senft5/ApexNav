@@ -739,7 +739,10 @@
       };
       Promise.resolve(page.crews ? page.crews() : []).then((crews) => {
         const opts = Array.isArray(crews) && crews.length ? [['', 'All'], ['friends=1', 'Friends'], ...crews.map((c) => [`crew=${encodeURIComponent(c.id)}`, c.name])] : [];
-        if (only && !opts.some(([q]) => q === only)) show('');               // a crew picked before, left since: All again
+        // a crew picked before, left since: All again. Crews that didn't load (no list) change nothing: a redraw while the
+        // list was being asked for used to drop the driver's pick back to All
+        if (!Array.isArray(crews)) return;
+        if (only && !opts.some(([q]) => q === only)) show('');
         if (!opts.length) return;
         if (opts.length > 3) pick.className = 'stamps feed-pick';
         pick.replaceChildren(...opts.map(([q, label]) => { const b = btn(label, () => show(q), 'chip'); b.dataset.q = q; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(q === only)); b.classList.toggle('on', q === only); return b; }));
@@ -752,7 +755,9 @@
         mutedBox.replaceChildren(el('b', { textContent: 'Muted' }), ...[...muted].map((h) => el('div', { className: 'row feed-muted-row' },
           el('span', { textContent: `@${h}` }), btn('Unmute', () => setMuted(h, false), 'linkbtn'))));
       };
-      onMute.add(() => show(only));
+      // a Feed the page has drawn over since lets go of mutes (it used to call show() and move the pick under the new one)
+      const onMuted = () => { if (!list.isConnected) { onMute.delete(onMuted); return; } show(only); };
+      onMute.add(onMuted);
       paintMuted();
       load();
       return el('div', { className: 'stack-12' }, pick, list, more, mutedBox);
