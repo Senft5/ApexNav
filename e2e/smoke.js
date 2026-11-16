@@ -7763,6 +7763,12 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
     'who gave kudos, with their faces: ' + await page.textContent('.feed-sheet .feed-kudos-from'));
   await page.click('.feed-sheet .feed-kudos-from');
   await page.waitForSelector('.feed-kudos-sheet .feed-kudos-row:has-text("@dan")');
+  // (2026-11-16) Add friend beside who isn't one yet; a tap asks, and the row says Asked
+  await page.waitForSelector('.feed-kudos-sheet button[aria-label="Add @dan as a friend"]');
+  check(await page.$$eval('.feed-kudos-sheet .feed-kudos-add button', (l) => l.length) === 2, 'Add friend beside each who is not a friend yet');
+  await page.click('.feed-kudos-sheet button[aria-label="Add @dan as a friend"]');
+  await page.waitForSelector('.feed-kudos-sheet .feed-kudos-line:has-text("@dan") small:text-is("Asked")');
+  check(sent.some((x) => x.m === 'POST' && x.p === '/api/friends/request' && JSON.parse(x.b).handle === 'dan'), 'Add friend sends the request');
   await page.click('.feed-kudos-sheet button:has-text("Done")');
   await page.waitForSelector('.feed-kudos-sheet', { state: 'detached' });
   // (2026-11-14) Reply under a comment puts its writer's handle in the box

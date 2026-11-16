@@ -4,7 +4,8 @@
 - Done: under a friend's profile head, Message, Drive with (was Convoy) and Challenge (was Challenge on a stage), then ··· (48 pt) opening a sheet with On the map, Share a route, Report, Block and Unfriend (red, last) and Cancel. The foot of Unfriend / Report / Block is gone (screen inventory, Friends row). `profile_view.js` `show()` takes `more`. e2e: the friend profile flows check the keys and the ··· sheet.
 - Done: duels move into the friend's profile: Friends shows only a challenge waiting on your answer; on, sent or over, the card sits on that friend's profile under the keys (`duels.cards({ with, asks })`). e2e "duels:" checks it.
 - Done: Find or start a crew: a crew near you is its preview card (its mark, name, one line, Join crew, Report); no crews near says "Start one below", and no answer has Try again. e2e "People, a new account…" checks it.
-- Next: the inventory's remaining rows: Kudos list with Add friend; Invite sheet with friends to tick; signed out / offline profile skeleton (Settings is the UI thread's).
+- Done: the Kudos list puts Add friend beside each giver who isn't your friend yet (Asked once sent, or when a request is waiting either way); the same request the Invite sheet sends. e2e "drive posts: Post on a scored…" checks it.
+- Next: the inventory's remaining rows: the crew Invite sheet with friends to tick; signed out / offline profile skeleton (Settings is the UI thread's).
 
 # CALL SHEET
 
