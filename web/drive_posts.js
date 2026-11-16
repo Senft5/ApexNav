@@ -800,13 +800,14 @@
         let settled = false;
         const finish = (v) => { if (settled) return; settled = true; s.close(); done(v); };
         s.ov.addEventListener('click', (e) => { if (e.target === s.ov) finish(false); });
-        let to = null;                                                   // null: your friends
+        // null: your friends; a crew's Posts tab hands its crew (d.to), while you are in it
+        let to = d.to && crews.some((c) => c.id === d.to) ? d.to : null;
         const opts = [[null, 'Friends'], ...crews.map((c) => [c.id, c.name])];
         // who sees it: one slide switch (Friends, or a crew), as every pick of one in the app; stamps past three
         const chips = el('div', { className: opts.length <= 3 ? 'switch' : 'stamps', role: 'radiogroup' });
         chips.setAttribute('aria-label', 'Post to');
         // a crew drive you were marked at that day: that crew is picked, and the post will say who came (GET /api/feed/with)
-        let along = null, picked = false;
+        let along = null, picked = !!to;
         const withNote = el('p', { className: 'feed-with post-with', hidden: true });
         // who came, on a post to friends (2026-11-15): tap up to five friends; they see "With you" and a For you line
         const tags = new Set();

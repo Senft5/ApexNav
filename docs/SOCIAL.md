@@ -274,6 +274,8 @@ and in random batches so a trace cannot be re-assembled.
 - Manage crew (the owner's key) holds the crew's name (a rename alone, `PUT /api/crews/:id` `{ name }`), who can invite,
   who can find it, what it sees of yours, and Delete crew (the owner leaving ends it). Joined (a member's key) is Your
   settings: what it sees of yours, and Leave crew.
+- Posts opens with one composer row, Post your latest drive: the Post sheet with your newest drive from the last 30 days,
+  this crew already picked (no drive yet: one line saying so).
 - No migration.
 
 ### 2.19 A drive, ready to post (members; built 2026-11-16)

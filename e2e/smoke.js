@@ -3846,6 +3846,20 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(/PINNED · CREW DRIVE/.test(await page.textContent('#cpPane-posts .cp-next')) && /Dawn run/.test(await page.textContent('#cpPane-posts .cp-next')) && /1 going/.test(await page.textContent('#cpPane-posts .cp-next')), 'the next drive pinned on Posts');
   await page.waitForSelector('#cpPane-posts .crew-drives:not([hidden]) .feed-card');
   check(await page.isHidden('#cpPane-posts .cp-posts-hint'), 'with posts, no hint');
+  // the group's composer (2026-11-16): Post your latest drive opens the sheet with this crew picked, and posts it there
+  await page.evaluate(async () => {
+    const lat = [], lon = []; for (let i = 0; i < 600; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
+    await ApexRecording.store({ id: 'cp1', name: 'Tail of the Dragon', date: new Date(Date.now() - 2 * 3600e3).toISOString(), lat, lon, dist: lat.map((_, i) => i * 5),
+      speed_mps: lat.map(() => 15), lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] });
+  });
+  await page.click('#cpPane-posts .cp-compose');
+  await page.waitForSelector('.post-sheet [role="radiogroup"] button[aria-checked="true"]:has-text("Ridge Runners")');
+  check(await page.inputValue('.post-sheet .post-name') === 'Tail of the Dragon', 'the latest drive, named, with the crew picked');
+  await page.click('.post-sheet button:text-is("Post")');
+  await page.waitForSelector('.post-sheet', { state: 'detached' });
+  const cpost = sent.filter((x) => x.m === 'POST' && x.p === '/api/posts').pop();
+  check(cpost && JSON.parse(cpost.b).crew_id === 'k1' && JSON.parse(cpost.b).title === 'Tail of the Dragon', 'posted to the crew: ' + (cpost && cpost.b.slice(0, 120)));
+  await page.waitForSelector('#cpPane-posts .cp-next');
   await page.click('#cpPane-posts .cp-next');
   check(await page.getAttribute('[data-cp-tab="drives"]', 'aria-selected') === 'true', 'the pinned drive opens Drives');
   await page.click('.crew-page .cp-chat-key');
