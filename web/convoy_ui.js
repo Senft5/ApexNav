@@ -355,10 +355,15 @@
       }, 'ink-btn');
     }
     // The calls as a sheet's block, in rows that wrap (never a row cut off at the screen's edge); a call closes the sheet.
+    // the calls the public report has no mark for (this file loads on first use, so they stay off the map page's startup)
+    const OWN_MARKS = {
+      bump: '<path d="M3 17h4.5c1.8 0 2.6-5 4.5-5s2.7 5 4.5 5H21"/><path d="M3 20h18"/>',
+      stopped: '<path d="M5 15l1.6-4.6A2 2 0 0 1 8.5 9h7a2 2 0 0 1 1.9 1.4L19 15v3.5H5z"/><circle cx="8" cy="15.5" r="1"/><circle cx="16" cy="15.5" r="1"/><path d="M12 3v3.5M8.5 4.5l1 1.8M15.5 4.5l-1 1.8"/>',
+      regroup: '<path d="M6 21V4h11l-2.2 4 2.2 4H6"/>' };
     function callsBox(done) {
       const grid = el('div', { className: 'hz-grid cv-call-grid' });
       // each call its mark over its word, as the public kinds below it (cockpit.js ApexHazardIcons); words alone without it
-      const mark = (b, k) => { const d = window.ApexHazardIcons && window.ApexHazardIcons[k]; if (!d) return b;
+      const mark = (b, k) => { const d = OWN_MARKS[k] || (window.ApexHazardIcons && window.ApexHazardIcons[k]); if (!d) return b;
         b.classList.add('hz-btn', 'hz-drawn'); b.insertAdjacentHTML('afterbegin', `<svg class="hz-ico" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`); return b; };
       for (const k of LEADER_CALLS) grid.append(labelled(mark(btn(C.KINDS[k], () => { done(); callOut(k); }, 'ink-btn hz-btn'), k), `Call ${C.KINDS[k]} to the convoy`));
       grid.append(mark(regroupKey(done), 'regroup'));

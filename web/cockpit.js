@@ -11030,11 +11030,7 @@
       animal: '<circle cx="6.5" cy="10.5" r="1.8"/><circle cx="10" cy="6.5" r="1.8"/><circle cx="14" cy="6.5" r="1.8"/><circle cx="17.5" cy="10.5" r="1.8"/><path d="M8 17.3c0-3 1.8-5.3 4-5.3s4 2.3 4 5.3c0 1.6-1.6 2.7-4 2.7s-4-1.1-4-2.7z"/>',
       police: '<path d="M12 3l7 2.8v5.4c0 4.6-3 7.9-7 9.8-4-1.9-7-5.2-7-9.8V5.8z"/><path d="M12 8.2l1.2 2.5 2.7.3-2 1.9.6 2.7-2.5-1.4-2.5 1.4.6-2.7-2-1.9 2.7-.3z"/>',
       closure: '<rect x="3" y="7.5" width="18" height="6" rx="1"/><path d="M7.5 7.5l-3 6M13 7.5l-3 6M18.5 7.5l-3 6M6 13.5V20M18 13.5V20"/>' };
-    // the convoy's own calls (convoy_ui.js) draw from the same marks, with a bump, a stopped car and a regroup flag of their own
-    window.ApexHazardIcons = { ...HZ_ICON,
-      bump: '<path d="M3 17h4.5c1.8 0 2.6-5 4.5-5s2.7 5 4.5 5H21"/><path d="M3 20h18"/>',
-      stopped: '<path d="M5 15l1.6-4.6A2 2 0 0 1 8.5 9h7a2 2 0 0 1 1.9 1.4L19 15v3.5H5z"/><circle cx="8" cy="15.5" r="1"/><circle cx="16" cy="15.5" r="1"/><path d="M12 3v3.5M8.5 4.5l1 1.8M15.5 4.5l-1 1.8"/>',
-      regroup: '<path d="M6 21V4h11l-2.2 4 2.2 4H6"/>' };
+    window.ApexHazardIcons = HZ_ICON;   // convoy_ui.js draws its calls with them
     for (const k of ApexHazardReports.KINDS) {
       const b = document.createElement('button'); b.className = 'ink-btn hz-btn' + (HZ_ICON[k] ? ' hz-drawn' : ''); b.dataset.kind = k;
       if (HZ_ICON[k]) b.innerHTML = `<svg class="hz-ico" viewBox="0 0 24 24" aria-hidden="true">${HZ_ICON[k]}</svg>`;
