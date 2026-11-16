@@ -125,3 +125,7 @@
 [data-theme="roadbook"] .log-page details.quiet > :not(summary) { margin-bottom: 14px; }
 [data-theme="roadbook"] .log-page details.quiet :is(button.btn, a.btn, label.btn):not(.solid):not(.on):not([aria-pressed="true"]):not(.danger) { background: var(--panel); }   /* a key on the card stands off it */
 [data-theme="roadbook"] .log-page details.quiet .stamps > :is(button, .chip):not(.on):not([aria-pressed="true"]):not([aria-checked="true"]) { background: var(--panel); }
+
+/* the map's credits key: the last square ink box on the map; a small lifted round button like the map's other keys */
+[data-theme="roadbook"] #map .maplibregl-ctrl-attrib.maplibregl-compact { border: 0; border-radius: 12px; box-shadow: var(--elev-1); }
+[data-theme="roadbook"] #map .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-button { border-left: 0; }
