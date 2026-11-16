@@ -54,6 +54,17 @@
     #app.live .convoy-bar { top: auto; bottom: 10px; left: 10px; right: auto; max-width: min(360px, calc(100% - 90px)); flex-direction: row; align-items: center; gap: 0;
       border: 1.5px solid var(--panel-ink); box-shadow: 0 2px 0 var(--rule); }
     #app.live .convoy-bar .cv-line { flex: 1 1 auto; }
+    .convoy-bar .cv-faces { display: none; }
+    /* a calm drive: a pill of your friends' faces behind the car; the name and the count are read, not shown, while live */
+    #app.live .convoy-bar { border-radius: 999px; overflow: hidden; }
+    #app.live .convoy-bar .cv-line { min-height: 44px; padding: 0 14px 0 10px; }
+    #app.live .convoy-bar .cv-faces { display: flex; flex: none; }
+    #app.live .convoy-bar .cv-faces b { width: 26px; height: 26px; margin-left: -7px; border-radius: 50%; border: 2px solid var(--panel); background: var(--panel-ink); color: var(--panel);
+      font: 800 13px/22px var(--font-num); text-align: center; overflow: visible; }
+    #app.live .convoy-bar .cv-faces b:first-child { margin-left: 0; }
+    #app.live .convoy-bar .cv-faces b.more { background: var(--panel-dim); }
+    #app.live .convoy-bar .cv-line > b, #app.live .convoy-bar .cv-line.ok > span:not(.cv-faces):not(.cv-talking):not(.cv-rg) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    #app.live .convoy-bar .cv-line.ok::after { content: "Convoy"; font-weight: 700; }
     #app.live .stage:has(> .convoy-bar.show) > .plates { bottom: 82px; }   /* a Pro trial's line, if any, goes over the convoy's */
     @media (orientation: landscape) and (max-height: 540px) {
       #app.live .convoy-bar { left: calc(10px + var(--safe-left)); bottom: calc(10px + var(--safe-bottom)); max-width: min(360px, calc(100% - 90px - var(--safe-left) - var(--safe-right))); }
@@ -318,6 +329,13 @@
       if (client.regroup) live.regroup = el('span', { className: 'cv-rg' });
       const name = s.ctx ? s.ctx.name : 'Convoy', calling = callsOn();
       const ln = line(s.status === 'live' ? '' : 'off', name, live.headline);
+      // a calm drive (Nate, 2026-11-16): in a drive the line is a chip of faces; the names and the count stay for VoiceOver
+      const others = (s.members || []).filter((m) => m.key !== (s.ctx && s.ctx.you) && m.online);
+      const faces = el('span', { className: 'cv-faces' });
+      for (const m of others.slice(0, 3)) faces.append(el('b', { textContent: String(m.handle || '?').replace(/^@/, '').slice(0, 1).toUpperCase() }));
+      if (others.length > 3) faces.append(el('b', { className: 'more', textContent: `+${others.length - 3}` }));
+      ln.insertBefore(faces, ln.children[1]);
+      ln.classList.toggle('ok', s.status === 'live');
       if (live.regroup) ln.append(live.regroup);
       if (voiceOffered()) ln.append(live.talk = el('span', { className: 'cv-talking' }));
       const kids = [labelled(ln, `Convoy ${name}. ${calling ? 'Open it for your calls' : 'Open it'}`)];
