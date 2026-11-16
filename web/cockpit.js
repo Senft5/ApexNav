@@ -2708,7 +2708,7 @@
         if (!t || ev.target.closest('button, a')) return;                // the Trip key and links keep their own taps
         // a calm drive (index.html #app.drive-more): in a drive the speed is the way to the rest of the panel and back
         const app = $('app');
-        if (id === 'cluster' && t.dataset.explain === 'speed' && app.classList.contains('live') && !app.classList.contains('replaying')) {
+        if (id === 'cluster' && t.dataset.explain === 'speed' && $('cluster').classList.contains('cluster-line') && app.classList.contains('live') && !app.classList.contains('replaying')) {
           app.classList.toggle('drive-more'); return;   // the map follows its box (ResizeObserver)
         }
         openExplain(t.dataset.explain);

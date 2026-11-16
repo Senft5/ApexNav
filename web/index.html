@@ -2017,28 +2017,41 @@
     /* A calm drive (Nate, 2026-11-16: "the screen is cluttered in general while driving"). Upright, at speed, the panel is one
        row: the speed and the limit (Sight only when you are over it; its plate rides the map), then the arrival, Report as a
        glyph and End. The G-ball, the speed ruler and the trip ledger are for after the drive (the replay) or a tap on the
-       speed (#app.drive-more). The map takes the room they had. */
+       speed (#app.drive-more). The map takes the room they had. The Vetta Line cluster only: Tapedeck's and Billet's dials
+       keep their own panel for now. */
     @media not ((orientation: landscape) and (max-height: 540px)) {
-      #app.live:not(.replaying):not(.drive-more) > .binnacle { grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 10px; padding-top: 6px; }
-      #app.live:not(.replaying):not(.drive-more) > .binnacle > #cluster { grid-column: 1; grid-row: 1; }
-      #app.live:not(.replaying):not(.drive-more) > .binnacle > #driveBar { grid-column: 2; grid-row: 1; border-bottom: 0; min-height: 0; padding: 0; gap: 8px; justify-content: flex-end; }
-      #app.live:not(.replaying):not(.drive-more) #cluster.cluster-line { grid-template-columns: auto auto; grid-template-areas: "speed read"; column-gap: 8px; min-height: 0; padding: 0; border: 0; }
-      #app.live:not(.replaying):not(.drive-more) #cluster.cluster-line > :is(.dial-g, .speed-line, .ledger, .rule) { display: none; }
-      #app.live:not(.replaying):not(.drive-more) #cluster .ro-sight:not(.short) { display: none; }
-      #app.live:not(.replaying):not(.drive-more) #cluster .readouts { gap: 6px; }
-      #app.live:not(.replaying):not(.drive-more) #driveBar .dbstat { flex: 1 1 auto; min-width: 0; text-align: right; }
-      #app.live:not(.replaying):not(.drive-more) #cluster.cluster-line > .dial.dial-speed { max-width: 126px; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) > .binnacle { grid-template-columns: minmax(0, auto) max-content; justify-content: space-between; align-items: center; column-gap: 10px; padding-top: 6px; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) > .binnacle > #cluster { grid-column: 1; grid-row: 1; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) > .binnacle > #driveBar { grid-column: 2; grid-row: 1; border-bottom: 0; min-height: 0; padding: 0; gap: 8px; justify-content: flex-end; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #cluster.cluster-line { grid-template-columns: minmax(0, auto) auto; grid-template-areas: "speed read"; column-gap: 8px; min-height: 0; padding: 0; border: 0; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #cluster.cluster-line > :is(.dial-g, .speed-line, .ledger, .rule) { display: none; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #cluster .ro-sight:not(.short) { display: none; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #cluster .readouts { gap: 6px; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #driveBar .dbstat { flex: 1 1 auto; min-width: 0; text-align: right; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #cluster.cluster-line > .dial.dial-speed { width: 126px; max-width: 100%; min-width: 72px; }   /* gives way to a long time left (~1:30 hr) */
+      /* a free drive's line ("● Rec 0.82 mi", "Waiting for GPS") stacks in a narrow column beside Report, never at the speed's cost */
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #dsMain:not(.has-trip) { max-width: 60px; font-size: 14px; line-height: 1.2; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #dsMain:not(.has-trip) b { font-size: 14px; }
       /* the line's news (a report sent, weak GPS, calibrating) has no room in the row: it is a slip over the map's foot */
-      #app.live:not(.replaying):not(.drive-more) #driveStat > :is(#dsNote, #dsWarn):not([hidden]) { position: absolute; left: 10px; right: 10px; bottom: calc(100% + 8px); z-index: 4;
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #driveStat > :is(#dsNote, #dsWarn):not([hidden]) { position: absolute; left: 10px; right: 10px; bottom: calc(100% + 8px); z-index: 4;
         margin: 0; padding: 10px 14px; text-align: left; font-size: 14px; background: var(--panel); border: 1px solid var(--rule); border-radius: var(--r-card, 0); box-shadow: var(--elev-1, none); }
-      #app.live:not(.replaying):not(.drive-more) #dsMain .trip { justify-content: flex-end; }
-      #app.live:not(.replaying):not(.drive-more) #dsMain .tf:not(:nth-child(2)) { display: none; }   /* the time left, at a glance; arrival and miles with a tap */
-      #app.live:not(.replaying):not(.drive-more) #dsMain .trip { flex-wrap: nowrap; }
-      #app.live:not(.replaying):not(.drive-more) #dsMain.has-trip .ds-sub { display: none; }
-      #app.live:not(.replaying):not(.drive-more) #hzReportBtn { width: 48px; min-width: 48px; padding: 0; font-size: 0; display: grid; place-items: center; }
-      #app.live:not(.replaying):not(.drive-more) #hzReportBtn::before { content: ""; width: 24px; height: 22px; background: currentColor;
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #dsMain .trip { justify-content: flex-end; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #dsMain .tf:not(:nth-child(2)) { display: none; }   /* the time left, at a glance; arrival and miles with a tap */
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #dsMain .trip { flex-wrap: nowrap; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #dsMain.has-trip .ds-sub { display: none; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #hzReportBtn { width: 48px; min-width: 48px; padding: 0; font-size: 0; display: grid; place-items: center; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #driveBar > #driveEnd { min-width: 60px; margin: 0; padding: 0 12px; }   /* the time left's room */
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #hzReportBtn::before { content: ""; width: 24px; height: 22px; background: currentColor;
         -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 22'%3E%3Cpath d='M12 1.5 L23 20.5 H1 Z' fill='none' stroke='black' stroke-width='2.4' stroke-linejoin='round'/%3E%3Cpath d='M12 8 V13.5' stroke='black' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='17' r='1.5'/%3E%3C/svg%3E") center / contain no-repeat;
                 mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 22'%3E%3Cpath d='M12 1.5 L23 20.5 H1 Z' fill='none' stroke='black' stroke-width='2.4' stroke-linejoin='round'/%3E%3Cpath d='M12 8 V13.5' stroke='black' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='17' r='1.5'/%3E%3C/svg%3E") center / contain no-repeat; }
+    }
+    /* a 320 px phone: Report and End at their 44 px floor, so the speed keeps more of its size */
+    @media (max-width: 359px) and (orientation: portrait) {
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) > .binnacle { column-gap: 6px; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #cluster.cluster-line { column-gap: 4px; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) > .binnacle > #driveBar { gap: 4px; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #hzReportBtn { width: 44px; min-width: 44px; }
+      #app.live:not(.replaying):not(.drive-more):has(#cluster.cluster-line) #driveBar > #driveEnd { min-width: 56px; padding: 0 10px; }
     }
     #dsMain .ds-sub { font-size: 13px; font-weight: 600; color: var(--panel-dim); }
     #dsMain .ds-sub b { font-size: 13px; color: var(--panel-ink); }
@@ -2096,7 +2109,7 @@
     html[data-mode="night"] #cluster.cluster-line:not(.show-trip) .trip-peek { padding: 0; min-width: 44px; text-align: left; }
     /* the drive screen as the replay (real-drive reviews): what the drive can't know steps aside, not a framed dash: the
        Score until scored, the limit sign until a limit is known, the Bank figure until measured (a web drive never is) */
-    .cluster-line .ledger > .g-score.unk, .cluster-line .ro-limit.unknown { display: none; }
+    .cluster-line .ledger > .g-score.unk, html .cluster-line .readouts .ro.ro-limit.unknown { display: none; }   /* (the sign's own rule, html .readouts .ro.ro-limit, is (0,3,1)) */
     .cluster-line .g-line .dial-digital.small.unk { visibility: hidden; }
     @media (orientation: landscape) and (max-height: 540px), (max-width: 359px) {
       /* a narrow column (a phone on its side, a small phone): the numeral keeps its size; the meter moves down beside the ledger */
