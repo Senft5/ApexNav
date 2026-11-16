@@ -7973,6 +7973,13 @@
       const roads = (...ds) => ds.map((d) => `<path class="jr-case" d="${d}"/>`).join('') + ds.map((d) => `<path class="jr-fill" d="${d}"/>`).join('');   // casings first: roads that meet, join
       const pucks = (...at) => at.map(([x, y, lead]) => `<circle class="jr-puck${lead ? ' lead' : ''}" cx="${x}" cy="${y}" r="7"/>`).join('');
       const drawing = (inner) => el('div', { className: 'join-art', innerHTML: `<svg viewBox="0 0 360 128" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${inner}</svg>` });
+      // Your profile before Vetta knows you (signed out, or no answer): the same head as yours, a face still to come, -- for the numbers.
+      const profileSkeleton = (title, sub, keys) => {
+        const face = el('span', { className: 'ph-ghost', innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M4.5 20c1.2-4 4.2-6 7.5-6s6.3 2 7.5 6"/></svg>' });
+        if (!window.ApexProfileHead) return el('div', { className: 'stack-8 garage-you' }, el('h3', { textContent: title }), el('p', { className: 'note', textContent: sub }), ...keys.map(([l, run]) => btn(l, run, 'ink-btn solid')));
+        return el('div', { className: 'stack-12 garage-you skel' }, ApexProfileHead.draw({ el, btn, face, title, sub, car: null,
+          counts: [{ n: null, label: 'Drives' }, { n: null, label: 'Friends' }, { n: null, label: 'Crews' }], keys }));
+      };
       if (!me) {
         // No answer from the server is a page too (design pass 5, 2026-11-10; it was a heading, a grey line and a key at the
         // top of an empty sheet): the road stops where the signal does, you are still on it, and what works without a
@@ -7990,7 +7997,12 @@
         body.append(lost('Friends and who’s out driving'));
         cbody.append(lost('Crews, their drives and boards'));
         // the Garage's own corner said nothing (an empty band over Look and voice): it says what is missing and what isn't
-        gbody.append(el('h3', { textContent: 'Your cars' }), el('p', { className: 'note', textContent: `${offline ? 'Your cars and profile need a connection.' : 'Your cars and profile will be back when Vetta answers.'} Looks, voices and settings work without it.` }), again('ink-btn'));
+        // the Garage keeps its shape (inventory 2026-11-16): your profile's head with the handle this phone last knew, -- for
+        // what needs the server, and Try again as its key; what still works is one line under it
+        let known = ''; try { known = localStorage.getItem('apex.myHandle') || ''; } catch (_) {}
+        gbody.append(profileSkeleton(known ? `@${known}` : 'Your profile', offline ? 'You’re offline. Your profile is back with signal.' : 'Can’t reach Vetta. Your profile is back when it answers.',
+          [['Try again', (e) => { const b = e && e.currentTarget; if (b) { b.disabled = true; b.textContent = 'Trying…'; } redo(); }]]),
+          el('h3', { textContent: 'Your cars' }), el('p', { className: 'note', textContent: 'Your cars need a connection. Looks, voices and settings work without it.' }));
         return;
       }
       const inviteFromLink = params2.get('invite'), crewFromLink = params2.get('crew'), addFromLink = params2.get('add');
@@ -8033,10 +8045,12 @@
             ['<path d="M8 21l3-18M16 21l-3-18"/><circle cx="12" cy="16" r="1.6"/><circle cx="12" cy="9" r="1.6"/>', 'Convoys', 'Everyone on one map while you drive together.']),
           stash('apex.crew') ? 'You have a crew link. Sign in to see which crew, then join it.' : ''));
         // An empty bay, not a paragraph (design pass, 2026-11-10): the place a car will stand, drawn in pencil, and the key that gets you there.
-        gbody.append(el('h3', { textContent: 'Your cars' }), el('div', { className: 'empty-bay' },
+        try { localStorage.removeItem('apex.myHandle'); } catch (_) {}
+        // your profile as it will look, with the one key that makes it yours (the bay under it no longer has its own)
+        gbody.append(profileSkeleton('Your profile', 'Sign in for your drives, friends and crews.', [['Sign in', () => showView('friends')]]),
+          el('h3', { textContent: 'Your cars' }), el('div', { className: 'empty-bay' },
           el('span', { className: 'eb-slot', innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16v-3l2.2-5h13.6L21 13v3M3 16h18M3 16v2M21 16v2"/><circle cx="7.5" cy="13" r="1"/><circle cx="16.5" cy="13" r="1"/></svg>' }),
-          el('p', {}, el('b', { textContent: 'No car parked here yet' }), el('small', { textContent: 'Sign in to keep your cars and build threads.' })),
-          btn('Sign in', () => showView('friends'), 'ink-btn')));
+          el('p', {}, el('b', { textContent: 'No car parked here yet' }), el('small', { textContent: 'Sign in to keep your cars and build threads.' }))));
         ambientFromAccount(false, false);                                     // U-116
         return;
       }
@@ -8104,6 +8118,7 @@
       // numbers (drives you posted, friends, crews; each a tap to them), your handle and the car you drive, Edit profile and
       // Share, then your drives three across, each the road it drew. Who sees what stays one row under it (P-09).
       const you = el('div', { className: 'stack-12 garage-you' });
+      try { if (me.handle) localStorage.setItem('apex.myHandle', me.handle); } catch (_) {}   // the offline Garage names you with it
       you.append(el('h3', { className: 'sr-only', textContent: 'You' }));
       // TestFlight 2026-11-05: the photo itself is the key (a tap adds one, or changes or removes it on a small sheet)
       const myFace = (px) => { const f = window.ApexPhotos ? ApexPhotos.avatar(me.photo_id, me.handle, px) : el('span');

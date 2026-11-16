@@ -32,6 +32,11 @@
     .edit-face { display: grid; justify-items: center; gap: 8px; padding: 8px 0 4px; }
     .edit-face small { color: var(--panel-dim); font-size: 13px; }
     .ph-keys .ink-btn { height: 40px; min-height: 40px; padding: 0 10px; font-size: 15px; }
+    /* the largest text sizes (Dynamic Type): the face over the numbers, so three counts never run off the screen */
+    html[data-type-size] .ph-top { grid-template-columns: minmax(0, 1fr); justify-items: start; }
+    html[data-type-size] .ph-counts { width: 100%; display: flex; flex-wrap: wrap; gap: 4px 20px; }
+    html[data-type-size] .ph-count { flex: 0 1 auto; justify-items: start; }
+    .ph-count small { max-width: 100%; overflow-wrap: anywhere; }
   `;
   const CAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16v-3l2.2-5h13.6L21 13v3M3 16h18M3 16v2M21 16v2"/><circle cx="7.5" cy="13" r="1"/><circle cx="16.5" cy="13" r="1"/></svg>';
 

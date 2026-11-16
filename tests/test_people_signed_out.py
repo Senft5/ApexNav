@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def signed_out_block() -> str:
     src = (ROOT / "web" / "cockpit.js").read_text(encoding="utf-8")
     a = src.index("if (!me.signed_in) {\n        // Signed out is a page")
-    return src[a:src.index("gbody.append(el('h3', { textContent: 'Your cars' })", a)]
+    return src[a:src.index("gbody.append(profileSkeleton('Your profile'", a)]
 
 
 def test_both_sides_are_the_same_page_with_their_own_drawing_and_name():

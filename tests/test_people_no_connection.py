@@ -33,7 +33,7 @@ def test_try_again_is_at_the_foot_and_shows_it_is_trying():
 def test_both_sides_and_the_garage_say_so():
     b = lost_branch()
     assert "body.append(lost(" in b and "cbody.append(lost(" in b
-    assert "gbody.append(el('h3', { textContent: 'Your cars' })" in b      # no empty band over Look and voice
+    assert "gbody.append(profileSkeleton(" in b and "el('h3', { textContent: 'Your cars' })" in b   # the profile head keeps its shape
     assert "join-page" not in b[b.index("gbody.append"):]                  # never the People page in the Garage (#336)
 
 

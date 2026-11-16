@@ -299,6 +299,9 @@
     .cp-member-list .cp-member { width: 100%; grid-template-columns: auto minmax(0, 1fr) auto; justify-items: start; align-items: center; gap: 12px; min-height: 60px; border-bottom: 1px solid var(--hair, var(--rule)); text-align: left; cursor: pointer; }
     .cp-member-list .cp-member[hidden] { display: none; }
     .cp-member-who { display: grid; min-width: 0; } .cp-member-who b { overflow-wrap: anywhere; }
+    .cp-member-head { align-items: center; gap: 12px; } .cp-member-head h2 { flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+    .cp-member-keys { align-items: stretch; gap: 8px; } .cp-member-key { display: contents; } .cp-member-keys .ink-btn { min-height: 44px; }
+    .cp-member-keys .ink-btn.solid { flex: 1; } .cp-member-keys .pv-more { flex: none; width: 48px; padding: 0; }
     .cp-member-list .cp-member small { max-width: none; white-space: normal; font-size: 13px; }
     .cp-member-list .cp-member em { position: static; transform: none; }
     .cp-member-list .cp-member.live .avatar { box-shadow: 0 0 0 2px var(--panel); }
@@ -719,7 +722,7 @@
       const sub = el('p', { className: 'note', textContent: subText });
       // a crew-mate is one tap from a friend, as on any social app (Nate 2026-11-12): Add friend, Accept when they asked
       // first, Request sent once asked; a friend already says so on the line under the name
-      const key = el('div', { className: 'row' });
+      const key = el('div', { className: 'cp-member-key' });
       if (!m.mine && page.friendOf && page.addFriend) {
         page.friendOf(m.handle).then((st) => {
           if (st === 'friend') { sub.textContent = `${subText} \u00b7 your friend`; return; }
@@ -735,20 +738,22 @@
           key.replaceChildren(b);
         }).catch(() => {});
       }
-      const foot = el('div', { className: 'row' });
-      if (!m.mine && page.report) foot.append(btn('Report', () => { close(); page.report({ kind: 'user', target: m.handle, label: `@${m.handle} in ${c.name}`, who: m.handle }); }, 'linkbtn'));
-      if (!m.mine && page.block) foot.append(btn('Block', () => { close(); page.block(m.handle); }, 'linkbtn'));
-      // the owner runs the crew: Remove takes someone out (their shares and invite links go with them; social.ts crewRemoveMember)
-      const own = c.is_owner && !m.mine && m.role !== 'owner' ? btn('Remove from crew', async () => {
+      // the rarer things behind ··· (the friend profile's shape, 2026-11-16): Report, Block, and for the owner Remove from
+      // crew last, in red (their shares and invite links go with them; social.ts crewRemoveMember)
+      const more = [];
+      if (!m.mine && page.report) more.push(['Report', () => { close(); page.report({ kind: 'user', target: m.handle, label: `@${m.handle} in ${c.name}`, who: m.handle }); }]);
+      if (!m.mine && page.block) more.push(['Block', () => { close(); page.block(m.handle); }]);
+      if (c.is_owner && !m.mine && m.role !== 'owner') more.push(['Remove from crew', async () => {
         const ok = root.ApexConfirm ? await root.ApexConfirm.ask(`Remove @${m.handle} from ${c.name}? Their shared Scores leave the crew. They can come back only with a new invite.`, 'Remove') : true;
         if (!ok) return;
         const r = await apiCall('DELETE', `/api/crews/${encodeURIComponent(c.id)}/members/${encodeURIComponent(m.handle)}`).catch(() => null);
         if (r && r.ok) { toast(`@${m.handle} is out of ${c.name}.`); close(); if (redraw) redraw(); } else toast('Couldn\u2019t remove them. Try again.');
-      }, 'danger-btn') : null;
-      foot.append(btn('Done', close, 'linkbtn'));   // last: the sheet's way out, after what it holds
+      }, 'danger-btn']);
+      const PV = root.ApexProfileView;
+      const keys = el('div', { className: 'row cp-member-keys' }, key, ...(more.length && PV && PV.moreKey ? [PV.moreKey(el, btn, `@${m.handle}`, more)] : []));
       ov.append(el('div', { className: 'card-sheet' },
-        el('div', { className: 'row', style: 'align-items:center;gap:12px' }, P() ? P().avatar(m.photo_id || null, m.handle, 56) : '', el('h2', { textContent: `@${m.handle}` })),
-        sub, ...(state ? [el('p', { textContent: state })] : []), key, ...(own ? [own] : []), foot));
+        el('div', { className: 'row cp-member-head' }, P() ? P().avatar(m.photo_id || null, m.handle, 56) : '', el('h2', { textContent: `@${m.handle}` }), btn('Done', close, 'linkbtn')),
+        sub, ...(state ? [el('p', { textContent: state })] : []), keys));
       root.document.body.append(ov);
     }
 

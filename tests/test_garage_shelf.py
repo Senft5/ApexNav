@@ -33,10 +33,19 @@ def test_a_sideways_drag_on_the_shelf_turns_it_and_never_closes_the_sheet():
     assert "shelveLooks();" in src[src.index("function renderThemePicker()"):src.index("function shelveLooks()")]
 
 
-def test_your_cars_signed_out_is_an_empty_bay_with_the_key_to_sign_in():
+def test_your_cars_signed_out_is_an_empty_bay_under_a_profile_skeleton():
     src = cockpit_source()
     assert "Sign in (People) to keep your cars" not in src                           # no "(People)" directions in prose
     bay = src[src.index("className: 'empty-bay'"):src.index("className: 'empty-bay'") + 900]
-    assert "No car parked here yet" in bay and "btn('Sign in', () => showView('friends'), 'ink-btn')" in bay
+    assert "No car parked here yet" in bay and "btn('Sign in'" not in bay           # one Sign in: the profile head's
+    assert "profileSkeleton('Your profile', 'Sign in for your drives, friends and crews.', [['Sign in', () => showView('friends')]])" in src
     assert re.search(r"\.empty-bay \.eb-slot \{[^}]*dashed", HTML)
     assert "html[data-type-size] .empty-bay { grid-template-columns: minmax(0, 1fr); }" in HTML
+
+
+def test_the_offline_garage_keeps_the_profile_head_with_the_last_known_handle():
+    src = cockpit_source()
+    assert "localStorage.setItem('apex.myHandle', me.handle)" in src and "localStorage.removeItem('apex.myHandle')" in src
+    off = src[src.index("let known = ''"):src.index("let known = ''") + 900]
+    assert "profileSkeleton(known ? `@${known}` : 'Your profile'" in off and "'Try again'" in off
+    assert re.search(r"\.ph-ghost \{[^}]*dashed", HTML)
