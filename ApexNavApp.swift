@@ -460,6 +460,8 @@ struct ApexCockpitWebView: UIViewRepresentable {
 @MainActor
 final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
     weak var shell: ApexSensorShell?
+    private static let noteTap = UIImpactFeedbackGenerator(style: .light)
+    private static let warnTap = UINotificationFeedbackGenerator()
 
     init(shell: ApexSensorShell) {
         self.shell = shell
@@ -598,10 +600,14 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             return
         }
         if cmd == "haptic" {
+            // one generator each, kept and prepared again after each tap, so a call's tap fires at once instead of first
+            // waking the Taptic Engine on the main thread as the call starts
             if (body as? [String: Any])?["kind"] as? String == "hazard" {
-                UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                Self.warnTap.notificationOccurred(.warning)
+                Self.warnTap.prepare()
             } else {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                Self.noteTap.impactOccurred()
+                Self.noteTap.prepare()
             }
             return
         }
@@ -2009,19 +2015,24 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     /// A web voice clip is about to play. The page waits for the answer (`promptStyle`) and skips the clip unless it's
     /// "normal": CarPlay asks navigation apps to stay silent during a call or Siri, or to play only a tone.
+    /// The session work runs on the audio queue (ApexAudioSession), so the page's frames never wait on it; the page hears
+    /// the style when it is known, and a line it cannot hold for that plays anyway (cockpit.js voiceBracket, 250 ms).
     func webVoiceBegin(duck: Bool) {
-        let style = currentPromptStyle(duck: duck)
-        switch style {
-        case AVAudioSession.PromptStyle.none:
-            break
-        case AVAudioSession.PromptStyle.short:
-            playPromptTone()
-        default:
-            webVoiceActive = true
-            beginVoice(duck: duck)
+        webVoiceActive = true                                  // held from now, so no release lands between this and the clip
+        voiceEndGen += 1
+        withPromptStyle(duck: duck) { [weak self] style in
+            guard let self else { return }
+            switch style {
+            case AVAudioSession.PromptStyle.none:
+                break
+            case AVAudioSession.PromptStyle.short:
+                self.playPromptTone()
+            default:
+                if self.webVoiceActive { self.beginVoice(duck: duck) }   // (unless the page already said voiceEnd)
+            }
+            let name = style == AVAudioSession.PromptStyle.none ? "none" : style == AVAudioSession.PromptStyle.short ? "short" : "normal"
+            self.evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'promptStyle',style:'\(name)'}); void 0;")
         }
-        let name = style == AVAudioSession.PromptStyle.none ? "none" : style == AVAudioSession.PromptStyle.short ? "short" : "normal"
-        evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'promptStyle',style:'\(name)'}); void 0;")
     }
 
     /// The voice bank's clips, played here rather than by the page's WebAudio, which WebKit stops while the phone is locked.
@@ -2129,7 +2140,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         talkOn = on
         if on {
             configureTalkSession(duck: false)
-            try? AVAudioSession.sharedInstance().setActive(true)
+            ApexAudioSession.activate()
         } else if synth.isSpeaking || webVoiceActive {
             configureVoiceSession()
         } else {
@@ -2140,13 +2151,13 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private func configureTalkSession(duck: Bool) {
         var options: AVAudioSession.CategoryOptions = [.allowBluetooth, .allowBluetoothA2DP, .defaultToSpeaker]   // .allowBluetooth: HFP, the name every SDK the CI builds with knows
         options.insert(duck && !pauseMusic ? .duckOthers : .mixWithOthers)
-        try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: options)
+        ApexAudioSession.set(.playAndRecord, mode: .voiceChat, options: options)
     }
 
     private func holdForSoundtrack() {
-        if talkOn { configureTalkSession(duck: false); try? AVAudioSession.sharedInstance().setActive(true); return }
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
-        try? AVAudioSession.sharedInstance().setActive(true)
+        if talkOn { configureTalkSession(duck: false); ApexAudioSession.activate(); return }
+        ApexAudioSession.set(.playback, mode: .default, options: [.mixWithOthers])
+        ApexAudioSession.activate()
     }
 
     func setVoiceMusic(_ mode: String) {
@@ -2160,21 +2171,21 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private func configureVoiceSession(duck: Bool = true) {
         if talkOn { configureTalkSession(duck: duck); return }   // convoy voice: keep the microphone open
         let options: AVAudioSession.CategoryOptions = pauseMusic ? [] : (duck ? [.duckOthers, .interruptSpokenAudioAndMixWithOthers] : [.mixWithOthers])
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: options)
+        ApexAudioSession.set(.playback, mode: .voicePrompt, options: options)
     }
 
     private func beginVoice(duck: Bool = true) {
         voiceEndGen += 1                                       // a release waiting from the line before is cancelled
         configureVoiceSession(duck: duck)                      // WebKit may have changed the category for its own media
-        try? AVAudioSession.sharedInstance().setActive(true)
+        ApexAudioSession.activate()
     }
 
     // CarPlay Developer Guide, Voice prompts: check the session's promptStyle just before each prompt. None (a phone call,
     // Siri listening): say nothing. Short: a tone instead of words. Normal: the full prompt. It is read with the session set
-    // up for prompts, which is when the system fills it in.
-    private func currentPromptStyle(duck: Bool) -> AVAudioSession.PromptStyle {
+    // up for prompts, which is when the system fills it in: on the audio queue, after the category, and handed back here.
+    private func withPromptStyle(duck: Bool, _ then: @escaping @MainActor @Sendable (AVAudioSession.PromptStyle) -> Void) {
         configureVoiceSession(duck: duck)
-        return AVAudioSession.sharedInstance().promptStyle
+        ApexAudioSession.promptStyle(then)
     }
 
     private var tonePlayer: AVAudioPlayer?
@@ -2221,7 +2232,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private func releaseVoice() {
         if talkOn { configureTalkSession(duck: false); return }   // convoy voice keeps the session; ducked music comes back up
         if soundtrackOn { holdForSoundtrack(); return }        // the Soundtrack keeps the session; other apps come back up
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        ApexAudioSession.deactivate()
     }
 
     private func speak(_ phrase: String, interrupt: Bool = false, style: String = "codriver", duck: Bool = true) {
@@ -2230,22 +2241,25 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         if interrupt && synth.isSpeaking {
             synth.stopSpeaking(at: .word)
         }
-        switch currentPromptStyle(duck: duck) {
-        case AVAudioSession.PromptStyle.none:
-            endVoiceIfIdle()
-            return
-        case AVAudioSession.PromptStyle.short:
-            playPromptTone()
-            return
-        default:
-            break
+        withPromptStyle(duck: duck) { [weak self] promptStyle in
+            guard let self else { return }
+            switch promptStyle {
+            case AVAudioSession.PromptStyle.none:
+                self.endVoiceIfIdle()
+                return
+            case AVAudioSession.PromptStyle.short:
+                self.playPromptTone()
+                return
+            default:
+                break
+            }
+            self.beginVoice(duck: duck)
+            let utterance = AVSpeechUtterance(string: phrase)
+            utterance.voice = Self.voice(for: style)
+            utterance.rate = 0.54
+            utterance.pitchMultiplier = 1.0
+            self.synth.speak(utterance)
         }
-        beginVoice(duck: duck)
-        let utterance = AVSpeechUtterance(string: phrase)
-        utterance.voice = Self.voice(for: style)
-        utterance.rate = 0.54
-        utterance.pitchMultiplier = 1.0
-        synth.speak(utterance)
     }
 }
 
@@ -2296,6 +2310,37 @@ extension ApexSensorShell: AVSpeechSynthesizerDelegate {
     }
 }
 
+/// AVAudioSession's setCategory and setActive block their thread until the audio hardware is set up again: tens of ms,
+/// and far longer when other apps' audio is ducked or handed back (deactivating waits for that). They ran on the main
+/// thread for every call, twice (begin and end), and the main thread is where the web view's frames are put on the screen,
+/// so a replay or a drive hitched as each call began and ended (the owner 2026-11-16, TestFlight: the replay "stutters"
+/// on corner calls). They run here instead, in the order asked, on one serial queue, and so do the clip files' loading
+/// (ApexClipPlayer); only the answers come back to the main thread.
+enum ApexAudioSession {
+    static let queue = DispatchQueue(label: "app.vetta.audio-session", qos: .userInitiated)
+
+    static func set(_ category: AVAudioSession.Category, mode: AVAudioSession.Mode, options: AVAudioSession.CategoryOptions) {
+        queue.async { try? AVAudioSession.sharedInstance().setCategory(category, mode: mode, options: options) }
+    }
+    static func activate() {
+        queue.async { try? AVAudioSession.sharedInstance().setActive(true) }
+    }
+    /// Gives the audio back: ducked music comes back up, paused music is told it may play on.
+    static func deactivate() {
+        queue.async { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
+    }
+    /// The prompt style once every category change asked before it has been made (it is filled in for the current one).
+    static func promptStyle(_ then: @escaping @MainActor @Sendable (AVAudioSession.PromptStyle) -> Void) {
+        queue.async {
+            let style = AVAudioSession.sharedInstance().promptStyle
+            Task { @MainActor in then(style) }
+        }
+    }
+}
+
+/// Clip players made on the audio queue and handed to the main thread, which alone touches them from then on.
+private struct ApexLoadedClips: @unchecked Sendable { let players: [AVAudioPlayer] }
+
 /// Plays a voice-bank call (one to a few clips) back to back with the page's gaps between them, in the voice session the
 /// page opened with voiceBegin. A new call stops the one playing (the page sends one call at a time; a hazard can cut in).
 /// Every clip is scheduled at once on the audio device's clock (each one's start = the last one's start + its length + the
@@ -2305,19 +2350,32 @@ extension ApexSensorShell: AVSpeechSynthesizerDelegate {
 final class ApexClipPlayer: NSObject, AVAudioPlayerDelegate {
     private var players: [AVAudioPlayer] = []
     private var done: ((Bool) -> Void)?
+    private var seq = 0                                        // the call being loaded; a newer one makes an older load stale
 
+    /// The files are opened and decoded on the audio queue (after any session change asked before them), never on the main
+    /// thread, and the call is scheduled here once they are ready.
     func play(_ files: [URL], gaps: [Double], done: @escaping (Bool) -> Void) {
         finish(false)
-        var list: [AVAudioPlayer] = []
-        for url in files {
-            guard let p = try? AVAudioPlayer(contentsOf: url) else { done(false); return }
-            p.prepareToPlay()
-            p.delegate = self
-            list.append(p)
-        }
-        guard let first = list.first else { done(false); return }
-        players = list
+        seq += 1
+        let mine = seq
         self.done = done
+        ApexAudioSession.queue.async {
+            var list: [AVAudioPlayer] = []
+            for url in files {
+                guard let p = try? AVAudioPlayer(contentsOf: url) else { break }
+                p.prepareToPlay()
+                list.append(p)
+            }
+            let loaded = ApexLoadedClips(players: list.count == files.count ? list : [])
+            Task { @MainActor in self.start(loaded.players, gaps: gaps, seq: mine) }
+        }
+    }
+
+    private func start(_ list: [AVAudioPlayer], gaps: [Double], seq mine: Int) {
+        guard mine == seq, done != nil else { return }         // a newer call (or a stop) came while these loaded
+        guard let first = list.first else { finish(false); return }
+        for p in list { p.delegate = self }
+        players = list
         var at = first.deviceCurrentTime + 0.03
         for (i, p) in list.enumerated() {
             if i > 0 { at += list[i - 1].duration + (i < gaps.count ? max(0, gaps[i]) : 0) }
