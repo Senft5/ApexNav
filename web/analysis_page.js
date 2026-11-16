@@ -652,6 +652,11 @@
         const words = { ...ApexDriverProfile.WORDS, sideWords: ApexDriverProfile.sideWords }, news = await newsOf;
         const b = ApexLogCoach.brief(list, p || null, words, Date.now(), news);
         box.hidden = !(b.headline || b.next);
+        // Nate 2026-11-16, "it should feel more like it's coaching you not just listing data": when the coach speaks, the
+        // latest Score is its first line, one card, not a second hero under it (the hero goes back when the coach is quiet)
+        const hero = $('historyCards');
+        if (hero) { if (!box.hidden && hero.parentNode !== box) box.prepend(hero); else if (box.hidden && hero.parentNode === box) box.after(hero); }
+        box.classList.toggle('has-hero', !!hero && hero.parentNode === box);
         $('logCoachHead').textContent = b.headline || 'What to work on';
         $('logCoachWhy').textContent = b.why || ''; $('logCoachWhy').hidden = !b.why;
         $('logCoachTrend').textContent = b.trend || ''; $('logCoachTrend').hidden = !b.trend;

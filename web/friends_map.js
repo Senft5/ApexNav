@@ -146,18 +146,22 @@
     function paintZones() {
       if (!map || !map.getStyle) return;
       const data = { type: 'FeatureCollection', features: layerOn ? zones().map((z) => circle(z)) : [] };
+      // Nate, 2026-11-16: "privacy zones make the map really ugly when it opens zoomed in on your house". The hatch filled the
+      // whole screen at a street's zoom. Now a soft tint in the panel's ink with a fine dashed edge, which fades as you zoom in:
+      // seen from the town it marks the place; standing in it, the map is the map.
+      let ink = '#3a342b';
+      try { ink = (getComputedStyle(d.documentElement).getPropertyValue('--panel-ink') || '').trim() || ink; } catch (_) { /* keep the fallback */ }
       try {
-        if (!map.hasImage('apex-hatch')) {
-          const c = d.createElement('canvas'); c.width = c.height = 12; const x = c.getContext('2d');
-          x.strokeStyle = 'rgba(80,72,60,0.45)'; x.lineWidth = 2; x.beginPath(); x.moveTo(-3, 15); x.lineTo(15, -3); x.moveTo(-3, 3); x.lineTo(3, -3); x.moveTo(9, 15); x.lineTo(15, 9); x.stroke();
-          map.addImage('apex-hatch', x.getImageData(0, 0, 12, 12));
-        }
         if (map.getSource('apex-home-zones')) map.getSource('apex-home-zones').setData(data);
         else {
           map.addSource('apex-home-zones', { type: 'geojson', data });
-          map.addLayer({ id: 'apex-home-zones-fill', type: 'fill', source: 'apex-home-zones', paint: { 'fill-pattern': 'apex-hatch' } });
-          map.addLayer({ id: 'apex-home-zones-line', type: 'line', source: 'apex-home-zones', paint: { 'line-color': '#3a342b', 'line-width': 1.5 } });
+          map.addLayer({ id: 'apex-home-zones-fill', type: 'fill', source: 'apex-home-zones',
+            paint: { 'fill-color': ink, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10, 0.12, 13, 0.07, 15, 0] } });
+          map.addLayer({ id: 'apex-home-zones-line', type: 'line', source: 'apex-home-zones',
+            paint: { 'line-color': ink, 'line-width': 1.5, 'line-dasharray': [2, 2], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.7, 16, 0.3] } });
         }
+        map.setPaintProperty('apex-home-zones-fill', 'fill-color', ink);   // the look's ink, day or night
+        map.setPaintProperty('apex-home-zones-line', 'line-color', ink);
       } catch (_) { if (map.once) map.once('idle', paintZones); }   // the style is still loading: once it's idle
     }
     function setLayer(on) {

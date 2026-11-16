@@ -252,7 +252,18 @@ body .cp-say textarea:focus { box-shadow: inset 0 0 0 2px var(--panel-ink); outl
 
 /* Theme cards with no essay (TestFlight 2026-11-12): the voice line keeps a breath under the Use key */
 .theme-card .tc-voice { margin-top: 10px; }
-/* the Log's coach (log_coach.js): the news in a heading, the rest a few short lines; its look is the redesign's to set */
-.log-page .log-coach { padding: 16px; margin: 0 0 12px; border-radius: 14px; background: var(--face, var(--panel)); box-shadow: var(--lift-0); }
-.log-page .log-coach h2 { margin: 0 0 6px; font-size: 22px; line-height: 1.2; }
-.log-page .log-coach p { margin: 4px 0 0; }
+/* the Log's coach (log_coach.js) as the Log's first card (2026-11-16): the latest Score, the news in a heading, why, then
+   the one thing to work on next in a well of its own and a full-width key to the drive. Numbers on demand below it. */
+.log-page .log-coach { padding: 18px 18px 16px; margin: 4px 0 16px; border-radius: 20px; background: var(--face, var(--panel)); box-shadow: var(--lift-1), inset 0 0 0 1px var(--hair); }
+.log-page .log-coach .log-hero { display: flex; flex-direction: column; padding: 0 0 12px; border: 0; }
+.log-page .log-coach .hero-what { order: -1; margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
+.log-page .log-coach .hero-score b { font-size: 72px; }
+.log-page .log-coach h2 { margin: 0 0 6px; font: 800 26px/1.08 var(--font-num); letter-spacing: 0.005em; text-wrap: balance; }
+.log-page .log-coach p { margin: 4px 0 0; font-size: 16px; line-height: 1.45; }
+.log-page .log-coach #logCoachTrend { font-size: 14px; color: var(--panel-dim); }
+.log-page .log-coach #logCoachNext { position: relative; margin: 14px 0 0; padding: 12px 14px 12px 44px; border-radius: 14px; background: var(--well); font-weight: 600; }
+.log-page .log-coach #logCoachNext::before { content: ""; position: absolute; left: 14px; top: 14px; width: 18px; height: 18px; border-radius: 50%;
+  box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 0 5px var(--well), inset 0 0 0 9px var(--accent); }
+.log-page .log-coach #logCoachGoRow { margin-top: 14px; }
+.log-page .log-coach #logCoachGo { width: 100%; min-height: 50px; border: 0; border-radius: 14px; background: var(--panel-ink); color: var(--panel); font-size: 17px; font-weight: 700; }
+.log-page .log-coach #logCoachGo::after { content: "  ›"; }
