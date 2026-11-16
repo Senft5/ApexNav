@@ -5363,6 +5363,9 @@ flow('garage: a VIN fills the car in, the owner keeps the colour (NHTSA stubbed,
     document.body.prepend(host); host.append(g.section());
   });
   await page.click('#e2eGarage button:has-text("Add a car")');
+  // a new car is year, make, model and nickname; the rest folds under one row (2026-11-16)
+  check(!(await page.isVisible('#e2eGarage input[name="color"]')) && await page.isVisible('#e2eGarage input[name="make"]'), 'a new car opens on four fields, the rest one tap down');
+  await page.click('#e2eGarage .car-more > summary');
   await page.fill('#e2eGarage input[name="color"]', 'Soul Red');
   await page.fill('#e2eGarage input[name="vin"]', 'JM1NDAD75N0500000');
   await page.click('#e2eGarage button:has-text("Look up VIN")');
