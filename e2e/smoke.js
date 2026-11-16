@@ -8363,7 +8363,10 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   check(/@bob challenged you/.test(await page.textContent('.duel-card.ask')) && /Dry Ridge climb · 7 days\. The higher Vetta Score on it wins\./.test(await page.textContent('.duel-card.ask')), 'the ask says who, where, how long and what wins');
   await page.click('.duel-card.ask button:has-text("Accept")');
   await page.waitForFunction(() => /Dry Ridge climb is in your Stages now/.test(document.getElementById('toast').textContent));
-  await page.waitForSelector('#accountBody .duel-card.on');
+  // (2026-11-16) on, it leaves Friends (only challenges waiting on you are there) and lives on bob's profile
+  await page.waitForFunction(() => !document.querySelector('#accountBody .duel-card'));
+  await page.click('#accountBody .friend-head:has-text("@bob")');
+  await page.waitForSelector('.profile-view .duel-card.on');
   let t = await page.textContent('.duel-card.on');
   check(/@bob 812 · no run from you yet · 7 days left/.test(t) && !/--|has a run in|don't reach/.test(t), 'on: their Score, plain words for yours, the days left; yours not shared is the Show key, not a sentence: ' + t);
   check(await page.$$eval('.duel-card.on button', (bs) => bs.map((x) => x.textContent).join('|')) === 'Drive it|Show my Scores to @bob|Call it off', 'on: Drive it first, Call it off last');

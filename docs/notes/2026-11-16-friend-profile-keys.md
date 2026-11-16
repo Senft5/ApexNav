@@ -2,7 +2,8 @@
 
 ## 2026-11-16 A friend's profile has three keys and ···
 - Done: under a friend's profile head, Message, Drive with (was Convoy) and Challenge (was Challenge on a stage), then ··· (48 pt) opening a sheet with On the map, Share a route, Report, Block and Unfriend (red, last) and Cancel. The foot of Unfriend / Report / Block is gone (screen inventory, Friends row). `profile_view.js` `show()` takes `more`. e2e: the friend profile flows check the keys and the ··· sheet.
-- Next: the inventory's remaining rows: Duels into the friend's profile and For you; Settings groups; signed out / offline profile skeleton.
+- Done: duels move into the friend's profile: Friends shows only a challenge waiting on your answer; on, sent or over, the card sits on that friend's profile under the keys (`duels.cards({ with, asks })`). e2e "duels:" checks it.
+- Next: the inventory's remaining rows: Settings groups; signed out / offline profile skeleton; Find or start a crew as cards.
 
 # CALL SHEET
 

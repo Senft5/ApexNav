@@ -83,6 +83,8 @@ and in random batches so a trace cannot be re-assembled.
 - Reads only Scores each already shows the other (grants + board entries); the card says in words when one side's
   don't reach the other. Friends only; a block or unfriend hides it. Kept 60 days after it ends. `web/duels.js`,
   `backend/src/duels.ts`, migration 0047.
+- Where the cards are (2026-11-16): a challenge waiting on your answer is a card on Friends; once on, sent or over, a
+  duel lives on that friend's profile, under their keys, and in For you.
 ### 2.8 Crew drive results (crew members)
 - A remembered crew drive folds out its results: an overall, then each stage as SS1, SS2…, each driver's best Vetta
   Score that day and a place. Overall ranks by stages driven, then the mean Score. Share sends it as text.

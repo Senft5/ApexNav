@@ -8121,7 +8121,7 @@
           btn('Not now', async () => { await apiCall('DELETE', `/api/friends/${f.id}`); toast(`Declined. @${f.handle} isn’t told.`); redo(); }, 'linkbtn'))));
 
       // Duels (duels.js): one asked of you, one on, a result: cards under the requests, while there is a friend to duel
-      if (duels && accepted.length) body.append(duels.cards());
+      if (duels && accepted.length) body.append(duels.cards({ asks: true }));   // the rest are on each friend's profile
 
       // P-23: you, one tap from People: your face, your handle and who sees where you are; it opens Who sees what (P-09)
       const WHO = { nobody: 'Nobody sees where you are', crew: 'Your private crews see where you are', friends: 'Friends see where you are' };
@@ -8213,7 +8213,7 @@
         if (window.ApexVocabulary && ApexVocabulary.watchTerms) ApexVocabulary.watchTerms(view);   // a friend's DNA words, on tap
         ApexProfileView.show(view, p && !Array.isArray(p) ? p : { handle: f.handle, name: f.name }, { el, btn, back: () => closeProfile(), keys: keysFor(f),
           avatar: window.ApexPhotos ? ApexPhotos.avatar(photo, f.handle || '?', 56) : null, status: st && st.text ? { text: st.text, live: !!st.live } : null,
-          more: moreFor(f), partial: !p || Array.isArray(p), extra: [...lastShare(f), ...(drivePosts && drivePosts.grid ? [drivePosts.grid(f.id, { empty: `@${f.handle || '?'} hasn’t posted a drive you can see yet.` })] : drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), ...(roadbooks && f.handle ? [roadbooks.ofFriend(f.handle)] : []), aboutYou(f)],
+          more: moreFor(f), partial: !p || Array.isArray(p), extra: [...(duels && f.handle ? [duels.cards({ with: f.handle })] : []), ...lastShare(f), ...(drivePosts && drivePosts.grid ? [drivePosts.grid(f.id, { empty: `@${f.handle || '?'} hasn’t posted a drive you can see yet.` })] : drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), ...(roadbooks && f.handle ? [roadbooks.ofFriend(f.handle)] : []), aboutYou(f)],
           });
         ppop.replaceChildren(view); ppop.classList.add('open');
       };
