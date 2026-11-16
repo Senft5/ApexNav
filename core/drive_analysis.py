@@ -21,6 +21,8 @@ BRAKE_G = -0.15              # a_lon below this counts as braking
 BRAKE_LOOKBACK = 40          # search 200 m before the apex for the brake point
 DELTA_STRIDE = 5             # delta curve every 25 m
 STOPPED_MPS = 2.5            # below this through a corner, the time measures waiting, not driving
+STOP_BEFORE_BINS = 20        # a stop within 100 m before a corner (a sign, a light, traffic)...
+STOP_AFTER_BINS = 10         # ...or 50 m after it: its pace was set for you, so Rhythm (consistency) leaves it out
 PACE_TARGET = 0.85           # Driver Score: full pace credit from 85 % of the corner's sane grip limit...
 PACE_CEILING = 1.0           # ...held to 100 %, then falling steeply: overdriving is never rewarded
 
@@ -189,8 +191,10 @@ def corner_technique(v, lon_g, lat_g, c: dict):
     lat = np.asarray(lat_g, dtype=float)[c["start"]:c["end"] + 1]
     step = float(np.sqrt(np.mean(np.diff(lat) ** 2))) if len(lat) > 1 else 0.0
     late = max(0.0, -float(np.min(np.asarray(lon_g, dtype=float)[c["apex"]:c["end"] + 1])))   # braking after the apex
+    near = np.concatenate([v[max(0, c["start"] - STOP_BEFORE_BINS):c["start"]], v[c["end"] + 1:c["end"] + 1 + STOP_AFTER_BINS]])
     return {"use": m["envelope_use"], "smooth": math.exp(-step / 0.15),
-            "brake": 1.0 - min(1.0, max(0.0, (late - 0.10) / 0.30))}
+            "brake": 1.0 - min(1.0, max(0.0, (late - 0.10) / 0.30)),
+            "near_stop": bool(np.any(near < STOPPED_MPS))}
 
 
 # ---------------------------------------------------------------------------
@@ -232,13 +236,14 @@ def corners_for_car(corners, mu=None):
 def driver_score(speed_mps, lon_g, lat_g, corners, lo: int = 0, hi=None) -> dict:
     """Score the driving between bins [lo, hi). corners: [{start, end, apex, apex_mps}].
 
-    pace 40 %, smoothness 25 %, braking discipline 15 %, consistency 20 %. score None when no
+    pace 40 %, smoothness 25 %, braking discipline 15 %, consistency 20 % (Rhythm: the spread of envelope use over the
+    corners whose pace the driver chose, leaving out any with a stop just before or after). score None when no
     clean corners. Technique only: posted limits and legality never enter it, and a perfect score
     (driving at the corner limit) is a closed-track figure, not a goal for public roads.
     """
     v = np.asarray(speed_mps, dtype=float)
     hi = len(v) if hi is None else hi
-    uses, pace, smooth, brake = [], [], [], []
+    uses, pace, smooth, brake, chosen = [], [], [], [], []
     for c in corners:
         if c["start"] < lo or c["end"] >= hi:
             continue
@@ -249,9 +254,12 @@ def driver_score(speed_mps, lon_g, lat_g, corners, lo: int = 0, hi=None) -> dict
         pace.append(_pace_credit(t["use"]))
         smooth.append(t["smooth"])
         brake.append(t["brake"])
+        if not t["near_stop"]:
+            chosen.append(t["use"])
     if not uses:
         return {"score": None, "corners": 0, "components": None}
-    consistency = 1.0 - min(1.0, float(np.std(uses)) / 0.25)
+    # Rhythm judges the corners whose pace you chose: one by a stop is left out of it (while two or more others remain)
+    consistency = 1.0 - min(1.0, float(np.std(chosen if len(chosen) >= 2 else uses)) / 0.25)
     comp = {"pace": float(np.mean(pace)), "smoothness": float(np.mean(smooth)),
             "braking": float(np.mean(brake)), "consistency": consistency}
     raw = 0.40 * comp["pace"] + 0.25 * comp["smoothness"] + 0.15 * comp["braking"] + 0.20 * comp["consistency"]
