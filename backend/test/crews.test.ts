@@ -149,6 +149,16 @@ describe("crews as groups: the owner removes a member (2026-11-16)", () => {
     expect(g!.n).toBe(0);
     expect((await api(late, "POST", "/api/crews/join", { token: samLink })).status).toBe(400);  // sam's link is void
   });
+  it("Manage crew renames it without touching who can find it", async () => {
+    const owner = await makeUser("owner"), sam = await makeUser("sam");
+    const id = await make(owner, { name: "Ridge Runners" });
+    await ok(api(owner, "PUT", `/api/crews/${id}`, { visibility: "public", area: { name: "Robbinsville", lat: 35.32, lon: -83.8 } }));
+    await ok(api(owner, "PUT", `/api/crews/${id}`, { name: "Dragon Runners" }));
+    const mine = (await (await ok(api(owner, "GET", "/api/crews"))).json()) as { id: string; name: string; visibility: string; area_name: string }[];
+    expect(mine.find((c) => c.id === id)).toMatchObject({ name: "Dragon Runners", visibility: "public", area_name: "Robbinsville" });
+    expect((await api(owner, "PUT", `/api/crews/${id}`, { name: "x" })).status).toBe(400);
+    expect((await api(sam, "PUT", `/api/crews/${id}`, { name: "Mine now" })).status).toBe(404);
+  });
 });
 
 describe("one link in (P-02)", () => {

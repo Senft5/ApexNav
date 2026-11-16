@@ -8339,6 +8339,19 @@
         // owner: switch between private (invite link) and public (people nearby can find it; needs an area name)
         const ownerBox = el('div', { className: 'stack-8' });
         if (c.role === 'owner') {
+          // Manage crew (2026-11-16, crews as groups): its name first, then who can invite and who can find it
+          const nameIn = el('input', { className: 'field', value: c.name, maxLength: 40, autocomplete: 'off' });
+          nameIn.setAttribute('aria-label', 'Crew name');
+          const saveName = btn('Save', async () => {
+            const name = nameIn.value.trim();
+            if (name.length < 2) { toast('A name of two letters or more.'); return; }
+            const r = await apiCall('PUT', `/api/crews/${c.id}`, { name });
+            if (r.ok) { toast(`It's ${name} now.`); redo(); } else toast('Couldn\'t rename it. Try again.');
+          }, 'ink-btn');
+          saveName.hidden = true;
+          nameIn.addEventListener('input', () => { saveName.hidden = nameIn.value.trim() === c.name; });
+          nameIn.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !saveName.hidden) saveName.click(); });
+          ownerBox.append(el('h4', { className: 'nav-group', textContent: 'Name' }), el('div', { className: 'row' }, nameIn, saveName));
           // P-07: any member can invite (a mate brings a mate) unless the owner keeps it to themselves; Owner voids the members' links
           const by = el('div', { className: 'switch', role: 'radiogroup' });
           by.setAttribute('aria-label', `Who can invite to ${c.name}`);
@@ -8379,14 +8392,16 @@
           }
         }
         box.append(el('div', { className: 'stack-8' }, el('b', { textContent: c.name }), el('span', { className: 'note', textContent: `${count} ${count === 1 ? 'member' : 'members'} · ${kind}${c.role === 'owner' ? ' · you run it' : ''}` })),
+          ...(c.role === 'owner' ? [ownerBox] : []),
           el('div', { className: 'stack-8' }, el('h4', { className: 'nav-group', textContent: 'What it sees of yours' }),
             el('div', { className: 'row' }, switchRow('Scores', g.share_scores, () => putGrant('crew', c.id, !g.share_scores, g.share_scores ? g.share_times : false)),
               switchRow('Times', g.share_times, () => putGrant('crew', c.id, true, !g.share_times))),
             el('p', { className: 'note', textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` })),
-          ownerBox,
-          // P-07: the crew page's Invite is the one invite key; the gear keeps who can invite, and Leave
-          el('div', { className: 'row' },
-            btn('Leave', async () => { if (await ApexConfirm.ask(`Leave ${c.name}?`, 'Leave')) { await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'danger-btn')));
+          // P-07: the crew page's Invite is the one invite key; the sheet keeps who can invite, and Leave. The owner leaving
+          // ends the crew for everyone (social.ts crewLeave), so the owner's key says so (2026-11-16)
+          el('div', { className: 'row' }, c.role === 'owner'
+            ? btn('Delete crew', async () => { if (await ApexConfirm.ask(`Delete ${c.name} for everyone? Its chat, drives and board go with it.`, 'Delete crew')) { await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'danger-btn')
+            : btn('Leave crew', async () => { if (await ApexConfirm.ask(`Leave ${c.name}?`, 'Leave')) { await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'danger-btn')));
         return box;
       };
       // A crew link asks first: joining shows your handle to its members, so it is never done for you by opening a link.
@@ -8450,6 +8465,9 @@
             chead.hidden = !many;
             holder.replaceChildren(crewPage.view(cur.id));
             crewSettings.replaceChildren(crewSettings.firstElementChild, crewSettingsFor(cur));
+            // the owner's sheet is Manage crew; a member's is their own settings for it (Joined)
+            const title = cur.role === 'owner' ? 'Manage crew' : 'Your settings';
+            crewSettings.setAttribute('aria-label', title); crewSettings.querySelector('.side-pop-head h3').textContent = title;
           }
           const sc = cbody.closest('.body') || cbody.parentElement; if (sc && sc.scrollTop) sc.scrollTop = 0;
         };

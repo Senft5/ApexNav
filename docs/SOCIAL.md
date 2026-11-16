@@ -271,6 +271,9 @@ and in random batches so a trace cannot be re-assembled.
 - Members lists everyone: the owner first, who is driving now, your friends marked, a search past 12. A tap opens their
   sheet; the owner's has Remove from crew (`DELETE /api/crews/:id/members/:handle`), which takes out what leaving takes out
   (their grants, board entries, shared Scores and segments, their crew links).
+- Manage crew (the owner's key) holds the crew's name (a rename alone, `PUT /api/crews/:id` `{ name }`), who can invite,
+  who can find it, what it sees of yours, and Delete crew (the owner leaving ends it). Joined (a member's key) is Your
+  settings: what it sees of yours, and Leave crew.
 - No migration.
 
 ### 2.19 A drive, ready to post (members; built 2026-11-16)
