@@ -8421,13 +8421,20 @@
       // A crew link asks first: joining shows your handle to its members, so it is never done for you by opening a link.
       if (stash('apex.crew')) {
         const tok = stash('apex.crew');
-        const what = el('p', { textContent: 'You have a crew link.' });
-        const why = el('p', { className: 'note', textContent: 'Its members will see your handle, and your car if you show it to crews.' });
-        const actions = el('div', { className: 'row' });
+        // Crews as groups (2026-11-16): the crew's own preview, as a group's: its mark, its name, one line of what it is, who
+        // sent it, then Join. What joining shows of you is one short line under the key, not a paragraph.
+        const badge = el('span', { className: 'cl-badge', 'aria-hidden': 'true', textContent: '' });
+        const what = el('p', { className: 'cl-name', textContent: 'You have a crew link.' });
+        const meta = el('p', { className: 'note cl-meta', hidden: true });
+        const from = el('p', { className: 'cl-from', hidden: true });
+        const why = el('p', { className: 'note cl-why', textContent: 'Its members will see your handle.' });
+        const actions = el('div', { className: 'row cl-keys' });
         const show = (j) => {   // name the crew before the yes
           if (j.member) { unstash('apex.crew'); toast(`You're already in ${j.name}.`); redo(); return; }
+          badge.textContent = String(j.name || '?').trim().charAt(0).toUpperCase();
           what.replaceChildren(document.createTextNode('Join '), el('b', { textContent: j.name }), document.createTextNode('?'));
-          why.textContent = `${j.visibility === 'public' ? 'Public' : 'Private'} crew · ${j.members} ${j.members === 1 ? 'member' : 'members'}${j.owner ? ' · run by @' + j.owner : ''}. Its members will see your handle, and your car if you show it to crews.${j.from ? ` You and @${j.from}, who sent the link, will be friends.` : ''}`;
+          meta.textContent = `${j.visibility === 'public' ? 'Public' : 'Private'} crew · ${j.members} ${j.members === 1 ? 'member' : 'members'}${j.owner ? ' · run by @' + j.owner : ''}`; meta.hidden = false;
+          from.textContent = j.from ? `@${j.from} sent it. You'll be friends.` : ''; from.hidden = !j.from;
         };
         if (crewPreview.token === tok && crewPreview.data) show(crewPreview.data);
         else (async () => {
@@ -8437,11 +8444,11 @@
           if (j && j.name) { crewPreview.token = tok; crewPreview.data = j; show(j); }
           else if (r && r.status === 400) {
             unstash('apex.crew');
-            what.textContent = 'That crew link has run out or doesn\'t work for you. Ask for a new one.'; why.remove();
+            what.textContent = 'That crew link has run out or doesn\'t work for you. Ask for a new one.'; why.remove(); badge.remove();
             actions.replaceChildren(btn('OK', redo, 'linkbtn'));
           }
         })();
-        cbody.append(el('div', { className: 'card stack-8' }, what, why, actions));
+        cbody.append(el('div', { className: 'card crew-link-card' }, el('div', { className: 'cl-head' }, badge, el('div', { className: 'cl-words' }, what, meta)), from, actions, why));
         actions.append(btn('Join crew', async (e) => {
             const b = e && e.currentTarget; if (b) { if (b.disabled) return; b.disabled = true; }
             let r = null;

@@ -1237,6 +1237,17 @@
     .join-art .jr-fill { stroke: var(--panel); stroke-width: 7; }
     .join-art .jr-puck { fill: var(--panel-ink); stroke: var(--panel); stroke-width: 2.5; }
     .join-art .jr-puck.lead { fill: var(--accent); }
+    /* a crew link, as the crew's preview (2026-11-16, crews as groups) */
+    .crew-link-card { display: grid; gap: 12px; }
+    .crew-link-card .cl-head { display: flex; align-items: center; gap: 14px; }
+    .crew-link-card .cl-badge { flex: none; width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center; background: var(--raised, var(--face)); box-shadow: inset 0 0 0 1px var(--hair, var(--rule)); font: 800 26px var(--font-num); }
+    .crew-link-card .cl-badge:empty { display: none; }
+    .crew-link-card .cl-words { display: grid; gap: 2px; min-width: 0; }
+    .crew-link-card .cl-name { margin: 0; font-size: 20px; line-height: 1.2; overflow-wrap: anywhere; }
+    .crew-link-card .cl-name b { font: inherit; font-weight: 800; }
+    .crew-link-card .cl-meta, .crew-link-card .cl-why, .crew-link-card .cl-from { margin: 0; }
+    .crew-link-card .cl-from { font-weight: 600; }
+    .crew-link-card .cl-keys > .solid { flex: 1 1 auto; }
     #accountSection .join-head { margin: 22px 0 0; padding: 0; border: 0; font: 700 34px/1.02 var(--font-num); letter-spacing: 0.005em; text-transform: none; }
     .join-line { margin: 8px 0 0; font-size: 15px; line-height: 1.4; color: var(--panel-dim); }
     .join-gets { list-style: none; margin: 18px 0 0; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
