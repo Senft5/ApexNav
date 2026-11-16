@@ -8558,6 +8558,10 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   await page.goto(base + '/index.html?crew=TOKEN123');
   await page.waitForSelector('#crewsBody >> text=Join Ridge Runners?');
   check((await side()).crews === 'true' && /run by @sam/.test(await page.textContent('#crewsBody')), '?crew= opens Crews with the invite named');
+  // (2026-11-16) the link is the crew's preview: its mark, its name, one line of what it is, Join, and one short line under it
+  const cl = await page.evaluate(() => { const c = document.querySelector('#crewsBody .crew-link-card'); return c && { badge: c.querySelector('.cl-badge').textContent, name: c.querySelector('.cl-name').textContent, meta: c.querySelector('.cl-meta').textContent, why: c.querySelector('.cl-why').textContent }; });
+  check(cl && cl.badge.length === 1 && /^Join .+\?$/.test(cl.name) && /crew · \d+ members? · run by @sam$/.test(cl.meta) && cl.why === 'Its members will see your handle.', 'the crew link as a preview: ' + JSON.stringify(cl));
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/crew-link.png` });
   check(await page.evaluate(() => document.querySelector('#crewTab .badge')?.textContent) === '3', 'a crew link waiting is on the badge too');
 });
 
