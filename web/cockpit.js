@@ -8178,12 +8178,17 @@
         const r = await convoy.inviteFriend(f.handle);
         if (r.ok) closeSheet();
       };
+      // the keys under their head: Message, Drive with, Challenge; the rest behind ··· (moreFor, below)
       const keysFor = (f) => [
         ...(messages && f.handle ? [['Message', () => { closeProfile(); messages.open(f.handle); }]] : []),
+        ...(convoy ? [['Drive with', () => driveWith(f)]] : []),
+        ...(duels ? [['Challenge', () => duels.challenge(f)]] : [])];
+      const moreFor = (f) => [
         ...(where.get(f.handle) && friendsMap ? [['On the map', () => seeOnMap(f)]] : []),
         ['Share a route', () => { closeProfile(); shareRouteWith(f.handle); }],
-        ...(convoy ? [['Convoy', () => driveWith(f)]] : []),
-        ...(duels ? [['Challenge on a stage', () => duels.challenge(f)]] : [])];
+        ...(safety && f.handle ? [['Report', () => safety.report({ kind: 'user', target: f.handle, label: `@${f.handle}`, who: f.handle, done: redo })],
+                                 ['Block', () => safety.block(f.handle, () => { closeProfile(); redo(); })]] : []),
+        ['Unfriend', async () => { if (await ApexConfirm.ask(`Unfriend @${f.handle}? This also stops all sharing.`, 'Unfriend')) { await apiCall('DELETE', `/api/friends/${f.id}`); closeProfile(); redo(); } }, 'danger-btn']];
       // Nate 2026-11-12 (as easy as a big social app): a tap on a friend opens their profile; what you do with them, their last
       // share and what they see of you are on it (the row used to open five keys, a share and a grants drawer in the list)
       const aboutYou = (f) => {
@@ -8208,10 +8213,8 @@
         if (window.ApexVocabulary && ApexVocabulary.watchTerms) ApexVocabulary.watchTerms(view);   // a friend's DNA words, on tap
         ApexProfileView.show(view, p && !Array.isArray(p) ? p : { handle: f.handle, name: f.name }, { el, btn, back: () => closeProfile(), keys: keysFor(f),
           avatar: window.ApexPhotos ? ApexPhotos.avatar(photo, f.handle || '?', 56) : null, status: st && st.text ? { text: st.text, live: !!st.live } : null,
-          partial: !p || Array.isArray(p), extra: [...lastShare(f), ...(drivePosts && drivePosts.grid ? [drivePosts.grid(f.id, { empty: `@${f.handle || '?'} hasn’t posted a drive you can see yet.` })] : drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), ...(roadbooks && f.handle ? [roadbooks.ofFriend(f.handle)] : []), aboutYou(f)],
-          foot: [['Unfriend', async () => { if (await ApexConfirm.ask(`Unfriend @${f.handle}? This also stops all sharing.`, 'Unfriend')) { await apiCall('DELETE', `/api/friends/${f.id}`); closeProfile(); redo(); } }, 'danger-btn'],
-            ...(safety && f.handle ? [['Report', () => safety.report({ kind: 'user', target: f.handle, label: `@${f.handle}`, who: f.handle, done: redo })],
-                                     ['Block', () => safety.block(f.handle, () => { closeProfile(); redo(); })]] : [])] });
+          more: moreFor(f), partial: !p || Array.isArray(p), extra: [...lastShare(f), ...(drivePosts && drivePosts.grid ? [drivePosts.grid(f.id, { empty: `@${f.handle || '?'} hasn’t posted a drive you can see yet.` })] : drivePosts && drivePosts.drivesOf ? [drivePosts.drivesOf(f.id)] : []), ...(roadbooks && f.handle ? [roadbooks.ofFriend(f.handle)] : []), aboutYou(f)],
+          });
         ppop.replaceChildren(view); ppop.classList.add('open');
       };
       // P-02: a friend link (?invite=) is "add a friend" now, not a way in. It asks first, naming who sent it, at the top of the list.

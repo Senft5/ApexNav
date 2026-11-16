@@ -35,7 +35,7 @@
   /** Draws the profile into `box` (replacing what's there); `back` returns to the list. `keys` ([label, run] pairs) are
    *  the things to do with them, first; `foot` ([label, run, className] triples) the ways to end it, last. `avatar` (a node)
    *  and `status` ({ text, live }) put the person at the top. */
-  function show(box, p, { el, btn, back, keys = [], extra = [], foot = [], partial = false, avatar = null, status = null }) {
+  function show(box, p, { el, btn, back, keys = [], more = [], extra = [], foot = [], partial = false, avatar = null, status = null }) {
     const v = lines(p);
     // Nate 2026-11-12 (as easy as a big social app): the person first, their photo, who they are and what they are doing now
     // (status: the friend list's own line, "On the road · Cherohala Skyway" or "Seen 15 min ago"), then what to do with them
@@ -54,12 +54,31 @@
     // partial: the profile didn't load (no signal): the person and what you can do with them, nothing guessed about the rest
     box.replaceChildren(el('div', { className: 'side-pop-head' }, ...(head ? [el('span')] : [el('h3', { textContent: v.title })]), btn('‹ Friends', back, 'linkbtn')),
       ...who,
-      ...(keys.length ? [el('div', { className: 'row profile-keys' }, ...keys.map(([label, run], i) => btn(label, run, i ? 'ink-btn' : 'ink-btn solid')))] : []),
+      // up to three keys, then ··· for the rest (screen inventory 2026-11-16: Message, Drive with, Challenge, and ··· for the
+      // rarer things and Unfriend / Report / Block, the destructive one last), as Instagram's profile keys
+      ...(keys.length || more.length ? [el('div', { className: 'row profile-keys' + (more.length ? ' with-more' : '') },
+        ...keys.map(([label, run], i) => btn(label, run, i ? 'ink-btn' : 'ink-btn solid')),
+        ...(more.length ? [moreKey(el, btn, v.title, more)] : []))] : []),
       ...extra,
       ...(!partial && p.dna && p.dna.theirs && root.ApexDnaCard ? [dnaSection(p, el, btn)] : []),
       ...(partial ? [el('p', { className: 'note', textContent: 'Couldn’t load the rest. Check signal.' })]
         : [...sections.map((s) => el('div', { className: 'stack-8' }, el('b', { textContent: s.head }), ...s.rows.map((r) => el('p', { className: 'note', textContent: r }))))]),   // what they share with you, so no line saying so
       ...(foot.length ? [el('div', { className: 'row profile-foot' }, ...foot.map(([label, run, cls]) => btn(label, run, cls || 'linkbtn')))] : []));
+  }
+
+  /** ··· on a profile: a sheet of the rarer things to do, a Cancel under them. */
+  function moreKey(el, btn, title, more) {
+    const k = btn('···', () => {
+      const d = root.document, ov = el('div', { className: 'overlay dim show pv-menu' });
+      ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', title);
+      const close = () => ov.remove();
+      ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+      ov.append(el('div', { className: 'card-sheet' }, el('h3', { textContent: title }),
+        ...more.map(([label, run, cls]) => btn(label, () => { close(); run(); }, cls || 'ink-btn')), btn('Cancel', close, 'linkbtn')));
+      d.body.append(ov);
+    }, 'ink-btn pv-more');
+    k.setAttribute('aria-label', `More for ${title}`);
+    return k;
   }
 
   /** Their driving DNA beside yours (dna_card.js): the two hexagons, theirs filled and yours outlined, and a line or two. */

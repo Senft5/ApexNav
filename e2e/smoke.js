@@ -8302,9 +8302,18 @@ flow('friend profile: a friend on People → Profile shows what the friend share
     counts: [...w.querySelectorAll('.ph-count small')].map((x) => x.textContent) }; });
   check(who && who.photo && who.live && who.first && /friends since September/.test(who.text) && /On the road · Dry Ridge Rd/.test(who.text) && JSON.stringify(who.counts) === '["Days","Stages","Best"]',
     'the profile opens on the person, photo, status and their month: ' + JSON.stringify(who));
-  const pk = await page.evaluate(() => ({ keys: [...document.querySelectorAll('.profile-view .profile-keys button')].map((b) => b.textContent), foot: [...document.querySelectorAll('.profile-view .profile-foot button')].map((b) => b.textContent),
-    last: document.querySelector('.profile-view > :last-child').className }));
-  check(JSON.stringify(pk.keys) === '["Message","On the map","Share a route","Convoy","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
+  // (2026-11-16) three keys and ···, as a social app's profile; the rest, Unfriend last, behind ···
+  const pk = await page.evaluate(() => ({ keys: [...document.querySelectorAll('.profile-view .profile-keys button')].map((b) => b.textContent), foot: !!document.querySelector('.profile-view .profile-foot'),
+    more: Math.round(document.querySelector('.profile-view .profile-keys .pv-more').getBoundingClientRect().width) }));
+  check(JSON.stringify(pk.keys) === '["Message","Drive with","Challenge","···"]' && !pk.foot && pk.more === 48, 'Message, Drive with, Challenge and ···; no foot: ' + JSON.stringify(pk));
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/friend-profile.png` });
+  await page.click('.profile-view .pv-more');
+  await page.waitForSelector('.pv-menu[aria-label="@bob"]');
+  if (process.env.SHOTS) { await page.waitForTimeout(300); await page.screenshot({ path: `${process.env.SHOTS}/friend-profile-more.png` }); }
+  const pm = await page.$$eval('.pv-menu button', (l) => l.map((b) => b.textContent));
+  check(JSON.stringify(pm) === '["On the map","Share a route","Report","Block","Unfriend","Cancel"]' && await page.getAttribute('.pv-menu button:text-is("Unfriend")', 'class') === 'danger-btn', '··· holds the rest, Unfriend last and red: ' + JSON.stringify(pm));
+  await page.click('.pv-menu button:text-is("Cancel")');
+  check(!(await page.$('.pv-menu')), 'Cancel closes it');
   await page.click('.profile-view button:has-text("Friends")');   // one back glyph and where it goes (REVIEW2.md)
   await page.waitForSelector('.side-pop.open .profile-view', { state: 'detached', timeout: 3000 }).catch(() => {});
   check(await page.evaluate(() => !document.querySelector('.side-pop.open') && !!document.querySelector('#accountBody .friend-head:not(.you-row)')), 'Back returns to the friends list');
@@ -8371,7 +8380,7 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   // challenging: from the friend's row, pick a stage and the days, Send
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
   await page.click('#accountBody .friend-head:has-text("@bob")');
-  await page.click('.profile-view button:has-text("Challenge on a stage")');
+  await page.click('.profile-view .profile-keys button:text-is("Challenge")');
   await page.waitForSelector('.duel-pop.open [aria-label="Stage"] button:has-text("Esses")');
   await page.click('.duel-pop.open [aria-label="Stage"] button:has-text("Esses")');
   await page.click('.duel-pop.open [aria-label="How long"] button:has-text("3 days")');
@@ -8557,17 +8566,21 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   check(!(await page.$('#accountBody .friend .crew-detail, #accountBody .friend button.ink-btn')), 'a friend row is one line, no keys in the list');
   const profileOf = async (h) => { await page.click(`#accountBody .friend-head:has-text("${h}")`); await page.waitForSelector(`.people-pop.open .profile-view h3:text-is("${h}")`);
     const k = await page.$$eval('.people-pop.open .profile-keys button', (b) => b.map((x) => x.textContent)); return k; };
+  const moreOf = async () => { await page.click('.people-pop.open .pv-more'); await page.waitForSelector('.pv-menu');
+    const m = await page.$$eval('.pv-menu button', (b) => b.map((x) => x.textContent)); await page.click('.pv-menu button:text-is("Cancel")'); return m; };
   const back = () => page.click('.people-pop.open .profile-view button:has-text("Friends")');
   const acts = await profileOf('@cara');
-  check(JSON.stringify(acts) === '["Message","On the map","Share a route","Convoy","Challenge on a stage"]' && await page.evaluate(() => getComputedStyle(document.querySelector('.people-pop.open .profile-keys > :last-child')).gridColumnEnd) === '-1',
-    'her profile opens on what you can do with her, Message first; an odd last key spans the row: ' + JSON.stringify(acts));
+  check(JSON.stringify(acts) === '["Message","Drive with","Challenge","···"]' && JSON.stringify(await moreOf()) === '["On the map","Share a route","Report","Block","Unfriend","Cancel"]',
+    'her profile opens on what you can do with her, Message first, the rest behind ···: ' + JSON.stringify(acts));
   const cara = await page.textContent('.people-pop.open .profile-view');
   check(/Shared Cherohala loop · /.test(cara) && /What @cara sees of you\s*Scores/.test(cara) && /Couldn’t load the rest/.test(cara) && !/No scores shared/.test(cara), 'her last share and what she sees of you; offline, nothing guessed: ' + cara);
   await back();
-  check((await profileOf('@bob')).includes('On the map'), 'bob shares a delayed position: On the map too');
+  await profileOf('@bob');
+  check((await moreOf()).includes('On the map'), 'bob shares a delayed position: On the map too');
   await back();
-  const eve = await profileOf('@eve');
-  check(!eve.includes('On the map') && eve.length === 4, 'no On the map for a friend who shares nothing: ' + JSON.stringify(eve));
+  await profileOf('@eve');
+  const eve = await moreOf();
+  check(!eve.includes('On the map') && eve.length === 5, 'no On the map for a friend who shares nothing: ' + JSON.stringify(eve));
   await back();
   // P-09: Who sees what, from her profile, her line marked
   await profileOf('@cara');
@@ -8613,7 +8626,8 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   await page.click('.side-pop.open button:has-text("Done")');
   // On the map: the sheet closes, the Friends layer comes on
   await profileOf('@cara');
-  await page.click('.people-pop.open .profile-keys button:has-text("On the map")');
+  await page.click('.people-pop.open .pv-more');
+  await page.click('.pv-menu button:text-is("On the map")');
   await page.waitForFunction(() => !document.getElementById('sheet').classList.contains('open'));
   check(await page.evaluate(() => document.querySelector('[data-toggle="friends"]').classList.contains('on')), 'On the map turns the Friends layer on');
   // the Garage: Who sees what under You; the pioneer count with Road feel; no points board anywhere
