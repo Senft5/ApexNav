@@ -1545,6 +1545,15 @@
     .co-card #soundtrackRow { min-height: 0; margin: -10px 0 0; padding: 0 0 12px; }
     .co-card #soundtrackRow .linkbtn { font-size: 14px; font-weight: 500; color: var(--panel-dim); min-height: 32px; text-decoration: none; }
     .co-card #soundtrackRow .linkbtn::before { content: "\25B6\FE0E  "; font-size: 10px; }
+    /* A label over a control on a setting's page is a group's small caps line, the one "Take a copy" uses (2026-11-16; they were
+       grey sentences, and the same page mixed both) */
+    .garage-pop p.group-label { margin: 18px 2px 8px; font: 700 12px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
+    /* Account's keys are rows on a card, Delete account on its own card, as Your data's are (they were loose pills) */
+    .garage-pop[data-setting="account"] .row:has(> button) { display: grid; gap: 0; margin-top: 18px; border-radius: var(--r-card, 12px); overflow: hidden; background: var(--well, color-mix(in srgb, var(--panel-ink) 6%, var(--panel))); }
+    .garage-pop[data-setting="account"] .row > button, .garage-pop[data-setting="account"] .danger-btn { display: flex; align-items: center; justify-content: flex-start; width: 100%; min-height: 52px; margin: 0; padding: 0 14px;
+      border: 0; border-radius: 0; box-shadow: none; background: transparent; font-size: 16px; font-weight: 600; text-align: left; color: var(--panel-ink); }
+    .garage-pop[data-setting="account"] .row > button + button { border-top: 1px solid var(--hair, var(--panel-dim)); }
+    .garage-pop[data-setting="account"] .danger-btn { margin-top: 18px; border-radius: var(--r-card, 12px); background: var(--well, color-mix(in srgb, var(--panel-ink) 6%, var(--panel))); color: var(--accent); }
     .garage-pop .sw { min-height: 52px; padding: 0 14px; border-top: 0; border-radius: var(--r-card, 12px); background: var(--well, color-mix(in srgb, var(--panel-ink) 6%, var(--panel))); }
     .garage-pop .sw span { font-size: 16px; }
     .garage-pop .sw + .sw { margin-top: 8px; }
@@ -2534,7 +2543,7 @@
           <section data-panel="garage" data-setting="zones" data-title="Privacy zones" data-summary="#zoneList" data-summary-count="place,places">
             <h3>Privacy zones</h3>
             <p class="note" style="margin:0 0 8px">Places like home and work. Inside one, nothing is recorded or shared, and convoys don't see you. Kept on this phone only.</p>
-            <p class="note" style="margin:0 0 4px" aria-hidden="true">Size of a new zone</p>
+            <p class="note group-label" aria-hidden="true">Size of a new zone</p>
             <div class="detents" id="zoneRadius" role="group" aria-label="Size of a new zone">
               <button data-zone-r="200">200 m</button>
               <button data-zone-r="500">500 m</button>
@@ -2587,7 +2596,7 @@
           <section data-panel="garage" data-setting="units" data-title="Units" data-summary="#unitsRow">
             <h3>Units</h3>
             <div class="switch" role="radiogroup" aria-label="Units" id="unitsRow"><button data-units="imperial" role="radio">Miles and feet</button><button data-units="metric" role="radio">Kilometres and metres</button></div>
-            <p class="note" style="margin:8px 0 4px" title="Bends toward your own side get more caution: you see less round them.">Driving side</p>
+            <p class="note group-label" title="Bends toward your own side get more caution: you see less round them.">Driving side</p>
             <div class="switch" role="radiogroup" aria-label="Driving side: bends toward your own side get more caution" id="sideRow"><button data-side="auto" role="radio">From the map</button><button data-side="right" role="radio">Right</button><button data-side="left" role="radio">Left</button></div>
           </section>
           <section data-panel="garage" data-setting="feedback" data-title="Feedback">
@@ -2627,7 +2636,7 @@
         <section data-panel="garage" data-setting="spots" data-title="Spots" data-summary="#hlList" data-summary-count="spot,spots">
             <h3>Spots</h3>
             <p class="note" style="margin:0 0 8px">Loops lean toward spots you rate 3★ or more. Your spots stay on this phone until you share one.</p>
-            <p class="note" style="margin:0 0 4px" aria-hidden="true">How far loops go out of their way</p>
+            <p class="note group-label" aria-hidden="true">How far loops go out of their way</p>
             <div class="detents" id="detourList" role="group" aria-label="How far loops go out of their way for your spots">
               <button data-detour="0">Off</button>
               <button data-detour="0.5">Little</button>
