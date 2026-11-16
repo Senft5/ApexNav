@@ -4067,7 +4067,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
 flow('build threads: start one from a car, add a step, a friend suggests and it shows on a red rule (Worker stubbed, REVIEW.md roadmap 23)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const sent = [];
-  let build = null;
+  let build = null, buildAnswer = 'ok';
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method(), p = u.pathname;
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
@@ -4080,6 +4080,8 @@ flow('build threads: start one from a car, add a step, a friend suggests and it 
     }
     if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (p === '/api/garage') return json([{ id: 'c1', make: 'Mazda', model: 'Miata', year: 2004, is_primary: 1, shared: 1, cover_photo_id: null, build_id: build ? 'b1' : null }]);
+    if (p === '/api/builds/b1' && buildAnswer === 'none') return route.abort();
+    if (p === '/api/builds/b1' && buildAnswer === 'gone') return json({ error: 'no_build' }, 404);
     if (p === '/api/builds/b1') return json(build);
     return json([]);
   });
@@ -4121,6 +4123,22 @@ flow('build threads: start one from a car, add a step, a friend suggests and it 
   await page.click('.bv-chat button:has-text("Send")');
   await page.waitForTimeout(300);
   check(sent.some((x) => x.p === '/api/builds/b1/chat' && x.b.body === 'Which pads?'), 'a chat message is sent');
+  // no answer: the thread says so with Try again, and comes in on the tap; gone: says so, no key (the shared states)
+  await page.click('.bv-top button:has-text("Back")');
+  await page.evaluate(() => document.querySelectorAll('.build-view').forEach((o) => o.remove()));
+  buildAnswer = 'none';
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Build thread').click());
+  await page.waitForSelector('.build-view .bv-lost button:text-is("Try again")');
+  check(/^Couldn’t load the build\. Check signal\./.test(await page.textContent('.build-view .bv-lost')), 'no answer says so');
+  buildAnswer = 'ok';
+  await page.click('.build-view .bv-lost button:text-is("Try again")');
+  await page.waitForSelector('.build-view .bv-head h2');
+  await page.click('.bv-top button:has-text("Back")');
+  await page.evaluate(() => document.querySelectorAll('.build-view').forEach((o) => o.remove()));
+  buildAnswer = 'gone';
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Build thread').click());
+  await page.waitForSelector('.build-view .bv-lost');
+  check(await page.textContent('.build-view .bv-lost') === 'This build isn’t here any more.' && !(await page.$('.build-view .bv-lost button')), 'a gone build says so, with no key');
 });
 
 flow('friends on the map: off by default; the first time on explains both choices; Show me to sends no zones for Nobody; pucks say how old (Worker stubbed, REVIEW.md roadmap 24)', async (page, base) => {
