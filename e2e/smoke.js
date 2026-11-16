@@ -3805,6 +3805,26 @@ flow('convoy voice: Talk joins the channel, the one key mutes and unmutes, and a
   check(calls.at(-1) === 'DELETE /voice' && !(await page.evaluate(() => localStorage.getItem('apex.convoyVoice'))), 'Leave voice takes us off, and the next convoy will not join by itself');
 });
 
+flow('crew page offline: one line and Try again, which brings the crew back (screen inventory 2026-11-16)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  let down = true;
+  const crewPage = { id: 'k1', name: 'Ridge Runners', motto: null, visibility: 'private', area_name: null, members: 2, is_owner: false, invites: 'anyone', can_invite: true,
+    crest: null, crest_photo_id: null, stripe: null, cover_photo_id: null, livery: 'plain', sharing_scores: false, board: [], next: null };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/crews') return json([{ id: 'k1', name: 'Ridge Runners', role: 'member', visibility: 'private', members: 2 }]);
+    if (u.pathname === '/api/crews/k1/page' || u.pathname === '/api/crews/k1/board') return down ? route.fulfill({ status: 503, body: '' }) : json(u.pathname.endsWith('/board') ? { period: 'month', rows: [] } : crewPage);
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=crew');
+  await page.waitForSelector('.crew-page .cp-lost button:has-text("Try again")', { timeout: 15000 });
+  check(await page.textContent('.crew-page .cp-lost .note') === 'Couldn’t load the crew. Check signal.', 'the crew that can not load: one line and one key');
+  down = false;
+  await page.click('.crew-page .cp-lost button:has-text("Try again")');
+  await page.waitForSelector('.crew-page .cp-title h2');
+  check(await page.textContent('.crew-page .cp-title h2') === 'Ridge Runners' && !(await page.$('.crew-page > .cp-lost')), 'Try again brings the crew back');
+});
 flow('crew page: an old ?view=crew link opens People on Crews, at your crew; going, chat and the livery reach the Worker (Worker stubbed, REVIEW.md roadmap 20)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const sent = [], boardAsks = [], soon = new Date(Date.now() + 3 * 86400e3).toISOString();
@@ -4483,6 +4503,8 @@ flow('the Log coaches first: the news from the latest drive, why, and the one th
   check(got.why === '40 above your previous best. Smoothness carried it: 78 out of 100 (usually 60).', 'why, from the measured part beside your usual: ' + JSON.stringify(got));
   check(got.trend === null && /^Next drive, work on /.test(got.next || '') && got.go, 'no steady trend said twice; one thing to work on next; a key to the drive: ' + JSON.stringify(got));
   check((await page.textContent('#logCoachGo')) === 'See the drive', 'a drive\'s news opens the drive (a corner\'s, the corner)');
+  // one card, not two heroes: the latest Score is the coach card's first line (2026-11-16)
+  check(await page.evaluate(() => { const h = document.getElementById('historyCards'); return h.parentElement.id === 'logCoach' && h === document.getElementById('logCoach').firstElementChild && /700/.test(h.textContent); }), 'the latest Score heads the coach card');
   await page.click('#logCoachGo');
   await page.waitForFunction(() => document.getElementById('dvPick') && document.getElementById('dvPick').value === 'c4', null, { timeout: 15000 });
   check(true, 'See the drive opens the drive the news is about');
@@ -8004,6 +8026,13 @@ flow('the full Feed picks whose posts (All, Friends or one crew) and mutes a dri
     }
     return json([]);
   });
+  // how many Feeds the page drew, and what one showed when a wait ran out (CI timed out here and couldn't say on which wait)
+  await page.addInitScript(() => { window.__feeds = 0; new MutationObserver((ms) => { for (const m of ms) for (const x of m.addedNodes) if (x.nodeType === 1 && (x.matches('.feed-pick') || x.querySelector('.feed-pick'))) window.__feeds++; }).observe(document, { childList: true, subtree: true }); });
+  const until = (fn, what) => page.waitForFunction(fn).catch(async (e) => {
+    const now = await page.evaluate(() => ({ feeds: window.__feeds, titles: [...document.querySelectorAll('#feedBody .feed-card .feed-title')].map((t) => t.textContent.trim()).join(','),
+      on: [...document.querySelectorAll('#feedBody .feed-pick button[aria-checked="true"]')].map((b) => b.textContent).join(','), muted: (document.querySelector('#feedBody .feed-muted') || {}).hidden })).catch(() => null);
+    throw new Error(`${what}: ${e.message.split('\n')[0]} ${JSON.stringify(now)} asked ${JSON.stringify(asked)}`);
+  });
   await page.goto(base + '/index.html?view=feed');
   await page.waitForSelector('#feedBody .feed-card', { timeout: 15000 });
   // (2026-11-16) the whole Feed is the Social tab's first side, its pick over it
@@ -8015,21 +8044,21 @@ flow('the full Feed picks whose posts (All, Friends or one crew) and mutes a dri
   const along = await page.$$eval('#feedBody .feed-card .feed-with', (l) => l.map((x) => x.textContent));
   check(JSON.stringify(along) === '["With you and @cara"]', 'who came, on the crew post only, you first: ' + JSON.stringify(along));
   await page.click('#feedBody .feed-pick button:has-text("Friends")');
-  await page.waitForFunction(() => [...document.querySelectorAll('#feedBody .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 4,Drive 2,Drive 1');
+  await until(() => [...document.querySelectorAll('#feedBody .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 4,Drive 2,Drive 1', 'Friends');
   await page.click('#feedBody .feed-pick button:has-text("Ridge Runners")');
-  await page.waitForFunction(() => [...document.querySelectorAll('#feedBody .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 5,Drive 3');
+  await until(() => [...document.querySelectorAll('#feedBody .feed-card .feed-title')].map((t) => t.textContent.trim()).join(',') === 'Drive 5,Drive 3', 'the crew');
   check(asked.includes('?friends=1') && asked.includes('?crew=k1'), 'each pick asks the Worker for its posts: ' + JSON.stringify(asked));
   check(await page.getAttribute('#feedBody .feed-pick button:has-text("Ridge Runners")', 'aria-checked') === 'true', 'the crew is the one on');
   // (2026-11-14) Mute: ··· on bob's post, Mute @bob; his drives leave the Feed, Muted lists him, Unmute brings them back
   await page.click('#feedBody .feed-pick button:has-text("All")');
-  await page.waitForFunction(() => document.querySelectorAll('#feedBody .feed-card').length === 5);
+  await until(() => document.querySelectorAll('#feedBody .feed-card').length === 5, 'All again');
   await page.click('#feedBody .feed-card .feed-more');
   await page.click('.feed-menu button:has-text("Mute @bob")');
-  await page.waitForFunction(() => !document.querySelector('#feedBody .feed-card'));
+  await until(() => !document.querySelector('#feedBody .feed-card'), 'muted');
   check(await page.textContent('#feedBody .feed-muted') === 'Muted@bobUnmute' && await page.evaluate(() => localStorage.getItem('apex.feedMuted')) === '["bob"]',
     'muted, kept on the phone: ' + await page.textContent('#feedBody .feed-muted'));
   await page.click('#feedBody .feed-muted button:has-text("Unmute")');
-  await page.waitForFunction(() => document.querySelectorAll('#feedBody .feed-card').length === 5 && document.querySelector('#feedBody .feed-muted').hidden);
+  await until(() => document.querySelectorAll('#feedBody .feed-card').length === 5 && document.querySelector('#feedBody .feed-muted').hidden, 'unmuted');
 });
 
 flow('a post that can not load: its shape while loading, one line and Try again, then the post; no comments is one line (screen inventory 2026-11-16)', async (page, base) => {
