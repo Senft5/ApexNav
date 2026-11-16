@@ -7461,11 +7461,16 @@
       else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : j && j.error === 'owner_invites_only' ? `Only the owner invites to ${c.name}.` : 'Couldn\'t make a link. Try again.');
     };
     // The crew page (web/crew_page.js, REVIEW.md roadmap 20): the Crew tab opens your crew.
+    let crewGear = null;   // opens the open crew's settings sheet (renderAccount sets it)
     let crewPage = null, crewDrivesEl = null;
     // in a crew, Crew drives is a row on the Crews side that opens its sheet; not in one, the section on the side itself
     const toDrives = () => { const pop = crewDrivesEl && crewDrivesEl.closest('.side-pop'); if (pop) pop.classList.add('open'); else if (crewDrivesEl) crewDrivesEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     onSocial(() => { try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, askPublicSharing,
       invite: (c) => crewInviteLink(c),
+      // a group's keys (2026-11-16): Joined / Manage opens this crew's settings sheet (the Crews side's, crewSettingsFor)
+      settings: () => { if (crewGear) crewGear(); },
+      // your friends' handles, for "cara and sam are in it" and the Members tab's "Your friend"
+      friendHandles: () => apiCall('GET', '/api/friends').then(jsonOf).then((l) => new Set((Array.isArray(l) ? l : []).filter((f) => f && f.status === 'accepted' && f.handle).map((f) => f.handle))),
       openRoute: (id) => openSharedRoute(id), builds: () => builds, onAllDrives: toDrives,
       posts: (c) => (drivePosts && drivePosts.crewDrives ? drivePosts.crewDrives(c.id) : null),
       // the drives members posted to this crew (posts), and its roadbooks, every member adding roads (roadbooks.js)
@@ -8432,6 +8437,7 @@
         const holder = el('div', { className: 'stack-8' }), chead = el('div', { className: 'crew-head' });
         const gear = el('button', { className: 'gear-key', type: 'button', 'aria-label': 'Crew settings', innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="8" stroke-width="3.2" stroke-dasharray="3.1 3.18"/></svg>' });
         gear.addEventListener('click', () => crewSettings.classList.add('open'));
+        crewGear = () => crewSettings.classList.add('open');   // the crew page's Joined / Manage key opens it
         const openCrew = (id) => {
           crewOpen = id || null;
           const cur = myCrews.find((c) => c.id === crewOpen);
@@ -8440,7 +8446,8 @@
             chead.hidden = false; chead.classList.toggle('solo', !many);
             const back = many ? btn('Your crews', () => { openCrew(null); const k = holder.querySelector('.cd-open'); if (k) k.focus({ preventScroll: true }); }, 'linkbtn cd-back') : el('span');   // one crew: its page's title says the name, so the head is the gear alone (it said it twice)
             if (many) back.setAttribute('aria-label', 'Back to your crews');
-            chead.replaceChildren(back, gear);
+            chead.replaceChildren(back);                                    // the page's own Joined / Manage key holds the settings now
+            chead.hidden = !many;
             holder.replaceChildren(crewPage.view(cur.id));
             crewSettings.replaceChildren(crewSettings.firstElementChild, crewSettingsFor(cur));
           }
