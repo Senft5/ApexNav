@@ -7649,18 +7649,19 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
     apexDebug.showEndCard(d, Date.now() - 30 * 60000, { quiet: true });
   });
   await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !document.getElementById('endPostRow').hidden && !b.getAttribute('aria-disabled'); }, null, { timeout: 15000 });
-  check(await page.evaluate(() => document.getElementById('endPost').classList.contains('solid') && !document.getElementById('endShare').classList.contains('solid') && document.getElementById('endPost').textContent === 'Post to friends'), 'Post to friends is the solid key; Share card sits beside it');
-  // one tap (2026-11-14): Post to friends sends it at once, no sheet; Undo in the toast takes it back. It carries the saved
-  // stage it went over (a straight line has no corners, so its Score there is unknown: null)
+  check(await page.evaluate(() => document.getElementById('endPost').classList.contains('solid') && !document.getElementById('endShare').classList.contains('solid') && document.getElementById('endPost').textContent === 'Post' && !document.getElementById('endPostMore')), 'Post is the solid key, one key; Share card sits beside it');
+  // (Nate 2026-11-16, "magic") Post opens the drive ready: its road and Score, its name, the crew picked; Not now closes it
   await page.click('#endPost');
-  await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Posted to friends');
-  const one = JSON.parse(sent.filter((x) => x.p === '/api/posts').pop().b);
-  check(one.crew_id === null && one.score === 790 && one.title === 'Cherohala Skyway' && JSON.stringify(one.stages) === JSON.stringify([{ name: 'Tellico climb', score: null, ends: [35.36226, -84.29, 35.37809, -84.29] }]) && !(await page.$('.post-sheet')), 'one tap posts the drive to your friends, no sheet: ' + JSON.stringify({ ...one, line: one.line && one.line.length }));
-  await page.click('#toast .toast-key:text-is("Undo")');
-  await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Post to friends' && !document.getElementById('endPost').disabled);
-  check(sent.some((x) => x.m === 'DELETE' && x.p === '/api/posts/C2AAAAAAAAAAAAAA'), 'Undo takes the post back');
-  // ··· beside it: the sheet, for a caption or a crew
-  await page.click('#endPostMore');
+  await page.waitForSelector('.post-sheet .post-pic .feed-line');
+  await page.waitForSelector('.post-sheet .post-with:not([hidden])');
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/post-ready.png` });
+  check(await page.textContent('.post-sheet .post-head h2') === 'Nice drive. Post it?' && await page.inputValue('.post-sheet .post-name') === 'Cherohala Skyway'
+    && /790/.test(await page.textContent('.post-sheet .post-pic .feed-stats')), 'the post, ready: named, its road and Score on it');
+  check(await page.evaluate(() => document.activeElement && document.activeElement.classList.contains('post-go')), 'Post has the focus: one tap sends it');
+  await page.click('.post-sheet .post-not-now');
+  await page.waitForSelector('.post-sheet', { state: 'detached' });
+  check(await page.evaluate(() => !document.getElementById('endPost').disabled && document.getElementById('endPost').textContent === 'Post'), 'Not now closes it, Post still there');
+  await page.click('#endPost');
   await page.waitForSelector('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")');
   // (2026-11-15) you were at a Ridge Runners drive today: that crew is picked, and the sheet says who the post will name
   await page.waitForSelector('.post-sheet .post-with:not([hidden])');
@@ -7677,12 +7678,14 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   await page.click('.post-sheet [role="radiogroup"] button:has-text("Ridge Runners")');
   check(await page.$eval('.post-sheet .post-tags', (n) => n.hidden), 'to a crew: no tags, the crew drive says who came');
   await page.fill('.post-sheet textarea', 'First run with the crew.');
+  await page.fill('.post-sheet .post-name', 'Cherohala at dusk');
   await page.click('.post-sheet button:text-is("Post")');
   await page.waitForFunction(() => document.getElementById('endPost').textContent === 'Posted');
   const p = JSON.parse(sent.filter((x) => x.p === '/api/posts').pop().b);
   const first = (() => { const s = p.line; let i = 0, r = 0, sh = 0, b; do { b = s.charCodeAt(i++) - 63; r |= (b & 31) << sh; sh += 5; } while (b >= 32); return (r & 1 ? ~(r >> 1) : r >> 1) / 1e5; })();
   check(p.tags === undefined, 'a crew post sends no tags');
-  check(p.crew_id === 'k1' && p.caption === 'First run with the crew.' && p.score === 790 && p.title === 'Cherohala Skyway' && first > 35.36 + 0.0044,
+  check(JSON.stringify(p.stages) === JSON.stringify([{ name: 'Tellico climb', score: null, ends: [35.36226, -84.29, 35.37809, -84.29] }]), 'it carries the saved stage it went over: ' + JSON.stringify(p.stages));
+  check(p.crew_id === 'k1' && p.caption === 'First run with the crew.' && p.score === 790 && p.title === 'Cherohala at dusk' && first > 35.36 + 0.0044,
     'the post: to the crew, the caption, the Score, and the line starting 500 m in: ' + JSON.stringify({ ...p, line: p.line.length, first }));
 });
 flow('the Feed: Keep in a roadbook on a friend\'s post puts the road it drew into one of your roadbooks, nothing else of the drive (free roamer B, 2026-11-14)', async (page, base) => {
@@ -7786,7 +7789,7 @@ flow('post media: a friend\'s photo shows on their post in the Feed, and Add a p
     apexDebug.showEndCard(d, Date.now() - 30 * 60000, { quiet: true });
   });
   await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !document.getElementById('endPostRow').hidden && !b.getAttribute('aria-disabled'); }, null, { timeout: 15000 });
-  await page.click('#endPostMore');
+  await page.click('#endPost');
   await page.waitForSelector('.post-sheet .post-media button:text-is("Add a photo")');
   await page.setInputFiles('.post-sheet .post-media input[type=file]', { name: 'shot.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAACgAAAAeCAIAAADRv8uKAAAAL0lEQVR4nO3NMQ0AMAgAsDENyMF/kIUFPp7WQKMr34V/sorFYrFYLBaLxWKxeGUAOWUBVBcDkCYAAAAASUVORK5CYII=', 'base64') });
   await page.waitForSelector('.post-sheet .post-media img');
@@ -7974,15 +7977,8 @@ flow('a drive posted with no signal waits on the phone and goes up once there is
   });
   await page.waitForFunction(() => { const b = document.getElementById('endPost'); return b && !b.hidden && !b.getAttribute('aria-disabled') && window.ApexDrivePosts; }, null, { timeout: 15000 });
   down = true;
-  // the one-tap key: the post waits too
+  // Post opens the sheet; with no signal the post waits on the phone
   await page.click('#endPost');
-  await page.waitForFunction(() => /goes up when you have one/.test(document.getElementById('toast').textContent), null, { timeout: 10000 });
-  const one = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.outbox') || '[]'));
-  check(one.length === 1 && one[0].path === '/api/posts' && one[0].body.caption === null && one[0].capped === true, 'one tap with no signal: the post waits on the phone: ' + JSON.stringify(one).slice(0, 300));
-  await page.evaluate(() => { localStorage.removeItem('apex.outbox'); document.getElementById('toast').textContent = '';
-    const k = document.getElementById('endPost'); k.disabled = false; k.textContent = 'Post to friends'; document.getElementById('endPostMore').hidden = false; });
-  // the sheet (a caption): the same
-  await page.click('#endPostMore');
   await page.waitForSelector('.post-sheet textarea');
   await page.fill('.post-sheet textarea', 'No bars up top.');
   await page.click('.post-sheet button:text-is("Post")');

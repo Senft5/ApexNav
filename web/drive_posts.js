@@ -275,7 +275,14 @@
     .feed-comment .feed-more { width: 44px; height: 44px; display: grid; place-items: center; text-decoration: none; font-size: 20px; color: var(--panel-ink); }
     .feed-say { display: flex; gap: 8px; }
     .feed-say .field { flex: 1; min-width: 0; }
-    .post-sheet textarea { width: 100%; min-height: 72px; resize: vertical; }
+    .post-sheet textarea { width: 100%; min-height: 56px; resize: vertical; }
+    .post-sheet .card-sheet { display: grid; gap: 14px; }
+    .post-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .post-head h2 { margin: 0; padding: 0; border: 0; font-size: 22px; }
+    .post-head .post-not-now { min-height: 44px; color: var(--panel-dim); }
+    .post-pic { display: grid; } .post-pic .feed-line { aspect-ratio: 340 / 150; }
+    .post-field { display: grid; gap: 6px; } .post-field small { color: var(--panel-dim); font-size: 13px; }
+    .post-sheet .post-go { width: 100%; min-height: 52px; font-size: 17px; }
   `;
   const ICON = {
     kudos: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11v9H4v-9zM7 11l4-7c1.5 0 2.5 1 2 3l-1 4h6a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 16.8 21H7"/></svg>',
@@ -309,6 +316,17 @@
       toast(`Muted @${handle}. Their drives are off your Feed.`, { label: 'Undo', onClick: () => setMuted(handle, false) });
     };
     const face = (p, px) => (page.avatar ? page.avatar(p.photo_id || null, p.handle, px) : el('span'));
+    /** The road a drive drew, wide, from its start ring to the red finish dot (a post's picture). */
+    function roadSvg(pts, W, H) {
+      const NS = 'http://www.w3.org/2000/svg', svg = doc.createElementNS(NS, 'svg'), path = doc.createElementNS(NS, 'path');
+      svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('class', 'feed-line'); svg.setAttribute('aria-hidden', 'true');
+      const d = lineSvg(pts, W, H, 18), casing = doc.createElementNS(NS, 'path');
+      casing.setAttribute('d', d); casing.setAttribute('class', 'casing'); path.setAttribute('d', d); svg.append(casing, path);
+      const xy = d.match(/-?[\d.]+ -?[\d.]+/g) || [];
+      [[xy[0], 'go', 5.5], [xy[xy.length - 1], 'end', 6]].forEach(([q, cls, r]) => { if (!q) return; const [x, y] = q.split(' ');
+        const c = doc.createElementNS(NS, 'circle'); c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', r); c.setAttribute('class', cls); svg.append(c); });
+      return svg;
+    }
     const sheet = (label, cls = '') => {
       const ov = el('div', { className: `overlay dim show ${cls}` });
       ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', label);
@@ -390,13 +408,7 @@
       const pts = p.line ? decode(p.line) : [];
       if (pts.length < 2) box.append(stats);                           // no line kept: the numbers stand on their own
       if (pts.length > 1) {                                             // the road it drew, wide, from the start ring to the red finish dot
-        const W = 340, H = 170, NS = 'http://www.w3.org/2000/svg', svg = doc.createElementNS(NS, 'svg'), path = doc.createElementNS(NS, 'path');
-        svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('class', 'feed-line'); svg.setAttribute('aria-hidden', 'true');
-        const d = lineSvg(pts, W, H, 18), casing = doc.createElementNS(NS, 'path');
-        casing.setAttribute('d', d); casing.setAttribute('class', 'casing'); path.setAttribute('d', d); svg.append(casing, path);
-        const xy = d.match(/-?[\d.]+ -?[\d.]+/g) || [];
-        [[xy[0], 'go', 5.5], [xy[xy.length - 1], 'end', 6]].forEach(([q, cls, r]) => { if (!q) return; const [x, y] = q.split(' ');
-          const c = doc.createElementNS(NS, 'circle'); c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', r); c.setAttribute('class', cls); svg.append(c); });
+        const W = 340, H = 170, svg = roadSvg(pts, W, H);
         // the picture: the road, then its numbers on a strip right under it
         box.append(el('div', { className: 'feed-pic' }, svg, stats));
         // the streets round it (post_map.js): one still picture of the real map, laid exactly under the line once drawn
@@ -779,7 +791,11 @@
       try { crews = (page.crews ? await page.crews() : []) || []; } catch (_) { crews = []; }
       if (!Array.isArray(crews)) crews = [];
       return new Promise((done) => {
-        const s = sheet('Post this drive', 'post-sheet');
+        // straight after a drive (d.ready, the drive's card): everything filled in already, one tap on Post (Nate 2026-11-16, "magic")
+        const s = sheet(d.ready ? 'Post your drive' : 'Post this drive', 'post-sheet');
+        let settled = false;
+        const finish = (v) => { if (settled) return; settled = true; s.close(); done(v); };
+        s.ov.addEventListener('click', (e) => { if (e.target === s.ov) finish(false); });
         let to = null;                                                   // null: your friends
         const opts = [[null, 'Friends'], ...crews.map((c) => [c.id, c.name])];
         // who sees it: one slide switch (Friends, or a crew), as every pick of one in the app; stamps past three
@@ -802,7 +818,10 @@
           tagRow.replaceChildren(el('small', { textContent: tags.size ? withLine([...tags], null) : 'Who came? (optional)' }), el('div', { className: 'post-tag-keys' }, ...keys));
         };
         apiCall('GET', '/api/friends').then((r) => (r && r.ok ? jsonOf(r) : null)).then((l) => {
-          friends = Array.isArray(l) ? l.filter((f) => f && f.status === 'accepted' && f.handle).map((f) => f.handle).sort().slice(0, 24) : [];
+          const all = Array.isArray(l) ? l.filter((f) => f && f.status === 'accepted' && f.handle).map((f) => f.handle) : [];
+          // who drove with you (the convoy you were in, d.with) is tapped in already, and first; the rest by name
+          for (const h of Array.isArray(d.with) ? d.with : []) if (all.includes(h) && tags.size < TAG_N) tags.add(h);
+          friends = [...tags, ...all.filter((h) => !tags.has(h)).sort()].slice(0, 24);
           if (s.box.isConnected) paintTags();
         }).catch(() => {});
         const paint = () => {
@@ -852,28 +871,36 @@
         const line = trimLine(d.lat, d.lon, page.inZone || (() => false));
         const post = btn('Post', async () => {
           post.disabled = true;
-          const body = bodyOf(d, to, say.value.trim(), [...tags]);
+          const body = bodyOf({ ...d, name: name.value.trim() || d.name }, to, say.value.trim(), [...tags]);   // the name as the driver left it
           const r = await apiCall('POST', '/api/posts', body).catch(() => null);
           // no signal (IDEAS F-05): the post waits on the phone and goes when there is one (outbox.js), as a hazard report does
           // (a post with a clip or photo can't wait: the outbox keeps text only, so the sheet stays open for another try)
-          if ((!r || r.status >= 500) && page.later && !media) { page.later('/api/posts', body); s.close(); done(true); toast('No signal. Your post goes up when you have one.'); return; }
+          if ((!r || r.status >= 500) && page.later && !media) { page.later('/api/posts', body); finish(true); toast('No signal. Your post goes up when you have one.'); return; }
           if (!r || !r.ok) { post.disabled = false; toast(r && r.status === 429 ? 'That’s ten posts today.' : 'Couldn’t post it. Check signal.'); return; }
           const where = to ? `Posted to ${(crews.find((c) => c.id === to) || {}).name || 'your crew'}.` : 'Posted to your friends.';
           if (media) {
             post.textContent = 'Posting…';
             const { id } = (await jsonOf(r)) || {};
             const up = id ? await putMedia(id, media) : false;
-            s.close(); done(true);
+            finish(true);
             toast(up ? where : `${where} The ${/^video\//.test(media.mime) ? 'clip' : 'photo'} didn’t go up.`);
             return;
           }
-          s.close(); done(true);
+          finish(true);
           toast(where);
-        }, 'ink-btn solid');
-        const cancel = btn('Cancel', () => { s.close(); done(false); }, 'linkbtn');
-        s.box.append(el('h2', { textContent: 'Post this drive' }), chips, withNote, tagRow, say, mrow,
-          el('p', { className: 'note', textContent: line ? 'Its start and end stay off the line.' : 'No line: too short to show without its start and end.' }),
-          el('div', { className: 'row' }, post, cancel));
+        }, 'ink-btn solid post-go');
+        // the drive as it will look: its road, its Score and length on the strip under it, the clip or photo named on it
+        const stat = (label, v, unit) => { const b = el('b', { textContent: v }); if (unit) b.append(el('span', { textContent: unit }));
+          return el('div', {}, el('small', { textContent: label }), b); };
+        const fmtLen = page.fmtLen || ((m) => `${(m / 1000).toFixed(1)} km`);
+        const stats = el('div', { className: 'feed-stats' }, stat('Vetta Score', Number.isFinite(d.score) ? String(Math.round(d.score)) : '--'));
+        if (Number.isFinite(d.len_m) && d.len_m > 0) { const m = /^([\d.,]+)\s*(.*)$/.exec(fmtLen(d.len_m)) || []; stats.append(m[1] ? stat('Distance', m[1], m[2]) : stat('Distance', fmtLen(d.len_m))); }
+        const pic = line ? el('div', { className: 'feed-pic post-pic' }, roadSvg(line, 340, 150), stats)
+          : el('div', { className: 'post-pic' }, stats, el('p', { className: 'note', textContent: 'Too short to show its line.' }));
+        const name = el('input', { type: 'text', className: 'field post-name', maxLength: 60, value: String(d.name || ''), 'aria-label': 'Name', autocomplete: 'off' });
+        const head = el('div', { className: 'post-head' }, el('h2', { textContent: d.ready ? 'Nice drive. Post it?' : 'Post this drive' }), btn('Not now', () => finish(false), 'linkbtn post-not-now'));
+        s.box.append(head, pic, el('label', { className: 'post-field' }, el('small', { textContent: 'Name' }), name), withNote, tagRow, chips, say, mrow, post);
+        if (d.ready) setTimeout(() => { try { post.focus({ preventScroll: true }); } catch (_) {} }, 0);
       });
     }
 
