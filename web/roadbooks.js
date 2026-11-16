@@ -235,6 +235,9 @@
 
   // ---- the pages ---------------------------------------------------------------------------------------------------
   const STYLE = `
+    .rb-skel { display: grid; gap: 12px; } .rb-skel i { display: block; height: 18px; border-radius: 8px; background: var(--rule); opacity: .55; }
+    .rb-skel i:first-child { height: 180px; } .rb-skel i:nth-child(3) { width: 60%; }
+    .rb-lost { display: grid; gap: 10px; justify-items: start; } .rb-lost p { margin: 0; }
     .rb-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 12px; width: 100%; min-height: 56px; padding: 8px 2px; border: 0; border-bottom: 1px solid var(--hair, var(--panel-dim)); background: none; color: var(--panel-ink); text-align: left; font: inherit; }
     .rb-row b { font-size: 16px; font-weight: 700; } .rb-row span { grid-column: 1; font-size: 13px; color: var(--panel-dim); }
     .rb-row i { grid-row: 1 / span 2; grid-column: 2; width: 9px; height: 9px; margin-right: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); }
@@ -398,10 +401,18 @@
 
     /** A roadbook's page: its roads on one map, your progress, each road with Drive it; its owner's keys or Follow, Share, Report. */
     async function open(id) {
-      const s = sheet('Roadbook'), body = el('div', { className: 'stack-12' }, el('p', { className: 'note', textContent: 'Opening the roadbook…' }));
+      // loading is the page's shape; no answer is one line and Try again; private or gone says so (the shared states)
+      const skel = () => el('div', { className: 'rb-skel', 'aria-busy': 'true', 'aria-label': 'Opening the roadbook' }, el('i'), el('i'), el('i'));
+      const s = sheet('Roadbook'), body = el('div', { className: 'stack-12' }, skel());
       s.pop.append(body);
-      const r = await call('GET', `/api/roadbooks/${encodeURIComponent(id)}`);
-      if (!r.ok || !r.data) { body.replaceChildren(el('p', { className: 'note', textContent: r.status === 404 ? 'This roadbook is private now, or gone.' : 'Couldn’t open the roadbook. Check signal.' })); return null; }
+      let r = await call('GET', `/api/roadbooks/${encodeURIComponent(id)}`);
+      while (!r.ok || !r.data) {
+        if (r.status === 404) { body.replaceChildren(el('p', { className: 'note', textContent: 'This roadbook is private now, or gone.' })); return null; }
+        const again = await new Promise((res) => body.replaceChildren(el('div', { className: 'rb-lost' }, el('p', { textContent: 'Couldn’t open the roadbook. Check signal.' }), btn('Try again', () => res(true), 'ink-btn solid'))));
+        if (!again || !s.pop.isConnected) return null;
+        body.replaceChildren(skel());
+        r = await call('GET', `/api/roadbooks/${encodeURIComponent(id)}`);
+      }
       const book = r.data;
       const redraw = () => paint(book, s, body);
       redraw();
