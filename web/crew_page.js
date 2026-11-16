@@ -284,6 +284,10 @@
     .cp-next-what small { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--panel-dim); }
     .cp-next-what b { font-size: 16px; overflow-wrap: anywhere; } .cp-next-what span { font-size: 13px; color: var(--panel-dim); }
     .crew-drives:not([hidden]) ~ .cp-posts-hint { display: none; }
+    .cp-compose { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 52px; padding: 0 14px;
+      border: 1px solid var(--hair, var(--rule)); border-radius: 14px; background: var(--raised, transparent); color: var(--panel-ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+    .cp-compose svg { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+    .cp-compose:disabled { opacity: 0.6; }
     .cp-member-list { display: grid; }
     .cp-member-list .cp-member { width: 100%; grid-template-columns: auto minmax(0, 1fr) auto; justify-items: start; align-items: center; gap: 12px; min-height: 60px; border-bottom: 1px solid var(--hair, var(--rule)); text-align: left; cursor: pointer; }
     .cp-member-list .cp-member[hidden] { display: none; }
@@ -401,7 +405,7 @@
         // Members (everyone, the owner's Remove one tap in); the keys under the name: Joined or Manage, Invite, Chat
         let tabsBox = null;
         const panes = {
-          posts: [nextPinned(c, () => tabsBox && tabsBox.pick('drives')), ...(page.posts ? [page.posts(c)] : []), postsHint(c)],
+          posts: [nextPinned(c, () => tabsBox && tabsBox.pick('drives')), composer(c, draw), ...(page.posts ? [page.posts(c)] : []), postsHint(c)],
           drives: [driveSec, ...(page.books ? [page.books(c)].filter(Boolean) : []), ...(c.pinned ? [pinnedRow(c)] : []), meetShare(c)],
           members: [members(c, draw)],   // posts: what members posted to the crew (drive_posts.js)
           chat: [chat(c, draw)],
@@ -518,8 +522,22 @@
       return b;
     }
     // Posts with nothing posted yet says how one gets there (crew_drives hides itself while there is none)
+    // the group's composer (2026-11-16): one row at the top of Posts that posts your latest drive here, the sheet already
+    // filled in with this crew picked (cockpit postLatestTo)
+    function composer(c, redraw) {
+      if (!page.postDrive) return null;
+      const b = el('button', { type: 'button', className: 'cp-compose' }, el('span', { textContent: 'Post your latest drive' }), icon('M12 5v14M5 12h14'));
+      b.setAttribute('aria-label', `Post your latest drive to ${c.name}`);
+      b.addEventListener('click', async () => {
+        if (b.disabled) return; b.disabled = true;
+        let ok = false;
+        try { ok = await page.postDrive(c); } finally { b.disabled = false; }
+        if (ok && redraw) redraw();
+      });
+      return b;
+    }
     function postsHint(c) {
-      const p = el('p', { className: 'note cp-posts-hint', textContent: 'Crew drives land here. Post one after you drive.' });
+      const p = el('p', { className: 'note cp-posts-hint', textContent: page.postDrive ? 'No posts yet. Yours can be the first.' : 'Crew drives land here. Post one after you drive.' });
       return p;
     }
     // The livery at the foot of the page (P-03): one line. The people who care (the owner, a Pro supporter) open it: the

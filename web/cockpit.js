@@ -6133,6 +6133,24 @@
       logFrameEl('analysis.html?tab=log');
     }
     window.addEventListener('resize', () => { if (logFrame.el && !logFrame.el.hidden) logInsets(); });
+    // a saved drive as a post (drive_posts.js compose): its name, day, length, Score (unknown stays null), line and roads
+    const postOfRec = (rec) => {
+      let score = null;
+      try { const sum = ApexRecording.summarize(ApexCore, rec); score = sum && sum.ds ? sum.ds.score : null; } catch (_) { score = null; }
+      const dt = new Date(rec.date), day = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+      const len = Array.isArray(rec.dist) && rec.dist.length ? rec.dist[rec.dist.length - 1] : null;
+      return { name: rec.name, driven_on: day, len_m: len, score, lat: rec.lat, lon: rec.lon, roads: Array.isArray(rec.roads) ? rec.roads : [] };
+    };
+    // Crews as groups (2026-11-16): a crew's Posts tab posts your latest drive to it, the sheet filled in with that crew
+    // picked. Resolves true once posted.
+    async function postLatestTo(crewId) {
+      if (!drivePosts || !window.ApexRecording || !(accountMe && accountMe.member)) { toast('Sign in to post.'); return false; }
+      const sums = (await ApexRecording.summaries().catch(() => []) || []).filter((x) => x && x.date_known !== false && postable(x.date))
+        .sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
+      const rec = sums.length ? await ApexRecording.get(sums[0].id).catch(() => null) : null;
+      if (!rec) { toast('No drive from the last 30 days yet. Drive one, then post it.'); return false; }
+      return !!(await drivePosts.compose({ ...postOfRec(rec), to: crewId }));
+    }
     const postable = (date) => { const t = Date.parse(date); return Number.isFinite(t) && t <= Date.now() + 86400e3 && t >= Date.now() - 29 * 86400e3; };
     window.ApexLogHost = {
       close(v) {
@@ -6172,13 +6190,8 @@
         try { await needSocial(); } catch (_) {}
         const rec = meta.driveId && window.ApexRecording ? await ApexRecording.get(meta.driveId).catch(() => null) : null;
         if (!drivePosts || !rec) return { posted: false, said: 'Couldn’t post it here.' };
-        let score = null;
-        try { const sum = ApexRecording.summarize(ApexCore, rec); score = sum && sum.ds ? sum.ds.score : null; } catch (_) { score = null; }
         if (rec.date_known === false || !postable(rec.date)) return { posted: false, said: 'Only drives from the last 30 days can be posted.' };
-        const dt = new Date(rec.date), day = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-        const len = Array.isArray(rec.dist) && rec.dist.length ? rec.dist[rec.dist.length - 1] : null;
-        const d = { name: rec.name, driven_on: day, len_m: len, score, lat: rec.lat, lon: rec.lon, roads: Array.isArray(rec.roads) ? rec.roads : [],
-          media: { blob, mime: String(meta.mime || blob.type || 'video/mp4').split(';')[0], label: String(meta.cornerLabel || '').slice(0, 60) || null } };
+        const d = { ...postOfRec(rec), media: { blob, mime: String(meta.mime || blob.type || 'video/mp4').split(';')[0], label: String(meta.cornerLabel || '').slice(0, 60) || null } };
         const f = logFrame.el, shown = !!(f && !f.hidden), t = $('toast');
         if (shown) f.hidden = true;
         const before = t.textContent;
@@ -7473,6 +7486,7 @@
       friendHandles: () => apiCall('GET', '/api/friends').then(jsonOf).then((l) => new Set((Array.isArray(l) ? l : []).filter((f) => f && f.status === 'accepted' && f.handle).map((f) => f.handle))),
       openRoute: (id) => openSharedRoute(id), builds: () => builds, onAllDrives: toDrives,
       posts: (c) => (drivePosts && drivePosts.crewDrives ? drivePosts.crewDrives(c.id) : null),
+      postDrive: (c) => postLatestTo(c.id),
       // the drives members posted to this crew (posts), and its roadbooks, every member adding roads (roadbooks.js)
       books: (c) => (roadbooks && roadbooks.ofCrew ? roadbooks.ofCrew(c) : null),
       onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); },
