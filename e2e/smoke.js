@@ -6742,7 +6742,7 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
     if (m === 'POST' || m === 'DELETE') return route.fulfill({ status: 204 });
     return json([]);
   });
-  const crewSide = async () => { await page.goto(base + '/index.html?view=crew'); await page.waitForSelector('.crew-page .cp-week .drive-card'); };
+  const crewSide = async () => { await page.goto(base + '/index.html?view=crew'); await page.click('.cp-tabs [data-cp-tab="drives"]'); await page.waitForSelector('.crew-page .cp-week .drive-card'); };
   // a crew-mate started the drive's convoy: the card says so and joins it; no Convoy section anywhere
   await crewSide();
   await page.waitForSelector('.cp-week .drive-card.is-morning button:has-text("Join the convoy")', { timeout: 8000 });
