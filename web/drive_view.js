@@ -866,7 +866,10 @@
     co.corners.forEach((x, k) => {
       if (!x || !x.m || x.best_from !== -1 || !Number.isFinite(x.prior_s) || !Number.isFinite(x.m.time_s)) return;
       if (!(x.m.envelope_use <= 1.0)) return;
-      const by = x.prior_s - x.m.time_s;
+      // beaten by every other pass, not only those inside the grip ceiling (prior_s): a quicker pass over the limit
+      // still means this was not your quickest here (Nate's drive of Nov 14, 22:58: corner 22 was 0.5 s quicker at 21:35)
+      const all = Array.isArray(x.times) ? x.times.map((p) => p && p[1]).filter(Number.isFinite) : [];
+      const by = Math.min(x.prior_s, ...all) - x.m.time_s;
       if (by >= 0.2) out.push({ k, by_s: by, from: x.prior_from });
     });
     return out.sort((a, b) => b.by_s - a.by_s || a.k - b.k).slice(0, n);

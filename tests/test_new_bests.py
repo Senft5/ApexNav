@@ -1,6 +1,6 @@
 """Your best yet (web/drive_view.js newBests): the corners a drive beat every other pass of, by how much over your next
 best (coach's prior_s, core/drive_analysis.py and its web/apex_core.js port). Over the grip ceiling, or inside the
-alignment noise, is not a best."""
+alignment noise, is not a best; nor is a corner another pass took quicker, even over the ceiling."""
 import json
 import os
 import shutil
@@ -21,7 +21,8 @@ const co = { others: [{ date: 'Oct 3' }, { date: 'Nov 1' }], corners: [
   { m: m(6.0), best: null, best_from: -1, prior_s: 6.1, prior_from: 1 },      // 0.1 s: noise
   { m: m(3.0, 1.1), best: null, best_from: -1, prior_s: 4.0, prior_from: 0 }, // past the ceiling: not celebrated
   { m: m(7.0), best: null, best_from: -1, prior_s: null, prior_from: -1 },    // the only pass: nothing to beat
-  { m: m(2.0), best: null, best_from: -1, prior_s: 2.3, prior_from: 1 },      // 0.3 s up
+  { m: m(2.0), best: null, best_from: -1, prior_s: 2.3, prior_from: 1, times: [[0, 2.6], [1, 2.3]] },   // 0.3 s up
+  { m: m(5.0), best: null, best_from: -1, prior_s: 6.0, prior_from: 0, times: [[0, 6.0], [1, 4.7]] },   // quicker over the ceiling: not
   { m: null, best: null, gain_s: null } ] };
 console.log(JSON.stringify({ all: V.newBests(co), one: V.newBests(co, 1), none: V.newBests(null) }));
 """

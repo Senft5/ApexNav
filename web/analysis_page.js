@@ -644,16 +644,20 @@
     // drives' summaries and the driver profile (its focus); nothing under a few scored drives
     function renderLogCoach() {
       const box = $('logCoach'); if (!box || !window.ApexLogCoach) return;
-      const paint = (p) => {
-        const words = { ...ApexDriverProfile.WORDS, sideWords: ApexDriverProfile.sideWords };
-        const b = ApexLogCoach.brief(drives.map((d) => ({ ...d, dateKnown: monthOf(d) !== null })), p || null, words);
+      const list = drives.map((d) => ({ ...d, dateKnown: monthOf(d) !== null })), latest = ApexLogCoach.latestScored(list);
+      // the latest drive's corners quicker than ever (the worker's cornerNews), named in the driver's words
+      const newsOf = latest ? ApexAnalysis.job('cornerNews', { id: latest }).then((r) => ({ id: r.driveId, bests: (r.bests || []).map((w) => ({ ...w,
+        name: w.corner && ApexDriveView.cornerCall ? ApexDriveView.cornerCall(w.corner, ApexDriveView.noteWordsPref()) || null : null })) })).catch(() => null) : Promise.resolve(null);
+      const paint = async (p) => {
+        const words = { ...ApexDriverProfile.WORDS, sideWords: ApexDriverProfile.sideWords }, news = await newsOf;
+        const b = ApexLogCoach.brief(list, p || null, words, Date.now(), news);
         box.hidden = !(b.headline || b.next);
         $('logCoachHead').textContent = b.headline || 'What to work on';
         $('logCoachWhy').textContent = b.why || ''; $('logCoachWhy').hidden = !b.why;
         $('logCoachTrend').textContent = b.trend || ''; $('logCoachTrend').hidden = !b.trend;
         $('logCoachNext').textContent = b.next || ''; $('logCoachNext').hidden = !b.next;
         $('logCoachGoRow').hidden = !b.go;
-        $('logCoachGo').onclick = b.go ? () => openDrive(b.go) : null;
+        $('logCoachGo').onclick = b.go ? () => openDrive(b.go.drive || b.go) : null;
       };
       if (drives.some((d) => d.corners.length)) drivingProfile((p) => paint(p)); else paint(null);
     }
