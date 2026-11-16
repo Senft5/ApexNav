@@ -1513,6 +1513,14 @@
       background: var(--well, color-mix(in srgb, var(--panel-ink) 6%, var(--panel))); font-size: 16px; }
     #zoneList > .row + .row { border-top: 1px solid var(--hair, var(--rule)); }
     #zoneList > .row .linkbtn { min-height: 44px; padding: 0 2px; text-decoration: none; font-weight: 600; color: var(--panel-dim); }
+    /* a setting's page reads as grouped rows, as the phone's own Settings does: each switch a row on a quiet card, each field a
+       well of its own, full width; the words about it sit under it, small */
+    .garage-pop .sw { min-height: 52px; padding: 0 14px; border-top: 0; border-radius: var(--r-card, 12px); background: var(--well, color-mix(in srgb, var(--panel-ink) 6%, var(--panel))); }
+    .garage-pop .sw span { font-size: 16px; }
+    .garage-pop .sw + .sw { margin-top: 8px; }
+    .garage-pop .field { flex: 1 1 100%; min-height: 48px; border: 0; border-radius: var(--r-card, 12px); padding: 0 14px; font-size: 16px;
+      background-color: var(--well, color-mix(in srgb, var(--panel-ink) 6%, var(--panel))); color: var(--panel-ink); }   /* (the colour only: a select keeps its chevron) */
+    .garage-pop .field:focus-visible { outline: 2px solid var(--panel-ink); outline-offset: 1px; }
     @media not ((min-width: 1100px) and (min-height: 600px)) and (prefers-reduced-motion: reduce) {
       #garageSettings, .garage-pop, #garageSettings.open:has(~ .garage-pop.open) { transition: none; }
     }
