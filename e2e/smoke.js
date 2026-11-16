@@ -11354,7 +11354,7 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   // Map idle: four tabs, Layers and Recenter as keys, the deck with the search and the record key, one suggested loop
   const idle = await page.evaluate(() => ({ tabs: [...document.querySelectorAll('#tabbar .tab')].map((t) => t.textContent), layers: document.getElementById('swTab').className,
     recenter: document.getElementById('recenterBtn').className, start: document.getElementById('startDrive').className, loop: document.getElementById('loopSuggest').innerText }));
-  check(JSON.stringify(idle.tabs) === '["Map","Log","People","Garage"]', 'four tabs: ' + idle.tabs);
+  check(JSON.stringify(idle.tabs) === '["Map","Log","Social","Garage"]', 'four tabs: ' + idle.tabs);
   check(/map-key/.test(idle.layers) && /map-key/.test(idle.recenter) && /btn-start/.test(idle.start) && await page.evaluate(() => document.getElementById('startDrive').textContent.trim()) === 'Just drive',
     'Layers and Recenter are keys, Just drive the record key: ' + JSON.stringify(idle));
   check(/^Loop from here · \d+ mi/.test(idle.loop) && /On the twistiest roads nearby\s*Plan$/.test(idle.loop), 'one suggested loop, one clause under it (U-87): ' + idle.loop);
