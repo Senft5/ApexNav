@@ -9966,7 +9966,7 @@
       sheet.setAttribute('aria-label', locDenied ? 'Location is off' : 'Before your first drive');
       $('permTitle').textContent = locDenied ? 'Location is off' : 'Before your first drive';
       $('permMot').textContent = motDenied ? MOT_DENIED_TEXT : 'to feel bumps and surface';
-      $('permNote').textContent = locDenied ? `Vetta can\u2019t record a drive or call the corners ahead without it. ${NATIVE_SHELL ? 'In Settings, set Location to While Using the App.' : `Turn it on: ${LOC_HOW_TEXT}.`}` : 'Your drive stays on this phone.';
+      $('permNote').textContent = locDenied ? `Vetta can\u2019t record a drive or call the corners ahead without it. ${NATIVE_SHELL ? 'In Settings, set Location to While Using the App.' : `Turn it on: ${LOC_HOW_TEXT}.`}` : 'Your full drive stays on this phone.';
       $('permGo').textContent = locDenied ? (NATIVE_SHELL ? 'Open Settings' : 'Try again') : 'Allow and start';
       $('permGo').className = locDenied ? 'ink-btn solid' : 'rec-key';   // the red key is go; a way to Settings is ink
     }

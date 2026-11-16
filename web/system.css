@@ -35,6 +35,11 @@
 /* cards: the raised fill, rounded, no outline */
 [data-theme="roadbook"] #app :is(.theme-card, .loop-suggest, .nearby-chip, .feed-card, .people-sample-body, .nav-rows) { border-color: transparent; border-radius: var(--r-card); background: var(--raised); }
 [data-theme="roadbook"] #app :is(.plan-chips, .deck-chips) .chip:not(.on):not([aria-pressed="true"]) { border-color: transparent; background: var(--raised); border-radius: var(--r-chip); }
+/* the keys under Where to? (2026-11-16): the key is its tile and its word, not a chip. The chip fill drew a grey pill behind
+   the square tile; now the tile itself is the raised, rounded card, outline gone, and Best roads nearby stays solid ink */
+[data-theme="roadbook"] #app .chip.rkey:not(.on):not([aria-pressed="true"]):not([aria-checked="true"]) { border: 0; border-radius: 0; background: none; box-shadow: none; }
+[data-theme="roadbook"] .rkey > i { border: 0; border-radius: var(--r-card); background: var(--raised); }
+[data-theme="roadbook"] #planNearbyChip > i { background: var(--panel-ink); color: var(--panel); }
 [data-theme="roadbook"] .loop-suggest svg { border: 0; border-radius: 10px; background: var(--panel); }
 [data-theme="roadbook"] .theme-card { overflow: hidden; }
 [data-theme="roadbook"] .theme-card.in-use { box-shadow: 0 0 0 2px var(--panel-ink); }

@@ -134,10 +134,10 @@ def test_the_permission_sheet_says_what_it_said():
     html, src = page(), cockpit_source()
     sheet = html[html.index('<div class="overlay dim" id="permSheet"'):html.index('<script src="lazy.js" defer>')]
     for label, why in (("Location", '<span id="permLoc">to call corners ahead</span>'), ("Motion", '<span id="permMot">to feel bumps and surface</span>'),
-                       ("Screen on", "<span>while you drive</span>"), ("Mount", "in a holder, any way up.")):
+                       ("Screen on", "<span>while you drive</span>"), ("Mount", "<span>in a holder, any way up</span>")):
         assert f"<b>{label}</b>" in sheet and why in sheet
     assert sheet.count('class="perm-row') == 4 and 'class="perm-row mount-row" style="--i:3" hidden' in sheet
-    assert '<p id="permNote">Your drive stays on this phone.</p>' in sheet and 'id="permNo">Not now</button>' in sheet
+    assert '<p id="permNote">Your full drive stays on this phone.</p>' in sheet and 'id="permNo">Not now</button>' in sheet
     assert "$('permGo').className = locDenied ? 'ink-btn solid' : 'rec-key';" in src, "red is go; the way to Settings is ink"
 
 
