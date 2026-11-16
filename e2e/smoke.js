@@ -8752,6 +8752,7 @@ flow('one link in: no "invite-only" anywhere; a crew link joins a newcomer with 
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const sent = [];
   let me = { signed_in: false }, crews = [], crewPage = null;
+  let inviting = false;   // the crew Invite sheet's friends and members, asked for only at its step
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method(), p = u.pathname;
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
@@ -8765,6 +8766,9 @@ flow('one link in: no "invite-only" anywhere; a crew link joins a newcomer with 
     if (p === '/api/crews') return json(crews);
     if (p === '/api/crews/k1/page') return json(crewPage);
     if (p === '/api/crews/k1/invite') return json({ token: 'CREWLINK1234' }, 201);
+    if (p === '/api/friends' && inviting) return json([{ id: 'U1', handle: 'sam', status: 'accepted', incoming: 0 }, { id: 'U2', handle: 'tilly', status: 'accepted', incoming: 0 }]);
+    if (p === '/api/crews/k1/members' && inviting) return json([{ handle: 'newbie', role: 'member' }, { handle: 'tilly', role: 'owner' }]);
+    if (p === '/api/messages/sam') return json({ id: 'M1' }, 201);
     if (p === '/api/crews/k1/invites' && m === 'PUT') return json({ by: JSON.parse(route.request().postData()).by });
     if (p === '/api/points') return json({ total: 0 });
     return json([]);
@@ -8807,9 +8811,27 @@ flow('one link in: no "invite-only" anywhere; a crew link joins a newcomer with 
   await page.waitForSelector('.crew-page .cp-title h2');
   check(await page.isVisible('.cp-keys button:has-text("Invite")'), 'a member\'s crew page has Invite (P-07)');
   await page.evaluate(() => { try { Object.defineProperty(navigator, 'share', { value: undefined, configurable: true }); navigator.clipboard.writeText = async () => {}; } catch (_) {} });
+  inviting = true;
   await page.click('.cp-keys button:has-text("Invite")');
   for (let i = 0; i < 50 && !sent.some((x) => x.p === '/api/crews/k1/invite'); i++) await page.waitForTimeout(100);
   check(sent.some((x) => x.p === '/api/crews/k1/invite'), 'Invite asks the Worker for a crew link');
+  // (2026-11-16) one sheet: Copy link and Show code; friends not in the crew to tick, and Send messages them the link
+  await page.waitForSelector('.crew-invite .ci-keys button:text-is("Copy link")');
+  check(await page.textContent('.crew-invite h2') === 'Invite to Ridge Runners' && await page.isVisible('.crew-invite .ci-keys button:text-is("Show code")'), 'Invite is a sheet: the link and its code');
+  await page.click('.crew-invite .ci-keys button:text-is("Copy link")');
+  await page.waitForFunction(() => /Crew link copied/.test(document.getElementById('toast').textContent));
+  await page.click('.crew-invite .ci-keys button:text-is("Show code")');
+  await page.waitForSelector('.crew-invite canvas[aria-label="A code that joins Ridge Runners"]');
+  await page.waitForSelector('.crew-invite .ci-friend:has-text("@sam")');
+  const tick = await page.$$eval('.crew-invite .ci-friend > b', (l) => l.map((b) => b.textContent));
+  check(JSON.stringify(tick) === '["@sam"]', 'friends not in the crew yet, to tick: ' + JSON.stringify(tick));
+  check(await page.isDisabled('.crew-invite .post-go'), 'Send waits for a tick');
+  await page.click('.crew-invite .ci-friend:has-text("@sam")');
+  check(await page.textContent('.crew-invite .post-go') === 'Send to 1', 'Send says how many');
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/crew-invite.png` });
+  await page.click('.crew-invite .post-go');
+  await page.waitForFunction(() => /Sent the link to @sam\./.test(document.getElementById('toast').textContent));
+  check(sent.some((x) => x.p === '/api/messages/sam' && /^Join Ridge Runners on Vetta: .*\?crew=/.test(JSON.parse(x.b).body)) && !(await page.$('.crew-invite')), 'Send messages the link to who was ticked, and closes');
   // the owner keeps invites to themselves: the page's Invite goes for a member; the gear has the switch, and it reaches the Worker
   crewPage = { ...crewPage, invites: 'owner', can_invite: false };
   await page.goto(base + '/index.html?view=crew');
