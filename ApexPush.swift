@@ -11,6 +11,7 @@ import UserNotifications
 final class ApexAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        UNUserNotificationCenter.current().setNotificationCategories(ApexPush.categories)
         Task { @MainActor in await ApexPush.refresh() }
         return true
     }
@@ -29,7 +30,10 @@ final class ApexAppDelegate: NSObject, UIApplicationDelegate, UNUserNotification
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard let s = response.notification.request.content.userInfo["url"] as? String else { return }
+        let info = response.notification.request.content.userInfo
+        // a long-press key (a convoy invite's Join convoy) opens its own link; a plain tap, the push's `url`
+        let picked = (info["actions"] as? [String: String])?[response.actionIdentifier]
+        guard let s = picked ?? (info["url"] as? String) else { return }
         await MainActor.run { if let url = URL(string: s) { ApexEngine.shared.shell.openLink(url) } }
     }
 }
@@ -44,6 +48,14 @@ enum ApexPush {
     #else
     static let sandbox = false
     #endif
+
+    /// The long-press keys a push can carry (its `aps.category`, backend/src/push.ts). A convoy invite's Join convoy opens
+    /// the app already joining (Nate 2026-11-16: "clicking it automatically adds them"); the key is the yes to sharing the
+    /// position, so the page joins without asking again. A plain tap opens the invite's Join / Not now card instead.
+    nonisolated static var categories: Set<UNNotificationCategory> { [
+        UNNotificationCategory(identifier: "convoy", actions: [UNNotificationAction(identifier: "join", title: "Join convoy", options: [.foreground])],
+                               intentIdentifiers: [], options: []),
+    ] }
 
     /// At launch: when notifications are already allowed, ask iOS for the token again (it can change).
     static func refresh() async {
