@@ -62,9 +62,9 @@
    * takes more than HWY.ABSURD x quickS); else the ones with the least highway (rule 'link', the exception: `minKm`);
    * nothing known about highways: all of them, rule 'unknown'. { list, rule, absurd, freeS, minKm }.
    */
-  function levelHighways(cands, level, quickS) {
+  function levelHighways(cands, level, quickS, o = {}) {
     const L = LEVELS[level];
-    if (!L || !L.noHighway) return { list: cands, rule: 'any', absurd: false, freeS: null, minKm: null };
+    if (!L || (!L.noHighway && !o.avoidHighways)) return { list: cands, rule: 'any', absurd: false, freeS: null, minKm: null };
     const km = cands.map((c) => highwayKm(c));
     const free = cands.filter((c, i) => km[i] != null && km[i] <= HWY.FREE_KM);
     if (free.length) {
@@ -83,7 +83,7 @@
    * level's own. Returns { list, limit }.
    */
   function applyHighways(valued, level, quickS, limit, o = {}) {
-    const h = levelHighways(valued, level, quickS);
+    const h = levelHighways(valued, level, quickS, o);   // (Avoid highways on: every level, as Fun)
     if (h.rule === 'any' || h.rule === 'unknown') return { list: valued, limit };
     // no highway-free way in a sensible time (absurd): the level's pick is the quickest, and its card says Quick is the way.
     // A highway-free way at twice the time is no Fun route (the owner, 2026-11-16, Blue Ash to Colerain: 44 min of suburban
@@ -105,7 +105,8 @@
     }
     const times = h.list.map((c) => c.timeS).filter(Number.isFinite);
     const lim = Math.max(limit, (times.length ? Math.min(...times) : 0) + HWY.SLACK_S);
-    for (const c of h.list) Object.assign(c, { hwyRule: h.rule, hwyKm: highwayKm(c), hwyAbsurd: h.absurd, hwyFreeS: h.freeS });
+    // (Avoid highways on: no "Quick is the way" either, Quick avoids them as well)
+    for (const c of h.list) Object.assign(c, { hwyRule: h.rule, hwyKm: highwayKm(c), hwyAbsurd: h.absurd && !o.avoidHighways, hwyFreeS: h.freeS });
     return { list: h.list, limit: lim };
   }
 

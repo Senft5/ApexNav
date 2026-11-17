@@ -719,5 +719,8 @@ def test_a_highway_free_way_of_poor_road_is_no_fun_route():
     assert r["pickHwyKm"] > 8 and r["poor"], r
     assert r["why"] == "No good roads off the highway on this trip; Quick is the way", r
     assert r["avoidPickHwyKm"] == 0 and r["engineAvoidPickHwyKm"] == 0, "Avoid highways on: never the highway (the owner, 2026-11-17)"
+    q = r["quickAvoid"]
+    assert q["plan"] == 0 and q["through"] == 0 and q["pick"] == 0 and not q["absurd"] and q["why"] is None, q
+    assert q["off"] > 8, "Avoid highways off: Quick takes the motorway: " + str(q)
     g = case("poorWay", "0.8")
     assert g["pickHwyKm"] == 0 and not g["poor"] and g["why"] is None, g

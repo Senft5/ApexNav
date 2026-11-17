@@ -114,7 +114,16 @@ const CASES = {
       poor: !!ranked[0].hwyPoor, why: (E.whyHighway(ranked[0]) || {}).text || null,
       // Avoid highways on: never the highway, whatever the roads off it (the owner, 2026-11-17)
       avoidPickHwyKm: FunRoute.rank(cands, 'fun', { avoidHighways: true })[0].route.hwyKm,
-      engineAvoidPickHwyKm: E.rank(cands.map((c) => ({ ...c })), { level: 'fun', avoidHighways: true })[0].route.hwyKm };
+      engineAvoidPickHwyKm: E.rank(cands.map((c) => ({ ...c })), { level: 'fun', avoidHighways: true })[0].route.hwyKm,
+      // ... and at Quick: our router's plan and a reroute keep off it, and the ranking picks off it
+      quickAvoid: (() => {
+        const av = { highways: true }, from = { lat: y, lon: -84.702 }, to = { lat: y, lon: -84.598 };
+        const pq = R.plan(v, { from, to, level: 'quick', avoid: av }), th = R.through(v, { from, to, level: 'quick', avoid: av });
+        const cq = pq.routes.map((r, i) => ({ id: i, kind: 'own', own: r, timeS: r.timeS, route: r.route }));
+        const pick = E.rank(cq, { level: 'quick', avoidHighways: true })[0];
+        return { plan: pq.routes[0].hwyKm, through: th.hwyKm, pick: pick.route.hwyKm, absurd: !!pick.hwyAbsurd, why: (E.whyHighway(pick) || {}).text || null,
+          off: E.rank(R.plan(v, { from, to, level: 'quick' }).routes.map((r, i) => ({ id: i, kind: 'own', own: r, timeS: r.timeS, route: r.route })), { level: 'quick' })[0].route.hwyKm };
+      })() };
   },
   byway(lv) {
     // A to B by the Skyline Drive (a ridge road that sweeps more than it winds: fewer corner points) or US 59 (more corners,
