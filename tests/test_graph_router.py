@@ -433,6 +433,7 @@ def test_no_highway_free_way_in_a_sensible_time():
     assert r["absurd"] and r["mode"] == "free" and r["hwyKm"] == 0 and r["ratio"] > 2, r
     assert r["names"] == ["Start Lane", "Loop Road", "End Lane"] and r["routes"] == 2, r
     assert len(r["rankHwy"]) == 1 and r["rankHwy"][0] > 8 and r["rankAbsurd"] == [True], r
+    assert r["avoidHwy"] == [0], "Avoid highways on: the highway-free way all the same (the owner, 2026-11-17)"
     assert r["why"] == "No highway-free way in a sensible time; Quick is the way", r["why"]
     assert r["quickPick"] > 8, "Quick: the motorway"
 
@@ -708,3 +709,18 @@ def test_a_fun_reroutes_shaping_points_stay_off_side_streets_and_dead_ends():
     assert r["fun"] == ["Main Road"] and r["max"] == ["Main Road"] and r["far"] == ["Main Road"], r
     # a stop the driver added, and Quick, still go where they're asked
     assert "Devonian Dr" in r["stop"] and "Devonian Dr" in r["quick"], r
+
+
+def test_a_highway_free_way_of_poor_road_is_no_fun_route():
+    """Every highway-free way mostly poor road (2026-11-16 survey: downtown to Mason 27.6 km poor to 2.6 good): Fun's pick
+    is the quickest and the card says so; the same way on good road stays Fun's."""
+    r = case("poorWay", "0.25")
+    assert not r["absurd"] and r["ratio"] < 2 and r["poorKm"] >= 5 and r["poorKm"] > 2 * r["goodKm"], r
+    assert r["pickHwyKm"] > 8 and r["poor"], r
+    assert r["why"] == "No good roads off the highway on this trip; Quick is the way", r
+    assert r["avoidPickHwyKm"] == 0 and r["engineAvoidPickHwyKm"] == 0, "Avoid highways on: never the highway (the owner, 2026-11-17)"
+    q = r["quickAvoid"]
+    assert q["plan"] == 0 and q["through"] == 0 and q["pick"] == 0 and not q["absurd"] and q["why"] is None, q
+    assert q["off"] > 8, "Avoid highways off: Quick takes the motorway: " + str(q)
+    g = case("poorWay", "0.8")
+    assert g["pickHwyKm"] == 0 and not g["poor"] and g["why"] is None, g

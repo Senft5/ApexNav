@@ -478,7 +478,7 @@
     const { src, dst } = snapBoth(v, req.from, req.to);
     const sc = startCostFor(v, req.from.heading != null ? req.from.heading : req.heading);
     const opts = { ...(sc ? { startCost: sc } : {}), ellipse: ellipseFor(req.from, req.to, level) };
-    if (noHighway(level)) {
+    if (noHighway(level, req)) {
       const f = freeQuickest(v, obj, req, src, dst, opts);
       if (!f) throw new Error('no route');
       v.quickMemo = { key: quickKey(req, level, obj, 'free'), f };
@@ -509,7 +509,7 @@
    * Throws when a point has no road near it or a leg has no way.
    */
   function through(v, req) {
-    const level = levels()[req.level] ? req.level : 'fun', obj = objective(v, req), free = noHighway(level), is = free ? hwyOf(v) : null;
+    const level = levels()[req.level] ? req.level : 'fun', obj = objective(v, req), free = noHighway(level, req), is = free ? hwyOf(v) : null;
     const h0 = req.from.heading != null ? req.from.heading : req.heading;
     let prev = snap(v, req.from.lat, req.from.lon);
     if (!prev.length) throw new Error('no road near the start');
@@ -1397,7 +1397,9 @@
     v.isHwy = h;
     return h;
   }
-  const noHighway = (level) => !!K.NO_HWY[level];
+  // Fun and Long way; and any level with Avoid highways on (the owner, 2026-11-17: "the avoid highways option should always
+  // avoid highways"), for A to B: a highway only where there is no other way, which the card says (hwyReason)
+  const noHighway = (level, req = null) => !!K.NO_HWY[level] || !!(req && req.avoid && req.avoid.highways);
   /**
    * A snap for a level that never drives a highway: the nearest road when it isn't one; else the nearest other road within
    * HWY_SNAP_M (a house beside the interstate is reached by its own street). A moving car (a heading) within HWY_ON_M of
@@ -1489,7 +1491,7 @@
     let opts0 = { ...(sc ? { startCost: sc } : {}), ellipse: ellipseFor(req.from, req.to, level), ...(crowM > K.LONG_KM * 1000 ? { timeTo: true } : {}) };
     let opts = opts0;
     const run = (a, penal = null, role = 'step') => { const r = search(v, obj, src, dst, a, penal, opts); return r ? assemble(v, r, obj, { level, role, a }) : null; };
-    const free = noHighway(level);
+    const free = noHighway(level, req);
     const memoOf = (kind) => (v.quickMemo && v.quickMemo.key === quickKey(req, level, obj, kind) ? v.quickMemo : null);
     const memo = free ? null : memoOf('any');
     let quick = memo ? assemble(v, memo.r, obj, { level, role: 'quickest', a: 0 }) : run(0, null, 'quickest');
@@ -1510,7 +1512,7 @@
       if (base !== quick) quick.why.role = 'quickest-highway';
       hwy = { mode: f.mode, absurd: f.mode === 'free' && base.timeS > K.HWY_ABSURD * quick.timeS, quickS: quick.timeS, freeS: f.mode === 'free' ? base.timeS : null };
       const fitS = quick.timeS * (1 + L.budget) + L.slackS;
-      if (base !== quick && base.timeS > fitS + K.HWY_FIT_S) {
+      if (base !== quick && base.timeS > fitS + K.HWY_FIT_S && !(req.avoid && req.avoid.highways)) {   // (Avoid highways: never a fit onto one)
         const g = fitHighway(v, obj, snaps.src, snaps.dst, opts0, is, fitS, level);
         if (g) {
           ({ src, dst } = g);

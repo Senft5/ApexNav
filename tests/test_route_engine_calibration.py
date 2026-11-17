@@ -63,11 +63,13 @@ def test_subdivision_cut_through_never_wins(r):
 
 def test_highway_beats_the_suburban_arterial(r):
     """Northgate → NE: Springdale and Mill Roads (the router's own costing) vs I-275, quicker and far fewer driveways.
-    I-275 at Quick; Fun and Long way never drive a highway (the owner, 2026-11-08): Springdale and Mill Roads."""
+    I-275 at Quick. Fun and Long way kept off it (the owner, 2026-11-08) until 2026-11-16: every highway-free way here is
+    mostly poor road (FunRoute.poorWay, the owner's "was that route meant to be a joke"), so Quick is the way at every level."""
     assert r["northgate:quick"]["engine"][0] == "highway", r["northgate:quick"]["engine"]
     for lv in ("fun", "max"):
-        assert r[f"northgate:{lv}"]["engine"][0] == "router0" and "highway" not in r[f"northgate:{lv}"]["engine"], (lv, r[f"northgate:{lv}"]["engine"])
-    assert r["northgate:fun"]["old"][0] == "router1", "the old ranking took Pippin and Kemper Roads for 3 corners"
+        assert r[f"northgate:{lv}"]["engine"] == ["highway"], (lv, r[f"northgate:{lv}"]["engine"])
+    # (the old ranking took Pippin and Kemper Roads for 3 corners; it shares FunRoute.applyHighways, so now the highway too)
+    assert r["northgate:fun"]["old"] == ["highway"], r["northgate:fun"]["old"]
 
 
 def test_strip_mall_arterial_loses_to_quieter_roads(r):
@@ -123,7 +125,7 @@ def test_picks_hold_with_the_context_grid(r):
             assert r[f"grid:northgate:{lv}"]["engine"][0] == "highway", "AADT, noise and crashes per km don't count against a motorway"
             assert r[f"grid:colerain:{lv}"]["engine"][0] == "router1", "Quick: the quickest"
             continue
-        assert r[f"grid:northgate:{lv}"]["engine"][0] == "router0", "Fun and Long way never drive the highway"
+        assert r[f"grid:northgate:{lv}"]["engine"] == ["highway"], "every highway-free way is mostly poor road: Quick is the way"
         e = r[f"grid:colerain:{lv}"]["engine"]
         assert e[0] in ("router0", "router2") and ("router1" not in e or e.index("router1") > e.index("router0"))
     assert r["grid:harrison:quick"]["engine"][0] == "highway" and r["grid:harrison:fun"]["engine"][0] == "router0"

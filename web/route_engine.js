@@ -729,7 +729,7 @@
     }
     // Fun and Long way never drive a highway (the owner, 2026-11-08): only the highway-free candidates, when any exists
     // (else the least highway: the exception), measured against the quickest all the same (fun_route.js applyHighways)
-    const h = FunRoute && FunRoute.applyHighways ? FunRoute.applyHighways(ok, level, quick.timeS, limit) : { list: ok, limit };
+    const h = FunRoute && FunRoute.applyHighways ? FunRoute.applyHighways(ok, level, quick.timeS, limit, { avoidHighways: !!opts.avoidHighways }) : { list: ok, limit };
     const out = h.list.filter((c) => (c.extraS === 0 && h.list === ok) || c.timeS <= h.limit).sort((a, b) => b.value - a.value);
     // the quickest as valued, for the why line, when the level keeps it out (its parts are what the pick is told against)
     const vq = valued[cands.indexOf(quick)];
@@ -867,10 +867,12 @@
   /**
    * The card's highway line at Fun and Long way (the owner, 2026-11-08: "fun should never go on the highway"): the
    * exception says how much it uses and why, "Uses 0.4 mi of I-275 (no other way across)"; a highway-free way more than
-   * twice the quickest's time says "No highway-free way in a sensible time; Quick is the way". null otherwise.
+   * twice the quickest's time says "No highway-free way in a sensible time; Quick is the way", and one that is mostly poor
+   * road (FunRoute.poorWay) "No good roads off the highway on this trip; Quick is the way". null otherwise.
    */
   function whyHighway(best, o = {}) {
     if (!best) return null;
+    if (best.hwyAbsurd && best.hwyPoor) return { text: 'No good roads off the highway on this trip; Quick is the way', kind: 'absurd' };
     if (best.hwyAbsurd) return { text: 'No highway-free way in a sensible time; Quick is the way', kind: 'absurd' };
     if (best.hwyRule !== 'link' || !(best.hwyKm > 0)) return null;
     const r = best.route || {}, name = r.hwyName && r.hwyName !== 'the highway' ? r.hwyName : 'highway';
