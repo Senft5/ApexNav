@@ -160,9 +160,12 @@ public struct PracticePick: Equatable, Sendable {
     public let bpm: Int
     public let reps: Int
     public let step: Int                     // 16ths per note, the same for every note of the block
-    public init(root: Int, item: PracticeItem, bpm: Int, reps: Int, step: Int = 2) {
-        self.root = root; self.item = item; self.bpm = bpm; self.reps = reps; self.step = step
+    public let base: Int                     // the root's MIDI note: middle C's octave, or wherever a sung range puts it
+    public init(root: Int, item: PracticeItem, bpm: Int, reps: Int, step: Int = 2, base: Int? = nil) {
+        self.root = root; self.item = item; self.bpm = bpm; self.reps = reps; self.step = step; self.base = base ?? 60 + root
     }
+    /// The drone: two octaves under the root, or one when two would be too low to hear on a phone (under E1).
+    public var droneMidi: Int { base - 24 >= 28 ? base - 24 : base - 12 }
     public var title: String { PracticeTheory.title(root: root, item: item, bpm: bpm, step: step) }
     public var callout: String { PracticeTheory.callout(root: root, item: item, bpm: bpm, step: step) }
 }
@@ -181,19 +184,26 @@ public struct PracticeRandom: RandomNumberGenerator, Sendable {
 }
 
 public enum PracticePicker {
-    /// The next block: never the same root and item twice in a row when the settings leave another choice.
-    public static func next<G: RandomNumberGenerator>(_ settings: PracticeSettings, after last: PracticePick?, using rng: inout G) -> PracticePick {
+    /// The next block: never the same root and item twice in a row when the settings leave another choice. With a sung
+    /// `range` (MIDI notes), the root goes where the whole repetition, root to octave, fits inside it (PracticeRange.bases).
+    public static func next<G: RandomNumberGenerator>(_ settings: PracticeSettings, after last: PracticePick?,
+                                                      range: ClosedRange<Int>? = nil, using rng: inout G) -> PracticePick {
         let s = settings.clamped
         let pool = PracticeTheory.items(for: s.focus)
         var pick: PracticePick
         var tries = 0
         repeat {
-            let root = s.lockRoot ?? Int.random(in: 0..<12, using: &rng)
+            var root = s.lockRoot ?? Int.random(in: 0..<12, using: &rng)
+            var base: Int? = nil
+            if let range {
+                let b = PracticeRange.bases(range, root: s.lockRoot).randomElement(using: &rng)!
+                base = b; root = ((b % 12) + 12) % 12
+            }
             let item = pool.randomElement(using: &rng)!
             let bpm = s.bpms.randomElement(using: &rng)!
             let reps = Int.random(in: s.repsMin...s.repsMax, using: &rng)
             let step = s.values.randomElement(using: &rng)!
-            pick = PracticePick(root: root, item: item, bpm: bpm, reps: reps, step: step)
+            pick = PracticePick(root: root, item: item, bpm: bpm, reps: reps, step: step, base: base)
             tries += 1
         } while tries < 8 && last.map { $0.root == pick.root && $0.item == pick.item } == true
         return pick
@@ -324,12 +334,12 @@ public final class PracticeRenderer: @unchecked Sendable {
         let f = frame - blockStart
         // the callout, at the start of the lead
         if f < Int64(b.callout.count) { s += b.callout[Int(f)] * 0.9 }
-        // the drone: the root two octaves under the scale, with its octave, faded in and out over half a second
+        // the drone: the root two octaves under the scale (PracticePick.droneMidi), with its octave, faded in and out over half a second
         if drone {
             let t = Double(f) / sampleRate
             let total = Double(blockLen) / sampleRate
             let env = Float(min(1, t / 0.5, max(0, total - t) / 0.5))
-            let hz = Self.hz(midi: 36 + b.pick.root)
+            let hz = Self.hz(midi: b.pick.droneMidi)
             let p = 2 * Double.pi * hz * t
             s += env * 0.075 * Float(sin(p) + 0.5 * sin(2 * p) + 0.18 * sin(3 * p))
         }
@@ -364,7 +374,7 @@ public final class PracticeRenderer: @unchecked Sendable {
         if noteStart >= 0 {
             let nt = Double(f - noteStart) / sampleRate
             if nt < noteLen {
-                let hz = Self.hz(midi: 60 + b.pick.root + notes[noteIdx])
+                let hz = Self.hz(midi: b.pick.base + notes[noteIdx])
                 let env = min(1, nt / 0.005) * (0.55 + 0.45 * exp(-nt / 0.08)) * min(1, (noteLen - nt) / 0.02)
                 let p = 2 * Double.pi * hz * nt
                 s += Float(env * 0.16 * (sin(p) + 0.3 * sin(2 * p) + 0.12 * sin(3 * p)))

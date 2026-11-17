@@ -18,6 +18,7 @@
 
   let ui = null;                     // the mounted sheet: { paint(state) }
   let viz = null;                    // its pictures (practice_viz.js), when loaded
+  let range = { step: null };        // the voice range test: { step: 'low'|'high'|null, lo, hi, label, now, best, low, error }
   let last = { active: false, playing: false, settings: { ...DEFAULTS } };
 
   /** Whether this account and this app get the entry: the owner (moderator), inside the iOS app. */
@@ -26,7 +27,7 @@
   /** Mounts the sheet into `body`. deps: { post(msg), document? }. Asks the shell for its state at once. */
   function mount(body, deps) {
     const doc = deps.document || root.document;
-    const post = (action, settings, on) => { try { deps.post({ cmd: 'practice', action, ...(settings ? { settings } : {}), ...(on != null ? { on: !!on } : {}) }); } catch (_) { /* no shell */ } };
+    const post = (action, settings, on, step) => { try { deps.post({ cmd: 'practice', action, ...(settings ? { settings } : {}), ...(on != null ? { on: !!on } : {}), ...(step ? { step } : {}) }); } catch (_) { /* no shell */ } };
     const el = (tag, props = {}, ...kids) => { const n = doc.createElement(tag); for (const [k, v] of Object.entries(props)) { if (k === 'dataset') Object.assign(n.dataset, v); else if (k in n) n[k] = v; else n.setAttribute(k, v); } n.append(...kids); return n; };
     const set = (patch) => { last.settings = { ...last.settings, ...patch }; post('settings', patch); paint(last); };
 
@@ -78,6 +79,13 @@
       });
       vals.append(b);
     }
+    // the voice range (Nate 2026-11-17): sing your lowest and highest note; blocks stay inside it until the app quits
+    const rangeNow = el('p', { className: 'pl-range' });
+    rangeNow.setAttribute('aria-live', 'polite');
+    const rangeGo = el('button', { type: 'button', className: 'ink-btn' });
+    rangeGo.addEventListener('click', () => post('range', null, null, range.step ? 'done' : 'start'));
+    const rangeOff = el('button', { type: 'button', className: 'ink-btn' });
+    rangeOff.addEventListener('click', () => post('range', null, null, range.step ? 'cancel' : 'clear'));
     const vizBox = el('div', { className: 'pl-viz-box' });
     const lbl = (t) => el('p', { className: 'note group-label', textContent: t });
 
@@ -89,6 +97,7 @@
       lbl('Play'), focus,
       lbl('Tempo (BPM)'), el('div', { className: 'row' }, bpmMin, el('span', { textContent: 'to' }), bpmMax),
       lbl('Note values'), vals,
+      lbl('Voice range'), rangeNow, el('div', { className: 'row' }, rangeGo, rangeOff),
       lbl('Repeats'), el('div', { className: 'row' }, repsMin, el('span', { textContent: 'to' }), repsMax),
       el('div', { className: 'row mt-8' }, drone),
       lbl('Volume'), vol,
@@ -108,9 +117,22 @@
       if (doc.activeElement !== vol) vol.value = String(s.volume);
       for (const b of sleep.children) b.setAttribute('aria-pressed', String(Number(b.dataset.v) === Number(s.sleepMin)));
       for (const b of vals.children) b.setAttribute('aria-pressed', String((s.values || DEFAULTS.values).includes(Number(b.dataset.v))));
+      paintRange();
       if (viz) viz.state(st);
     }
-    ui = { paint };
+    function paintRange() {
+      const r = range;
+      const heard = [r.now && `Hearing ${r.now}`, r.best && `${r.step === 'low' ? 'lowest' : 'highest'} held ${r.best}`].filter(Boolean).join(' · ');
+      rangeNow.textContent = r.step === 'low' ? `Sing your lowest note and hold it.${heard ? ` ${heard}` : ''}`
+        : r.step === 'high' ? `Now your highest note, and hold it.${heard ? ` ${heard}` : ''}`
+          : r.error ? r.error
+            : r.label ? `${r.label}, for this session` : 'Any octave. Sing your lowest and highest notes to keep every block inside them.';
+      rangeGo.textContent = r.step ? (r.best ? 'Got it' : 'Listening…') : (r.label ? 'Test again' : 'Test my range');
+      rangeGo.disabled = !!r.step && !r.best;
+      rangeOff.textContent = r.step ? 'Cancel' : 'Clear';
+      rangeOff.hidden = !r.step && !r.label;
+    }
+    ui = { paint, paintRange };
     if (deps.viz) viz = deps.viz.mount(vizBox, { document: doc, watch: (on) => post('watch', null, on) });
     paint(last);
     post('state');
@@ -120,8 +142,10 @@
   /** The shell's answer (cockpit.js onNative, type 'practice'). */
   function onNative(msg) {
     if (msg && msg.type === 'practiceClock') { if (viz) viz.clock(msg); return; }
+    if (msg && msg.type === 'practiceRange') { range = { ...msg }; if (ui) ui.paintRange(); return; }
     if (!msg || msg.type !== 'practice') return;
     if (msg.error) { last = { ...last, active: false, playing: false, title: null }; if (ui) ui.paint({ ...last, error: msg.error }); return; }
+    if (msg.range) range = { ...msg.range };
     last = { active: !!msg.active, playing: !!msg.playing, title: msg.title || null, settings: { ...DEFAULTS, ...(msg.settings || last.settings) } };
     if (ui) ui.paint(last);
   }
