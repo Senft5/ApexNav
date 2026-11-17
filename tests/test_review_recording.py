@@ -201,7 +201,7 @@ def test_recording_notes_of_the_fifth_recording():
     dyn = body("test09DynamicType")
     assert '"-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"' in dyn
     assert "test: test09DynamicType, name: dynamic-type" in yml
-    for tag in ('tab("Garage")', 'tab("People")', 'tab("Log")', 'shot("route-card")', '"cockpit"'):
+    for tag in ('tab("Garage")', 'tab("Social")', 'tab("Log")', 'shot("route-card")', '"cockpit"'):
         assert tag in dyn, tag
 
 
