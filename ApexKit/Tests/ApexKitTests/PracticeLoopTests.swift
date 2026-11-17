@@ -32,6 +32,12 @@ final class PracticeLoopTests: XCTestCase {
         let dim = PracticeTheory.items.first { $0.id == "dim_wh" }!
         XCTAssertEqual(PracticeTheory.rep(dim).count, 17)
         XCTAssertEqual(PracticeTheory.barsPerRep(dim), 3)
+        // in other note values: whole notes take a bar each, 16ths fit two reps of a 7-note mode in two bars
+        XCTAssertEqual(PracticeTheory.barsPerRep(ionian, step: 16), 15)
+        XCTAssertEqual(PracticeTheory.barsPerRep(ionian, step: 8), 8)
+        XCTAssertEqual(PracticeTheory.barsPerRep(ionian, step: 4), 4)
+        XCTAssertEqual(PracticeTheory.barsPerRep(ionian, step: 1), 1)
+        XCTAssertEqual(PracticeTheory.barsPerRep(maj, step: 1), 1)
     }
 
     func testDefaultTemposAreStandardMarkings() {
@@ -63,15 +69,20 @@ final class PracticeLoopTests: XCTestCase {
         for _ in 0..<500 { let p = PracticePicker.next(PracticeSettings(), after: nil, using: &rng); all.insert(p.root); reps.insert(p.reps) }
         XCTAssertEqual(all.count, 12, "every root comes up")
         XCTAssertEqual(reps, Set(5...10), "reps 5 to 10 by default")
+        var steps = Set<Int>()
+        for _ in 0..<300 { steps.insert(PracticePicker.next(PracticeSettings(), after: nil, using: &rng).step) }
+        XCTAssertEqual(steps, [16, 8, 4, 2, 1], "every note value comes up")
+        var only = PracticeSettings(); only.values = [8, 99]
+        for _ in 0..<50 { XCTAssertEqual(PracticePicker.next(only, after: nil, using: &rng).step, 8) }
     }
 
     func testCalloutWords() {
         let dorian = PracticeTheory.items.first { $0.id == "dorian" }!
-        let p = PracticePick(root: 2, item: dorian, bpm: 92, reps: 5)
-        XCTAssertEqual(p.callout, "D Dorian, 92 BPM")
-        XCTAssertEqual(p.title, "D Dorian · 92")
-        let p2 = PracticePick(root: 10, item: PracticeTheory.items.first { $0.id == "arp_m7b5" }!, bpm: 60, reps: 5)
-        XCTAssertEqual(p2.callout, "B flat minor seven flat five arpeggio, 60 BPM")
+        let p = PracticePick(root: 2, item: dorian, bpm: 92, reps: 5, step: 8)
+        XCTAssertEqual(p.callout, "D Dorian, 92 BPM, half notes")
+        XCTAssertEqual(p.title, "D Dorian · 92 · half")
+        let p2 = PracticePick(root: 10, item: PracticeTheory.items.first { $0.id == "arp_m7b5" }!, bpm: 60, reps: 5, step: 1)
+        XCTAssertEqual(p2.callout, "B flat minor seven flat five arpeggio, 60 BPM, sixteenth notes")
     }
 
     /// Plays `seconds` of endless blocks (a new one offered whenever the renderer asks) in buffers of varying size.
@@ -105,37 +116,69 @@ final class PracticeLoopTests: XCTestCase {
         let rate = 8000.0
         let (r, out, blocks) = run(seconds: 1800, rate: rate)
         let starts = r.blockLog!
-        XCTAssertGreaterThan(starts.count, 20)
+        XCTAssertGreaterThan(starts.count, 8)
         XCTAssertEqual(starts.first?.frame, 0)
         // every block starts on the frame the one before it ended: no gap between blocks
         for (a, b) in zip(starts, starts.dropFirst()) {
             let blk = blocks[a.id]
             let lead = PracticeRenderer.leadFrames(calloutCount: blk.callout.count, sampleRate: rate)
-            let e = PracticeRenderer.framesPerEighth(bpm: blk.pick.bpm, sampleRate: rate)
-            let len = PracticeRenderer.eighthStart(8 + blk.pick.reps * PracticeTheory.barsPerRep(blk.pick.item) * 8, lead: lead, framesPerEighth: e)
+            let e = PracticeRenderer.framesPerSixteenth(bpm: blk.pick.bpm, sampleRate: rate)
+            let len = PracticeRenderer.sixteenthStart(16 + blk.pick.reps * PracticeTheory.barsPerRep(blk.pick.item, step: blk.pick.step) * 16, lead: lead, framesPerSixteenth: e)
             XCTAssertEqual(b.frame - a.frame, len, "block \(a.id) ends where the next begins")
         }
-        // every click is on its block's own grid: quarter m at lead + round(2m × eighth), beat 1 accented
+        // every click is on its block's own grid: quarter m at lead + round(4m × 16th), beat 1 accented
         let clicks = r.clickLog!
         var ci = 0
         for (n, s) in starts.enumerated() {
             let end = n + 1 < starts.count ? starts[n + 1].frame : Int64(out.count)
             let blk = blocks[s.id]
             let lead = PracticeRenderer.leadFrames(calloutCount: blk.callout.count, sampleRate: rate)
-            let e = PracticeRenderer.framesPerEighth(bpm: blk.pick.bpm, sampleRate: rate)
+            let e = PracticeRenderer.framesPerSixteenth(bpm: blk.pick.bpm, sampleRate: rate)
             var m = 0
             while ci < clicks.count && clicks[ci].frame < end {
-                XCTAssertEqual(clicks[ci].frame, s.frame + PracticeRenderer.eighthStart(2 * m, lead: lead, framesPerEighth: e), "block \(s.id) click \(m)")
+                XCTAssertEqual(clicks[ci].frame, s.frame + PracticeRenderer.sixteenthStart(4 * m, lead: lead, framesPerSixteenth: e), "block \(s.id) click \(m)")
                 XCTAssertEqual(clicks[ci].accent, m % 4 == 0)
                 m += 1; ci += 1
             }
             if n + 1 < starts.count {
-                XCTAssertEqual(m, 4 + blk.pick.reps * PracticeTheory.barsPerRep(blk.pick.item) * 4, "block \(s.id): count-in bar and every rep clicked")
+                XCTAssertEqual(m, 4 + blk.pick.reps * PracticeTheory.barsPerRep(blk.pick.item, step: blk.pick.step) * 4, "block \(s.id): count-in bar and every rep clicked")
             }
         }
         XCTAssertEqual(ci, clicks.count)
+        XCTAssertGreaterThan(Set(blocks.prefix(starts.count).map(\.pick.step)).count, 2, "blocks came in several note values")
         XCTAssertTrue(out.allSatisfy { $0.isFinite && abs($0) <= 1 })
         XCTAssertGreaterThan(out.map { abs($0) }.max()!, 0.2, "it makes sound")
+    }
+
+    /// Every note of a block in its one note value, on the grid: note i of rep r at 16 + r·rep + i·step 16ths.
+    func testEachBlockPlaysAllItsNotesInOneNoteValue() {
+        let rate = 8000.0
+        let dorian = PracticeTheory.items.first { $0.id == "dorian" }!
+        for step in PracticeTheory.steps {
+            let r = PracticeRenderer(sampleRate: rate)
+            r.noteLog = []; r.blockLog = []
+            r.offer(PracticeBlock(id: 0, pick: PracticePick(root: 2, item: dorian, bpm: 120, reps: 2, step: step), callout: []))
+            let e = PracticeRenderer.framesPerSixteenth(bpm: 120, sampleRate: rate)
+            let lead = PracticeRenderer.leadFrames(calloutCount: 0, sampleRate: rate)
+            let repS = PracticeTheory.barsPerRep(dorian, step: step) * 16
+            let total = Int(PracticeRenderer.sixteenthStart(16 + 2 * repS, lead: lead, framesPerSixteenth: e))
+            var out = [Float](repeating: 0, count: total)
+            out.withUnsafeMutableBufferPointer { r.render($0.baseAddress!, count: $0.count) }
+            let notes = r.noteLog!
+            let want = PracticeTheory.rep(dorian)
+            XCTAssertEqual(notes.map(\.semis), want + want, "step \(step): every note, up then down, twice")
+            for (i, n) in notes.enumerated() {
+                let rr = i / want.count, j = i % want.count
+                XCTAssertEqual(n.frame, PracticeRenderer.sixteenthStart(16 + rr * repS + j * step, lead: lead, framesPerSixteenth: e), "step \(step) note \(i)")
+            }
+        }
+    }
+
+    func testOldSavedSettingsStillLoad() throws {
+        let old = #"{"focus":"modes","bpmMin":72,"bpmMax":96,"repsMin":5,"repsMax":10,"drone":false,"volume":0.5,"sleepMin":30}"#
+        let s = try JSONDecoder().decode(PracticeSettings.self, from: Data(old.utf8))
+        XCTAssertEqual(s.focus, "modes"); XCTAssertEqual(s.bpmMin, 72); XCTAssertFalse(s.drone)
+        XCTAssertEqual(s.values, PracticeTheory.steps, "a build from before note values gets them all")
     }
 
     func testBufferSizeDoesNotChangeTheSound() {
@@ -155,6 +198,7 @@ final class PracticeLoopTests: XCTestCase {
         let c = r.clickLog!.map(\.frame)
         XCTAssertGreaterThan(c.count, 50)
         for (a, b) in zip(c, c.dropFirst()) { XCTAssertEqual(b - a, 4000, accuracy: 1, "quarter notes at 120 BPM, no gap") }
+        XCTAssertEqual(r.clock.id, 0)
         XCTAssertEqual(r.status.blockId, 0)
     }
 

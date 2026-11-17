@@ -1,13 +1,14 @@
 // Practice Loop (the owner, 2026-11-17): an endless ear-training and time player, for the owner only. A metronome click
-// in 4/4 (beat 1 accented) at a random standard tempo, with a random scale, mode or arpeggio played over it in 8th notes
-// (up, then down) over a quiet drone on the root, and a callout before each block ("D Dorian, 92 BPM"). Each block repeats
-// 5 to 10 times, then a new one is picked.
+// in 4/4 (beat 1 accented) at a random standard tempo, with a random scale, mode or arpeggio played over it (up, then
+// down) over a quiet drone on the root, and a callout before each block ("D Dorian, 92 BPM, half notes"). Each block
+// plays all its notes in one note value (whole, half, quarter, 8th or 16th; never mixed within a block), repeats 5 to 10
+// times, then a new one is picked.
 //
 // This file is the pure part, free of AVFoundation so it is tested on Linux and macOS (Tests/ApexKitTests/PracticeLoopTests):
 // the content pool, the random picker, and the sample renderer. The app (PracticeLoop.swift beside ApexNavApp.swift) feeds
 // the renderer to an AVAudioSourceNode, so every click and note is placed by counting samples on the audio thread: no timer,
 // nothing that can drift or stall with the screen locked. Each event's first sample is computed from the block's start
-// (`PracticeRenderer.eighthStart`), never by adding lengths up, so an hour of clicks lands where the first one said.
+// (`PracticeRenderer.sixteenthStart`), never by adding lengths up, so an hour of clicks lands where the first one said.
 import Foundation
 
 public enum PracticeKind: String, Codable, CaseIterable, Sendable { case mode, scale, arpeggio }
@@ -67,8 +68,16 @@ public enum PracticeTheory {
         return up + up.dropLast().reversed()
     }
 
-    /// Whole 4/4 bars (8 eighths each) a repetition takes; the eighths after its last note rest.
-    public static func barsPerRep(_ item: PracticeItem) -> Int { (rep(item).count + 7) / 8 }
+    /// The note values a block can play in, as 16ths per note (Nate 2026-11-17: some wholes, halves, quarters, 16ths;
+    /// never mixed within a scale). Each with its spoken and short name.
+    public static let values: [(step: Int, spoken: String, short: String)] = [
+        (16, "whole notes", "whole"), (8, "half notes", "half"), (4, "quarter notes", "quarter"),
+        (2, "eighth notes", "8ths"), (1, "sixteenth notes", "16ths"),
+    ]
+    public static let steps = values.map(\.step)
+
+    /// Whole 4/4 bars (16 16ths each) a repetition takes in `step` 16ths per note; what is left of its last bar rests.
+    public static func barsPerRep(_ item: PracticeItem, step: Int = 2) -> Int { (rep(item).count * step + 15) / 16 }
 
     public static func items(for focus: String) -> [PracticeItem] {
         switch focus {
@@ -79,8 +88,12 @@ public enum PracticeTheory {
         }
     }
 
-    public static func title(root: Int, item: PracticeItem, bpm: Int) -> String { "\(rootNames[root]) \(item.name) · \(bpm)" }
-    public static func callout(root: Int, item: PracticeItem, bpm: Int) -> String { "\(rootSpoken[root]) \(item.spoken), \(bpm) BPM" }
+    public static func title(root: Int, item: PracticeItem, bpm: Int, step: Int = 2) -> String {
+        "\(rootNames[root]) \(item.name) · \(bpm) · \(values.first { $0.step == step }?.short ?? "")"
+    }
+    public static func callout(root: Int, item: PracticeItem, bpm: Int, step: Int = 2) -> String {
+        "\(rootSpoken[root]) \(item.spoken), \(bpm) BPM, \(values.first { $0.step == step }?.spoken ?? "")"
+    }
 }
 
 /// The owner's choices (Practice Loop's sheet). Anything out of range is pulled back in by `clamped`.
@@ -94,8 +107,26 @@ public struct PracticeSettings: Codable, Equatable, Sendable {
     public var drone: Bool = true
     public var volume: Double = 0.8          // master, 0...1
     public var sleepMin: Int = 0             // 0: never stops by itself
+    public var values: [Int] = PracticeTheory.steps   // the note values a block may pick (16ths per note)
 
     public init() {}
+
+    private enum CodingKeys: String, CodingKey { case lockRoot, focus, bpmMin, bpmMax, repsMin, repsMax, drone, volume, sleepMin, values }
+    /// Any key left out (settings saved by an older build) keeps its default.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = PracticeSettings()
+        lockRoot = try c.decodeIfPresent(Int.self, forKey: .lockRoot)
+        focus = try c.decodeIfPresent(String.self, forKey: .focus) ?? d.focus
+        bpmMin = try c.decodeIfPresent(Int.self, forKey: .bpmMin) ?? d.bpmMin
+        bpmMax = try c.decodeIfPresent(Int.self, forKey: .bpmMax) ?? d.bpmMax
+        repsMin = try c.decodeIfPresent(Int.self, forKey: .repsMin) ?? d.repsMin
+        repsMax = try c.decodeIfPresent(Int.self, forKey: .repsMax) ?? d.repsMax
+        drone = try c.decodeIfPresent(Bool.self, forKey: .drone) ?? d.drone
+        volume = try c.decodeIfPresent(Double.self, forKey: .volume) ?? d.volume
+        sleepMin = try c.decodeIfPresent(Int.self, forKey: .sleepMin) ?? d.sleepMin
+        values = try c.decodeIfPresent([Int].self, forKey: .values) ?? d.values
+    }
 
     public var clamped: PracticeSettings {
         var s = self
@@ -107,6 +138,8 @@ public struct PracticeSettings: Codable, Equatable, Sendable {
         if s.repsMin > s.repsMax { swap(&s.repsMin, &s.repsMax) }
         s.volume = min(max(s.volume.isFinite ? s.volume : 0.8, 0), 1)
         s.sleepMin = min(max(s.sleepMin, 0), 24 * 60)
+        s.values = PracticeTheory.steps.filter { s.values.contains($0) }
+        if s.values.isEmpty { s.values = PracticeTheory.steps }
         return s
     }
 
@@ -126,8 +159,12 @@ public struct PracticePick: Equatable, Sendable {
     public let item: PracticeItem
     public let bpm: Int
     public let reps: Int
-    public var title: String { PracticeTheory.title(root: root, item: item, bpm: bpm) }
-    public var callout: String { PracticeTheory.callout(root: root, item: item, bpm: bpm) }
+    public let step: Int                     // 16ths per note, the same for every note of the block
+    public init(root: Int, item: PracticeItem, bpm: Int, reps: Int, step: Int = 2) {
+        self.root = root; self.item = item; self.bpm = bpm; self.reps = reps; self.step = step
+    }
+    public var title: String { PracticeTheory.title(root: root, item: item, bpm: bpm, step: step) }
+    public var callout: String { PracticeTheory.callout(root: root, item: item, bpm: bpm, step: step) }
 }
 
 /// A seedable generator for the picker (SplitMix64), so tests replay the same blocks.
@@ -155,7 +192,8 @@ public enum PracticePicker {
             let item = pool.randomElement(using: &rng)!
             let bpm = s.bpms.randomElement(using: &rng)!
             let reps = Int.random(in: s.repsMin...s.repsMax, using: &rng)
-            pick = PracticePick(root: root, item: item, bpm: bpm, reps: reps)
+            let step = s.values.randomElement(using: &rng)!
+            pick = PracticePick(root: root, item: item, bpm: bpm, reps: reps, step: step)
             tries += 1
         } while tries < 8 && last.map { $0.root == pick.root && $0.item == pick.item } == true
         return pick
@@ -172,7 +210,7 @@ public struct PracticeBlock: Sendable {
 
 /// Makes the sound, sample by sample, on the audio thread. A block is: the callout over the drone (at least `minLead` s,
 /// and `calloutGap` s after the voice ends), one bar of count-in clicks at the block's tempo, then `reps` repetitions.
-/// Everything after the lead sits on the 8th-note grid of `eighthStart`.
+/// Everything after the lead sits on the 16th-note grid of `sixteenthStart`; a note lasts `pick.step` 16ths.
 public final class PracticeRenderer: @unchecked Sendable {
     public let sampleRate: Double
     public static let minLead = 1.0
@@ -192,11 +230,13 @@ public final class PracticeRenderer: @unchecked Sendable {
     private var block: PracticeBlock?
     private var reps = 0                         // the current block's reps (grows by one when no next block is ready yet)
     private var notes: [Int] = []
-    private var repEighths = 8
+    private var repSixteenths = 16
+    private var step = 2
     private var blockStart: Int64 = 0            // frame the block's lead began
     private var lead: Int64 = 0
-    private var eighth: Double = 0               // frames per 8th note
-    private var k = -1                           // the 8th-note index sounding now (-1: in the lead)
+    private var sixteenth: Double = 0            // frames per 16th note
+    private var k = -1                           // the 16th-note index sounding now (-1: in the lead)
+    private var noteStart: Int64 = -1, noteIdx = 0, noteLen = 0.0   // the note sounding (block frames, index, seconds)
     private var kStart: Int64 = 0, kNext: Int64 = 0
     private var fade: Float = 1                  // the skip's fade-out
     private var fading = false
@@ -205,6 +245,8 @@ public final class PracticeRenderer: @unchecked Sendable {
     /// Tests only: when set, the frame and accent of every click, and the frame each block began, are written here.
     public var clickLog: [(frame: Int64, accent: Bool)]? = nil
     public var blockLog: [(frame: Int64, id: Int)]? = nil
+    public var noteLog: [(frame: Int64, semis: Int)]? = nil
+    private var snap: (id: Int, at: Int64, lead: Int64, reps: Int) = (-1, 0, 0, 0)   // under lock, each buffer
     private var shownId = -1                     // under lock: the block sounding now, for the app
     private var finishedFlag = false             // under lock
 
@@ -228,19 +270,22 @@ public final class PracticeRenderer: @unchecked Sendable {
     }
     /// The block sounding now (its id), and whether the sleep timer has run out.
     public var status: (blockId: Int, finished: Bool) { lock.lock(); defer { lock.unlock() }; return (shownId, finishedFlag) }
+    /// Where the block on air is, as of the last buffer: its id, frames since it began, its lead and its reps so far
+    /// (for the page's pictures; the app adds the output latency).
+    public var clock: (id: Int, at: Int64, lead: Int64, reps: Int) { lock.lock(); defer { lock.unlock() }; return snap }
     /// Blocks the audio thread is done with, handed back so their memory is freed off the audio thread.
     public func collect() { lock.lock(); let r = retired; retired = []; lock.unlock(); _ = r }
 
     // MARK: timing (pure)
 
-    /// The first frame of 8th note `k` (0 = the count-in's first click) of a block whose lead is `lead` frames long.
-    public static func eighthStart(_ k: Int, lead: Int64, framesPerEighth: Double) -> Int64 {
-        lead + Int64((Double(k) * framesPerEighth).rounded())
+    /// The first frame of 16th note `k` (0 = the count-in's first click) of a block whose lead is `lead` frames long.
+    public static func sixteenthStart(_ k: Int, lead: Int64, framesPerSixteenth: Double) -> Int64 {
+        lead + Int64((Double(k) * framesPerSixteenth).rounded())
     }
     public static func leadFrames(calloutCount: Int, sampleRate: Double) -> Int64 {
         Int64(max(minLead * sampleRate, Double(calloutCount) + calloutGap * sampleRate).rounded())
     }
-    public static func framesPerEighth(bpm: Int, sampleRate: Double) -> Double { sampleRate * 30.0 / Double(bpm) }
+    public static func framesPerSixteenth(bpm: Int, sampleRate: Double) -> Double { sampleRate * 15.0 / Double(bpm) }
 
     // MARK: the audio thread
 
@@ -251,6 +296,7 @@ public final class PracticeRenderer: @unchecked Sendable {
             if block == nil, let p = pending { pending = nil; begin(p) }
             if skipAsked && block != nil && pending != nil && !fading { fading = true }
             if stopped && fade <= 0 { finishedFlag = true }
+            snap = block.map { ($0.id, frame - blockStart, lead, reps) } ?? (-1, 0, 0, 0)
             lock.unlock()
         }
         let vol = max(0, min(1, volume))
@@ -288,34 +334,40 @@ public final class PracticeRenderer: @unchecked Sendable {
             s += env * 0.075 * Float(sin(p) + 0.5 * sin(2 * p) + 0.18 * sin(3 * p))
         }
         guard f >= lead else { return s }
-        // which 8th note is sounding (each start from the block's own grid, never summed)
+        // which 16th note is sounding (each start from the block's own grid, never summed)
         if k < 0 || f >= kNext {
             if k < 0 { k = 0 }
-            while f >= Self.eighthStart(k + 1, lead: lead, framesPerEighth: eighth) { k += 1 }
-            kStart = Self.eighthStart(k, lead: lead, framesPerEighth: eighth)
-            kNext = Self.eighthStart(k + 1, lead: lead, framesPerEighth: eighth)
-            if k % 2 == 0, clickLog != nil, f == kStart { clickLog?.append((frame, k % 8 == 0)) }
+            while f >= Self.sixteenthStart(k + 1, lead: lead, framesPerSixteenth: sixteenth) { k += 1 }
+            kStart = Self.sixteenthStart(k, lead: lead, framesPerSixteenth: sixteenth)
+            kNext = Self.sixteenthStart(k + 1, lead: lead, framesPerSixteenth: sixteenth)
+            if k % 4 == 0, clickLog != nil, f == kStart { clickLog?.append((frame, k % 16 == 0)) }
+            // a note starts on every `step`-th 16th of a repetition, until the repetition's notes run out
+            let n = k - 16
+            if n >= 0, f == kStart {
+                let j = n % repSixteenths
+                if j % step == 0, j / step < notes.count {
+                    noteStart = kStart; noteIdx = j / step
+                    noteLen = Double(Self.sixteenthStart(k + step, lead: lead, framesPerSixteenth: sixteenth) - kStart) / sampleRate * 0.9
+                    noteLog?.append((frame, notes[noteIdx]))
+                }
+            }
         }
         let dt = Double(f - kStart) / sampleRate
         // the click on every quarter, beat 1 accented
-        if k % 2 == 0 && dt < 0.04 {
-            let accent = k % 8 == 0
+        if k % 4 == 0 && dt < 0.04 {
+            let accent = k % 16 == 0
             let hz = accent ? 2000.0 : 1300.0
             let env = exp(-dt / 0.006) * min(1, dt / 0.0005)
             s += Float(env * (accent ? 0.55 : 0.36) * sin(2 * Double.pi * hz * dt))
         }
         // the note: a soft tone with two overtones and a short envelope, under the click
-        let n = k - 8
-        if n >= 0 {
-            let j = n % repEighths
-            if j < notes.count {
-                let len = Double(kNext - kStart) / sampleRate * 0.9
-                if dt < len {
-                    let hz = Self.hz(midi: 60 + b.pick.root + notes[j])
-                    let env = min(1, dt / 0.005) * (0.55 + 0.45 * exp(-dt / 0.08)) * min(1, (len - dt) / 0.02)
-                    let p = 2 * Double.pi * hz * dt
-                    s += Float(env * 0.16 * (sin(p) + 0.3 * sin(2 * p) + 0.12 * sin(3 * p)))
-                }
+        if noteStart >= 0 {
+            let nt = Double(f - noteStart) / sampleRate
+            if nt < noteLen {
+                let hz = Self.hz(midi: 60 + b.pick.root + notes[noteIdx])
+                let env = min(1, nt / 0.005) * (0.55 + 0.45 * exp(-nt / 0.08)) * min(1, (noteLen - nt) / 0.02)
+                let p = 2 * Double.pi * hz * nt
+                s += Float(env * 0.16 * (sin(p) + 0.3 * sin(2 * p) + 0.12 * sin(3 * p)))
             }
         }
         return s
@@ -323,17 +375,19 @@ public final class PracticeRenderer: @unchecked Sendable {
 
     private var blockLen: Int64 = 0
 
-    private func setLength() { blockLen = lead + Int64((Double(8 + reps * repEighths) * eighth).rounded()) }
+    private func setLength() { blockLen = Self.sixteenthStart(16 + reps * repSixteenths, lead: lead, framesPerSixteenth: sixteenth) }
 
     private func begin(_ b: PracticeBlock) {
         block = b
         reps = max(1, b.pick.reps)
         notes = PracticeTheory.rep(b.pick.item)
-        repEighths = PracticeTheory.barsPerRep(b.pick.item) * 8
-        eighth = Self.framesPerEighth(bpm: b.pick.bpm, sampleRate: sampleRate)
+        step = max(1, b.pick.step)
+        repSixteenths = PracticeTheory.barsPerRep(b.pick.item, step: step) * 16
+        sixteenth = Self.framesPerSixteenth(bpm: b.pick.bpm, sampleRate: sampleRate)
         lead = Self.leadFrames(calloutCount: b.callout.count, sampleRate: sampleRate)
         blockStart = frame
         k = -1
+        noteStart = -1
         setLength()
         shownId = b.id
         blockLog?.append((frame, b.id))

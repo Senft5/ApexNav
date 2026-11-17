@@ -808,7 +808,7 @@
       practiceShown = true;
       ApexLazy.load('practice').then(() => {
         if (!practiceShown || b.childElementCount) return;
-        ApexPracticeLoop.mount(b, { post: (m) => window.webkit.messageHandlers.apex.postMessage(m) });
+        ApexPracticeLoop.mount(b, { post: (m) => window.webkit.messageHandlers.apex.postMessage(m), viz: window.ApexPracticeViz });
         refreshSettingsRows();
       }).catch((e) => { practiceShown = false; console.error('practice loop', e); });
     }
@@ -12795,7 +12795,7 @@
       onNative(msg) {
         if (msg && msg.type === 'journals') { if (journalsWaiter) journalsWaiter(msg); return; }
         if (msg && msg.type === 'driveCam') { driveCamSaid(msg.state); return; }
-        if (msg && msg.type === 'practice') { if (window.ApexPracticeLoop) ApexPracticeLoop.onNative(msg); return; }   // the owner's Practice Loop
+        if (msg && (msg.type === 'practice' || msg.type === 'practiceClock')) { if (window.ApexPracticeLoop) ApexPracticeLoop.onNative(msg); return; }   // the owner's Practice Loop
         if (msg && msg.type === 'carOffline') { carOfflineBytes = Number.isFinite(msg.bytes) ? msg.bytes : null; if (typeof renderOffline === 'function') renderOffline().catch(() => {}); return; }
         if (msg && msg.type === 'reloaded') { health.bump(msg.why === 'background' ? 'reload_back' : 'reload_web'); return; }   // the shell reloaded a page iOS killed
         if (msg && msg.type === 'lifecycle') { if (driveActive) keepSave(); return; }   // going to the background: kept now

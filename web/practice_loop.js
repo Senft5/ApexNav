@@ -12,9 +12,12 @@
     126, 132, 138, 144, 152, 160, 168, 176, 184, 192, 200, 208];
   const FOCUS = [['all', 'All'], ['modes', 'Modes'], ['scales', 'Scales'], ['arpeggios', 'Arps']];
   const SLEEP = [[0, 'Off'], [15, '15 m'], [30, '30 m'], [60, '1 h'], [90, '90 m']];
-  const DEFAULTS = { lockRoot: null, focus: 'all', bpmMin: 60, bpmMax: 120, repsMin: 5, repsMax: 10, drone: true, volume: 0.8, sleepMin: 0 };
+  // note values as 16ths per note (ApexKit PracticeTheory.values); a block plays all its notes in one of the chosen ones
+  const VALUES = [[16, 'Whole'], [8, 'Half'], [4, 'Quarter'], [2, '8th'], [1, '16th']];
+  const DEFAULTS = { lockRoot: null, focus: 'all', bpmMin: 60, bpmMax: 120, repsMin: 5, repsMax: 10, drone: true, volume: 0.8, sleepMin: 0, values: [16, 8, 4, 2, 1] };
 
   let ui = null;                     // the mounted sheet: { paint(state) }
+  let viz = null;                    // its pictures (practice_viz.js), when loaded
   let last = { active: false, playing: false, settings: { ...DEFAULTS } };
 
   /** Whether this account and this app get the entry: the owner (moderator), inside the iOS app. */
@@ -23,7 +26,7 @@
   /** Mounts the sheet into `body`. deps: { post(msg), document? }. Asks the shell for its state at once. */
   function mount(body, deps) {
     const doc = deps.document || root.document;
-    const post = (action, settings) => { try { deps.post({ cmd: 'practice', action, ...(settings ? { settings } : {}) }); } catch (_) { /* no shell */ } };
+    const post = (action, settings, on) => { try { deps.post({ cmd: 'practice', action, ...(settings ? { settings } : {}), ...(on != null ? { on: !!on } : {}) }); } catch (_) { /* no shell */ } };
     const el = (tag, props = {}, ...kids) => { const n = doc.createElement(tag); for (const [k, v] of Object.entries(props)) { if (k === 'dataset') Object.assign(n.dataset, v); else if (k in n) n[k] = v; else n.setAttribute(k, v); } n.append(...kids); return n; };
     const set = (patch) => { last.settings = { ...last.settings, ...patch }; post('settings', patch); paint(last); };
 
@@ -64,14 +67,28 @@
     const vol = el('input', { type: 'range', min: '0', max: '1', step: '0.05', 'aria-label': 'Volume' });
     vol.addEventListener('input', () => { last.settings.volume = Number(vol.value); post('settings', { volume: last.settings.volume }); });
     const sleep = detents('Stop after', SLEEP, 'sleepMin');
+    // note values: any mix of the five may come up, one per block; at least one stays on
+    const vals = el('div', { className: 'detents', role: 'group', 'aria-label': 'Note values' });
+    for (const [v, t] of VALUES) {
+      const b = el('button', { type: 'button', textContent: t, dataset: { v: String(v) } });
+      b.addEventListener('click', () => {
+        const cur = new Set(last.settings.values || DEFAULTS.values);
+        if (cur.has(v)) { if (cur.size > 1) cur.delete(v); } else cur.add(v);
+        set({ values: VALUES.map(([x]) => x).filter((x) => cur.has(x)) });
+      });
+      vals.append(b);
+    }
+    const vizBox = el('div', { className: 'pl-viz-box' });
     const lbl = (t) => el('p', { className: 'note group-label', textContent: t });
 
     body.append(
       now,
+      vizBox,
       el('div', { className: 'row' }, play, next, stop),
       lbl('Key'), keyPick,
       lbl('Play'), focus,
       lbl('Tempo (BPM)'), el('div', { className: 'row' }, bpmMin, el('span', { textContent: 'to' }), bpmMax),
+      lbl('Note values'), vals,
       lbl('Repeats'), el('div', { className: 'row' }, repsMin, el('span', { textContent: 'to' }), repsMax),
       el('div', { className: 'row mt-8' }, drone),
       lbl('Volume'), vol,
@@ -90,8 +107,11 @@
       drone.classList.toggle('on', !!s.drone); drone.setAttribute('aria-pressed', String(!!s.drone));
       if (doc.activeElement !== vol) vol.value = String(s.volume);
       for (const b of sleep.children) b.setAttribute('aria-pressed', String(Number(b.dataset.v) === Number(s.sleepMin)));
+      for (const b of vals.children) b.setAttribute('aria-pressed', String((s.values || DEFAULTS.values).includes(Number(b.dataset.v))));
+      if (viz) viz.state(st);
     }
     ui = { paint };
+    if (deps.viz) viz = deps.viz.mount(vizBox, { document: doc, watch: (on) => post('watch', null, on) });
     paint(last);
     post('state');
     return ui;
@@ -99,13 +119,14 @@
 
   /** The shell's answer (cockpit.js onNative, type 'practice'). */
   function onNative(msg) {
+    if (msg && msg.type === 'practiceClock') { if (viz) viz.clock(msg); return; }
     if (!msg || msg.type !== 'practice') return;
     if (msg.error) { last = { ...last, active: false, playing: false, title: null }; if (ui) ui.paint({ ...last, error: msg.error }); return; }
     last = { active: !!msg.active, playing: !!msg.playing, title: msg.title || null, settings: { ...DEFAULTS, ...(msg.settings || last.settings) } };
     if (ui) ui.paint(last);
   }
 
-  const api = { ROOTS, BPMS, DEFAULTS, allowed, mount, onNative };
+  const api = { ROOTS, BPMS, VALUES, DEFAULTS, allowed, mount, onNative };
   root.ApexPracticeLoop = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
