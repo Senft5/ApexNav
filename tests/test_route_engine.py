@@ -286,7 +286,8 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
   const known = cand(wiggly(8000), 900, subdiv), unknown = cand(wiggly(8000), 900, {}), quickHwy = cand(straight(8000), 700, hwy);
   const ru = rank([known, unknown, quickHwy], { level: 'fun' });
   // (at Fun a candidate whose road class isn't known isn't known to keep off the highway: out, or below the known one)
-  out.unknownLoses = ru.findIndex((c) => c.id === known.id) >= 0 && (ru.findIndex((c) => c.id === unknown.id) < 0 || ru.findIndex((c) => c.id === unknown.id) >= ru.findIndex((c) => c.id === known.id));
+  // (or neither: the subdivision is mostly poor road, so Fun's pick is the quickest alone, FunRoute.poorWay)
+  out.unknownLoses = (ru.length === 1 && ru[0].id === quickHwy.id) || ru.findIndex((c) => c.id === known.id) >= 0 && (ru.findIndex((c) => c.id === unknown.id) < 0 || ru.findIndex((c) => c.id === unknown.id) >= ru.findIndex((c) => c.id === known.id));
   // deer can't fill the total: ice still counts, and a longer deer road still costs more
   const deer = (km, spans = []) => { const c = cand(straight(km * 1000), km * 60, { ...back, deer_risk: 4 }, { departAt: Date.parse('2026-11-04T17:20:00-05:00'), spans }); E.evaluate(c, {}); return c.ev.penaltyPts; };
   out.deerSat = { d40: deer(40), d80: deer(80), d40ice: deer(40, [{ fromM: 1000, toM: 4000, kind: 'ice' }]) };

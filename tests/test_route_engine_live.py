@@ -44,14 +44,14 @@ def km(x, road):
 
 
 def test_northgate_takes_i275_at_quick_never_at_fun(r):
-    """Northgate to the I-275 / Winton Road side: the highway at Quick; Fun and Long way never drive it (the owner,
-    2026-11-08: "fun should never go on the highway"). The stage plan out along Colerain Avenue (2 km of strip mall, then
+    """Northgate to the I-275 / Winton Road side: the highway at Quick. Fun and Long way kept off it (the owner, 2026-11-08:
+    "fun should never go on the highway") until every highway-free way being mostly poor road made Quick the way (2026-11-16). The stage plan out along Colerain Avenue (2 km of strip mall, then
     suburbs, for 3 km of Bank Road) took Fun and Max on main and stays below."""
     assert km(r["northgate_fun:quick"], "I 275") >= 5, r["northgate_fun:quick"]["names"]
     for lv in LEVELS:
         x = r[f"northgate_fun:{lv}"]
-        if lv != "quick":
-            assert km(x, "I 275") == 0 and not any(n.startswith("I ") for n in x["names"]), (lv, x["order"], x["names"])
+        if lv != "quick":   # (2026-11-16: every highway-free way is mostly poor road, so Quick is the way, FunRoute.poorWay)
+            assert x["order"] == [x["quick"]] and km(x, "I 275") >= 5, (lv, x["order"], x["names"])
         bad = [p["label"] for p in x["plans"] if p["colerain"] >= 2]
         assert bad and all(x["order"].index(b) > x["order"].index(x["order"][0]) for b in bad if b in x["order"]), (lv, x["order"])
         assert not x["why"] or "forest" not in x["why"], (lv, x["why"])

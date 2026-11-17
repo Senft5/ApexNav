@@ -96,6 +96,26 @@ const CASES = {
     return { fun: go({ ...near, shaping: true }, 'fun'), max: go({ ...near, shaping: true }, 'max'), far: go({ ...far, shaping: true }, 'fun'),
       stop: go(near, 'fun'), quick: go({ ...near, shaping: true }, 'quick') };
   },
+  poorWay(q) {
+    // A city trip: I-71 (280 s) or a highway-free way of arterials 1.6 x its time. With the arterials poor (worn, signals,
+    // quality q 0.25) the Fun pick is I-71 and the card says there's no good road; with them good (0.8) Fun keeps them
+    const y = 39.60, nodes = [], edges = [];
+    const n = (lat, lon) => { nodes.push(at(lat, lon)); return nodes.length - 1; };
+    const s0 = n(y, -84.704), S = n(y, -84.70), T = n(y, -84.60), t0 = n(y, -84.596), L1 = n(y + 0.02, -84.67), L2 = n(y + 0.02, -84.63);
+    two(edges, s0, S, { name: 'Start Lane', t: 30, cls: 5 }); two(edges, T, t0, { name: 'End Lane', t: 30, cls: 5 });
+    two(edges, S, T, { name: 'I-71', cls: 0, flags: 64, quality: 0.82, fun: 0, t: 280 });
+    for (const [a, b] of [[S, L1], [L1, L2], [L2, T]]) two(edges, a, b, { name: 'Arterial', cls: 3, quality: Number(q), fun: 0.2, t: 150 });
+    const v = R.view(H.tiles(nodes, edges).tiles);
+    const p = R.plan(v, { from: { lat: y, lon: -84.702 }, to: { lat: y, lon: -84.598 }, level: 'fun' });
+    const cands = p.routes.map((r, i) => ({ id: i, kind: 'own', own: r, timeS: r.timeS, route: r.route }));
+    const ranked = FunRoute.rank(cands, 'fun'), E = require('../web/route_engine.js');
+    const b = p.routes[0];
+    return { absurd: p.hwy.absurd, poorKm: b.why.poorKm, goodKm: b.why.goodKm, ratio: b.timeS / p.quick.timeS, pickHwyKm: ranked[0].route.hwyKm,
+      poor: !!ranked[0].hwyPoor, why: (E.whyHighway(ranked[0]) || {}).text || null,
+      // Avoid highways on: never the highway, whatever the roads off it (the owner, 2026-11-17)
+      avoidPickHwyKm: FunRoute.rank(cands, 'fun', { avoidHighways: true })[0].route.hwyKm,
+      engineAvoidPickHwyKm: E.rank(cands.map((c) => ({ ...c })), { level: 'fun', avoidHighways: true })[0].route.hwyKm };
+  },
   byway(lv) {
     // A to B by the Skyline Drive (a ridge road that sweeps more than it winds: fewer corner points) or US 59 (more corners,
     // the same time and scenery). With the Drive a scenic byway (the tiles' byway channel: lv 1 state, 2 National Scenic
@@ -892,6 +912,7 @@ const CASES = {
       const ranked = FunRoute.rank(cands, 'fun'), E = require('../web/route_engine.js');
       out.absurd = { absurd: p.hwy.absurd, mode: p.hwy.mode, hwyKm: b.hwyKm, names: names(b), ratio: b.timeS / p.quick.timeS, routes: p.routes.length,
         rankHwy: ranked.map((c) => c.route.hwyKm), rankAbsurd: ranked.map((c) => !!c.hwyAbsurd), why: (E.whyHighway(ranked[0]) || {}).text || null,
+        avoidHwy: FunRoute.rank(cands, 'fun', { avoidHighways: true }).map((c) => c.route.hwyKm),
         quickPick: FunRoute.rank(cands, 'quick')[0].route.hwyKm };
     }
     // (3b) a road trip (2026-11-15): the motorway is 4 h; off it the only way to the Pass Road is a 5 h Loop Road, so the

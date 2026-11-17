@@ -26,7 +26,23 @@
   // line can catch a few metres of the road it crosses over); a highway-free way more than HWY_ABSURD x the quickest's
   // time is still the level's way, and the card says Quick is the way; the exception (no highway-free way at all) keeps
   // the candidates within HWY_LINK_TOL_KM of the least highway.
-  const HWY = { FREE_KM: 0.1, ABSURD: 2, LINK_TOL_KM: 0.3, SLACK_S: 60 };
+  // POOR_MIN_KM / POOR_X: a highway-free way with at least POOR_MIN_KM of poor road and more than POOR_X x its good road
+  // is side streets, not a Fun route (2026-11-16 survey, Cincinnati: downtown to Mason 27.6 km poor to 2.6 good, West
+  // Chester to downtown 25 to 0.2); when every highway-free way is, Quick is the way as for ABSURD
+  const HWY = { FREE_KM: 0.1, ABSURD: 2, LINK_TOL_KM: 0.3, SLACK_S: 60, POOR_MIN_KM: 5, POOR_X: 2 };
+  /** A candidate's poor and good road km: our router's own (own.why, every edge scored on the tiles), else the route
+   * engine's (ev, from the context, where known); null when unknown. */
+  function roadKm(c) {
+    const ev = c && c.ev, w = c && c.own && c.own.why;
+    if (w && Number.isFinite(w.poorKm) && Number.isFinite(w.goodKm)) return { poor: w.poorKm, good: w.goodKm };
+    if (ev && Number.isFinite(ev.poorKm) && Number.isFinite(ev.goodKm)) return { poor: ev.poorKm, good: ev.goodKm };
+    return null;
+  }
+  /** Mostly poor road: side streets and worn arterials, no road worth leaving the highway for. */
+  function poorWay(c) {
+    const k = roadKm(c);
+    return !!k && k.poor >= HWY.POOR_MIN_KM && k.poor > HWY.POOR_X * k.good;
+  }
   /**
    * km of a candidate on motorway, trunk or their links: our router's own count (route.hwyKm), else the route engine's from
    * the context's road class (ev.stats.highwayKm), else the router's summary flag (route.has.highways false: none);
@@ -66,17 +82,24 @@
    * card. valued: [{ timeS, extraS, ... }] (copies, as the rankings make them); quickS the quickest's time; limit the
    * level's own. Returns { list, limit }.
    */
-  function applyHighways(valued, level, quickS, limit) {
+  function applyHighways(valued, level, quickS, limit, o = {}) {
     const h = levelHighways(valued, level, quickS);
     if (h.rule === 'any' || h.rule === 'unknown') return { list: valued, limit };
     // no highway-free way in a sensible time (absurd): the level's pick is the quickest, and its card says Quick is the way.
     // A highway-free way at twice the time is no Fun route (the owner, 2026-11-16, Blue Ash to Colerain: 44 min of suburban
     // side streets for a 19 min trip, "was that route meant to be a joke")
-    if (h.absurd) {
+    // ... and when every highway-free way is mostly poor road (poorWay): the same, its card saying there's no good road
+    // (only where the quickest drives a highway: with a highway-free quickest the level's own ranking already chooses)
+    const timedAll = valued.filter((c) => Number.isFinite(c.timeS));
+    const quickest = timedAll.length ? timedAll.reduce((a, b) => (b.timeS < a.timeS ? b : a)) : null;
+    const poor = !h.absurd && h.rule === 'free' && h.list.length > 0 && !!quickest && highwayKm(quickest) > HWY.FREE_KM && h.list.every(poorWay);
+    // Avoid highways on (the owner, 2026-11-17: "the avoid highways option should always avoid highways"): never this
+    // fallback; the highway-free ways stay the level's, the card still saying Quick would be quicker
+    if ((h.absurd || poor) && !o.avoidHighways) {
       const timed = valued.filter((c) => Number.isFinite(c.timeS));
       const q = timed.length ? timed.reduce((a, b) => (b.timeS < a.timeS ? b : a)) : null;
       if (q) {
-        Object.assign(q, { hwyRule: 'absurd', hwyKm: highwayKm(q), hwyAbsurd: true, hwyFreeS: h.freeS });
+        Object.assign(q, { hwyRule: 'absurd', hwyKm: highwayKm(q), hwyAbsurd: true, hwyPoor: poor, hwyFreeS: h.freeS });
         return { list: [q], limit: Math.max(limit, q.timeS + HWY.SLACK_S) };
       }
     }
@@ -663,7 +686,7 @@
    * The quickest route always stays in, so there is always an answer.
    */
   const GAIN_PER_CORNER = 0.5, GAIN_CAP = 60;
-  function rank(cands, level = 'fun') {
+  function rank(cands, level = 'fun', o = {}) {
     const L = LEVELS[level] || LEVELS.fun;
     const timed = cands.filter(c => Number.isFinite(c.timeS));
     if (!timed.length) return cands.slice();
@@ -676,7 +699,7 @@
       return { ...c, extraS, value: fun + GAIN_PER_CORNER * gain - L.perMin * extraS / 60 + (c.adjust || 0) - glareCost(c) - townCost(c) - (c.weatherCost || 0) + (c.tasteBonus || 0) + (c.preferBonus || 0) };
     });
     // Fun and Long way: off the highways (applyHighways); the quickest stays in only where it may be picked
-    const h = applyHighways(valued, level, quick.timeS, limit);
+    const h = applyHighways(valued, level, quick.timeS, limit, o);
     return h.list.filter(c => (c.extraS === 0 && h.list === valued) || c.timeS <= h.limit).sort((a, b) => b.value - a.value);
   }
 
@@ -968,6 +991,6 @@
   /** Whether a tune changes anything at all (an empty or absent one is no tune). */
   const tuned = (t) => !!(t && typeof t === 'object' && Object.values(t).some((m) => m && typeof m === 'object' && Object.keys(m).length));
 
-  const api = { tuneOnto, untune, tuned, tuneKnobs, LEVELS, HWY, highwayKm, levelHighways, applyHighways, BUILT, builtKeep, builtAgree, shown, dominates, cornerWeight, townKm, townCost, STREET, streetSample, streetShare, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, LOOP_LEVEL, loopLevelAdjust, LOOP_HWY, loopHighwayCost, loopDominates, loopRank, loopWay, loopOffer, LOOP_OFFER, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, CAMERA_ON_M, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
+  const api = { tuneOnto, untune, tuned, tuneKnobs, LEVELS, HWY, highwayKm, roadKm, poorWay, levelHighways, applyHighways, BUILT, builtKeep, builtAgree, shown, dominates, cornerWeight, townKm, townCost, STREET, streetSample, streetShare, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, LOOP_LEVEL, loopLevelAdjust, LOOP_HWY, loopHighwayCost, loopDominates, loopRank, loopWay, loopOffer, LOOP_OFFER, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, CAMERA_ON_M, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

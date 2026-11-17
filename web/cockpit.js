@@ -3543,10 +3543,10 @@
         return p;
       } catch (_) { return roadPrefs; }
     };
-    const engineOpts = (level) => ({ level, prefs: { ...roadPrefs, ...(window.ApexRouteDriver ? ApexRouteDriver.load(localStorage) : {}) }, car: routingCar(),
+    const engineOpts = (level) => ({ level, avoidHighways: !!avoid.highways, prefs: { ...roadPrefs, ...(window.ApexRouteDriver ? ApexRouteDriver.load(localStorage) : {}) }, car: routingCar(),
       score: (c, scaleAt) => funOf(c.t, (c.route && c.route.turns) || [], scaleAt) });
     function rankPool(pool, level) {
-      return window.ApexRouteEngine ? ApexRouteEngine.rank(pool, engineOpts(level)) : FunRoute.rank(pool, level);
+      return window.ApexRouteEngine ? ApexRouteEngine.rank(pool, engineOpts(level)) : FunRoute.rank(pool, level, { avoidHighways: !!avoid.highways });
     }
     // The route-context providers that only answer a plan are not on the launch path (web/lazy.js 'ctx'): they load once
     // the map is idle after the launch, or by the first plan that needs them. Offline website: the plan goes on with the
@@ -4860,7 +4860,7 @@
       let ranked = rankPool(pool, level); mark('ranked'); tlSpan('rank', rankAt);
       // never an empty ranking (route_engine.js keeps the least bad when all break a hard constraint); if a future change
       // empties it anyway, today's ranking still gives a route
-      if (!ranked.length) ranked = FunRoute.rank(pool, level);
+      if (!ranked.length) ranked = FunRoute.rank(pool, level, { avoidHighways: !!avoid.highways });
       if (!ranked.length) { toast('Couldn\'t build the route. Check signal and try again.'); return false; }
       const best = ranked[0];
       const quickPool = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
@@ -5172,7 +5172,7 @@
       const overLine = rival ? ApexRouteEngine.whyOver(c, rival) : null;
       // Fun and Long way: the exception's highway, or no highway-free way in a sensible time (first: it's what you'd ask)
       const hwyLine = window.ApexRouteEngine && ApexRouteEngine.whyHighway ? ApexRouteEngine.whyHighway(c, { metric: ApexUnits.metric() }) : null;
-      Object.assign(t, { tasteBonus: Number.isFinite(c.tasteBonus) ? c.tasteBonus : null, measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, rerouteLevel: c.hwyAbsurd ? 'quick' : o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
+      Object.assign(t, { tasteBonus: Number.isFinite(c.tasteBonus) ? c.tasteBonus : null, measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, rerouteLevel: c.hwyRule === 'absurd' ? 'quick' : o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
                          engine: c.ev ? { quality: c.ev.quality, confidence: c.ev.confidence, poorKm: c.ev.poorKm, hard: c.ev.hard, penalties: c.ev.penalties } : null,
                          unavoided: FunRoute.unavoided(avoid, c.route), why: (hwyLine && hwyLine.kind === 'absurd' ? [hwyLine.text] : [hwyLine && hwyLine.text, (engineWhy && engineWhy.text) || (quickLine && quickLine.text) || whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS), overLine && overLine.text]).filter(Boolean).join('. ') || null,
                          request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) }, tuned: o.tuned || null });
