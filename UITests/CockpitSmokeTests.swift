@@ -31,7 +31,7 @@ final class CockpitSmokeTests: XCTestCase {
         XCTAssertTrue(web.waitForExistence(timeout: 30), "WKWebView never appeared")
 
         XCTAssertTrue(web.buttons["Garage"].waitForExistence(timeout: 45), "cockpit JS did not boot")
-        for tab in ["Map", "Log", "People"] {
+        for tab in ["Map", "Log", "Social"] {
             XCTAssertTrue(web.buttons[tab].waitForExistence(timeout: 5), "tab \(tab) missing")
         }
 
