@@ -724,3 +724,9 @@ def test_a_highway_free_way_of_poor_road_is_no_fun_route():
     assert q["off"] > 8, "Avoid highways off: Quick takes the motorway: " + str(q)
     g = case("poorWay", "0.8")
     assert g["pickHwyKm"] == 0 and not g["poor"] and g["why"] is None, g
+
+
+def test_a_quick_loop_with_avoid_highways_never_drives_one():
+    r = case("loopsAvoidHwy")
+    assert r["avoid"] and all(k == 0 for k in r["avoid"]), r
+    assert r["after"] == r["plain"], "the switch is for that call only: " + str(r)

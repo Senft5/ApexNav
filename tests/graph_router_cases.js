@@ -651,6 +651,16 @@ const CASES = {
     return { n: res.routes.length, ms: res.ms, loops: res.routes.map((r) => ({ km: r.distM / 1000, retraced: r.retraced, d0: R.distM(start.lat, start.lon, r.coords[0][0], r.coords[0][1]), dN: R.distM(start.lat, start.lon, r.coords[r.coords.length - 1][0], r.coords[r.coords.length - 1][1]) })) };
   },
 
+  loopsAvoidHwy() {
+    // a Quick loop on the grid whose arterials are motorways: on them by default, never with Avoid highways on (the owner,
+    // 2026-11-17: "the avoid highways option should always avoid highways")
+    const g = H.grid({ seed: 3, nx: 30, ny: 30, holes: 0.05, oneway: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62, motorway: true });
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles), start = { lat: 39.19, lon: -84.57 };
+    const hwy = (res) => res.routes.map((r) => +(r.hwyKm || 0).toFixed(2));
+    return { plain: hwy(R.loop(v, { start, km: 14, level: 'quick' })), avoid: hwy(R.loop(v, { start, km: 14, level: 'quick', avoid: { highways: true } })),
+      after: hwy(R.loop(v, { start, km: 14, level: 'quick' })) };
+  },
+
   // unpaved road avoided: a loop's legs keep off it where they can, and a loop with more than LOOP_DIRT_KM of it goes
   // when others don't need it (Sturgis loops drove 15 to 31 km of gravel)
   valleyLoop() {

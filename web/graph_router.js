@@ -1399,7 +1399,14 @@
   }
   // Fun and Long way; and any level with Avoid highways on (the owner, 2026-11-17: "the avoid highways option should always
   // avoid highways"), for A to B: a highway only where there is no other way, which the card says (hwyReason)
-  const noHighway = (level, req = null) => !!K.NO_HWY[level] || !!(req && req.avoid && req.avoid.highways);
+  const noHighway = (level, req = null) => !!K.NO_HWY[level] || avoidHwyNow || !!(req && req.avoid && req.avoid.highways);
+  // a loop's or round trip's own helpers take the level only: Avoid highways reaches them through this, for the call
+  let avoidHwyNow = false;
+  function withAvoid(req, fn) {
+    const was = avoidHwyNow;
+    avoidHwyNow = !!(req && req.avoid && req.avoid.highways);
+    try { return fn(); } finally { avoidHwyNow = was; }
+  }
   /**
    * A snap for a level that never drives a highway: the nearest road when it isn't one; else the nearest other road within
    * HWY_SNAP_M (a house beside the interstate is reached by its own street). A moving car (a heading) within HWY_ON_M of
@@ -1640,7 +1647,7 @@
    * back; the pairs are ranked: a fifth or less driven twice first, then by goodness. Returns
    * { routes: [round trip: { ...route, retraced, out: { timeS, distM }, back: { timeS, distM } }], out, ms }.
    */
-  function roundTrip(v, req) { return withTune(req && req.tune, () => roundNow(v, req)); }
+  function roundTrip(v, req) { return withTune(req && req.tune, () => withAvoid(req, () => roundNow(v, req))); }
   function roundNow(v, req) {
     const t0 = Date.now(), level = levels()[req.level] ? req.level : 'fun', L = levels()[level];
     const there = planNow(v, req);
@@ -1695,7 +1702,7 @@
    * does), and what earlier legs drove costing LOOP_RETRACE_X. Rings round the start only where no stage loop can be built.
    * { routes: [{ ...route, retraced, hwyShare, kind: 'stages' | 'ring', stages: [names] }], ms }.
    */
-  function loop(v, req) { return withTune(req && req.tune, () => loopNow(v, req)); }
+  function loop(v, req) { return withTune(req && req.tune, () => withAvoid(req, () => loopNow(v, req))); }
   function loopNow(v, req) {
     const t0 = Date.now(), level = levels()[req.level] ? req.level : 'fun', km = Math.max(3, Number(req.km) || 30);
     const obj = objective(v, req);
