@@ -28,3 +28,11 @@ Undo: PracticeTheory and PracticeRenderer in ApexKit/Sources/ApexKit/PracticeLoo
 co-driver line hands the session back to it (ApexSensorShell.releaseVoice, practiceOn); convoy voice stops it, since the
 call needs the microphone. Headphones unplugged pause it; a call pauses it and it resumes when iOS says it should.
 Undo: holdForPractice / setPractice in ApexNavApp.swift.
+
+## 2026-11-17 (practice-loop): note values per block, and the pictures (claude/project-thread-wwggcj)
+Nate: some scales in wholes, halves, quarters or 16ths, never mixed within a scale. Each block picks one note value
+(whole, half, quarter, 8th, 16th; a "Note values" setting narrows it) and says it in the callout; the renderer's grid is
+now 16ths. Pictures (web/practice_viz.js): a ball between two walls touching one on each click and flashing on each
+note, and the solfège line with flats and sharps under each syllable where one exists, a ball hopping to the note
+heard. The shell sends the block's position only while the sheet is on screen with the app in front, less the output
+latency. Undo: drop `step` from PracticePick (all 8ths) and the viz group file.

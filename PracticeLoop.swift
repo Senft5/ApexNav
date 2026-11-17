@@ -18,6 +18,7 @@
 import AVFoundation
 import Foundation
 import MediaPlayer
+import UIKit
 import ApexKit
 
 @MainActor
@@ -45,6 +46,9 @@ final class ApexPracticeLoop {
     private lazy var writer = AVSpeechSynthesizer()   // renders callouts into samples (never plays)
     private lazy var live = AVSpeechSynthesizer()     // the fallback, if a callout couldn't be rendered
     private var writeGen = 0
+    // The page's pictures (web/practice_viz.js): only while the Practice Loop sheet is on screen and the app is in front,
+    // the poll sends where the block is (`sendClock`). Locked or in the background, nothing is sent.
+    private var watching = false
 
     init(shell: ApexSensorShell) {
         self.shell = shell
@@ -62,6 +66,7 @@ final class ApexPracticeLoop {
         case "toggle": playing ? pause() : play()
         case "next": next()
         case "stop": stop()
+        case "watch": watching = (dict["on"] as? Bool) ?? false; sendClock()
         default: break
         }
         report()
@@ -289,6 +294,24 @@ final class ApexPracticeLoop {
             report()
         }
         if r.needsBlock { makeBlock() }
+        sendClock()
+    }
+
+    /// Where the block you hear is: its notes and grid, and how far into it the sound now leaving the speaker is
+    /// (the renderer's last buffer, less the output latency, so a Bluetooth delay doesn't put the ball ahead).
+    private func sendClock() {
+        guard watching, active, let r = renderer, UIApplication.shared.applicationState == .active else { return }
+        let c = r.clock
+        guard c.id >= 0, let p = picks[c.id] else { return }
+        let s = AVAudioSession.sharedInstance()
+        let heard = Double(c.at) - (s.outputLatency + s.ioBufferDuration) * r.sampleRate
+        shell?.sendToPage([
+            "type": "practiceClock", "id": c.id, "playing": playing,
+            "root": p.root, "item": p.item.name, "intervals": p.item.intervals, "notes": PracticeTheory.rep(p.item),
+            "bpm": p.bpm, "step": p.step, "reps": c.reps,
+            "repSixteenths": PracticeTheory.barsPerRep(p.item, step: p.step) * 16,
+            "posS": (heard - Double(c.lead)) / r.sampleRate,       // seconds since the count-in's first click (< 0: the callout)
+        ])
     }
 
     // MARK: lock screen
