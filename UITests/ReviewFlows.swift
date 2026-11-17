@@ -146,7 +146,7 @@ final class ReviewFlows: XCTestCase {
     /// The tab bar is up: its four tabs on the screen, in its bottom quarter, and no replay over them (its "Replay ·" chip and
     /// its Play key gone). The tabs flow's Log, People and Garage photos were all of the replay (REVIEW5 §7.2).
     private func tabBarShown() -> Bool {
-        guard ["Map", "Log", "People", "Garage"].allSatisfy({ onScreen($0, below: 0.75) != nil }) else { return false }
+        guard ["Map", "Log", "Social", "Garage"].allSatisfy({ onScreen($0, below: 0.75) != nil }) else { return false }
         // the plate reads "Replay · <road> ×" while it plays and "Replay finished · <score> ×" after (U-110): either is the replay
         let chip = web.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH %@", "Replay", "×")).firstMatch
         return !chip.exists && onScreen("Play") == nil
@@ -387,7 +387,7 @@ final class ReviewFlows: XCTestCase {
         try tab("Log"); shot("log"); scroll(3, "log")
         try tab("Map")
         // People (the owner, 2026-10-30): Friends first, then the switch's other side, Crews
-        try tab("People"); shot("friends"); scroll(3, "friends")
+        try tab("Social"); shot("friends"); scroll(3, "friends")
         if tap("Crews", wait: 4) { shot("crews"); scroll(3, "crews"); tap("Friends", wait: 3) }
         try tab("Garage"); shot("garage"); scroll(8, "garage")
         // Roadbook at night (§6.2): the Garage's Night detent (the Garage is still open: its tab again would close it), then the map
@@ -556,7 +556,7 @@ final class ReviewFlows: XCTestCase {
         try XCTSkipUnless(env["APEX_REVIEW"] == "1", "review recording only")
         try XCTSkipIf((env["APEX_REVIEW_SESSION"] ?? "").isEmpty, "needs the review account (REVIEW_SESSION secret)")
         start("signed-in")
-        try tab("People")
+        try tab("Social")
         // REVIEW4 §6.5 (U-66): the member's page, not the sign-in page, before anything is photographed; nothing here may
         // tap into "Sign in with Google" (the last recording's stray tap opened Google's sheet)
         let signedOut = { self.find(["Sign in with Google", "Sign in with Apple"], wait: 0.5) != nil }
@@ -588,7 +588,7 @@ final class ReviewFlows: XCTestCase {
         // R-5 / I-6 (panel round 1): recording 6 drew the drive's end card over the Garage; a tab closes it
         XCTAssertNil(find(["Open in the Log"], wait: 1), "the drive's end card is over the Garage")
         scroll(3, "garage")
-        try tab("People"); shot("people"); scroll(2, "people")
+        try tab("Social"); shot("people"); scroll(2, "people")
         try tab("Map")
         let search = web.searchFields.firstMatch
         if search.waitForExistence(timeout: 10) {

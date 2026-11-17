@@ -73,7 +73,7 @@ final class AppTourTests: XCTestCase {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["APEX_TOUR"] == "1", "recorded tour only")
         let (app, web) = launch()
         let types = [XCUIElement.ElementType.textField, .searchField, .textView, .secureTextField].map { NSNumber(value: $0.rawValue) }
-        for name in ["Map", "Log", "People", "Garage"] {
+        for name in ["Map", "Log", "Social", "Garage"] {
             let b = tab(web, name)
             guard b.waitForExistence(timeout: 10) else { XCTFail("no \(name) tab"); continue }
             b.tap(); pause(2.5)
@@ -121,7 +121,7 @@ final class AppTourTests: XCTestCase {
     func testTour() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["APEX_TOUR"] == "1", "recorded tour only")
         let (app, web) = launch()
-        for name in ["Log", "People", "Garage"] {
+        for name in ["Log", "Social", "Garage"] {
             let b = tab(web, name)
             if b.waitForExistence(timeout: 10) { b.tap(); pause(2.5); scroll(app, times: 5) }
         }
@@ -163,7 +163,7 @@ final class AppTourTests: XCTestCase {
             let app = XCUIApplication()
             app.launchArguments = args
             let web = launch(app).1
-            for name in ["Map", "Log", "People", "Garage"] {
+            for name in ["Map", "Log", "Social", "Garage"] {
                 let b = tab(web, name)
                 guard b.exists && b.isHittable else { lines.append("\(name) · \(size) · no tab to tap"); print("A11Y-AUDIT \(lines.last!)"); continue }
                 b.tap(); pause(3)
