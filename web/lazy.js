@@ -23,6 +23,7 @@
     // the quiet lines of a drive (cockpit.js notes loop, each behind its window.Apex* check): once the map is idle after the
     // launch, or when a drive starts, whichever is first
     ahead: ['sun_ahead.js', 'briefing.js', 'corners_ahead.js', 'along_ahead.js', 'horizon.js'],
+    practice: ['practice_loop.js'], // the owner's Practice Loop (cockpit.js paintPracticeRow): only for the owner, in the app
     ops: ['service_check.js'],       // the owner's service check (cockpit.js serviceCheckSection): only while /api/me says moderator           // dev mode's panel (cockpit.js devPanel): only on a developer's phone (/api/me developer)
   };
   const files = new Map();           // file -> Promise, so a file is fetched and run once whoever asks

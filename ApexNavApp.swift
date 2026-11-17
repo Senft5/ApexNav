@@ -504,6 +504,11 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             shell?.webVoiceBegin(duck: speechDuck)
             return
         }
+        // The owner's Practice Loop (PracticeLoop.swift, web/practice_loop.js): made on its first message, never before.
+        if cmd == "practice", let dict = body as? [String: Any] {
+            shell?.practiceMessage(dict)
+            return
+        }
         // The Soundtrack (web/soundtrack.js, Garage > Co-driver): the page's own music plays through a drive, so the audio
         // session stays up, mixed with other apps, until the page says it stopped (cockpit.js soundtrackNative).
         if cmd == "soundtrack", let dict = body as? [String: Any] {
@@ -2138,6 +2143,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     func setTalk(_ on: Bool) {
         guard on != talkOn else { return }
         talkOn = on
+        if on { practice?.stop() }                               // the Practice Loop gives the session to the call
         if on {
             configureTalkSession(duck: false)
             ApexAudioSession.activate()
@@ -2228,9 +2234,32 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
+    // The owner's Practice Loop (PracticeLoop.swift): while it plays, the session is its own (.playback, not mixed, so the lock
+    // screen shows it), and a co-driver line hands the session back to it instead of turning it off.
+    private var practice: ApexPracticeLoop?
+    private var practiceOn = false
+
+    func practiceMessage(_ dict: [String: Any]) {
+        if practice == nil { practice = ApexPracticeLoop(shell: self) }
+        practice?.handle(dict)
+    }
+
+    func setPractice(_ on: Bool) {
+        practiceOn = on
+        if !on {
+            if synth.isSpeaking || webVoiceActive { configureVoiceSession() } else { releaseVoice() }
+        }
+    }
+
+    private func holdForPractice() {
+        ApexAudioSession.set(.playback, mode: .default, options: [])
+        ApexAudioSession.activate()
+    }
+
     /// Gives the audio back: ducked music comes back up, paused music is told it may play on.
     private func releaseVoice() {
         if talkOn { configureTalkSession(duck: false); return }   // convoy voice keeps the session; ducked music comes back up
+        if practiceOn { holdForPractice(); return }            // the Practice Loop keeps the session
         if soundtrackOn { holdForSoundtrack(); return }        // the Soundtrack keeps the session; other apps come back up
         ApexAudioSession.deactivate()
     }
