@@ -2790,6 +2790,10 @@
           </section>
           <!-- dev mode (the owner, 2026-11-09): filled only while /api/me says this account is a developer (cockpit.js
                paintDevRow), so for everyone else the row is empty and not offered (data-empty-hides) -->
+          <!-- the owner only, in the app (cockpit.js paintPracticeRow, web/practice_loop.js); empty, so hidden, for everyone else -->
+          <section data-panel="garage" data-setting="practice" data-title="Practice Loop" data-empty-hides>
+            <div id="garagePracticeBody" class="stack-8" data-fill></div>
+          </section>
           <section data-panel="garage" data-setting="dev" data-title="Developer" data-empty-hides>
             <div id="garageDevBody" class="stack-8" data-fill></div>
           </section>

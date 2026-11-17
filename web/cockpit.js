@@ -716,6 +716,7 @@
       devCache = undefined;                                              // read again for this account (or none)
       applyDevTune();
       paintDevRow();
+      paintPracticeRow(me);
       if (devAccess) { const d = devSettings(); if (d && (d.offline || d.lines)) devPanel().catch(() => {}); }   // their switches, without the panel open
       else if (window.ApexDevPanel) ApexDevPanel.unmount();
       if (devAccess) devDrivesSync();                                    // their drives go up to Vetta (web/dev_drives.js)
@@ -793,6 +794,25 @@
       }
       try { if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.refresh(); } catch (_) { /* drawn at the next open */ }
     }
+    // Garage → Settings → Practice Loop (index.html section data-setting="practice"; the owner, 2026-11-17): the owner's
+    // ear-training player, only for the owner (/api/me moderator) and only in the app, whose shell plays it
+    // (PracticeLoop.swift). Its module loads only then; for anyone else the section stays empty, so its row is hidden.
+    let practiceShown = false;
+    function paintPracticeRow(me) {
+      const b = $('garagePracticeBody');
+      if (!b) return;
+      const native = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex);
+      const ok = native && me && me.signed_in && me.member && me.moderator === true;
+      if (!ok) { if (practiceShown) { b.textContent = ''; practiceShown = false; } refreshSettingsRows(); return; }
+      if (practiceShown) return;
+      practiceShown = true;
+      ApexLazy.load('practice').then(() => {
+        if (!practiceShown || b.childElementCount) return;
+        ApexPracticeLoop.mount(b, { post: (m) => window.webkit.messageHandlers.apex.postMessage(m) });
+        refreshSettingsRows();
+      }).catch((e) => { practiceShown = false; console.error('practice loop', e); });
+    }
+    function refreshSettingsRows() { try { if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.refresh(); } catch (_) { /* drawn at the next open */ } }
     // Garage → Settings → Route tuning (index.html section data-setting="tuning"): the sliders, saved as they move; the
     // engine's global tune follows at once, a plan's router tune at its next plan (or Use on the route on screen)
     function paintTuning() {
@@ -12775,6 +12795,7 @@
       onNative(msg) {
         if (msg && msg.type === 'journals') { if (journalsWaiter) journalsWaiter(msg); return; }
         if (msg && msg.type === 'driveCam') { driveCamSaid(msg.state); return; }
+        if (msg && msg.type === 'practice') { if (window.ApexPracticeLoop) ApexPracticeLoop.onNative(msg); return; }   // the owner's Practice Loop
         if (msg && msg.type === 'carOffline') { carOfflineBytes = Number.isFinite(msg.bytes) ? msg.bytes : null; if (typeof renderOffline === 'function') renderOffline().catch(() => {}); return; }
         if (msg && msg.type === 'reloaded') { health.bump(msg.why === 'background' ? 'reload_back' : 'reload_web'); return; }   // the shell reloaded a page iOS killed
         if (msg && msg.type === 'lifecycle') { if (driveActive) keepSave(); return; }   // going to the background: kept now
