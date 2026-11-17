@@ -2252,14 +2252,29 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     private func holdForPractice() {
-        ApexAudioSession.set(.playback, mode: .default, options: [])
+        if practiceListening {
+            // the voice range test: the microphone, measured as it is (no voice processing), out of the speaker
+            ApexAudioSession.set(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth])
+        } else {
+            ApexAudioSession.set(.playback, mode: .default, options: [])
+        }
         ApexAudioSession.activate()
+    }
+
+    // The Practice Loop's voice range test listens to the microphone for a few seconds (only while the owner sings into it).
+    private var practiceListening = false
+    var isTalking: Bool { talkOn }
+
+    func setPracticeListening(_ on: Bool) {
+        guard on != practiceListening else { return }
+        practiceListening = on
+        if on { holdForPractice() } else if synth.isSpeaking || webVoiceActive { configureVoiceSession() } else { releaseVoice() }
     }
 
     /// Gives the audio back: ducked music comes back up, paused music is told it may play on.
     private func releaseVoice() {
         if talkOn { configureTalkSession(duck: false); return }   // convoy voice keeps the session; ducked music comes back up
-        if practiceOn { holdForPractice(); return }            // the Practice Loop keeps the session
+        if practiceOn || practiceListening { holdForPractice(); return }   // the Practice Loop keeps the session
         if soundtrackOn { holdForSoundtrack(); return }        // the Soundtrack keeps the session; other apps come back up
         ApexAudioSession.deactivate()
     }

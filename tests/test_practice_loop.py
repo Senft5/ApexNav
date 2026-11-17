@@ -104,7 +104,7 @@ def test_native_player_wiring():
     # nothing is made until the page first asks
     assert "private var practice: ApexPracticeLoop?" in shell and "if practice == nil { practice = ApexPracticeLoop(shell: self) }" in shell
     # a co-driver line hands the session back to the player; convoy voice (the microphone) stops it
-    assert "if practiceOn { holdForPractice(); return }" in shell
+    assert "if practiceOn || practiceListening { holdForPractice(); return }" in shell
     assert "if on { practice?.stop() }" in shell
     p = read("PracticeLoop.swift")
     for needle in ["AVAudioSourceNode", "setCategory(.playback, mode: .default, options: [])", "writer.write(",
@@ -178,3 +178,54 @@ def test_pictures_only_while_on_screen():
     p = read("PracticeLoop.swift")
     assert "guard watching, active, let r = renderer, UIApplication.shared.applicationState == .active" in p
     assert "s.outputLatency + s.ioBufferDuration" in p
+
+
+def test_voice_range_test_on_the_sheet():
+    """Nate 2026-11-17: sing your lowest and highest note; for that session only notes inside that range are played."""
+    if NODE is None:
+        pytest.skip("node not installed")
+    out = node(FAKE_DOM + """
+const P = require(process.argv[1] + '/web/practice_loop.js');
+const sent = []; const body = new N('div');
+P.mount(body, { post: (m) => sent.push(m), document });
+const btns = body.all().filter((n) => n.tagName === 'BUTTON');
+const text = () => body.all().find((n) => n.className === 'pl-range').textContent;
+const go = btns.find((b) => b.textContent === 'Test my range');
+const idle = { text: text(), clearHidden: btns.find((b) => b.textContent === 'Clear').hidden };
+go.on.click();
+const start = sent[sent.length - 1];
+P.onNative({ type: 'practiceRange', step: 'low', now: 'F2' });
+const listening = { text: text(), label: go.textContent, disabled: go.disabled };
+P.onNative({ type: 'practiceRange', step: 'low', now: 'F2', best: 'E2' });
+const heard = { text: text(), label: go.textContent, disabled: go.disabled };
+go.on.click();
+const done = sent[sent.length - 1];
+P.onNative({ type: 'practice', active: true, playing: true, title: 'G Dorian · 92 · half', range: { step: null, lo: 40, hi: 67, label: 'E2 to G4' } });
+const set = { text: text(), label: go.textContent };
+btns.find((b) => b.textContent === 'Clear').on.click();
+const clear = sent[sent.length - 1];
+process.stdout.write(JSON.stringify({ idle, start, listening, heard, done, set, clear }));
+""")
+    assert out["idle"]["text"].startswith("Any octave") and out["idle"]["clearHidden"] is True
+    assert out["start"] == {"cmd": "practice", "action": "range", "step": "start"}
+    assert out["listening"]["text"].startswith("Sing your lowest note") and "F2" in out["listening"]["text"]
+    assert out["listening"]["disabled"] is True, "nothing held yet: nothing to keep"
+    assert "lowest held E2" in out["heard"]["text"] and out["heard"]["label"] == "Got it" and out["heard"]["disabled"] is False
+    assert out["done"] == {"cmd": "practice", "action": "range", "step": "done"}
+    assert out["set"]["text"] == "E2 to G4, for this session" and out["set"]["label"] == "Test again"
+    assert out["clear"] == {"cmd": "practice", "action": "range", "step": "clear"}
+
+
+def test_voice_range_native_wiring():
+    p = read("PracticeLoop.swift")
+    # the microphone is asked for only when the test starts, never kept, and the player picks inside the range
+    assert "AVAudioApplication.requestRecordPermission" in p and p.index("Self.askForMicrophone") > p.index("private func listen()")
+    assert "PracticePicker.next(settings, after: lastPick, range: range, using: &rng)" in p
+    assert "e.inputNode.removeTap(onBus: 0)" in p and "shell?.setPracticeListening(false)" in p
+    assert "UserDefaults" not in p.split("// MARK: the voice range test")[1], "the range is for the session only"
+    shell = read("ApexNavApp.swift")
+    assert "ApexAudioSession.set(.playAndRecord, mode: .measurement" in shell
+    assert "if practiceOn || practiceListening { holdForPractice(); return }" in shell
+    kit = read("ApexKit", "Sources", "ApexKit", "PracticeLoop.swift")
+    assert "Self.hz(midi: b.pick.base + notes[noteIdx])" in kit and "Self.hz(midi: b.pick.droneMidi)" in kit
+    assert "hears your singing when you test your vocal range" in read("project.yml")

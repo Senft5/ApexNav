@@ -15,6 +15,12 @@
 // so the app costs nothing more when it isn't playing. The co-driver and convoy voice share the one session: while this
 // plays, the shell (ApexSensorShell.releaseVoice) hands the session back to it instead of turning it off, and convoy
 // voice (which needs the microphone) stops it.
+//
+// The voice range (Nate 2026-11-17): "sing as high as possible and low as possible and it will only include tones in that
+// range for that session". The sheet's Test my range listens to the microphone (asked for only then) for the lowest held
+// note, then the highest (ApexKit PracticeRangeTracker), and from then until the app quits every block's root sits where
+// root to octave fits inside it (PracticePicker.next(range:)). It is never saved and nothing is recorded: the samples are
+// read for their pitch and dropped. The player pauses while it listens and carries on after.
 import AVFoundation
 import Foundation
 import MediaPlayer
@@ -49,6 +55,15 @@ final class ApexPracticeLoop {
     // The page's pictures (web/practice_viz.js): only while the Practice Loop sheet is on screen and the app is in front,
     // the poll sends where the block is (`sendClock`). Locked or in the background, nothing is sent.
     private var watching = false
+    // the voice range: kept for this run of the app only
+    private var range: ClosedRange<Int>?
+    private var rangeStep: String?                // "low" | "high" while the test listens
+    private var rangeLow: Int?
+    private var rangeError: String?
+    private var heard: (now: Int?, low: Int?, high: Int?) = (nil, nil, nil)
+    private var listener: AVAudioEngine?
+    private var listenGen = 0
+    private var resumeAfterRange = false
 
     init(shell: ApexSensorShell) {
         self.shell = shell
@@ -67,12 +82,14 @@ final class ApexPracticeLoop {
         case "next": next()
         case "stop": stop()
         case "watch": watching = (dict["on"] as? Bool) ?? false; sendClock()
+        case "range": rangeAction((dict["step"] as? String) ?? "")
         default: break
         }
         report()
     }
 
     var isActive: Bool { active }
+    var isListening: Bool { listener != nil }
 
     // MARK: settings
 
@@ -189,6 +206,7 @@ final class ApexPracticeLoop {
     }
 
     func stop() {
+        if rangeStep != nil { endListening(error: nil) }
         guard active else { return }
         active = false
         playing = false
@@ -217,7 +235,7 @@ final class ApexPracticeLoop {
     private func makeBlock() {
         guard active, !making, let r = renderer, r.needsBlock else { return }
         making = true
-        let pick = PracticePicker.next(settings, after: lastPick, using: &rng)
+        let pick = PracticePicker.next(settings, after: lastPick, range: range, using: &rng)
         lastPick = pick
         let id = nextId; nextId += 1
         let gen = writeGen
@@ -410,7 +428,201 @@ final class ApexPracticeLoop {
         if let p = picks[shownId] { msg["title"] = p.title; msg["callout"] = p.callout; msg["reps"] = p.reps }
         if let d = try? JSONEncoder().encode(settings), let s = try? JSONSerialization.jsonObject(with: d) { msg["settings"] = s }
         if active && settings.sleepMin > 0 { msg["sleepLeftS"] = max(0, Double(settings.sleepMin) * 60 - Date().timeIntervalSince(startedAt)) }
+        msg["range"] = rangeMessage
         shell.sendToPage(msg)
+    }
+
+    // MARK: the voice range test
+
+    private var rangeMessage: [String: Any] {
+        var m: [String: Any] = ["step": rangeStep ?? NSNull()]
+        if let r = range {
+            m["lo"] = r.lowerBound; m["hi"] = r.upperBound
+            m["label"] = "\(PracticePitch.name(midi: r.lowerBound)) to \(PracticePitch.name(midi: r.upperBound))"
+        }
+        if let n = heard.now { m["now"] = PracticePitch.name(midi: n) }
+        let best = rangeStep == "high" ? heard.high : heard.low
+        if let b = best { m["best"] = PracticePitch.name(midi: b) }
+        if let l = rangeLow { m["low"] = PracticePitch.name(midi: l) }
+        if let e = rangeError { m["error"] = e }
+        return m
+    }
+
+    private func sendRange() { var m = rangeMessage; m["type"] = "practiceRange"; shell?.sendToPage(m) }
+
+    /// start: listen for the lowest note. done: keep what was heard and go on (low, then high, then the range is set).
+    /// cancel: stop listening, keep the old range. clear: back to middle C's octave.
+    private func rangeAction(_ step: String) {
+        switch step {
+        case "start":
+            guard rangeStep == nil else { return }
+            if shell?.isTalking == true { rangeError = "Convoy talk is using the microphone."; sendRange(); return }
+            rangeError = nil; rangeLow = nil
+            listen()
+        case "done":
+            guard let st = rangeStep else { return }
+            let best = st == "low" ? heard.low : heard.high
+            guard let b = best else { rangeError = "Didn't hear a held note yet. Hold one steady for a moment."; sendRange(); return }
+            rangeError = nil
+            if st == "low" {
+                rangeLow = b
+                rangeStep = "high"
+                heard = (nil, nil, nil)
+                listenGen += 1
+                tracker.reset { [weak self] in self?.heard = (nil, nil, nil); self?.sendRange() }
+                armTimeout()
+            } else {
+                let lo = min(rangeLow ?? b, b), hi = max(rangeLow ?? b, b)
+                guard PracticeRange.usable(lo, hi) else {
+                    endListening(error: "\(PracticePitch.name(midi: lo)) to \(PracticePitch.name(midi: hi)) is under an octave. Try again, as low and as high as you can.")
+                    return
+                }
+                range = lo...hi
+                endListening(error: nil)
+                remakeNext()
+            }
+        case "cancel": if rangeStep != nil { endListening(error: nil) }
+        case "clear":
+            if rangeStep != nil { endListening(error: nil) }
+            range = nil; rangeError = nil
+            remakeNext()
+        default: break
+        }
+        sendRange()
+    }
+
+    /// The queued block was picked for the old range: pick it again.
+    private func remakeNext() {
+        guard active, let r = renderer else { return }
+        r.clearPending(); writeGen += 1; making = false; makeBlock()
+    }
+
+    private let tracker = RangeListener()
+
+    private func listen() {
+        if playing { resumeAfterRange = true; pause() }
+        rangeStep = "low"
+        heard = (nil, nil, nil)
+        listenGen += 1
+        let gen = listenGen
+        sendRange()
+        Self.askForMicrophone { ok in
+            Task { @MainActor [weak self] in
+                guard let self, self.rangeStep != nil, gen == self.listenGen else { return }
+                guard ok else { self.endListening(error: "Vetta can't hear the microphone. Allow it in Settings → Vetta → Microphone."); return }
+                self.shell?.setPracticeListening(true)
+                // after the shell's session change (the same queue), start listening
+                ApexAudioSession.queue.async { Task { @MainActor [weak self] in self?.startListener(gen) } }
+            }
+        }
+    }
+
+    private func startListener(_ gen: Int) {
+        guard rangeStep != nil, gen == listenGen, listener == nil else { return }
+        let e = AVAudioEngine()
+        let input = e.inputNode
+        let fmt = input.outputFormat(forBus: 0)
+        guard fmt.sampleRate > 0, fmt.channelCount > 0 else { endListening(error: "No microphone to listen with."); return }
+        tracker.begin(sampleRate: fmt.sampleRate) { [weak self] now, low, high in
+            Task { @MainActor [weak self] in
+                guard let self, self.rangeStep != nil else { return }
+                self.heard = (now, low, high)
+                self.sendRange()
+            }
+        }
+        let t = tracker
+        input.installTap(onBus: 0, bufferSize: 2048, format: fmt, block: Self.tap(t))
+        e.prepare()
+        do { try e.start() } catch {
+            input.removeTap(onBus: 0)
+            endListening(error: "Couldn't listen: \(error.localizedDescription)")
+            return
+        }
+        listener = e
+        armTimeout()
+    }
+
+    /// The audio thread's and the permission prompt's sides: nonisolated, so neither closure is the main actor's.
+    nonisolated private static func tap(_ t: RangeListener) -> AVAudioNodeTapBlock { { buf, _ in t.feed(buf) } }
+    nonisolated private static func askForMicrophone(_ done: @escaping @Sendable (Bool) -> Void) {
+        AVAudioApplication.requestRecordPermission { ok in done(ok) }
+    }
+
+    /// A step that is never finished stops by itself after 15 s, keeping what it heard.
+    private func armTimeout() {
+        let gen = listenGen, st = rangeStep
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, gen == self.listenGen, self.rangeStep == st, st != nil else { return }
+                let best = st == "low" ? self.heard.low : self.heard.high
+                if best != nil { self.rangeAction("done") } else { self.endListening(error: "Didn't hear a held note. Try again and hold each one for a moment.") }
+            }
+        }
+    }
+
+    private func endListening(error: String?) {
+        listenGen += 1
+        rangeStep = nil
+        rangeLow = nil
+        rangeError = error
+        heard = (nil, nil, nil)
+        if let e = listener {
+            e.inputNode.removeTap(onBus: 0)
+            e.stop()
+            listener = nil
+        }
+        tracker.end()
+        shell?.setPracticeListening(false)
+        if resumeAfterRange { resumeAfterRange = false; resume() }
+        sendRange()
+        report()
+    }
+}
+
+/// The microphone's buffers, read for their pitch on a queue of their own (never the audio thread or the main thread):
+/// mono, brought down to about 16 kHz (plenty for a voice's fundamental), and fed to PracticeRangeTracker. Only what it
+/// heard (the note now, the lowest and highest held) goes back; the samples are dropped.
+private final class RangeListener: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "app.vetta.practice-range", qos: .userInitiated)
+    private var tracker: PracticeRangeTracker?
+    private var factor = 1
+    private var report: ((Int?, Int?, Int?) -> Void)?
+    private var last: (Int?, Int?, Int?) = (nil, nil, nil)
+
+    func begin(sampleRate: Double, report: @escaping @Sendable (Int?, Int?, Int?) -> Void) {
+        queue.async {
+            self.factor = max(1, Int(sampleRate / 16000))
+            self.tracker = PracticeRangeTracker(sampleRate: sampleRate / Double(self.factor))
+            self.report = report
+            self.last = (nil, nil, nil)
+        }
+    }
+
+    func reset(then: @escaping @MainActor @Sendable () -> Void) {
+        queue.async {
+            self.tracker?.reset(); self.last = (nil, nil, nil)
+            Task { @MainActor in then() }
+        }
+    }
+
+    func end() { queue.async { self.tracker = nil; self.report = nil } }
+
+    func feed(_ buf: AVAudioPCMBuffer) {
+        guard let ch = buf.floatChannelData else { return }
+        let n = Int(buf.frameLength)
+        let x = Array(UnsafeBufferPointer(start: ch[0], count: n))
+        queue.async {
+            guard let t = self.tracker else { return }
+            let f = self.factor
+            let down: [Float] = f == 1 ? x : stride(from: 0, to: x.count - f + 1, by: f).map { i in
+                var s: Float = 0
+                for j in 0..<f { s += x[i + j] }
+                return s / Float(f)
+            }
+            t.feed(down)
+            let now = (t.now, t.lowest, t.highest)
+            if now != self.last { self.last = now; self.report?(now.0, now.1, now.2) }
+        }
     }
 }
 
