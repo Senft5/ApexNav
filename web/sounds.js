@@ -153,6 +153,28 @@
     }
     const sendRange = () => send({ type: 'practiceRange', ...rangeMsg() });
 
+    // iPhone: Web Audio follows the ringer switch unless the page says it is playback, and the first sound and the first
+    // speech must start inside the tap. So, on every Play tap: the session type, a looping silent <audio> (older Safari
+    // routes Web Audio as media once a media element plays), a resume, and an empty utterance to unlock speech.
+    let silent = null;
+    function unlock() {
+      try { if (root.navigator.audioSession) root.navigator.audioSession.type = 'playback'; } catch (_) { /* older Safari */ }
+      try {
+        if (!silent) {
+          silent = root.document.createElement('audio');
+          silent.setAttribute('playsinline', ''); silent.loop = true;
+          silent.src = 'data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YUAGAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA';
+        }
+        const pr = silent.play(); if (pr && pr.catch) pr.catch(() => {});
+      } catch (_) { /* no media element */ }
+      audio();
+      if (ctx.state !== 'running') { const pr = ctx.resume(); if (pr && pr.catch) pr.catch(() => {}); }
+      // a one-sample click inside the tap, which some iOS versions need before anything scheduled is heard
+      try { const b = ctx.createBuffer(1, 1, ctx.sampleRate), src = ctx.createBufferSource(); src.buffer = b; src.connect(ctx.destination); src.start(0); } catch (_) { /* fine */ }
+      try { if (root.speechSynthesis && !spoke) { const u = new root.SpeechSynthesisUtterance(' '); u.volume = 0; root.speechSynthesis.speak(u); spoke = true; } } catch (_) { /* no speech */ }
+    }
+    let spoke = false;
+
     function audio() {
       if (ctx) return ctx;
       const AC = root.AudioContext || root.webkitAudioContext;
@@ -174,8 +196,8 @@
     function droneFor(b) {
       if (!settings.drone) return;
       const g = ctx.createGain(), t = b.t0, end = b.end();
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.075, t + 0.5);
-      g.gain.setValueAtTime(0.075, Math.max(t + 0.5, end - 0.5)); g.gain.linearRampToValueAtTime(0, end);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.12, t + 0.5);
+      g.gain.setValueAtTime(0.12, Math.max(t + 0.5, end - 0.5)); g.gain.linearRampToValueAtTime(0, end);
       g.connect(master);
       for (const [mul, amp] of [[1, 1], [2, 0.5], [3, 0.18]]) {
         const o = ctx.createOscillator(), og = ctx.createGain();
@@ -205,7 +227,7 @@
     function note(t, len, m) {
       const o = ctx.createOscillator(), g = ctx.createGain();
       o.setPeriodicWave(wave); o.frequency.value = hz(m);
-      const peak = 0.16, sus = 0.16 * 0.6;
+      const peak = 0.3, sus = 0.3 * 0.6;
       g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + 0.005);
       g.gain.setTargetAtTime(sus, t + 0.005, 0.08);
       g.gain.setValueAtTime(sus, Math.max(t + 0.01, t + len - 0.02)); g.gain.linearRampToValueAtTime(0, t + len);
@@ -247,8 +269,7 @@
     }
 
     function start() {
-      audio();
-      if (ctx.state === 'suspended') ctx.resume();
+      unlock();
       if (active) { if (!playing) resume(); return; }
       active = true; playing = true; startedAt = ctx.currentTime;
       const b0 = makeBlock(ctx.currentTime + 0.1); lay(b0); block = b0;
@@ -256,7 +277,7 @@
       tick(); report();
     }
     function pause() { if (!active || !playing) return; playing = false; ctx.suspend(); if (root.speechSynthesis) root.speechSynthesis.pause(); report(); }
-    function resume() { if (!active || playing) return; playing = true; ctx.resume(); if (root.speechSynthesis) root.speechSynthesis.resume(); report(); }
+    function resume() { if (!active || playing) return; playing = true; unlock(); if (root.speechSynthesis) root.speechSynthesis.resume(); report(); }
     function silenceFrom(t) {
       // a skip or a stop: everything scheduled fades out over 80 ms
       const g = master; g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0, t + 0.08);
