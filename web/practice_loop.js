@@ -102,7 +102,7 @@
       el('div', { className: 'row mt-8' }, drone),
       lbl('Volume'), vol,
       lbl('Stop after'), sleep,
-      el('p', { className: 'note', textContent: 'Keeps playing with the screen locked. Lock screen: play, pause, next.' }));
+      el('p', { className: 'note', textContent: deps.note || 'Keeps playing with the screen locked. Lock screen: play, pause, next.' }));
 
     function paint(st) {
       const s = { ...DEFAULTS, ...(st.settings || {}) };

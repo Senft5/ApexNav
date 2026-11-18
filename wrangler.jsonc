@@ -26,7 +26,8 @@
     { "pattern": "www.vettadrive.app", "custom_domain": true },
     { "pattern": "vettadrive.com", "custom_domain": true },
     { "pattern": "www.vettadrive.com", "custom_domain": true },
-    { "pattern": "data.vettadrive.com", "custom_domain": true }
+,
+    { "pattern": "sounds.vettadrive.app", "custom_domain": true }
   ],
   // Convoys (backend/src/convoy.ts): one Durable Object per live group drive. Previews get their own namespace automatically,
   // but the env binding must be declared in the previews block too.
