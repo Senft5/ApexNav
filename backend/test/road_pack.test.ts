@@ -9,6 +9,15 @@ beforeEach(freshDb);
 const restore: Array<() => void> = [];
 afterEach(() => { while (restore.length) restore.pop()!(); });
 
+// the old per-bin table, as it was before 0068 (0070 dropped it): the SQL merge's reference table and the backfill's source
+const LEGACY = `CREATE TABLE IF NOT EXISTS road_bins_legacy (way_id INTEGER NOT NULL, dir INTEGER NOT NULL, bin_idx INTEGER NOT NULL, n INTEGER NOT NULL,
+  camber_mean REAL, camber_m2 REAL, rough_mean REAL, rough_m2 REAL, crest_peak REAL, camber_n INTEGER NOT NULL DEFAULT 0, crest_n INTEGER NOT NULL DEFAULT 0,
+  last_on TEXT, changed_on TEXT, smooth_run INTEGER NOT NULL DEFAULT 0, k_mean REAL, k_n INTEGER NOT NULL DEFAULT 0, flow_mean REAL, brake_mean REAL,
+  flow_n INTEGER NOT NULL DEFAULT 0, bump_hit REAL NOT NULL DEFAULT 0, bump_pass REAL NOT NULL DEFAULT 0, bump_drivers INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (way_id, dir, bin_idx)) WITHOUT ROWID`;
+beforeEach(async () => { await env.DB.prepare(LEGACY).run(); });
+afterEach(async () => { await env.DB.prepare("DROP TABLE IF EXISTS road_bins_legacy").run(); });
+
 // a small seeded generator, so a failure names the case it came from
 function rng(seed: number) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); }
 
