@@ -156,8 +156,9 @@ function meanSql(mean: string, m2: string, k: string, x: string) {
   };
 }
 
-/** Merges one bin into a per-bin table in a single atomic statement (computed from the old row). The reference for
- *  road_pack.ts mergeBinRow (test/road_pack.test.ts runs both); uploads have used the packed rows since migration 0068. */
+/** Merges one bin into a per-bin table shaped like the old road_bins, in a single atomic statement (computed from the old row).
+ *  Only the reference for road_pack.ts mergeBinRow now: test/road_pack.test.ts makes that table and runs both. Uploads have
+ *  used the packed rows since migration 0068, and 0070 dropped the old table. */
 export function mergeBin(env: Env, wayId: number, dir: number, b: Bin, day: string, table = "road_bins_legacy"): D1PreparedStatement {
   const smoother = `(n >= 3 AND rough_mean IS NOT NULL AND ?5 < rough_mean * ${FRESH.repaveRatio} AND rough_mean - ?5 > ${FRESH.repaveG})`;
   const reset = `(${smoother} AND smooth_run + 1 >= ${FRESH.repavePasses})`;
